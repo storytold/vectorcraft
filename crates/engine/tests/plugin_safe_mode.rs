@@ -463,6 +463,49 @@ fn expand_appearance_keeps_a_plug_in_effect_safe_mode_skips() {
     s.execute("effect.expandAppearance", &json!({})).unwrap();
 }
 
+/// In Safe Mode, Expand Appearance refuses a group whose raster effect makes an image of a plain
+/// instance in it when the instance's symbol art holds a plug-in effect.
+#[test]
+fn expand_appearance_in_safe_mode_checks_symbol_art_a_group_image_draws() {
+    let _f = fresh();
+    let mut s = Session::new();
+    let fx = wat::parse_str(tpl::returning(&tpl::manifest("test.sm.sym", "effect", "{}"), r#"{"objects":[]}"#)).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&fx)})).unwrap();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "plugin.test.sm.sym"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "fx"})).unwrap();
+    let plain = s.execute("symbol.place", &json!({"name": "fx", "x": 100, "y": 100})).unwrap()["id"].clone();
+    let refused = |s: &mut Session, group: &Value| {
+        let before = s.execute("document.inspect", &json!({})).unwrap();
+        safe_mode::set_active(Some(safe_mode::Source::Flag));
+        let err = s.execute("effect.expandAppearance", &json!({"ids": [group]})).unwrap_err().to_string();
+        safe_mode::set_active(None);
+        assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+        assert_eq!(s.execute("document.inspect", &json!({})).unwrap(), before, "nothing changes");
+    };
+    // A Gaussian Blur of the group's own.
+    let group = s.execute("object.group", &json!({"ids": [plain]})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [group], "params": {"radius": 2}})).unwrap();
+    refused(&mut s, &group);
+    // A Gaussian Blur on a fill of a group around a group that holds another plain instance.
+    let blurred_fill = {
+        let t = s.execute("shape.rectangle", &json!({"x": 150, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [t], "item": 0, "params": {"radius": 2}})).unwrap();
+        s.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(t)).unwrap().appearance.items[0].clone()
+    };
+    let plain = s.execute("symbol.place", &json!({"name": "fx", "x": 100, "y": 20})).unwrap()["id"].clone();
+    let inner = s.execute("object.group", &json!({"ids": [plain]})).unwrap()["id"].clone();
+    let outer = s.execute("object.group", &json!({"ids": [inner]})).unwrap()["id"].as_u64().unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+        .node_mut(vectorcraft_engine::doc::NodeId(outer))
+        .unwrap()
+        .appearance
+        .items
+        .push(blurred_fill);
+    refused(&mut s, &json!(outer));
+}
+
 /// In Safe Mode, a plug-in effect in the art of a graph design in a series stops Expand Appearance of the graph only
 /// when an effect of the series group draws that art with the group.
 #[test]

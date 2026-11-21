@@ -3622,6 +3622,73 @@ fn the_eraser_drag_area_takes_the_tip_halfway_along_each_step() {
     t.pointer(&cx, &PointerEvent { pressure: 1.0, ..PointerEvent::new(PointerKind::Up, 150.0, 150.0) });
 }
 
+/// A step of a round Eraser drag whose Size follows the pen shows as wide as the tip halfway along
+/// it, as the release erases: with Size 10 pt on Pressure by up to 20 pt, a step from no pressure
+/// (the tip at its 0.1 pt least) to full pressure (30 pt) shows 10 pt wide, not the 15.05 pt
+/// halfway between the tips at its ends.
+#[test]
+fn a_round_eraser_drag_step_is_as_wide_as_the_tip_halfway_along_it() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(10)), ("sizeMode", json!("pressure")), ("sizeVariation", json!(20))] {
+        t.set_option(k, &v);
+    }
+    t.pointer(&cx, &PointerEvent { pressure: 0.0, ..PointerEvent::new(PointerKind::Down, 50.0, 150.0) });
+    t.pointer(&cx, &PointerEvent { pressure: 1.0, ..PointerEvent::new(PointerKind::Drag, 150.0, 150.0) });
+    let o = t.overlays(&cx);
+    assert!(matches!(&o[..], [Overlay::Path { width, .. }] if (*width - 10.0).abs() < 1e-4), "{o:?}");
+    t.pointer(&cx, &PointerEvent { pressure: 1.0, ..PointerEvent::new(PointerKind::Up, 150.0, 150.0) });
+}
+
+/// A pen tilted in place at the last point of an Eraser drag gives the last step the new tip halfway
+/// along it, even where the tip at that point stays the same: with Size 10 pt on Tilt by up to 20 pt,
+/// the tip at a pen leaning 80° and at one leaning 85° is the 0.1 pt least, while halfway along a
+/// step from an upright pen it goes from 12.22 pt to 11.11 pt.
+#[test]
+fn the_eraser_drag_area_takes_the_new_tip_halfway_along_a_step_whose_end_tip_stays() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let bounds = |t: &GestureTool| {
+        drain_area(t, &cx);
+        let o = t.overlays(&cx);
+        o.iter()
+            .filter_map(|o| match o {
+                Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+                Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+                _ => None,
+            })
+            .reduce(|a, b| a.union(b))
+            .unwrap_or_else(|| panic!("{o:?}"))
+    };
+    // The tip lying level, 4 times as long as it is wide: a step from x 50 to x 150 with a tip
+    // `size` long reaches `size` / 2 before and after it and `size` / 8 above and below.
+    let near = |b: vectorcraft_geom::Rect, size: f64| {
+        let want = (50.0 - size / 2.0, 150.0 - size / 8.0, 150.0 + size / 2.0, 150.0 + size / 8.0);
+        assert!([b.x0 - want.0, b.y0 - want.1, b.x1 - want.2, b.y1 - want.3].iter().all(|e| e.abs() < 0.01), "{b:?} vs {want:?}");
+    };
+    let mut t = GestureTool::new("eraser");
+    for (k, v) in [("size", json!(10)), ("roundness", json!(25)), ("sizeMode", json!("tilt")), ("sizeVariation", json!(20))] {
+        t.set_option(k, &v);
+    }
+    let press = |t: &mut GestureTool, lean: f32, kind: PointerKind, x: f64| {
+        let pen = Some(PenPose { tilt: Some([lean, 0.0]), rotation: None, wheel: None });
+        t.pointer(&cx, &PointerEvent { pen, pressure: 1.0, ..PointerEvent::new(kind, x, 150.0) });
+    };
+    press(&mut t, 0.0, PointerKind::Down, 50.0);
+    press(&mut t, 80.0, PointerKind::Drag, 150.0);
+    // Tilt reads 1 upright and 1/9 at 80°, 5/9 halfway: 10 + 20 × (2 × 5/9 − 1) pt.
+    near(bounds(&t), 10.0 + 20.0 / 9.0);
+    // At 85° Tilt reads 1/18, 19/36 halfway.
+    press(&mut t, 85.0, PointerKind::Drag, 150.0);
+    near(bounds(&t), 10.0 + 20.0 / 18.0);
+    press(&mut t, 85.0, PointerKind::Up, 150.0);
+}
+
 /// The outline of a long Eraser drag whose tip turns and changes shape with the pen is built a
 /// bounded amount per frame, and once finished it shows nothing inside the area: no point of it
 /// lies well inside the area of any step, each step with the tip halfway along it.

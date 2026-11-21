@@ -515,7 +515,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Missing:** CJK vertical
   composition (custom mojikumi sets and the Mojikumi Settings dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
   features beyond bidi, digit types, Character Direction and Kashidas (a split caret; the Middle Eastern & South Asian composers are done, #4935),
-  Touch Type, Retype beyond exact matches of available fonts (phase 1 is in, #4934, and the Retype panel lists the exactly matching fonts; near matches, installed fonts not yet loaded and text in images remain), Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
+  Touch Type, Retype beyond exact matches of available fonts (phase 1 is in, #4934, the Retype panel lists the exactly matching fonts, and `type.retype` takes near matches within a tolerance and words outlined as one compound path; glyphs fused into one contour, near matches in the panel's list, installed fonts not yet loaded and text in images remain), Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
 - **Estimate:** 34–47 h (type core 14–19 h blocks beta).

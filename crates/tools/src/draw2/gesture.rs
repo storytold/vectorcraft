@@ -1300,12 +1300,6 @@ impl GestureTool {
         self.poses.len() == self.points.len()
     }
 
-    /// The tip at point `i` of the stroke, as `path.eraseRegion` reads the pen there
-    /// ([`Self::controls_of_point`]).
-    fn tip_of_point(&self, i: usize) -> [f64; 3] {
-        self.tip_of_controls(self.controls_of_point(i))
-    }
-
     /// The tip halfway along the step from point `j` to point `j + 1`, as `path.eraseRegion` reads
     /// the pen there: the pressure and tilt halfway between those at the two points, and the
     /// bearing and rotation halfway between them the shorter way round. A tip whose angle follows
@@ -1945,7 +1939,7 @@ impl Tool for GestureTool {
             };
             let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
             let sized = |[angle, roundness, size]: [f64; 3]| [angle, roundness, if size_varies { size } else { self.size }];
-            area.step(&self.points, &|i| sized(self.tip_of_point(i)), &|j| sized(self.tip_between(j)));
+            area.step(&self.points, &|j| sized(self.tip_between(j)));
             let paths = area.paths(&self.points);
             o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0, dash: None }));
             o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
@@ -1953,9 +1947,9 @@ impl Tool for GestureTool {
             self.area.set(Some(area));
         } else if size_varies {
             // With Size on a mode that follows the pen, each step of the drag shows as wide as the
-            // tip the pen gives at its ends. A long drag's steps are kept from call to call
-            // ([`LinePreview::segments`]).
-            let width_of = |j: usize| ((self.tip_of_point(j)[2] + self.tip_of_point(j + 1)[2]) / 2.0 * cx.zoom) as f32;
+            // tip the pen gives halfway along it, as `path.eraseRegion` reads it. A long drag's
+            // steps are kept from call to call ([`LinePreview::segments`]).
+            let width_of = |j: usize| (self.tip_between(j)[2] * cx.zoom) as f32;
             if self.points.len() > line::PIECE_SEGMENTS + 1 {
                 let mut kept = self.line.take().unwrap_or_default();
                 for (j, path) in kept.segments(&self.points).into_iter().enumerate() {
