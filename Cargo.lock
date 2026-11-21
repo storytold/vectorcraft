@@ -7117,6 +7117,7 @@ dependencies = [
  "craft-image-codecs",
  "craft-mime",
  "craft-svg",
+ "craft-xml",
  "data-url",
  "flate2",
  "image",
