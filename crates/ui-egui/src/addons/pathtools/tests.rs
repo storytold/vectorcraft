@@ -136,6 +136,62 @@ fn the_parametric_shape_panel_opens_from_the_submenu_and_shows_the_shape() {
     assert!(!text.contains("Count:"), "a speech bubble has no count: {text}");
 }
 
+/// One headless frame of the Parametric Shape panel with input `events`: every text drawn, with its rect.
+fn shape_panel_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::shape::show(app, ui));
+    out.textures_delta.clear();
+    fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+            _ => {}
+        }
+    }
+    let mut texts = vec![];
+    for c in &out.shapes {
+        collect(&c.shape, &mut texts);
+    }
+    texts
+}
+
+/// Type `value` into the panel's field that shows `shown`, and press Enter.
+fn type_into_shape_panel(ctx: &egui::Context, app: &mut VectorcraftApp, shown: &str, value: &str) {
+    let texts = shape_panel_frame(ctx, app, vec![]);
+    let pos = texts.iter().find(|(t, _)| t == shown).unwrap_or_else(|| panic!("`{shown}` not drawn: {texts:?}")).1.center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    for e in
+        [egui::Event::PointerMoved(pos), button(true), button(false), key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text(value.into())]
+    {
+        shape_panel_frame(ctx, app, vec![e]);
+    }
+    shape_panel_frame(ctx, app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    shape_panel_frame(ctx, app, vec![]);
+}
+
+/// The panel's W and H keep the point of the selection's box that the Transform panel and the
+/// Control bar share in place, as their own W and H do, on upright and turned shapes.
+#[test]
+fn the_parametric_shape_panels_size_fields_keep_the_shared_reference_point() {
+    for (refi, rotation) in [(0usize, 0.0), (8, 0.0), (2, 30.0), (0, 180.0)] {
+        let mut app = app();
+        let params = json!({"kind": "rectangle", "center": [150, 150], "width": 100, "height": 60, "rotation": rotation});
+        let id = vectorcraft_doc::NodeId(app.run("addon.pathtools.shape.create", params).unwrap()["id"].as_u64().unwrap());
+        let node = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).cloned().unwrap();
+        let shape = |app: &VectorcraftApp| vectorcraft_tools::addons::parametric_shape::read(&node(app)).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), refi));
+        let (before, was) = (shape(&app), app.selection_box().unwrap().reference_point(refi));
+        type_into_shape_panel(&ctx, &mut app, "100 pt", "160");
+        type_into_shape_panel(&ctx, &mut app, "60 pt", "20");
+        let after = shape(&app);
+        assert!(after.width > before.width && after.height < before.height, "reference {refi}: W and H took {after:?}");
+        let moved = app.selection_box().unwrap().reference_point(refi).distance(was);
+        assert!(moved < 1e-6, "reference {refi}, rotation {rotation}: the reference point moved {moved} pt");
+    }
+}
+
 #[test]
 fn the_corner_tool_item_selects_the_tool_and_opens_its_panel_section() {
     let mut app = app();
