@@ -2,6 +2,7 @@
 //! Join, Split Into Grid.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::ops::Range;
 
 use kurbo::{CubicBez, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, Vec2};
 use vectorcraft_geom::path::measured_arclen;
@@ -114,7 +115,10 @@ pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
 /// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it. A closed refit
 /// starts where the subpath started ([`keep_start`]).
 fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
-    refit_subpath(sp, opts).map(|fit| keep_start(fit, sp).0)
+    refit_subpath(sp, opts).map(|fit| {
+        let n = fit.anchors.len();
+        keep_start(fit, sp, 0..n).0
+    })
 }
 
 /// Distance (points) from an anchor within which a closed path restarted by [`start_nearest`]
@@ -176,18 +180,21 @@ fn earliest_nearest<T>(candidates: impl IntoIterator<Item = (f64, Point, T)>, or
 /// used, then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest
 /// point, is returned as it is.
 pub fn start_nearest(sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
-    start_near(sp, start, orig, true).0
+    let n = sp.anchors.len();
+    start_near(sp, start, orig, true, 0..n).0
 }
 
-/// [`start_nearest`], splitting a segment only when `split` is set; otherwise, when no anchor lies
-/// at the nearest point, the path starts at its anchor nearest `start`, with the same tie rule. →
-/// (the path, the segment split when one was, where the new start was before the anchors turned).
-fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool) -> (SubPath, Option<usize>, usize) {
+/// [`start_nearest`] on the segments `within` alone, splitting a segment only when `split` is set;
+/// otherwise, when no anchor lies at the nearest point, the path starts at the anchor of those
+/// segments nearest `start`, with the same tie rule. → (the path, the segment split when one was,
+/// where the new start was before the anchors turned).
+fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool, within: Range<usize>) -> (SubPath, Option<usize>, usize) {
     let n = sp.anchors.len();
     if !sp.closed || n < 2 {
         return (sp, None, 0);
     }
-    let hits = (0..n).map(|i| {
+    let within = within.start.min(n)..within.end.min(n);
+    let hits = within.clone().map(|i| {
         let c = sp.segment(i);
         let hit = c.nearest(start, 1e-9);
         let d = if hit.distance_sq.is_finite() && hit.t.is_finite() { hit.distance_sq.sqrt() } else { f64::NAN };
@@ -212,7 +219,8 @@ fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool) -> (Su
         sp.anchors.insert(i + 1, mid);
         (i + 1, Some(i))
     } else {
-        let near = sp.anchors.iter().enumerate().map(|(j, a)| (a.p.distance(start), a.p, j));
+        // The anchors of the segments `within`: each one's first, and the last one's end.
+        let near = (within.start..=within.end).map(|j| j % n).map(|j| (sp.anchors[j].p.distance(start), sp.anchors[j].p, j));
         (earliest_nearest(near, orig).unwrap_or(0), None)
     };
     sp.anchors.rotate_left(first);
@@ -221,13 +229,13 @@ fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool) -> (Su
 
 /// The closed refit `fit` of the closed `orig` started where `orig` starts: at its anchor at
 /// `orig`'s first anchor, or at a new anchor split in at its point nearest there when it still has
-/// fewer anchors than `orig` with that one, or else at its anchor nearest there ([`start_near`]). An
-/// open `orig` keeps `fit` as it is.
-fn keep_start(fit: SubPath, orig: &SubPath) -> (SubPath, Option<usize>, usize) {
+/// fewer anchors than `orig` with that one, or else at its anchor nearest there ([`start_near`]),
+/// looking only at the segments `within`. An open `orig` keeps `fit` as it is.
+fn keep_start(fit: SubPath, orig: &SubPath, within: Range<usize>) -> (SubPath, Option<usize>, usize) {
     match orig.anchors.first() {
         Some(a) if orig.closed => {
             let split = fit.anchors.len() + 1 < orig.anchors.len();
-            start_near(fit, a.p, orig, split)
+            start_near(fit, a.p, orig, split, within)
         }
         _ => (fit, None, 0),
     }
@@ -820,7 +828,8 @@ pub struct SimplifiedPart {
 /// The other segments and anchors stay exactly as they are. A subpath whose every segment is in
 /// `segments` is simplified whole, as [`simplify_with`] does. A run whose refit would have more
 /// segments than it had is left as it is (except with Convert to Straight Lines). A closed subpath
-/// starts where it did, as [`simplify_with`] starts one ([`keep_start`]).
+/// starts where it did, as [`simplify_with`] starts one ([`keep_start`]), on the run that held its
+/// first anchor when that anchor goes.
 pub fn simplify_part(path: &PathData, segments: &BTreeSet<(usize, usize)>, opts: &SimplifyOptions) -> SimplifiedPart {
     let opts = &SimplifyOptions { free_start: false, free_end: false, ..*opts };
     let (mut runs, mut anchors) = (BTreeSet::new(), BTreeMap::new());
@@ -859,6 +868,7 @@ fn simplify_runs(sp: &SubPath, picked: &[bool], opts: &SimplifyOptions) -> (SubP
     let mut anchors = vec![sp.anchors[start]];
     let mut kept = vec![(start, 0)];
     let mut runs = vec![];
+    let mut start_run = None;
     let mut k = 0;
     while k < n {
         let j = (start + k) % n;
@@ -891,7 +901,12 @@ fn simplify_runs(sp: &SubPath, picked: &[bool], opts: &SimplifyOptions) -> (SubP
         }
         // The run's segments, from its first anchor on: a run back to the walk's start ends with
         // the closing segment, the last index.
-        runs.extend(first..first + if keep_original { run.len() } else { fitted.len() });
+        let segs = first..first + if keep_original { run.len() } else { fitted.len() };
+        if sp.closed && (k + 1..k + len).any(|i| (start + i) % m == 0) {
+            // The run that held the old first anchor.
+            start_run = Some(segs.clone());
+        }
+        runs.extend(segs);
         let end_seg = fitted.last().filter(|_| !keep_original);
         if sp.closed && k + len == n {
             // The run ends where the walk started.
@@ -908,8 +923,11 @@ fn simplify_runs(sp: &SubPath, picked: &[bool], opts: &SimplifyOptions) -> (SubP
         }
         k += len;
     }
-    // A closed subpath starts where it did ([`keep_start`]), with the runs and anchors kept renumbered.
-    let (out, cut, first) = keep_start(SubPath::new(anchors, sp.closed), sp);
+    // A closed subpath starts where it did: the walk already starts at its first anchor when that
+    // stays, and otherwise the run that held it starts the path ([`keep_start`] on that run's
+    // segments alone, so no other segment changes), with the runs and anchors kept renumbered.
+    let Some(within) = start_run else { return (SubPath::new(anchors, sp.closed), runs, kept) };
+    let (out, cut, first) = keep_start(SubPath::new(anchors, sp.closed), sp, within);
     let len = out.anchors.len();
     if (cut, first) == (None, 0) || len == 0 {
         return (out, runs, kept);
@@ -1545,6 +1563,41 @@ mod tests {
 
     pub(super) fn count_places() {
         PLACES.set(PLACES.get() + 1);
+    }
+
+    /// A refitted run across the start of a closed path that crosses itself at its start keeps the
+    /// start on the run: the unselected segment through the old start is not split.
+    #[test]
+    fn a_run_across_the_start_keeps_the_start_on_the_run() {
+        let pts = [
+            (0.0, 0.0),
+            (10.0, 0.3),
+            (20.0, -0.3),
+            (30.0, 0.3),
+            (40.0, 0.6),
+            (40.0, 50.0),
+            (0.0, 50.0),
+            (0.0, -50.0),
+            (-40.0, -50.0),
+            (-40.0, 0.6),
+            (-30.0, 0.3),
+            (-20.0, -0.3),
+            (-10.0, 0.3),
+        ];
+        let sp = SubPath::new(pts.iter().map(|&(x, y)| Anchor::corner(Point::new(x, y))).collect(), true);
+        let path = PathData::new(vec![sp]);
+        let picked: BTreeSet<(usize, usize)> = [9, 10, 11, 12, 0, 1, 2, 3].into_iter().map(|s| (0, s)).collect();
+        let out = simplify_part(&path, &picked, &SimplifyOptions { tolerance: 1.0, ..SimplifyOptions::default() });
+        let got = &out.path.subpaths[0];
+        let n = got.anchors.len();
+        assert!(n < pts.len(), "{n} anchors");
+        let (top, bottom) = (Point::new(0.0, 50.0), Point::new(0.0, -50.0));
+        assert!(
+            (0..n).any(|i| got.anchors[i].p == top && got.anchors[(i + 1) % n].p == bottom),
+            "the segment through the old start was split: {:?}",
+            got.anchors.iter().map(|a| a.p).collect::<Vec<_>>()
+        );
+        assert!(got.anchors[0].p.x.abs() < 40.0 && got.anchors[0].p.y.abs() <= 1.0, "start {:?}", got.anchors[0].p);
     }
 
     /// Candidates tied at one point are placed along the old path once, not once each, and the first
