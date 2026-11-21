@@ -98,6 +98,7 @@ impl VectorcraftApp {
                 cursors: Default::default(),
                 view_moved: None,
                 hover_cursor: None,
+                hover_object: None,
                 presented: None,
                 opening_fit: None,
                 panes: Default::default(),

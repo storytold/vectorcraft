@@ -6096,6 +6096,231 @@ fn object_highlighting_preference_hides_the_hover_outline() {
     assert_eq!(outlines(&mut app), 0, "Smart Guides off");
 }
 
+/// The screen points of the 1.5 px hover outlines in `color` that one frame with `held` keys down
+/// draws, the pointer where the last frame left it.
+fn hover_outline_points(app: &mut VectorcraftApp, ctx: &egui::Context, color: Color32, held: egui::Modifiers) -> Vec<Pos2> {
+    fn flat(s: Shape, out: &mut Vec<Shape>) {
+        match s {
+            Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
+            s => out.push(s),
+        }
+    }
+    app.canvas.selection_marks = Default::default();
+    let events = vec![egui::Event::ModifiersChanged(held)];
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    // The art's raster lands in some frame when the render worker is done with it.
+    out.textures_delta.clear();
+    let mut shapes = vec![];
+    out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
+    let solid = egui::epaint::ColorMode::Solid(color);
+    let mut at = vec![];
+    for s in shapes {
+        if let Shape::Path(ps) = s
+            && ps.stroke.width == 1.5
+            && ps.stroke.color == solid
+        {
+            at.extend(ps.points);
+        }
+    }
+    at
+}
+
+/// The screen box around `points`.
+fn screen_box(points: &[Pos2]) -> egui::Rect {
+    points.iter().fold(egui::Rect::NOTHING, |r, p| r.union(egui::Rect::from_min_max(*p, *p)))
+}
+
+/// Whether two screen boxes agree to within a pixel.
+fn same_box(a: egui::Rect, b: egui::Rect) -> bool {
+    (a.min - b.min).length() < 1.0 && (a.max - b.max).length() < 1.0
+}
+
+/// With the Eyedropper, Smart Guides › Object Highlighting outlines the object under the pointer
+/// as the selection tools do (1.5 px in its layer color), and nothing over empty canvas.
+#[test]
+fn eyedropper_hover_outlines_the_object_under_the_pointer() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("eyedropper");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(150.0, 150.0)))]);
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE);
+    let rect = egui::Rect::from_two_pos(xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(200.0, 200.0)));
+    assert!(!at.is_empty() && same_box(screen_box(&at), rect), "the rectangle under the pointer is outlined: {:?}", screen_box(&at));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(300.0, 50.0)))]);
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "nothing over empty canvas");
+    // Space lends the view tools: a press pans, so no object is outlined, with any tool.
+    let space = |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+    for tool in ["eyedropper", "selection"] {
+        app.select_tool(tool);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(150.0, 150.0)))]);
+        assert!(!hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "{tool}: outlined");
+        frame(&mut app, &ctx, vec![space(true)]);
+        assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "{tool}: Space held");
+        frame(&mut app, &ctx, vec![space(false)]);
+        assert!(!hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "{tool}: Space let go");
+    }
+}
+
+/// The Eyedropper outlines a selected object too, since its click still acts on it. With Cmd held,
+/// a click selects with the selection tool lent to it, so the outline is that tool's: none on a
+/// selected object, and the object under the pointer otherwise. Hiding the object under the
+/// pointer, or arming Image Trace's Ignore Color pick (which acts on no object), removes the
+/// outline without the pointer moving.
+#[test]
+fn eyedropper_hover_outline_follows_the_selection_cmd_and_the_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("eyedropper");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+    let rect = egui::Rect::from_two_pos(xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(200.0, 200.0)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(150.0, 150.0)))]);
+    assert!(app.session.active().unwrap().selection.contains(vectorcraft_doc::NodeId(id)));
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE);
+    assert!(!at.is_empty() && same_box(screen_box(&at), rect), "a selected object: {:?}", screen_box(&at));
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::COMMAND).is_empty(), "Cmd over a selected object");
+    app.session.execute("select.none", &json!({})).unwrap();
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::COMMAND);
+    assert!(!at.is_empty() && same_box(screen_box(&at), rect), "Cmd over an unselected object: {:?}", screen_box(&at));
+    assert!(!hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "Cmd let go");
+    app.session.set_tool_option("imageTraceIgnoreColor", &json!({"binding": 1}));
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "an armed Ignore Color pick");
+    app.session.set_tool_option("imageTraceIgnoreColor", &serde_json::Value::Null);
+    assert!(!hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "the pick disarmed");
+    app.session.execute("object.hide", &json!({"ids": [id]})).unwrap();
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "hidden art");
+}
+
+/// With a group member selected (as Group Selection leaves it), the Selection tool outlines
+/// nothing over that member, where a press keeps the selection, and the group over its other
+/// member, where a press selects the group.
+#[test]
+fn selection_hover_outline_skips_a_selected_group_member() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let b = app.session.execute("shape.rectangle", &json!({"x": 200, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    app.session.execute("object.group", &json!({})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [a]})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(a)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(125.0, 125.0)))]);
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "the selected member");
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(225.0, 125.0)))]);
+    let group = egui::Rect::from_two_pos(xf.to_screen(Point::new(100.0, 100.0)), xf.to_screen(Point::new(250.0, 150.0)));
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE);
+    assert!(!at.is_empty() && same_box(screen_box(&at), group), "the other member: {:?}", screen_box(&at));
+}
+
+/// For a Shift-click the Eyedropper outlines the object whose color the click samples: the blend
+/// where one of its steps is drawn, and the rectangle below it in a gap between the steps.
+#[test]
+fn eyedropper_shift_hover_outlines_the_object_sampled() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut VectorcraftApp, x: f64, y: f64, w: f64, h: f64, color: &str| {
+        let id = app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("paint.setFill", &json!({"ids": [id], "color": color})).unwrap();
+        id
+    };
+    let back = rect(&mut app, 20.0, 50.0, 360.0, 150.0, "#00ff00");
+    let a = rect(&mut app, 100.0, 100.0, 20.0, 20.0, "#ff0000");
+    let b = rect(&mut app, 200.0, 100.0, 20.0, 20.0, "#0000ff");
+    app.session.execute("object.blend.make", &json!({"ids": [a, b], "steps": 1})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("eyedropper");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(back)));
+    let boxed = |x0: f64, y0: f64, x1: f64, y1: f64| egui::Rect::from_two_pos(xf.to_screen(Point::new(x0, y0)), xf.to_screen(Point::new(x1, y1)));
+    // One step, halfway: (150, 100) to (170, 120).
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(160.0, 110.0)))]);
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::SHIFT);
+    assert!(!at.is_empty() && same_box(screen_box(&at), boxed(100.0, 100.0, 220.0, 120.0)), "a blend step: {:?}", screen_box(&at));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(135.0, 110.0)))]);
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::SHIFT);
+    assert!(!at.is_empty() && same_box(screen_box(&at), boxed(20.0, 50.0, 380.0, 200.0)), "a gap between the steps: {:?}", screen_box(&at));
+}
+
+/// The Eyedropper's hover outline follows Smart Guides › Object Highlighting.
+#[test]
+fn eyedropper_hover_outline_follows_object_highlighting() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("eyedropper");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(xf.to_screen(Point::new(150.0, 150.0)))]);
+    app.session.execute("prefs.set", &json!({"key": "objectHighlighting", "value": false})).unwrap();
+    assert!(hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "the option off");
+    app.session.execute("prefs.set", &json!({"key": "objectHighlighting", "value": true})).unwrap();
+    assert!(!hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE).is_empty(), "the option on");
+}
+
+/// The Eyedropper outlines the object its click there then acts on: the front object a plain
+/// click copies attributes from, a locked one included (the Eyedropper reads locked art), and with
+/// Alt the unlocked object below it that an Alt-click gives the selection's attributes to.
+#[test]
+fn eyedropper_hover_outline_is_the_object_the_click_acts_on() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut VectorcraftApp, x: f64, y: f64, size: f64, color: &str| {
+        let id = app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": size, "height": size})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("paint.setFill", &json!({"ids": [id], "color": color})).unwrap();
+        id
+    };
+    let back = rect(&mut app, 100.0, 100.0, 100.0, "#0000ff");
+    let front = rect(&mut app, 150.0, 150.0, 100.0, "#ff0000");
+    let target = rect(&mut app, 20.0, 20.0, 40.0, "#00ff00");
+    app.session.execute("select.set", &json!({"ids": [target]})).unwrap();
+    app.select_tool("eyedropper");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(front)));
+    let boxed = |x: f64, y: f64, size: f64| egui::Rect::from_two_pos(xf.to_screen(Point::new(x, y)), xf.to_screen(Point::new(x + size, y + size)));
+    let fill = |app: &VectorcraftApp, id: u64| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+    let over = xf.to_screen(Point::new(175.0, 175.0));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(over)]);
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE);
+    assert!(same_box(screen_box(&at), boxed(150.0, 150.0, 100.0)), "the front rectangle is outlined: {:?}", screen_box(&at));
+    click_at(&mut app, &ctx, over);
+    assert_eq!(fill(&app, target), fill(&app, front), "the click copied the outlined rectangle's fill");
+
+    app.session.execute("object.lock", &json!({"ids": [front]})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [target]})).unwrap();
+    app.session.execute("paint.setFill", &json!({"ids": [target], "color": "#00ff00"})).unwrap();
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(over)]);
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::NONE);
+    assert!(same_box(screen_box(&at), boxed(150.0, 150.0, 100.0)), "the locked front rectangle is still the source: {:?}", screen_box(&at));
+    let at = hover_outline_points(&mut app, &ctx, color, egui::Modifiers::ALT);
+    assert!(same_box(screen_box(&at), boxed(100.0, 100.0, 100.0)), "with Alt, the unlocked rectangle below: {:?}", screen_box(&at));
+    let button = |pressed| egui::Event::PointerButton { pos: over, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::ALT };
+    frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT), button(true)]);
+    frame(&mut app, &ctx, vec![button(false), egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    assert_eq!(fill(&app, back), fill(&app, target), "the Alt-click gave the outlined rectangle the selection's fill");
+    assert_ne!(fill(&app, front), fill(&app, target));
+}
+
 /// Hide Corner Widget for angles greater than (#394): a rectangle's 90° corners lose their
 /// widgets below 90°.
 #[test]

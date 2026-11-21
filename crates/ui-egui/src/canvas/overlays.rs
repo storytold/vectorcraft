@@ -10,25 +10,142 @@ use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_pa
 use super::selection_marks::{MarkOptions, SelectionMarks};
 use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
-pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+pub(super) fn hover_highlight(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, view: vectorcraft_engine::ViewInfo) {
     let Some(h) = app.hover_doc else { return };
     // Smart Guides › Object Highlighting: a Smart Guides display option, so it needs them on and Snap to Grid and Pixel Preview off.
     if !app.ui.view.smart_guides || !app.session.prefs.object_highlighting || app.ui.view.snap_to_grid || app.ui.view.pixel_preview {
         return;
     }
-    if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
+    if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection" | "eyedropper") {
         return;
     }
+    let (m, space) = p.ctx().input(|i| (i.modifiers, i.key_down(egui::Key::Space)));
+    let mods = super::drag::mods(m, false);
+    // With Space lending the view tools, a press pans the view and acts on no object.
+    if super::drag::space_lends_view_tools(app, m, space) {
+        return;
+    }
+    // With the Eyedropper, Cmd lends a selection tool, whose click acts on what that tool outlines.
+    let eyedropper = app.session.tool_id() == "eyedropper";
+    let lent = if eyedropper && !app.session.tool_editing() { app.session.lent_tool_id(&mods) } else { None };
+    let id = if eyedropper && lent.is_none() {
+        // The object the Eyedropper's click there samples, recolors or copies to, with the keys
+        // held now. A selected one is outlined too: a click on it still acts on it.
+        let Some(id) = eyedropper_hover_object(app, h, mods, view) else { return };
+        id
+    } else {
+        let tool = lent.unwrap_or(app.session.tool_id());
+        let Some(st) = app.session.active() else { return };
+        let Some(hit) = selection_hit_at(app, h, xf.zoom) else { return };
+        let id = if tool == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
+        // A Selection tool press on selected art inside `id`, such as a group member picked with
+        // Group Selection, keeps the selection and selects nothing new.
+        let kept = if tool == "selection" {
+            vectorcraft_tools::select::selected_under_in(&st.doc, &st.selection, &hit, id).is_some()
+        } else {
+            st.selection.contains(id)
+        };
+        if kept {
+            return;
+        }
+        id
+    };
     let Some(st) = app.session.active() else { return };
-    let Some(hit) = selection_hit_at(app, h, xf.zoom) else { return };
-    let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
-    if st.selection.contains(id) {
-        return;
-    }
     if let Some(n) = st.doc.node(id).filter(|n| !too_many_anchors([*n])) {
         let color = c32(st.doc.layer_color(id));
         stroke_path(p, &node_outline(n, &st.doc.symbol_boxes()), xf, Stroke::new(1.5, color));
     }
+}
+
+/// What the Eyedropper's hover object depends on: the point, the keys held, the document as it is,
+/// the selection and isolation, the tool's options (an armed pick), the paint defaults and the
+/// selected gradient stop, the selection tolerance, Eyedropper Options (the raster sample size),
+/// whether guides show and are locked, and the view's zoom and Outline mode: everything the
+/// tool's context gives a click that can change what it acts on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HoverObjectKey {
+    at: vectorcraft_geom::Point,
+    mods: vectorcraft_tools::Mods,
+    doc: (u64, u64),
+    selection: vectorcraft_doc::Selection,
+    isolation: Option<vectorcraft_doc::NodeId>,
+    options: serde_json::Value,
+    paint: vectorcraft_tools::PaintDefaults,
+    fill_active: bool,
+    stop: Option<usize>,
+    tolerance: f64,
+    eyedropper: vectorcraft_engine::EyedropperOptions,
+    guides: (bool, bool),
+    zoom: f64,
+    outline: bool,
+}
+
+/// [`vectorcraft_engine::Session::hover_object`] at `at`, found again only when its
+/// [`HoverObjectKey`] changes: over an image, or with Shift held, finding it samples a color. The
+/// cached key is compared field by field, the cheap fields first, and the key is copied only
+/// when it changed.
+fn eyedropper_hover_object(
+    app: &mut VectorcraftApp,
+    at: vectorcraft_geom::Point,
+    mods: vectorcraft_tools::Mods,
+    view: vectorcraft_engine::ViewInfo,
+) -> Option<vectorcraft_doc::NodeId> {
+    let st = app.session.active()?;
+    let s = &app.session;
+    let cached = app.canvas.hover_object.as_ref().filter(|(k, _)| {
+        let HoverObjectKey {
+            at: k_at,
+            mods: k_mods,
+            doc,
+            selection,
+            isolation,
+            options,
+            paint,
+            fill_active,
+            stop,
+            tolerance,
+            eyedropper,
+            guides,
+            zoom,
+            outline,
+        } = k;
+        *k_at == at
+            && *k_mods == mods
+            && *doc == (st.uid, st.revision)
+            && *isolation == st.isolation
+            && *fill_active == s.fill_active
+            && *stop == s.selected_stop()
+            && *tolerance == s.prefs.selection_tolerance
+            && *eyedropper == s.prefs.eyedropper
+            && *guides == (view.guides, s.guides_locked())
+            && *zoom == view.zoom
+            && *outline == view.outline
+            && *selection == st.selection
+            && *paint == s.paint
+            && *options == s.tool_options()
+    });
+    if let Some((_, id)) = cached {
+        return *id;
+    }
+    let key = HoverObjectKey {
+        at,
+        mods,
+        doc: (st.uid, st.revision),
+        selection: st.selection.clone(),
+        isolation: st.isolation,
+        options: app.session.tool_options(),
+        paint: app.session.paint.clone(),
+        fill_active: app.session.fill_active,
+        stop: app.session.selected_stop(),
+        tolerance: app.session.prefs.selection_tolerance,
+        eyedropper: app.session.prefs.eyedropper,
+        guides: (view.guides, app.session.guides_locked()),
+        zoom: view.zoom,
+        outline: view.outline,
+    };
+    let id = app.session.hover_object(at, mods, view);
+    app.canvas.hover_object = Some((key, id));
+    id
 }
 
 /// Draw Inside (Shift+D): while the mode lasts, a dotted open rectangle round the corners of the
