@@ -7554,7 +7554,7 @@ and the weed box of Weed Box and Lines (`addon.cutting.weed`) read the image whe
 corners make a parallelogram, the image is placed by its transform as before. Otherwise the native file saves them in
 the image's `image_quad` field (top left, top right, bottom right and bottom left of its pixels, in page
 coordinates); files without the field open as before. The canvas, printing and every export except DXF, WMF and HP-GL
-(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. In
+(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. The `.ai` writers write the nearest parallelogram instead at their nesting limit (below). In
 printing and exports the mesh takes as many cells as it needs for the pieces to stay within 0.05 pt of the exact
 perspective at the points it checks, with cells at least 2 pt long on the corners' longest side, and each piece reaches
 0.5 pt into its neighbors. The canvas cuts the mesh for the zoom, by the view's largest stretch: within a quarter of a
@@ -7562,7 +7562,11 @@ screen pixel at the points it checks, with cells at least 4 pixels long, and eac
 neighbors. Either way the mesh takes no more than 64 by 64 cells, and no more cells across than the image has pixels on
 its longer side (or 8, if that is more). A stronger perspective, or a smaller image, is drawn with the cells it is
 allowed. In EMF each piece stores only the pixels inside its clip, with a pixel more on each side. DXF and WMF cannot
-clip, so they write the image as the parallelogram nearest its corners and warn. Corners that would fold the image over
+clip, so they write the image as the parallelogram nearest its corners and warn. The editing data a `.ai` file carries
+writes an image nested 8 deep in opacity masks, symbols, live objects and pattern tiles the same way, and a legacy
+`.ai` (version 7) does so for an image nested 8 deep in symbols and live objects; each warns that the image was
+written as the nearest parallelogram. Ordinary groups and layers do not count toward that depth. Neither writer
+writes an image nested deeper. Corners that would fold the image over
 itself, put three corners on one line, join two corners, cross the warp's horizon or lie too close together for a
 perspective map are an error, and nothing changes. A transform that squeezes the corners past what a perspective map
 can place leaves the image at the parallelogram nearest them. A file whose `image_quad` holds other than four points,
