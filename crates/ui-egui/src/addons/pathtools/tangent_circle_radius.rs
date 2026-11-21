@@ -84,9 +84,9 @@ fn circle(d: &mut Dialog) -> Result<Option<Value>, String> {
 
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     let unit = app.session.general_unit();
-    let (lo, hi) = tangent_circle::RADIUS_RANGE;
+    // The field keeps a radius as typed, so one outside the tool's range shows [`RADIUS_RANGE`].
     widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
-        form::length_within(ui, d, "radius", unit, FIELD_W, Some(lo..=hi));
+        form::length_within(ui, d, "radius", unit, FIELD_W, None);
     });
     let note = match circle(d) {
         Ok(Some(points)) => {
@@ -156,6 +156,69 @@ mod tests {
 
     fn ok_enabled(app: &VectorcraftApp) -> bool {
         super::SPEC.ok_enabled.is_some_and(|f| f(app, app.ui.dialog.as_ref().unwrap()))
+    }
+
+    /// Click the dialog's Radius field, select its text, type `text` over it and press Tab.
+    fn type_radius(app: &mut VectorcraftApp, text: &str) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+            let input = egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| crate::dialogs::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        run(app, vec![]);
+        let out = run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        // The Radius field is the dialog's only text field.
+        let fields: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput).filter_map(|(_, n)| n.bounds()).collect();
+        let [b] = fields[..] else { panic!("one text field, not {fields:?}") };
+        let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+        for pressed in [true, false] {
+            let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+            run(app, vec![egui::Event::PointerMoved(at), button]);
+        }
+        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+        let select_all = egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: all };
+        run(app, vec![select_all, egui::Event::Text(text.into())]);
+        for pressed in [true, false] {
+            run(app, vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: Default::default() }]);
+        }
+        run(app, vec![]);
+    }
+
+    #[test]
+    fn a_radius_typed_outside_the_tool_range_shows_the_error_and_leaves_ok_off() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 500, "height": 500})).unwrap();
+        for y in [100, 140] {
+            app.run("path.create", json!({"anchors": [{"x": 100, "y": y}, {"x": 300, "y": y}]})).unwrap();
+        }
+        app.session.select_tool(tool::ID, ViewInfo::default()).unwrap();
+        app.run("tool.setOption", json!({"tool": tool::ID, "key": "askRadius", "value": true})).unwrap();
+        let paths = count(&app);
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert!(ok_enabled(&app));
+        // A radius typed in the field is kept as typed, not moved into the tool's range.
+        for (typed, kept) in [("0", 0.0), ("-20", -20.0), ("2000000", 2e6)] {
+            type_radius(&mut app, typed);
+            assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", f64::NAN), kept, "{typed}");
+            assert!(frame(&mut app).contains(super::RADIUS_RANGE), "{typed}");
+            assert!(!ok_enabled(&app), "{typed}");
+            assert_eq!(count(&app), paths, "{typed}");
+        }
+        // Typing the click's radius again previews its circle and turns OK on.
+        type_radius(&mut app, "20");
+        frame(&mut app);
+        assert!(ok_enabled(&app));
+        assert_eq!(count(&app), paths + 1);
     }
 
     #[test]
