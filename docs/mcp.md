@@ -2675,7 +2675,55 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
-  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+  themselves, such as a text frame's `contents`, are not defined yet and read as `undefined`.
+- `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
+  `getByName(name)`, `removeAll()`, `add()` (a path with no points, from `path.create`, painted as new art; when new
+  art has no fill and no stroke, the path has neither), and the shape creators
+  `rectangle(top, left, width, height, reversed?)`, `roundedRectangle(top, left, width, height, horizontalRadius = 15,
+  verticalRadius = 20, reversed?)`, `ellipse(top = 100, left = 100, width = 50, height = 100, reversed?, inscribed?)`,
+  `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed?)` and `star(centerX = 200, centerY = 300,
+  radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
+  `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
+  art is painted. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
+  `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
+  `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
+  `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)` (counterclockwise for a
+  positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
+  `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
+  `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
+  through `object.move`, `object.rotate` and `object.scale`. `pathPoints`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
+  `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
+  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `parent` and
+  `remove()`. `new RGBColor()` (0 to 255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100
+  white, as https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
+  the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
+  and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
+  VectorCraft's own rules: a point's index counts across the path's subpaths; `closed` is true when every subpath is
+  closed, and assigning it opens or closes them all; `setEntirePath` takes at most 100,000 points and gives corner
+  points with no handles, keeping the path closed when it was; moving `anchor` leaves its handles where they are, and
+  `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
+  whose index is past the end of its path throws `Stale path point`. Color components left out count as 0, `new
+  cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
+  range throws a `RangeError` when the color is assigned, with nothing changed. Reading `fillColor` or `strokeColor`
+  gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
+  global or spot swatch reads as a `SpotColor` with its `tint`); assigning one of those throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
+  stroke; a new-art pattern with a placement of its own, or one missing from the document, throws an error. Sizes and
+  radii are finite and not negative, `sides` is a whole number from 3 to 1000, `points` one from 2 to 1000,
+  `strokeWidth` 0 to 1000 points (a `changeLineWidths` that would scale it past 1000 throws), `strokeDashes` at most
+  64 lengths that are not all 0 (`[]` or `{}` for a solid line), and `rotateAbout` and `scaleAbout` default to
+  `Transformation.CENTER`. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
+  `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
+  `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
+  that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
+  changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
+  shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
+  art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
+  `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Anchors",
             [],
             None,
-            "{id, subpaths: [{anchors: [{x,y,in?,out?}], closed}]} replace a path's geometry",
+            "{id, subpaths: [{anchors: [{x,y,in?,out?,smooth?: bool (left out: smooth when both handles are pulled out and in line)}], closed}]} replace a path's geometry",
             has_doc,
             set_anchors
         ),
