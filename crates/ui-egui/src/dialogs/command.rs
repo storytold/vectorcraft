@@ -282,8 +282,16 @@ const FIRST_BASELINE: form::Choices = &[
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
 
 /// Closes before running, so a dialog the command opens stays open. A previewed one keeps its
-/// preview as the one undo step.
+/// preview as the one undo step. A dialog opened on one document's objects (`__doc`, its uid)
+/// closes as Cancel does and runs nothing once another document is the active one, as Delete
+/// Brush's question does (`brush_delete.rs`, `confirm`).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if let Some(doc) = d.fields.get("__doc")
+        && doc.as_u64() != app.session.active().map(|st| st.uid)
+    {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let (cmd, params) = call(d);
     if previews(d) {
         return form::commit_preview(app, &cmd, params);

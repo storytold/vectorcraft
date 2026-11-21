@@ -216,21 +216,37 @@ pub fn selection_fold_angles(s: &Session) -> FoldAngles {
     }
 }
 
+/// The lines Set Fold Angle changes among the selected objects of the active document, as it takes
+/// them with no `ids` (none, while it would refuse the selection). Given back as `ids`, they are the
+/// lines it changes.
+pub fn selection_fold_lines(s: &Session) -> Vec<NodeId> {
+    match (taken_roots(s, &Value::Null, SET_FOLD_ANGLE), s.doc()) {
+        (Ok((roots, _)), Ok(st)) => changeable(&st.doc, &roots).into_iter().map(|(n, _)| n.id).collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// The [`FoldAngles`] of the outermost objects `roots` of `d`.
 pub(super) fn fold_angles(d: &Document, roots: &[NodeId]) -> FoldAngles {
-    let table = RoleTable::of(d);
-    let editable = d.editable();
     let mut f = FoldAngles::default();
-    for n in role_targets(d, &editable_members(d, roots.to_vec()).0, false).0.iter().filter_map(|id| d.node(*id)) {
-        // The role first: whether an object can be edited can take its bounds to find out.
-        if let Some(role) = table.role_of(n)
-            && folds(role)
-            && editable(n.id)
-        {
-            f.add(n, role);
-        }
+    for (n, role) in changeable(d, roots) {
+        f.add(n, role);
     }
     f
+}
+
+/// The lines that fold among the outermost objects `roots` of `d` that Set Fold Angle can change,
+/// with their roles, in order.
+fn changeable<'a>(d: &'a Document, roots: &[NodeId]) -> Vec<(&'a Node, Role)> {
+    let table = RoleTable::of(d);
+    let editable = d.editable();
+    let targets = role_targets(d, &editable_members(d, roots.to_vec()).0, false).0;
+    // The role first: whether an object can be edited can take its bounds to find out.
+    targets
+        .iter()
+        .filter_map(|id| d.node(*id))
+        .filter_map(|n| table.role_of(n).filter(|r| folds(*r)).filter(|_| editable(n.id)).map(|r| (n, r)))
+        .collect()
 }
 
 impl FoldAngles {

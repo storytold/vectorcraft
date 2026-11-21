@@ -269,13 +269,17 @@ fn rows(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Row> {
 }
 
 /// The fields Set Fold Angle… opens with: `addon.packaging.setFoldAngle`'s options on the angle
-/// the selected lines that it can change all fold at, else 90°. The command's reason while it
-/// can't change any.
+/// the selected lines that it can change all fold at, else 90°, and those lines as the `ids` OK
+/// sends, so OK changes the lines the dialog opened on even when the selection changes while it is
+/// open, with the uid of their document as `__doc`, so OK changes nothing once another document is
+/// the active one. The command's reason while it can't change any.
 pub(crate) fn dialog_fields(app: &VectorcraftApp) -> Result<Value, String> {
     let command = vectorcraft_engine::find_command(SET_FOLD_ANGLE).ok_or_else(|| format!("unknown command {SET_FOLD_ANGLE}"))?;
     (command.enabled)(&app.session)?;
     let angle = vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle.unwrap_or(90.0);
-    Ok(json!({ "__command": SET_FOLD_ANGLE, "__label": "Set Fold Angle", "angle": angle }))
+    let ids: Vec<u64> = vectorcraft_engine::cmd::selection_fold_lines(&app.session).iter().map(|id| id.0).collect();
+    let doc = app.session.active().map(|st| st.uid);
+    Ok(json!({ "__command": SET_FOLD_ANGLE, "__label": "Set Fold Angle", "angle": angle, "__params": { "ids": ids }, "__doc": doc }))
 }
 
 /// The Fold Angle row, while the selection holds lines that fold and can be changed: the angle

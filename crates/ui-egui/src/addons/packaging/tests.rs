@@ -324,6 +324,52 @@ fn set_fold_angle_opens_its_dialog_on_the_selected_lines_angle() {
     assert_eq!(app.ui.dialog.take().expect("a dialog").fields["angle"].as_f64(), Some(30.0));
 }
 
+/// Set Fold Angle…'s OK changes the lines the dialog opened on, even when the selection changes
+/// while it is open (a remote command can change it): the other crease keeps its angle.
+#[test]
+fn set_fold_angle_s_ok_changes_the_lines_the_dialog_opened_on() {
+    let (mut app, a, b) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a, b]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+    assert!(app.ui.dialog.is_some(), "the dialog opens");
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(30.0));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "OK closes the dialog");
+    let angle = |app: &mut VectorcraftApp, id: u64| {
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle
+    };
+    assert_eq!(angle(&mut app, a), Some(30.0), "the line the dialog opened on");
+    assert_eq!(angle(&mut app, b), Some(90.0), "the line selected later keeps its role's angle");
+}
+
+/// Set Fold Angle…'s OK changes nothing once another document is the active one, even a line there
+/// with the same id as the line the dialog opened on.
+#[test]
+fn set_fold_angle_s_ok_changes_nothing_in_another_document() {
+    let (mut app, a, _) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+    assert!(app.ui.dialog.is_some(), "the dialog opens");
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let other = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(other, a, "the same id in the other document");
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [other]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(30.0));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "OK closes the dialog");
+    let angle = |app: &mut VectorcraftApp| {
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle
+    };
+    assert_eq!(angle(&mut app), Some(90.0), "the other document's line keeps its role's angle");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(angle(&mut app), Some(90.0), "the first document's line is left as it was");
+}
+
 /// Set Fold Angle… keeps the angle typed into its dialog within -180° to 180°, so OK applies the
 /// nearest end instead of closing on an angle the command refuses.
 #[test]

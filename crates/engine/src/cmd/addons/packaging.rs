@@ -11,7 +11,7 @@ mod check;
 mod fold;
 mod roles;
 
-pub use angle::{FoldAngles, selection_fold_angles};
+pub use angle::{FoldAngles, selection_fold_angles, selection_fold_lines};
 pub use fold::{fold_source, print_hidden};
 pub(crate) use roles::{role_swatch_edited, role_swatches_merged};
 

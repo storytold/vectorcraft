@@ -616,9 +616,16 @@ fn a_flap_split_by_a_0_degree_crease_stacks_as_one_against_another_flap() {
     let camera = Camera { width: 140, center: [70.0, -50.0, 0.0], rotate_y: 180.0, ..front() };
     let img = render(&Scene { blank: b, folded: &f, print: None, inside: [0, 0, 0, 255], outside: WHITE, camera }).expect("drawn");
     // From the back the image is mirrored: x on the blank is 140 - x in the image.
-    let right_flap = b.panels.iter().position(|p| p.outline.bounds().is_some_and(|r| (r.x0 - 90.0).abs() < 1e-6)).expect("the right flap");
+    let starting_at = |x0: f64| b.panels.iter().position(|p| p.outline.bounds().is_some_and(|r| (r.x0 - x0).abs() < 1e-6));
+    let right_flap = starting_at(90.0).expect("the right flap");
+    // Folded back about x 30, the left flap's part from 15 to 30 lies at 30 to 45 and its part from
+    // 0 to 15 at 45 to 60.
+    let (inner, outer) = (starting_at(15.0).expect("the left flap's inner part"), starting_at(0.0).expect("its outer part"));
     let (near, far) = (img.panel_at(140 - 42, 30), img.panel_at(140 - 52, 30));
-    assert_eq!(near == Some(right_flap), far == Some(right_flap), "{near:?} {far:?}");
+    // Either flap may be in front, but the same one at both samples.
+    let right = (near, far) == (Some(right_flap), Some(right_flap));
+    let left = (near, far) == (Some(inner), Some(outer));
+    assert!(right || left, "{near:?} {far:?}: right flap {right_flap}, left flap {inner} and {outer}");
 }
 
 #[test]
