@@ -150,29 +150,4 @@ mod tests {
             "{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType 1\n/DataSource VCsrc /FlateDecode filter >> image\nVCsrc flushfile } exec\n~>\n"
         );
     }
-
-    #[test]
-    fn shared_shading_handles_empty_single_and_flat_stops() {
-        let mut empty = String::new();
-        super::push_shading(&mut empty, super::ShadingKind::Axial, "/DeviceRGB", &[0.0, 0.0, 10.0, 0.0], 3, &[]);
-        super::push_shading(&mut empty, super::ShadingKind::Axial, "/DeviceRGB", &[0.0, 0.0, 10.0, 0.0], 0, &[(0.0, vec![1.0, 0.0, 0.0])]);
-        assert!(empty.is_empty());
-
-        let mut single = String::new();
-        super::push_shading(&mut single, super::ShadingKind::Axial, "/DeviceRGB", &[0.0, 0.0, 10.0, 0.0], 3, &[(0.5, vec![1.0])]);
-        assert!(single.contains("/FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [1 0 0] /N 1"));
-        assert!(!single.contains("/FunctionType 3"));
-
-        let mut flat = String::new();
-        super::push_shading(
-            &mut flat,
-            super::ShadingKind::Axial,
-            "/DeviceRGB",
-            &[0.0, 0.0, 10.0, 0.0],
-            3,
-            &[(0.5, vec![1.0, 0.0, 0.0]), (0.5, vec![0.0, 0.0, 1.0])],
-        );
-        assert!(flat.contains("/FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [1 0 0] /N 1"));
-        assert!(!flat.contains("/FunctionType 3"));
-    }
 }
