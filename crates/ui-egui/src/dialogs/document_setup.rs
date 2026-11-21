@@ -232,7 +232,7 @@ fn pending_grid_pair(fields: &Map<String, Value>) -> Option<Vec<Value>> {
 /// Color `c` as an entry of the dialog's `gridColors` that `document.setup` reads back as `c`: its
 /// hex code when that reads back as `c`, else the color in its own model (a Lab or CMYK color, or
 /// an RGB color whose hex code is converted to display RGB or rounded).
-fn grid_color_entry(c: &vectorcraft_color::Color) -> Value {
+pub(super) fn grid_color_entry(c: &vectorcraft_color::Color) -> Value {
     let hex = json!(c.to_hex());
     if vectorcraft_engine::cmd::color_value(&hex) == Some(*c) { hex } else { serde_json::to_value(c).unwrap_or(hex) }
 }
@@ -916,6 +916,29 @@ mod tests {
             assert!(app.ui.dialog.is_none());
             assert_eq!(app.session.active().unwrap().doc.setup.grid_colors_name(), "Light");
             assert_eq!(undo_steps(&app), 0, "cancel {cancel}");
+        }
+    }
+
+    /// The Color Picker's OK on a grid color it opened on, unchanged, keeps that color in its own
+    /// model: a Lab or CMYK color stays Lab or CMYK through Document Setup's OK, and a hex color
+    /// stays that hex color. The other color stays as it was.
+    #[test]
+    fn an_unchanged_grid_color_picker_ok_keeps_the_colors_own_model() {
+        for (index, grid) in
+            [(0, json!(["lab 55 60 40", "#cccccc"])), (1, json!(["#ffffff", "cmyk 0 50 100 0"])), (1, json!(["lab 55 60 40", "#123456"]))]
+        {
+            let (mut app, ctx) = transparency_tab_on(grid.clone());
+            let before = app.session.active().unwrap().doc.setup.grid_colors;
+            click_grid_box(&mut app, &ctx, index);
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value)), ("colorPicker", Some(before[index])));
+            crate::dialogs::confirm(&mut app).unwrap();
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, before.to_vec()), "{grid}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, before, "{grid}");
+            assert_eq!(undo_steps(&app), 1, "{grid}: only the document.setup that opened the tab on the grid");
         }
     }
 
