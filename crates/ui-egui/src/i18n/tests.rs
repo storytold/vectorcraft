@@ -1061,12 +1061,12 @@ fn document_info_labels_are_in_complete_catalogs() {
 }
 
 /// The values Document Info makes and shows in the interface language: the font states and
-/// embedding permissions, the templates of the font, image, raster effects and Repeat object
-/// values, the names of gradients named by their kind, the counted uses, instances, rows and
+/// embedding permissions, the templates of the font, image (format, size, resolution and memory),
+/// raster effects and Repeat object values, the names of gradients named by their kind, the counted uses, instances, rows and
 /// columns, and the transparency settings' values.
 #[test]
 fn document_info_values_are_in_complete_catalogs() {
-    const VALUES: [&str; 22] = [
+    const VALUES: [&str; 28] = [
         "unknown type",
         "{type}; {uses}",
         "built in",
@@ -1081,6 +1081,12 @@ fn document_info_values_are_in_complete_catalogs() {
         "{width} × {height} px",
         "{size} — {file}",
         "{n} ppi",
+        "{format}; {size}; {detail}",
+        "{x} × {y} ppi",
+        "resolution unavailable",
+        "estimated memory {memory}",
+        "memory unavailable",
+        "Unknown format",
         "{kind}, {instances}",
         "{kind}, {rows} × {cols}",
         "{grid}, {instances}",
