@@ -3885,7 +3885,10 @@ already walks Image Trace. Short agent entry points:
   art, where it is, snaps the art again after it is edited, and does not count
   instances in `select.object.notAlignedToPixelGrid`; `alignToPixelGrid` alone with the value the symbol already has
   adds no undo step),
-  `symbol.place {name?, x?, y?}`, `symbol.placeFromDocument {sourceDocument, name, x?, y?}` (an instance of a symbol
+  `symbol.place {name?, x?, y?}` (on top of the current layer; in Draw Behind directly below the bottommost selected
+  object, beside the compound path that holds it, or at the bottom of the current layer with nothing selected, above
+  a clipping path; `symbol.placeFromDocument` and `symbol.addFromLibrary` with `place` stack the instance the same
+  way), `symbol.placeFromDocument {sourceDocument, name, x?, y?}` (an instance of a symbol
   of another open document, as a symbol dragged from that document's Symbols panel onto the canvas places it: the
   symbol, the symbols it nests and the resources they use are added as `edit.dropSelection` adds them, in the same
   undo step, and a symbol with the same name but other art or Symbol Options is added under a free name; an error
@@ -9136,7 +9139,8 @@ undo step. When a matched layer, or a layer around it, is hidden or locked, the 
 Drawing modes (`view.drawMode`) apply
 too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put the objects inside the
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
-`edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection. `edit.pasteInFront` and
+`edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection, and a placed symbol instance
+(`symbol.place`) goes just below the selection too. `edit.pasteInFront` and
 `edit.pasteInBack` ignore the drawing mode. When the object drawn into is the one isolation mode isolates (`object.isolate`,
 or a double-click on it with the Selection tool), art drawn or pasted inside it takes isolation mode into its clip group,
 so the new art can be picked and isn't dimmed; `edit.undo` or `edit.redo` that removes the isolated object ends
