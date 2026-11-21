@@ -1311,6 +1311,8 @@ fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, H
 
 /// [`command`], with the command's result as it gave it as well as the script's copy of it.
 fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
+    // Point changes that wait in the object model are written before any command runs.
+    dom::flush(host)?;
     let id = id.to_string();
     let params = params.clone();
     let session = host.session.clone();
@@ -1354,6 +1356,7 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits
 /// of a crossing throws a `RangeError`.
 fn vc_document(host: &Host) -> std::result::Result<Data, HostError> {
+    dom::flush(host)?;
     let s = host.session.borrow();
     let Some(st) = s.active() else { return Ok(Data::Null) };
     let ids: Vec<u64> = st.selection.objects.iter().take(1_000).map(|i| i.0).collect();
@@ -2474,6 +2477,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     std::mem::swap(s, &mut *cell.borrow_mut());
     let scope = job.scope.clone();
     let realm = &mut job.realm;
+    let host = &job.host;
     let started = clock();
     let r = scope.run(|| {
         guard::catch_panic(|| {
@@ -2481,7 +2485,14 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
             if PANIC_IN_SLICE.with(Cell::get) {
                 panic!("a slice failed");
             }
-            realm.advance(SLICE_FUEL)
+            // Point changes that still wait in the object model are written when the script ends. Between
+            // slices the run's documents are put aside, so they can wait across slices.
+            realm.advance(SLICE_FUEL).and_then(|progress| {
+                if matches!(progress, Progress::Done(_)) {
+                    dom::flush(host).map_err(end_flush_error)?;
+                }
+                Ok(progress)
+            })
         })
     });
     if let Some(started) = started {
@@ -2493,6 +2504,17 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     s.depth = depth;
     s.sync_front_profiles();
     r
+}
+
+/// The error that ends a run when the point changes waiting at the end of its script cannot be
+/// written.
+fn end_flush_error(e: HostError) -> RunError {
+    let message = match e {
+        HostError::Error(m) | HostError::Type(m) | HostError::Range(m) | HostError::Syntax(m) | HostError::Abort(m) => m,
+        HostError::Marked { error, .. } => return end_flush_error(*error),
+        HostError::Wait => "a host function waited for its result where the run cannot pause".into(),
+    };
+    RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line: 0, column: 0, authored: false }
 }
 
 /// Tests: removes the session's running job while the session keeps its hold on it. → whether a

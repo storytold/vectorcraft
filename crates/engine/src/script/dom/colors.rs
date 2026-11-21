@@ -45,9 +45,24 @@ fn color_object(class: &str, values: &[(&str, f64)]) -> Data {
     Data::Object(items)
 }
 
-/// A component as the script sees it: `v` times `scale`, rounded to 4 decimals.
+/// A component as the script sees it: `exact` rounded to the fewest decimals, from 4 to 9, that
+/// `back` turns into the stored `v` again, else `exact` itself, so that assigning a color read
+/// from an object gives that object the same color.
+fn shown_as(exact: f64, v: f32, back: impl Fn(f64) -> f32) -> f64 {
+    let mut scale = 1e4;
+    for _ in 4..=9 {
+        let r = (exact * scale).round() / scale;
+        if back(r) == v {
+            return r;
+        }
+        scale *= 10.0;
+    }
+    exact
+}
+
+/// A component stored as `v`, from 0 to 1, that the script sees times `scale`.
 fn shown(v: f32, scale: f64) -> f64 {
-    (f64::from(v) * scale * 1e4).round() / 1e4
+    shown_as(f64::from(v) * scale, v, |r| unit(r, scale))
 }
 
 /// The color object for a solid color.
@@ -58,7 +73,7 @@ fn of_color(c: &Color) -> Data {
             "CMYKColor",
             &[("cyan", shown(c, 100.0)), ("magenta", shown(m, 100.0)), ("yellow", shown(y, 100.0)), ("black", shown(k, 100.0))],
         ),
-        Color::Gray { k } => color_object("GrayColor", &[("gray", shown(1.0 - k, 100.0))]),
+        Color::Gray { k } => color_object("GrayColor", &[("gray", shown_as((1.0 - f64::from(k)) * 100.0, k, |g| unit(100.0 - g, 100.0)))]),
         Color::Lab { l, a, b } => color_object("LabColor", &[("l", shown(l, 1.0)), ("a", shown(a, 1.0)), ("b", shown(b, 1.0))]),
     }
 }

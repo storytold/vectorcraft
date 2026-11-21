@@ -2665,7 +2665,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
-  kept from an earlier run, throws `Stale page item`; `index` and `getByName` throw `Not found`; and
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
   nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
@@ -2685,7 +2689,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed?)` and `star(centerX = 200, centerY = 300,
   radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
   `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
-  art is painted. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
+  mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
   `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
   `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
@@ -2693,7 +2698,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
   `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
   `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
-  through `object.move`, `object.rotate` and `object.scale`. `pathPoints`
+  through `object.move`, `object.rotate` and `object.scale`. Changes to the points of a path (`closed`,
+  `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
+  script uses any other member or command, or the points of another path, and when the script ends; a path aligned
+  to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  `pathPoints`
   (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
   `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
   `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `parent` and
@@ -2708,15 +2717,19 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
   whose index is past the end of its path throws `Stale path point`. Color components left out count as 0, `new
   cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
-  range throws a `RangeError` when the color is assigned, with nothing changed. Reading `fillColor` or `strokeColor`
-  gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
+  range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
+  decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
+  was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
   global or spot swatch reads as a `SpotColor` with its `tint`); assigning one of those throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
   art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
-  stroke; a new-art pattern with a placement of its own, or one missing from the document, throws an error. Sizes and
+  stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
+  it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
+  `fillOverprint` and `strokeOverprint` read and change the top fill or stroke only. Sizes and
   radii are finite and not negative, `sides` is a whole number from 3 to 1000, `points` one from 2 to 1000,
   `strokeWidth` 0 to 1000 points (a `changeLineWidths` that would scale it past 1000 throws), `strokeDashes` at most
   64 lengths that are not all 0 (`[]` or `{}` for a solid line), and `rotateAbout` and `scaleAbout` default to
-  `Transformation.CENTER`. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
+  `Transformation.CENTER`. A transform that leaves the path where it is, such as `rotate(360)` or
+  `resize(100, 100)`, checks its arguments and runs no command, on a path with no points too. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
   `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
   `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
   that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
