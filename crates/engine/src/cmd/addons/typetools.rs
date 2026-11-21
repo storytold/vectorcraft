@@ -20,7 +20,7 @@ use vectorcraft_text::edit;
 use super::super::menucmds::whole_or;
 use super::super::object::choice;
 use super::super::textedit::{CharChange, text_mut, text_ref, type_ranges};
-use super::super::typecmd::refresh_bounds;
+use super::super::typecmd::{refresh_bounds, refresh_with_given_leading};
 use super::super::typemenu::{bake_dynamic_text, text_ids};
 use super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or, targets};
 use crate::{EngineError, Result, Session};
@@ -170,7 +170,11 @@ fn text_tweaker(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, changes) in &plans {
             let t = text_mut(d, *id).ok_or(EngineError::NoNode(*id))?;
             t.runs = tweak(std::mem::take(&mut t.runs), changes);
-            refresh_bounds(t);
+            // With Block on, the first changed character's leading goes to the frame's line gap.
+            match changes.first().filter(|_| key == "leading") {
+                Some(&(at, _)) => refresh_with_given_leading(t, at),
+                None => refresh_bounds(t),
+            }
         }
         Ok(())
     })?;

@@ -500,13 +500,31 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
     };
     each_text_mut(d, &mut |t| {
         let mut changed = false;
+        // The first character whose leading the new definition changed.
+        let mut leading_at = None;
+        // With Block on, every leading is the one Block gives (size plus line gap), not an
+        // override: the old definition's leading stands in for it so the new one applies.
+        let block = t.dynamic_text && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. });
+        let old_leading = old
+            .get("leading")
+            .filter(|_| block && old.get("leading") != new.get("leading"))
+            .and_then(|v| serde_json::from_value::<Option<f64>>(v.clone()).ok());
         match kind {
             Kind::Char => {
+                let mut off = 0;
                 for r in &mut t.runs {
                     if r.style.style_name == target {
+                        if let Some(l) = old_leading {
+                            r.style.leading = l;
+                        }
+                        let was = r.style.leading;
                         r.style = font_change(&r.style, restyle(&r.style, char_attrs, old, new, &base), new);
                         changed = true;
+                        if r.style.leading != was && leading_at.is_none() {
+                            leading_at = Some(off);
+                        }
                     }
+                    off += r.text.len();
                 }
             }
             Kind::Para => {
@@ -519,7 +537,11 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
             }
         }
         if changed {
-            refresh_bounds(t);
+            // With Block on, a leading the new definition gives goes to the frame's line gap.
+            match leading_at {
+                Some(at) => super::typecmd::refresh_with_given_leading(t, at),
+                None => refresh_bounds(t),
+            }
         }
         Ok(())
     })
@@ -971,6 +993,8 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let attrs = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
     let normal = kind.attrs(d, kind.normal()).unwrap_or_default();
     let clear = bool_or(p, "clearOverrides", false);
+    // The style sets a leading, or clearing overrides gives the text Normal's.
+    let sets_leading = kind == Kind::Char && (attrs.contains_key("leading") || (clear && normal.contains_key("leading")));
     let style_name = (name != kind.normal()).then(|| name.clone());
     // A Type tool range or whole text objects.
     let text_range = super::typecmd::TextRange::parse(p, &c)?;
@@ -997,6 +1021,8 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     s.edit_named("Apply {name}", &name, name == kind.normal(), |d, _| {
         for id in &ids {
             let Some(t) = text_mut(d, *id) else { continue };
+            // The first character given the style's leading.
+            let mut leading_at = None;
             match kind {
                 Kind::Char => {
                     let len = vectorcraft_text::edit::runs_len(&t.runs);
@@ -1017,6 +1043,7 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                     if let Some(e) = err {
                         return Err(e);
                     }
+                    leading_at = sets_leading.then(|| super::typecmd::styled_start(t, a.min(b), a.max(b))).flatten();
                 }
                 Kind::Para => {
                     let mut v = t.paragraph_styles();
@@ -1030,7 +1057,11 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
                     t.set_paragraph_styles(v);
                 }
             }
-            refresh_bounds(t);
+            // With Block on, a leading the style sets goes to the frame's line gap.
+            match leading_at {
+                Some(at) => super::typecmd::refresh_with_given_leading(t, at),
+                None => refresh_bounds(t),
+            }
         }
         Ok(())
     })?;
