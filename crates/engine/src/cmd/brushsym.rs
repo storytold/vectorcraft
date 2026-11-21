@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Brush Stroke",
             [],
             None,
-            "{ids?|id?} remove brushes from the selected strokes → {ids}",
+            "{ids?|id?} remove brushes from the selected strokes; the current brush stops being current when it was one of them → {ids}",
             has_selection,
             brush_remove
         ),
