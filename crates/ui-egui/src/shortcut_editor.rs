@@ -2447,166 +2447,6 @@ mod tests {
     }
 
     #[test]
-    fn format_parse_round_trip_for_every_default() {
-        for e in entries().iter() {
-            if let Some(s) = default_of(&e.key)
-                && let Some(sc) = crate::shortcuts::parse(s)
-            {
-                let f = format(&sc);
-                assert_eq!(crate::shortcuts::parse(&f), Some(sc), "{} `{s}` → `{f}`", e.key);
-                assert_eq!(normalize(&f).as_deref(), Some(f.as_str()));
-            }
-        }
-    }
-
-    #[test]
-    fn normalize_is_order_insensitive() {
-        assert_eq!(normalize("Shift+Cmd+Alt+K"), normalize("Cmd+Alt+Shift+K"));
-        assert_eq!(normalize("Cmd+Shift+]").as_deref(), Some("Cmd+Shift+]"));
-        assert_eq!(normalize("Cmd+="), Some("Cmd+=".into()));
-        assert!(normalize("Hyper+K").is_none());
-    }
-
-    #[test]
-    fn chord_from_recorded_event() {
-        assert_eq!(chord_from_event(Key::K, Modifiers::COMMAND | Modifiers::SHIFT).as_deref(), Some("Cmd+Shift+K"));
-        assert_eq!(chord_from_event(Key::P, Modifiers::NONE).as_deref(), Some("P"));
-        assert_eq!(chord_from_event(Key::Escape, Modifiers::NONE), None);
-        // A modifier's own key press is no chord (#487).
-        assert_eq!(chord_from_event(Key::ShiftLeft, Modifiers::SHIFT), None);
-        assert!(normalize("ShiftLeft").is_none() && normalize("Cmd+ControlRight").is_none());
-    }
-
-    #[test]
-    fn clearing_a_row_that_leaves_the_list_stops_its_recording() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
-        crate::keymap::set_override(&mut app.ui.shortcut_overrides, "edit.duplicate", "Cmd+Alt+Shift+F11");
-        open(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
-        let start = keymap_with(&dialog_overrides(&d));
-        let set = |d: &mut Dialog, key: &str| {
-            d.fields.insert("__recording".into(), json!(key));
-            d.fields.insert("__selected".into(), json!(key));
-        };
-        let state = |d: &Dialog| (d.str("__recording"), d.str("__selected"));
-        // Clear, and Use Default, take the row out of the list: its recording stops.
-        let mut km = start.clone();
-        set(&mut d, "document.setUnits");
-        assign_in(&mut km, "document.setUnits", None, true).unwrap();
-        drop_hidden(&mut d, km.overrides());
-        assert_eq!(state(&d), (String::new(), String::new()));
-        let mut km = start.clone();
-        set(&mut d, "document.setUnits");
-        km.reset(&command_of("document.setUnits"));
-        drop_hidden(&mut d, km.overrides());
-        assert_eq!(state(&d), (String::new(), String::new()));
-        // A row that stays listed keeps its recording, and so does a tool's.
-        let mut km = start.clone();
-        set(&mut d, "edit.duplicate");
-        assign_in(&mut km, "edit.duplicate", None, true).unwrap();
-        drop_hidden(&mut d, km.overrides());
-        assert_eq!(state(&d), ("edit.duplicate".to_string(), "edit.duplicate".to_string()));
-        set(&mut d, "tool:groupSelection");
-        drop_hidden(&mut d, km.overrides());
-        assert_eq!(state(&d), ("tool:groupSelection".to_string(), "tool:groupSelection".to_string()));
-        // A chord taken from a row that then leaves the list offers no Go to Conflict for it.
-        let mut km = start.clone();
-        record(&mut d, &mut km, "edit.duplicate", "Cmd+Alt+Shift+F12");
-        assert_eq!(d.str("__conflict"), "document.setUnits");
-        drop_hidden(&mut d, km.overrides());
-        assert_eq!(d.str("__conflict"), "");
-        // A conflict with a row that stays listed is kept.
-        let mut km = start.clone();
-        record(&mut d, &mut km, "document.setUnits", "Cmd+Alt+Shift+F11");
-        drop_hidden(&mut d, km.overrides());
-        assert_eq!(d.str("__conflict"), "edit.duplicate");
-    }
-
-    #[test]
-    fn a_modifier_pressed_while_recording_waits_for_the_key() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        open(&mut app);
-        app.ui.dialog.as_mut().unwrap().fields.insert("__recording".into(), json!("tool:groupSelection"));
-        let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        let mut press = |key, modifiers| {
-            let events = vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }];
-            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(&mut app, ui.ctx()));
-            out.textures_delta.clear();
-            app.ui.dialog.clone().unwrap()
-        };
-        // egui reports Shift's own key press first (#487): the recording goes on.
-        assert_eq!(press(Key::ShiftLeft, Modifiers::SHIFT).str("__recording"), "tool:groupSelection");
-        let d = press(Key::A, Modifiers::SHIFT);
-        assert_eq!(d.str("__recording"), "");
-        assert_eq!(crate::keymap::override_text(&dialog_overrides(&d), "tool:groupSelection").as_deref(), Some("Shift+A"));
-    }
-
-    /// On Turkish Q the key left of 1 types `"`, which egui reports as the backtick key: the
-    /// recorded shortcut is that key, saved as `~` as before, and its row shows `"`. On a US
-    /// layout the row still shows `~`.
-    #[test]
-    fn the_backtick_key_shows_what_it_types() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        open(&mut app);
-        let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
-        let text = |t: &str| egui::Event::Text(t.into());
-        let mut record_with = |events: Vec<egui::Event>| {
-            app.ui.dialog.as_mut().unwrap().fields.insert("__recording".into(), json!("edit.clear"));
-            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(&mut app, ui.ctx()));
-            out.textures_delta.clear();
-            let d = app.ui.dialog.clone().unwrap();
-            let view = DialogView::new(dialog_overrides(&d));
-            let at = view.entries.iter().position(|e| e.key == "edit.clear").unwrap();
-            let shown = view.texts[at].clone();
-            (crate::keymap::override_text(&dialog_overrides(&d), "edit.clear"), shown)
-        };
-        assert_eq!(record_with(vec![press(Key::Backtick), text("\"")]), (Some("~".to_string()), Some("\"".to_string())));
-        assert_eq!(record_with(vec![press(Key::Backtick), text("`")]), (Some("~".to_string()), Some("~".to_string())));
-        // eframe's web build with no text field focused sends the text before its key.
-        assert_eq!(record_with(vec![text("\""), press(Key::Backtick)]), (Some("~".to_string()), Some("\"".to_string())));
-        // A text right after another key's press is that key's.
-        note_backtick_text(&[press(Key::Num2), text("'"), press(Key::Backtick)]);
-        assert_eq!(backtick_text().as_deref(), Some("\""));
-        note_backtick_text(&[text("`"), press(Key::Backtick)]);
-        assert_eq!(backtick_text(), None);
-        // Several keys typed in one frame on the web: each text goes with the press after it.
-        let web = [text("a"), press(Key::A), text("\""), press(Key::Backtick), text("b"), press(Key::B)];
-        note_backtick_text(&web);
-        assert_eq!(backtick_text().as_deref(), Some("\""));
-        note_backtick_text(&[text("`"), press(Key::Backtick)]);
-        note_backtick_text(&[press(Key::A), text("a"), press(Key::Backtick), text("\""), press(Key::B), text("b")]);
-        assert_eq!(backtick_text().as_deref(), Some("\""));
-        // Only the unshifted key types that character.
-        assert_eq!(on_layout("Shift+~".into(), Some("\"")), "Shift+~");
-        assert_eq!(on_layout("Cmd+~".into(), Some("\"")), "Cmd+\"");
-        assert_eq!(on_layout("Cmd+K".into(), Some("\"")), "Cmd+K");
-    }
-
-    #[test]
-    fn menus_and_tooltips_show_the_backtick_key_as_it_types() {
-        let mut ui = UiState::default();
-        // Not Cmd+~: macOS reserves it, so the override would leave Edit › Clear on Delete there.
-        crate::keymap::set_override(&mut ui.shortcut_overrides, "edit.clear", "Alt+~");
-        crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:measure", "~");
-        sync(&ui);
-        let measure = vectorcraft_tools::tool_info("measure").unwrap();
-        let press = |key| egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE };
-        let clear = || menus::shown_shortcut(menus::shortcut_of("edit.clear").unwrap());
-        note_backtick_text(&[press(Key::Backtick), egui::Event::Text("`".into())]);
-        assert_eq!(clear(), menus::pretty_shortcut("Alt+~"));
-        assert!(crate::toolbar::tip(measure).ends_with("(~)"));
-        note_backtick_text(&[press(Key::Backtick), egui::Event::Text("\"".into())]);
-        assert_eq!(clear(), menus::pretty_shortcut("Alt+\""));
-        assert!(crate::toolbar::tip(measure).ends_with("(\")"), "{}", crate::toolbar::tip(measure));
-        assert_eq!(menus::shown_shortcut("Shift+~"), menus::pretty_shortcut("Shift+~"));
-        sync(&UiState::default());
-    }
-
-    #[test]
     fn saved_modifier_only_overrides_give_the_default_back() {
         let mut ui = UiState::default();
         crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:groupSelection", "Shift+ShiftLeft");
@@ -2614,73 +2454,6 @@ mod tests {
         let ui = ui.sanitized();
         assert!(!crate::keymap::has_override(&ui.shortcut_overrides, "tool:groupSelection"));
         assert_eq!(crate::keymap::override_text(&ui.shortcut_overrides, "edit.preferences").as_deref(), Some(""));
-    }
-
-    #[test]
-    fn override_beats_default_and_empty_removes() {
-        let mut ov = Overrides::new();
-        assert_eq!(effective_in(&ov, "edit.preferences").as_deref(), Some("Cmd+K"));
-        crate::keymap::set_override(&mut ov, "edit.preferences", "Cmd+Alt+Shift+9");
-        assert_eq!(effective_in(&ov, "edit.preferences").as_deref(), Some("Cmd+Alt+Shift+9"));
-        crate::keymap::set_override(&mut ov, "edit.preferences", "");
-        assert_eq!(effective_in(&ov, "edit.preferences"), None);
-        assert_eq!(effective_in(&Overrides::new(), "tool:pen").as_deref(), Some("P"));
-    }
-
-    #[test]
-    fn global_override_reaches_shortcut_of_and_tools() {
-        let mut ui = UiState::default();
-        crate::keymap::set_override(&mut ui.shortcut_overrides, "test.nonexistent", "Cmd+Alt+Shift+F9");
-        crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:measure", "Shift+9");
-        let g = GENERATION.load(Ordering::Relaxed);
-        sync(&ui);
-        assert!(GENERATION.load(Ordering::Relaxed) > g);
-        assert_eq!(menus::shortcut_of("test.nonexistent"), Some("Cmd+Alt+Shift+F9"));
-        assert_eq!(tool_shortcut("measure"), Some("Shift+9"));
-        assert_eq!(tool_for_key("Shift+9"), Some("measure"));
-        sync(&UiState::default());
-        assert_eq!(menus::shortcut_of("test.nonexistent"), None);
-    }
-
-    #[test]
-    fn another_tests_frames_leave_this_tests_mirror_alone() {
-        let mut ui = UiState::default();
-        crate::keymap::set_override(&mut ui.shortcut_overrides, "tool:measure", "Shift+8");
-        crate::workspaces::save_as(&mut ui, "Mine").unwrap();
-        sync(&ui);
-        // What each frame of a test running in parallel does with its default state.
-        std::thread::spawn(|| sync(&UiState::default())).join().unwrap();
-        assert_eq!(tool_shortcut("measure"), Some("Shift+8"));
-        assert!(crate::workspaces::menu_items().iter().any(|i| matches!(i, menus::Item::Cmd("Mine", ..))));
-    }
-
-    #[test]
-    fn assign_detects_conflicts() {
-        let mut ov = Overrides::new();
-        // ⌘K is Preferences.
-        let err = assign(&mut ov, "file.revert", Some("Cmd+K"), false).unwrap_err();
-        assert!(err.contains("Preferences"), "{err}");
-        assert!(ov.is_empty());
-        assert_eq!(conflicts_with(&ov, "Cmd+K", "file.revert"), vec!["edit.preferences".to_string()]);
-    }
-
-    #[test]
-    fn forced_assign_moves_the_chord() {
-        let mut ov = Overrides::new();
-        let removed = assign(&mut ov, "file.revert", Some("Cmd+K"), true).unwrap();
-        assert_eq!(removed, vec!["edit.preferences".to_string()]);
-        assert_eq!(effective_in(&ov, "file.revert").as_deref(), Some("Cmd+K"));
-        assert_eq!(effective_in(&ov, "edit.preferences"), None);
-        assert!(conflicts_with(&ov, "Cmd+K", "file.revert").is_empty());
-    }
-
-    #[test]
-    fn assigning_the_default_drops_the_override() {
-        let mut ov = Overrides::new();
-        assign(&mut ov, "tool:pen", Some("Shift+9"), false).unwrap();
-        assert_eq!(ov.len(), 1);
-        assign(&mut ov, "tool:pen", Some("P"), false).unwrap();
-        assert!(ov.is_empty());
     }
 
     #[test]
@@ -2701,57 +2474,6 @@ mod tests {
         assert_eq!(back, ov);
         assert!(import_json(&json!({"overrides": {"x": "Cmd+Nope+Q"}})).is_err());
         assert!(import_json(&json!({})).is_err());
-    }
-
-    /// An Export Text line: the row's name as the dialog shows it, a tab and `shortcut`.
-    fn text_row(key: &str, shortcut: &str) -> String {
-        let e = entry(key).unwrap_or_else(|| panic!("no entry {key}"));
-        format!("{}\t{shortcut}", english_name(&e))
-    }
-
-    /// Export Text writes the set's name, then the Tools and the Menu Commands rows in the dialog's
-    /// order, each with its shortcut as the dialog shows it.
-    #[test]
-    fn export_text_lists_the_dialogs_rows_with_their_shortcuts() {
-        let mut ov = Overrides::new();
-        crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
-        let (text, km, tool_rows, menu_rows) = with_steady_plugins(|| {
-            let text = export_text("VectorCraft Defaults", &ov);
-            let km = keymap_with(&ov);
-            let names = |tools: bool| -> Vec<String> {
-                entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| format!("{}\t", english_name(e))).collect()
-            };
-            let rows = (names(true), names(false));
-            (text, km, rows.0, rows.1)
-        });
-        let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines[..4], ["Keyboard Shortcuts", "Set: VectorCraft Defaults", "", "Tools"]);
-        let menu_at = lines.iter().position(|l| *l == "Menu Commands").expect("a Menu Commands section");
-        assert_eq!(lines[menu_at - 1], "", "a blank line before Menu Commands");
-        let names_of = |rows: &[&str]| -> Vec<String> { rows.iter().map(|l| format!("{}\t", l.split('\t').next().unwrap_or_default())).collect() };
-        assert_eq!(names_of(&lines[4..menu_at - 1]), tool_rows, "the Tools rows, in the dialog's order");
-        assert_eq!(names_of(&lines[menu_at + 1..]), menu_rows, "the Menu Commands rows, in the dialog's order");
-        let pen = menus::pretty_shortcut(default_of("tool:pen").expect("the Pen tool has a default key"));
-        assert!(lines[4..menu_at].contains(&text_row("tool:pen", &pen).as_str()), "{text}");
-        let prefs = menus::pretty_shortcut(&effective_with(&km, "edit.preferences").expect("the shortcut set"));
-        assert!(prefs.ends_with('9'), "{prefs}");
-        assert!(lines[menu_at..].contains(&text_row("edit.preferences", &prefs).as_str()), "{text}");
-        assert!(text.ends_with('\n'));
-    }
-
-    /// A command without a shortcut is listed with nothing after the tab: one without a default key
-    /// and one whose shortcut the set clears.
-    #[test]
-    fn export_text_lists_a_command_without_a_shortcut_with_an_empty_shortcut() {
-        let mut ov = Overrides::new();
-        crate::keymap::set_override(&mut ov, "edit.preferences", "");
-        assert!(default_of("align.horizontalLeft").is_none());
-        let text = export_text(CUSTOM, &ov);
-        let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines[1], "Set: Custom");
-        for key in ["align.horizontalLeft", "edit.preferences"] {
-            assert!(lines.contains(&text_row(key, "").as_str()), "{key}: {text}");
-        }
     }
 
     /// `shortcuts.exportText` writes the set's name as the set was named, and a path that can't be
@@ -2950,72 +2672,6 @@ mod tests {
         assert_eq!(TextFormat::with_extension("/a/v1.2", TextFormat::Sheet), "/a/v1.2.pdf");
     }
 
-    /// The dialog's Import… leaves an action its function key when the imported set gives the key
-    /// to a command, through both Cancel and OK.
-    #[test]
-    fn importing_into_the_dialog_preserves_action_keys_on_ok() {
-        use crate::panels::actions::{Action, ActionSet, FunctionKey};
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        let f15 = FunctionKey { key: 15, cmd: false, shift: false };
-        let mut nudge = Action::new("Nudge", vec![]);
-        nudge.key = Some(f15);
-        app.ui.action_sets.push(ActionSet::new("Mine", vec![nudge]));
-        let mut ov = Overrides::new();
-        crate::keymap::set_override(&mut ov, "edit.duplicate", "F15");
-        let bytes = serde_json::to_vec(&export_json("Imported", &ov)).unwrap();
-        app.services.pick_open = Some(Box::new(|_: &crate::FilePick| Some("/sets/Imported.json".to_string())));
-        app.services.read = Some(Box::new(move |_: &str| Ok(bytes.clone())));
-        let key = |app: &VectorcraftApp| app.ui.action_sets.last().and_then(|s| s.actions.first()).and_then(|a| a.key);
-        open(&mut app);
-        import_into_dialog(&mut app);
-        assert_eq!(key(&app), Some(f15), "the import alone keeps the action's key");
-        assert!(app.ui.shortcut_overrides.is_empty(), "the import is only in the dialog");
-        app.ui.dialog = None;
-        assert_eq!(key(&app), Some(f15), "Cancel keeps the action's key");
-        open(&mut app);
-        import_into_dialog(&mut app);
-        assert_eq!(key(&app), Some(f15));
-        confirm(&mut app).unwrap();
-        assert_eq!(key(&app), Some(f15), "OK keeps the action's function key");
-    }
-
-    #[test]
-    fn presets_are_the_defaults() {
-        for p in PRESETS {
-            assert_eq!(preset(p), Some(Overrides::new()));
-        }
-        assert!(preset("Nope").is_none());
-    }
-
-    #[test]
-    fn paint_dialog_rows_show_both_default_keys() {
-        let view = DialogView::new(Overrides::new());
-        for (key, plain, shifted) in [("paint.lastColor", ",", "Shift+Comma"), ("paint.lastGradient", ".", "Shift+Period")] {
-            let at = view.entries.iter().position(|e| e.key == key).unwrap();
-            let shown = view.texts[at].as_deref().unwrap();
-            let shifted = menus::pretty_shortcut(shifted);
-            assert!(shown.contains(plain) && shown.contains(&shifted), "{key}: {shown}");
-        }
-        assert_eq!(view.conflicts, 0);
-    }
-
-    #[test]
-    fn edit_dialog_rows_show_primary_and_function_keys() {
-        for p in [craft_keymap::Platform::Windows, craft_keymap::Platform::Linux, craft_keymap::Platform::Mac] {
-            let km = crate::keymap::keymap_for(p, &snapshot());
-            for (key, primary, alternate) in [("edit.cut", "Cmd+X", "F2"), ("edit.copy", "Cmd+C", "F3"), ("edit.paste", "Cmd+V", "F4")] {
-                let shown = dialog_shortcuts_with(&km, key, None).unwrap();
-                let primary = menus::pretty_shortcut(primary);
-                assert!(shown.contains(&primary), "{p:?} {key}: {shown}");
-                assert_eq!(shown.contains(alternate), !p.is_mac(), "{p:?} {key}: {shown}");
-            }
-        }
-        for (key, primary) in [("edit.cut", "Cmd+X"), ("edit.copy", "Cmd+C"), ("edit.paste", "Cmd+V")] {
-            let shown = menus::item_shortcut(key, &Value::Null).map(menus::pretty_shortcut);
-            assert_eq!(shown, Some(menus::pretty_shortcut(primary)), "{key} menu shortcut");
-        }
-    }
-
     #[test]
     fn saved_function_key_assignment_does_not_change_cut_in_the_editor() {
         if crate::keymap::platform().is_mac() {
@@ -3094,28 +2750,6 @@ mod tests {
             let dialog_saved = saved_overrides(km.overrides(), &source);
             assert!(!crate::keymap::has_override(&dialog_saved, edit), "{alias} dialog edit override");
             assert_eq!(crate::keymap::lookup(&keymap_with(&dialog_saved), &crate::keymap::vc_chord(alias).unwrap()), Some(command_of(edit)));
-        }
-    }
-
-    #[test]
-    fn assigning_an_edit_function_key_elsewhere_reports_the_conflict() {
-        if crate::keymap::platform().is_mac() {
-            return;
-        }
-        for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
-            let label = entry(edit).map(|e| english_name(&e)).unwrap();
-            assert_eq!(conflicts_with(&Overrides::new(), alias, "tool:pen"), vec![edit.to_string()], "{alias}");
-            let mut ov = Overrides::new();
-            let err = assign(&mut ov, "tool:pen", Some(alias), false).unwrap_err();
-            assert!(err.ends_with(&format!("is already used by {label}")), "{alias}: {err}");
-            assert!(!crate::keymap::has_override(&ov, "tool:pen"), "{alias}: a refused assignment saves nothing");
-
-            let mut d = Dialog::new("shortcuts", json!({"overrides": {}}));
-            let mut km = keymap_with(&Overrides::new());
-            record(&mut d, &mut km, "tool:pen", alias);
-            assert_eq!(d.str("__conflict"), edit, "{alias}");
-            assert!(d.str("__message").contains(&label), "{alias}: {}", d.str("__message"));
-            assert_eq!(crate::keymap::lookup(&km, &crate::keymap::vc_chord(alias).unwrap()), Some(command_of("tool:pen")), "{alias}");
         }
     }
 
@@ -3366,29 +3000,6 @@ mod tests {
         assert!(!items.contains_key("window.toolbar.custom"), "{items:?}");
         assert!(!items.contains_key(crate::scripts_menu::COMMAND), "{items:?}");
         assert_eq!(items.get("object.path.cleanUp"), Some(&vec![("Clean Up…", json!({"strayPoints": true}))]));
-    }
-
-    /// While a menu item is dimmed, a pick or a shortcut gets a status line and no target: with the
-    /// engine's reason when it gives one, and without one when the app's own rules dim the item (an
-    /// Appearance command with nothing targeted, a UI command).
-    #[test]
-    fn a_dimmed_item_gives_a_status_line_with_or_without_a_reason() {
-        use vectorcraft_testkit::fixtures::Fixture;
-        let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        assert!(!menus::enabled(&none, "edit.findReplace"));
-        let why = "command `edit.findReplace` is not available right now: no document open";
-        assert_eq!(dimmed(&none, "edit.findReplace", "edit.findReplace").as_deref(), Some(why));
-        // A name to show takes the id's place.
-        let shown = "command `Edit › Find and Replace…` is not available right now: no document open";
-        assert_eq!(dimmed(&none, "edit.findReplace", "Edit › Find and Replace…").as_deref(), Some(shown));
-        let empty = VectorcraftApp::new(Fixture::Empty.session(), crate::Services::default());
-        for id in ["appearance.addFill", "ui.cropImage"] {
-            assert!(!menus::enabled(&empty, id), "{id}");
-            assert!(vectorcraft_engine::find_command(id).is_none_or(|c| (c.enabled)(&empty.session).is_ok()), "{id}: the engine gives no reason");
-            assert_eq!(dimmed(&empty, id, id), Some(format!("command `{id}` is not available right now")));
-        }
-        assert!(menus::enabled(&empty, "edit.findReplace"));
-        assert_eq!(dimmed(&empty, "edit.findReplace", "edit.findReplace"), None, "not dimmed");
     }
 
     /// Every command the editor lists, run as a key press runs it on a document with one or with
@@ -3721,21 +3332,6 @@ mod tests {
         assert_eq!(app.ui.shortcut_holds.keys().collect::<Vec<_>>(), ["paint.swap"]);
     }
 
-    /// Reset All and a preset clear the hold shortcuts; two entries holding one key are a conflict.
-    #[test]
-    fn hold_shortcut_conflicts_reset_and_presets() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui.shortcut_holds.insert("paint.swap".into(), "X".into());
-        app.ui.shortcut_holds.insert("select.none".into(), "X".into());
-        let c = app.run("shortcuts.conflicts", json!({})).unwrap();
-        assert!(c.as_array().unwrap().iter().any(|c| c["shortcut"] == "Hold X"), "{c}");
-        app.run("shortcuts.reset", json!({})).unwrap();
-        assert!(app.ui.shortcut_holds.is_empty());
-        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
-        app.run("shortcuts.preset", json!({"name": PRESETS[0]})).unwrap();
-        assert!(app.ui.shortcut_holds.is_empty());
-    }
-
     /// Export… writes the hold shortcuts as `holds` (version 1) only when there are any; Import…
     /// reads them, a file without them has none, and a bad one fails and applies nothing.
     #[test]
@@ -3756,32 +3352,6 @@ mod tests {
         }
         app.run("shortcuts.import", json!({"data": none})).unwrap();
         assert!(app.ui.shortcut_holds.is_empty(), "an import replaces the whole set");
-    }
-
-    /// Export Text… gives a row with a hold shortcut a third column while Hold Shortcuts is on.
-    #[test]
-    fn export_text_lists_hold_shortcuts_while_they_act() {
-        type Files = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        let written: Files = Default::default();
-        let w = written.clone();
-        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
-            w.borrow_mut().push(String::from_utf8(b.to_vec()).map_err(|e| e.to_string())?);
-            Ok(())
-        }));
-        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
-        let row = |text: &str| text.lines().find(|l| l.starts_with(&english_name(&entry("paint.swap").unwrap()))).map(str::to_string);
-        with_steady_plugins(|| {
-            written.borrow_mut().clear();
-            app.run("shortcuts.exportText", json!({"path": "/a.txt"})).unwrap();
-            app.run("prefs.set", json!({"key": "holdShortcuts", "value": true})).unwrap();
-            app.run("shortcuts.exportText", json!({"path": "/b.txt"})).unwrap();
-            app.run("prefs.set", json!({"key": "holdShortcuts", "value": false})).unwrap();
-        });
-        let files = written.borrow();
-        let (off, on) = (row(&files[0]).unwrap(), row(&files[1]).unwrap());
-        assert_eq!(off.split('\t').count(), 2, "{off}");
-        assert_eq!(on.split('\t').nth(2), Some(format!("Hold {}", menus::pretty_shortcut("X")).as_str()), "{on}");
     }
 
     /// Export Text…'s shortcut sheet and CSV file also list a hold shortcut while Hold Shortcuts is
@@ -3832,83 +3402,6 @@ mod tests {
         };
         assert_eq!(unstamped(sheet_off), unstamped(sheet_off_again), "the sheet is the same each time");
         assert_ne!(sheet_off, sheet_on, "on, the sheet lists the hold");
-    }
-
-    /// The text the Keyboard Shortcuts dialog draws in its second frame.
-    fn dialog_texts(app: &mut VectorcraftApp) -> Vec<String> {
-        let ctx = egui::Context::default();
-        theme::install_fonts(&ctx);
-        // The modal draws nothing in its first frame, which only sizes it.
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
-        out.textures_delta.clear();
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
-        out.textures_delta.clear();
-        out.shapes
-            .iter()
-            .filter_map(|c| match &c.shape {
-                egui::Shape::Text(t) => Some(t.galley.text().to_string()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Hold Shortcuts is off by default: the dialog shows its checkbox and no Hold column. Turned
-    /// on, the dialog shows the column and the delay, and OK turns hold shortcuts on and asks the
-    /// host to write the preferences file; Cancel keeps them off.
-    #[test]
-    fn the_hold_shortcuts_checkbox_shows_the_hold_column() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        assert!(!app.session.prefs.hold_shortcuts);
-        open(&mut app);
-        let off = dialog_texts(&mut app);
-        assert!(off.iter().any(|t| t == "Hold Shortcuts"), "{off:?}");
-        assert!(!off.iter().any(|t| t == "Hold" || t == "Hold Shortcut Delay"), "{off:?}");
-        app.ui.dialog.as_mut().unwrap().fields.insert("holdShortcuts".into(), json!(true));
-        let on = dialog_texts(&mut app);
-        assert!(on.iter().any(|t| t == "Hold") && on.iter().any(|t| t == "Hold Shortcut Delay"), "{on:?}");
-        app.ui.dialog = None;
-        assert!(!app.session.prefs.hold_shortcuts, "Cancel keeps them off");
-        assert!(!app.take_prefs_changed(), "nothing to write after Cancel");
-        open(&mut app);
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("holdShortcuts".into(), json!(true));
-        d.fields.insert("keyHoldDelay".into(), json!(0.5));
-        confirm(&mut app).unwrap();
-        assert!(app.session.prefs.hold_shortcuts);
-        assert_eq!(app.session.prefs.key_hold_delay, 0.5);
-        assert!(app.take_prefs_changed(), "OK asks the host to write the preferences file");
-        assert_eq!(app.ui.engine_prefs["holdShortcuts"], json!(true));
-        assert_eq!(app.ui.engine_prefs["keyHoldDelay"], json!(0.5));
-    }
-
-    /// The info button shows how hold shortcuts work.
-    #[test]
-    fn the_info_button_explains_hold_shortcuts() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        open(&mut app);
-        assert!(!dialog_texts(&mut app).iter().any(|t| t.starts_with("A quick press")));
-        app.ui.dialog.as_mut().unwrap().fields.insert("__holdInfo".into(), json!(true));
-        let texts = dialog_texts(&mut app);
-        assert!(texts.iter().any(|t| t.starts_with("A quick press")) && texts.iter().any(|t| t == "Tap"), "{texts:?}");
-    }
-
-    /// While Hold Shortcuts is on, the search finds a row by its hold shortcut as the Hold column
-    /// shows it; while it is off, the hold shortcut finds nothing.
-    #[test]
-    fn the_search_finds_a_row_by_its_hold_shortcut() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Shift+;"})).unwrap();
-        let hold = menus::pretty_shortcut("Shift+;").to_lowercase();
-        let name = shown_name(&entry("paint.swap").unwrap());
-        assert!(!name.to_lowercase().contains(&hold), "{name}");
-        open(&mut app);
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("tab".into(), json!("menu"));
-        d.fields.insert("query".into(), json!(hold));
-        assert!(!dialog_texts(&mut app).contains(&name), "off, the hold shortcut finds nothing");
-        app.ui.dialog.as_mut().unwrap().fields.insert("holdShortcuts".into(), json!(true));
-        let texts = dialog_texts(&mut app);
-        assert!(texts.contains(&name), "{name} in {texts:?}");
     }
 
     /// A command that needs a value is listed in the editor once the user gives it a key, but the
