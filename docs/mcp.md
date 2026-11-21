@@ -13276,7 +13276,7 @@ object's geometry unchanged while the object keeps the effect: `effect.list` giv
 Appearance panel shows "(Safe Mode)" after its name and the plug-in's id in its tooltip. `effect.expandAppearance` returns an
 error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. That includes a
 visible plain symbol instance in a group or layer with a raster effect, since the group's image draws the symbol's art. A
-hidden instance draws nothing in that image, so its symbol's art does not count. `vectorcraft` rejects an option it does not know (such as
+hidden instance, or one in a template sublayer, draws nothing in that image, so its symbol's art does not count. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
 pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or

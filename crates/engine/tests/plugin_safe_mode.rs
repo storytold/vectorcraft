@@ -558,6 +558,41 @@ fn expand_appearance_in_safe_mode_skips_symbol_art_of_a_hidden_instance_a_group_
     assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
 }
 
+/// In Safe Mode, the image a layer's raster effect makes leaves out a template sublayer, so the symbol
+/// art of a plain instance in it doesn't stop Expand Appearance of the layer; in a plain sublayer, it does.
+#[test]
+fn expand_appearance_in_safe_mode_skips_symbol_art_in_a_template_sublayer_a_layer_image_leaves_out() {
+    let _f = fresh();
+    let mut s = Session::new();
+    let fx = wat::parse_str(tpl::returning(&tpl::manifest("test.sm.tpl", "effect", "{}"), r#"{"objects":[]}"#)).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&fx)})).unwrap();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "plugin.test.sm.tpl"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "fx"})).unwrap();
+    let layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("layer.setCurrent", &json!({"id": layer})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+    let instance = s.execute("symbol.place", &json!({"name": "fx", "x": 150, "y": 150})).unwrap()["id"].as_u64().unwrap();
+    let sub = s.execute("layer.newSublayer", &json!({"parent": layer})).unwrap()["id"].as_u64().unwrap();
+    s.execute("layer.move", &json!({"ids": [instance], "target": sub})).unwrap();
+    s.execute("layer.target", &json!({"id": layer})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [layer], "item": null, "params": {"radius": 2}})).unwrap();
+    let blurred = |s: &Session| s.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(layer)).unwrap().appearance.effects.len();
+    assert_eq!(blurred(&s), 1, "the layer has its own Gaussian Blur");
+    let expand = |s: &mut Session| {
+        s.execute("layer.target", &json!({"id": layer})).unwrap();
+        safe_mode::set_active(Some(safe_mode::Source::Flag));
+        let r = s.execute("effect.expandAppearance", &json!({}));
+        safe_mode::set_active(None);
+        r
+    };
+    let err = expand(&mut s).unwrap_err().to_string();
+    assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+    s.execute("layer.setProps", &json!({"id": sub, "template": true})).unwrap();
+    expand(&mut s).unwrap();
+}
+
 /// In Safe Mode, a plug-in effect in the art of a graph design in a series stops Expand Appearance of the graph only
 /// when an effect of the series group draws that art with the group.
 #[test]
