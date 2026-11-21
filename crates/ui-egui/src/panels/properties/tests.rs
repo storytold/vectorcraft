@@ -1487,6 +1487,85 @@ fn isolate_group_is_not_a_quick_action_while_an_opacity_mask_is_edited() {
     assert!(shows(&texts, "Ungroup") && !shows(&texts, "Isolate Group"), "{texts:?}");
 }
 
+/// Two rectangles grouped, returned as the group's id.
+fn grouped(app: &mut VectorcraftApp, x: f64) -> serde_json::Value {
+    let (a, b) = (rect(app, x, 20.0, 30.0, 30.0), rect(app, x + 40.0, 20.0, 30.0, 30.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.group", json!({})).unwrap()["id"].clone()
+}
+
+/// Two selected groups offer Ungroup and not Isolate Group. The same holds when a path is
+/// selected ahead of a group, and when a group that holds another group is selected with other art.
+#[test]
+fn two_groups_offer_ungroup_without_isolate_group() {
+    let mut app = new_app();
+    let (first, second) = (grouped(&mut app, 20.0), grouped(&mut app, 160.0));
+    // The later group is first in the selection, so a check of only the first node still sees a group.
+    app.run("select.set", json!({"ids": [second, first]})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Ungroup") && !shows(&texts, "Isolate Group"), "{texts:?}");
+    assert!(!shows(&texts, "Unite"), "groups are not a vector selection: {texts:?}");
+    // A path selected ahead of a group that itself holds a group.
+    let inner = grouped(&mut app, 300.0);
+    let beside = rect(&mut app, 380.0, 20.0, 30.0, 30.0);
+    app.run("select.set", json!({"ids": [inner, beside]})).unwrap();
+    let outer = app.run("object.group", json!({})).unwrap()["id"].clone();
+    let ahead = rect(&mut app, 20.0, 120.0, 24.0, 24.0);
+    app.run("select.set", json!({"ids": [ahead, outer]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Ungroup") && !shows(&texts, "Isolate Group"), "path then nested group: {texts:?}");
+    assert!(shows(&texts, "Group") && shows(&texts, "Make Clipping Mask"), "{texts:?}");
+    assert!(!shows(&texts, "Unite"), "a group in the selection: {texts:?}");
+}
+
+/// One selected group offers Ungroup and Isolate Group, including a group that holds another group.
+#[test]
+fn one_group_offers_ungroup_and_isolate_group() {
+    let mut app = new_app();
+    let inner = grouped(&mut app, 20.0);
+    let beside = rect(&mut app, 120.0, 20.0, 30.0, 30.0);
+    app.run("select.set", json!({"ids": [inner, beside]})).unwrap();
+    let outer = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [outer]})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Ungroup") && shows(&texts, "Isolate Group"), "{texts:?}");
+    assert!(!shows(&texts, "Unite") && !shows(&texts, "Make Clipping Mask"), "one group: {texts:?}");
+}
+
+/// Several paths, or a compound path with another path, offer Group, Make Clipping Mask and Unite.
+/// Unite joins them in one undo step. A path selected with type does not offer Unite.
+#[test]
+fn several_paths_offer_group_clipping_mask_and_unite() {
+    let mut app = new_app();
+    let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 80.0, 20.0, 40.0, 40.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Group") && shows(&texts, "Make Clipping Mask") && shows(&texts, "Unite"), "{texts:?}");
+    let before = app.session.active().unwrap().selection.objects.len();
+    let depth = undo_depth(&app);
+    press(&mut app, &ctx, text_at(&texts, "Unite").center());
+    let after = app.session.active().unwrap().selection.objects.len();
+    assert!(after < before, "Unite joins the paths");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), before, "Undo restores the paths");
+    // A compound path and another path.
+    app.run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    let compound = app.run("object.compoundPath.make", json!({})).unwrap()["id"].clone();
+    let c = rect(&mut app, 160.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [compound, c]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Group") && shows(&texts, "Make Clipping Mask") && shows(&texts, "Unite"), "compound path: {texts:?}");
+    // Type with a path is not a vector-only selection.
+    let text = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [c, text]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Group") && !shows(&texts, "Unite"), "path and type: {texts:?}");
+}
+
 /// A stroke with a variable width shows its Width Profile in the Appearance section, as every
 /// stroke does with the Width tool; choosing another profile is one undo step. A uniform stroke
 /// shows none with other tools.

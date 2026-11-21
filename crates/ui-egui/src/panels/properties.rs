@@ -119,7 +119,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&vectorcraft_doc::Node>, n_sel: usize) {
     section_header(ui, tl!("Quick Actions"));
-    let is_group = matches!(first.map(|n| &n.kind), Some(NodeKind::Group { .. }));
+    // Every selected object counts, not only the first. Ungroup is offered when any of them is a
+    // group (several groups, or a group after other objects, including a group that holds another
+    // group). Isolate Group is offered only for that one group: the Properties panel overview
+    // lists it for a group, and isolation edits one object
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>,
+    // <https://helpx.adobe.com/illustrator/desktop/manage-objects/group-expand-objects/isolate-artwork-for-editing.html>).
+    let (has_group, multi_vector) = selection_quick_actions(app, n_sel);
+    let single_group = n_sel == 1 && has_group;
     let is_live = matches!(first.map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(&**l, LiveShape::Path { .. }));
     // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with
     // more to merge into it, as the Properties panel overview lists them
@@ -137,6 +144,11 @@ fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&v
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
         actions.push((tl!("Make Clipping Mask"), "object.clippingMask.make"));
+        // Several paths, live shapes or compound paths: Unite, the Pathfinder Shape Mode
+        // (<https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/pathfinder-panel-overview.html>).
+        if multi_vector {
+            actions.push((tl!("Unite"), "object.pathfinder.unite"));
+        }
     }
     if merge_live_paint {
         actions.push((tl!("Merge Live Paint"), "livePaint.merge"));
@@ -147,8 +159,10 @@ fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&v
     if repeat_options {
         actions.push((tl!("Repeat Options"), "object.repeat.options"));
     }
-    if is_group {
+    if has_group {
         actions.push((tl!("Ungroup"), "object.ungroup"));
+    }
+    if single_group {
         actions.push((tl!("Isolate Group"), "object.isolate"));
     }
     if is_live {
@@ -211,6 +225,26 @@ fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&v
             }
         });
     }
+}
+
+/// Whether any selected object is a group, and whether the selection is several vector paths or
+/// shapes. A vector path or shape is a path that is not a guide, or a compound path. A group
+/// counts as a group even when it holds another group.
+fn selection_quick_actions(app: &VectorcraftApp, n_sel: usize) -> (bool, bool) {
+    let Some(st) = app.session.active() else { return (false, false) };
+    let mut has_group = false;
+    let mut all_vector = !st.selection.objects.is_empty();
+    for id in &st.selection.objects {
+        match st.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::Group { .. }) => {
+                has_group = true;
+                all_vector = false;
+            }
+            Some(NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) => {}
+            _ => all_vector = false,
+        }
+    }
+    (has_group, n_sel > 1 && all_vector)
 }
 
 /// Whether Merge Live Paint can take the selection: a Live Paint group among the selected objects
