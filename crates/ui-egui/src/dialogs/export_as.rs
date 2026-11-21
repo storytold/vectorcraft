@@ -45,21 +45,24 @@ fn unavailable(d: &Dialog) -> Option<(&'static str, &'static str)> {
     Some((label, fileio::unsupported(&id)?.hint))
 }
 
-/// Open the dialog on `format` (an id or extension, default PNG); `p` may preset `useArtboards`
-/// and `range`.
+/// Open the dialog on `format` (an id or extension, else the format the last export used, else
+/// PNG); `p` may preset `useArtboards` and `range`.
 pub fn open(app: &mut VectorcraftApp, format: Option<&str>, p: &Value) {
     let n = app.session.active().map_or(0, |s| s.doc.artboards.len());
-    let missing = format.and_then(|f| UNAVAILABLE.iter().find(|u| u.0.eq_ignore_ascii_case(f.trim_start_matches('.'))));
+    let remembered = app.ui.export_as_format.clone();
+    let wanted = format.or(remembered.as_deref());
+    let missing = wanted.and_then(|f| UNAVAILABLE.iter().find(|u| u.0.eq_ignore_ascii_case(f.trim_start_matches('.'))));
     let format = match missing {
         Some((id, _)) => id,
-        None => format.and_then(fileio::format).filter(|f| formats().iter().any(|g| g.id == f.id)).map_or("png", |f| f.id),
+        None => wanted.and_then(fileio::format).filter(|f| formats().iter().any(|g| g.id == f.id)).map_or("png", |f| f.id),
     };
     let range = p.get("range").and_then(Value::as_str);
+    let use_artboards = p.get("useArtboards").and_then(Value::as_bool).unwrap_or(app.ui.export_as_use_artboards);
     app.ui.dialog = Some(Dialog::new(
         "exportAs",
         json!({
             "format": format,
-            "useArtboards": p.get("useArtboards").and_then(Value::as_bool).unwrap_or(false),
+            "useArtboards": use_artboards,
             "all": range.is_none(),
             "range": range.map_or_else(|| if n > 1 { format!("1-{n}") } else { "1".into() }, str::to_string),
         }),
@@ -146,6 +149,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     {
         return Err("nothing to export: the document has no visible art (or turn on Use Artboards)".into());
     }
+    // The next Export As opens on what this one was left on (its format and Use Artboards).
+    app.ui.export_as_format = Some(f.id.to_string());
+    app.ui.export_as_use_artboards = d.bool("useArtboards");
     app.ui.dialog = None;
     let path = io::export_path(app, None, f)?;
     let range = if all { "all".to_string() } else { range };
