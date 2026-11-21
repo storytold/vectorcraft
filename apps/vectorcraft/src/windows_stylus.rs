@@ -70,7 +70,9 @@ const WM_POINTERLEAVE: u32 = 0x024A;
 
 thread_local! {
     static STROKES: RefCell<BarrelStrokes> = RefCell::new(BarrelStrokes::default());
-    /// The pointer id of the pen whose message last read the Wintab wheel.
+    /// The pointer id of the pen whose leaving starts the Wintab wheel readings afresh: the pen that
+    /// took them, or the pen whose message last asked for the wheel when none has
+    /// ([`crate::windows_wintab::wheel_pen`]).
     static WHEEL_PEN: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
 }
 
@@ -117,10 +119,10 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
         // SAFETY: `info` is a `POINTER_PEN_INFO` that lives for the call. The call fails for a
         // pointer that is not a pen.
         unsafe { GetPointerPenInfo(id, &mut info) }.ok()?;
-        WHEEL_PEN.set(Some(id));
         let in_contact = info.pointerInfo.pointerFlags.0 & POINTER_FLAG_INCONTACT.0 != 0;
         let eraser = info.penFlags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0;
-        let wheel = crate::windows_wintab::pen_wheel(msg.hwnd, msg.time, eraser);
+        let wheel = crate::windows_wintab::pen_wheel(msg.hwnd, msg.time, id, eraser);
+        WHEEL_PEN.set(Some(crate::windows_wintab::wheel_pen(id)));
         let pose = pen_pose(info.penMask, info.tiltX, info.tiltY, info.rotation, wheel);
         Some(pen_sample(info.pressure, info.penMask, info.penFlags, in_contact, pose))
     };
@@ -159,7 +161,7 @@ fn pen_pose(pen_mask: u32, tilt_x: i32, tilt_y: i32, rotation: u32, wheel: Optio
 
 /// Whether a message with this `wParam` starts the Wintab wheel readings afresh: a pointer message
 /// of a pointer that has left detection range or whose press was canceled, or a pointer leaving the
-/// window, when the pointer is `pen`, the pen whose message last read the wheel. A touch or another
+/// window, when the pointer is `pen`, the pen whose leaving starts them afresh. A touch or another
 /// pen leaving keeps the readings.
 fn forgets_wheel(message: u32, wparam: usize, pen: Option<u32>) -> bool {
     if pen != Some((wparam & 0xffff) as u32) {

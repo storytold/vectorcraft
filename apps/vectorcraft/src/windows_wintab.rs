@@ -23,10 +23,12 @@
 //!   whose packets carry the tangential pressure, on a device whose `DVC_TPRESSURE` range is valid,
 //!   reads a wheel ([`wheel_axis`]). The wheel is the value's place in that range, 0..1
 //!   ([`Axis::wheel`]); a value outside it reads as none.
-//! - A pointer message of a pen takes the wheel of the airbrush read since the readings started
-//!   afresh, however long ago its last packet came, since a pen held still sends none. When
-//!   several cursors were read, it takes the one whose latest packet came within [`MAX_SKEW_MS`] of
-//!   the message, and none when two are that recent or none is ([`Readings::wheel_at`]). As on
+//! - A pointer message of a pen takes the wheel of the airbrush whose latest packet came within
+//!   [`MAX_SKEW_MS`] of the message, and none when two are that recent or none is
+//!   ([`Readings::wheel_for`]). The first pen to read a wheel that way after the readings start
+//!   afresh takes the readings: other pens read none until they start afresh, and that pen keeps
+//!   reading the one airbrush read, however long ago its last packet came, since a pen held still
+//!   sends none. As on
 //!   macOS, 0 counts as no wheel until the pen has reported another value since it came near: the
 //!   readings start afresh when a cursor
 //!   comes near or leaves (`WT_PROXIMITY`), another cursor comes (`WT_CSRCHANGE`), the pen turns
@@ -34,11 +36,14 @@
 //!   range, or the context closes. These rules are VectorCraft's own.
 //!
 //! The context is dropped when the driver closes it (`WT_CTXCLOSE`), closed when the driver's
-//! information changes (`WT_INFOCHANGE`), and dropped when its window no longer exists; a later pen
-//! message opens it again. The driver sends those two notices to the window procedure, where a
-//! sent message does not pass winit's message hook, so the context's window gets a window procedure
-//! in front of its own that notes them ([`Notices`]). A packet that `WTPacket` cannot read also
-//! starts the readings afresh ([`Readings::read`]).
+//! information changes (`WT_INFOCHANGE`) unless the driver closed it too, and dropped when its
+//! window no longer exists; a later pen message opens it again. The driver sends those two notices
+//! to the window procedure, where a sent message does not pass winit's message hook, so the
+//! context's window gets a window procedure in front of its own that notes them ([`Notices`]).
+//! When that procedure cannot be put in front, no context is opened for the window
+//! ([`hooked_open`]). A packet that `WTPacket` cannot read starts the readings afresh
+//! ([`Readings::read`]), and so does a packet sent after the context's queue overflowed
+//! (`TPS_QUEUE_ERR`, [`Readings::packet`]).
 #![cfg_attr(not(windows), allow(dead_code))]
 
 /// Wintab's default message base (`WT_DEFBASE`, `wintab.h`), which [`configure`] sets.
@@ -257,14 +262,22 @@ struct Readings {
     list: Vec<Reading>,
     /// The end of the pen the last pointer message read, `Some(true)` for the eraser end.
     eraser: Option<bool>,
+    /// The pointer id of the pen whose message first read the wheel since the readings started
+    /// afresh; another pen's messages read none.
+    pen: Option<u32>,
 }
 
 impl Readings {
     /// A packet of `p.cursor`, whose wheel range is `axis`, at the message time `time`. A packet of
-    /// a cursor out of the context, or after the queue overflowed, drops that cursor's reading.
+    /// a cursor out of the context drops that cursor's reading. A packet sent after the context's
+    /// queue overflowed starts every reading afresh, until the next packet.
     fn packet(&mut self, p: Packet, axis: Option<Axis>, time: u32) {
+        if p.status & TPS_QUEUE_ERR != 0 {
+            self.forget();
+            return;
+        }
         let at = self.list.iter().position(|r| r.cursor == p.cursor);
-        if p.status & (TPS_PROXIMITY | TPS_QUEUE_ERR) != 0 {
+        if p.status & TPS_PROXIMITY != 0 {
             if let Some(i) = at {
                 self.list.remove(i);
             }
@@ -294,25 +307,36 @@ impl Readings {
     }
 
     /// Start afresh: the pen came near or left, another cursor came, a press was canceled, a packet
-    /// could not be read, or the context closed.
+    /// could not be read, the context's queue overflowed, or the context closed.
     fn forget(&mut self) {
         self.list.clear();
         self.eraser = None;
+        self.pen = None;
     }
 
-    /// The wheel for a pointer message of a pen at the message time `time` with its `eraser` end,
-    /// if the cursor it comes from is an airbrush: the one cursor read since the readings started
-    /// afresh, however long ago its last packet came (a pen held still sends none), or, when
-    /// several were, the one whose latest packet is within [`MAX_SKEW_MS`] of the message. `None`
-    /// when no cursor, or more than one, is that recent, or the cursor has read only 0 since the
-    /// readings started afresh. A turn to the other end starts them afresh first.
-    fn wheel_at(&mut self, time: u32, eraser: bool) -> Option<f32> {
+    /// The pen whose leaving starts the readings afresh, for a message of `pen`: the pen that took
+    /// the readings, or `pen` when none has.
+    fn owner_or(&self, pen: u32) -> u32 {
+        self.pen.unwrap_or(pen)
+    }
+
+    /// The wheel for a pointer message of the pen with the pointer id `pen` at the message time
+    /// `time` with its `eraser` end, if the cursor it comes from is an airbrush: the one cursor whose
+    /// latest packet is within [`MAX_SKEW_MS`] of the message, or, for the pen that took the
+    /// readings, the one cursor read since they started afresh, however long ago its last packet
+    /// came (a pen held still sends none). `None` when no cursor, or more than one, is that recent,
+    /// or the cursor has read only 0 since the readings started afresh, or another pen's message
+    /// read a wheel first since then. A turn to the other end starts them afresh first.
+    fn wheel_for(&mut self, time: u32, pen: u32, eraser: bool) -> Option<f32> {
+        if self.pen.is_some_and(|p| p != pen) {
+            return None;
+        }
         if self.eraser.is_some_and(|e| e != eraser) {
             self.forget();
         }
         self.eraser = Some(eraser);
         let r = match self.list.as_slice() {
-            [one] => one,
+            [one] if self.pen == Some(pen) => one,
             list => {
                 let mut near_time = list.iter().filter(|r| near(time, r.time));
                 let r = near_time.next()?;
@@ -325,7 +349,9 @@ impl Readings {
         if !r.moved {
             return None;
         }
-        r.axis?.wheel(r.raw)
+        let wheel = r.axis?.wheel(r.raw)?;
+        self.pen = Some(pen);
+        Some(wheel)
     }
 }
 
@@ -369,17 +395,15 @@ struct Notices {
     info_changed: bool,
 }
 
-/// What the driver's notices do to the open context.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Notice {
-    /// Nothing changed for it.
-    Keep,
+/// What the driver's notices do to the open context. Both can come in one batch.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Notice {
     /// The driver closed it: drop the handle without `WTClose`, and open a context again at the
     /// next pen message.
-    Closed,
-    /// The driver's information changed: close it, forget each cursor's wheel range, and open a
-    /// context again at the next pen message.
-    Reopen,
+    closed: bool,
+    /// The driver's information changed: close it if it is still open, forget each cursor's wheel
+    /// range, and open a context again at the next pen message.
+    info_changed: bool,
 }
 
 impl Notices {
@@ -406,14 +430,15 @@ impl Notices {
     /// Takes the notices: what they do to the open context `current`.
     fn take(&mut self, current: Option<usize>) -> Notice {
         let notices = std::mem::take(self);
-        if notices.info_changed {
-            Notice::Reopen
-        } else if current.is_some_and(|c| notices.closed.contains(&c)) {
-            Notice::Closed
-        } else {
-            Notice::Keep
-        }
+        Notice { closed: current.is_some_and(|c| notices.closed.contains(&c)), info_changed: notices.info_changed }
     }
+}
+
+/// Opens a context with `open` only when `hook` put the window procedure that notes the driver's
+/// notices in front of the window's own; otherwise opens none, and the window is not tried again
+/// until another window is ([`next_context`]).
+fn hooked_open<H>(hook: impl FnOnce() -> bool, open: impl FnOnce() -> Option<H>) -> Option<H> {
+    if hook() { open() } else { None }
 }
 
 /// What a message does to the readings and the context.
@@ -451,7 +476,7 @@ fn message(message: u32, wparam: usize, lparam: isize) -> Message {
 }
 
 #[cfg(windows)]
-pub use win::{forget, msg_hook, pen_wheel};
+pub use win::{forget, msg_hook, pen_wheel, wheel_pen};
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
@@ -471,7 +496,7 @@ mod win {
     use super::{
         Axis, CSR_PKTDATA, CSR_TYPE, Current, DVC_FIRSTCSR, DVC_NCSRTYPES, DVC_TPRESSURE, IFC_NDEVICES, LOGCONTEXT_WORDS, MAX_DEVICES, MAX_INDEX,
         MAX_READINGS, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE,
-        configure, decode, device_of, message, next_context, wheel_axis,
+        configure, decode, device_of, hooked_open, message, next_context, wheel_axis,
     };
 
     /// `WTInfoW`, `WTOpenW`, `WTClose` and `WTPacket` (`wintab.h`).
@@ -553,30 +578,33 @@ mod win {
         unsafe { CallWindowProcW(prev, hwnd, msg, wparam, lparam) }
     }
 
-    /// Puts [`wnd_proc`] in front of the window procedure of `hwnd`, once per window. The window's
-    /// property holds the procedure it replaced, and goes with the window.
-    fn subclass(hwnd: *mut c_void) {
+    /// Puts [`wnd_proc`] in front of the window procedure of `hwnd`, once per window, and returns
+    /// whether it is there. The window's property holds the procedure it replaced, and goes with the
+    /// window.
+    fn subclass(hwnd: *mut c_void) -> bool {
         let hwnd = HWND(hwnd);
         // SAFETY: `GetPropW` and `GetWindowLongPtrW` take any handle value and read no caller memory.
         if !unsafe { GetPropW(hwnd, PREV_PROC) }.0.is_null() {
-            return;
+            return true;
         }
         // SAFETY: as above.
         let prev = unsafe { GetWindowLongPtrW(hwnd, GWLP_WNDPROC) } as isize;
         if prev == 0 {
-            return;
+            return false;
         }
         // SAFETY: the window is this thread's (winit's), and the property's value is a procedure
         // address, not memory the system frees.
         if unsafe { SetPropW(hwnd, PREV_PROC, Some(HANDLE(prev as *mut c_void))) }.is_err() {
-            return;
+            return false;
         }
         type Proc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT;
         // SAFETY: `wnd_proc` is a window procedure, and the window is this thread's.
         if unsafe { SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wnd_proc as Proc as usize as _) } as isize == 0 {
             // SAFETY: as for `SetPropW`.
             let _ = unsafe { RemovePropW(hwnd, PREV_PROC) };
+            return false;
         }
+        true
     }
 
     /// The Wintab exports, or `None` without the driver's `Wintab32.dll` in the system directory.
@@ -663,19 +691,16 @@ mod win {
         /// Acts on the driver's notices since the last look ([`Notices::take`]).
         fn take_notices(&mut self, api: Api) {
             let current = self.context.as_ref().map(|c| c.handle as usize);
-            let notice = NOTICES.with(|n| n.try_borrow_mut().map_or(Notice::Keep, |mut n| n.take(current)));
-            match notice {
-                Notice::Keep => {}
-                Notice::Closed => {
-                    self.context = None;
-                    self.tried = None;
-                    self.readings.forget();
-                }
-                Notice::Reopen => {
-                    self.close(api);
-                    self.tried = None;
-                    self.cursors.clear();
-                }
+            let notice = NOTICES.with(|n| n.try_borrow_mut().map_or(Notice::default(), |mut n| n.take(current)));
+            if notice.closed {
+                self.context = None;
+                self.tried = None;
+                self.readings.forget();
+            }
+            if notice.info_changed {
+                self.close(api);
+                self.tried = None;
+                self.cursors.clear();
             }
         }
 
@@ -700,11 +725,17 @@ mod win {
             self.tried = Some(owner);
             let Some(mut words) = info::<LOGCONTEXT_WORDS>(api, WTI_DEFCONTEXT, 0) else { return };
             configure(&mut words);
-            // SAFETY: `words` is a `LOGCONTEXTW` of the size `WTInfoW` gave, and lives for the call.
-            let handle = unsafe { (api.open)(owner, words.as_mut_ptr().cast(), 1) };
-            if !handle.is_null() {
+            let handle = hooked_open(
+                || subclass(owner),
+                || {
+                    // SAFETY: `words` is a `LOGCONTEXTW` of the size `WTInfoW` gave, and lives for
+                    // the call.
+                    let handle = unsafe { (api.open)(owner, words.as_mut_ptr().cast(), 1) };
+                    (!handle.is_null()).then_some(handle)
+                },
+            );
+            if let Some(handle) = handle {
                 self.context = Some(Context { handle, hwnd: owner });
-                subclass(owner);
             }
         }
 
@@ -759,16 +790,23 @@ mod win {
         });
     }
 
-    /// The wheel for a pointer message of a pen to `hwnd` at the message time `time`, with its
-    /// `eraser` end ([`Readings::wheel_at`]), opening the context first when none is open.
-    pub fn pen_wheel(hwnd: HWND, time: u32, eraser: bool) -> Option<f32> {
+    /// The wheel for a pointer message of the pen with the pointer id `pen` to `hwnd` at the message
+    /// time `time`, with its `eraser` end ([`Readings::wheel_for`]), opening the context first when
+    /// none is open.
+    pub fn pen_wheel(hwnd: HWND, time: u32, pen: u32, eraser: bool) -> Option<f32> {
         let api = api()?;
         STATE.with(|s| {
             let mut s = s.try_borrow_mut().ok()?;
             s.take_notices(api);
             s.open_for(api, hwnd.0);
-            s.readings.wheel_at(time, eraser)
+            s.readings.wheel_for(time, pen, eraser)
         })
+    }
+
+    /// The pen whose leaving starts the readings afresh, for a message of the pen with the pointer
+    /// id `pen` ([`Readings::owner_or`]).
+    pub fn wheel_pen(pen: u32) -> u32 {
+        STATE.with(|s| s.try_borrow().map_or(pen, |s| s.readings.owner_or(pen)))
     }
 
     /// Start the readings afresh: the pen left the window or detection range, or a press was
@@ -785,6 +823,15 @@ mod win {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The pointer id of the pen in the tests that use one pen.
+    const PEN: u32 = 1;
+
+    impl Readings {
+        fn wheel_at(&mut self, time: u32, eraser: bool) -> Option<f32> {
+            self.wheel_for(time, PEN, eraser)
+        }
+    }
 
     /// A packet of the fields of `mask`: each 32-bit field holds its value in `values`, or a filler
     /// when it has none, and the wider fields hold filler bytes.
@@ -976,35 +1023,115 @@ mod tests {
     #[test]
     fn the_drivers_notices_drop_or_reopen_the_context() {
         let (ours, other) = (0x5000, 0x6000);
+        let keep = Notice::default();
+        let closed = Notice { closed: true, info_changed: false };
+        let reopen = Notice { closed: false, info_changed: true };
         let mut n = Notices::default();
-        assert_eq!(n.take(Some(ours)), Notice::Keep, "no notice");
+        assert_eq!(n.take(Some(ours)), keep, "no notice");
         n.note(Message::Closed { ctx: other });
-        assert_eq!(n.take(Some(ours)), Notice::Keep, "another context closed");
+        assert_eq!(n.take(Some(ours)), keep, "another context closed");
         n.note(Message::Closed { ctx: ours });
-        assert_eq!(n.take(Some(ours)), Notice::Closed, "the driver closed it");
-        assert_eq!(n.take(Some(ours)), Notice::Keep, "taken once");
+        assert_eq!(n.take(Some(ours)), closed, "the driver closed it");
+        assert_eq!(n.take(Some(ours)), keep, "taken once");
         n.note(Message::Closed { ctx: ours });
-        assert_eq!(n.take(None), Notice::Keep, "nothing open");
+        assert_eq!(n.take(None), keep, "nothing open");
         assert_eq!(n, Notices::default(), "and the notice is gone");
         n.note(Message::InfoChange);
-        assert_eq!(n.take(Some(ours)), Notice::Reopen);
+        assert_eq!(n.take(Some(ours)), reopen);
         n.note(Message::InfoChange);
-        assert_eq!(n.take(None), Notice::Reopen, "cursor ranges are read again even with nothing open");
+        assert_eq!(n.take(None), reopen, "cursor ranges are read again even with nothing open");
         // The reader closes its context, and the driver's notice of that arrives during the call;
         // a context opened next under the same handle value stays open.
         n.note(Message::Closed { ctx: ours });
         n.closed_by_reader(ours);
-        assert_eq!(n.take(Some(ours)), Notice::Keep);
+        assert_eq!(n.take(Some(ours)), keep);
         for ctx in 0..20 {
             n.note(Message::Closed { ctx });
             n.note(Message::Closed { ctx });
         }
         assert_eq!(n.closed.len(), MAX_NOTICES, "bounded, each context once");
-        assert_eq!(n.take(Some(19)), Notice::Closed, "the latest kept");
+        assert_eq!(n.take(Some(19)), closed, "the latest kept");
         n.note(Message::Packet { serial: 1, ctx: ours });
         n.note(Message::Forget { ctx: ours });
         n.note(Message::Other);
         assert_eq!(n, Notices::default(), "other messages are not notices");
+    }
+
+    #[test]
+    fn a_close_and_an_information_change_in_one_batch_both_count() {
+        let ours = 0x5000;
+        let both = Notice { closed: true, info_changed: true };
+        let mut n = Notices::default();
+        n.note(Message::Closed { ctx: ours });
+        n.note(Message::InfoChange);
+        assert_eq!(n.take(Some(ours)), both, "the closed handle is dropped, not closed again");
+        n.note(Message::InfoChange);
+        n.note(Message::Closed { ctx: ours });
+        assert_eq!(n.take(Some(ours)), both, "in either order");
+        n.note(Message::Closed { ctx: 0x6000 });
+        n.note(Message::InfoChange);
+        assert_eq!(n.take(Some(ours)), Notice { closed: false, info_changed: true }, "another context's close");
+    }
+
+    #[test]
+    fn a_context_opens_only_behind_the_window_procedure() {
+        let opens = std::cell::Cell::new(0);
+        let open = || {
+            opens.set(opens.get() + 1);
+            Some(7)
+        };
+        assert_eq!(hooked_open(|| true, open), Some(7));
+        assert_eq!(opens.get(), 1);
+        let open = || {
+            opens.set(opens.get() + 1);
+            Some(7)
+        };
+        assert_eq!(hooked_open(|| false, open), None, "no context without the procedure");
+        assert_eq!(opens.get(), 1, "and the driver is not asked for one");
+        assert_eq!(hooked_open(|| true, || None::<u8>), None, "an open that fails");
+    }
+
+    #[test]
+    fn the_readings_belong_to_the_pen_that_took_them_first() {
+        let other = 2;
+        let mut r = Readings::default();
+        r.packet(packet(1, 300), AXIS, 100);
+        assert_eq!(r.wheel_for(5000, other, false), None, "a pen message long after the packet does not take them");
+        assert_eq!(r.wheel_for(150, other, false), Some(0.3), "one near the packet does");
+        assert_eq!(r.wheel_at(5010, false), None, "another pen with no packets of its own");
+        assert_eq!(r.wheel_for(5020, other, false), Some(0.3), "and the pen that took them still reads them");
+        r.forget();
+        assert_eq!(r.wheel_at(5030, false), None, "no packet since the readings started afresh");
+        r.packet(packet(1, 400), AXIS, 5040);
+        assert_eq!(r.wheel_at(5040, false), Some(0.4), "then another pen takes them");
+    }
+
+    #[test]
+    fn a_pen_takes_the_readings_only_when_it_reads_a_wheel() {
+        let other = 2;
+        let mut r = Readings::default();
+        assert_eq!(r.wheel_for(100, other, false), None, "no packet yet");
+        assert_eq!(r.owner_or(PEN), PEN, "and no pen took the readings");
+        r.packet(packet(1, 300), AXIS, 110);
+        assert_eq!(r.wheel_at(110, false), Some(0.3), "the pen with the reading");
+        assert_eq!(r.owner_or(other), PEN, "the pen whose leaving starts the readings afresh");
+        r.forget();
+        assert_eq!(r.owner_or(other), other);
+    }
+
+    #[test]
+    fn a_queue_overflow_starts_every_reading_afresh() {
+        let mut r = Readings::default();
+        r.packet(packet(1, 300), AXIS, 100);
+        r.packet(packet(2, 500), None, 110);
+        r.packet(Packet { status: TPS_QUEUE_ERR, ..packet(2, 500) }, None, 120);
+        assert!(r.list.is_empty(), "the queue is the context's, not the cursor's");
+        assert_eq!(r.wheel_at(5000, false), None, "the airbrush's old wheel is not taken");
+        r.packet(packet(1, 400), AXIS, 5000);
+        assert_eq!(r.wheel_at(5000, false), Some(0.4), "the next packet reads again");
+        r.packet(packet(2, 500), None, 5010);
+        r.packet(Packet { status: TPS_PROXIMITY, ..packet(2, 500) }, None, 5020);
+        assert_eq!(r.list.len(), 1, "a cursor that leaves drops only its own reading");
     }
 
     #[test]
