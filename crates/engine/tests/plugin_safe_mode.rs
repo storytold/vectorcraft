@@ -506,6 +506,58 @@ fn expand_appearance_in_safe_mode_checks_symbol_art_a_group_image_draws() {
     refused(&mut s, &json!(outer));
 }
 
+/// In Safe Mode, a hidden plain instance draws nothing in the image a group's raster effect makes,
+/// so its symbol art's plug-in effect doesn't stop Expand Appearance of the group; shown, it does.
+#[test]
+fn expand_appearance_in_safe_mode_skips_symbol_art_of_a_hidden_instance_a_group_image_leaves_out() {
+    let _f = fresh();
+    let mut s = Session::new();
+    let fx = wat::parse_str(tpl::returning(&tpl::manifest("test.sm.hid", "effect", "{}"), r#"{"objects":[]}"#)).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&fx)})).unwrap();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "plugin.test.sm.hid"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "fx"})).unwrap();
+    let hide = |s: &mut Session, id: u64| {
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(vectorcraft_engine::doc::NodeId(id)).unwrap().visible = false;
+    };
+    let expand = |s: &mut Session, group: u64| {
+        safe_mode::set_active(Some(safe_mode::Source::Flag));
+        let r = s.execute("effect.expandAppearance", &json!({"ids": [group]}));
+        safe_mode::set_active(None);
+        r
+    };
+    // A blurred group of a visible rectangle and an instance, then one of a visible rectangle and a
+    // group around an instance; the instance, or the group around it, is shown and then hidden.
+    for wrap in [false, true] {
+        let rect = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].clone();
+        let mut hidden = s.execute("symbol.place", &json!({"name": "fx", "x": 150, "y": 150})).unwrap()["id"].clone();
+        if wrap {
+            hidden = s.execute("object.group", &json!({"ids": [hidden]})).unwrap()["id"].clone();
+        }
+        let group = s.execute("object.group", &json!({"ids": [rect, hidden]})).unwrap()["id"].clone();
+        s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [group], "params": {"radius": 2}})).unwrap();
+        let (hidden, group) = (hidden.as_u64().unwrap(), group.as_u64().unwrap());
+        let err = expand(&mut s, group).unwrap_err().to_string();
+        assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+        hide(&mut s, hidden);
+        expand(&mut s, group).unwrap();
+    }
+    // Expansion still makes the image of a hidden blurred group, or of one in a hidden group, so
+    // a shown instance in it still stops it.
+    let plain = s.execute("symbol.place", &json!({"name": "fx", "x": 150, "y": 20})).unwrap()["id"].clone();
+    let blurred = s.execute("object.group", &json!({"ids": [plain]})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [blurred], "params": {"radius": 2}})).unwrap();
+    let parent = s.execute("object.group", &json!({"ids": [blurred]})).unwrap()["id"].as_u64().unwrap();
+    hide(&mut s, parent);
+    let err = expand(&mut s, parent).unwrap_err().to_string();
+    assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+    let blurred = blurred.as_u64().unwrap();
+    hide(&mut s, blurred);
+    let err = expand(&mut s, blurred).unwrap_err().to_string();
+    assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+}
+
 /// In Safe Mode, a plug-in effect in the art of a graph design in a series stops Expand Appearance of the graph only
 /// when an effect of the series group draws that art with the group.
 #[test]
