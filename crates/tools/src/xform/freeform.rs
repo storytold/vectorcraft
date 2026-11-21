@@ -216,8 +216,9 @@ fn on_object(cx: &ToolContext, id: NodeId, p: Point) -> bool {
         keep.insert(c.id);
     });
     keep.extend(ancestry);
-    // The art as painted, whatever the view and the path-only selection preferences.
-    let opt = HitOptions { outline: false, path_only: false, type_path_only: false, ..cx.hit_options() };
+    // The art as painted, whatever the view, the layers' Preview and the path-only selection
+    // preferences.
+    let opt = HitOptions { outline: false, path_only: false, type_path_only: false, ignore_layer_preview: true, ..cx.hit_options() };
     hit_test_visible_skipping(cx.doc, p, opt, &|n| !keep.contains(&n)).is_some_and(|h| h.leaf == id || h.ancestry.contains(&id))
 }
 
@@ -530,23 +531,32 @@ mod tests {
     }
 
     /// The object's stroke is part of the object: moving onto it past the filled area keeps the
-    /// line open, and moving past the stroke ends it.
+    /// line open, and moving past the stroke ends it. The same holds on a layer with Preview off.
     #[test]
     fn the_stroke_counts_as_the_object() {
-        let (mut d, s) = doc(FreeformMode::Lines);
-        let id = s.objects[0];
-        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().width = 20.0;
-        let p = paint();
-        let mut cx = cx(&d, &s, &p);
-        let mut t = GradientTool::default();
-        let add = |x: f64, y: f64, line: bool| Action::Exec("paint.freeform.addPoint".into(), json!({"at": [x, y], "line": line, "stroke": false}));
-        assert_eq!(click(&mut t, &cx, 140.0, 150.0), vec![add(140.0, 150.0, false)]);
-        cx.freeform_point = Some(2);
-        t.pointer(&cx, &ev(PointerKind::Move, 206.0, 150.0));
-        assert!(t.claims_key(&cx, ToolKey::Escape), "on the stroke the line stays open");
-        assert_eq!(click(&mut t, &cx, 160.0, 150.0), vec![add(160.0, 150.0, true)]);
-        t.pointer(&cx, &ev(PointerKind::Move, 230.0, 150.0));
-        assert!(!t.claims_key(&cx, ToolKey::Escape), "past the stroke the line has ended");
+        for preview in [true, false] {
+            let (mut d, s) = doc(FreeformMode::Lines);
+            let id = s.objects[0];
+            d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().width = 20.0;
+            let l = d.layers[0].id;
+            if let vectorcraft_doc::NodeKind::Layer { preview: p, .. } = &mut d.node_mut(l).unwrap().kind {
+                *p = preview;
+            }
+            let p = paint();
+            let mut cx = cx(&d, &s, &p);
+            let mut t = GradientTool::default();
+            cx.freeform_point = Some(2);
+            // The line starts from the existing point.
+            assert!(click(&mut t, &cx, 150.0, 180.0).is_empty());
+            t.pointer(&cx, &ev(PointerKind::Move, 206.0, 150.0));
+            assert!(t.claims_key(&cx, ToolKey::Escape), "on the stroke the line stays open (Preview {preview})");
+            if preview {
+                let add = Action::Exec("paint.freeform.addPoint".into(), json!({"at": [160.0, 150.0], "line": true, "stroke": false}));
+                assert_eq!(click(&mut t, &cx, 160.0, 150.0), vec![add]);
+            }
+            t.pointer(&cx, &ev(PointerKind::Move, 230.0, 150.0));
+            assert!(!t.claims_key(&cx, ToolKey::Escape), "past the stroke the line has ended (Preview {preview})");
+        }
     }
 
     /// In a clipping mask, the part of the object the mask hides is outside it: moving there ends
