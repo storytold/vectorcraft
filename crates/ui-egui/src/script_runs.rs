@@ -33,6 +33,7 @@ pub fn poll(app: &mut VectorcraftApp) {
         app.ui.dialog = None;
     }
     script_run::settle_close(app);
+    let boards = result.as_ref().ok().and_then(|r| r["activeArtboards"].as_array().cloned()).unwrap_or_default();
     match result {
         // The commands it ran are journaled now: a recording they no longer fit in names its limit.
         Ok(_) => {
@@ -43,6 +44,22 @@ pub fn poll(app: &mut VectorcraftApp) {
         Err(e) => failed(app, e.to_string()),
     }
     app.sync_views();
+    show_artboards(app, &boards);
+}
+
+/// Makes each artboard a run's `setActiveArtboardIndex` chose the active one of its document's view
+/// (`activeArtboards` in the run's report: `{document, artboard}`, both indexes).
+fn show_artboards(app: &mut VectorcraftApp, boards: &[serde_json::Value]) {
+    for b in boards {
+        let index = |k: &str| b[k].as_u64().and_then(|i| usize::try_from(i).ok());
+        let (Some(doc), Some(board)) = (index("document"), index("artboard")) else { continue };
+        let count = app.session.documents().get(doc).map_or(0, |d| d.doc.artboards.len());
+        if let Some(view) = app.views.get_mut(doc)
+            && board < count
+        {
+            view.artboard = board;
+        }
+    }
 }
 
 /// Opens what the run waits at, once no other dialog is open: the script's own dialog, or the

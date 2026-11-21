@@ -51,6 +51,7 @@
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
+pub mod dom;
 pub mod include;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
@@ -799,6 +800,8 @@ struct Host {
     dollar: dollar::RunState,
     /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
     args: RefCell<(Data, u64)>,
+    /// The run's state of the script object model (`app`).
+    dom: dom::State,
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -1234,7 +1237,8 @@ fn note_ids(s: &mut Session) {
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
     let mutating = waits_for_tool_edit(id);
-    let save = mutating.then(|| Savepoint::take(s, id));
+    // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
+    let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
@@ -1293,6 +1297,20 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
     let bytes = args.iter().map(data_size).sum();
     host.charge_call(bytes)?;
     bump(&host.counts.vc_run);
+    command(host, &id, &params)
+}
+
+/// Runs command `id` for the script as `vc.run` does, its call already charged: it joins the run's
+/// transaction, its growth is counted, and a command that fails, or whose result cannot cross to
+/// the script, is put back. → its result.
+fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
+    command_value(host, id, params).map(|(data, _)| data)
+}
+
+/// [`command`], with the command's result as it gave it as well as the script's copy of it.
+fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
+    let id = id.to_string();
+    let params = params.clone();
     let session = host.session.clone();
     let started = clock();
     let r = {
@@ -1328,7 +1346,7 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
-    crossed
+    crossed.map(|data| (data, value))
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits
@@ -1564,11 +1582,17 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// `e`'s message, with what to do about a failure that comes from a script written for another
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
+    const APP_MEMBERS: &[&str] = &["activeDocument", "documents", "selection"];
     let message = &e.message;
-    let names_host_object =
-        message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
-    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
+    let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
+    let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
+    if e.kind == RunErrorKind::Thrown
+        && !e.authored
+        && let Some(member) = first.filter(|f| APP_MEMBERS.contains(f))
+    {
+        format!("{message} (use `app.{member}`)")
+    } else if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
@@ -2040,6 +2064,7 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
+            dom: dom::State::default(),
         });
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {
@@ -2076,6 +2101,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
                         let r = realm.start(&expanded.source);
@@ -2264,6 +2290,9 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        if let Some(boards) = dom::layers::active_artboards(&host.dom.active_artboards.borrow(), self.documents()) {
+            report["activeArtboards"] = boards;
+        }
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
         self.script_report = Some(report.clone());

@@ -41,7 +41,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
-/// outside it.
+/// outside it. The document model (`app`, its classes and the enumerations) acts on the open
+/// documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -70,7 +71,96 @@ const INSIDE: &[(&str, &str)] = &[
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
          getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
     ),
+    (
+        "",
+        "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
+         DocumentArtboardLayout DocumentColorSpace DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
+         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits \
+         ZOrderMethod",
+    ),
+    ("Application.", "prototype"),
+    (
+        "Application.prototype.",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
+         selection typename",
+    ),
+    ("Documents.", "prototype"),
+    ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
+    ("Document.", "prototype"),
+    (
+        "Document.prototype.",
+        "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
+         documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         views views= width",
+    ),
+    ("Layer.", "prototype"),
+    (
+        "Layer.prototype.",
+        "artworkKnockout artworkKnockout= blendingMode blendingMode= color color= compoundPathItems constructor \
+         dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
+         locked= move name name= opacity opacity= pageItems parent pathItems pathItems= placedItems placedItems= preview \
+         preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
+         textFrames= typename visible visible= zOrder zOrderPosition",
+    ),
+    ("Layers.", "prototype"),
+    ("Layers.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("GroupItem.", "prototype"),
+    (
+        "GroupItem.prototype.",
+        "clipped clipped= compoundPathItems constructor groupItems pageItems pathItems pathItems= placedItems placedItems= \
+         rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
+    ),
+    ("GroupItems.", "prototype"),
+    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll typename"),
+    ("CompoundPathItem.", "prototype"),
+    ("CompoundPathItem.prototype.", "constructor pathItems"),
+    ("CompoundPathItems.", "prototype"),
+    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Artboard.", "prototype"),
+    (
+        "Artboard.prototype.",
+        "artboardRect artboardRect= constructor name name= parent remove rulerOrigin rulerOrigin= rulerPAR rulerPAR= \
+         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= typename",
+    ),
+    ("Artboards.", "prototype"),
+    (
+        "Artboards.prototype.",
+        "add constructor getActiveArtboardIndex getByName index insert length parent remove setActiveArtboardIndex \
+         typename",
+    ),
+    ("PageItems.", "prototype"),
+    ("PageItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("PageItem.", "prototype"),
+    (
+        "PageItem.prototype.",
+        "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
+         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer left \
+         left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
+         transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
+         width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
+    ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
+    ("DocumentColorSpace.", "CMYK RGB"),
+    ("DocumentPresetType.", "BasicCMYK BasicRGB Mobile Print Video Web"),
+    ("DocumentPreviewMode.", "DefaultPreview OverprintPreview PixelPreview"),
+    ("DocumentRasterResolution.", "HighResolution MediumResolution ScreenResolution"),
+    (
+        "DocumentTransparencyGrid.",
+        "TransparencyGridBlue TransparencyGridDark TransparencyGridGreen TransparencyGridLight TransparencyGridMedium \
+         TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
+    ),
+    ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
+
+/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`
+/// and the page item types that have no members of their own.
+const BARE_CLASSES: &str = "BlendItem DocumentPreset EnvelopeItem GraphItem IntertwineItem MeshItem PathItem PlacedDocumentItem \
+     PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
@@ -118,7 +208,8 @@ fn language_names() -> BTreeSet<String> {
 
 fn table_names() -> BTreeSet<String> {
     let inside = INSIDE.iter().flat_map(|(prefix, names)| names.split_whitespace().map(move |n| format!("{prefix}{n}")));
-    OUTSIDE.iter().map(|(n, ..)| n.to_string()).chain(inside).chain([NOT_CHECKED.to_string()]).collect()
+    let bare = BARE_CLASSES.split_whitespace().flat_map(|c| [c.to_string(), format!("{c}.prototype"), format!("{c}.prototype.constructor")]);
+    OUTSIDE.iter().map(|(n, ..)| n.to_string()).chain(inside).chain(bare).chain([NOT_CHECKED.to_string()]).collect()
 }
 
 #[test]
