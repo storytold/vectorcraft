@@ -121,6 +121,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
+            "impact-bursts",
             "tech-circuit",
             "engraving",
             "arrows",
