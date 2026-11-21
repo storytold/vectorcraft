@@ -13224,8 +13224,9 @@ flag lasts for that session only. In other sessions the approval, or a `grant` a
 hash, counts as approved in later sessions and in the desktop app, and covers only that module: the
 same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
 with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. A
-`grants.json` that does not carry VectorCraft's MAC for its folder (see [plug-ins](plugins.md#grants-file-integrity))
-grants nothing, and its plug-ins have `needsApproval: true` again. When the system key store can't be reached, an
+`grants.json` that does not carry VectorCraft's MAC for its folder, or is at another generation than the one the key
+store keeps for the folder, such as an earlier copy put back (see [plug-ins](plugins.md#grants-file-integrity)), grants
+nothing, and its plug-ins have `needsApproval: true` again. When the system key store can't be reached, an
 approval lasts for that session only and the file is left as it is. `plugin.remove`
 forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
 need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the

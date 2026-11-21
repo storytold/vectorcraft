@@ -358,11 +358,11 @@ each time it is drawn, and a paint linked to a global swatch is drawn in that sw
 
 #### Grants file integrity
 
-`grants.json` holds the grants in a JSON object, `{"version": 1, "grants": [...], "mac": "..."}`. `mac` is an
-HMAC-SHA-256 ([RFC 2104](https://www.rfc-editor.org/rfc/rfc2104)), in lower-case hexadecimal, of the `grants` list
-written as compact JSON and of the folder the file is in. The key is 32 random bytes that VectorCraft makes when it
-records the first grant. VectorCraft keeps the key in the system key store, as the secret of the account
-`hmac-sha256-v1` of the service `org.storytold.vectorcraft.plugin-grants`, and never in a file:
+`grants.json` holds the grants in a JSON object, `{"version": 1, "generation": 3, "grants": [...], "mac": "..."}`.
+`mac` is an HMAC-SHA-256 ([RFC 2104](https://www.rfc-editor.org/rfc/rfc2104)), in lower-case hexadecimal, of the
+folder the file is in, the `generation` and the `grants` list written as compact JSON. The key is 32 random bytes that
+VectorCraft makes when it records the first grant. VectorCraft keeps the key in the system key store, as the secret of
+the account `hmac-sha256-v1` of the service `org.storytold.vectorcraft.plugin-grants`, and never in a file:
 
 - On macOS the key is in the user's Keychain.
 - On Windows the key is a generic credential in Credential Manager.
@@ -373,14 +373,25 @@ VectorCraft makes the key while it holds `vectorcraft-plugin-grant-key.lock` in 
 macOS, and in `$XDG_RUNTIME_DIR` elsewhere. When that file can't be locked, or `$XDG_RUNTIME_DIR` is not set, no key
 is made, and approvals last for the session only, as when the key store can't be reached.
 
-VectorCraft compares the MAC in constant time. A `grants.json` without the MAC of its grants and its folder grants
-nothing, and each plug-in it names that lists permissions asks for approval again. This covers a file that an earlier
-version wrote (a plain JSON list), a grant that another program edited or added, a file whose `mac` was removed or
-changed, a file copied from another `Plug-ins` folder or another computer, and a file whose key is no longer in the key
+The key store also keeps a generation for each `Plug-ins` folder, as an 8-byte secret of the account `generation-v1-`
+followed by the SHA-256 of the folder's resolved path in hexadecimal, in the same service. A key store that holds no
+generation for a folder counts as generation 0. Each time VectorCraft writes a signed `grants.json`, in the folder's
+turn (`disabled.lock`), it writes the file at the next generation and then keeps that generation. When it removes a
+signed `grants.json`, it keeps the next generation first, and puts the earlier one back when the file can't be removed;
+when the key store can't put it back either, the file grants nothing.
+When the key store can't keep the generation of a write, the file just written grants nothing, and the write reports a
+failure.
+
+VectorCraft compares the MAC in constant time. A `grants.json` without the MAC of its generation, its grants and its
+folder, or at another generation than the one the key store keeps for the folder, grants nothing, and each plug-in it
+names that lists permissions asks for approval again. This covers a file that an earlier version wrote (a plain JSON
+list), a grant that another program edited or added, a file whose `mac` was removed or changed, a file copied from
+another `Plug-ins` folder or another computer, an earlier copy of the file put back after a grant was revoked or the
+file was removed, a write whose generation the key store didn't keep, and a file whose key is no longer in the key
 store. The next approval replaces such a file with a signed file that holds that grant alone, making a key first when
 the key store has none. When a grant is forgotten without an approval (`plugin.remove`, installing a module that lists
-no permissions under that id, or a folder load that forgets the grant), VectorCraft takes that entry out of such a file
-and leaves the rest unsigned.
+no permissions under that id, or a folder load that forgets the grant), VectorCraft keeps the next generation, then
+takes that entry out of such a file and leaves the rest unsigned, so no earlier signed copy brings the entry back.
 
 When the key store can't be reached (it is locked, or a headless Linux session has no Secret Service), no
 `grants.json` grants anything and VectorCraft writes none: an approval lasts for the session only, the module stored

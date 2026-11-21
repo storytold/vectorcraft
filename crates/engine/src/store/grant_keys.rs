@@ -5,11 +5,17 @@
 //! an older version wrote, one another program wrote or changed, one copied from another folder or
 //! machine) grants nothing.
 //!
+//! The key store also keeps a generation for each plug-in folder, raised on every signed write of
+//! its grants file, and the file carries its generation inside the MAC. A file whose generation is
+//! not the one kept (an earlier copy put back over the current file, or a write whose generation
+//! the key store didn't keep) grants nothing either.
+//!
 //! The process uses one key store ([`set_grant_key_store`]); the apps use the system's
 //! ([`use_os_grant_keys`]). In a process that sets none, every grants file counts as one whose key
 //! store can't be reached: a grant holds for the session only.
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
 /// The length of a key, in bytes, and of the MAC.
@@ -66,18 +72,25 @@ pub trait GrantKeyStore: Send + Sync {
         self.set_key(&GrantKey::random()?)?;
         self.key()?.ok_or_else(|| KeyStoreError("the key store didn't keep the key".into()))
     }
+    /// The generation kept for the grants file of the plug-in store whose folder is `folder`
+    /// ([`super::plugin_store_key`]), read from the store each time; `None` when none is kept.
+    fn generation(&self, folder: &Path) -> Result<Option<u64>, KeyStoreError>;
+    /// Keep `generation` for the grants file of the plug-in store whose folder is `folder`.
+    fn set_generation(&self, folder: &Path, generation: u64) -> Result<(), KeyStoreError>;
 }
 
-/// A key store in memory: the key lasts as long as the store. For tests and embedders.
+/// A key store in memory: the key and the generations last as long as the store. For tests and
+/// embedders.
 #[derive(Default)]
 pub struct MemoryGrantKeys {
     key: Mutex<Option<GrantKey>>,
+    generations: Mutex<BTreeMap<PathBuf, u64>>,
 }
 
 impl MemoryGrantKeys {
     /// A store that holds `key`.
     pub fn with_key(key: GrantKey) -> Self {
-        MemoryGrantKeys { key: Mutex::new(Some(key)) }
+        MemoryGrantKeys { key: Mutex::new(Some(key)), ..MemoryGrantKeys::default() }
     }
 }
 
@@ -88,6 +101,15 @@ impl GrantKeyStore for MemoryGrantKeys {
 
     fn set_key(&self, key: &GrantKey) -> Result<(), KeyStoreError> {
         *self.key.lock().unwrap_or_else(|e| e.into_inner()) = Some(key.clone());
+        Ok(())
+    }
+
+    fn generation(&self, folder: &Path) -> Result<Option<u64>, KeyStoreError> {
+        Ok(self.generations.lock().unwrap_or_else(|e| e.into_inner()).get(folder).copied())
+    }
+
+    fn set_generation(&self, folder: &Path, generation: u64) -> Result<(), KeyStoreError> {
+        self.generations.lock().unwrap_or_else(|e| e.into_inner()).insert(folder.to_path_buf(), generation);
         Ok(())
     }
 }
@@ -154,49 +176,64 @@ pub(crate) fn signing_key() -> Result<GrantKey, KeyStoreError> {
     }
 }
 
+/// The generation kept for the grants file of the plug-in store whose folder is `folder`: 0 when
+/// none is kept yet, an error when there is no key store or it can't be reached.
+pub(crate) fn current_generation(folder: &Path) -> Result<u64, KeyStoreError> {
+    Ok(current_store().ok_or_else(|| KeyStoreError("there is no key store".into()))?.generation(folder)?.unwrap_or(0))
+}
+
+/// Keep `generation` for the grants file of the plug-in store whose folder is `folder`.
+pub(crate) fn set_current_generation(folder: &Path, generation: u64) -> Result<(), KeyStoreError> {
+    current_store().ok_or_else(|| KeyStoreError("there is no key store".into()))?.set_generation(folder, generation)
+}
+
 /// The start of every MAC input: what it is a MAC of, and the version of the file.
 #[cfg(not(target_arch = "wasm32"))]
 const DOMAIN: &[u8] = b"VectorCraft plug-in grants v1\0";
 
-/// The MAC of `grants` (the grants list as compact JSON) in the plug-in store whose folder is
-/// `folder` ([`super::plugin_store_key`]), made with `key`.
+/// The MAC of `grants` (the grants list as compact JSON) at `generation` in the plug-in store whose
+/// folder is `folder` ([`super::plugin_store_key`]), made with `key`. The folder and the generation
+/// go in with their lengths first.
 #[cfg(not(target_arch = "wasm32"))]
-fn mac_of(key: &GrantKey, folder: &Path, grants: &[u8]) -> Option<hmac::Hmac<sha2::Sha256>> {
+fn mac_of(key: &GrantKey, folder: &Path, generation: u64, grants: &[u8]) -> Option<hmac::Hmac<sha2::Sha256>> {
     use hmac::Mac;
     let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(&key.0).ok()?;
     let folder = folder.as_os_str().as_encoded_bytes();
+    let generation = generation.to_be_bytes();
     mac.update(DOMAIN);
     mac.update(&(folder.len() as u64).to_be_bytes());
     mac.update(folder);
+    mac.update(&(generation.len() as u64).to_be_bytes());
+    mac.update(&generation);
     mac.update(grants);
     Some(mac)
 }
 
-/// The MAC of `grants` in `folder` with `key`, as 64 lower-case hexadecimal digits.
+/// The MAC of `grants` at `generation` in `folder` with `key`, as 64 lower-case hexadecimal digits.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn sign(key: &GrantKey, folder: &Path, grants: &[u8]) -> Option<String> {
+pub(crate) fn sign(key: &GrantKey, folder: &Path, generation: u64, grants: &[u8]) -> Option<String> {
     use hmac::Mac;
-    Some(mac_of(key, folder, grants)?.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect())
+    Some(mac_of(key, folder, generation, grants)?.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// Whether `tag` is the whole MAC of `grants` in `folder` with `key` ([`sign`]), compared in constant
-/// time; a shorter or longer tag is not.
+/// Whether `tag` is the whole MAC of `grants` at `generation` in `folder` with `key` ([`sign`]),
+/// compared in constant time; a shorter or longer tag is not.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn verify(key: &GrantKey, folder: &Path, grants: &[u8], tag: &str) -> bool {
+pub(crate) fn verify(key: &GrantKey, folder: &Path, generation: u64, grants: &[u8], tag: &str) -> bool {
     use hmac::Mac;
     let Some(tag) = from_hex(tag) else { return false };
-    mac_of(key, folder, grants).is_some_and(|mac| mac.verify_slice(&tag).is_ok())
+    mac_of(key, folder, generation, grants).is_some_and(|mac| mac.verify_slice(&tag).is_ok())
 }
 
 /// The browser keeps no grants file.
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn sign(_: &GrantKey, _: &Path, _: &[u8]) -> Option<String> {
+pub(crate) fn sign(_: &GrantKey, _: &Path, _: u64, _: &[u8]) -> Option<String> {
     None
 }
 
 /// The browser keeps no grants file.
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn verify(_: &GrantKey, _: &Path, _: &[u8], _: &str) -> bool {
+pub(crate) fn verify(_: &GrantKey, _: &Path, _: u64, _: &[u8], _: &str) -> bool {
     false
 }
 
@@ -242,6 +279,15 @@ impl OsGrantKeys {
             Err(e) => Err(store_error(e)),
         }
     }
+
+    /// The entry of the generation of the plug-in store whose folder is `folder`: the account
+    /// `generation-v1-` followed by the SHA-256 of the folder in hexadecimal digits.
+    fn generation_entry(folder: &Path) -> Result<keyring::Entry, KeyStoreError> {
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest(folder.as_os_str().as_encoded_bytes());
+        let account: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+        keyring::Entry::new(Self::SERVICE, &format!("generation-v1-{account}")).map_err(store_error)
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -280,6 +326,22 @@ impl GrantKeyStore for OsGrantKeys {
         };
         *read = Some(key.clone());
         Ok(key)
+    }
+
+    /// Read from the key store each time, since another process on the folder may have raised it.
+    /// A kept value that is not 8 bytes is an error, so that nothing counts as signed with it.
+    fn generation(&self, folder: &Path) -> Result<Option<u64>, KeyStoreError> {
+        match Self::generation_entry(folder)?.get_secret() {
+            Ok(secret) => <[u8; 8]>::try_from(secret.as_slice())
+                .map(|bytes| Some(u64::from_be_bytes(bytes)))
+                .map_err(|_| KeyStoreError("the key store holds a generation of another length".into())),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(store_error(e)),
+        }
+    }
+
+    fn set_generation(&self, folder: &Path, generation: u64) -> Result<(), KeyStoreError> {
+        Self::generation_entry(folder)?.set_secret(&generation.to_be_bytes()).map_err(store_error)
     }
 }
 

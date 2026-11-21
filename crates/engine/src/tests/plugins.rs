@@ -4215,6 +4215,58 @@ impl crate::store::grant_keys::GrantKeyStore for UnreachableKeys {
     fn set_key(&self, _: &crate::store::grant_keys::GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
         Err(crate::store::grant_keys::KeyStoreError("the key store is locked".into()))
     }
+
+    fn generation(&self, _: &std::path::Path) -> std::result::Result<Option<u64>, crate::store::grant_keys::KeyStoreError> {
+        Err(crate::store::grant_keys::KeyStoreError("the key store is locked".into()))
+    }
+
+    fn set_generation(&self, _: &std::path::Path, _: u64) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+        Err(crate::store::grant_keys::KeyStoreError("the key store is locked".into()))
+    }
+}
+
+/// A memory key store the test keeps a handle on; it fails to keep a generation while
+/// `generation_writes_fail` is set.
+struct SharedKeys {
+    keys: std::sync::Arc<crate::store::grant_keys::MemoryGrantKeys>,
+    generation_writes_fail: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl SharedKeys {
+    fn new(keys: &std::sync::Arc<crate::store::grant_keys::MemoryGrantKeys>) -> Self {
+        SharedKeys { keys: keys.clone(), generation_writes_fail: std::sync::Arc::default() }
+    }
+}
+
+impl crate::store::grant_keys::GrantKeyStore for SharedKeys {
+    fn key(&self) -> std::result::Result<Option<crate::store::grant_keys::GrantKey>, crate::store::grant_keys::KeyStoreError> {
+        crate::store::grant_keys::GrantKeyStore::key(self.keys.as_ref())
+    }
+
+    fn set_key(&self, key: &crate::store::grant_keys::GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+        crate::store::grant_keys::GrantKeyStore::set_key(self.keys.as_ref(), key)
+    }
+
+    fn generation(&self, folder: &std::path::Path) -> std::result::Result<Option<u64>, crate::store::grant_keys::KeyStoreError> {
+        crate::store::grant_keys::GrantKeyStore::generation(self.keys.as_ref(), folder)
+    }
+
+    fn set_generation(&self, folder: &std::path::Path, generation: u64) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+        if self.generation_writes_fail.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(crate::store::grant_keys::KeyStoreError("the key store can't keep it".into()));
+        }
+        crate::store::grant_keys::GrantKeyStore::set_generation(self.keys.as_ref(), folder, generation)
+    }
+}
+
+/// The generation the grants file `bytes` is at.
+fn generation_of(bytes: &[u8]) -> Option<u64> {
+    serde_json::from_slice::<Value>(bytes).ok()?["generation"].as_u64()
+}
+
+/// The generation `keys` keeps for the plug-in store `dir`.
+fn kept_generation(keys: &crate::store::grant_keys::MemoryGrantKeys, dir: &std::path::Path) -> Option<u64> {
+    crate::store::grant_keys::GrantKeyStore::generation(keys, &crate::store::plugin_store_key(dir)).unwrap()
 }
 
 /// Whether the stored plug-in `id` loads from the plug-in store `dir` at a new start, and whether
@@ -4348,16 +4400,7 @@ fn a_grants_file_without_its_key_is_replaced_by_the_next_approval() {
     std::fs::write(&grants, &signed).unwrap();
     std::fs::write(folder.0.join(format!("{}.wasm", crate::store::file_stem(id))), &wasm).unwrap();
     let keys = std::sync::Arc::new(MemoryGrantKeys::default());
-    struct Shared(std::sync::Arc<MemoryGrantKeys>);
-    impl GrantKeyStore for Shared {
-        fn key(&self) -> std::result::Result<Option<GrantKey>, crate::store::grant_keys::KeyStoreError> {
-            self.0.key()
-        }
-        fn set_key(&self, key: &GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
-            self.0.set_key(key)
-        }
-    }
-    let _keys = ThreadKeys::using(Shared(keys.clone()));
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "no key, no grant");
     assert!(keys.key().unwrap().is_none(), "reading makes no key");
     assert_eq!(std::fs::read(&grants).unwrap(), signed, "the file is left as it is");
@@ -4413,22 +4456,23 @@ fn an_unreachable_key_store_keeps_approvals_in_the_session() {
     assert!(!grants.exists());
 }
 
-/// A MAC is made over the grants and the folder, and only the whole MAC of the same key, grants and
-/// folder verifies. A key's bytes are never printed.
+/// A MAC is made over the generation, the grants and the folder, and only the whole MAC of the same
+/// key, generation, grants and folder verifies. A key's bytes are never printed.
 #[test]
 fn a_grants_mac_verifies_only_for_its_key_grants_and_folder() {
     use crate::store::grant_keys::{GrantKey, sign, verify};
     let (key, other) = (GrantKey::from_bytes([1; 32]), GrantKey::from_bytes([2; 32]));
     let folder = std::path::Path::new("/plug-ins");
-    let tag = sign(&key, folder, b"[]").unwrap();
+    let tag = sign(&key, folder, 4, b"[]").unwrap();
     assert_eq!(tag.len(), 64);
-    assert!(verify(&key, folder, b"[]", &tag));
-    assert!(!verify(&other, folder, b"[]", &tag), "another key");
-    assert!(!verify(&key, std::path::Path::new("/other"), b"[]", &tag), "another folder");
-    assert!(!verify(&key, folder, b"[ ]", &tag), "other grants");
-    assert!(!verify(&key, folder, b"[]", &tag[..62]), "a MAC cut short");
-    assert!(!verify(&key, folder, b"[]", &tag.to_uppercase()), "upper case");
-    assert!(!verify(&key, folder, b"[]", ""));
+    assert!(verify(&key, folder, 4, b"[]", &tag));
+    assert!(!verify(&other, folder, 4, b"[]", &tag), "another key");
+    assert!(!verify(&key, std::path::Path::new("/other"), 4, b"[]", &tag), "another folder");
+    assert!(!verify(&key, folder, 3, b"[]", &tag), "another generation");
+    assert!(!verify(&key, folder, 4, b"[ ]", &tag), "other grants");
+    assert!(!verify(&key, folder, 4, b"[]", &tag[..62]), "a MAC cut short");
+    assert!(!verify(&key, folder, 4, b"[]", &tag.to_uppercase()), "upper case");
+    assert!(!verify(&key, folder, 4, b"[]", ""));
     assert_eq!(format!("{key:?}"), "GrantKey(..)");
 }
 
@@ -4449,6 +4493,14 @@ impl crate::store::grant_keys::GrantKeyStore for KeptFirstElsewhere {
     fn set_key(&self, _: &crate::store::grant_keys::GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
         Ok(())
     }
+
+    fn generation(&self, _: &std::path::Path) -> std::result::Result<Option<u64>, crate::store::grant_keys::KeyStoreError> {
+        Ok(None)
+    }
+
+    fn set_generation(&self, _: &std::path::Path, _: u64) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -4458,7 +4510,183 @@ fn a_new_grants_key_is_the_one_the_key_store_kept() {
     let key = crate::store::grant_keys::signing_key().unwrap();
     assert_eq!(key, GrantKey::from_bytes([7; 32]), "the key kept first signs");
     let folder = std::path::Path::new("/plug-ins");
-    assert!(verify(&GrantKey::from_bytes([7; 32]), folder, b"[]", &sign(&key, folder, b"[]").unwrap()));
+    assert!(verify(&GrantKey::from_bytes([7; 32]), folder, 1, b"[]", &sign(&key, folder, 1, b"[]").unwrap()));
+}
+
+/// An earlier copy of the grants file put back over the current one grants nothing: after one
+/// plug-in's grant is revoked while another's stays, and after the last grant is revoked and the
+/// file removed.
+#[test]
+fn an_earlier_grants_file_put_back_grants_nothing() {
+    let folder = crate::tests_links::Folder::new("plugin-store-earlier-copy");
+    let id = "test.engine.permissions.earlier";
+    let other = "test.engine.permissions.earlierother";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let other_wasm = asking(other, r#"["doc.read"]"#, &json!({"objects": []}));
+    let (data, other_data) = (vectorcraft_format::base64_encode(&wasm), vectorcraft_format::base64_encode(&other_wasm));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    let both = std::fs::read(&grants).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": other}));
+    let one = std::fs::read(&grants).unwrap();
+
+    std::fs::write(&grants, &both).unwrap();
+    assert_eq!(starts_from(&folder.0, other, &other_data), (false, true), "the revoked grant doesn't come back");
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the earlier copy grants nothing");
+    std::fs::write(&grants, &one).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the current file keeps its grant");
+
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!grants.exists());
+    std::fs::write(&grants, &one).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the last revoked grant doesn't come back");
+
+    // A grant revoked from a file edited outside VectorCraft doesn't come back with a signed copy
+    // made before the edit either.
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let signed = std::fs::read(&grants).unwrap();
+    let mut edited: Value = serde_json::from_slice(&signed).unwrap();
+    edited["mac"] = json!("0".repeat(64));
+    std::fs::write(&grants, serde_json::to_vec(&edited).unwrap()).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!grants.exists());
+    std::fs::write(&grants, &signed).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked from the edited file doesn't come back");
+}
+
+/// Every signed write of the grants file is at the next generation, which the key store then keeps,
+/// and the file stays signed; removing the last grant raises the generation too.
+#[test]
+fn a_signed_grants_write_raises_the_generation_and_stays_signed() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+    let folder = crate::tests_links::Folder::new("plugin-store-generation");
+    let id = "test.engine.permissions.generation";
+    let other = "test.engine.permissions.generationother";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(1), Some(1)));
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(2), Some(2)));
+    run(&mut s, "plugin.remove", json!({"id": other}));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(3), Some(3)));
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file stays signed");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!grants.exists());
+    assert_eq!(kept(&folder.0), Some(4), "removing the file raises the generation");
+}
+
+/// Each plug-in folder has a generation of its own.
+#[test]
+fn two_plugin_folders_keep_their_own_generations() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+    let first = crate::tests_links::Folder::new("plugin-store-generation-a");
+    let second = crate::tests_links::Folder::new("plugin-store-generation-b");
+    let ids = ["test.engine.permissions.foldera", "test.engine.permissions.folderaother", "test.engine.permissions.folderb"];
+    let data: Vec<String> = ids.iter().map(|id| vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})))).collect();
+    let mut a = session();
+    a.attach_plugin_store(first.0.clone());
+    run(&mut a, "plugin.install", json!({"dataBase64": data[0], "grant": ["doc.read"]}));
+    run(&mut a, "plugin.install", json!({"dataBase64": data[1], "grant": ["doc.read"]}));
+    let mut b = session();
+    b.attach_plugin_store(second.0.clone());
+    run(&mut b, "plugin.install", json!({"dataBase64": data[2], "grant": ["doc.read"]}));
+    assert_eq!((kept(&first.0), kept(&second.0)), (Some(2), Some(1)));
+    assert_eq!(starts_from(&first.0, ids[0], &data[0]), (true, false));
+    assert_eq!(starts_from(&second.0, ids[2], &data[2]), (true, false));
+    let (mut a, mut b) = (session(), session());
+    a.attach_plugin_store(first.0.clone());
+    b.attach_plugin_store(second.0.clone());
+    run(&mut a, "plugin.remove", json!({"id": ids[0]}));
+    run(&mut a, "plugin.remove", json!({"id": ids[1]}));
+    run(&mut b, "plugin.remove", json!({"id": ids[2]}));
+}
+
+/// A key store that holds a key and no generation for the folder, as one does the first time this
+/// version runs, reads generation 0: a file signed at 0 keeps its grants, and the next write is at 1.
+#[test]
+fn a_key_without_a_generation_reads_generation_zero() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::with_key(crate::store::grant_keys::GrantKey::from_bytes([5; 32])));
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let folder = crate::tests_links::Folder::new("plugin-store-generation-zero");
+    let id = "test.engine.permissions.generationzero";
+    let other = "test.engine.permissions.generationzeroother";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    assert_eq!(crate::store::grant_keys::current_generation(&crate::store::plugin_store_key(&folder.0)), Ok(0));
+    let file = crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": sha256_hex(&wasm), "permissions": ["doc.read"]}]).to_string());
+    assert_eq!(generation_of(&file), Some(0));
+    std::fs::write(&grants, &file).unwrap();
+    std::fs::write(folder.0.join(format!("{}.wasm", crate::store::file_stem(id))), &wasm).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file at generation 0 keeps its grant");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
+    run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    assert_eq!(generation_of(&std::fs::read(&grants).unwrap()), Some(1));
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.remove", json!({"id": other}));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// When the key store can't keep the generation of a write, the file written is one generation ahead
+/// of the kept one and grants nothing, so its plug-ins ask again; so does a file one generation
+/// behind the kept one, as a write that kept its generation and then failed to write the file would
+/// leave it.
+#[test]
+fn a_grants_file_whose_generation_was_not_kept_grants_nothing() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let shared = SharedKeys::new(&keys);
+    let fail = shared.generation_writes_fail.clone();
+    let _keys = ThreadKeys::using(shared);
+    let folder = crate::tests_links::Folder::new("plugin-store-generation-unkept");
+    let store = crate::store::plugin_store_key(&folder.0);
+    let id = "test.engine.permissions.generationunkept";
+    let other = "test.engine.permissions.generationunkeptother";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let written = std::fs::read(&grants).unwrap();
+
+    fail.store(true, std::sync::atomic::Ordering::SeqCst);
+    _ = s.execute("plugin.install", &json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    fail.store(false, std::sync::atomic::Ordering::SeqCst);
+    let ahead = std::fs::read(&grants).unwrap();
+    let kept = crate::store::grant_keys::GrantKeyStore::generation(keys.as_ref(), &store).unwrap();
+    assert_eq!((generation_of(&ahead), kept), (Some(2), Some(1)), "the file is one generation ahead");
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "and grants nothing");
+    assert_eq!(starts_from(&folder.0, other, &other_data), (false, true));
+
+    std::fs::write(&grants, &written).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file at the kept generation keeps its grant");
+    crate::store::grant_keys::GrantKeyStore::set_generation(keys.as_ref(), &store, 2).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "a file one generation behind grants nothing");
 }
 
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next

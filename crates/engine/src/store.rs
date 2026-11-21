@@ -21,8 +21,9 @@
 //!   Plug-ins Folder preference is not copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
 //!   stored there that list permissions (id, module hash, permissions); a stored plug-in whose
 //!   permissions it doesn't grant is skipped with a log record, and stays in the folder. The file
-//!   carries a MAC of its grants and its folder, made with a key the user's key store keeps
-//!   ([`grant_keys`]); a file without that MAC grants nothing.
+//!   carries a generation and a MAC of its generation, grants and folder, made with a key the user's
+//!   key store keeps ([`grant_keys`]); a file without that MAC, or at another generation than the
+//!   one the key store keeps for the folder, grants nothing.
 //! * **Plug-in settings and caches**: `storage/id-<id>/` in the plug-in store, the id written as
 //!   [`case_safe`] writes it, holds what a plug-in
 //!   keeps with the `settings` and `cache` permissions ([`PluginStorage`]): `settings.json` and a
@@ -725,11 +726,13 @@ impl Session {
 
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
     /// other grants as they are; with none left, remove the file. Entries this version can't use
-    /// are written back as they were, except one for `id`. The file is written with the MAC of its
-    /// grants for this folder ([`grant_keys`]), making the key when the key store holds none. A file
+    /// are written back as they were, except one for `id`. The file is written at the folder's next
+    /// generation with the MAC of its grants for this folder ([`grant_keys`]), making the key when
+    /// the key store holds none, and the key store then keeps that generation ([`put_grants`]); a
+    /// signed file left empty is removed after raising the generation ([`take_signed_grants`]). A file
     /// VectorCraft didn't write for this folder ([`Trust::Unsigned`]) grants nothing: a grant
-    /// replaces it with a file that holds that grant alone, and removing one takes out the entry for
-    /// `id` and leaves the rest unsigned. When the key store can't be reached ([`Trust::Unknown`], or
+    /// replaces it with a file that holds that grant alone, and removing one raises the generation
+    /// ([`raise_generation`]), then takes out the entry for `id` and leaves the rest unsigned. When the key store can't be reached ([`Trust::Unknown`], or
     /// a key can't be made or kept), the file is left as it is and nothing is recorded, and an entry
     /// for `id` stays. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
@@ -824,10 +827,15 @@ impl Session {
         }
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
-        if entries.is_empty() {
-            return take(dir, GRANTS_FILE);
+        if signed {
+            return if entries.is_empty() { take_signed_grants(dir) } else { put_grants(dir, entries, true) };
         }
-        put_grants(dir, entries, signed)
+        // An unsigned file loses an entry: the generation is raised first, so that no signed copy
+        // made before brings the entry back.
+        if raise_generation(dir).is_none() {
+            return false;
+        }
+        if entries.is_empty() { take(dir, GRANTS_FILE) } else { put_grants(dir, entries, false) }
     }
 
     /// Whether the store holds, or may hold, an entry for the plug-in `id`, including one this
@@ -1501,11 +1509,14 @@ impl GrantsFile {
 /// Whether a grants file was written by VectorCraft for its folder ([`grant_keys`]).
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
 enum Trust {
-    /// There is no file, or it carries the MAC of its grants and folder made with the user's key.
+    /// There is no file, or it is at the generation kept for its folder and carries the MAC of that
+    /// generation, its grants and its folder made with the user's key.
     #[default]
     Signed,
     /// It doesn't: an older version wrote it, another program wrote or changed it, it was copied
-    /// from another folder or machine, or the key store holds no key. It grants nothing.
+    /// from another folder or machine, it is an earlier copy or a write whose generation wasn't kept
+    /// (its generation is not the one the key store keeps), or the key store holds no key. It grants
+    /// nothing.
     Unsigned,
     /// The key store can't be reached, so it is not known which. It grants nothing, and is left as
     /// it is.
@@ -1515,25 +1526,31 @@ enum Trust {
 /// The version of the grants file this version writes ([`SignedGrants::version`]).
 const GRANTS_VERSION: u64 = 1;
 
-/// The grants file as this version writes it: the grants, and their MAC ([`grant_keys::sign`]) over
-/// the list written as compact JSON.
+/// The grants file as this version writes it: its generation ([`grant_keys::current_generation`]),
+/// the grants, and their MAC ([`grant_keys::sign`]) over the generation and the list written as
+/// compact JSON.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SignedGrants {
     version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    generation: Option<u64>,
     grants: Vec<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mac: Option<String>,
 }
 
 /// Tests: a grants file for the plug-in store `dir` that holds `grants` (a JSON list, written as it
-/// is) with their MAC made with the key in use, as VectorCraft writes one.
+/// is) at the generation kept for `dir`, with their MAC made with the key in use, as VectorCraft
+/// writes one.
 #[cfg(test)]
 pub(crate) fn signed_grants_file(dir: &Path, grants: &str) -> Vec<u8> {
     let entries: Vec<serde_json::Value> = serde_json::from_str(grants).unwrap_or_default();
     let key = grant_keys::signing_key().unwrap_or_else(|e| panic!("no key: {e}"));
+    let folder = plugin_store_key(dir);
+    let generation = grant_keys::current_generation(&folder).unwrap_or_else(|e| panic!("no generation: {e}"));
     let canonical = serde_json::to_vec(&entries).unwrap_or_default();
-    let mac = grant_keys::sign(&key, &plugin_store_key(dir), &canonical).unwrap_or_default();
-    format!(r#"{{"version":{GRANTS_VERSION},"grants":{grants},"mac":"{mac}"}}"#).into_bytes()
+    let mac = grant_keys::sign(&key, &folder, generation, &canonical).unwrap_or_default();
+    format!(r#"{{"version":{GRANTS_VERSION},"generation":{generation},"grants":{grants},"mac":"{mac}"}}"#).into_bytes()
 }
 
 /// Tests: the entries of the grants file `bytes`, signed or not.
@@ -1549,13 +1566,17 @@ pub(crate) fn grant_entries(bytes: &[u8]) -> Vec<serde_json::Value> {
     }
 }
 
-/// Whether `signed`, read from the grants file of the plug-in store `dir`, carries the MAC of its
-/// grants and of `dir` made with the user's key.
+/// Whether `signed`, read from the grants file of the plug-in store `dir`, is at the generation kept
+/// for `dir` and carries the MAC of that generation, its grants and `dir` made with the user's key.
+/// A file at another generation, one behind or one ahead of the kept one included, is
+/// [`Trust::Unsigned`].
 fn trust_of(dir: &Path, signed: &SignedGrants) -> Trust {
-    let (Some(tag), true) = (&signed.mac, signed.version == GRANTS_VERSION) else { return Trust::Unsigned };
+    let (Some(tag), Some(generation), true) = (&signed.mac, signed.generation, signed.version == GRANTS_VERSION) else { return Trust::Unsigned };
     let Ok(grants) = serde_json::to_vec(&signed.grants) else { return Trust::Unsigned };
-    match grant_keys::current_key() {
-        Ok(Some(key)) if grant_keys::verify(&key, &plugin_store_key(dir), &grants, tag) => Trust::Signed,
+    let folder = plugin_store_key(dir);
+    let kept = grant_keys::current_key().and_then(|key| key.map(|key| Ok((key, grant_keys::current_generation(&folder)?))).transpose());
+    match kept {
+        Ok(Some((key, kept))) if generation == kept && grant_keys::verify(&key, &folder, generation, &grants, tag) => Trust::Signed,
         Ok(_) => Trust::Unsigned,
         Err(e) => {
             log::warn!("can't check the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
@@ -1564,33 +1585,83 @@ fn trust_of(dir: &Path, signed: &SignedGrants) -> Trust {
     }
 }
 
-/// Write `entries` as the grants file of the plug-in store `dir`, with their MAC for `dir` when
-/// `signed`, pretty-printed, or compact when that is larger than [`MAX_GRANTS_FILE`] → whether it went
-/// there; the file is not written when the key can't be had or it is too large either way.
+/// Write `entries` as the grants file of the plug-in store `dir`, pretty-printed, or compact when
+/// that is larger than [`MAX_GRANTS_FILE`] → whether it went there; the file is not written when the
+/// key or the generation can't be had or it is too large either way. When `signed`, the file is at
+/// the next generation for `dir` with its MAC, and that generation is kept after the file is written;
+/// when it can't be kept, the file is at a generation the key store doesn't hold, so it grants
+/// nothing, and the write reports a failure. Call it in the store's turn ([`StoreTurn`]).
 fn put_grants(dir: &Path, entries: Vec<serde_json::Value>, signed: bool) -> bool {
     let path = dir.join(GRANTS_FILE);
-    let file = if signed {
-        let key = match grant_keys::signing_key() {
-            Ok(key) => key,
+    let folder = plugin_store_key(dir);
+    let (file, next) = if signed {
+        let signing = grant_keys::signing_key().and_then(|key| Ok((key, grant_keys::current_generation(&folder)?)));
+        let (key, generation) = match signing {
+            Ok(signing) => signing,
             Err(e) => {
                 log::warn!("not updating the stored plug-in grants {}: {e}", path.display());
                 return false;
             }
         };
-        let mac = serde_json::to_vec(&entries).ok().and_then(|grants| grant_keys::sign(&key, &plugin_store_key(dir), &grants));
+        let Some(next) = generation.checked_add(1) else { return false };
+        let mac = serde_json::to_vec(&entries).ok().and_then(|grants| grant_keys::sign(&key, &folder, next, &grants));
         let Some(mac) = mac else { return false };
-        serde_json::to_value(SignedGrants { version: GRANTS_VERSION, grants: entries, mac: Some(mac) })
+        (serde_json::to_value(SignedGrants { version: GRANTS_VERSION, generation: Some(next), grants: entries, mac: Some(mac) }), Some(next))
     } else {
-        serde_json::to_value(entries)
+        (serde_json::to_value(entries), None)
     };
     // The file is read back only up to its cap: written compactly when pretty-printed is larger,
     // and not at all when that is too.
     let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
     match file.ok().and_then(|file| serde_json::to_vec_pretty(&file).ok().filter(fits).or_else(|| serde_json::to_vec(&file).ok().filter(fits))) {
-        Some(bytes) => put(dir, GRANTS_FILE, &bytes),
+        Some(bytes) => put(dir, GRANTS_FILE, &bytes) && next.is_none_or(|next| keep_generation(dir, &folder, next)),
         None => {
             log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
             false
+        }
+    }
+}
+
+/// Keep `generation` for the grants file of the plug-in store `dir` (whose folder is `folder`) →
+/// whether the key store kept it; a failure is logged.
+fn keep_generation(dir: &Path, folder: &Path, generation: u64) -> bool {
+    match grant_keys::set_current_generation(folder, generation) {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("the stored plug-in grants {} grant nothing: their generation wasn't kept ({e})", dir.join(GRANTS_FILE).display());
+            false
+        }
+    }
+}
+
+/// Remove the signed grants file of the plug-in store `dir` → whether it is gone. Its generation is
+/// raised first, so that no copy of the file grants anything once it is gone; when the file can't be
+/// removed, the generation is put back, so the file keeps its grants, and when that can't be put back
+/// either, the file grants nothing. The file holds no grant but the one being removed. Nothing is
+/// removed when the generation can't be raised. Call it in the store's turn ([`StoreTurn`]).
+fn take_signed_grants(dir: &Path) -> bool {
+    let Some(generation) = raise_generation(dir) else { return false };
+    if take(dir, GRANTS_FILE) {
+        return true;
+    }
+    keep_generation(dir, &plugin_store_key(dir), generation);
+    false
+}
+
+/// Keep the next generation for the grants file of the plug-in store `dir`, so that no signed copy
+/// of the file made before grants anything → the generation kept before; `None`, with a log record,
+/// when the key store can't read or keep it.
+fn raise_generation(dir: &Path) -> Option<u64> {
+    let folder = plugin_store_key(dir);
+    let raised = grant_keys::current_generation(&folder).and_then(|generation| {
+        let next = generation.checked_add(1).ok_or_else(|| grant_keys::KeyStoreError("the generation can't be raised".into()))?;
+        grant_keys::set_current_generation(&folder, next).map(|()| generation)
+    });
+    match raised {
+        Ok(generation) => Some(generation),
+        Err(e) => {
+            log::warn!("not changing the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            None
         }
     }
 }
