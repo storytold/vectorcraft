@@ -509,6 +509,7 @@ registry! {
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
     SmoothBridge: [crate::addons::pathtools::bridge::KIND] => crate::addons::pathtools::bridge::SPEC,
     TangentCircle: [crate::addons::pathtools::tangent_circle::KIND] => crate::addons::pathtools::tangent_circle::SPEC,
+    TangentCircleRadius: [crate::addons::pathtools::tangent_circle_radius::KIND] => crate::addons::pathtools::tangent_circle_radius::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,

@@ -14566,8 +14566,20 @@ Tools:
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
   segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
   canceled preview does not leave a circle worked out on the previewed paths.
-  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
-  gives an error for a value outside that range or one that is not a number, and for any other option.
+  Options (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36), `askRadius` (Ask For
+  Circle Radius, true or false, false) and `autoUpdateDefault` (Auto-Update Default, true or false, false).
+  `tool.setOption` gives an error for a radius outside that range or one that is not a number, for a value of the other
+  two that is not true or false, and for any other option. With `askRadius` on, a click on the second segment that finds
+  a circle (with or without Shift) opens the Tangent Circle dialog (`tangentCircleRadius`) instead of drawing; a drag,
+  which sets the radius, draws at once. The dialog's Radius starts at the radius of the circle found, and each radius
+  previews the circle of that radius touching the second segments nearest the click, anywhere along the first segment
+  (at the radius it opened with, the circle found). A radius that gives no circle there shows the note and leaves OK
+  off, as do an edit to either segment's path after the click and another active document; one outside 0.01 to
+  1000000 pt, typed or set (or not a number, as `ui.dialog.set` can give), shows the radius error, except the radius the
+  dialog opened with; OK then gives that error and the dialog stays open. OK draws the circle in one undo
+  step, with `shape.circleThroughPoints`, and with `autoUpdateDefault` on also sets `radius` to the radius given when
+  it is in that range. Cancel draws nothing, leaves no undo step and
+  keeps the first segment picked.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has

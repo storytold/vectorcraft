@@ -1049,6 +1049,14 @@ pub(crate) fn preview_without_check(app: &mut crate::VectorcraftApp, d: &mut Dia
     let _ = preview_or_rollback(app, d, label, cmd, params);
 }
 
+/// Roll back the preview [`preview_without_check`] runs, for values that give nothing to preview:
+/// the next preview starts again from the document as it was.
+pub(crate) fn rollback_preview(app: &mut crate::VectorcraftApp, d: &mut Dialog) {
+    if d.fields.remove(PREVIEWED).is_some() {
+        let _ = app.session.cancel_interaction();
+    }
+}
+
 /// [`preview_now`] while Preview is on; off, it rolls the preview back.
 fn preview_or_rollback(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) -> Option<Value> {
     if !d.bool("preview") {

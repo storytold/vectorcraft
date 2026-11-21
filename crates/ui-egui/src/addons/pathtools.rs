@@ -3,8 +3,9 @@
 //! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle… and Add Bounding Circle…; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
-//! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
-//! `tool.setOption`.
+//! ([`shape`]); its tools' options dialog (a double-click on the tool); and the Tangent Circle Tool's radius dialog
+//! ([`tangent_circle_radius`]). Everything acts through `addon.pathtools.*` and `tool.setOption`, except that the radius
+//! dialog draws its circle with `shape.circleThroughPoints`.
 
 pub mod bridge;
 pub mod corner;
@@ -13,6 +14,7 @@ pub mod set_corners;
 pub mod shape;
 pub mod shared_edge;
 pub mod tangent_circle;
+pub mod tangent_circle_radius;
 
 use egui::Ui;
 use serde_json::{Map, Value, json};
@@ -245,6 +247,14 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("radius".into(), json!(x));
             }
         });
+        if widgets::check(ui, tl!("Ask For Circle Radius"), d.bool("askRadius"), true) {
+            let on = !d.bool("askRadius");
+            d.fields.insert("askRadius".into(), json!(on));
+        }
+        if widgets::check(ui, tl!("Auto-Update Default"), d.bool("autoUpdateDefault"), true) {
+            let on = !d.bool("autoUpdateDefault");
+            d.fields.insert("autoUpdateDefault".into(), json!(on));
+        }
         return false;
     }
     let rows = [
