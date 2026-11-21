@@ -75,6 +75,119 @@ fn answer_open(app: &mut VectorcraftApp, fields: Value, ok: bool) {
     crate::tests::picks::answer_dialog(app, dialog.id, &fields, ok);
 }
 
+fn snapping_items() -> Vec<Item> {
+    let (_, view) = menu_tree().into_iter().find(|(title, _)| *title == "View").unwrap();
+    view.into_iter()
+        .find_map(|item| match item {
+            Item::Sub("Snapping", items) => Some(items),
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn view_snapping_submenu_keeps_top_level_commands_and_shortcuts() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let items = snapping_items();
+    let expected = [
+        ("Smart Guides", "view.smartGuides"),
+        ("Snap to Point", "view.snapToPoint"),
+        ("Snap to Grid", "view.snapToGrid"),
+        ("Snap to Pixel", "view.snapToPixel"),
+        ("Snap to Glyph", "view.snapToGlyph"),
+        ("Pixel Snapping Options…", "view.snapToPixel.options"),
+    ];
+    assert_eq!(items.len(), 7);
+    assert!(matches!(items[5], Item::Sep));
+    let commands: Vec<_> = items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Cmd(label, id, _) => Some((*label, *id)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(commands, expected);
+    let entries = menu_entries(&app);
+    for (_, id) in expected.iter().take(5) {
+        let top = entries.iter().find(|e| e.path == ["View"] && e.command.as_deref() == Some(id)).unwrap();
+        let nested = entries.iter().find(|e| e.path == ["View", "Snapping"] && e.command.as_deref() == Some(id)).unwrap();
+        assert_eq!(top.shortcut, nested.shortcut, "{id}");
+        assert_eq!(top.shortcut, shortcut_of(id).unwrap_or_default(), "{id}");
+    }
+    let submenu = Item::Sub("Snapping", items);
+    let previous_lang = crate::i18n::current();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    let Some(Entry::Sub(label, _)) = entry(&app, &submenu) else { panic!("missing Snapping submenu") };
+    let translated = tl!("Snapping");
+    crate::i18n::set_current(previous_lang);
+    assert_eq!(label, translated);
+    assert_ne!(label, "Snapping");
+}
+
+#[test]
+fn snapping_menu_clicks_toggle_view_state_and_painted_checkmarks() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let items = snapping_items();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events| {
+        let mut clicked = None;
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            menu_body(app, ui, &items, &mut clicked);
+        });
+        out.textures_delta.clear();
+        if let Some((id, params)) = clicked {
+            invoke(app, &id, params);
+        }
+        out
+    };
+    let states = |app: &VectorcraftApp| {
+        let v = &app.ui.view;
+        [v.smart_guides, v.snap_to_point, v.snap_to_grid, v.snap_to_pixel, v.snap_to_glyph]
+    };
+    frame(&mut app, vec![]);
+    for (index, item) in items.iter().take(5).enumerate() {
+        let Item::Cmd(label, id, _) = item else { panic!("expected a toggle") };
+        for _ in 0..2 {
+            let before = states(&app);
+            let out = frame(&mut app, vec![]);
+            let text = crate::tests_labels::shapes_text(&out);
+            assert_eq!(text.lines().any(|line| line == format!("✓  {label}")), before[index], "{id}: {text}");
+            let Some(Entry::Item(row)) = entry(&app, item) else { panic!("missing toggle") };
+            assert!(row.enabled);
+            assert_eq!(row.checked, Some(before[index]), "{id}");
+            fn text_center(shape: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+                match shape {
+                    egui::Shape::Text(t) if t.galley.text().trim_start_matches(['✓', ' ']) == label => Some(t.pos + t.galley.size() * 0.5),
+                    egui::Shape::Vec(shapes) => shapes.iter().find_map(|s| text_center(s, label)),
+                    _ => None,
+                }
+            }
+            let pos = out.shapes.iter().find_map(|s| text_center(&s.shape, label)).unwrap();
+            frame(&mut app, vec![egui::Event::PointerMoved(pos)]);
+            for pressed in [true, false] {
+                frame(
+                    &mut app,
+                    vec![egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            let mut expected = before;
+            expected[index] = !expected[index];
+            assert_eq!(states(&app), expected, "{id} must toggle only its own state");
+            let Some(Entry::Item(row)) = entry(&app, item) else { panic!("missing toggle") };
+            assert_eq!(row.checked, Some(expected[index]), "{id}");
+            let out = frame(&mut app, vec![]);
+            let text = crate::tests_labels::shapes_text(&out);
+            assert_eq!(text.lines().any(|line| line == format!("✓  {label}")), expected[index], "{id}: {text}");
+        }
+    }
+    let Some(Entry::Item(options)) = entry(&app, &items[6]) else { panic!("missing pixel snapping options") };
+    assert!(options.enabled);
+    assert_eq!(options.checked, None);
+}
+
 #[test]
 fn help_f1_opens_discover_without_a_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
