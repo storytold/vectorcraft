@@ -79,6 +79,8 @@ const CHORD_W: f32 = 90.0;
 /// The tallest the Keys and Shortcuts lists get (points).
 const KEYS_LIST_H: f32 = 140.0;
 const ROWS_LIST_H: f32 = 280.0;
+/// The share of their tallest the Keys and Shortcuts lists shrink to at the least.
+const SMALLEST_SHARE: f32 = 0.1;
 
 /// An entry of the file and what it becomes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -666,15 +668,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let statuses = review.statuses();
     // The Keys and Shortcuts lists get the window's height less the rest of the dialog, as the frame
-    // before drew it.
+    // before drew it, and the gaps above and below the dialog.
     let id = egui::Id::unique("dialog-shortcut-import");
     let rest = ctx.data(|m| m.get_temp::<f32>(id.with("rest"))).unwrap_or(0.0);
     let (keys, mods) = review.asked();
     let keys_open = d.bool("__keysOpen") && (!keys.is_empty() || !mods.is_empty());
-    let (keys_h, rows_h) = list_heights(ctx.content_rect().height() - rest, keys_open);
+    let (keys_h, rows_h) = list_heights(ctx.content_rect().height() - rest - 2.0 * super::EDGE_GAP, keys_open);
     let (mut apply, mut cancel, mut copy, mut lists) = (false, false, false, 0.0);
     crate::dialogs::modal::show(ctx, tl!("Import Shortcut Set"), id, -20.0, 20, |ui| {
-        crate::dialogs::modal::fits_itself(ui);
+        crate::dialogs::modal::fits_itself_then_scrolls(ui, rows_h <= ROWS_LIST_H * SMALLEST_SHARE);
         ui.set_width(NAME_W + TARGET_W + CHORD_W + 220.0);
         crate::dialogs::modal::heading(ui, tl!("Import Shortcut Set"));
         ui.add_space(10.0);
@@ -739,8 +741,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
-    if let Some(window) = ctx.memory(|m| m.area_rect(id)) {
-        ctx.data_mut(|m| m.insert_temp(id.with("rest"), window.height() - lists));
+    // When the rest of the dialog changed, the next frame is drawn at once, for the lists to fit
+    // without waiting for input.
+    if let Some(window) = crate::dialogs::modal::full_height(ctx, id)
+        && (window - lists - rest).abs() > 0.5
+    {
+        ctx.data_mut(|m| m.insert_temp(id.with("rest"), window - lists));
+        ctx.request_repaint();
     }
     if review != before {
         if review.rows.iter().map(|r| &r.target).ne(before.rows.iter().map(|r| &r.target)) {
@@ -764,7 +771,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// window are left for them: their tallest, or both shorter by the same share, down to a tenth.
 fn list_heights(room: f32, keys_open: bool) -> (f32, f32) {
     let tallest = if keys_open { KEYS_LIST_H + ROWS_LIST_H } else { ROWS_LIST_H };
-    let share = (room / tallest).clamp(0.1, 1.0);
+    let share = (room / tallest).clamp(SMALLEST_SHARE, 1.0);
     (KEYS_LIST_H * share, ROWS_LIST_H * share)
 }
 
@@ -837,7 +844,8 @@ fn keys_section(ui: &mut egui::Ui, d: &mut Dialog, review: &mut Review, height: 
             }
         })
     });
-    list.inner.inner_rect.height()
+    // The list shrinks to its rows when they are fewer than `height` holds.
+    list.inner.content_size.y.min(list.inner.inner_rect.height())
 }
 
 /// A vertical list that scrolls when its contents are taller than `height` points, and is then

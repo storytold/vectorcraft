@@ -10,13 +10,15 @@ use super::*;
 
 type Open = fn(&mut VectorcraftApp);
 
-/// What a dialog drew: the shapes, the dialog window's rectangle, and how it scrolls
-/// ([`modal::scrolling`]).
+/// What a dialog drew: the shapes, the dialog window's rectangle, how it scrolls
+/// ([`modal::scrolling`]), and whether it scrolled upright as a whole in any frame since it was
+/// opened or the window last changed size.
 struct Shown {
     shapes: Vec<egui::epaint::ClippedShape>,
     window: Rect,
     body: Option<f32>,
     whole: [bool; 2],
+    tall_once: bool,
 }
 
 /// Open a dialog with `open` in a `size` window, with the pointer in the window's corner (away
@@ -24,6 +26,12 @@ struct Shown {
 /// near the dialog's right edge (on the bar of a window that scrolls as a whole, beside the lists
 /// inside it) and draw it until it settles again.
 fn show_in(open: Open, size: egui::Vec2, scroll: bool) -> Shown {
+    show_resized(open, None, size, scroll)
+}
+
+/// [`show_in`], with the dialog first drawn until it settles in a window `first_size` in size when
+/// that is given.
+fn show_resized(open: Open, first_size: Option<egui::Vec2>, size: egui::Vec2, scroll: bool) -> Shown {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 60})).unwrap();
@@ -45,9 +53,9 @@ fn show_in(open: Open, size: egui::Vec2, scroll: bool) -> Shown {
         .unwrap_or((egui::Id::NULL, Rect::NOTHING))
     };
     let mut time = 0.0;
-    let mut frames = |app: &mut VectorcraftApp, first: Vec<egui::Event>| {
+    let mut frames = |app: &mut VectorcraftApp, first: Vec<egui::Event>, screen: Rect| {
         let mut first = Some(first);
-        let mut shapes = vec![];
+        let (mut shapes, mut tall_once) = (vec![], false);
         for _ in 0..12 {
             time += 1.0;
             let input =
@@ -55,10 +63,15 @@ fn show_in(open: Open, size: egui::Vec2, scroll: bool) -> Shown {
             let mut out = ctx.run_ui(input, |ui| show(app, ui.ctx()));
             out.textures_delta.clear();
             shapes = std::mem::take(&mut out.shapes);
+            tall_once |= modal::scrolling(&ctx, window(&ctx).0).1[1];
         }
-        shapes
+        (shapes, tall_once)
     };
-    let mut shapes = frames(&mut app, vec![egui::Event::PointerMoved(screen.max - vec2(2.0, 2.0))]);
+    if let Some(first_size) = first_size {
+        let first_screen = Rect::from_min_size(Pos2::ZERO, first_size);
+        frames(&mut app, vec![egui::Event::PointerMoved(first_screen.max - vec2(2.0, 2.0))], first_screen);
+    }
+    let (mut shapes, tall_once) = frames(&mut app, vec![egui::Event::PointerMoved(screen.max - vec2(2.0, 2.0))], screen);
     if scroll {
         let wheel = egui::Event::MouseWheel {
             unit: egui::MouseWheelUnit::Point,
@@ -69,16 +82,16 @@ fn show_in(open: Open, size: egui::Vec2, scroll: bool) -> Shown {
         };
         let (id, w) = window(&ctx);
         let (body, whole) = modal::scrolling(&ctx, id);
-        let before = Shown { shapes: std::mem::take(&mut shapes), window: w, body, whole };
+        let before = Shown { shapes: std::mem::take(&mut shapes), window: w, body, whole, tall_once };
         // On the window's upright bar, else on its body's bar, else on its sideways bar, else at
         // its right edge.
         let sideways = bars(&before, true, true).into_iter().find(|r| r.width() >= 0.5 * w.width());
         let at = whole_bar(&before).or(body_bar(&before)).or(sideways).map_or(egui::pos2(w.right() - 23.0, w.center().y), |r| r.center());
-        shapes = frames(&mut app, vec![egui::Event::PointerMoved(at), wheel]);
+        shapes = frames(&mut app, vec![egui::Event::PointerMoved(at), wheel], screen).0;
     }
     let (id, window) = window(&ctx);
     let (body, whole) = modal::scrolling(&ctx, id);
-    Shown { shapes, window, body, whole }
+    Shown { shapes, window, body, whole, tall_once }
 }
 
 /// Filled bars 4 to 10 pt across and longer than 12 pt (scroll bars and their handles), upright or
@@ -110,12 +123,13 @@ fn body_bar(shown: &Shown) -> Option<Rect> {
 }
 
 /// The bar of a window that scrolls as a whole: an upright bar at the window's right edge that
-/// runs most of the window's height (lists inside it are shorter).
+/// runs most of the window's height, or all of it but the margins of a short window (lists inside
+/// it are shorter).
 fn whole_bar(shown: &Shown) -> Option<Rect> {
     let w = shown.window;
     bars(shown, false, true)
         .into_iter()
-        .filter(|r| r.right() >= w.right() - 24.0 && r.height() >= 0.8 * w.height())
+        .filter(|r| r.right() >= w.right() - 24.0 && r.height() >= (0.8 * w.height()).min(w.height() - 48.0))
         .max_by(|a, b| a.height().total_cmp(&b.height()))
 }
 
@@ -332,7 +346,7 @@ fn keyboard_shortcuts_keeps_its_scroll_under_import_shortcut_set() {
                 egui::RawInput { screen_rect: Some(screen), events: events.take().unwrap_or_default(), time: Some(time), ..Default::default() };
             let mut out = ctx.run_ui(input, |ui| show(app, ui.ctx()));
             out.textures_delta.clear();
-            let shown = Shown { shapes: out.shapes, window: screen, body: None, whole: [false; 2] };
+            let shown = Shown { shapes: out.shapes, window: screen, body: None, whole: [false; 2], tall_once: false };
             seen = buttons(&shown, screen, &["Keyboard Shortcuts"]).iter().any(|(_, seen)| *seen);
         }
         seen
@@ -384,6 +398,99 @@ fn a_window_that_fits_itself_but_is_too_wide_scrolls_sideways() {
     assert_eq!(shown.whole, [true, false], "it scrolls sideways only");
     let sideways: Vec<Rect> = bars(&shown, true, true).into_iter().filter(|r| r.width() >= 0.5 * shown.window.width()).collect();
     assert!(!sideways.is_empty(), "its sideways bar is drawn: {:?}", bars(&shown, true, false));
+}
+
+#[test]
+fn a_window_that_fits_itself_scrolls_as_a_whole_once_its_lists_are_at_their_smallest() {
+    // These dialogs size their own lists from the window's height. In a window that holds them
+    // with shorter lists, they fit without scrolling; in one too short for them with their lists at
+    // their smallest, they scroll as a whole instead of running off the screen.
+    // A dialog, how it opens, its buttons, text in its lists or rows, and window heights with
+    // whether it scrolls in each and whether that text is then seen at the top or the end of the
+    // window. Import Shortcut Set's lists at their smallest are shorter than one of their rows, and
+    // they scroll inside themselves; in a 90 pt window Transform Each's first row is in view only
+    // part way down.
+    type Case = (&'static str, Open, &'static [&'static str], &'static [&'static str], &'static [(f32, bool, bool)]);
+    let opens: [Case; 2] = [
+        (
+            "Import Shortcut Set",
+            open_shortcut_import,
+            &["Apply", "Cancel"],
+            &["/Key 902"],
+            &[(600.0, false, true), (400.0, true, false), (300.0, true, false)],
+        ),
+        (
+            "Transform Each",
+            |app| {
+                app.run("ui.menuDialog", json!({"command": "object.transformEach"})).unwrap();
+            },
+            &["OK", "Cancel"],
+            &["Scale"],
+            &[(200.0, false, true), (150.0, true, true), (120.0, true, true), (90.0, true, false)],
+        ),
+    ];
+    let mut wrong = vec![];
+    for (name, open, labels, rows, heights) in opens {
+        let tall = show_in(open, vec2(1280.0, 900.0), false);
+        if tall.whole != [false; 2] {
+            wrong.push(format!("{name}: in a large window it scrolls ({:?})", tall.whole));
+        }
+        // The Keys list of Import Shortcut Set is open, so both of its lists shrink.
+        if !texts(&tall).iter().any(|(s, ..)| rows.contains(&s.as_str())) {
+            wrong.push(format!("{name}: its lists or rows are not drawn in a large window"));
+        }
+        for &(height, scrolls, rows_seen) in heights {
+            let screen = Rect::from_min_size(Pos2::ZERO, vec2(1280.0, height));
+            let shown = show_in(open, screen.size(), false);
+            let scrolled = show_in(open, screen.size(), true);
+            if !screen.contains_rect(shown.window) || shown.whole != [false, scrolls] || whole_bar(&shown).is_some() != scrolls {
+                wrong.push(format!(
+                    "{name} at {height}: the window ({:?}) stays on the screen and scrolls as a whole ({:?}) with its bar ({:?}) only when {scrolls}",
+                    shown.window,
+                    shown.whole,
+                    bars(&shown, false, true)
+                ));
+            }
+            if !scrolls && shown.window.height() >= tall.window.height() {
+                wrong.push(format!("{name} at {height}: its lists are not shorter than in a large window ({:?})", shown.window));
+            }
+            if !scrolls && shown.tall_once {
+                wrong.push(format!("{name} at {height}: it scrolled as a whole while its lists were fitting to the window"));
+            }
+            let (top, end) = (buttons(&shown, screen, labels), buttons(&scrolled, screen, labels));
+            for label in labels {
+                let seen = |found: &[(String, bool)]| found.iter().any(|(s, seen)| s == label && *seen);
+                if !seen(&top) && !seen(&end) {
+                    wrong.push(format!("{name} at {height}: {label} cannot be scrolled into view: {top:?} {end:?}"));
+                }
+            }
+            let (top, end) = (buttons(&shown, screen, rows), buttons(&scrolled, screen, rows));
+            if rows_seen && !top.iter().chain(&end).any(|(_, seen)| *seen) {
+                wrong.push(format!("{name} at {height}: its lists or rows cannot be scrolled into view: {top:?} {end:?}"));
+            }
+        }
+        // Grown from the shortest window to the tallest that holds it, it stops scrolling and is
+        // as tall as when opened there.
+        let (fits, short) = (heights[0].0, heights[heights.len() - 1].0);
+        let opened = show_in(open, vec2(1280.0, fits), false);
+        let grown = show_resized(open, Some(vec2(1280.0, short)), vec2(1280.0, fits), false);
+        if grown.whole != [false; 2] || (grown.window.height() - opened.window.height()).abs() > 1.0 {
+            wrong.push(format!(
+                "{name} grown from {short} to {fits}: it scrolls ({:?}) or its height ({:?}) differs from opened there ({:?})",
+                grown.whole, grown.window, opened.window
+            ));
+        }
+    }
+    // The same in a window too narrow for Import Shortcut Set, where it goes on scrolling sideways.
+    let opened = show_in(open_shortcut_import, vec2(640.0, 600.0), false);
+    let grown = show_resized(open_shortcut_import, Some(vec2(640.0, 300.0)), vec2(640.0, 600.0), false);
+    if opened.whole != [true, false] || grown.whole != [true, false] || (grown.window.height() - opened.window.height()).abs() > 1.0 {
+        wrong.push(format!(
+            "Import Shortcut Set grown from 640 by 300 to 640 by 600 ({:?}, {:?}) scrolls sideways only and is as tall as opened there ({:?}, {:?})",
+            grown.whole, grown.window, opened.whole, opened.window
+        ));
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
 #[test]
