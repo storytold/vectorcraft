@@ -52,6 +52,10 @@ pub struct CanvasCache {
     /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
     /// frame; dropped while it is off.
     pub spelling: canvas::SpellingMarks,
+    /// The active document's text objects for (document uid, revision), which Show Hidden
+    /// Characters and Auto Spell Check draw over. A frame that draws neither drops them
+    /// ([`canvas::show`]).
+    pub text_nodes: canvas::TextNodes,
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,

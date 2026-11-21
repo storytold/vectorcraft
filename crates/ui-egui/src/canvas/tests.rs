@@ -7530,9 +7530,11 @@ fn show_hidden_characters_off_releases_the_text_nodes() {
         after.inputs == inputs && std::sync::Arc::ptr_eq(&after.marks[&id].1, &marks)
     });
     assert!(kept, "a frame keeps the marks of the frame before");
+    assert!(app.canvas.text_nodes.list.is_some(), "the list of the text objects is kept");
     app.run("type.hiddenCharacters", json!({})).unwrap();
     assert!(hidden_char_marks(&mut app, &ctx).is_empty(), "off");
     assert!(app.canvas.hidden_chars.marks.is_empty(), "no node is kept");
+    assert!(app.canvas.text_nodes.list.is_none(), "no list of the text objects is kept");
     app.run("type.hiddenCharacters", json!({})).unwrap();
     assert_eq!(hidden_char_marks(&mut app, &ctx), on, "on again: the same marks");
 }
@@ -7556,7 +7558,197 @@ fn show_hidden_characters_releases_the_text_nodes_of_a_closed_document() {
     app.session.execute("file.close", &json!({})).unwrap();
     assert!(hidden_char_marks(&mut app, &ctx).is_empty(), "the Home screen");
     assert!(app.canvas.hidden_chars.marks.is_empty(), "no node of the closed document is kept");
+    assert!(app.canvas.text_nodes.list.is_none(), "no list of the closed document's text objects is kept");
     assert_eq!(open(&mut app), first, "the same type in a new document");
+}
+
+/// `paths` small rectangles and three point type objects with hidden characters and words no
+/// dictionary knows: the first on the first layer, the second in a group on that layer and the
+/// third on a second layer. Returns the type objects, the group, the second layer and a view.
+fn type_among_paths(paths: usize) -> (VectorcraftApp, [vectorcraft_doc::NodeId; 3], vectorcraft_doc::NodeId, vectorcraft_doc::NodeId, Xf) {
+    use std::sync::Arc;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = |v: serde_json::Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    let path = id(app.session.execute("shape.rectangle", &json!({"x": 300, "y": 250, "width": 5, "height": 5})).unwrap());
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = Arc::make_mut(&mut st.doc);
+        let template = doc.node(path).unwrap().clone();
+        let more: Vec<_> = (1..paths)
+            .map(|_| {
+                let mut p = template.clone();
+                p.id = doc.alloc_id();
+                Arc::new(p)
+            })
+            .collect();
+        Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(more);
+        doc.drop_lookup_cache();
+    }
+    let text =
+        |app: &mut VectorcraftApp, y: u32, text: &str| id(app.session.execute("text.create", &json!({"x": 20, "y": y, "text": text})).unwrap());
+    let a = text(&mut app, 40, "one\ttwo\u{00A0}the\nthree\u{2028}four");
+    let b = text(&mut app, 110, "Qzvbtrw the\u{2003}cat");
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let group = id(app.session.execute("object.group", &json!({})).unwrap());
+    let layer = id(app.session.execute("layer.new", &json!({})).unwrap());
+    let c = text(&mut app, 180, "Zvqtrbx the\u{202F}cat\n");
+    assert_eq!(app.session.active().unwrap().doc.layers.iter().find(|l| l.id == layer).and_then(|l| l.children()).map(|c| c.len()), Some(1));
+    let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.0 };
+    (app, [a, b, c], group, layer, xf)
+}
+
+/// The list of text objects Show Hidden Characters and Auto Spell Check last drew over.
+fn listed_type(app: &VectorcraftApp) -> super::tool_overlays::TextList {
+    app.canvas.text_nodes.list.as_ref().map(|(_, l)| l.clone()).unwrap()
+}
+
+/// Show Hidden Characters and Auto Spell Check find the type among the document's other objects
+/// once for each revision, in one list both draw from: frames that change nothing draw from the
+/// same list, and draw the marks and lines a frame drawing from a new list draws. The list holds
+/// the visible type in the order the overlays drew it before they shared it.
+#[test]
+fn hidden_characters_and_auto_spell_check_share_one_list_of_the_type() {
+    let (mut app, ids, _, _, xf) = type_among_paths(2_000);
+    let ctx = egui::Context::default();
+    // Each visible text object in `Document::walk` order, with no group or layer hidden.
+    let mut walked = vec![];
+    app.session.active().unwrap().doc.walk(|n| {
+        if matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)) && n.visible {
+            walked.push(n.id);
+        }
+    });
+    assert_eq!(walked.len(), 3);
+    let marks = hidden_chars(&mut app, &ctx, &xf);
+    let list = listed_type(&app);
+    assert_eq!(list.iter().filter(|t| t.shown).map(|t| t.node.id).collect::<Vec<_>>(), walked);
+    assert!(list.iter().all(|t| ids.contains(&t.node.id)), "only type");
+    let lines = spelling_lines(&mut app, &ctx, &xf);
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(std::sync::Arc::ptr_eq(&list, &listed_type(&app)), "Auto Spell Check draws from the same list");
+    for _ in 0..3 {
+        assert_eq!(hidden_chars(&mut app, &ctx, &xf), marks);
+        assert_eq!(spelling_lines(&mut app, &ctx, &xf), lines);
+        assert!(std::sync::Arc::ptr_eq(&list, &listed_type(&app)), "a frame that changes nothing lists no type");
+    }
+    app.canvas.text_nodes = TextNodes::default();
+    app.canvas.hidden_chars = HiddenChars::default();
+    app.canvas.spelling = SpellingMarks::default();
+    assert_eq!(hidden_chars(&mut app, &ctx, &xf), marks, "the marks drawn from a new list");
+    assert_eq!(spelling_lines(&mut app, &ctx, &xf), lines, "the lines drawn from a new list");
+    assert!(!std::sync::Arc::ptr_eq(&list, &listed_type(&app)));
+}
+
+/// The list follows the document: a new text object, an edit, Undo, Redo and a switch to another
+/// document each list the type again, and the marks are those of the type the document holds.
+#[test]
+fn the_list_of_type_follows_edits_undo_redo_and_the_active_document() {
+    use std::sync::Arc;
+    let (mut app, ids, _, _, xf) = type_among_paths(50);
+    let ctx = egui::Context::default();
+    // Each listed object's id and node.
+    let nodes = |app: &VectorcraftApp| listed_type(app).iter().map(|t| (t.node.id, Arc::as_ptr(&t.node))).collect::<Vec<_>>();
+    hidden_chars(&mut app, &ctx, &xf);
+    let first = nodes(&app);
+    assert_eq!(first.len(), 3);
+    let added =
+        vectorcraft_doc::NodeId(app.session.execute("text.create", &json!({"x": 200, "y": 40, "text": "g h"})).unwrap()["id"].as_u64().unwrap());
+    hidden_chars(&mut app, &ctx, &xf);
+    let with_new = nodes(&app);
+    assert_eq!(with_new.len(), 4);
+    assert!(with_new.iter().any(|(id, _)| *id == added), "the new object");
+    assert!(app.canvas.hidden_chars.marks.contains_key(&added), "has marks");
+    app.session.execute("text.setText", &json!({"id": ids[0].0, "text": "x\ty"})).unwrap();
+    hidden_chars(&mut app, &ctx, &xf);
+    let edited = nodes(&app);
+    let node_of = |list: &[(vectorcraft_doc::NodeId, *const vectorcraft_doc::Node)], id| list.iter().find(|(i, _)| *i == id).map(|(_, n)| *n);
+    assert_ne!(node_of(&edited, ids[0]), node_of(&with_new, ids[0]), "the edited object's new node");
+    assert_eq!(node_of(&edited, ids[1]), node_of(&with_new, ids[1]), "the others' nodes");
+    assert_eq!(app.canvas.hidden_chars.marks[&ids[0]].1.chars.len(), 1, "the marks of the edited text: one tab");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    hidden_chars(&mut app, &ctx, &xf);
+    assert_eq!(nodes(&app), with_new, "Undo");
+    assert_eq!(app.canvas.hidden_chars.marks[&ids[0]].1.chars.len(), 2, "the marks of the text before: a tab and a nonbreaking space");
+    app.session.execute("edit.redo", &json!({})).unwrap();
+    hidden_chars(&mut app, &ctx, &xf);
+    assert_eq!(nodes(&app), edited, "Redo");
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(hidden_chars(&mut app, &ctx, &xf).is_empty(), "another document: none of the first one's marks");
+    assert!(nodes(&app).is_empty() && app.canvas.hidden_chars.marks.is_empty());
+    app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+    hidden_chars(&mut app, &ctx, &xf);
+    assert_eq!(nodes(&app), edited, "back to the first document");
+}
+
+/// Neither overlay draws over type that the canvas does not draw: a hidden text object, or one in
+/// a hidden group or layer. Shown again, its marks and lines come back.
+#[test]
+fn hidden_characters_and_auto_spell_check_leave_out_type_in_hidden_groups_and_layers() {
+    let (mut app, [a, b, c], group, layer, xf) = type_among_paths(10);
+    let ctx = egui::Context::default();
+    let drawn = |app: &mut VectorcraftApp| {
+        let marks = hidden_chars(app, &ctx, &xf).len();
+        let lines = spelling_lines(app, &ctx, &xf).len();
+        let mut ids: Vec<_> = app.canvas.hidden_chars.marks.keys().copied().collect();
+        ids.sort();
+        let mut spelled: Vec<_> = app.canvas.spelling.lines.keys().copied().collect();
+        spelled.sort();
+        (ids, spelled, marks, lines)
+    };
+    let all = drawn(&mut app);
+    assert_eq!((all.0.clone(), all.1.clone(), all.3), (vec![a, b, c], vec![a, b, c], 2));
+    app.session.execute("object.setProps", &json!({"ids": [group.0], "visible": false})).unwrap();
+    let (ids, spelled, marks, lines) = drawn(&mut app);
+    assert_eq!((ids, spelled, lines), (vec![a, c], vec![a, c], 1), "a hidden group");
+    assert!(marks < all.2, "fewer marks: {marks} of {}", all.2);
+    assert!(listed_type(&app).iter().any(|t| t.node.id == b && !t.shown), "listed, not shown");
+    app.session.execute("object.setProps", &json!({"ids": [group.0], "visible": true})).unwrap();
+    assert_eq!(drawn(&mut app), all, "the group shown again");
+    app.session.execute("layer.setProps", &json!({"id": layer.0, "visible": false})).unwrap();
+    let (ids, spelled, _, lines) = drawn(&mut app);
+    assert_eq!((ids, spelled, lines), (vec![a, b], vec![a, b], 1), "a hidden layer");
+    app.session.execute("layer.setProps", &json!({"id": layer.0, "visible": true})).unwrap();
+    assert_eq!(drawn(&mut app), all, "the layer shown again");
+    app.session.execute("object.setProps", &json!({"ids": [a.0], "visible": false})).unwrap();
+    let (ids, spelled, _, _) = drawn(&mut app);
+    assert_eq!((ids, spelled), (vec![b, c], vec![b, c]), "a hidden text object");
+    app.session.execute("object.setProps", &json!({"ids": [a.0], "visible": true})).unwrap();
+    assert_eq!(drawn(&mut app), all, "the text object shown again");
+}
+
+/// An ignored diagnostic for the overlays' cost on a document of many paths and a little type:
+/// frames of both overlays drawing from the kept list, and frames that list the type again each
+/// time. There is no timing threshold; run on an idle machine and compare the printed cases.
+#[test]
+#[ignore = "manual performance diagnostic; no stable timing threshold"]
+fn type_overlays_on_many_paths_diagnostic() {
+    use std::time::Instant;
+    const FRAMES: usize = 50;
+    for paths in [10_000, 100_000] {
+        let (mut app, _, _, _, xf) = type_among_paths(paths);
+        let ctx = egui::Context::default();
+        let both = |app: &mut VectorcraftApp| {
+            hidden_chars(app, &ctx, &xf);
+            spelling_lines(app, &ctx, &xf);
+        };
+        both(&mut app);
+        let t = Instant::now();
+        for _ in 0..FRAMES {
+            both(&mut app);
+        }
+        let kept = t.elapsed();
+        let t = Instant::now();
+        for _ in 0..FRAMES {
+            app.canvas.text_nodes = TextNodes::default();
+            both(&mut app);
+        }
+        let listed = t.elapsed();
+        eprintln!(
+            "{paths} paths: {:?} a frame from the kept list, {:?} a frame listing the type again",
+            kept / FRAMES as u32,
+            listed / FRAMES as u32
+        );
+    }
 }
 
 /// General › Zoom with Mouse Wheel (#394), through the control channel's `ui.wheel`: off,

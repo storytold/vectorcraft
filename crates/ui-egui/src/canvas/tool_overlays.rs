@@ -22,21 +22,13 @@ pub(super) fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, 
         last.clear();
         kept.inputs = inputs;
     }
-    // `walk` visits each node's `Arc` in the order `Document::walk` visits the nodes (depth first,
-    // in paint order).
-    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&std::sync::Arc<Node>)) {
-        for n in nodes {
-            f(n);
-            if let Some(children) = n.children() {
-                walk(children, f);
-            }
-        }
-    }
-    walk(&st.doc.layers, &mut |n| {
-        let NodeKind::Text(tx) = &n.kind else { return };
+    // Leaving out hidden objects and what is inside hidden groups and layers, as the canvas does.
+    for t in text_nodes(&mut app.canvas.text_nodes, st).iter().filter(|t| t.shown) {
+        let n = &t.node;
+        let NodeKind::Text(tx) = &n.kind else { continue };
         // The box round the object's corners on screen, turned with the view.
-        if !n.visible || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
-            return;
+        if n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
+            continue;
         }
         let marks = match last.remove(&n.id) {
             Some((was, marks)) if std::sync::Arc::ptr_eq(&was, n) => marks,
@@ -62,7 +54,53 @@ pub(super) fn hidden_chars_overlay(app: &mut VectorcraftApp, p: &egui::Painter, 
             p.text(xf.to_screen(at), align, glyph, font.clone(), color);
         }
         kept.marks.insert(n.id, (n.clone(), marks));
-    });
+    }
+}
+
+/// One text object of the active document ([`TextNodes`]).
+pub(super) struct TextNode {
+    pub(super) node: std::sync::Arc<Node>,
+    /// The object and every group and layer that holds it are visible: the canvas draws it.
+    pub(super) shown: bool,
+}
+
+/// The text objects of the active document, for (document uid, revision): Show Hidden Characters
+/// and Auto Spell Check draw over them every frame ([`crate::CanvasCache::text_nodes`]). A frame
+/// that draws neither drops them ([`super::show`]).
+#[derive(Default)]
+pub struct TextNodes {
+    pub(super) list: Option<((u64, u64), TextList)>,
+}
+
+/// The text objects of a document, in paint order ([`TextNodes`]).
+pub(super) type TextList = std::sync::Arc<Vec<TextNode>>;
+
+/// The text objects of `st`'s document in the order `Document::walk` visits the nodes (depth
+/// first, in paint order), hidden ones included. `kept` holds the list while the document and its
+/// revision are those it was made for.
+pub(super) fn text_nodes(kept: &mut TextNodes, st: &vectorcraft_engine::DocState) -> TextList {
+    let key = (st.uid, st.revision);
+    if let Some((k, list)) = &kept.list
+        && *k == key
+    {
+        return list.clone();
+    }
+    fn walk(nodes: &[std::sync::Arc<Node>], shown: bool, out: &mut Vec<TextNode>) {
+        for n in nodes {
+            let shown = shown && n.visible;
+            if matches!(n.kind, NodeKind::Text(_)) {
+                out.push(TextNode { node: n.clone(), shown });
+            }
+            if let Some(children) = n.children() {
+                walk(children, shown, out);
+            }
+        }
+    }
+    let mut list = Vec::new();
+    walk(&st.doc.layers, true, &mut list);
+    let list = std::sync::Arc::new(list);
+    kept.list = Some((key, list.clone()));
+    list
 }
 
 /// `v` scaled to length 1, or `or` when `v` has no length.
@@ -265,19 +303,12 @@ pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: 
         kept.inputs = Some(inputs);
     }
     let stroke = Stroke::new(1.0, Color32::from_rgb(0xe0, 0x20, 0x20));
-    // Depth first in paint order, leaving out hidden objects and what is inside them.
-    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&std::sync::Arc<Node>)) {
-        for n in nodes.iter().filter(|n| n.visible) {
-            f(n);
-            if let Some(children) = n.children() {
-                walk(children, f);
-            }
-        }
-    }
-    walk(&st.doc.layers, &mut |n| {
-        let NodeKind::Text(tx) = &n.kind else { return };
+    // Leaving out hidden objects and what is inside hidden groups and layers.
+    for t in text_nodes(&mut app.canvas.text_nodes, st).iter().filter(|t| t.shown) {
+        let n = &t.node;
+        let NodeKind::Text(tx) = &n.kind else { continue };
         if !auto_spell_checks(n) || n.geometric_bounds().is_none_or(|b| !egui::Rect::from_points(&xf.quad(b)).intersects(clip)) {
-            return;
+            continue;
         }
         let lines = match last.remove(&n.id) {
             Some((was, lines)) if std::sync::Arc::ptr_eq(&was, n) => lines,
@@ -287,7 +318,7 @@ pub(super) fn spelling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: 
             wavy_line(p, xf.to_screen(a), xf.to_screen(b), stroke);
         }
         kept.lines.insert(n.id, (n.clone(), lines));
-    });
+    }
 }
 
 /// Whether Auto Spell Check marks `n`'s words: not with an effect shown (the Appearance panel's

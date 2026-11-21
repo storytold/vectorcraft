@@ -85,6 +85,7 @@ impl VectorcraftApp {
                 find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
+                text_nodes: Default::default(),
                 selection_marks: Default::default(),
                 shared_paths: Default::default(),
                 selection_box: None,
