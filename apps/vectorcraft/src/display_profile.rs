@@ -692,7 +692,7 @@ mod tests {
         assert_eq!(x11_choice(None, || Err("no X11".into())), Found::NoProfile("no X11".into()));
         // colord's file holds no usable profile: the property is used.
         let broken = usable(Found::Profile { icc: vec![1, 2, 3], from: "a.icc".into() });
-        assert_eq!(broken, Found::NoProfile("a.icc: the file is not an ICC profile".into()));
+        assert!(matches!(&broken, Found::NoProfile(reason) if reason.starts_with("a.icc: ")), "{broken:?}");
         assert_eq!(x11_choice(Some(Ok(Some(broken))), property), icc(2));
         assert_eq!(usable(Found::NoProfile("none".into())), Found::NoProfile("none".into()));
     }

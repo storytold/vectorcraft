@@ -35,7 +35,7 @@ pub struct Job {
     pub may_keep: bool,
     /// The display profile the finished frame is converted into ([`crate::display_profile`]).
     /// The frame the worker keeps stays sRGB.
-    pub display: Option<Arc<vectorcraft_color::cms::display::DisplayTransform>>,
+    pub display: Option<Arc<craft::color_ui::display::DisplayTransform>>,
 }
 
 pub struct Done {
@@ -55,6 +55,7 @@ pub struct Done {
 /// Render `job` as the worker thread does: inside the job's automation roots and deferred
 /// effects, with the worker's renderer `r` and its last frame `kept`.
 pub(crate) fn render(r: &mut Renderer, kept: &mut Option<crate::canvas::KeptFrame>, job: Job) -> Done {
+    // PLAN: `now_ms` becomes the framework clock when hub-w1 applies shell A2's request.
     let t0 = crate::now_ms();
     let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(r, kept, &job)));
     let ms = crate::now_ms() - t0;
