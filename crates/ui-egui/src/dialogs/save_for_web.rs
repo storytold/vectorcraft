@@ -1097,7 +1097,8 @@ fn colors_row(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// JPEG quality: a named step, then the exact value.
+/// JPEG quality: a named step, then the exact value on a slider that the row's "Quality:" label
+/// also names.
 fn quality_row(ui: &mut egui::Ui, d: &mut Dialog) {
     let q = d.f64("quality", 60.0).round().clamp(0.0, 100.0) as u8;
     let step = QUALITIES.iter().rev().find(|(_, v)| q >= *v).map_or("Low", |(l, _)| *l);
@@ -1107,7 +1108,7 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("quality".into(), json!(v));
         }
     });
-    slider_row(ui, d, "quality", "", "");
+    ui.name_inputs(tl!("Quality:"), |ui| slider_row(ui, d, "quality", "", ""));
 }
 
 /// The matte: none, white, black or a colour.
