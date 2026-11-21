@@ -2,12 +2,13 @@
 //! tool's Ask For Circle Radius option is on. It starts at the radius of the circle the click found,
 //! and each radius previews on the canvas the circle of that radius touching the two segments
 //! nearest the click ([`tangent_circle::radius_circle`]). A radius that gives no circle there shows
-//! the tool's note and leaves OK off. OK draws the circle with `shape.circleThroughPoints` in one
-//! undo step, and with Auto-Update Default on also sets the tool's `radius` to the one given; Cancel
-//! draws nothing.
+//! the tool's note and leaves OK off, as does an edit to either segment after the click. OK draws
+//! the circle with `shape.circleThroughPoints` in one undo step, and with Auto-Update Default on
+//! also sets the tool's `radius` to the one given; Cancel draws nothing.
 
 use egui::Ui;
 use serde_json::{Value, json};
+use vectorcraft_doc::Document;
 use vectorcraft_tools::addons::tangent_circle;
 
 use crate::VectorcraftApp;
@@ -28,13 +29,16 @@ const CLICK: &str = "__click";
 /// none) (private fields).
 const TRIED: &str = "__tried";
 const CIRCLE: &str = "__circle";
+/// The id of the document the click was in (`DocState::uid`; a private field).
+const DOC: &str = "__doc";
 /// The error for a radius outside the tool's range.
 const RADIUS_RANGE: &str = "`radius` must be from 0.01 to 1000000 pt";
 
 /// Open the dialog on what the tool found (its [`tangent_circle::RADIUS_DIALOG`] parameters).
 pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) {
     let radius = p.get("radius").cloned().unwrap_or(json!(tangent_circle::RADIUS));
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "radius": radius, "preview": true, CLICK: p })));
+    let doc = app.session.doc().ok().map(|s| s.uid);
+    app.ui.dialog = Some(Dialog::new(KIND, json!({ "radius": radius, "preview": true, CLICK: p, DOC: doc })));
 }
 
 pub(crate) const SPEC: DialogSpec = DialogSpec {
@@ -42,10 +46,17 @@ pub(crate) const SPEC: DialogSpec = DialogSpec {
     body,
     confirm,
     preview: true,
-    ok_enabled: Some(|_, d| circle_of(d).is_some_and(|c| c.is_ok_and(|c| c.is_some()))),
+    ok_enabled: Some(|app, d| circle_of(doc(app, d), d).is_some_and(|c| c.is_ok_and(|c| c.is_some()))),
     min_width: 280.0,
     ..DialogSpec::FORM
 };
+
+/// The document the click was in, while it is the active one. A preview adds the circle to it and
+/// leaves the two segments as they are.
+fn doc<'a>(app: &'a VectorcraftApp, d: &Dialog) -> Option<&'a Document> {
+    let clicked = d.fields.get(DOC).and_then(Value::as_u64)?;
+    app.session.doc().ok().filter(|s| s.uid == clicked).map(|s| &*s.doc)
+}
 
 /// Whether `r` is in the tool's radius range.
 fn in_range(r: f64) -> bool {
@@ -61,18 +72,23 @@ fn radius(d: &Dialog) -> Result<f64, String> {
 }
 
 /// The circle last looked for, when it was looked for at the radius the dialog holds: its [`DRAW`]
-/// parameters, or none.
-fn circle_of(d: &Dialog) -> Option<Result<Option<Value>, String>> {
+/// parameters, or none. None too without the document clicked in (`doc`), or when either segment in
+/// it is no longer the one clicked (a control request edited or removed its path).
+fn circle_of(doc: Option<&Document>, d: &Dialog) -> Option<Result<Option<Value>, String>> {
     let r = match radius(d) {
         Ok(r) => r,
         Err(e) => return Some(Err(e)),
     };
+    let click = d.fields.get(CLICK).unwrap_or(&Value::Null);
+    if !doc.is_some_and(|doc| tangent_circle::segments_unchanged(doc, click)) {
+        return Some(Ok(None));
+    }
     (d.fields.get(TRIED).and_then(Value::as_f64) == Some(r)).then(|| Ok(d.fields.get(CIRCLE).filter(|c| !c.is_null()).cloned()))
 }
 
 /// The circle at the radius the dialog holds, looked for again only when the radius changed.
-fn circle(d: &mut Dialog) -> Result<Option<Value>, String> {
-    if let Some(found) = circle_of(d) {
+fn circle(doc: Option<&Document>, d: &mut Dialog) -> Result<Option<Value>, String> {
+    if let Some(found) = circle_of(doc, d) {
         return found;
     }
     let r = radius(d)?;
@@ -88,7 +104,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     widgets::label_row(ui, tl!("Radius:"), LABEL_W, |ui| {
         form::length_within(ui, d, "radius", unit, FIELD_W, None);
     });
-    let note = match circle(d) {
+    let note = match circle(doc(app, d), d) {
         Ok(Some(points)) => {
             form::preview_without_check(app, d, "Tangent Circle", DRAW, points);
             return false;
@@ -107,7 +123,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     let r = radius(&d)?;
-    let points = circle(&mut d)?.ok_or_else(|| tangent_circle::NO_CIRCLE.to_string())?;
+    let points = circle(doc(app, &d), &mut d)?.ok_or_else(|| tangent_circle::NO_CIRCLE.to_string())?;
     let auto = app.session.tool_options_of(tangent_circle::ID).get("autoUpdateDefault").and_then(Value::as_bool) == Some(true);
     form::commit_preview(app, DRAW, points)?;
     if auto && in_range(r) {
@@ -219,6 +235,44 @@ mod tests {
         frame(&mut app);
         assert!(ok_enabled(&app));
         assert_eq!(count(&app), paths + 1);
+    }
+
+    #[test]
+    fn another_document_or_a_segment_changed_after_the_click_gives_no_circle() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 500, "height": 500})).unwrap();
+        for y in [100, 140] {
+            app.run("path.create", json!({"anchors": [{"x": 100, "y": y}, {"x": 300, "y": y}]})).unwrap();
+        }
+        app.session.select_tool(tool::ID, ViewInfo::default()).unwrap();
+        app.run("tool.setOption", json!({"tool": tool::ID, "key": "askRadius", "value": true})).unwrap();
+        let paths = count(&app);
+        click(&mut app, 150.0, 100.0, false);
+        click(&mut app, 200.0, 140.0, false);
+        frame(&mut app);
+        assert!(ok_enabled(&app));
+        assert_eq!(count(&app), paths + 1);
+        // Clicked in another document than the active one: no circle and OK off, until that one is
+        // active again.
+        let clicked = app.ui.dialog.as_ref().unwrap().fields[super::DOC].clone();
+        assert_eq!(clicked, json!(app.session.doc().unwrap().uid));
+        app.ui.dialog.as_mut().unwrap().fields.insert(super::DOC.into(), json!(clicked.as_u64().unwrap() + 1));
+        assert!(frame(&mut app).contains(tool::NO_CIRCLE));
+        assert_eq!(count(&app), paths);
+        assert!(!ok_enabled(&app));
+        app.ui.dialog.as_mut().unwrap().fields.insert(super::DOC.into(), clicked);
+        frame(&mut app);
+        assert!(ok_enabled(&app));
+        assert_eq!(count(&app), paths + 1);
+        // The dialog holds a first segment the document no longer has (as when a control request
+        // moves that line): no circle, nothing previewed, OK off and refused.
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.get_mut(super::CLICK).unwrap()["first"] = json!([[100.0, 110.0], [100.0, 110.0], [300.0, 110.0], [300.0, 110.0]]);
+        assert!(frame(&mut app).contains(tool::NO_CIRCLE));
+        assert_eq!(count(&app), paths);
+        assert!(!ok_enabled(&app));
+        assert_eq!(crate::dialogs::confirm(&mut app), Err(tool::NO_CIRCLE.to_string()));
+        assert_eq!(count(&app), paths);
     }
 
     #[test]
