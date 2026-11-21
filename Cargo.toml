@@ -20,6 +20,8 @@ craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", re
 craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
 # Native Affinity documents (craft-libs#914).
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
+# Bounded CDR (v1-v27) and CMX (32-bit) reader (craft-libs#778).
+craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "9b28b56bc7207ef7ce806f37df72cb94c0ad5c37" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
 craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2", features = ["tree"] }
 craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
@@ -34,7 +36,7 @@ craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe07
 craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
 craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
 craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
-craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2", default-features = false, features = ["write"] }
+craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2", default-features = false, features = ["read", "write"] }
 craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
 craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "57bc4efe0761dc6b5f7a0cb612b10b8d6597ccd2" }
@@ -73,7 +75,6 @@ vectorcraft-affinity = { path = "crates/affinity" }
 vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 vectorcraft-js = { path = "crates/js" }
 vectorcraft-apischema = { path = "crates/apischema" }
-vectorcraft-cdr = { path = "crates/cdr" }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }
@@ -92,6 +93,9 @@ socket2 = "0.6"
 # too. Without `wat` (text parsing is test-only) and memory64; `validate` keeps full module
 # validation on; the portable dispatcher can't overflow the host stack on long-running modules.
 wasmi = { version = "2.0.0", default-features = false, features = ["std", "validate", "stable", "portable-dispatch"] }
+# The plug-in host's check of the WebAssembly features a module uses (Apache-2.0 WITH
+# LLVM-exception). It is the version wasmi 2.0.0 uses.
+wasmparser = { version = "0.228.0", default-features = false, features = ["std", "validate", "features"] }
 # Tests: WebAssembly text -> binary for the plug-in fixtures (Apache-2.0 WITH LLVM-exception).
 wat = "1.228"
 

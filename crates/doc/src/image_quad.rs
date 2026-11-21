@@ -392,6 +392,11 @@ mod tests {
         assert_eq!(n.image_quad(), None);
         assert!(distorted_art(&n).is_none());
         assert_eq!(n.image_corners(), Some(rect_corners(Rect::new(0.0, 0.0, 100.0, 100.0))));
+        // Reading the file drops it, so a later transform can't make it a distortion.
+        let mut back: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        assert!(back.extras().image_quad.is_none());
+        back.transform(Affine::scale_non_uniform(1e6, 1.0), false);
+        assert!(!back.is_distorted_image());
     }
 
     #[test]

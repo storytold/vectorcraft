@@ -8,7 +8,7 @@ use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
 use super::cells::ArtDrag;
 use super::model::{DocLayers, RowId, opens};
-use super::{Document, Node, NodeId, NodeKind, Value, VectorcraftApp, json};
+use super::{Document, LayerFilter, Node, NodeId, NodeKind, Value, VectorcraftApp, json};
 use crate::edits::{EditPath, apply_event};
 use crate::widgets::Live;
 
@@ -119,6 +119,49 @@ pub(super) fn shows_targeted(tree: &DocLayers<'_>, n: &Node, is_sel: bool) -> bo
         }
         None => is_sel,
     }
+}
+
+/// The `layer.target` of a click with `mods` on the target circle of `id`, by the rules of a row click (#8639): plain
+/// targets it, Ctrl/Cmd adds it to the selection or takes it out, Shift selects the art of every row `filter` lists
+/// from `anchor` (the last circle clicked, else the targeted row) to it, and Shift+Ctrl/Cmd adds that art. With it,
+/// whether the click moves the anchor to `id`: every click but a Shift range.
+pub(super) fn target_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
+    if mods.shift
+        && let Some(start) = anchor.or(tree.state().selection.target)
+    {
+        let order = listed_nodes(tree, filter);
+        let at = |k: NodeId| order.iter().position(|r| *r == k);
+        if let (Some(i), Some(j)) = (at(start), at(id)) {
+            let range: Vec<u64> = order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect();
+            let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+            return (("layer.target".into(), params), false);
+        }
+    }
+    let params = if mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
+    (("layer.target".into(), params), true)
+}
+
+/// The layer, group and object rows the panel over `tree` lists under `filter`, top-down: the children of open rows,
+/// and while the filter is on every row it keeps and every row holding one, open or not.
+fn listed_nodes(tree: &DocLayers<'_>, filter: &LayerFilter) -> Vec<NodeId> {
+    fn walk(tree: &DocLayers<'_>, filter: &LayerFilter, parent: Option<&RowId>, out: &mut Vec<NodeId>) -> bool {
+        use craft::layers::ui::tree::LayerTree as _;
+        let filtered = filter.active();
+        let mut any = false;
+        for row in tree.children(parent) {
+            let at = out.len();
+            let inner = if filtered || tree.is_open(&row) { walk(tree, filter, Some(&row), out) } else { false };
+            let keep = !filtered || inner || tree.listed(&row, filter);
+            if keep && let RowId::Node(id) = row {
+                out.insert(at, id);
+            }
+            any |= keep;
+        }
+        any
+    }
+    let mut out = Vec::new();
+    walk(tree, filter, None, &mut out);
+    out
 }
 
 /// The radius of a target circle's outer ring.

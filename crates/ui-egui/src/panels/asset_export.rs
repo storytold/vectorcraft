@@ -17,8 +17,11 @@
 //! format or item when Export for Screens remembers that choice; 3D assets' mesh files go in the
 //! folder itself.
 //!
-//! Everything runs through the `assets.*` commands; the menu rows are the `ui.assetExport.*`
-//! commands ([`menu_rows`], [`menu_states`], [`run`]).
+//! A tile's context menu exports or removes the selected assets, renames the tile, selects its
+//! artwork on the canvas, or adds the selected artwork as assets.
+//!
+//! Everything runs through the `assets.*` commands (the canvas selection through `select.set`);
+//! the menu rows are the `ui.assetExport.*` commands ([`menu_rows`], [`menu_states`], [`run`]).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -35,11 +38,11 @@ use craft::ui::contract::{
     request_rename,
 };
 use craft::ui::dialog::StackDialog as _;
-use craft::ui::display::{Shade, Text};
+use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::ThumbAspect;
-use craft::ui::menu::PanelRow;
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeIcon, NoticeLayout};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::IconSpec;
@@ -83,6 +86,8 @@ pub(crate) struct AssetExportDoc {
     pub(crate) applied: Option<String>,
     /// The name being typed to save a preset (none when not saving).
     pub(crate) saving: Option<String>,
+    /// The tile whose context menu the grid last asked for.
+    pub(crate) menu: Option<u64>,
 }
 
 /// The active document's panel state, made on first use.
@@ -448,6 +453,55 @@ struct Seen {
     files_each: usize,
     format_3d: Option<(Vec<u64>, &'static str)>,
     save: Option<PresetPick>,
+    tile: Option<TileAct>,
+}
+
+/// What a tile's context menu runs.
+enum TileAct {
+    Export(Vec<u64>),
+    Remove(Vec<u64>),
+    Rename(u64),
+    SelectArtwork(Vec<NodeId>),
+    /// Add the selected artwork as assets: one of it all when `true`.
+    Collect(bool),
+}
+
+/// The context menu of tile `a`, hanging from the grid, which picked the tile unless it was picked already: Export and
+/// Remove for the picked assets (`sel`, else `a` alone), Rename, Select Artwork on Canvas, and the selected artwork
+/// (`has_art`) added as one asset or as one per object.
+fn tile_menu(ui: &mut Ui, opener: &egui::Response, a: &ExportAsset, sel: &[u64], has_art: bool) -> Option<TileAct> {
+    let targets = if sel.contains(&a.id) { sel.to_vec() } else { vec![a.id] };
+    let count = targets.len().to_string();
+    let (export_label, remove_label) = if targets.len() > 1 {
+        (crate::i18n::fmt(tl!("Export {count} Assets…"), &[("count", &count)]), crate::i18n::fmt(tl!("Remove {count} Assets"), &[("count", &count)]))
+    } else {
+        (tl!("Export Asset…").to_string(), tl!("Remove Asset").to_string())
+    };
+    let shown = Menu::context(a.name.clone(), opener).show(ui, |ui, _| {
+        let mut act = None;
+        if MenuItem::new(export_label.clone()).show(ui).ran {
+            act = Some(TileAct::Export(targets.clone()));
+        }
+        if MenuItem::new(remove_label.clone()).show(ui).ran {
+            act = Some(TileAct::Remove(targets.clone()));
+        }
+        if MenuItem::new(tl!("Rename")).show(ui).ran {
+            act = Some(TileAct::Rename(a.id));
+        }
+        Divider::horizontal().show(ui);
+        if MenuItem::new(tl!("Select Artwork on Canvas")).show(ui).ran {
+            act = Some(TileAct::SelectArtwork(a.nodes.clone()));
+        }
+        Divider::horizontal().show(ui);
+        if MenuItem::new(tl!("Add Selected Artwork as One Asset")).enabled(has_art).show(ui).ran {
+            act = Some(TileAct::Collect(true));
+        }
+        if MenuItem::new(tl!("Add Selected Artwork as Multiple Assets")).enabled(has_art).show(ui).ran {
+            act = Some(TileAct::Collect(false));
+        }
+        act
+    });
+    shown.inner.flatten()
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -465,6 +519,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let grid_id = ui.id().with(("asset-export-grid", uid));
     let mut seen = Seen::default();
     let mut events = Vec::new();
+    let mut opener = None;
     let alt = craft::ui::runtime::pointer::frame(&ctx).mods.alt;
     let zone = DropAction::<PanelDrag>::new(|p| matches!(p, PanelDrag::Art { .. })).sizing(Sizing::Fill).show(ui, |ui, _| {
         if st.doc.assets.is_empty() {
@@ -476,7 +531,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else {
             let items = Assets::of(st);
             let grid = TileGrid::<u64>::new(tl!("Assets")).id(grid_id).select(SelectMode::Multi).selection(Bind::bound(&mut model.selection)).rename(true);
-            events = grid.show_items(ui, &items, &mut |id, _| tile(st, *id)).response.events;
+            let out = grid.show_items(ui, &items, &mut |id, _| tile(st, *id));
+            opener = Some(out.response.response.clone());
+            events = out.response.events;
         }
     });
     if let Some(PanelDrag::Art { ids, .. }) = zone.output.dropped {
@@ -485,6 +542,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     for event in events {
         match event {
             CollectionEvent::Activate(id) => request_rename(&ctx, grid_id, &id),
+            CollectionEvent::ContextMenu(request) => model.menu = Some(request.key),
             CollectionEvent::Rename(edit) => {
                 let ended = matches!(edit.phase(), Some(GesturePhase::Commit) | None);
                 if let Some(rename) = edit.value().filter(|_| ended) {
@@ -500,6 +558,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel = model.selection.items.clone();
     let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
     let has_art = !st.selection.is_empty();
+    if let (Some(id), Some(opener)) = (model.menu, &opener)
+        && let Some(a) = st.doc.asset(id)
+    {
+        seen.tile = tile_menu(ui, opener, a, &sel, has_art);
+    }
     let mut export_clicked = false;
     Section::fixed(tl!("Export Settings")).show(ui, |ui, _| {
         let (change, files_each) = settings(ui, st);
@@ -557,6 +620,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if export_clicked {
         export(app, sel_or_all(&sel, &all), files_each);
+    }
+    match seen.tile {
+        Some(TileAct::Export(targets)) => export(app, targets, files_each),
+        Some(TileAct::Remove(targets)) => remove_selected(app, &targets),
+        Some(TileAct::Rename(id)) => request_rename(&ctx, grid_id, &id),
+        Some(TileAct::SelectArtwork(ids)) => {
+            run_command(app, "select.set", json!({ "ids": ids }));
+        }
+        Some(TileAct::Collect(single)) => collect(app, None, single),
+        None => {}
     }
 }
 

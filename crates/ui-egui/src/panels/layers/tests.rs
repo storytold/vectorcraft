@@ -471,3 +471,82 @@ fn context_menu_others_actions_sublayer_state_enables_all_commands() {
     assert_eq!(lock_cmd, "layer.unlockAll");
     assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }
+
+/// Names object `id` `name`, so its target circle is "Target {name}".
+fn name_row(app: &mut VectorcraftApp, id: NodeId, name: &str) {
+    app.session.execute("layer.setProps", &json!({"ids": [id.0], "name": name})).unwrap();
+}
+
+/// The target and the selected objects, sorted.
+fn targeted(app: &VectorcraftApp) -> (Option<NodeId>, Vec<NodeId>) {
+    let st = app.session.active().unwrap();
+    let mut ids = st.selection.objects.clone();
+    ids.sort();
+    (st.selection.target, ids)
+}
+
+/// Shift-clicking a target circle selects the art of every row from the last circle clicked to
+/// it, as Shift-clicking a name highlights a range of rows (#8639); Shift+Ctrl/Cmd adds a range to
+/// the selection. Nothing is targeted, and hidden art in the range is left out.
+#[test]
+fn shift_clicking_a_target_circle_selects_a_range_of_rows() {
+    use crate::tests::panel_harness::Panel;
+    use egui::Modifiers;
+    let (mut app, _, [a, b]) = two_rects();
+    let rect = |app: &mut VectorcraftApp, x: i32, y: i32| {
+        NodeId(app.session.execute("shape.rectangle", &json!({"x": x, "y": y, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap())
+    };
+    let (c, d) = (rect(&mut app, 120, 0), rect(&mut app, 0, 60));
+    for (id, name) in [(a, "A"), (b, "B"), (c, "C"), (d, "D")] {
+        name_row(&mut app, id, name);
+    }
+    app.session.execute("select.none", &json!({})).unwrap();
+    // Rows top down: the layer, D, C, B, A.
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Target C", Modifiers::NONE);
+    assert_eq!(targeted(&panel.app()), (Some(c), vec![c]));
+    panel.click_with("Target A", Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (None, vec![a, b, c]));
+    // A Shift range starts at the last circle clicked, not at the end of the last range.
+    panel.click_with("Target B", Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (None, vec![b, c]));
+    // Shift+Ctrl/Cmd adds a range: from C up to D.
+    panel.click_with("Target D", Modifiers::SHIFT | Modifiers::COMMAND);
+    assert_eq!(targeted(&panel.app()), (None, vec![b, c, d]));
+    // Ctrl/Cmd takes one out again.
+    panel.click_with("Target D", Modifiers::COMMAND);
+    assert_eq!(targeted(&panel.app()), (None, vec![b, c]));
+    // Hidden art in a range stays unselected.
+    panel.app().session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    panel.app().session.execute("object.hide", &json!({})).unwrap();
+    panel.click_with("Target C", Modifiers::NONE);
+    panel.click_with("Target A", Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (None, vec![a, c]));
+}
+
+/// The Shift-click anchor of the target circles belongs to the document it was clicked in: node
+/// ids are per document, so in another document a Shift-click with no circle clicked there yet
+/// targets only its own row, never a range from a row that has the old anchor's id.
+#[test]
+fn the_target_circle_anchor_does_not_carry_over_to_another_document() {
+    use crate::tests::panel_harness::Panel;
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    let mut panel = Panel::new(app, show);
+    panel.click_with("Target A", egui::Modifiers::NONE);
+    let (a2, b2) = {
+        let mut app = panel.app();
+        let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+        run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+        let a2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+        let b2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+        name_row(&mut app, a2, "A");
+        name_row(&mut app, b2, "B");
+        run(&mut app, "select.none", json!({}));
+        (a2, b2)
+    };
+    assert_eq!(a2, a, "the new document reuses the old anchor's id, so a stale anchor would find a row");
+    panel.click_with("Target B", egui::Modifiers::SHIFT);
+    assert_eq!(targeted(&panel.app()), (Some(b2), vec![b2]));
+}

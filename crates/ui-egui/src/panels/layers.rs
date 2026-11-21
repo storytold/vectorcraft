@@ -31,9 +31,12 @@
 //!   Backspace) asks first when a layer or sublayer among them holds art ([`delete`]).
 //! - The triangle opens or closes a row; Alt-click does the same to everything inside it.
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
-//! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
-//!   row's circle moves the appearance there (Alt copies it, `appearance.transfer`) and dropping it
-//!   on the trash reduces it to basic appearance (`appearance.reduceToBasic`) without deleting it.
+//! - A target circle targets its layer, group or object (`layer.target`). Its modifier keys
+//!   follow the names' rules: Ctrl/Cmd adds the item to the selection or takes it out, Shift
+//!   selects the art of every row from the last circle clicked to this one, and Shift+Ctrl/Cmd
+//!   adds that art (#8639). Dragging a circle onto another row's circle moves the appearance there
+//!   (Alt copies it, `appearance.transfer`) and dropping it on the trash reduces it to basic
+//!   appearance (`appearance.reduceToBasic`) without deleting it.
 //! - Search All and the Filter button at its right (`ui.layersFilter`, lit while a filter is on)
 //!   narrow the rows, and every row that holds others shows open while they do. A row stays when
 //!   its name holds the text typed, it is one of the object kinds ticked under By Object and it is
@@ -174,6 +177,8 @@ pub struct LayersUi {
     pub rename: Option<RowId>,
     /// Key focus was in the rows: Rename then names the highlighted row first.
     pub focused: bool,
+    /// The target circle clicked last, with its document's `uid`: where a Shift-click on another circle starts.
+    pub target_anchor: Option<(u64, NodeId)>,
 }
 
 impl Default for LayersUi {
@@ -181,7 +186,7 @@ impl Default for LayersUi {
     fn default() -> Self {
         let mut filter = LayerFilter::default();
         filter.by = FilterBy::Objects;
-        Self { filter, rename: None, focused: false }
+        Self { filter, rename: None, focused: false, target_anchor: None }
     }
 }
 
@@ -206,6 +211,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut filter = app.ui.layers_ui.filter.clone();
     let mut footer = Vec::new();
     let mut picks = Vec::new();
+    let mut target_click = None;
     let thumbnails = thumbs::layer_thumbnails(ui.ctx(), uid);
     let settings = app.ui.layers_panel.settings();
     let Some(st) = app.session.active() else { return };
@@ -221,7 +227,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .blend_rows(false)
         .deletable(true)
         .takes_drop::<cells::ArtDrag>(cells::accepts_art(&tree))
-        .trailing(|id, info| cells::build(&tree, id, info), |id, shown| cells::output(&mut picks, id, shown))
+        .trailing(|id, info| cells::build(&tree, id, info), |id, shown| cells::output(&mut picks, &mut target_click, id, shown))
         .row_menu(|target| controls::row_menu(&tree, target))
         .footer(|ui| controls::footer(&tree, ui, &mut footer))
         .document(uid);
@@ -232,10 +238,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         panel = panel.start_rename(row);
     }
     let output = panel.show(ui);
+    // A Shift-click starts at the last circle clicked in this document, else at the targeted row.
+    let anchor = app.ui.layers_ui.target_anchor.filter(|(doc, _)| *doc == uid).map(|(_, id)| id);
+    let target = target_click.map(|(id, mods)| (id, rows::target_click(&tree, &filter, anchor, id, mods)));
     app.ui.layers_ui.filter = filter;
+    if let Some((id, (_, true))) = &target {
+        app.ui.layers_ui.target_anchor = Some((uid, *id));
+    }
     app.ui.layers_ui.focused = output.focused;
     rows::apply(app, output.events);
-    for (c, p) in footer.into_iter().chain(picks) {
+    for (c, p) in footer.into_iter().chain(picks).chain(target.map(|(_, (command, _))| command)) {
         app.run(&c, p).ok();
     }
     // The panel's own commands reveal nothing for the selection they made: Locate Selected Objects

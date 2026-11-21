@@ -196,10 +196,17 @@ pub(crate) fn quick_actions(app: &mut VectorcraftApp) -> Vec<QuickAction> {
     add(is_image, tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND);
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets live through the
     // Appearance panel's Effect › Path › Offset Path (#2238).
-    let type_only = app.session.active().is_some_and(|st| {
-        let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
-        nodes.all(|n| matches!(n.kind, NodeKind::Text(_)))
+    let (has_type, type_only) = app.session.active().map_or((false, false), |st| {
+        let is_text = |id: &vectorcraft_doc::NodeId| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
+        let objects = &st.selection.objects;
+        (objects.iter().any(is_text), !objects.is_empty() && objects.iter().all(is_text))
     });
+    // A type selection's own Quick Actions: Create Outlines, Retype and Find and Replace…
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
+    let retype = has_type && (crate::menus::enabled(app, "ui.retype") || crate::menus::enabled(app, "type.retype"));
+    add(has_type, tl!("Create Outlines"), "type.createOutlines");
+    add(retype, tl!("Retype"), "ui.retype");
+    add(has_type, tl!("Find and Replace…"), "ui.findAndReplace");
     add(!type_only, tl!("Offset Path"), "object.path.offsetPath");
     add(!type_only, tl!("Simplify"), "object.path.simplify");
     add(true, tl!("Arrange: Bring to Front"), "object.arrange.bringToFront");

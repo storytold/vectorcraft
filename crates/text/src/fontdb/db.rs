@@ -314,6 +314,8 @@ impl FontDb {
                 }
             }
         }
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = (!made.is_empty()).then(crate::test_fonts::font_change);
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         let before = faces.len();
         for f in made {
@@ -332,6 +334,13 @@ impl FontDb {
         added
     }
 
+    /// Catalog the installed fonts unless that has been done: the first caller scans the font
+    /// folders, any other waits for that scan to finish, as every catalog lookup does.
+    #[cfg(any(test, feature = "test-fonts"))]
+    pub(crate) fn ensure_catalog(&self) {
+        let _ = self.catalog.families();
+    }
+
     /// Catalog the installed fonts on a background thread, so the first lookup by family name
     /// (opening a file, the font menus) doesn't wait for the scan. A no-op once they are
     /// cataloged, and on wasm.
@@ -347,6 +356,9 @@ impl FontDb {
     /// cataloged.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_system_fonts(&self) -> usize {
+        // The first scan waits for nothing: a guard is made only for a database already cataloged.
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = self.catalog.is_ready().then(crate::test_fonts::font_change);
         // The first scan, or a rescan once it is done (never both at once).
         let n = self.catalog.rescan();
         // Files may have been installed since: other versions are looked for again.

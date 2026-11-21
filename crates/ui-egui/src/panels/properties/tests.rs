@@ -1503,3 +1503,53 @@ fn character_section_shows_the_type_tool_selections_style() {
     assert_eq!(crate::panels::character::text_editing(&panel.app()), None);
     assert_eq!(shown(&mut panel), ["Regular"], "the Selection tool shows the first run's style");
 }
+
+/// With type selected, Quick Actions offers Create Outlines, Retype and Find and Replace… (G12): Create Outlines
+/// outlines the type in one undo step, Find and Replace… opens its dialog and Retype shows the Retype panel, leaving it
+/// shown when clicked again. A path offers Offset Path and Simplify instead of Create Outlines.
+#[test]
+fn type_quick_actions_show_text_commands_and_create_outlines() {
+    use craft::text::ui::find::FindReplaceDialog;
+    let mut app = new_app();
+    let t = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hello"})).unwrap()["id"].clone();
+    let mut panel = Panel::new(app, show);
+    for name in ["Create Outlines", "Retype", "Find and Replace…", "Arrange: Bring to Front", "Lock"] {
+        assert!(panel.shows(name), "type shows {name}");
+    }
+    assert!(!panel.shows("Offset Path") && !panel.shows("Simplify"), "no Offset Path or Simplify for type alone");
+    let undo = undo_depth(&panel.app());
+    panel.click("Create Outlines");
+    assert_eq!(undo_depth(&panel.app()), undo + 1, "one undo step");
+    {
+        let app = panel.app();
+        let st = app.session.doc().unwrap();
+        assert!(!st.selection.objects.is_empty(), "the outlines are selected");
+        for id in &st.selection.objects {
+            assert!(!matches!(st.doc.node(*id).unwrap().kind, NodeKind::Text(_)), "outlined, not type");
+        }
+    }
+    panel.app().run("edit.undo", json!({})).unwrap();
+    {
+        let app = panel.app();
+        let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(t.as_u64().unwrap())).cloned().unwrap();
+        assert!(matches!(node.kind, NodeKind::Text(_)), "undo brings the type back");
+    }
+    let r = rect(&mut panel.app(), 20.0, 20.0, 40.0, 40.0);
+    panel.app().run("select.set", json!({"ids": [r]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Offset Path") && panel.shows("Simplify"), "a path shows Offset Path and Simplify");
+    assert!(!panel.shows("Create Outlines"), "a path shows no Create Outlines");
+    panel.app().run("select.set", json!({"ids": [t]})).unwrap();
+    let ctx = panel.ctx().clone();
+    panel.app().ui_ctx = Some(ctx);
+    panel.frame();
+    panel.click("Find and Replace…");
+    let open = panel.app().dialogs().expect("a window").with(|host| host.get::<FindReplaceDialog>().is_some());
+    assert!(open, "Find and Replace… opens its dialog");
+    let retype = crate::panels::retype::ID;
+    assert!(!crate::panel_docking::visible(&panel.app(), retype), "Retype starts hidden");
+    panel.click("Retype");
+    assert!(crate::panel_docking::visible(&panel.app(), retype), "Retype shows the Retype panel");
+    panel.click("Retype");
+    assert!(crate::panel_docking::visible(&panel.app(), retype), "a second click leaves it shown");
+}
