@@ -937,6 +937,16 @@ fn tangent_circle_tool_note_is_in_complete_catalogs() {
     }
 }
 
+/// The label of the Tangent Circle tool's Add Points to Existing Paths option, which its options
+/// dialog takes from the tools crate.
+#[test]
+fn tangent_circle_tool_add_points_label_is_in_complete_catalogs() {
+    let label = vectorcraft_tools::addons::tangent_circle::ADD_POINTS;
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+    }
+}
+
 /// The Artboard tool's add buttons take their tooltips from the tools crate, which the `tl!` scan
 /// does not read, so each complete catalog is checked for them here.
 #[test]

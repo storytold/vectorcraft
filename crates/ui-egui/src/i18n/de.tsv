@@ -8074,6 +8074,7 @@ breakText	Glyphs	Glyphen
 	Tangent Circle	Tangentialkreis
 	Tangent Circle Tool	Tangentialkreis-Werkzeug
 	No tangent circle here	Hier kein Tangentialkreis
+	Add Points to Existing Paths	Punkte zu vorhandenen Pfaden hinzufügen
 	Circle:	Kreis:
 @msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
 @msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus

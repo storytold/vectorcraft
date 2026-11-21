@@ -14566,8 +14566,17 @@ Tools:
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
   segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
   canceled preview does not leave a circle worked out on the previewed paths.
-  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
-  gives an error for a value outside that range or one that is not a number, and for any other option.
+  With `addPoints` on, the circle also adds an anchor point to the first segment and to the second segment (or the
+  one beside it) where it touches them, with `path.insertAnchor` at that point, so the segments are split without
+  changing their shape; the anchors and the circle are one `command.batch` undo step, and one Undo removes all of them.
+  When a touched path was not selected, a `select.set` step puts the selection back before the circle is drawn, so
+  Draw Behind places the circle behind the objects that were selected.
+  A touch within 0.05 screen pixels of an existing anchor adds no anchor there; when neither touch adds one, only the
+  circle is drawn. Alt (Option on macOS) held at the release turns `addPoints` the other way for that circle, and a
+  dot right of and below the pointer shows while it is in effect, following Alt as it is pressed and let go.
+  Options (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36) and `addPoints`
+  (Add Points to Existing Paths, true or false, false). `tool.setOption` gives an error for a `radius` outside that
+  range or not a number, an `addPoints` that is not true or false, and any other option.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has

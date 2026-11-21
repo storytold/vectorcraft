@@ -8308,6 +8308,7 @@ breakText	Glyphs	Glify
 	Tangent Circle	Okrąg styczny
 	Tangent Circle Tool	Narzędzie Okrąg styczny
 	No tangent circle here	Brak okręgu stycznego w tym miejscu
+	Add Points to Existing Paths	Dodaj punkty do istniejących ścieżek
 	Circle:	Okrąg:
 @msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
 @msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone

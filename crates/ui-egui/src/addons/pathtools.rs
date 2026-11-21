@@ -245,6 +245,10 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("radius".into(), json!(x));
             }
         });
+        if widgets::check(ui, tangent_circle_tool::ADD_POINTS, d.bool("addPoints"), true) {
+            let on = !d.bool("addPoints");
+            d.fields.insert("addPoints".into(), json!(on));
+        }
         return false;
     }
     let rows = [
