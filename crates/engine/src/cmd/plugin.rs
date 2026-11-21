@@ -1218,7 +1218,7 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
-    // Installed again, it asks again. A grant that can't be removed still approves the module, and
+    // Installed again, it asks again. A grant that can't be removed may still approve the module, and
     // so may a grants file that can't be opened or read. One that is too large or doesn't hold a
     // list approves nothing and doesn't stop the removal.
     let forget = || s.store_grant_in(&turn, id, None) || !s.holds_plugin_grant(id);

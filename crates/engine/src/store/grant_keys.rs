@@ -6,9 +6,9 @@
 //! machine) grants nothing.
 //!
 //! The key store also keeps a generation for each plug-in folder, raised on every signed write of
-//! its grants file, and the file carries its generation inside the MAC. A file whose generation is
-//! not the one kept (an earlier copy put back over the current file, or a write whose generation
-//! the key store didn't keep) grants nothing either.
+//! its grants file and never lowered, and the file carries its generation inside the MAC. A file
+//! whose generation is not the one kept (an earlier copy put back over the current file, or a write
+//! whose generation the key store didn't keep or that failed after the raise) grants nothing either.
 //!
 //! The process uses one key store ([`set_grant_key_store`]); the apps use the system's
 //! ([`use_os_grant_keys`]). In a process that sets none, every grants file counts as one whose key
@@ -182,9 +182,15 @@ pub(crate) fn current_generation(folder: &Path) -> Result<u64, KeyStoreError> {
     Ok(current_store().ok_or_else(|| KeyStoreError("there is no key store".into()))?.generation(folder)?.unwrap_or(0))
 }
 
-/// Keep `generation` for the grants file of the plug-in store whose folder is `folder`.
+/// Keep `generation` for the grants file of the plug-in store whose folder is `folder`. The kept
+/// generation only goes up: one lower than the kept one is an error, and the kept one stays, since a
+/// lower one could match a file signed before.
 pub(crate) fn set_current_generation(folder: &Path, generation: u64) -> Result<(), KeyStoreError> {
-    current_store().ok_or_else(|| KeyStoreError("there is no key store".into()))?.set_generation(folder, generation)
+    let store = current_store().ok_or_else(|| KeyStoreError("there is no key store".into()))?;
+    if store.generation(folder)?.is_some_and(|kept| generation < kept) {
+        return Err(KeyStoreError("the key store keeps a later generation".into()));
+    }
+    store.set_generation(folder, generation)
 }
 
 /// The start of every MAC input: what it is a MAC of, and the version of the file.

@@ -2918,8 +2918,9 @@ fn a_grants_file_that_cannot_be_deleted_keeps_the_stored_module() {
 }
 
 /// When the last grant can't be removed because `grants.json` can't be deleted, a replacing module
-/// that asks for no permissions doesn't stay in the store: the store gets back the module the grant
-/// still covers, and the grant is left as it was.
+/// that asks for no permissions doesn't stay in the store: the store gets back the earlier module,
+/// and the file is left as it was. The generation was raised before the removal and stays raised, so
+/// the file left in place grants nothing and the module asks again.
 #[test]
 fn a_grants_file_whose_deletion_fails_keeps_the_stored_module() {
     let folder = crate::tests_links::Folder::new("plugin-store-undeletable-grants");
@@ -2939,8 +2940,8 @@ fn a_grants_file_whose_deletion_fails_keeps_the_stored_module() {
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain), "replace": true}));
     crate::store::GRANTS_DELETE_FAILS.set(false);
     assert_eq!(std::fs::read(&file).unwrap(), approved, "the store gets the module the grant covers back");
-    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the grant stays as it was");
-    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": approved_data}))["needsApproval"], false, "the grant still covers the module");
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the file stays as it was");
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": approved_data}))["needsApproval"], true, "the file left in place grants nothing");
 
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert!(!grants.exists(), "a removal that can delete the file forgets the grant");
@@ -4935,6 +4936,154 @@ fn a_write_whose_generation_wasnt_kept_grants_nothing_after_a_revoke() {
         s.attach_plugin_store(folder.0.clone());
         _ = s.execute("plugin.remove", &json!({"id": id}));
         _ = s.execute("plugin.remove", &json!({"id": other}));
+    }
+}
+
+/// A signed write that fails after raising the generation leaves the generation raised: the file
+/// left in place, signed at the generation before the raise, grants nothing and its plug-ins ask
+/// again, and so does a copy of it put back after a later write.
+#[test]
+fn a_grants_write_that_fails_leaves_the_generation_raised() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+    let folder = crate::tests_links::Folder::new("plugin-store-write-fails");
+    let id = "test.engine.permissions.writefails";
+    let other = "test.engine.permissions.writefailsother";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let earlier = std::fs::read(&grants).unwrap();
+    assert_eq!((generation_of(&earlier), kept(&folder.0)), (Some(3), Some(3)));
+
+    crate::store::GRANTS_WRITE_FAILS.set(true);
+    let grant = vectorcraft_plugins::permissions::Grant {
+        id: other.into(),
+        hash: vectorcraft_plugins::permissions::sha256_hex(b"module"),
+        permissions: vec![vectorcraft_plugins::permissions::Permission::DocRead],
+    };
+    let written = s.store_grant(other, Some(grant));
+    crate::store::GRANTS_WRITE_FAILS.set(false);
+    assert!(!written, "the write reports a failure");
+    assert_eq!(std::fs::read(&grants).unwrap(), earlier, "the file is left as it was");
+    assert_eq!(kept(&folder.0), Some(5), "the generation stays raised");
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the file left in place grants nothing");
+
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(8), Some(8)), "the next write is past the raise");
+    assert_eq!(starts_from(&folder.0, other, &other_data), (true, false), "the next write keeps its grant");
+    std::fs::write(&grants, &earlier).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the copy from before the raise grants nothing");
+    std::fs::remove_file(&grants).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    _ = s.execute("plugin.remove", &json!({"id": id}));
+    _ = s.execute("plugin.remove", &json!({"id": other}));
+}
+
+/// A revoke whose signed grants file can't be removed leaves the generation raised: the grant left in
+/// the file doesn't come back, and a later removal takes the file away.
+#[test]
+fn a_revoke_whose_grants_file_cant_be_removed_doesnt_bring_the_grant_back() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+    let folder = crate::tests_links::Folder::new("plugin-store-remove-fails");
+    let id = "test.engine.permissions.removefails";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let recorded = std::fs::read(&grants).unwrap();
+
+    crate::store::GRANTS_DELETE_FAILS.set(true);
+    let revoked = s.store_grant(id, None);
+    crate::store::GRANTS_DELETE_FAILS.set(false);
+    assert!(!revoked, "the removal reports a failure");
+    assert_eq!(std::fs::read(&grants).unwrap(), recorded, "the file is left as it was");
+    assert_eq!(kept(&folder.0), Some(5), "the generation stays raised");
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the revoked grant doesn't come back");
+
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.store_grant(id, None), "a later removal is recorded");
+    assert!(!grants.exists(), "and takes the file away");
+    std::fs::write(&grants, &recorded).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the copy put back grants nothing");
+    std::fs::remove_file(&grants).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    _ = s.execute("plugin.remove", &json!({"id": id}));
+}
+
+/// The key store's generation for a folder only goes up: a lower one is refused and the kept one
+/// stays, while the same one and a higher one are kept.
+#[test]
+fn the_kept_grants_generation_is_never_lowered() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let folder = crate::tests_links::Folder::new("plugin-store-generation-lowered");
+    let store = crate::store::plugin_store_key(&folder.0);
+    assert!(crate::store::grant_keys::set_current_generation(&store, 5).is_ok());
+    assert!(crate::store::grant_keys::set_current_generation(&store, 3).is_err(), "a lower generation is refused");
+    assert_eq!(crate::store::grant_keys::current_generation(&store), Ok(5), "the kept one stays");
+    assert!(crate::store::grant_keys::set_current_generation(&store, 5).is_ok(), "the same one is kept");
+    assert!(crate::store::grant_keys::set_current_generation(&store, 6).is_ok());
+    assert_eq!(crate::store::grant_keys::current_generation(&store), Ok(6));
+}
+
+/// A kept generation within two of the largest 64-bit value isn't raised: a signed write leaves the
+/// file and the generation as they are, and the file keeps its grant. Three below it, the write goes
+/// to the largest value.
+#[test]
+fn a_kept_generation_near_the_largest_value_isnt_raised() {
+    use vectorcraft_plugins::permissions::{Grant, Permission, sha256_hex};
+    for (kept_before, written) in [(u64::MAX - 2, None), (u64::MAX - 3, Some(u64::MAX))] {
+        let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+        let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+        let folder = crate::tests_links::Folder::new(&format!("plugin-store-generation-near-max-{}", u64::MAX - kept_before));
+        let store = crate::store::plugin_store_key(&folder.0);
+        let id = "test.engine.permissions.nearmax";
+        let other = "test.engine.permissions.nearmaxother";
+        let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+        let data = vectorcraft_format::base64_encode(&wasm);
+        let grants = folder.0.join("grants.json");
+        let mut s = session();
+        s.attach_plugin_store(folder.0.clone());
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+        crate::store::grant_keys::GrantKeyStore::set_generation(keys.as_ref(), &store, kept_before).unwrap();
+        let file =
+            crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": sha256_hex(&wasm), "permissions": ["doc.read"]}]).to_string());
+        std::fs::write(&grants, &file).unwrap();
+        assert_eq!(starts_from(&folder.0, id, &data), (true, false), "{kept_before}: the file grants");
+
+        let mut s = session();
+        s.attach_plugin_store(folder.0.clone());
+        let grant = Grant { id: other.into(), hash: sha256_hex(b"module"), permissions: vec![Permission::DocRead] };
+        assert_eq!(s.store_grant(other, Some(grant)), written.is_some(), "{kept_before}");
+        match written {
+            None => {
+                assert_eq!(std::fs::read(&grants).unwrap(), file, "{kept_before}: the file is left as it is");
+                assert_eq!(kept_generation(&keys, &folder.0), Some(kept_before), "{kept_before}: the generation too");
+                assert_eq!(starts_from(&folder.0, id, &data), (true, false), "{kept_before}: the file keeps its grant");
+            }
+            Some(generation) => {
+                assert_eq!(
+                    (generation_of(&std::fs::read(&grants).unwrap()), kept_generation(&keys, &folder.0)),
+                    (Some(generation), Some(generation))
+                );
+                assert_eq!(starts_from(&folder.0, id, &data), (true, false), "{kept_before}: the new file keeps the grant");
+            }
+        }
+        std::fs::remove_file(&grants).unwrap();
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
     }
 }
 
