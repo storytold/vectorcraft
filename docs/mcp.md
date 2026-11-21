@@ -11431,6 +11431,47 @@ hidden state and stay live on the group; none of them is copied onto the glyph p
 glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
+`type.retype` (Type › Retype) turns outlined glyphs back into point text. By default a shape must be exactly a glyph of
+an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes the
+glyph it is closest to when its leftover distance from that glyph, relative to the shape's outline spread (the root
+mean square distance of its sampled outline points from their center), is at most the
+tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
+and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
+and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
+a near match. The line also splits before a near-matched glyph, or a glyph of a line whose first glyph is one, that
+the type would draw further from its shape than the tolerance by the same measure (its own leftover distance together
+with the change of size and turn) or with its center further away than its origin may be. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
+at a leftover distance of 0.05. A compound path that holds several
+glyphs, such as a word made into one compound path, is split into groups of contours (a contour with the contours
+inside it) in path order, and runs of up to three groups are matched, the longest first among those after which the
+remaining groups can still all be matched, so an i's stem and dot become one i. A group whose contours run the other
+way round, as Make Compound Path leaves some of them, still matches exactly. Exact matches of the whole shape come
+first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
+compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
+`unmatched` when another shape of the selection becomes type, and the command returns an error when no shape does. A
+glyph also has to paint the area the shape paints under the shape's fill rule: a compound filled by the nonzero rule
+whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it. A shape with a counter narrower than three times the
+outline tolerance across in some direction, turned or not, cannot be checked this way and stays an outline: at `tolerance` 0.05, a
+counter 10 units wide in a 100 by 100 shape, or a 60 by 10 one turned 45 degrees. So does a shape whose outline is too large to check. The glyphs of a compound path that splits into several are set one beside
+another, so a split whose parts overlap where the shape's fill rule leaves the overlap unpainted (two o's on each
+other under the even-odd rule) stays an outline. A split whose parts overlap at all also stays an outline when the
+compound has an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke, since the
+glyphs may become separate objects that paint the overlap twice. When the split with the longest runs fails that check, the split with the
+shortest runs is checked, then the other complete splits in order, up to 32 splits per shape for exact matches and 32
+for near matches; when none passes, the shape stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups, 512 contours
+or 65,536 path elements is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
+matched whole only. Near matching compares a shape with at most the 256 glyphs closest to it in proportion, in at
+most 50 million point comparisons per shape and 2 billion per command, ranking a glyph by proportion counting as one
+comparison per contour and one more; past them, the glyphs not yet ranked or compared are left out. It looks glyphs up for at most 1,024 distinct shapes and runs per command: every selected shape first, in
+selection order, then the runs of groups of the compound paths. Glyphs close only to the shapes and runs past that
+limit are not looked up. At most 262,144 glyphs are drawn to check whether they could near match, and at most 32,768
+are indexed for it, each face taking an equal share of both; of a face's glyphs, those closest to the selected shapes
+in proportion are indexed.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{"tolerance":0.02}}}
+```
+
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
 Appearance describes) take an outlined frame of threaded text out of its thread with the text it shows, and the other
 frames keep the text they hold. When the thread's last frame is outlined, the text it has no room for, which its
@@ -12587,7 +12628,7 @@ on an open path that are not drawn because they fall before the path's start can
 ## Retype tracking
 
 `type.retype {fonts?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
-has. A line of three or more glyphs gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
+has. A line of three or more exactly matched glyphs (none a near match, see `tolerance`) gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
 tries the value rounded to a whole number first when it is within 0.05 of one, then the value as measured. The font's
 advances and pair kerning are left out of the measure, and word spaces are counted after the tracking. The tracking is
 kept when the tracked type draws the whole line in place, or more of it from its start than untracked type does. When
@@ -12607,7 +12648,7 @@ tracking their own gaps give. These rules are VectorCraft's own. Each entry of t
 
 ## Retype several lines
 
-`type.retype` joins lines that follow each other in paint order, with the same group, paint, font, size, turn and
+`type.retype` joins lines that follow each other in paint order (lines split from one compound path do), with the same group, paint, font, size, turn and
 tracking (an untracked line of one or two glyphs takes the tracking of the others), into one type object when each
 line's baseline is the same distance below the one before (between 0.25 and 3 times the size) and the lines line up at their starts, ends or centers. The object is area type with Convert To Area
 Type's frame, its lines separated by line breaks, with left, right or center alignment, checked in that order. Its
@@ -12629,7 +12670,8 @@ the result's `texts` list holds an object's lines joined by `\n`, and each entry
 
 `type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
 and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
-first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
+first, by the matching `type.retype` uses, and it counts only exact matches of whole shapes: it does not split a
+compound path into glyphs or take near matches. When two versions of a font are loaded,
 only the version its family and style name gives is compared, which is the version that choosing the font sets. The
 fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
 name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
