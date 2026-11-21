@@ -1180,6 +1180,39 @@ fn enter_in_the_optimize_rows_runs_nothing_when_a_later_control_refused_or_took_
     assert!(!go(|ctx| ctx.input_mut(|i| _ = i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))), "a taken press runs nothing");
 }
 
+/// A click on the Optimize to File Size rows' OK runs no search when its press took the focus from a
+/// field that then refused its text, as a click on the dialog's OK does not confirm; the next click
+/// on it runs the search.
+#[test]
+fn optimize_ok_runs_nothing_when_its_press_left_a_refused_field() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let at = std::cell::Cell::new(egui::Pos2::ZERO);
+    // `refuse` stands for the size field refusing its text in that frame; the flag lasts one frame,
+    // as the dialog runner clears it after the dialog has drawn.
+    let pass = |events: Vec<egui::Event>, refuse: bool| {
+        let mut ok = false;
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            if refuse {
+                crate::widgets::reject_dialog_commit(ui.ctx());
+            }
+            let top = ui.cursor().min;
+            ok = save_for_web::optimize_ok(ui);
+            at.set(top + egui::vec2(8.0, 6.0));
+            ui.data_mut(|d| d.remove_temp::<bool>(crate::widgets::dialog_reject_commit_flag()));
+        });
+        out.textures_delta.clear();
+        ok
+    };
+    let button =
+        |pressed: bool| egui::Event::PointerButton { pos: at.get(), button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    assert!(!pass(vec![], false));
+    assert!(!pass(vec![egui::Event::PointerMoved(at.get()), button(true)], true), "the press alone runs nothing");
+    assert!(!pass(vec![button(false)], false), "a click whose press left a refused field runs nothing");
+    assert!(!pass(vec![button(true)], false));
+    assert!(pass(vec![button(false)], false), "the next click runs the search");
+}
+
 #[test]
 fn optimize_to_file_size_starts_at_the_size_of_the_slices_files() {
     let dir = vectorcraft_testkit::temp_dir("sfw-optimize-slices");
