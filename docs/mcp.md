@@ -2430,11 +2430,15 @@ with `` `font` must be a string ``, and a `features` list with an entry that is 
 `text.setStyle` and `text.setRangeStyle` refuse a `size` outside 0.1 to 1,296 pt with
 `` `size` must be from 0.1 to 1296 `` and change nothing. `type.ruby` refuses a `text`,
 `position` or `align` that is not a string, and `text.setPathHandle` refuses a `which` other than `in` or `out` with
-`` `which` must be one of in, out ``. Each leaves the document, the selection and the undo history as they were, also
-when the call gives another param it could apply. A null is read as a key left out.
+`` `which` must be one of in, out ``. `text.editRange` refuses an `insert` that is not a string, `text.setText` a `text`
+that is not a string, and `text.createInPath` a `mode` or `text` that is not a string, each with
+`` `insert` must be a string ``, naming the key; `text.createInPath` refuses an `at` that is not two numbers with
+`` `at` must be a point: [x, y] ``, in area mode too. Each leaves the document, the selection and the undo history as
+they were, also when the call gives another param it could apply. A null is read as a key left out.
 
 A byte offset must be a whole number of at least 0. `at` in `text.startList`, and `start` and `end` in
-`text.editRange`, `text.getRange` and `text.setRangeStyle`, and in `type.step` and `addon.type.textTweaker` given an `id`,
+`text.editRange`, `text.getRange` and `text.setRangeStyle`, `start` in `text.touchType`, `text.glyphAlternates` and
+`text.setGlyphAlternate`, and `start` and `end` in `type.step` and `addon.type.textTweaker` given an `id`,
 refuse a negative or fractional number with
 `` `at` must be a whole number ``, naming the key, and change nothing. `2.0` is read as `2`, and a null as the key left out.
 
@@ -6207,7 +6211,8 @@ editing the pattern first". While a mask is edited, `object.pattern.edit` and `o
 
 Pathfinder Options: `object.pathfinder.options {precision?, removeRedundantPoints?, removeUnpainted?}` (or
 `prefs.get`/`prefs.set` with key `pathfinder`) reads and sets the options every later Shape Mode and Pathfinder
-operation uses: `precision` (0.001–10 pt, default 0.01; a string with a unit also reads) is how closely results follow
+operation uses: `precision` (0.001–10 pt, default 0.01; a string with a unit or a string that is all one number also reads, and
+any other string, such as `"1abc"`, is an error) is how closely results follow
 the paths (they are refit to within it and pieces thinner than it are dropped), `removeRedundantPoints` takes the
 anchors that don't change a result's shape off it, and `removeUnpainted` makes Divide and Outline leave out the pieces
 of objects with no fill (or only hidden fills). Both default to false; `{}` reads the options. Each Shape Mode and
