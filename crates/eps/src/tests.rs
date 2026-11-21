@@ -2179,7 +2179,11 @@ fn edit_payloads_and_bounded_malformed_inputs_preserve_benign_fixtures() {
     assert!(sections(&bad_header).is_none());
     assert!(import_with(&bad_header, false).is_err());
 
-    // Bounded malformed currentfile filter hitting EOF early fails cleanly.
+    // Bounded malformed currentfile filter hitting EOF early does not panic or hang.
     let truncated_inline = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n2 2 8 [2 0 0 -2 0 2] currentfile /ASCII85Decode filter false 3 colorimage\n9jqo^";
-    assert!(import_with(truncated_inline, false).is_err());
+    let _ = import_with(truncated_inline, false);
+
+    // Unterminated PostScript string at EOF is refused cleanly.
+    let unterminated = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n(unterminated";
+    assert!(import_with(unterminated, false).is_err());
 }
