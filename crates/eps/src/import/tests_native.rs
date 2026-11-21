@@ -3452,6 +3452,105 @@ fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
     assert_eq!(version("/0 (VertestInk-Regular) /VersionString (1.1)"), "1.1");
 }
 
+/// The widths a `.ai`'s PDF part gives the characters of `text` in its font `name` (a subset of
+/// it, a TrueType font in `WinAnsiEncoding`): those `width` gives each, in thousandths of an em.
+fn page_widths(name: &str, text: &str, width: impl Fn(char) -> f64) -> vectorcraft_pdf::PageWidths {
+    let widths: Vec<String> = (32u8..=126).map(char::from).map(|c| if text.contains(c) { width(c).to_string() } else { "0".into() }).collect();
+    let font = format!(
+        "/Font << /F1 << /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+{name} /FirstChar 32 /Widths [{}] /Encoding /WinAnsiEncoding >> >>",
+        widths.join(" ")
+    );
+    let page = vectorcraft_testkit::pdf::PdfPage { resources: font, ..vectorcraft_testkit::pdf::PdfPage::new(100.0, 100.0, "") };
+    vectorcraft_pdf::open_pdf(&vectorcraft_testkit::pdf::pdf_with(&[page], &[], None), None).unwrap().page_widths()
+}
+
+/// [`page_widths`] of a composite font (`Identity-H`, a TrueType CIDFont) whose `ToUnicode` map gives
+/// CID 1 the first character of `text`, CID 2 the next and so on, `W` their widths.
+fn page_widths_cid(name: &str, text: &str, width: impl Fn(char) -> f64) -> vectorcraft_pdf::PageWidths {
+    let chars: Vec<char> = text.chars().collect();
+    let pairs: Vec<String> = chars.iter().enumerate().map(|(i, c)| format!("<{:04X}> <{:04X}>", i + 1, u32::from(*c))).collect();
+    let cmap = format!(
+        "begincmap\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n{} beginbfchar\n{}\nendbfchar\nendcmap\n",
+        pairs.len(),
+        pairs.join("\n")
+    );
+    let w: Vec<String> = chars.iter().map(|c| width(*c).to_string()).collect();
+    let extra = vectorcraft_testkit::pdf::first_extra(1);
+    let font = format!(
+        "/Font << /F1 << /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+{name}-Identity-H /Encoding /Identity-H /ToUnicode {extra} 0 R \
+         /DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+{name} /W [1 [{}]] >>] >> >>",
+        w.join(" ")
+    );
+    let page = vectorcraft_testkit::pdf::PdfPage { resources: font, ..vectorcraft_testkit::pdf::PdfPage::new(100.0, 100.0, "") };
+    let file = vectorcraft_testkit::pdf::pdf_with(&[page], &[&format!("<< /Length {} >>\nstream\n{cmap}endstream", cmap.len())], None);
+    vectorcraft_pdf::open_pdf(&file, None).unwrap().page_widths()
+}
+
+/// The advance of `c` in installed `face`, in thousandths of an em.
+fn advance(face: &vectorcraft_text::FontFace, c: char) -> f64 {
+    face.advance(face.glyph_for(c)) * 1000.0 / face.units_per_em()
+}
+
+/// The version of the face that type from the text document of a `.ai` whose font record is
+/// `record` (in place of `/0 (Helvetica)`) is set in, its layers read alone with `widths`, the
+/// widths its PDF part gives the characters of its fonts.
+fn version_on_page(record: &str, widths: vectorcraft_pdf::PageWidths) -> String {
+    let doc = text_document(&[("Hamburg\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]).replacen("/0 (Helvetica)", record, 1);
+    let file = private(&native_with_text(&layer("Art", true, &text_object(0)), &doc));
+    let names = crate::NameEncoding::default();
+    let Ok((d, notes)) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, widths) else { panic!("{record}: opened with the page") };
+    let texts = text_of(&d.layers[0]);
+    assert_eq!(texts.len(), 1, "{record}: {notes:?}");
+    vectorcraft_text::FontDb::global().style_face(&texts[0].runs[0].style).unwrap().version.clone()
+}
+
+/// Two installed copies of one font can share its PostScript name, family and style, and differ
+/// in their glyphs' widths alone. Type from the text document of a `.ai` whose font record keeps no
+/// version is set in the copy that sets the characters its PDF part draws at the widths the PDF
+/// part gives them, also when the record spells the name with other punctuation. Without those
+/// widths, or when no copy sets the characters at them, it takes the copy it took before (the first
+/// loaded); a version the record keeps decides first. The widths of a simple font in
+/// `WinAnsiEncoding` and of a composite font with a `ToUnicode` map both tell the copies apart.
+#[test]
+fn type_from_the_text_document_takes_the_copy_that_sets_the_pages_widths() {
+    install(&[(true, ("Widtest Ink", "Regular", "1.0", "WidtestInk-Regular")), (false, ("Widtest Ink", "Regular", "1.1", "WidtestInk-Regular"))]);
+    let copies = vectorcraft_text::FontDb::global().postscript_faces("WidtestInk-Regular");
+    let copy = |version: &str| copies.iter().find(|f| f.version == version).unwrap().clone();
+    let (old, new) = (copy("1.0"), copy("1.1"));
+    assert!((advance(&old, 'H') - advance(&new, 'H')).abs() > 10.0, "the copies set the type at other widths");
+    let on = |name: &str, face: &vectorcraft_text::FontFace| page_widths(name, "Hamburg", |c| advance(face, c));
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", Default::default()), "1.0");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", on("WidtestInk-Regular", &new)), "1.1");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", on("WidtestInk-Regular", &old)), "1.0");
+    // Widths a file rounds are within 1/1000 em of the advances; farther off, they aren't the copy's.
+    let off = |by: f64| page_widths("WidtestInk-Regular", "Hamburg", |c| advance(&new, c) + by);
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", off(0.9)), "1.1");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", off(-0.9)), "1.1");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", off(2.0)), "1.0");
+    // A record whose name differs from the copies' in punctuation alone, as its PDF part's font.
+    assert_eq!(version_on_page("/0 (Widtest-Ink-Regular)", on("Widtest-Ink-Regular", &new)), "1.1");
+    // Widths of another font, or no copy setting the characters at the PDF part's widths.
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", on("OtherInk-Regular", &new)), "1.0");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", page_widths("WidtestInk-Regular", "Hamburg", |_| 1000.0)), "1.0");
+    // A version the record keeps picks the copy, and one that isn't installed gives the copy it gave.
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular) /5 (1.0)", on("WidtestInk-Regular", &new)), "1.0");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular) /5 (9.9)", on("WidtestInk-Regular", &new)), "1.0");
+    // The widths of a composite font.
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", page_widths_cid("WidtestInk-Regular", "Hamburg", |c| advance(&new, c))), "1.1");
+    assert_eq!(version_on_page("/0 (WidtestInk-Regular)", page_widths_cid("WidtestInk-Regular", "Hamburg", |c| advance(&old, c))), "1.0");
+    // A font installed once is set in that copy whatever the widths.
+    install(&[(true, ("Onewtest Ink", "Regular", "1.0", "OnewtestInk-Regular"))]);
+    assert_eq!(version_on_page("/0 (OnewtestInk-Regular)", on("OnewtestInk-Regular", &new)), "1.0");
+    // Of several copies that set the characters at the widths, the first in the order the faces
+    // are found (the first loaded).
+    install(&[
+        (true, ("Firstwtest Ink", "Regular", "1.0", "FirstwtestInk-Regular")),
+        (false, ("Firstwtest Ink", "Regular", "1.1", "FirstwtestInk-Regular")),
+        (false, ("Firstwtest Ink", "Regular", "1.2", "FirstwtestInk-Regular")),
+    ]);
+    assert_eq!(version_on_page("/0 (FirstwtestInk-Regular)", on("FirstwtestInk-Regular", &new)), "1.1");
+}
+
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
 /// Style]` and `[Normal Paragraph Style]` before the text document's base attributes. A Large
 /// Canvas copy (1:10) writes the styles at the art's scale (1.2 for 12 points, 0.6 for a 6-point
@@ -6351,7 +6450,7 @@ fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
     let file = private(&native_with_text(&layer("Art", true, &art), &doc));
     let names = crate::NameEncoding::default();
-    let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+    let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
     // A PDF part the layers don't draw as.
     let (d, notes, read) = crate::layered_ai_from(layers, pdf_part(80.0, 80.0), vec![], false, false, 1.0, names);
     assert!(read, "{notes:?}");
@@ -6360,7 +6459,7 @@ fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     assert_eq!(loose, [("Note".to_string(), true), ("FLUX".to_string(), false)], "{notes:?}");
     assert!(notes.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{notes:?}");
     // A PDF part that draws as those layers, with the drawn art: the envelope opens live.
-    let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+    let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
     let (d, notes, read) = crate::layered_ai_from(layers, d, vec![], false, false, 1.0, names);
     assert!(read, "{notes:?}");
     let (envelopes, loose) = envelopes_and_type(&d);
@@ -6388,7 +6487,7 @@ fn layers_that_open_alone_read_their_text_once() {
     let doc = unsplit_text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)]);
     let art = layer("Art", true, &format!("{}\n{}{}", square(10, 10), text_object(0), text_object(1)));
     let file = private(&native_with_text(&art, &doc));
-    let open = || crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, crate::NameEncoding::default()).ok();
+    let open = || crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, crate::NameEncoding::default(), Default::default()).ok();
     let (opened, texts, frames) = text_reads(false, open);
     let Some((d, notes)) = opened else { panic!("didn't open without the page") };
     assert_eq!((texts, frames), (1, 1), "{notes:?}");
@@ -6407,7 +6506,7 @@ fn layers_whose_text_document_cannot_be_read_read_it_once_with_the_page() {
     let file = private(&native_with_text(&art, "not a text document"));
     let names = crate::NameEncoding::default();
     let open = || {
-        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
         crate::layered_ai_from(layers, pdf_part(10.0, 86.0), vec![], false, false, 1.0, names)
     };
     let (opened, texts, frames) = text_reads(false, open);
@@ -6434,7 +6533,7 @@ fn an_envelope_of_type_waiting_on_the_page_reads_the_text_once() {
     let file = private(&native_with_text(&layer("Art", true, &art), &doc));
     let names = crate::NameEncoding::default();
     let open = |page: Document| {
-        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
         crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
     };
     // A PDF part the layers don't draw as: they open alone, after a build with the page and one without.
@@ -6518,7 +6617,7 @@ fn trusted_layers_that_draw_apart_from_the_page_leave_an_envelope_of_type_its_dr
     let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
     let file = private(&native_with_text(&layer("Art", true, &art), &doc));
     let names = crate::NameEncoding::default();
-    let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+    let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
     let (d, notes, read) = crate::layered_ai_from(layers, pdf_part(80.0, 80.0), vec![], false, true, 1.0, names);
     assert!(read, "{notes:?}");
     let (envelopes, loose) = envelopes_and_type(&d);
@@ -6612,7 +6711,7 @@ fn layers_that_would_open_alone_keep_an_envelope_of_type_live_where_other_art_di
     let file = private(&native_with_text(&layer("Art", true, &art), &doc));
     let names = crate::NameEncoding::default();
     let open = |page: Document| {
-        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
         crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
     };
     // The layers alone, with the envelope's drawn art: what the page draws.
@@ -6655,7 +6754,7 @@ fn trusted_layers_that_would_open_alone_open_alone_with_an_envelope_of_type_the_
     let file = private(&native_with_text(&layer("Art", true, &art), &doc));
     let names = crate::NameEncoding::default();
     let open = |page: Document, trust: bool| {
-        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
         crate::layered_ai_from(layers, page, vec![], false, trust, 1.0, names)
     };
     let (mut page, _, _) = open(pdf_part(80.0, 80.0), false);
@@ -6694,7 +6793,7 @@ fn layers_that_would_open_alone_keep_live_only_the_envelopes_of_type_the_page_do
     let file = private(&native_with_text(&layer("Art", true, &art), &doc));
     let names = crate::NameEncoding::default();
     let open = |page: Document| {
-        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names, Default::default()) else { panic!("opened without the page") };
         crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
     };
     // The layers alone, with the drawn art of both envelopes, but the first's: the page draws

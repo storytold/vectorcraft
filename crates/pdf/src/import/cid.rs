@@ -70,7 +70,7 @@ impl CidText {
 }
 
 /// A ToUnicode value that names no character: U+FFFD alone (#708).
-pub(super) fn replacement(u: &craft_pdf::interpret::hayro_cmap::BfString) -> bool {
+pub(crate) fn replacement(u: &craft_pdf::interpret::hayro_cmap::BfString) -> bool {
     use craft_pdf::interpret::hayro_cmap::BfString;
     match u {
         BfString::Char(c) => *c == char::REPLACEMENT_CHARACTER,

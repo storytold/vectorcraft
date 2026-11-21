@@ -61,6 +61,7 @@ mod lab_spot;
 mod linearize;
 mod marks;
 mod output;
+mod page_widths;
 mod pages;
 mod patch;
 mod pdfx;
@@ -83,6 +84,7 @@ pub use import::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
     holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
+pub use page_widths::{FontWidths, PageWidths};
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
 pub use pages::{

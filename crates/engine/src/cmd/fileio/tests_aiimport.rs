@@ -2180,3 +2180,110 @@ fn an_illustrator_ai_file_opens_with_its_layers_closed() {
     assert_eq!(r["restored"], json!(true), "{r}");
     assert_eq!(open_rows(&s).1, ["Art", "Hidden"]);
 }
+
+/// A `.ai` whose layer `Art` holds one line of type, `Hamburg`, that its text document sets in the
+/// font of PostScript name `name` (a font record without a version), and whose PDF part sets it in
+/// a subset of that font that gives each character the width `width` gives it, in thousandths of an
+/// em. With `square`, the layer and the page have a gray square too. The editing copy's artboard is
+/// 200 × 100 pt, and the page `page_width` × 100.
+fn type_in_copy_ai(name: &str, square: bool, page_width: f64, width: impl Fn(char) -> f64) -> Vec<u8> {
+    let story = "Hamburg";
+    let n = story.chars().count() + 1;
+    let document = format!(
+        "/0 << /1 << /0 [ << /0 << /0 << /0 ({name}) >> >> >> ] >> /8 << /0 [ << /0 << /0 [ 0 0 ] /2 << /2 [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /1 << /1 [ << /0 << /0 ({story}\r) /5 << /0 [ << /0 << /0 << /0 () /5 << /0 0 >> /6 0 >> >> /1 {n} >> ] >> \
+         /6 << /0 [ << /0 << /0 << /0 () /5 0 /6 << /0 0 /1 10.0 >> >> >> /1 {n} >> ] >> >> \
+         /1 << /0 [ << /0 0 >> ] /2 [ << /99 /PC /6 [ << /99 /F /0 << /0 [ 8105.5 8176.5 ] >> /6 [ << /99 /R /6 [ << /99 /R /6 [ << /99 /L /6 [ \
+         << /99 /S /0 << /0 [ 0.0 0.0 ] >> /15 << /0 {n} >> >> ] >> ] >> ] >> ] >> ] >> ] >> >> ] /2 << /1 12.0 >> >>\n"
+    );
+    let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
+    let text = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n";
+    let (art, drawn) =
+        if square { (format!("0.5 g\n{}f\n{text}", ai::rect(120.0, 20.0, 160.0, 60.0)), "0.5 g 120 20 40 40 re f ") } else { (text.to_string(), "") };
+    let body = format!(
+        "%AI3_TemplateBox: 100 50 100 50\n{}%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n",
+        ai::layer("Art", &art),
+        lines.join("\n")
+    );
+    let data = ai::editing_data(200.0, 100.0, &body);
+    let widths: Vec<String> = (32u8..=126).map(char::from).map(|c| if story.contains(c) { width(c).to_string() } else { "0".into() }).collect();
+    let page = PdfPage {
+        resources: format!(
+            "/Font << /F1 << /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+{name} /FirstChar 32 /Widths [{}] /Encoding /WinAnsiEncoding >> >>",
+            widths.join(" ")
+        ),
+        entries: format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(1)),
+        // A page that is only type, with its art box, isn't a placeholder.
+        art: Some([0.0, 0.0, page_width, 100.0]),
+        ..PdfPage::new(page_width, 100.0, &format!("{drawn}BT /F1 10 Tf 14 65 Td ({story}) Tj ET"))
+    };
+    pdf_with(&[page], &[&format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len())], None)
+}
+
+/// Type from the text document of a `.ai` whose font record keeps no version, where two installed
+/// copies of the font share its PostScript name, family and style and differ in their widths, is
+/// set in the copy that sets its characters at the widths the file's PDF part gives them: whether
+/// its layers open alone, with the PDF part imported, or from the editing copy alone because the PDF
+/// part is only type (read after the layers alone, on a page of another size, were not used).
+#[test]
+fn type_from_the_text_document_takes_the_copy_its_pdf_part_sets_it_in() {
+    let (db, width) = (vectorcraft_text::FontDb::global(), install_width_copies("Pagewtest Ink", "PagewtestInk-Regular"));
+    let trim = LoadOptions { crop: vectorcraft_pdf::CropTo::Trim, ..Default::default() };
+    // (a square beside the type, the page's width, the options, whether the PDF part is imported)
+    let cases = [
+        (true, 200.0, &LoadOptions::default(), false),
+        (true, 200.0, &trim, true),
+        (false, 200.0, &LoadOptions::default(), false),
+        (false, 200.0, &trim, true),
+        (false, 260.0, &LoadOptions::default(), true),
+    ];
+    for (square, page_width, opts, imported) in cases {
+        let file = type_in_copy_ai("PagewtestInk-Regular", square, page_width, &width);
+        let before = vectorcraft_pdf::imports_of(&file);
+        let loaded = load_with("copies.ai", &file, opts).unwrap();
+        let case = format!("square {square}, page {page_width}, {:?}: {:?}", opts.crop, loaded.warnings);
+        assert!(loaded.editing_data, "{case}");
+        assert_eq!(vectorcraft_pdf::imports_of(&file) > before, imported, "{case}");
+        let art = loaded.doc.layers[0].children().unwrap();
+        assert_eq!(art.len(), 1 + usize::from(square), "{case}");
+        let Some(NodeKind::Text(t)) = art.iter().map(|n| &n.kind).find(|k| matches!(k, NodeKind::Text(_))) else { panic!("type: {case}") };
+        assert_eq!(t.plain_text(), "Hamburg");
+        assert_eq!(db.style_face(&t.runs[0].style).unwrap().version, "1.1", "{case}");
+    }
+}
+
+/// Installs two copies of family `family` and PostScript name `name`: Inter as version 1.0, loaded
+/// first, and Source Sans 3 as 1.1, whose advances (thousandths of an em) the returned function gives.
+fn install_width_copies(family: &str, name: &str) -> impl Fn(char) -> f64 + use<> {
+    let db = vectorcraft_text::FontDb::global();
+    for (inter, version) in [(true, "1.0"), (false, "1.1")] {
+        let font = vectorcraft_text::test_fonts::named_copy(inter, (family, "Regular", version, name)).unwrap();
+        assert_eq!(db.add_font(font), 1);
+    }
+    let newer = db.postscript_faces(name).into_iter().find(|f| f.version == "1.1").unwrap();
+    move |c: char| newer.advance(newer.glyph_for(c)) * 1000.0 / newer.units_per_em()
+}
+
+/// Type the PDF part's widths set in the second copy of its font is saved as `.ai` with that
+/// copy's version in its font record, so it opens in the same copy again, from the editing copy
+/// alone as from the whole file.
+#[test]
+fn type_in_the_copy_its_pdf_part_sets_comes_back_in_it_from_a_save() {
+    let (db, width) = (vectorcraft_text::FontDb::global(), install_width_copies("Pagewrt Ink", "PagewrtInk-Regular"));
+    let mut s = Session::new();
+    let r = open(&mut s, "copies.ai", &type_in_copy_ai("PagewrtInk-Regular", true, 200.0, &width), json!({})).unwrap();
+    let saved = s.execute("file.saveCopy", &json!({"format": "ai"})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let versions = |doc: &vectorcraft_doc::Document| -> Vec<String> {
+        let art = doc.layers[0].children().unwrap();
+        art.iter()
+            .filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(db.style_face(&t.runs[0].style).unwrap().version.clone()) } else { None })
+            .collect()
+    };
+    assert_eq!(versions(&s.doc().unwrap().doc), ["1.1"], "{r}");
+    let loaded = load_with("saved.ai", &bytes, &LoadOptions { native: false, ..Default::default() }).unwrap();
+    assert!(loaded.editing_data, "{:?}", loaded.warnings);
+    assert_eq!(versions(&loaded.doc), ["1.1"], "{:?}", loaded.warnings);
+    let private = vectorcraft_pdf::illustrator_data(&bytes, None).unwrap();
+    assert_eq!(versions(&vectorcraft_eps::ai_alone(&private).unwrap().0), ["1.1"]);
+}

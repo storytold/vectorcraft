@@ -1020,19 +1020,26 @@ pub(crate) fn vertical_metrics(f: &Dict<'_>, embedded: bool) -> Option<Vertical>
 
 /// Each CID a `W` or `W2` array (`per` numbers a CID) gives values for, and its values: `c [v…]`
 /// gives CIDs from c on their values in turn, `c_first c_last v…` the same values to each of the
-/// range. At most [`MAX_CIDS`] CIDs are read.
-fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
+/// range. At most [`MAX_CIDS`] CIDs are read, and a list's values only as far as they take; `per`
+/// is 1 or 3.
+pub(crate) fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
     let mut it = a.flex_iter();
     let mut read = 0;
     loop {
         if let Some((first, list)) = it.next::<(u32, Array<'_>)>() {
-            let values: Vec<f64> = list.iter::<f64>().collect();
-            for (cid, v) in (first..=u32::MAX).zip(values.chunks_exact(per)) {
+            // Read as they are given, no more than the CIDs read take.
+            let mut values = list.iter::<f64>();
+            let mut v = [0.0; 3];
+            for cid in first..=u32::MAX {
+                let Some(group) = v.get_mut(..per) else { return };
+                if group.iter_mut().any(|slot| values.next().map(|x| *slot = x).is_none()) {
+                    break;
+                }
                 read += 1;
                 if read > MAX_CIDS {
                     return;
                 }
-                each(cid, v);
+                each(cid, group);
             }
         } else if per == 1
             && let Some((first, last, w)) = it.next::<(u32, u32, f64)>()
@@ -1060,11 +1067,20 @@ fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
     }
 }
 
+/// A font's PostScript name without its subset's six-letter tag (`ABCDEF+Name` is `Name`, ISO
+/// 32000-1 §9.6.4).
+pub(crate) fn without_subset_tag(name: &str) -> &str {
+    match name.split_once('+') {
+        Some((tag, rest)) if tag.len() == 6 && tag.bytes().all(|b| b.is_ascii_uppercase()) => rest,
+        _ => name,
+    }
+}
+
 /// The PostScript name of font `f`: its `BaseFont`. A composite (Type 0) font's `BaseFont` is its
 /// CIDFont's name, a hyphen and its CMap's (`Name-Identity-H`, ISO 32000-1 §9.7.6.1), so its
 /// descendant CIDFont's `BaseFont` is taken, the font program's own name (§9.7.4.1); without one,
 /// the `BaseFont` without the CMap's name on its end.
-fn font_name(f: &Dict<'_>) -> Option<String> {
+pub(crate) fn font_name(f: &Dict<'_>) -> Option<String> {
     if f.get::<Name<'_>>(b"Subtype").is_some_and(|s| s.as_ref() == b"Type3") {
         if let Some(base) = f.get::<Name<'_>>(b"BaseFont") {
             return Some(String::from_utf8_lossy(base.as_ref()).into_owned());

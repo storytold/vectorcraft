@@ -223,6 +223,10 @@ pub struct Structure {
     /// name of the art style that gives each: the styles that are one paint, a pattern this read
     /// (see `ate::Texts::with_patterns`).
     pub text_patterns: HashMap<String, Paint>,
+    /// The widths a `.ai`'s PDF part gives the characters of its fonts, which tell installed copies
+    /// of a font apart for type whose font record keeps no version (see
+    /// `ate::Texts::with_page_widths`): none until the importer sets them.
+    pub page_widths: vectorcraft_pdf::PageWidths,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
     /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its

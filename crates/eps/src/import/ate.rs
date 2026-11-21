@@ -23,6 +23,7 @@
 //! a layout has its point type's anchor at its frame's point. See [`Story::place`].
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
@@ -581,15 +582,20 @@ struct DocFont {
     /// Key 5, when the record keeps it: the font's version string (name ID 5), which tells installed
     /// copies of one font apart.
     version: Option<String>,
-    /// [`Self::font`]'s answer, found once for every run that names the record.
-    font: std::sync::OnceLock<Font>,
+    /// The widths the file's page gives the font's characters, when it has them
+    /// ([`Texts::with_page_widths`]): without a version, they tell the copies apart. Every record
+    /// of the font shares them.
+    widths: Option<Arc<vectorcraft_pdf::FontWidths>>,
+    /// [`Self::font`]'s answer, found once for every run that names the record, and shared by the
+    /// records of the same name and version, which give the same answer.
+    font: Arc<std::sync::OnceLock<Font>>,
 }
 
 impl DocFont {
     /// The font type set in this record's font takes: the installed copy it names
     /// ([`super::text::document_font`]).
     fn font(&self) -> &Font {
-        self.font.get_or_init(|| super::text::document_font(&self.name, self.version.as_deref()))
+        self.font.get_or_init(|| super::text::document_font(&self.name, self.version.as_deref(), self.widths.as_deref()))
     }
 }
 
@@ -633,6 +639,17 @@ impl Texts {
         Texts { patterns, ..self }
     }
 
+    /// The text document with the widths `page` (the file's page, [`vectorcraft_pdf::PageWidths`])
+    /// gives the characters of its fonts, by each record's PostScript name: a record that keeps no
+    /// version is set in the installed copy of its font that sets them at those widths
+    /// ([`super::text::postscript_face`]).
+    pub(super) fn with_page_widths(mut self, page: &vectorcraft_pdf::PageWidths) -> Texts {
+        for f in &mut self.fonts {
+            f.widths = page.widths(super::text::bare_name(&f.name)).cloned();
+        }
+        self
+    }
+
     /// The text document in the editing copy `data`, if it has one that can be read.
     pub(super) fn read(data: &[u8]) -> Option<Texts> {
         fn find(h: &[u8], n: &[u8], from: usize) -> Option<usize> {
@@ -660,6 +677,8 @@ impl Texts {
             return None;
         }
         let doc = names::numbered(read(&bytes)?);
+        // Records of one name and version share their answer.
+        let mut answers: HashMap<(String, Option<String>), Arc<std::sync::OnceLock<Font>>> = HashMap::new();
         let fonts = doc
             .get("0")?
             .get("1")?
@@ -669,11 +688,10 @@ impl Texts {
             .map(|f| {
                 let record = f.get("0").and_then(|f| f.get("0"));
                 let text = |k: &str| record.and_then(|r| r.get(k)).and_then(Val::str);
-                DocFont {
-                    name: text("0").unwrap_or_default().to_string(),
-                    version: text("5").and_then(record_version).map(str::to_string),
-                    font: std::sync::OnceLock::new(),
-                }
+                let name = text("0").unwrap_or_default().to_string();
+                let version = text("5").and_then(record_version).map(str::to_string);
+                let font = answers.entry((name.clone(), version.clone())).or_default().clone();
+                DocFont { name, version, widths: None, font }
             })
             .collect();
         let main = doc.get("1")?;
@@ -1644,6 +1662,40 @@ fn art_scale(to_doc: Affine) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The records of a text document's font list that name one font share the widths the file's
+    /// page gives it and the face they resolve to, however many there are: 20,000 records of a font
+    /// whose page gives 4,096 characters hold one copy of those widths, and resolve once. A record
+    /// of another version is resolved apart.
+    #[test]
+    fn records_of_one_font_share_its_page_widths_and_answer() {
+        let n = 20_000;
+        let records = "<< /0 << /0 << /0 (Sharetest-Regular) >> >> >> ".repeat(n) + "<< /0 << /0 << /0 (Sharetest-Regular) /5 (2.0) >> >> >>";
+        let doc = format!("/0 << /1 << /0 [ {records} ] >> /8 << /0 [ ] >> >>\n/1 << /1 [ ] /2 << >> >>\n");
+        let data =
+            format!("%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n{}\n%AI11_EndTextDocument\n", crate::ps::ascii85(doc.as_bytes()));
+        let mut cmap = String::from("begincmap\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n16 beginbfrange\n");
+        for hi in 1..=16u32 {
+            cmap.push_str(&format!("<{hi:02X}00> <{hi:02X}FF> <{hi:02X}00>\n"));
+        }
+        cmap.push_str("endbfrange\nendcmap\n");
+        let extra = vectorcraft_testkit::pdf::first_extra(1);
+        let font = format!(
+            "/Font << /F1 << /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+Sharetest-Regular /Encoding /Identity-H /ToUnicode {extra} 0 R \
+             /DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+Sharetest-Regular /W [256 4351 500] >>] >> >>"
+        );
+        let page = vectorcraft_testkit::pdf::PdfPage { resources: font, ..vectorcraft_testkit::pdf::PdfPage::new(100.0, 100.0, "") };
+        let pdf = vectorcraft_testkit::pdf::pdf_with(&[page], &[&format!("<< /Length {} >>\nstream\n{cmap}endstream", cmap.len())], None);
+        let widths = vectorcraft_pdf::open_pdf(&pdf, None).unwrap().page_widths();
+        let shared = widths.widths("Sharetest-Regular").unwrap();
+        assert_eq!(shared.len(), 4096);
+        let texts = Texts::read(data.as_bytes()).unwrap().with_page_widths(&widths);
+        assert_eq!(texts.fonts.len(), n + 1);
+        assert!(texts.fonts.iter().all(|f| f.widths.as_ref().is_some_and(|w| Arc::ptr_eq(w, shared))));
+        let first = &texts.fonts[0].font;
+        assert!(texts.fonts[..n].iter().all(|f| Arc::ptr_eq(&f.font, first)));
+        assert!(texts.fonts.last().is_some_and(|f| !Arc::ptr_eq(&f.font, first)), "another version resolves apart");
+    }
 
     #[test]
     fn right_to_left_paragraphs_swap_left_and_right_alignment() {
