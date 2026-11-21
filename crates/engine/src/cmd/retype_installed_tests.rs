@@ -38,6 +38,11 @@ fn keys(shapes: &[BezPath]) -> BTreeSet<u64> {
     shapes.iter().filter_map(shape_key).collect()
 }
 
+/// `paths` as a search compares them, each matched whole.
+fn whole(paths: Vec<BezPath>) -> Vec<super::Shape> {
+    paths.into_iter().map(super::Shape::whole).collect()
+}
+
 fn unloaded(db: &FontDb, family: &str) -> bool {
     db.unloaded_installed_faces().iter().any(|f| f.family == family)
 }
@@ -104,8 +109,12 @@ fn a_loaded_face_of_the_same_names_counts_only_for_the_shapes_it_matches() {
     let keys = keys(&shapes);
     let loaded = super::load(&db, &read);
     assert_ne!(loaded.id(), read.id(), "the face loaded first is kept");
-    assert!(super::still_fit(&db, &read, &loaded, &refs, &keys, vec![0, 1]).is_empty(), "Inter's R and x are not these");
-    assert_eq!(super::still_fit(&db, &read, &read, &refs, &keys, vec![0, 1]), [0, 1]);
+    let fit = |ix: &super::super::RetypeIndex, k: usize| !ix.matches(refs[k]).is_empty();
+    let index = || super::super::RetypeIndex::build_unloaded(&db, read.clone(), &keys);
+    let (fits, _) = super::still_fit(&db, &read, &loaded, index(), &keys, &[], vec![0, 1], &fit);
+    assert!(fits.is_empty(), "Inter's R and x are not these");
+    let (fits, _) = super::still_fit(&db, &read, &read, index(), &keys, &[], vec![0, 1], &fit);
+    assert_eq!(fits, [0, 1]);
 }
 
 #[test]
@@ -245,7 +254,7 @@ fn a_run_away_from_the_list_hands_in_the_loaded_faces_that_match_with_the_instal
         vectorcraft_text::test_fonts::named_copy(false, ("Retype Loaded List", "Regular", "Version 1.000", "RetypeLoadedList-Regular")).unwrap(),
     );
     let loaded: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family == "Retype Loaded List").collect();
-    let search = super::RetypeSearch { command: "type.retypeFonts", doc: 1, shapes: glyphs(&db, "Rx"), faces: loaded.clone() };
+    let search = super::RetypeSearch { command: "type.retypeFonts", doc: 1, shapes: whole(glyphs(&db, "Rx")), faces: loaded.clone(), tolerance: 0.0 };
     let found = search.run_in(&db).unwrap();
     let families: Vec<&str> = found.installed.faces.iter().map(|f| f.family.as_str()).collect();
     // The loaded face first, then the installed one, each once.
@@ -305,6 +314,12 @@ fn a_run_away_from_the_command_loads_the_faces_it_finds() {
     assert!(super::RetypeRun::prepare_in(&s, "type.retypeFonts", &json!({"count": 0}), &db).is_err());
     assert!(super::RetypeRun::prepare_in(&s, "type.retype", &json!({"fonts": 1}), &db).is_err());
     assert!(super::RetypeRun::prepare_in(&s, "type.text", &json!({}), &db).is_err());
+    // An unknown key fails before any search, as the command fails on it.
+    for cmd in ["type.retype", "type.retypeFonts"] {
+        let e = super::RetypeRun::prepare_in(&s, cmd, &json!({"typo": true}), &db).err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(e.contains("typo"), "{cmd}: {e}");
+        assert!(s.execute(cmd, &json!({"typo": true})).is_err());
+    }
     // Retype: the loaded Source Sans 3 matches both shapes, so no installed file is read.
     let run = super::RetypeRun::prepare_in(&s, "type.retype", &json!({}), &db).unwrap().unwrap();
     assert_eq!(run.command(), "type.retype");
@@ -390,34 +405,244 @@ fn retype_fills_the_shapes_no_loaded_font_matches_from_the_installed_fonts() {
     let (db, _) = installed("retype", &["Retype Copy K"]);
     let pieces = pieces("Wk-");
     assert_eq!(pieces.len(), 3);
+    let groups = vec![vec![]; pieces.len()];
     // The first shape is taken as matched already: the others are looked for.
-    let mut found = vec![vec![], vec![], vec![]];
     let keep = super::super::RetypeIndex::build(&db, db.face("Source Sans 3", "Regular"), &keys(&[pieces[0].path.clone()]));
-    found[0] = keep.matches(&pieces[0].path);
-    assert!(!found[0].is_empty());
-    let installed = super::super::from_installed(&db, &pieces, &mut found).unwrap();
+    let found = super::super::match_pieces(&pieces, &groups, &[&keep], 0.0);
+    assert!(!found[0].is_empty() && found[1].is_empty() && found[2].is_empty());
+    let left = super::super::left_shapes(&pieces, &groups, &found);
+    assert_eq!(left.len(), 2);
+    let installed = super::search_for(&db, &left, 0.0, false).unwrap();
     assert_eq!(installed.read, 1);
-    assert_eq!(found[0].first().map(|m| m.face.family.as_str()), Some("Source Sans 3"), "a matched shape keeps its match");
+    // The faces found join the index, and every shape is matched again.
+    let all_keys = keys(&pieces.iter().map(|pc| pc.path.clone()).collect::<Vec<_>>());
+    let extra = super::super::RetypeIndex::build(&db, installed.faces.iter().cloned(), &all_keys);
+    let found = super::super::match_pieces(&pieces, &groups, &[&keep, &extra], 0.0);
+    let whole = |k: usize| found[k].first().expect("one part").clone();
+    assert_eq!(whole(0).first().map(|m| m.face.family.as_str()), Some("Source Sans 3"), "a matched shape keeps its match");
     // and gets the face found too, so its line can be set in the face the others match.
-    assert!(found[0].iter().any(|m| m.face.family == "Retype Copy K" && m.ch == 'W'), "the W also matches the face found");
-    let m = found[1].first().expect("the installed copy matches the k");
+    assert!(whole(0).iter().any(|m| m.face.family == "Retype Copy K" && m.ch == 'W'), "the W also matches the face found");
+    let k = whole(1);
+    let m = k.first().expect("the installed copy matches the k");
     assert_eq!((m.face.family.as_str(), m.ch), ("Retype Copy K", 'k'));
     assert!(db.loaded_faces().iter().any(|f| f.id() == m.face.id()), "the match is in a loaded face");
     // The hyphen, a plain shape, matches the font the k found.
-    let m = found[2].first().expect("the installed copy matches the hyphen");
+    let hyphen = whole(2);
+    let m = hyphen.first().expect("the installed copy matches the hyphen");
     assert_eq!((m.face.family.as_str(), m.ch), ("Retype Copy K", '-'));
+}
+
+/// `path` flattened into lines `tol` from its curves, each contour started at its second point
+/// and run backwards: an outline built nothing like the font's.
+fn simplified(path: &BezPath, tol: f64) -> BezPath {
+    let mut contours: Vec<Vec<kurbo::Point>> = vec![];
+    kurbo::flatten(path.iter(), tol, |el| match el {
+        kurbo::PathEl::MoveTo(q) => contours.push(vec![q]),
+        kurbo::PathEl::LineTo(q) => contours.last_mut().unwrap().push(q),
+        _ => {}
+    });
+    let mut out = BezPath::new();
+    for mut c in contours {
+        if c.len() > 1 && c.first() == c.last() {
+            c.pop();
+        }
+        c.rotate_left(1);
+        c.reverse();
+        out.move_to(c[0]);
+        for q in &c[1..] {
+            out.line_to(*q);
+        }
+        out.close_path();
+    }
+    out
+}
+
+#[test]
+fn an_installed_face_is_found_through_the_glyphs_of_a_split_shape_and_through_near_matches() {
+    // A word outlined as one compound path: the whole shape is no glyph, and its glyphs are.
+    let (db, _) = installed("split", &["Retype Copy Split"]);
+    let mut word = BezPath::new();
+    for g in glyphs(&db, "Wk") {
+        word.extend(g.iter());
+    }
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    assert_eq!(groups.len(), 2);
+    let found = super::search_for(&db, &[super::Sought::unpainted(&word, &groups)], 0.0, false).unwrap();
+    assert_eq!(found.read, 1);
+    let families: Vec<&str> = found.faces.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families, ["Retype Copy Split"], "the face the split's glyphs match is found");
+    assert!(!unloaded(&db, "Retype Copy Split"));
+    // A simplified outline: no installed glyph matches it exactly, and one does within a tolerance.
+    let (db, _) = installed("near", &["Retype Copy Near"]);
+    let r = simplified(&glyphs(&db, "R")[0], 0.05);
+    let shape = [super::Sought::unpainted(&r, &[])];
+    let exact = super::search_for(&db, &shape, 0.0, false).unwrap();
+    assert_eq!((exact.read, exact.faces.len()), (1, 0));
+    assert!(unloaded(&db, "Retype Copy Near"));
+    let near = super::search_for(&db, &shape, 0.02, false).unwrap();
+    let families: Vec<&str> = near.faces.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families, ["Retype Copy Near"], "the face the outline nearly matches is found");
+    assert!(!unloaded(&db, "Retype Copy Near"));
+}
+
+#[test]
+fn a_split_shape_whose_glyphs_are_in_different_installed_faces_finds_them_all() {
+    // A W of Source Sans 3 and a k of Inter, outlined as one compound path, with a copy of each
+    // font installed: neither face holds both glyphs.
+    let dir = vectorcraft_testkit::temp_dir("retype-installed-split-two");
+    for (inter, family) in [(false, "Retype Mix S"), (true, "Retype Mix I")] {
+        let postscript = format!("{}-Regular", family.replace(' ', ""));
+        let data = vectorcraft_text::test_fonts::named_copy(inter, (family, "Regular", "Version 1.000", &postscript)).unwrap();
+        std::fs::write(dir.join(format!("{postscript}.ttf")), data).unwrap();
+    }
+    let db = FontDb::with_font_dirs(vec![dir]);
+    let mut word = BezPath::new();
+    word.extend(glyphs(&db, "W")[0].iter());
+    let inter = db.face("Inter", "Regular").unwrap();
+    let k = Affine::translate((70.0, 100.0)) * Affine::scale(0.03) * db.outline_uncached(&inter, inter.glyph_for('k'));
+    word.extend(k.iter());
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    assert_eq!(groups.len(), 2);
+    let found = super::search_for(&db, &[super::Sought::unpainted(&word, &groups)], 0.0, false).unwrap();
+    assert_eq!(found.read, 2);
+    let mut families: Vec<&str> = found.faces.iter().map(|f| f.family.as_str()).collect();
+    families.sort_unstable();
+    assert_eq!(families, ["Retype Mix I", "Retype Mix S"], "the faces of both glyphs are found");
+    assert!(!unloaded(&db, "Retype Mix S") && !unloaded(&db, "Retype Mix I"));
+}
+
+#[test]
+fn a_split_shape_completes_with_the_loaded_faces_it_is_searched_beside() {
+    // A W of Source Sans 3 and a k of Inter, outlined as one compound path. Source Sans 3 is the
+    // loaded face compared first; the only other face is an installed copy of Inter.
+    let dir = vectorcraft_testkit::temp_dir("retype-installed-beside");
+    let data = vectorcraft_text::test_fonts::named_copy(true, ("Retype Beside I", "Regular", "Version 1.000", "RetypeBesideI-Regular")).unwrap();
+    std::fs::write(dir.join("RetypeBesideI-Regular.ttf"), data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    let mut word = BezPath::new();
+    word.extend(glyphs(&db, "W")[0].iter());
+    let inter = db.face("Inter", "Regular").unwrap();
+    let k = Affine::translate((70.0, 100.0)) * Affine::scale(0.03) * db.outline_uncached(&inter, inter.glyph_for('k'));
+    word.extend(k.iter());
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    assert_eq!(groups.len(), 2);
+    let shapes = [super::Sought::unpainted(&word, &groups)];
+    let (keys, near) = super::keys_of(&shapes, 0.0);
+    let first = super::super::RetypeIndex::build_near(&db, db.face("Source Sans 3", "Regular"), &keys, &near);
+    let found = super::search_beside(&db, &shapes, &[&first], 0.0, false).unwrap();
+    let families: Vec<&str> = found.faces.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families, ["Source Sans 3", "Retype Beside I"], "the installed face completes the loaded face's glyphs");
+}
+
+#[test]
+fn one_loaded_face_per_glyph_completes_a_split_shape_however_many_hold_it() {
+    // A W of Source Sans 3 and a k of Inter in one compound path. More loaded copies of Source
+    // Sans 3 than a search finds faces hold the W; an installed copy of Inter holds the k.
+    let n = vectorcraft_text::retype::MAX_FACES + 4;
+    let dir = vectorcraft_testkit::temp_dir("retype-installed-many");
+    let data = vectorcraft_text::test_fonts::named_copy(true, ("Retype Many I", "Regular", "Version 1.000", "RetypeManyI-Regular")).unwrap();
+    std::fs::write(dir.join("RetypeManyI-Regular.ttf"), data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    for i in 0..n {
+        let family = format!("Retype Many {i}");
+        db.add_font(
+            vectorcraft_text::test_fonts::named_copy(false, (&family, "Regular", "Version 1.000", &format!("RetypeMany{i}-Regular"))).unwrap(),
+        );
+    }
+    let mut word = BezPath::new();
+    word.extend(glyphs(&db, "W")[0].iter());
+    let inter = db.face("Inter", "Regular").unwrap();
+    let k = Affine::translate((70.0, 100.0)) * Affine::scale(0.03) * db.outline_uncached(&inter, inter.glyph_for('k'));
+    word.extend(k.iter());
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    let shapes = [super::Sought::unpainted(&word, &groups)];
+    let (keys, near) = super::keys_of(&shapes, 0.0);
+    let copies: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family.starts_with("Retype Many ")).collect();
+    assert_eq!(copies.len(), n);
+    let indexes: Vec<super::super::RetypeIndex> = copies
+        .chunks(vectorcraft_text::retype::MAX_FACES)
+        .map(|g| super::super::RetypeIndex::build_near(&db, g.iter().cloned(), &keys, &near))
+        .collect();
+    let beside: Vec<&super::super::RetypeIndex> = indexes.iter().collect();
+    let found = super::search_beside(&db, &shapes, &beside, 0.0, false).unwrap();
+    let families: Vec<&str> = found.faces.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families.len(), 2, "{families:?}");
+    assert_eq!(families.last(), Some(&"Retype Many I"));
+}
+
+#[test]
+fn a_split_shape_completes_with_loaded_faces_past_the_first_and_installed_ones() {
+    // A W of Source Sans 3 and a k of Inter in one compound path. Past the faces compared first
+    // (the bundled ones), a loaded copy of Inter holds the k and an installed copy of Source Sans 3
+    // the W.
+    let dir = vectorcraft_testkit::temp_dir("retype-installed-kept");
+    let data = vectorcraft_text::test_fonts::named_copy(false, ("Retype Kept S", "Regular", "Version 1.000", "RetypeKeptS-Regular")).unwrap();
+    std::fs::write(dir.join("RetypeKeptS-Regular.ttf"), data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir]);
+    let compared: Vec<u32> = db.loaded_faces().iter().map(|f| f.id()).collect();
+    db.add_font(vectorcraft_text::test_fonts::named_copy(true, ("Retype Kept I", "Regular", "Version 1.000", "RetypeKeptI-Regular")).unwrap());
+    let mut word = BezPath::new();
+    word.extend(glyphs(&db, "W")[0].iter());
+    let inter = db.face("Inter", "Regular").unwrap();
+    let k = Affine::translate((70.0, 100.0)) * Affine::scale(0.03) * db.outline_uncached(&inter, inter.glyph_for('k'));
+    word.extend(k.iter());
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    assert_eq!(groups.len(), 2);
+    let shapes = [super::Sought::unpainted(&word, &groups)];
+    let (rest, done, kept) = super::loaded_rest_for(&db, &shapes, &[], 0.0, &compared).unwrap();
+    assert!(rest.is_empty() && done == [false]);
+    assert_eq!(kept.len(), 1, "the group with the k is kept for the installed fonts");
+    let beside: Vec<&super::super::RetypeIndex> = kept.iter().collect();
+    let found = super::search_beside(&db, &shapes, &beside, 0.0, false).unwrap();
+    let families: Vec<&str> = found.faces.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families, ["Retype Kept I", "Retype Kept S"], "the loaded copy's k and the installed copy's W");
+}
+
+#[test]
+fn an_installed_face_whose_glyphs_paint_otherwise_than_the_shape_is_not_found() {
+    // Two o's moved onto each other in one compound path filled by the even-odd rule: the overlap
+    // is unpainted, and two glyphs set side by side would paint it.
+    let paths = |db: &FontDb| {
+        let face = db.face("Source Sans 3", "Regular").unwrap();
+        let o = Affine::scale(0.03) * db.outline_uncached(&face, face.glyph_for('o'));
+        let mut word = BezPath::new();
+        for x in [40.0, 49.0] {
+            word.extend((Affine::translate((x, 100.0)) * o.clone()).iter());
+        }
+        word
+    };
+    let (db, _) = installed("paint", &["Retype Copy Paint"]);
+    let word = paths(&db);
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    assert_eq!(groups.len(), 2);
+    let even_odd = super::Sought { path: &word, groups: &groups, fill: Some(false), once: true };
+    let found = super::search_for(&db, &[even_odd], 0.0, false).unwrap();
+    assert_eq!((found.read, found.faces.len()), (1, 0), "the o's paint the overlap");
+    assert!(unloaded(&db, "Retype Copy Paint"));
+    // Without a fill to compare, the same glyphs are found.
+    let (db, _) = installed("paint-none", &["Retype Copy Unpainted"]);
+    let word = paths(&db);
+    let found = super::search_for(&db, &[super::Sought::unpainted(&word, &groups)], 0.0, false).unwrap();
+    assert_eq!(found.faces.len(), 1);
 }
 
 #[test]
 fn retype_reads_no_installed_font_for_plain_shapes_alone() {
     let (db, _) = installed("retype-plain", &["Retype Copy M"]);
     let pieces = pieces("W-");
-    let mut found = vec![vec![], vec![]];
+    let groups = vec![vec![]; pieces.len()];
     let keep = super::super::RetypeIndex::build(&db, db.face("Source Sans 3", "Regular"), &keys(&[pieces[0].path.clone()]));
-    found[0] = keep.matches(&pieces[0].path);
-    let installed = super::super::from_installed(&db, &pieces, &mut found).unwrap();
+    let found = super::super::match_pieces(&pieces, &groups, &[&keep], 0.0);
+    let left = super::super::left_shapes(&pieces, &groups, &found);
+    assert_eq!(left.len(), 1, "the hyphen is left");
+    let installed = super::search_for(&db, &left, 0.0, false).unwrap();
     assert_eq!((installed.read, installed.faces.len()), (0, 0));
-    assert!(found[1].is_empty(), "the hyphen alone stays unmatched");
     assert!(unloaded(&db, "Retype Copy M"));
 }
 
@@ -472,13 +697,57 @@ fn loaded_faces_past_the_ones_compared_first_are_compared_too() {
 }
 
 #[test]
+fn a_split_shape_completes_with_loaded_faces_past_the_ones_compared_first() {
+    // A W of Source Sans 3 and a k of Inter in one compound path. Source Sans 3 and Inter are
+    // compared first; past them, a loaded copy of Inter holds the k.
+    let db = loaded_copies("Retype Rest Split", 1, 0);
+    let mut word = BezPath::new();
+    word.extend(glyphs(&db, "W")[0].iter());
+    let inter = db.face("Inter", "Regular").unwrap();
+    let k = Affine::translate((70.0, 100.0)) * Affine::scale(0.03) * db.outline_uncached(&inter, inter.glyph_for('k'));
+    word.extend(k.iter());
+    let mut budget = super::super::MAX_SPLIT_TOTAL_CONTOURS;
+    let groups = super::super::split_groups(&word, &mut budget);
+    assert_eq!(groups.len(), 2);
+    let shapes = [super::Sought::unpainted(&word, &groups)];
+    let (keys, near) = super::keys_of(&shapes, 0.0);
+    let source = db.face("Source Sans 3", "Regular").unwrap();
+    let compared = [source.id(), inter.id()];
+    let first = super::super::RetypeIndex::build_near(&db, [source], &keys, &near);
+    let (rest, done, kept) = super::loaded_rest_for(&db, &shapes, &[&first], 0.0, &compared).unwrap();
+    assert!(kept.is_empty(), "no split shape is left");
+    let families: Vec<&str> = rest.iter().map(|f| f.family.as_str()).collect();
+    assert_eq!(families, ["Retype Rest Split Inter 0"], "the copy completes the glyphs of the face compared first");
+    assert_eq!(done, [true]);
+}
+
+#[test]
+fn files_past_the_glyph_budget_are_skipped_without_being_read() {
+    let (db, mut files) = installed("budget-spent", &["Retype Copy E1", "Retype Copy E2"]);
+    let shapes = glyphs(&db, "k");
+    let refs: Vec<&BezPath> = shapes.iter().collect();
+    // The order the search reads them in: smallest first.
+    let len = |p: &PathBuf| std::fs::metadata(p).unwrap().len();
+    files.sort_by(|a, b| len(a).cmp(&len(b)).then_with(|| a.cmp(b)));
+    assert_eq!(db.unloaded_installed_faces().len(), 2);
+    let face = db.read_unloaded_file(&files[0], u64::MAX).faces.into_iter().next().unwrap();
+    let drawn = vectorcraft_text::retype::encoded_glyphs(&face);
+    // The second file holds no font after the listing: had it been read, it would give no face
+    // to skip.
+    std::fs::write(&files[1], vec![0u8; len(&files[1]) as usize]).unwrap();
+    let limits = Limits { file: u64::MAX, read: u64::MAX, glyphs: drawn, faces: usize::MAX };
+    let found = search_within(&db, &refs, true, limits, &|_| true).unwrap();
+    assert_eq!((found.read, found.skipped, found.faces.len()), (1, 1, 1));
+}
+
+#[test]
 fn a_run_away_from_the_command_hands_in_the_loaded_faces_past_the_ones_compared_first() {
     let db = loaded_copies("Retype Run Rest", vectorcraft_text::retype::MAX_FACES, 1);
     let shapes = glyphs(&db, "Rx");
     // The Inter copies are compared first: none matches, and the copy loaded after them does.
     let faces: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family.starts_with("Retype Run Rest Inter")).collect();
     assert_eq!(faces.len(), vectorcraft_text::retype::MAX_FACES);
-    let search = super::RetypeSearch { command: "type.retype", doc: 1, shapes: shapes.clone(), faces };
+    let search = super::RetypeSearch { command: "type.retype", doc: 1, shapes: whole(shapes.clone()), faces, tolerance: 0.0 };
     let found = search.run_in(&db).unwrap();
     assert!(found.installed.faces.iter().any(|f| f.family == "Retype Run Rest 0"), "the loaded copy is handed in");
     assert_eq!((found.installed.read, found.installed.skipped), (0, 0), "no installed file is read for it");
@@ -487,7 +756,7 @@ fn a_run_away_from_the_command_hands_in_the_loaded_faces_past_the_ones_compared_
     // A face compared first that matches is handed in too, as loading others may move it past
     // the faces the command compares first.
     let copy: Vec<_> = db.loaded_faces().into_iter().filter(|f| f.family == "Retype Run Rest 0").collect();
-    let found = super::RetypeSearch { command: "type.retype", doc: 1, shapes, faces: copy }.run_in(&db).unwrap();
+    let found = super::RetypeSearch { command: "type.retype", doc: 1, shapes: whole(shapes), faces: copy, tolerance: 0.0 }.run_in(&db).unwrap();
     assert_eq!(found.installed.faces.first().map(|f| f.family.as_str()), Some("Retype Run Rest 0"));
 }
 

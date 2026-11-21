@@ -4,7 +4,9 @@
 //! Each font file is read for the search and let go; a face whose glyphs match a shape is loaded
 //! as it was read, without the family's other files. Files are read smallest first, within a budget
 //! of bytes read and glyphs drawn, and the search stops between files when it is canceled. The app
-//! runs it off the UI thread ([`RetypeRun`]), with a Cancel.
+//! runs it off the UI thread ([`RetypeRun`]), with a Cancel. A face read is matched as a loaded one
+//! is: with Retype's tolerance, near matches count, and a compound path of several glyphs counts
+//! when every glyph it splits into matches, in one face or in several.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -12,7 +14,7 @@ use std::sync::Arc;
 use kurbo::BezPath;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId};
-use vectorcraft_text::retype::{MAX_FACES, RetypeIndex, encoded_glyphs, is_plain, shape_key};
+use vectorcraft_text::retype::{MAX_FACES, NearKey, RetypeIndex, encoded_glyphs, is_plain, shape_key};
 use vectorcraft_text::{FontDb, FontFace};
 
 use super::super::{EngineError, Result, Session, bad};
@@ -62,65 +64,192 @@ impl Installed {
     }
 }
 
-/// The installed faces nothing has loaded whose glyphs match at least one of `shapes` that is not
-/// plain ([`is_plain`]: a rectangle, a triangle or a bar), each loaded into `db` as it was read.
-/// With `every` false the search stops once each such shape matches a face found; with it, every
-/// face within the limits ([`LIMITS`]) is compared. No file is read when every shape is plain. At
-/// most [`MAX_FACES`] faces are found; the faces not compared past that count as skipped.
+/// A shape to look for: its path, the contour groups it splits into when it may hold several
+/// glyphs (none for a shape matched whole only), its fill rule when it has a visible fill
+/// (`Some(nonzero)`) and whether it paints its overlaps once ([`super::paints_once`]), as
+/// `type.retype` reads them.
+#[derive(Clone, Copy)]
+pub(super) struct Sought<'a> {
+    pub(super) path: &'a BezPath,
+    pub(super) groups: &'a [BezPath],
+    pub(super) fill: Option<bool>,
+    pub(super) once: bool,
+}
+
+impl<'a> Sought<'a> {
+    /// `path` split into `groups`, with no paint check.
+    pub(super) fn unpainted(path: &'a BezPath, groups: &'a [BezPath]) -> Self {
+        Sought { path, groups, fill: None, once: true }
+    }
+}
+
+/// `shapes`, each matched whole only.
+fn whole<'a>(shapes: &[&'a BezPath]) -> Vec<Sought<'a>> {
+    shapes.iter().map(|path| Sought::unpainted(path, &[])).collect()
+}
+
+/// The keys to look glyphs up by for `shapes`, at `tolerance` ([`super::lookup_keys`]).
+fn keys_of(shapes: &[Sought], tolerance: f64) -> (BTreeSet<u64>, Vec<NearKey>) {
+    super::lookup_keys(shapes.iter().map(|s| (s.path, s.groups)), tolerance)
+}
+
+/// Does a search look for `s`: is it not plain ([`is_plain`]: a rectangle, a triangle or a bar),
+/// with a key to look glyphs up by? A shape without one matches no face.
+fn starts(s: &Sought, tolerance: f64) -> bool {
+    if is_plain(s.path) {
+        return false;
+    }
+    let (keys, near) = keys_of(std::slice::from_ref(s), tolerance);
+    !keys.is_empty() || !near.is_empty()
+}
+
+/// Is `s` found in `indexes` at `tolerance`: does its whole shape match a glyph there, or does
+/// every glyph it splits into, painting the area `s` paints ([`super::shape_parts`])?
+fn found_in(indexes: &[&RetypeIndex], s: &Sought, tolerance: f64) -> bool {
+    !super::shape_parts(s.path, s.groups, s.fill, s.once, indexes, tolerance).is_empty()
+}
+
+/// [`search_for`] of `shapes` matched whole, exactly.
+#[cfg(test)]
 pub(super) fn search(db: &FontDb, shapes: &[&BezPath], every: bool) -> Result<Installed> {
     search_within(db, shapes, every, LIMITS, &|_| true)
+}
+
+/// [`search_beside`] with no loaded faces.
+#[cfg(test)]
+pub(super) fn search_for(db: &FontDb, shapes: &[Sought], tolerance: f64, every: bool) -> Result<Installed> {
+    search_beside(db, shapes, &[], tolerance, every)
+}
+
+/// The installed faces nothing has loaded that `shapes` that are not plain ([`is_plain`]) are found
+/// in at `tolerance` ([`found_in`]), each loaded into `db` as it was read. With `every` false, a
+/// face is found when it matches such a shape, or completes the glyphs of a split one with the
+/// loaded faces of `loaded` (the indexes of faces the command compares too) and the faces found or
+/// read before it (a face read before whose glyphs it completes is found with it), and the search
+/// stops once each such shape is found; with it, every face within the limits ([`LIMITS`]) is
+/// compared, and found when it matches a shape on its own. No file is read when every shape is
+/// plain. At most [`MAX_FACES`] faces are found; the faces not compared past that count as skipped.
+/// The faces of `loaded` whose glyphs complete a split shape with a face found are among the faces
+/// found too, so the command compares them with it.
+pub(super) fn search_beside(db: &FontDb, shapes: &[Sought], loaded: &[&RetypeIndex], tolerance: f64, every: bool) -> Result<Installed> {
+    search_sought(db, shapes, loaded, tolerance, every, LIMITS, &|_| true)
 }
 
 /// [`search`] comparing every face within the limits, for a list of at most `faces` faces: a face
 /// found that `listed` turns down is loaded and not listed, and takes no place of the `faces`.
 pub(super) fn search_listed(db: &FontDb, shapes: &[&BezPath], faces: usize, listed: &dyn Fn(&FontFace) -> bool) -> Result<Installed> {
-    search_within(db, shapes, true, Limits { faces: faces.min(MAX_FACES), ..LIMITS }, listed)
+    search_sought(db, &whole(shapes), &[], 0.0, true, Limits { faces: faces.min(MAX_FACES), ..LIMITS }, listed)
 }
 
-/// Would a search for `shapes` read any installed file: is one of them not plain, with a glyph's
-/// key ([`shape_key`])?
+/// Would a search for `shapes`, matched whole and exactly, read any installed file: is one of them
+/// not plain, with a glyph's key ([`shape_key`])?
 pub(super) fn starts_search(shapes: &[&BezPath]) -> bool {
     shapes.iter().any(|s| !is_plain(s) && shape_key(s).is_some())
 }
 
-/// The loaded faces that are not among `compared` (those past the [`MAX_FACES`] a Retype compares
-/// first) whose glyphs match one of `shapes` that is not plain ([`is_plain`]), compared
-/// [`MAX_FACES`] at a time. A cancel stops it between those groups.
+/// [`loaded_rest_for`] of `shapes` matched whole, exactly: the faces only.
+#[cfg(test)]
 pub(super) fn loaded_rest(db: &FontDb, shapes: &[&BezPath], compared: &[u32]) -> Result<Vec<Arc<FontFace>>> {
-    let shapes: Vec<&BezPath> = shapes.iter().copied().filter(|s| !is_plain(s)).collect();
-    let keys: BTreeSet<u64> = shapes.iter().filter_map(|s| shape_key(s)).collect();
+    Ok(loaded_rest_for(db, &whole(shapes), &[], 0.0, compared)?.0)
+}
+
+/// The loaded faces that are not among `compared` (those past the [`MAX_FACES`] a Retype compares
+/// first) that one of `shapes` that is not plain ([`is_plain`]) is found in at `tolerance`
+/// ([`found_in`]), indexed [`MAX_FACES`] at a time: the faces of the glyphs it matches. The glyphs of
+/// a split shape may be spread over those groups and the faces of `beside` (the indexes of faces
+/// among `compared`). With them, whether each shape was found, and the indexes of the latest
+/// groups that hold glyphs of the shapes while a split shape is not found (at most
+/// [`MAX_KEPT_GROUPS`]), for the search of the installed fonts. A cancel stops it between those
+/// groups.
+pub(super) fn loaded_rest_for(db: &FontDb, shapes: &[Sought], beside: &[&RetypeIndex], tolerance: f64, compared: &[u32]) -> Result<LoadedRest> {
+    let mut done = vec![false; shapes.len()];
+    let looked: Vec<(usize, &Sought)> = shapes.iter().enumerate().filter(|(_, s)| !is_plain(s.path)).collect();
+    let (keys, near) = super::lookup_keys(looked.iter().map(|(_, s)| (s.path, s.groups)), tolerance);
     let mut out: Vec<Arc<FontFace>> = vec![];
-    if keys.is_empty() {
-        return Ok(out);
+    if keys.is_empty() && near.is_empty() {
+        return Ok((out, done, vec![]));
     }
     let rest: Vec<Arc<FontFace>> = db.loaded_faces().into_iter().filter(|f| !compared.contains(&f.id())).collect();
+    // The earlier groups' indexes that hold glyphs of the shapes, while a split shape is not found
+    // yet: the latest [`MAX_KEPT_GROUPS`].
+    let mut kept: Vec<RetypeIndex> = vec![];
     for group in rest.chunks(MAX_FACES) {
         vectorcraft_doc::cancel::check()?;
-        let index = RetypeIndex::build(db, group.iter().cloned(), &keys);
-        for s in &shapes {
-            for m in index.all_matches(s) {
-                if !out.iter().any(|f| f.id() == m.face.id()) {
+        let index = RetypeIndex::build_near(db, group.iter().cloned(), &keys, &near);
+        let with: Vec<&RetypeIndex> = beside.iter().copied().chain(&kept).chain(std::iter::once(&index)).collect();
+        for (k, s) in &looked {
+            // A split shape not found yet is matched with the faces before the group too (one pass,
+            // as near matching spends an index's budget); any other shape with the group alone.
+            let combined = !s.groups.is_empty() && !done.get(*k).copied().unwrap_or(true);
+            let indexes: &[&RetypeIndex] = if combined { &with } else { &[&index] };
+            let parts = super::shape_parts(s.path, s.groups, s.fill, s.once, indexes, tolerance);
+            if parts.is_empty() {
+                continue;
+            }
+            if let Some(d) = done.get_mut(*k) {
+                *d = true;
+            }
+            for m in parts.into_iter().flatten() {
+                if !compared.contains(&m.face.id()) && !out.iter().any(|f| f.id() == m.face.id()) {
                     out.push(m.face);
                 }
             }
         }
+        let open = looked.iter().any(|(k, s)| !s.groups.is_empty() && !done.get(*k).copied().unwrap_or(true));
+        if open && !index.is_empty() {
+            // The latest groups are kept: the oldest goes when the cap is reached.
+            if kept.len() >= MAX_KEPT_GROUPS {
+                kept.remove(0);
+            }
+            kept.push(index);
+        }
     }
-    Ok(out)
+    if !looked.iter().any(|(k, s)| !s.groups.is_empty() && !done.get(*k).copied().unwrap_or(true)) {
+        kept.clear();
+    }
+    Ok((out, done, kept))
 }
+
+/// What [`loaded_rest_for`] finds: the faces, whether each shape was found, and the indexes kept
+/// for the search of the installed fonts.
+type LoadedRest = (Vec<Arc<FontFace>>, Vec<bool>, Vec<RetypeIndex>);
+
+/// Earlier groups of [`MAX_FACES`] loaded faces past the ones compared first that a group's faces
+/// complete a split shape's glyphs with, at most: the latest ones.
+const MAX_KEPT_GROUPS: usize = 4;
 
 /// An installed font file: its path, its length and the (family, style) of the faces wanted from it.
 type File = (std::path::PathBuf, u64, Vec<(String, String)>);
 
 /// [`search`] within `limits`, keeping in its faces only those `listed` accepts.
+#[cfg(test)]
 fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, listed: &dyn Fn(&FontFace) -> bool) -> Result<Installed> {
+    search_sought(db, &whole(shapes), &[], 0.0, every, limits, listed)
+}
+
+/// [`search_beside`] within `limits`, keeping in its faces only those `listed` accepts.
+fn search_sought(
+    db: &FontDb,
+    shapes: &[Sought],
+    beside: &[&RetypeIndex],
+    tolerance: f64,
+    every: bool,
+    limits: Limits,
+    listed: &dyn Fn(&FontFace) -> bool,
+) -> Result<Installed> {
     let mut out = Installed::default();
     // A shape without a glyph's key matches no face: the search does not wait for it.
-    let shapes: Vec<&BezPath> = shapes.iter().copied().filter(|s| !is_plain(s) && shape_key(s).is_some()).collect();
-    let keys: BTreeSet<u64> = shapes.iter().filter_map(|s| shape_key(s)).collect();
-    if keys.is_empty() {
+    let shapes: Vec<Sought> = shapes.iter().copied().filter(|s| starts(s, tolerance)).collect();
+    let (keys, near) = keys_of(&shapes, tolerance);
+    if keys.is_empty() && near.is_empty() {
         return Ok(out);
     }
-    let keys = &keys;
+    let (keys, near) = (&keys, near.as_slice());
+    // The indexes of the faces found, which the glyphs of a split shape may be spread over.
+    let mut found: Vec<RetypeIndex> = vec![];
+    // The faces read, not loaded, that hold glyphs of the shapes without completing one, with their
+    // indexes: a later face may complete a split shape with them. The latest [`MAX_FACES`].
+    let mut partial: Vec<(Arc<FontFace>, RetypeIndex)> = vec![];
     // The faces wanted from each file, smallest file first.
     let mut files: Vec<File> = vec![];
     let mut at: std::collections::HashMap<std::path::PathBuf, usize> = std::collections::HashMap::new();
@@ -140,7 +269,8 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
     for (i, (path, len, styles)) in files.iter().enumerate() {
         vectorcraft_doc::cancel::check()?;
         vectorcraft_doc::cancel::progress(i as u64, total, "Retype: reading installed fonts");
-        if *len > limits.file || *len > bytes_left {
+        // A file too long for what is left, or read when no glyph is left to draw, is not read.
+        if *len > limits.file || *len > bytes_left || glyphs_left == 0 {
             out.skipped += styles.len();
             continue;
         }
@@ -167,24 +297,99 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
             }
             glyphs_left -= n;
             out.read += 1;
-            let index = RetypeIndex::build_unloaded(db, face.clone(), keys);
+            let index = RetypeIndex::build_unloaded_near(db, face.clone(), keys, near);
             if index.is_empty() {
                 continue;
             }
-            let fits: Vec<usize> = shapes
-                .iter()
-                .zip(&matched)
-                .enumerate()
-                .filter(|(_, (s, m))| (every || !**m) && !index.matches(s).is_empty())
-                .map(|(k, _)| k)
-                .collect();
+            // With `every`, a face fits a shape it matches on its own; otherwise a shape not found
+            // yet that it completes with the loaded faces of `beside`, the faces found before it and
+            // the faces read before it that hold some of its glyphs (`partial`).
+            let parts: Vec<&RetypeIndex> = partial.iter().map(|(_, ix)| ix).collect();
+            let parts_with = |extra: &[&RetypeIndex], ix: &RetypeIndex, k: usize| -> Vec<Vec<super::GlyphMatch>> {
+                let Some(s) = shapes.get(k) else { return vec![] };
+                if every {
+                    return super::shape_parts(s.path, s.groups, s.fill, s.once, &[ix], tolerance);
+                }
+                if matched.get(k).copied().unwrap_or(true) {
+                    return vec![];
+                }
+                let with: Vec<&RetypeIndex> = beside.iter().copied().chain(&found).chain(extra.iter().copied()).chain(std::iter::once(ix)).collect();
+                super::shape_parts(s.path, s.groups, s.fill, s.once, &with, tolerance)
+            };
+            let fit_with = |extra: &[&RetypeIndex], ix: &RetypeIndex, k: usize| !parts_with(extra, ix, k).is_empty();
+            let fit = |ix: &RetypeIndex, k: usize| fit_with(&parts, ix, k);
+            // Each shape it fits, with the glyphs it matches: one pass, as near matching spends an
+            // index's budget.
+            let first: Vec<(usize, Vec<Vec<super::GlyphMatch>>)> =
+                (0..shapes.len()).map(|k| (k, parts_with(&parts, &index, k))).filter(|(_, p)| !p.is_empty()).collect();
+            let fits: Vec<usize> = first.iter().map(|(k, _)| *k).collect();
             if fits.is_empty() {
+                // The face holds glyphs of a shape without completing one: a later face may.
+                // The latest are kept: the oldest goes when the cap is reached.
+                if !every {
+                    if partial.len() >= MAX_FACES {
+                        partial.remove(0);
+                    }
+                    partial.push((face.clone(), index));
+                }
                 continue;
             }
             let loaded = load(db, face);
-            let fits = still_fit(db, face, &loaded, &shapes, keys, fits);
+            let same = loaded.id() == face.id();
+            let (mut fits, index) = still_fit(db, face, &loaded, index, keys, near, fits, &fit);
             if fits.is_empty() {
                 continue;
+            }
+            // The faces read before whose glyphs the shapes it fits use, loaded with it: those
+            // that leave room under the cap, or else only the shapes it fits without them. A face
+            // loaded in place of the one read is matched again for them.
+            let matches: Vec<Vec<super::GlyphMatch>> = if same {
+                first.into_iter().flat_map(|(_, p)| p).collect()
+            } else {
+                fits.iter().flat_map(|k| parts_with(&parts, &index, *k)).collect()
+            };
+            let held: Vec<&Arc<FontFace>> = index.faces().iter().chain(found.iter().flat_map(|ix| ix.faces())).chain(&out.faces).collect();
+            let (mut used, mut with_loaded) = companions(&matches, &held, beside, &partial);
+            if out.faces.len() + used.len() + with_loaded.len() >= limits.faces {
+                let alone: Vec<&RetypeIndex> = found.iter().chain(std::iter::once(&index)).collect();
+                fits.retain(|k| shapes.get(*k).is_some_and(|s| found_in(&alone, s, tolerance)));
+                used.clear();
+                with_loaded.clear();
+                if fits.is_empty() {
+                    continue;
+                }
+            }
+            let mut shadowed = false;
+            let mut promoted: Vec<Arc<FontFace>> = vec![];
+            for at in used.into_iter().rev() {
+                let (read, ix) = partial.remove(at);
+                let loaded = load(db, &read);
+                let ix = if loaded.id() == read.id() {
+                    ix
+                } else {
+                    shadowed = true;
+                    RetypeIndex::build_near(db, [loaded.clone()], keys, near)
+                };
+                promoted.insert(0, loaded);
+                found.push(ix);
+            }
+            // A face loaded in place of one read may have other glyphs: the shapes are checked again.
+            if shadowed {
+                let with: Vec<&RetypeIndex> = beside.iter().copied().chain(&found).chain(std::iter::once(&index)).collect();
+                fits.retain(|k| shapes.get(*k).is_some_and(|s| found_in(&with, s, tolerance)));
+                if fits.is_empty() {
+                    continue;
+                }
+            }
+            // The faces it completes shapes with, once the match holds.
+            out.faces.extend(with_loaded);
+            for loaded in promoted {
+                if listed(&loaded) {
+                    remember(db, &loaded);
+                    if !out.faces.iter().any(|f| f.id() == loaded.id()) {
+                        out.faces.push(loaded);
+                    }
+                }
             }
             // A face `listed` turns down (another version shadows it) is not compared ahead of others.
             if listed(&loaded) {
@@ -193,6 +398,7 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
                     out.faces.push(loaded);
                 }
             }
+            found.push(index);
             for k in fits {
                 if let Some(m) = matched.get_mut(k) {
                     *m = true;
@@ -209,6 +415,33 @@ fn search_within(db: &FontDb, shapes: &[&BezPath], every: bool, limits: Limits, 
         }
     }
     Ok(out)
+}
+
+/// For each of `parts` (each part's candidates) that none of the faces of `held` has a glyph of,
+/// one face that does: a loaded face of `beside` (the command compares it with the face found),
+/// or else a face of `partial`, read before. The places in `partial` of those, in order, and the
+/// loaded faces.
+fn companions(
+    parts: &[Vec<super::GlyphMatch>],
+    held: &[&Arc<FontFace>],
+    beside: &[&RetypeIndex],
+    partial: &[(Arc<FontFace>, RetypeIndex)],
+) -> (Vec<usize>, Vec<Arc<FontFace>>) {
+    let (mut used, mut loaded) = (BTreeSet::new(), Vec::<Arc<FontFace>>::new());
+    for part in parts {
+        let has = |f: &Arc<FontFace>| part.iter().any(|m| m.face.id() == f.id());
+        let chosen = used.iter().filter_map(|at: &usize| partial.get(*at).map(|(f, _)| f));
+        if held.iter().copied().chain(&loaded).chain(chosen).any(has) {
+            continue;
+        }
+        let of_beside = part.iter().find(|m| beside.iter().any(|ix| ix.faces().iter().any(|f| f.id() == m.face.id())));
+        if let Some(m) = of_beside {
+            loaded.push(m.face.clone());
+        } else if let Some(at) = part.iter().find_map(|m| partial.iter().position(|(f, _)| Arc::ptr_eq(f, &m.face))) {
+            used.insert(at);
+        }
+    }
+    (used.into_iter().collect(), loaded)
 }
 
 /// The faces searches loaded from installed files, by database ([`FontDb::id`]) and face id, the
@@ -231,15 +464,27 @@ pub(super) fn found(db: &FontDb) -> Vec<Arc<FontFace>> {
     kept.into_iter().filter(|(d, _)| *d == db.id()).filter_map(|(_, id)| db.face_by_id(id)).collect()
 }
 
-/// Of `fits` (indices into `shapes` that `read` matches), those that `loaded`, the face loading
-/// `read` gave, matches too: all of them when it is `read` itself. Another face of the same
-/// family, style and version, loaded from another file, may have other glyphs.
-fn still_fit(db: &FontDb, read: &FontFace, loaded: &Arc<FontFace>, shapes: &[&BezPath], keys: &BTreeSet<u64>, fits: Vec<usize>) -> Vec<usize> {
+/// Of `fits` (the shapes `index`, the index of `read`, fits as `fit` tells), those that `loaded`,
+/// the face loading `read` gave, fits too, with the index they fit in: all of them and `index`
+/// when it is `read` itself. Another face of the same family, style and version, loaded from
+/// another file, may have other glyphs; it is indexed by `keys` and `near`.
+#[allow(clippy::too_many_arguments)]
+fn still_fit(
+    db: &FontDb,
+    read: &FontFace,
+    loaded: &Arc<FontFace>,
+    index: RetypeIndex,
+    keys: &BTreeSet<u64>,
+    near: &[NearKey],
+    fits: Vec<usize>,
+    fit: &dyn Fn(&RetypeIndex, usize) -> bool,
+) -> (Vec<usize>, RetypeIndex) {
     if loaded.id() == read.id() {
-        return fits;
+        return (fits, index);
     }
-    let index = RetypeIndex::build(db, [loaded.clone()], keys);
-    fits.into_iter().filter(|k| shapes.get(*k).is_some_and(|s| !index.matches(s).is_empty())).collect()
+    let index = RetypeIndex::build_near(db, [loaded.clone()], keys, near);
+    let fits = fits.into_iter().filter(|k| fit(&index, *k)).collect();
+    (fits, index)
 }
 
 /// `face` (read from an installed file and not loaded) loaded into `db` as it was read
@@ -271,8 +516,31 @@ pub struct RetypeSearch {
     /// The document it is for ([`crate::DocState::uid`]).
     doc: u64,
     /// The shapes to match, and the loaded faces they are compared with first.
-    shapes: Vec<BezPath>,
+    shapes: Vec<Shape>,
     faces: Vec<Arc<FontFace>>,
+    /// `type.retype`'s tolerance (0 for `type.retypeFonts`).
+    tolerance: f64,
+}
+
+/// A shape a [`RetypeSearch`] compares, as `type.retype` matches it ([`super::shape_parts`]): its
+/// path, its contour groups when it may hold several glyphs, its fill rule when it has a visible
+/// fill (`Some(nonzero)`), and whether it paints its overlaps once ([`super::paints_once`]).
+struct Shape {
+    path: BezPath,
+    groups: Vec<BezPath>,
+    fill: Option<bool>,
+    once: bool,
+}
+
+impl Shape {
+    /// `path`, matched whole, with no paint check.
+    fn whole(path: BezPath) -> Self {
+        Shape { path, groups: vec![], fill: None, once: true }
+    }
+
+    fn sought(&self) -> Sought<'_> {
+        Sought { path: &self.path, groups: &self.groups, fill: self.fill, once: self.once }
+    }
 }
 
 /// What a [`RetypeSearch`] found: for `type.retype`, the faces it compared first that match, the
@@ -321,22 +589,41 @@ impl RetypeRun {
 
     /// [`RetypeRun::prepare`] with the fonts of `db`.
     fn prepare_in(s: &Session, command: &str, p: &Value, db: &FontDb) -> Result<Option<RetypeRun>> {
-        let (command, fonts) = match command {
-            "type.retype" => ("type.retype", Some(super::fonts_param(p)?)),
+        let (command, fonts, tolerance) = match command {
+            "type.retype" => ("type.retype", Some(super::fonts_param(p)?), super::tolerance_param(p)?),
             "type.retypeFonts" => {
                 super::fonts::count_param(p)?;
-                ("type.retypeFonts", None)
+                ("type.retypeFonts", None, 0.0)
             }
             other => return Err(EngineError::Other(format!("`{other}` doesn't search the installed fonts"))),
         };
+        // The keys the command refuses (an unknown one) fail here too, before any search.
+        s.check_params(command, p)?;
         if !wanted(command, p)? {
             return Ok(None);
         }
         let (pieces, _) = super::selected_pieces(s)?;
         let st = s.doc()?;
-        // Retype compares the shapes that may become type; the list compares every shape.
-        let shapes: Vec<BezPath> = pieces.into_iter().filter(|pc| fonts.is_none() || !pc.keeps_outline).map(|pc| pc.path).collect();
-        if !shapes.iter().any(|sh| shape_key(sh).is_some()) {
+        // Retype compares the shapes that may become type, split as it splits them; the list
+        // compares every shape whole.
+        let shapes: Vec<Shape> = if fonts.is_some() {
+            let mut budget = super::MAX_SPLIT_TOTAL_CONTOURS;
+            pieces
+                .into_iter()
+                .filter(|pc| !pc.keeps_outline)
+                .map(|pc| Shape {
+                    groups: super::split_groups(&pc.path, &mut budget),
+                    fill: pc.filled.then_some(pc.nonzero),
+                    once: super::paints_once(pc.opacity, pc.blend, &pc.appearance),
+                    path: pc.path,
+                })
+                .collect()
+        } else {
+            pieces.into_iter().map(|pc| Shape::whole(pc.path)).collect()
+        };
+        let sought: Vec<Sought> = shapes.iter().map(Shape::sought).collect();
+        let (keys, near) = keys_of(&sought, tolerance);
+        if keys.is_empty() && near.is_empty() {
             return Ok(None);
         }
         let faces = match &fonts {
@@ -348,7 +635,7 @@ impl RetypeRun {
             doc: st.uid,
             content: st.doc.clone(),
             selection: st.selection.objects.clone(),
-            search: Arc::new(RetypeSearch { command, doc: st.uid, shapes, faces }),
+            search: Arc::new(RetypeSearch { command, doc: st.uid, shapes, faces, tolerance }),
         }))
     }
 
@@ -390,8 +677,8 @@ impl RetypeSearch {
 
     /// [`RetypeSearch::run`] with the fonts of `db`.
     fn run_in(&self, db: &FontDb) -> Result<RetypeFound> {
-        let shapes: Vec<&BezPath> = self.shapes.iter().collect();
         let installed = if self.command == "type.retypeFonts" {
+            let shapes: Vec<&BezPath> = self.shapes.iter().map(|s| &s.path).collect();
             let (ranked, mut found) = super::fonts::rank_fonts(db, self.faces.clone(), &shapes, true, None)?;
             // The loaded faces that match are handed in too, ahead of the installed ones found:
             // loading those can move a loaded face past the 96 the command lists.
@@ -404,13 +691,18 @@ impl RetypeSearch {
             found.faces = faces;
             found
         } else {
-            let keys: BTreeSet<u64> = shapes.iter().filter_map(|sh| shape_key(sh)).collect();
-            let index = RetypeIndex::build(db, self.faces.iter().cloned(), &keys);
-            let left: Vec<&BezPath> = shapes.iter().copied().filter(|sh| index.matches(sh).is_empty()).collect();
+            // The shapes are matched as the command matches them first.
+            let tolerance = self.tolerance;
+            let sought: Vec<Sought> = self.shapes.iter().map(Shape::sought).collect();
+            let (keys, near) = keys_of(&sought, tolerance);
+            let index = RetypeIndex::build_near(db, self.faces.iter().cloned(), &keys, &near);
+            let parts: Vec<Vec<Vec<super::GlyphMatch>>> =
+                self.shapes.iter().map(|s| super::shape_parts(&s.path, &s.groups, s.fill, s.once, &[&index], tolerance)).collect();
+            let left: Vec<Sought> = sought.iter().zip(&parts).filter(|(_, p)| p.is_empty()).map(|(s, _)| *s).collect();
             // The first faces that match are handed in too: loading the faces found can move one
             // past the first 96 the command compares.
             let mut first: Vec<Arc<FontFace>> = vec![];
-            for m in shapes.iter().flat_map(|sh| index.all_matches(sh)) {
+            for m in parts.into_iter().flatten().flatten() {
                 if !first.iter().any(|f| f.id() == m.face.id()) {
                     first.push(m.face);
                 }
@@ -420,13 +712,21 @@ impl RetypeSearch {
             let compared: Vec<u32> = self.faces.iter().map(|f| f.id()).collect();
             // Every face loaded now is compared, among the first ones or with the rest.
             let scanned: Vec<u32> = compared.iter().copied().chain(db.loaded_faces().iter().map(|f| f.id())).collect();
-            let rest = loaded_rest(db, &left, &compared)?;
-            let mut left = left;
-            for group in rest.chunks(MAX_FACES) {
-                let index = RetypeIndex::build(db, group.iter().cloned(), &keys);
-                left.retain(|sh| index.matches(sh).is_empty());
-            }
-            let mut found = search(db, &left, false)?;
+            // A split shape's glyphs may be spread over the faces compared first and the others.
+            // Near matching spends an index's comparison budget, so with a tolerance the faces
+            // compared first are indexed again for each search that has a split shape to look for.
+            let again = |needed: bool| (needed && tolerance > 0.0).then(|| RetypeIndex::build_near(db, self.faces.iter().cloned(), &keys, &near));
+            let fresh = again(left.iter().any(|s| !s.groups.is_empty()));
+            let (rest, done, kept) = loaded_rest_for(db, &left, &[fresh.as_ref().unwrap_or(&index)], tolerance, &compared)?;
+            let left: Vec<Sought> = left.into_iter().zip(done).filter(|(_, done)| !done).map(|(s, _)| s).collect();
+            let fresh = again(left.iter().any(|s| !s.groups.is_empty()));
+            let kept: Vec<RetypeIndex> = if tolerance > 0.0 {
+                kept.iter().map(|ix| RetypeIndex::build_near(db, ix.faces().iter().cloned(), &keys, &near)).collect()
+            } else {
+                kept
+            };
+            let beside: Vec<&RetypeIndex> = std::iter::once(fresh.as_ref().unwrap_or(&index)).chain(&kept).collect();
+            let mut found = search_beside(db, &left, &beside, tolerance, false)?;
             found.faces.splice(0..0, first.into_iter().chain(rest));
             found.scanned = scanned;
             found

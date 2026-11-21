@@ -77,6 +77,13 @@ pub struct DimensionTool {
     /// The path that holds the first Linear point, when it was picked on a corner of that path's
     /// preview bounds.
     first_corner: Option<NodeId>,
+    /// The link the first Linear point took at its click when it was not on an anchor: held
+    /// against the path whose preview-bounds corner it was picked on, or on the segment under it.
+    /// When the art moves before the second click, the first point moves with it.
+    first_link: Option<FreePoint>,
+    /// Where the first Linear point was picked. The point goes back there when its anchor or
+    /// [`Self::first_link`] no longer resolves.
+    first_pick: Option<Point>,
     /// Whether the press under way began on an anchor a Linear click picks.
     press_on_anchor: bool,
     /// The second point clicked for the Linear dimension being placed, and where the pointer was
@@ -238,9 +245,17 @@ struct PreviewBoxes {
     revision: Option<(u64, u64)>,
     geometric: HashMap<NodeId, Option<Rect>>,
     preview: HashMap<NodeId, Option<Rect>>,
+    /// The editable path holding each corner of a measured object's preview bounds, found when
+    /// the object is measured, so that a pointer move reads no member.
+    holders: HashMap<NodeId, [Option<NodeId>; 4]>,
     /// Whether a point at each corner (by object and corner number) can be held against its path.
     holdable: HashMap<(NodeId, usize), bool>,
 }
+
+/// How many member paths one pointer move may read to measure objects not yet measured, apart
+/// from the objects it visits: an object with more members than are left gives no corner on
+/// that move.
+const PREVIEW_MEMBER_WORK: usize = 20_000;
 
 /// A corner of an object's preview bounds that a Linear pick can land on.
 #[derive(Clone, Copy, Debug)]
@@ -257,7 +272,9 @@ struct PreviewCorner {
 /// strokes and effects included) nearest `p` within reach, on any editable one whose preview
 /// bounds differ from its geometric bounds. In a compound path, the member whose own box reaches
 /// nearest to the corner holds it. The work is bounded, and dimension artwork is skipped, as in
-/// [`pick`]. `cache` keeps the bounds measured for the document's revision.
+/// [`pick`]: the objects visited count against one budget, and the member paths read to measure
+/// them against [`PREVIEW_MEMBER_WORK`]. `cache` keeps the bounds and holders measured for the
+/// document's revision.
 fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Option<PreviewCorner> {
     struct Walk<'a, 'c> {
         symbols: Option<vectorcraft_doc::SymbolBoxes<'a>>,
@@ -266,7 +283,37 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         p: Point,
         reach: f64,
         budget: usize,
+        /// Member paths left to read for objects not yet measured.
+        work: usize,
         best: Option<(f64, PreviewCorner)>,
+    }
+    /// Takes `count` from the member work left, or nothing when less is left.
+    fn charge(work: &mut usize, count: usize) -> bool {
+        let fits = count <= *work;
+        if fits {
+            *work -= count;
+        }
+        fits
+    }
+    fn corners(r: Rect) -> [Point; 4] {
+        [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)]
+    }
+    /// For each corner of `preview`, the path whose own box reaches nearest to it: in a compound
+    /// path, the member that puts that corner where it is. A hidden or locked member, or one made
+    /// into a guide, gives no corner. One pass reads each member once for all four corners.
+    fn holders<'n>(members: impl Iterator<Item = &'n Node>, preview: Rect) -> [Option<NodeId>; 4] {
+        let mut best: [Option<(f64, NodeId, bool)>; 4] = [None; 4];
+        for m in members {
+            let Some(b) = m.geometric_bounds() else { continue };
+            let editable = m.visible && !m.locked && !m.is_guide();
+            for ((holder, c), q) in best.iter_mut().zip(corners(b)).zip(corners(preview)) {
+                let gap = c.distance(q);
+                if holder.is_none_or(|(near, _, was)| gap < near || (gap == near && editable && !was)) {
+                    *holder = Some((gap, m.id, editable));
+                }
+            }
+        }
+        best.map(|h| h.filter(|(.., editable)| *editable).map(|(_, id, _)| id))
     }
     fn visit(n: &Node, w: &mut Walk) {
         if w.budget == 0 || !n.visible || n.locked || n.extras().dimension.is_some() {
@@ -277,7 +324,6 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         // its strokes reach.
         let effects = !n.appearance.effects.is_empty() || n.appearance.items.iter().any(|i| !i.effects().is_empty());
         let reach = n.appearance.outset() + w.reach;
-        let corners = |r: Rect| [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
         // A path is its own member; a compound path's members are its paths.
         let compound = match &n.kind {
             NodeKind::Compound { children, .. } => Some(children.as_slice()),
@@ -285,25 +331,45 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
         };
         let members =
             || compound.into_iter().flatten().map(|c| c.as_ref()).chain(compound.is_none().then_some(n)).filter(|m| m.path_data().is_some());
+        // Measuring the object, its bounds or its holders, reads every member once.
+        let count = compound.map_or(1, <[_]>::len);
         // A path made into a guide draws as a guide, without its strokes or effects. The pointer
         // test includes the right and bottom edges, as the distance test below does.
         let within = |r: Rect| (r.x0..=r.x1).contains(&w.p.x) && (r.y0..=r.y1).contains(&w.p.y);
-        if !n.is_guide()
-            && members().next().is_some()
-            && let Some(geometric) = *w.cache.geometric.entry(n.id).or_insert_with(|| n.geometric_bounds())
+        // Set once this move has paid for reading the members: measuring the preview bounds and
+        // holders on the same move reads them again without a second charge.
+        let mut paid = false;
+        let geometric = match w.cache.geometric.get(&n.id) {
+            _ if n.is_guide() || members().next().is_none() => None,
+            Some(g) => *g,
+            None if charge(&mut w.work, count) => {
+                paid = true;
+                let g = n.geometric_bounds();
+                w.cache.geometric.insert(n.id, g);
+                g
+            }
+            None => None,
+        };
+        if let Some(geometric) = geometric
             && (effects || within(geometric.inflate(reach, reach)))
         {
             let doc = w.doc;
             let measured = match w.cache.preview.get(&n.id) {
-                Some(r) => *r,
-                None => {
+                Some(r) => Some(*r),
+                None if paid || charge(&mut w.work, count) => {
                     let symbols = w.symbols.get_or_insert_with(|| doc.symbol_boxes());
                     let r = vectorcraft_effects::preview::visual_bounds(symbols, n);
                     w.cache.preview.insert(n.id, r);
-                    r
+                    if let Some(r) = r
+                        && r != geometric
+                    {
+                        w.cache.holders.insert(n.id, holders(members(), r));
+                    }
+                    Some(r)
                 }
+                None => None,
             };
-            if let Some(r) = measured
+            if let Some(Some(r)) = measured
                 && r != geometric
             {
                 for (k, q) in corners(r).into_iter().enumerate() {
@@ -311,26 +377,13 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
                     if d > w.reach || w.best.is_some_and(|(nearest, ..)| d >= nearest) {
                         continue;
                     }
-                    // The path whose own box reaches furthest towards the corner holds it: in a
-                    // compound path, the member that puts that corner where it is. A hidden or
-                    // locked member gives no corner.
-                    let mut holder: Option<(f64, NodeId, bool)> = None;
-                    for m in members() {
-                        let Some(b) = *w.cache.geometric.entry(m.id).or_insert_with(|| m.geometric_bounds()) else { continue };
-                        let gap = corners(b).get(k).map_or(f64::INFINITY, |c| c.distance(q));
-                        let editable = m.visible && !m.locked;
-                        if holder.is_none_or(|(near, _, was)| gap < near || (gap == near && editable && !was)) {
-                            holder = Some((gap, m.id, editable));
-                        }
-                    }
-                    let holder = holder.filter(|(.., editable)| *editable).map(|(gap, id, _)| (gap, id));
+                    let holder = w.cache.holders.get(&n.id).and_then(|h| h.get(k).copied().flatten());
                     // A path that cannot hold a point at the corner (a stroked dot, whose anchors
                     // all coincide) gives no corner.
                     let holdable = |id: NodeId, cache: &mut PreviewBoxes| {
                         *cache.holdable.entry((n.id, k)).or_insert_with(|| FreePoint::on(doc, id, q).is_some())
                     };
-                    let holder = holder.filter(|(_, id)| holdable(*id, w.cache));
-                    if let Some(((_, holder), stands_for)) = holder.zip(corners(geometric).get(k).copied()) {
+                    if let Some((holder, stands_for)) = holder.filter(|id| holdable(*id, w.cache)).zip(corners(geometric).get(k).copied()) {
                         w.best = Some((d, PreviewCorner { at: q, holder, stands_for }));
                     }
                 }
@@ -353,7 +406,7 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
     if cache.revision != Some(cx.revision) {
         *cache = PreviewBoxes { revision: Some(cx.revision), ..Default::default() };
     }
-    let mut w = Walk { symbols: None, doc: cx.doc, cache, p, reach: cx.tol(ANCHOR_REACH), budget: 20_000, best: None };
+    let mut w = Walk { symbols: None, doc: cx.doc, cache, p, reach: cx.tol(ANCHOR_REACH), budget: 20_000, work: PREVIEW_MEMBER_WORK, best: None };
     for n in cx.doc.layers.iter().rev() {
         visit(n, &mut w);
     }
@@ -564,28 +617,34 @@ fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
 /// point, so that it moves with that path. None when neither point has a path to link to.
 /// `held_a` and `held_b` name the path holding a point picked on a corner of that path's
 /// preview bounds: such a point is held against that path, however far its strokes or effects
-/// put the corner from the path and whatever other segment lies there.
+/// put the corner from the path and whatever other segment lies there. `link_a` is the link the
+/// first point took at its own click ([`own_link`]): while it still resolves, the point keeps it,
+/// whatever other art lies there now.
 fn points_source(
     cx: &ToolContext,
     (a, ra, held_a): (Point, &Option<PointRef>, Option<NodeId>),
     (b, rb, held_b): (Point, &Option<PointRef>, Option<NodeId>),
+    link_a: Option<FreePoint>,
 ) -> Option<DimensionSource> {
     // A path deleted since the pick holds nothing.
     let holder = |held: Option<NodeId>| held.filter(|node| cx.doc.node(*node).is_some());
     let (corner_a, corner_b) = (holder(held_a), holder(held_b));
+    let link_a = link_a.filter(|link| ra.is_none() && link.position(cx.doc).is_some());
     let edge = |p: Point, corner: Option<NodeId>| if corner.is_some() { None } else { pick(cx, p) };
-    let (edge_a, edge_b) = (edge(a, corner_a), edge(b, corner_b));
+    let (edge_a, edge_b) = (if link_a.is_some() { None } else { edge(a, corner_a) }, edge(b, corner_b));
     let node = |r: &Option<PointRef>, corner: Option<NodeId>, e: &Option<SegmentRef>| {
         r.as_ref().map(|r| r.node).or(corner).or_else(|| e.as_ref().map(|e| e.node))
     };
-    let (path_a, path_b) = (node(ra, corner_a, &edge_a), node(rb, corner_b, &edge_b));
+    let path_a = link_a.as_ref().map(FreePoint::node).or_else(|| node(ra, corner_a, &edge_a));
+    let path_b = node(rb, corner_b, &edge_b);
     let free = |p: Point, r: &Option<PointRef>, edge: &Option<SegmentRef>, own: Option<NodeId>, other: Option<NodeId>| {
         if r.is_some() {
             return None;
         }
         edge.as_ref().and_then(|e| FreePoint::on_segment(cx.doc, e, p)).or_else(|| own.or(other).and_then(|node| FreePoint::on(cx.doc, node, p)))
     };
-    let (free_a, free_b) = (free(a, ra, &edge_a, path_a, path_b), free(b, rb, &edge_b, path_b, path_a));
+    let free_a = link_a.or_else(|| free(a, ra, &edge_a, path_a, path_b));
+    let free_b = free(b, rb, &edge_b, path_b, path_a);
     (ra.is_some() || rb.is_some() || free_a.is_some() || free_b.is_some()).then(|| DimensionSource::Points {
         a: ra.clone(),
         b: rb.clone(),
@@ -593,6 +652,17 @@ fn points_source(
         free_a,
         free_b,
     })
+}
+
+/// The link a point picked at `p` off any anchor takes from its own pick, as [`points_source`]
+/// links it: held against `corner`'s path when it was picked on a corner of that path's preview
+/// bounds, else on the segment under it, or held against that segment's path. None when nothing
+/// under it holds it.
+fn own_link(cx: &ToolContext, p: Point, corner: Option<NodeId>) -> Option<FreePoint> {
+    match corner.filter(|node| cx.doc.node(*node).is_some()) {
+        Some(node) => FreePoint::on(cx.doc, node, p),
+        None => pick(cx, p).and_then(|e| FreePoint::on_segment(cx.doc, &e, p).or_else(|| FreePoint::on(cx.doc, e.node, p))),
+    }
 }
 
 impl DimensionTool {
@@ -610,6 +680,7 @@ impl DimensionTool {
     /// A point the guides leave where the pointer is (right on a guide line) stays there, and with
     /// Snap to Pixel or Snap to Grid on a point stays where they place it.
     fn snap_linear(&mut self, cx: &ToolContext, p: Point) -> (Point, Option<PointRef>) {
+        self.follow_first(cx);
         let leave = self.points.last().map(|(first, anchor)| match anchor {
             Some(_) => crate::guides::Leave::segment(cx, *first, false),
             None => crate::guides::Leave::contact(*first),
@@ -651,6 +722,30 @@ impl DimensionTool {
             }
             None => (p, None),
         }
+    }
+    /// Moves the first Linear point to where its link puts it in the document as it is now: on
+    /// its anchor, or where [`Self::first_link`] holds it. A point whose link no longer resolves,
+    /// or that has none, stays where it was picked, and an anchor that no longer resolves is
+    /// dropped from it.
+    fn follow_first(&mut self, cx: &ToolContext) {
+        if let Some(now) = self.first_now(cx)
+            && let [(at, reference)] = self.points.as_mut_slice()
+        {
+            *at = now;
+            if reference.as_ref().is_some_and(|r| r.position(cx.doc).is_none()) {
+                *reference = None;
+            }
+        }
+    }
+    /// Where the first Linear point is in the document as it is now ([`Self::follow_first`]),
+    /// while it is the only point picked.
+    fn first_now(&self, cx: &ToolContext) -> Option<Point> {
+        let [(at, reference)] = self.points.as_slice() else { return None };
+        let now = match reference {
+            Some(r) => r.position(cx.doc),
+            None => self.first_link.as_ref().and_then(|link| link.position(cx.doc)),
+        };
+        Some(now.or(self.first_pick).unwrap_or(*at))
     }
     fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
         let edge = pick(cx, p)?;
@@ -800,6 +895,8 @@ impl DimensionTool {
         self.on_end = false;
         self.corner = None;
         self.first_corner = None;
+        self.first_link = None;
+        self.first_pick = None;
         self.points.clear();
         self.lines.clear();
         self.dragging = false;
@@ -824,13 +921,16 @@ impl DimensionTool {
                     reference = reference.filter(|r| r.position(cx.doc) == Some(at));
                     corner = corner.filter(|_| at.distance(snapped) <= 1e-9);
                 }
-                self.points.push((at, reference));
-                if self.points.len() == 1 {
+                if self.points.is_empty() {
                     self.first_corner = corner;
+                    self.first_link = reference.is_none().then(|| own_link(cx, at, corner)).flatten();
+                    self.first_pick = Some(at);
                 }
+                self.points.push((at, reference));
                 if let [(a, ra), (b, rb)] = self.points.as_slice() {
-                    let source = points_source(cx, (*a, ra, self.first_corner), (*b, rb, corner));
+                    let source = points_source(cx, (*a, ra, self.first_corner), (*b, rb, corner), self.first_link.take());
                     self.first_corner = None;
+                    self.first_pick = None;
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
                         self.second = Some((*b, p));
@@ -1041,8 +1141,10 @@ impl Tool for DimensionTool {
                 None => {}
             }
         }
+        // The first point where the art puts it now, also when the art moved without a pointer move.
+        let first = self.first_now(cx);
         for (p, _) in &self.points {
-            out.push(Overlay::Anchor { p: *p, color, filled: true, size: 6.0 });
+            out.push(Overlay::Anchor { p: first.unwrap_or(*p), color, filled: true, size: 6.0 });
         }
         for edge in &self.lines {
             segment(edge, &mut out);
@@ -1057,10 +1159,10 @@ impl Tool for DimensionTool {
             let on_anchor = reference.is_some() || self.on_end;
             out.push(Overlay::Anchor { p: *q, color, filled: !on_anchor, size: if on_anchor { 10.0 } else { 6.0 } });
         }
-        if let Some((p, _)) = self.points.last() {
+        if let Some(p) = first.or_else(|| self.points.last().map(|(p, _)| *p)) {
             let target = snapped.map_or(self.at, |(q, _)| q);
-            let b = if self.shift { constrained(cx, *p, target) } else { target };
-            out.push(Overlay::Line { a: *p, b, color, dashed: true });
+            let b = if self.shift { constrained(cx, p, target) } else { target };
+            out.push(Overlay::Line { a: p, b, color, dashed: true });
         }
         // The Smart Guides of the point the next click picks (after the rubber band).
         if linear_pick {
@@ -1615,6 +1717,60 @@ mod tests {
         assert!(t.points.first().is_some_and(|(q, _)| near(*q, Point::new(80.0, 80.0))), "{:?}", t.points);
     }
 
+    /// A stroked compound path of a small hole and `extra` more tiny squares inside a square from
+    /// 100 to 200, with the ids of the compound, the hole and the square.
+    fn stroked_compound(extra: usize) -> (vectorcraft_doc::Document, [NodeId; 3]) {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, hole, part, whole) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let square =
+            |id, a: f64, b: f64| std::sync::Arc::new(Node::path(id, vectorcraft_geom::shapes::rectangle(Rect::new(a, a, b, b)), Default::default()));
+        let mut children = vec![square(hole, 140.0, 160.0), square(part, 100.0, 200.0)];
+        for _ in 0..extra {
+            children.push(square(d.alloc_id(), 150.0, 151.0));
+        }
+        let mut n = Node::new(whole, NodeKind::Compound { children, rule: Default::default() });
+        n.appearance = vectorcraft_doc::Appearance::default_art().into();
+        d.insert(Some(l), 0, n).expect("the compound path");
+        (d, [whole, hole, part])
+    }
+
+    /// The member holding each corner of a compound path is found when the compound is measured,
+    /// and later pointer moves over the same revision take it from the cache without reading the
+    /// members.
+    #[test]
+    fn a_compound_paths_corner_holders_are_found_once_per_revision() {
+        let (d, [whole, hole, part]) = stroked_compound(0);
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut cache = PreviewBoxes::default();
+        let corner = preview_corner(&c, Point::new(99.5, 99.5), &mut cache).expect("the corner of the stroke");
+        assert_eq!(corner.holder, part, "the member that reaches the corner holds it");
+        assert_eq!(cache.holders.get(&whole), Some(&[Some(part); 4]));
+        // A move over the same revision reads the holder from the cache: one changed there is the
+        // one it gives.
+        cache.holders.insert(whole, [Some(hole); 4]);
+        let corner = preview_corner(&c, Point::new(200.5, 200.5), &mut cache).expect("the corner of the stroke");
+        assert_eq!(corner.holder, hole, "the cached holder is used");
+    }
+
+    /// A compound path with more members than one pointer move may read gives no corner, and is
+    /// neither measured nor cached, so its member work stays bounded. A compound within the limit
+    /// still gives its corner.
+    #[test]
+    fn a_compound_path_past_the_member_work_gives_no_corner() {
+        let (s, p) = (Selection::default(), paint());
+        // Two members plus `extra`: exactly the limit, then one more.
+        for (extra, within) in [(PREVIEW_MEMBER_WORK - 2, true), (PREVIEW_MEMBER_WORK - 1, false)] {
+            let (d, [whole, ..]) = stroked_compound(extra);
+            let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+            let mut cache = PreviewBoxes::default();
+            let corner = preview_corner(&c, Point::new(99.5, 99.5), &mut cache);
+            assert_eq!(corner.is_some(), within, "{} members", extra + 2);
+            assert_eq!(cache.preview.contains_key(&whole), within, "{} members", extra + 2);
+            assert_eq!(cache.geometric.contains_key(&whole), within, "{} members", extra + 2);
+        }
+    }
+
     /// With Use Preview Bounds on, hovering by a corner of a stroked path's preview bounds, or
     /// right on it, shows the anchor ring there.
     #[test]
@@ -1781,6 +1937,23 @@ mod tests {
             let (q, _) = t.snap_linear(&c, Point::new(81.0, 81.0));
             assert!(!near(q, Point::new(80.0, 80.0)) && t.corner.is_none(), "{kind}: {q:?}");
         }
+        // A visible, unlocked member of a stroked compound path made into a guide does not hold
+        // the corner its box puts there.
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, hole, part, whole) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut guide = Node::path(part, vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Default::default());
+        if let NodeKind::Path { guide, .. } = &mut guide.kind {
+            *guide = true;
+        }
+        let small = Node::path(hole, vectorcraft_geom::shapes::rectangle(Rect::new(140.0, 140.0, 160.0, 160.0)), Default::default());
+        let mut n =
+            Node::new(whole, NodeKind::Compound { children: vec![std::sync::Arc::new(small), std::sync::Arc::new(guide)], rule: Default::default() });
+        n.appearance = vectorcraft_doc::Appearance::default_art().into();
+        d.insert(Some(l), 0, n).expect("the compound path");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        let (q, _) = t.snap_linear(&c, Point::new(99.6, 99.6));
+        assert!(t.corner.is_none() && !near(q, Point::new(99.5, 99.5)), "{q:?} {:?}", t.corner);
         // Two stroked rectangles sharing the edge x = 200; the right one is on top.
         let (mut d, left) = doc_with_rect();
         let (l, right) = (d.layers[0].id, d.alloc_id());
@@ -1814,7 +1987,7 @@ mod tests {
         let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
         let (corner, b) = (Point::new(99.5, 99.5), Point::new(250.0, 99.5));
         for (held, node) in [(Some(id), id), (None, line)] {
-            let source = points_source(&c, (corner, &None, held), (b, &None, None));
+            let source = points_source(&c, (corner, &None, held), (b, &None, None), None);
             let Some(DimensionSource::Points { free_a: Some(free), .. }) = &source else { panic!("{source:?}") };
             let linked = match free {
                 FreePoint::Anchors { node, .. } => *node,
@@ -1822,6 +1995,105 @@ mod tests {
             };
             assert_eq!(linked, node, "{held:?}: {free:?}");
         }
+    }
+
+    /// A first point keeps its link when the art moves before the second click: a point picked on
+    /// a corner of the preview bounds, on a segment or on an anchor is measured, shown and
+    /// constrained by Shift from where the art puts it now.
+    #[test]
+    fn a_first_point_follows_art_moved_before_the_second_click() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let near = |a: Point, b: Point| a.distance(b) < 1e-9;
+        let moved = |by: (f64, f64)| {
+            let mut m = d.clone();
+            m.node_mut(id).expect("the rectangle").transform(vectorcraft_geom::Affine::translate(by), false);
+            m
+        };
+        let click = |t: &mut DimensionTool, c: &ToolContext, (x, y): (f64, f64), shift: bool| {
+            for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+                let mut ev = PointerEvent::new(kind, x, y);
+                ev.mods.shift = shift;
+                t.pointer(c, &ev);
+            }
+        };
+        let base = |doc| ToolContext { preview_bounds: true, smart_guides: false, snap_to_point: false, ..cx(doc, &s, &p) };
+        // A corner of the preview bounds, then the rectangle moved 20 points right.
+        let right = moved((20.0, 0.0));
+        let mut t = DimensionTool::default();
+        click(&mut t, &base(&d), (101.0, 101.0), false);
+        let c = ToolContext { revision: (0, 1), ..base(&right) };
+        let shown = t.overlays(&c).into_iter().any(|o| matches!(o, Overlay::Anchor { p, filled: true, .. } if near(p, Point::new(119.5, 99.5))));
+        assert!(shown, "the first point shows at the moved corner before the pointer moves");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 219.0, 101.0));
+        let band = t.overlays(&c).into_iter().any(|o| matches!(o, Overlay::Line { a, dashed: true, .. } if near(a, Point::new(119.5, 99.5))));
+        assert!(band, "the rubber band starts at the moved corner");
+        click(&mut t, &c, (219.0, 101.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(119.5, 99.5)) && near(pending.b, Point::new(220.5, 99.5)), "{:?} {:?}", pending.a, pending.b);
+        assert!((pending.length - 101.0).abs() < 1e-9, "{}", pending.length);
+        let Some(DimensionSource::Points { free_a: Some(free), .. }) = &pending.source else { panic!("{:?}", pending.source) };
+        assert!(free.position(&right).is_some_and(|q| near(q, Point::new(119.5, 99.5))), "{free:?}");
+        // The same corner, the rectangle moved 20 points right with the pointer moving, then
+        // deleted: the first point goes back to where it was picked.
+        let mut gone = right.clone();
+        gone.remove(id).expect("the rectangle");
+        let (l, line) = (gone.layers[0].id, gone.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 300.0), Point::new(400.0, 300.0)], false));
+        gone.insert(Some(l), 0, Node::path(line, path, Default::default())).expect("the line");
+        let mut t = DimensionTool::default();
+        click(&mut t, &base(&d), (101.0, 101.0), false);
+        let c = ToolContext { revision: (0, 1), ..base(&right) };
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 219.0, 101.0));
+        let c = ToolContext { revision: (0, 2), ..base(&gone) };
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 300.0, 300.0));
+        let shown = t.overlays(&c).into_iter().any(|o| matches!(o, Overlay::Anchor { p, filled: true, .. } if near(p, Point::new(99.5, 99.5))));
+        assert!(shown, "the first point shows where it was picked once its rectangle is deleted");
+        click(&mut t, &c, (300.0, 300.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(99.5, 99.5)), "{:?}", pending.a);
+        // An anchor, then its rectangle deleted: the dimension starts where the anchor was picked.
+        let mut t = DimensionTool::default();
+        let unbounded = |doc| ToolContext { preview_bounds: false, ..base(doc) };
+        click(&mut t, &unbounded(&d), (100.0, 100.0), false);
+        click(&mut t, &ToolContext { revision: (0, 2), ..unbounded(&gone) }, (300.0, 300.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(100.0, 100.0)), "{:?}", pending.a);
+        let Some(DimensionSource::Points { a: None, .. }) = &pending.source else { panic!("{:?}", pending.source) };
+        // A point on the top segment, then the rectangle moved 20 points down.
+        let down = moved((0.0, 20.0));
+        let mut t = DimensionTool::default();
+        click(&mut t, &unbounded(&d), (150.0, 100.0), false);
+        click(&mut t, &ToolContext { revision: (0, 1), ..unbounded(&down) }, (300.0, 300.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(150.0, 120.0)), "{:?}", pending.a);
+        let Some(DimensionSource::Points { free_a: Some(FreePoint::OnSegment { edge, .. }), .. }) = &pending.source else {
+            panic!("{:?}", pending.source)
+        };
+        assert_eq!(edge.node, id);
+        // The same, with a line drawn on top along the moved segment before the second click: the
+        // point keeps the segment it was picked on, where a pick there now finds the line.
+        let mut covered = down.clone();
+        let (l, line) = (covered.layers[0].id, covered.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 120.0), Point::new(300.0, 120.0)], false));
+        covered.insert(Some(l), 0, Node::path(line, path, Default::default())).expect("the line");
+        let c = unbounded(&covered);
+        let at = Point::new(150.0, 120.0);
+        assert_eq!(pick(&c, at).map(|e| e.node), Some(line));
+        let link = own_link(&unbounded(&d), Point::new(150.0, 100.0), None);
+        assert!(matches!(&link, Some(FreePoint::OnSegment { edge, .. }) if edge.node == id), "{link:?}");
+        let source = points_source(&c, (at, &None, None), (Point::new(300.0, 300.0), &None, None), link);
+        let Some(DimensionSource::Points { free_a: Some(FreePoint::OnSegment { edge, .. }), .. }) = &source else { panic!("{source:?}") };
+        assert_eq!(edge.node, id, "the line on top does not take the point");
+        // An anchor, then the rectangle moved 20 points down: Shift constrains from the anchor's
+        // new place.
+        let mut t = DimensionTool::default();
+        click(&mut t, &unbounded(&d), (100.0, 100.0), false);
+        click(&mut t, &ToolContext { revision: (0, 1), ..unbounded(&down) }, (300.0, 124.0), true);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(100.0, 120.0)) && (pending.b.y - 120.0).abs() < 1e-9, "{:?} {:?}", pending.a, pending.b);
     }
 
     /// Hovering right on the end of a dimension's line shows the anchor ring there.
