@@ -40,7 +40,7 @@ mod trace;
 pub use live_paint::live_paint_gaps;
 pub(crate) use live_paint::{LivePaintMove, check_part_name, clear_part_name, isolated_live_paints, merge_drawn_in_isolation};
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
-use shape_builder::{sb_merge, sb_regions};
+use shape_builder::{sb_copy_region, sb_merge, sb_regions};
 pub(crate) use trace::TracePresetChanges;
 pub use trace::{
     TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES, TracePreset, TracePresetChange, TraceRun, Traced, image_trace_target,
@@ -71,6 +71,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?, gap?: pt (0–72; 0: Gap Detection off), openFilledAsClosed?: true (as shapeBuilder.merge)} → {regions: [{bounds: [x0,y0,x1,y1], area, sources: [id…]}], lines: [{bounds, source: id}], edges: [{bounds, source: id}]} faces of the planar arrangement (unfilled open paths cut them, and filled ones too with openFilledAsClosed false; sources is empty for an area only they enclose), the pieces of those open paths and the edges (the other paths' outlines cut where paths meet; source: the front-most path along it), which erasing deletes",
             has_selection_or_ids,
             sb_regions
+        ),
+        cmd!(
+            "shapeBuilder.copyRegion",
+            "Fill Area",
+            [],
+            None,
+            "{point: [x,y], ids?|id?: [id…] (the objects or layers whose paths bound areas; default: every layer, nothing needs to be selected), gap?: pt (0–72; 0: Gap Detection off; out of range is an error), openFilledAsClosed?: true (as shapeBuilder.merge), fill?, stroke?: \"#rrggbb\" | {color|swatch|gradient|none} (default: the current fill and stroke, with the current stroke weight)} add a new closed path of the area under point that the visible, unlocked paths enclose (the region of shapeBuilder.regions holding it: areas a shape already fills and areas open paths bound count too), directly above the front-most object along the area (its outline touches the area's outline, or it covers the area; when a group, Live Paint group, Shaper group or clipping group holds that path, above the outermost group in its layer, never inside it), and select it; in isolation mode only the paths of the isolated layer or group bound areas (with ids, only the paths of the listed objects that are in it), and the new path goes inside it, directly above the object in it that holds that path; no area is found while the isolated object is not a layer or group (a path or compound path), is a Live Paint group, compound shape, Shaper group, graph, Image Trace result, dimension, flare or Objects on Path group, is a layer or group with a live effect or a clipping mask, or lies inside one of these or inside an envelope; the paths around the area are not changed; a point in no enclosed area is an error and changes nothing (no undo step); when the paths together have more than 65,536 segments, only an area the paths near the point enclose is found → {id, above (the object the new path went above)}",
+            has_doc,
+            sb_copy_region
         ),
         cmd!(
             "livePaint.make",
@@ -285,12 +294,18 @@ fn stroke_only(paint: Paint, width: f64) -> Appearance {
 // ---------- Shape Builder ----------
 
 fn fill_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Paint>> {
-    match p.get("fill") {
+    paint_param(s, p, "fill", cmd)
+}
+
+/// The paint `p` gives for `key` (`"#rrggbb"` or `{color|swatch|gradient|none}`), as `fill` is read.
+fn paint_param(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<Option<Paint>> {
+    match p.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v @ Value::Object(o)) if o.contains_key("color") || o.contains_key("swatch") || o.contains_key("gradient") || o.contains_key("none") => {
-            paint_from(s, v)
+            // A paint key whose value is not a paint, such as `{"swatch": 123}`, gives no paint.
+            paint_from(s, v)?.map(Some).ok_or_else(|| bad(cmd, format!("bad {key} {v}")))
         }
-        Some(v) => color_value(v).map(|c| Some(Paint::solid(super::paint::new_color(s, p, c)))).ok_or_else(|| bad(cmd, format!("bad fill {v}"))),
+        Some(v) => color_value(v).map(|c| Some(Paint::solid(super::paint::new_color(s, p, c)))).ok_or_else(|| bad(cmd, format!("bad {key} {v}"))),
     }
 }
 

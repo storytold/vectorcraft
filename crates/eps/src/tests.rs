@@ -331,6 +331,72 @@ fn many_repeats_keep_their_places_in_a_smooth_shading() {
     }
 }
 
+/// Level 3 smooth shadings handle two-stop (`FunctionType 2`), hard-edge (duplicate offset),
+/// zero-span (solid fallback), and degenerate zero-length linear/radial gradients cleanly.
+#[test]
+fn smooth_shadings_handle_two_stop_hard_edge_and_degenerate_gradients() {
+    use vectorcraft_color::GradientGeom;
+
+    // Two-stop linear gradient emits a single FunctionType 2 (no stitching FunctionType 3).
+    let two_stop = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let two_doc = doc_with(|d| {
+        vec![path(
+            d,
+            shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)),
+            Paint::Gradient(Box::new(GradientPaint::new(two_stop))),
+            Paint::None,
+            0.0,
+        )]
+    });
+    let two_page = page_of(&two_doc, &opts(&two_doc));
+    assert!(two_page.contains("/ShadingType 2") && two_page.contains("/FunctionType 2"), "{two_page}");
+    assert!(!two_page.contains("/FunctionType 3"), "{two_page}");
+
+    // Hard-edge gradient (two stops at offset 0.5) skips the zero-width segment and stitches at 0.5.
+    let hard = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)),
+            GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0)),
+            GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0)),
+        ],
+    );
+    let hard_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(hard))), Paint::None, 0.0)]
+    });
+    let hard_page = page_of(&hard_doc, &opts(&hard_doc));
+    assert!(hard_page.contains("/FunctionType 3") && hard_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{hard_page}");
+
+    // Two stops at the same interior offset pad to 0 and 1, emitting a hard-edge stitch at 0.5.
+    let flat = Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(0.5, Color::rgb(0.0, 0.0, 1.0))],
+    );
+    let flat_doc = doc_with(|d| {
+        vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(GradientPaint::new(flat))), Paint::None, 0.0)]
+    });
+    let flat_page = page_of(&flat_doc, &opts(&flat_doc));
+    assert!(flat_page.contains("/FunctionType 3") && flat_page.contains("/Bounds [0.5 ] /Encode [0 1 0 1 ]"), "{flat_page}");
+    assert!(flat_page.contains("/C0 [1 0 0] /C1 [1 0 0]") && flat_page.contains("/C0 [0 0 1] /C1 [0 0 1]"), "{flat_page}");
+
+    // Zero-length linear and radial gradients still emit valid shfill geometry.
+    for kind in [GradientKind::Linear, GradientKind::Radial] {
+        let mut gp = GradientPaint::new(Gradient::new(
+            kind,
+            vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))],
+        ));
+        gp.geom = Some(GradientGeom { start: Point::new(50.0, 50.0), end: Point::new(50.0, 50.0), aspect: 1.0, focal: None });
+        let deg_doc =
+            doc_with(|d| vec![path(d, shapes::rectangle(Rect::new(20.0, 20.0, 180.0, 120.0)), Paint::Gradient(Box::new(gp)), Paint::None, 0.0)]);
+        let deg_page = page_of(&deg_doc, &opts(&deg_doc));
+        assert!(deg_page.contains("shfill"), "{kind:?}: {deg_page}");
+    }
+}
+
 #[test]
 fn strokes_keep_their_caps_joins_and_dashes() {
     let d = doc_with(|d| {
