@@ -2306,15 +2306,25 @@ fn a_smooth_drag_that_comes_back_to_a_segment_smooths_where_it_comes_back() {
     assert!(gap < 0.5, "{between:?} is {gap} pt off the smoothed path");
 }
 
-/// A click on a curve 100,000 pt long, at the sharp crest in its middle and between the places a
-/// fixed number of samples along it would look at, still finds the curve under it.
+/// A click on the sharp crest of a curve 100,000 pt wide finds the curve under it, although the crest
+/// lies halfway between two of 65 evenly spaced places along the curve and more than the click's 12 pt
+/// reach from each of them, so a search that looked only at those places would miss it.
 #[test]
 fn a_smooth_drag_finds_a_very_long_curve_under_it() {
     use kurbo::ParamCurve;
     let mut s = session();
-    let anchors = [json!({"x": 0.0, "y": 0.0, "out": [99800.0, -9000.0]}), json!({"x": 100000.0, "y": 0.0, "in": [200.0, -9000.0]})];
+    // The crest is a cusp at t0: the control points are chosen so that the curve's velocity is 0 there.
+    let (t0, wide): (f64, f64) = (32.5 / 64.0, 1.0e5);
+    let (d0, d2) = ((wide, -wide), (wide, wide));
+    let d1 = ((1.0 - t0).powi(2) * d0.0 + t0 * t0 * d2.0, (1.0 - t0).powi(2) * d0.1 + t0 * t0 * d2.1);
+    let d1 = (-d1.0 / (2.0 * t0 * (1.0 - t0)), -d1.1 / (2.0 * t0 * (1.0 - t0)));
+    let (p1, p2) = (d0, (d0.0 + d1.0, d0.1 + d1.1));
+    let anchors = [json!({"x": 0.0, "y": 0.0, "out": [p1.0, p1.1]}), json!({"x": p2.0 + d2.0, "y": p2.1 + d2.1, "in": [p2.0, p2.1]})];
     let id = smooth_test_path(&mut s, &anchors, false);
-    let at = path(&s, id).subpaths[0].segment(0).eval(0.5 + 0.5 / 1024.0);
+    let curve = path(&s, id).subpaths[0].segment(0);
+    let at = curve.eval(t0);
+    let nearest_place = (0..=64).map(|k| curve.eval(f64::from(k) / 64.0).distance(at)).fold(f64::INFINITY, f64::min);
+    assert!(nearest_place > 12.0, "the nearest of 65 places is {nearest_place} pt from the click");
     assert_eq!(smooth_pass_ids(&mut s, &[at]), json!([id.0]));
 }
 
