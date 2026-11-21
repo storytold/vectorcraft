@@ -1106,9 +1106,7 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui, m: &Measured) -> Option<C
                 Some(c) => widgets::swatch_tile(ui, rect, &Paint::solid(c), false, false),
                 None => widgets::swatch_tile(ui, rect, &Paint::None, false, false),
             }
-            if chip_resp.has_focus() {
-                ui.painter().rect_stroke(rect, 0.0, ui.visuals().selection.stroke, StrokeKind::Inside);
-            }
+            widgets::focus_outline(ui, &chip_resp, rect);
             let enabled = ui.is_enabled();
             let value = chip.map(|c| hex(bytes(cms::active().display_rgb(&c))));
             chip_resp.widget_info(|| egui::WidgetInfo {
@@ -1163,6 +1161,7 @@ fn fix_chip(ui: &mut Ui, answer: Option<&Value>, aa: bool, aaa: Option<bool>) ->
     };
     let (rect, resp) = ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::click());
     widgets::swatch_tile(ui, rect, &Paint::solid(color), false, false);
+    widgets::focus_outline(ui, &resp, rect);
     let label = crate::i18n::fmt(tl!("The closest color that passes {level}: click to apply it."), &[("level", name)]);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &label));
     let resp = resp.on_hover_text(&label);

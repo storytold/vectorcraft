@@ -383,7 +383,7 @@ fn arrow_steps(ui: &Ui, id: egui::Id, horizontal: bool, vertical: bool) -> (f32,
 }
 
 /// The focus outline of a focused color control.
-fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
+pub(crate) fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
     if ui.memory(|m| m.has_focus(resp.id)) {
         let t = Tokens::get(ui.ctx());
         ui.painter().rect_stroke(rect.expand(2.0), 0.0, Stroke::new(1.0, t.accent), StrokeKind::Outside);
