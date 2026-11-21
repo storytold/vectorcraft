@@ -85,6 +85,8 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
         }
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
+        // Set Fold Angle… opens on the angle the selected fold lines fold at, while it can change one.
+        crate::addons::packaging::SET_FOLD_ANGLE => ("command", crate::addons::packaging::dialog_fields(app).ok()?),
         crate::addons::pathtools::set_corners::COMMAND => {
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }

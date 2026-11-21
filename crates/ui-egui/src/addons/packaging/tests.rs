@@ -1,7 +1,7 @@
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::{CHECK, ID, ROLES, SET_ROLE, SET_ROLE_SWATCH, show};
+use super::{CHECK, ID, ROLES, SET_FOLD_ANGLE, SET_ROLE, SET_ROLE_SWATCH, show};
 use crate::tests_labels::painted_text;
 use crate::{VectorcraftApp, menus};
 
@@ -274,10 +274,211 @@ fn every_issue_message_translates_in_every_complete_message_catalog() {
         "ca", "nl", "da",
     ] {
         let lang = crate::i18n::Lang::from_code(code).unwrap();
-        for m in ISSUE_MESSAGES.into_iter().chain(["Panels: 3, hinges: 2, errors: 1, warnings: 0"]) {
+        let no_fold_line = "select a crease, partial cut or perforation line that is neither locked nor hidden";
+        for m in ISSUE_MESSAGES.into_iter().chain(["Panels: 3, hinges: 2, errors: 1, warnings: 0", no_fold_line]) {
             assert_ne!(crate::i18n::message(lang, m), m, "{code}: {m}");
         }
     }
+}
+
+#[test]
+fn set_fold_angle_opens_its_dialog_on_the_selected_lines_angle() {
+    let (mut app, a, b) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+    app.run(SET_ROLE, json!({"role": "cut", "ids": [b]})).unwrap();
+    let entries = menus::menu_entries(&app);
+    let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Packaging Tools"] && e.label == "Set Fold Angle…").expect("listed");
+    assert_eq!(item.command.as_deref(), Some(SET_FOLD_ANGLE));
+    let opened = |app: &mut VectorcraftApp| {
+        let (target, p) = menus::click_target(&item.label, SET_FOLD_ANGLE, &item.params);
+        menus::invoke(app, &target, p);
+        let d = app.ui.dialog.take().expect("a dialog");
+        assert_eq!((d.kind.as_str(), d.str("__command")), ("command", SET_FOLD_ANGLE.to_string()));
+        d.fields["angle"].as_f64()
+    };
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(opened(&mut app), Some(90.0), "a crease folds at 90° until it has an angle of its own");
+    app.run(SET_FOLD_ANGLE, json!({"angle": 45})).unwrap();
+    assert_eq!(opened(&mut app), Some(45.0));
+    // The cut line does not fold, so the crease's angle is still the one shown.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(opened(&mut app), Some(45.0));
+    // Lines that differ open on 90°.
+    let c = app.run("shape.rectangle", json!({"x": 180, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run(SET_ROLE, json!({"role": "partialCut", "ids": [c]})).unwrap();
+    app.run("select.set", json!({"ids": [a, c]})).unwrap();
+    assert_eq!(opened(&mut app), Some(90.0));
+    // With only a cut line selected there is nothing to set: no dialog opens.
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    let (target, p) = menus::click_target(&item.label, SET_FOLD_ANGLE, &item.params);
+    menus::invoke(&mut app, &target, p);
+    assert!(app.ui.dialog.is_none());
+    // ui.menuDialog gives the command's reason.
+    let e = app.run("ui.menuDialog", json!({"command": SET_FOLD_ANGLE})).unwrap_err();
+    assert!(e.contains("select a crease, partial cut or perforation line"), "{e}");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("ui.menuDialog", json!({"command": SET_FOLD_ANGLE})).unwrap();
+    assert_eq!(app.ui.dialog.take().expect("a dialog").fields["angle"].as_f64(), Some(45.0));
+    // The options dialog opened with an angle keeps it.
+    menus::invoke(&mut app, "ui.paramDialog", json!({"command": SET_FOLD_ANGLE, "label": "Set Fold Angle", "params": {"angle": 30}}));
+    assert_eq!(app.ui.dialog.take().expect("a dialog").fields["angle"].as_f64(), Some(30.0));
+}
+
+/// Set Fold Angle…'s OK changes the lines the dialog opened on, even when the selection changes
+/// while it is open (a remote command can change it): the other crease keeps its angle.
+#[test]
+fn set_fold_angle_s_ok_changes_the_lines_the_dialog_opened_on() {
+    let (mut app, a, b) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a, b]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+    assert!(app.ui.dialog.is_some(), "the dialog opens");
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(30.0));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "OK closes the dialog");
+    let angle = |app: &mut VectorcraftApp, id: u64| {
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle
+    };
+    assert_eq!(angle(&mut app, a), Some(30.0), "the line the dialog opened on");
+    assert_eq!(angle(&mut app, b), Some(90.0), "the line selected later keeps its role's angle");
+}
+
+/// Set Fold Angle…'s OK changes nothing once another document is the active one, even a line there
+/// with the same id as the line the dialog opened on.
+#[test]
+fn set_fold_angle_s_ok_changes_nothing_in_another_document() {
+    let (mut app, a, _) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+    assert!(app.ui.dialog.is_some(), "the dialog opens");
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let other = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(other, a, "the same id in the other document");
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [other]})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("angle".into(), json!(30.0));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "OK closes the dialog");
+    let angle = |app: &mut VectorcraftApp| {
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        vectorcraft_engine::cmd::selection_fold_angles(&app.session).angle
+    };
+    assert_eq!(angle(&mut app), Some(90.0), "the other document's line keeps its role's angle");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(angle(&mut app), Some(90.0), "the first document's line is left as it was");
+}
+
+/// Set Fold Angle… keeps the angle typed into its dialog within -180° to 180°, so OK applies the
+/// nearest end instead of closing on an angle the command refuses.
+#[test]
+fn set_fold_angle_s_dialog_keeps_the_angle_within_its_range() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::Queryable;
+    let (mut app, a, _) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+    assert!(app.ui.dialog.is_some(), "the dialog opens");
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            crate::dialogs::show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(5);
+    let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+    h.get_by_role_and_label(Role::TextInput, "Angle:").focus();
+    h.run_steps(2);
+    h.key_press_modifiers(all, egui::Key::A);
+    h.get_by_role_and_label(Role::TextInput, "Angle:").type_text("181");
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().expect("still open").fields["angle"].as_f64(), Some(180.0));
+    crate::dialogs::confirm(h.state_mut()).unwrap();
+    let r = h.state_mut().session.execute("addon.packaging.roles", &json!({"ids": [a]})).unwrap();
+    assert_eq!(r["foldAngle"].as_f64(), Some(180.0), "{r}");
+    // An angle typed with more places than the field shows is kept as typed, as the panel keeps it.
+    menus::invoke(h.state_mut(), SET_FOLD_ANGLE, json!({}));
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::TextInput, "Angle:").focus();
+    h.run_steps(2);
+    h.key_press_modifiers(all, egui::Key::A);
+    h.get_by_role_and_label(Role::TextInput, "Angle:").type_text("179.9999");
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().expect("still open").fields["angle"].as_f64(), Some(179.9999));
+    crate::dialogs::confirm(h.state_mut()).unwrap();
+    let r = h.state_mut().session.execute("addon.packaging.roles", &json!({"ids": [a]})).unwrap();
+    assert_eq!(r["foldAngle"].as_f64(), Some(179.9999), "{r}");
+    // Opened on an angle with more places than that, the dialog shows them all, so typing 180 sets 180.
+    h.state_mut().run(SET_FOLD_ANGLE, json!({"angle": 179.999999, "ids": [a]})).unwrap();
+    menus::invoke(h.state_mut(), SET_FOLD_ANGLE, json!({}));
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::TextInput, "Angle:").focus();
+    h.run_steps(2);
+    h.key_press_modifiers(all, egui::Key::A);
+    h.get_by_role_and_label(Role::TextInput, "Angle:").type_text("180");
+    h.run_steps(2);
+    h.key_press(egui::Key::Tab);
+    h.run_steps(3);
+    crate::dialogs::confirm(h.state_mut()).unwrap();
+    let r = h.state_mut().session.execute("addon.packaging.roles", &json!({"ids": [a]})).unwrap();
+    assert_eq!(r["foldAngle"].as_f64(), Some(180.0), "{r}");
+    // A fine step from a whole angle steps a tenth of a degree.
+    h.state_mut().run(SET_FOLD_ANGLE, json!({"angle": 90, "ids": [a]})).unwrap();
+    menus::invoke(h.state_mut(), SET_FOLD_ANGLE, json!({}));
+    h.run_steps(3);
+    h.get_by_role_and_label(Role::TextInput, "Angle:").focus();
+    h.run_steps(2);
+    h.key_press_modifiers(all, egui::Key::ArrowUp);
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().expect("still open").fields["angle"].as_f64(), Some(90.1));
+}
+
+#[test]
+fn a_fold_angle_field_shows_every_place_the_angle_has() {
+    use super::angle_places;
+    assert_eq!([None, Some(90.0), Some(-135.5), Some(179.9999999), Some(1e-12)].map(angle_places), [1, 1, 1, 7, 12]);
+}
+
+#[test]
+fn the_panel_shows_and_resets_the_selected_lines_fold_angle() {
+    let (mut app, a, b) = app();
+    app.run(SET_ROLE, json!({"role": "crease", "ids": [a]})).unwrap();
+    app.run(SET_ROLE, json!({"role": "cut", "ids": [b]})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    let text = painted_text(&mut app, show);
+    assert!(!text.contains("Fold Angle"), "a cut line has no fold angle: {text}");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run(SET_FOLD_ANGLE, json!({"angle": 135})).unwrap();
+    let text = painted_text(&mut app, show);
+    assert!(text.contains("Fold Angle") && text.contains("135"), "{text}");
+    click_row(&mut app, "Reset");
+    let r = app.session.execute("addon.packaging.roles", &json!({"ids": [a]})).unwrap();
+    assert_eq!((r["foldAngle"].as_f64(), r["ownAngles"].as_u64()), (Some(90.0), Some(0)), "{r}");
+    // Stored text that is not an angle: the field shows the role's angle, and Reset removes the text.
+    app.session
+        .edit("Test", |d, _| {
+            if let Some(n) = d.node_mut(vectorcraft_doc::NodeId(a)) {
+                n.edit_attrs(|at| at.data.push(("vc-fold-angle".into(), "wide".into())));
+            }
+            Ok(())
+        })
+        .unwrap();
+    let r = app.session.execute("addon.packaging.roles", &json!({"ids": [a]})).unwrap();
+    assert_eq!((r["foldAngle"].as_f64(), r["ownAngles"].as_u64(), r["storedAngles"].as_u64()), (Some(90.0), Some(0), Some(1)), "{r}");
+    click_row(&mut app, "Reset");
+    let r = app.session.execute("addon.packaging.roles", &json!({"ids": [a]})).unwrap();
+    assert_eq!(r["storedAngles"].as_u64(), Some(0), "{r}");
 }
 
 #[test]

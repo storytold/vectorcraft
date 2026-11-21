@@ -17,7 +17,7 @@ mod typetools;
 mod units;
 
 pub(crate) use image::{DecodedImages, refresh_color_masks};
-pub use packaging::{fold_source, print_hidden};
+pub use packaging::{FoldAngles, fold_source, print_hidden, selection_fold_angles, selection_fold_lines};
 pub(crate) use packaging::{role_swatch_edited, role_swatches_merged};
 
 use super::CommandSpec;

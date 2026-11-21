@@ -43,6 +43,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.packaging.check",
     "addon.packaging.fold",
     "addon.packaging.roles",
+    "addon.packaging.setFoldAngle",
     "addon.packaging.setRole",
     "addon.packaging.setRoleSwatch",
     "addon.pathtools.addPoints",

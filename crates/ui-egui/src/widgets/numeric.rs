@@ -842,6 +842,21 @@ pub fn mixed_field(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, su
     mixed_field_named(ui, id, None, value, suffix, decimals, width)
 }
 
+/// [`mixed_field`] whose value is kept within `bounds`: steps stop at its ends, and a typed value
+/// past one is brought to it.
+pub fn mixed_field_within(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    suffix: &str,
+    decimals: usize,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    bounded_field(ui, id, label, None, value, suffix, decimals, width, &bounds, None, false, false).map(|v| within(v, &bounds))
+}
+
 /// [`mixed_field`] for a row named explicitly instead of by an adjacent label widget.
 pub fn mixed_field_named(
     ui: &mut Ui,

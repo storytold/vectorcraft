@@ -172,6 +172,15 @@ pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeIn
     }
 }
 
+/// The range of a number parameter (not a distance) of the commands this dialog edits, where the
+/// command has one: the field keeps what is typed within it.
+pub(super) fn number_range(command: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    match (command, key) {
+        (crate::addons::packaging::SET_FOLD_ANGLE, "angle") => Some(crate::addons::packaging::FOLD_ANGLES),
+        _ => None,
+    }
+}
+
 /// The order the fields of the commands this dialog edits come in, where the order of their
 /// names isn't it (the rest follow, by name).
 fn order(command: &str) -> &'static [&'static str] {
@@ -273,8 +282,16 @@ const FIRST_BASELINE: form::Choices = &[
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
 
 /// Closes before running, so a dialog the command opens stays open. A previewed one keeps its
-/// preview as the one undo step.
+/// preview as the one undo step. A dialog opened on one document's objects (`__doc`, its uid)
+/// closes as Cancel does and runs nothing once another document is the active one, as Delete
+/// Brush's question does (`brush_delete.rs`, `confirm`).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if let Some(doc) = d.fields.get("__doc")
+        && doc.as_u64() != app.session.active().map(|st| st.uid)
+    {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let (cmd, params) = call(d);
     if previews(d) {
         return form::commit_preview(app, &cmd, params);
