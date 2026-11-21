@@ -344,13 +344,229 @@ fn a_spot_color_reads_as_a_spot_color_and_keeps_its_link() {
 fn filled_true_on_a_filled_path_runs_no_command() {
     let (mut s, _, _) = doc();
     let steps = undo_steps(&s);
-    log(
+    let r = run(
         &mut s,
         "var p = app.activeDocument.pathItems[0]; p.filled = true; p.stroked = true; p.fillColor = p.fillColor;\
          p.strokeWidth = p.strokeWidth; p.strokeCap = p.strokeCap; p.closed = true; p.evenodd = false; p.strokeDashes = [];\
          p.pathPoints[0].anchor = p.pathPoints[0].anchor; p.translate(0, 0); p.rotate(360); p.resize(100, 100);",
-    );
+    )
+    .unwrap();
     assert_eq!(undo_steps(&s), steps, "values that change nothing add no step");
+    assert_eq!(r["slowestCommands"], json!([]), "and run no command");
+}
+
+#[test]
+fn identity_transforms_of_an_empty_path_do_nothing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    log(
+        &mut s,
+        "var n = app.activeDocument.pathItems.add(); n.rotate(360); n.rotate(0, true, true, true, true, Transformation.TOPLEFT);\
+         n.resize(100, 100); n.resize(100, 100, true, true, true, true, 100, Transformation.BOTTOM); n.translate(0, 0);",
+    );
+    for source in [
+        "app.activeDocument.pathItems[0].rotate(360, true, true, true, true, 'CENTER');",
+        "app.activeDocument.pathItems[0].resize(100, 100, true, true, true, true, 100, 'x');",
+    ] {
+        assert!(failure(&mut s, source).contains("Transformation"), "{source}");
+    }
+}
+
+/// The paint of the fill (`fill`) or stroke of `id`.
+fn paint_of(s: &Session, id: NodeId, fill: bool) -> Paint {
+    let n = node(s, id);
+    if fill { n.appearance.fill_paint() } else { n.appearance.stroke_paint() }
+}
+
+#[test]
+fn a_color_read_from_a_path_assigns_back_unchanged() {
+    let colors = [
+        "var c = new RGBColor(); c.red = 0.00001; c.green = 200.123456789; c.blue = 1 / 3;",
+        "var c = new CMYKColor(); c.cyan = 100 / 3; c.magenta = 0.00001; c.yellow = 99.99999; c.black = 12.3456789;",
+        "var c = new GrayColor(); c.gray = 100 / 3;",
+        "var c = new GrayColor(); c.gray = 99.99999;",
+        "var c = new LabColor(); c.l = 12.3456789; c.a = -0.00001; c.b = 127.99999;",
+    ];
+    for color in colors {
+        for prop in ["fillColor", "strokeColor"] {
+            let (mut s, a, _) = doc();
+            log(&mut s, &format!("{color} app.activeDocument.pathItems[0].{prop} = c;"));
+            let (before, steps) = (paint_of(&s, a, prop == "fillColor"), undo_steps(&s));
+            let r = run(&mut s, &format!("var p = app.activeDocument.pathItems[0]; p.{prop} = p.{prop};")).unwrap();
+            assert_eq!(paint_of(&s, a, prop == "fillColor"), before, "{color} {prop}");
+            assert_eq!((undo_steps(&s), &r["slowestCommands"]), (steps, &json!([])), "{color} {prop}");
+        }
+    }
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], c = new RGBColor(); c.red = 200; c.green = 0.5; p.fillColor = c;\
+         var g = new GrayColor(); g.gray = 25; p.strokeColor = g; vc.log([p.fillColor.red, p.fillColor.green, p.strokeColor.gray]);",
+    );
+    assert_eq!(out, vec![json!([200, 0.5, 25])], "whole and short values read as they were given");
+}
+
+#[test]
+fn many_point_edits_run_one_command() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let anchors: Vec<Value> = (0..2000).map(|i| json!({"x": f64::from(i) * 0.1, "y": 100})).collect();
+    let id = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    let r = run(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], pp = p.pathPoints;\
+         for (var i = 0; i < pp.length; i++) { var a = pp[i].anchor; pp[i].rightDirection = [a[0] + 1, a[1]]; pp[i].anchor = [a[0], a[1] + 5]; }\
+         vc.log(pp[1999].anchor); vc.log(pp[1999].rightDirection); pp[0].remove(); vc.log(pp.length); vc.log(p.pathPoints[0].anchor);",
+    )
+    .unwrap();
+    let out: Vec<Value> = r["log"].as_array().unwrap().iter().map(rounded).collect();
+    assert_eq!(out, vec![json!([199.9, 205]), json!([200.9, 200]), json!(1999), json!([0.1, 205])]);
+    assert_eq!(
+        r["slowestCommands"].as_array().map(|c| c.iter().map(|c| (c["id"].clone(), c["calls"].clone())).collect::<Vec<_>>()),
+        Some(vec![(json!("path.setAnchors"), json!(1))]),
+        "one command writes every point"
+    );
+    let pd = node(&s, id).path_data().unwrap().clone();
+    assert_eq!(pd.subpaths[0].anchors.len(), 1999);
+    assert!(pd.subpaths[0].anchors.iter().all(|a| (a.h_out.x - a.p.x - 1.0).abs() < 1e-9 && (a.h_out.y - a.p.y - 5.0).abs() < 1e-9));
+    assert_eq!(undo_steps(&s), steps + 1);
+}
+
+#[test]
+fn point_edits_are_written_before_the_next_other_member_reads() {
+    let (mut s, a, _) = doc();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], q = app.activeDocument.pathItems[1];\
+         p.pathPoints[0].anchor = [0, 300]; vc.log(p.geometricBounds); q.pathPoints[0].anchor = [90, 210];\
+         p.pathPoints[1].anchor = [50, 300]; vc.log(q.geometricBounds); vc.log(p.geometricBounds);",
+    );
+    let out: Vec<Value> = out.iter().map(rounded).collect();
+    assert_eq!(out, vec![json!([0, 300, 40, 240]), json!([90, 210, 150, 150]), json!([0, 300, 50, 240])]);
+    assert_eq!(node(&s, a).path_data().unwrap().subpaths[0].anchors[1].p, vectorcraft_geom::Point::new(50.0, 0.0));
+}
+
+#[test]
+fn closed_and_set_entire_path_join_the_point_edits_in_one_command() {
+    let (mut s, a, _) = doc();
+    let r = run(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0]; p.setEntirePath([[0, 300], [40, 300], [40, 240]]); p.closed = false;\
+         p.pathPoints[1].anchor = [50, 300]; vc.log(p.closed); p.closed = true; p.setEntirePath([[0, 300], [60, 300], [60, 240]]); vc.log(p.closed);",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([false, true]));
+    assert_eq!(
+        r["slowestCommands"].as_array().map(|c| c.iter().map(|c| (c["id"].clone(), c["calls"].clone())).collect::<Vec<_>>()),
+        Some(vec![(json!("path.setAnchors"), json!(1))]),
+        "one command writes every change"
+    );
+    let pd = node(&s, a).path_data().unwrap().clone();
+    assert!(pd.subpaths[0].closed);
+    assert_eq!(pd.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect::<Vec<_>>(), vec![(0.0, 0.0), (60.0, 0.0), (60.0, 60.0)]);
+}
+
+#[test]
+fn point_edits_of_a_pixel_aligned_path_read_as_the_grid_snaps_them() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.setPixelAligned", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0]; p.setEntirePath([[10.3, 280.3], [40.3, 280.3], [40.3, 240.3], [10.3, 240.3]]);\
+         vc.log(p.pathPoints[0].anchor); p.pathPoints[1].anchor = [40.4, 280.3]; vc.log(p.pathPoints[1].anchor);",
+    );
+    let anchors = node(&s, a).path_data().unwrap().subpaths[0].anchors.to_vec();
+    let stored = |i: usize| rounded(&json!([anchors[i].p.x, 300.0 - anchors[i].p.y]));
+    assert_ne!(rounded(&out[0]), json!([10.3, 280.3]), "the grid moves the point");
+    assert_eq!((rounded(&out[0]), rounded(&out[1])), (stored(0), stored(1)), "points read as the path has them");
+}
+
+#[test]
+fn added_paths_go_on_top_of_the_layer_whatever_the_drawing_mode() {
+    for mode in ["behind", "inside"] {
+        let (mut s, a, _) = doc();
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute("view.drawMode", &json!({"mode": mode})).unwrap();
+        let drawing = s.draw_mode;
+        log(
+            &mut s,
+            "var d = app.activeDocument; d.pathItems.add().name = 'n'; d.pathItems.rectangle(10, 10, 5, 5).name = 'r';\
+             d.pathItems.roundedRectangle(10, 10, 5, 5).name = 'q';",
+        );
+        let st = s.active().unwrap();
+        let children = st.doc.layers[0].children().unwrap();
+        let names: Vec<Option<&str>> = children.iter().rev().take(3).map(|c| c.name.as_deref()).collect();
+        assert_eq!(names, [Some("q"), Some("r"), Some("n")], "{mode}: the new paths are on top of the layer");
+        assert_eq!(s.draw_mode, drawing, "{mode}: the drawing mode stays");
+    }
+}
+
+#[test]
+fn overprint_changes_the_top_fill_or_stroke_only() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    s.execute("appearance.addStroke", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0]; p.fillOverprint = true; p.strokeOverprint = true; vc.log([p.fillOverprint, p.strokeOverprint]);",
+    );
+    assert_eq!(out, vec![json!([true, true])]);
+    let items = node(&s, a).appearance.items.clone();
+    for fill in [true, false] {
+        let flags: Vec<bool> = items.iter().filter(|i| i.is_fill() == fill).map(|i| i.overprint()).collect();
+        assert!(flags.len() >= 2, "{flags:?}");
+        let (top, lower) = flags.split_last().unwrap();
+        assert!(*top && lower.iter().all(|f| !f), "fill {fill}: only the top row overprints: {flags:?}");
+    }
+}
+
+#[test]
+fn filled_true_on_a_compound_member_places_the_gradient_on_the_compound() {
+    for member in 0..2 {
+        let (mut s, a, b) = doc();
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"ids": [compound.0], "none": true})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+        s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "stops": stops}})).unwrap();
+        if let Paint::Gradient(g) = &mut s.paint.fill {
+            g.geom = Some(vectorcraft_color::GradientGeom {
+                start: vectorcraft_geom::Point::new(0.0, 0.5),
+                end: vectorcraft_geom::Point::new(1.0, 0.5),
+                aspect: 1.0,
+                focal: None,
+            });
+        }
+        log(&mut s, &format!("app.activeDocument.pathItems[{member}].filled = true;"));
+        let b = node(&s, compound).geometric_bounds().unwrap();
+        let Paint::Gradient(g) = node(&s, compound).appearance.fill_paint() else { panic!("member {member}: the compound has a gradient") };
+        let geom = g.geom.unwrap();
+        assert!((geom.start.x - b.x0).abs() < 1e-6 && (geom.end.x - b.x1).abs() < 1e-6, "member {member}: {geom:?} spans {b:?}");
+    }
+}
+
+#[test]
+fn set_anchors_reads_smooth_false_as_a_corner() {
+    let (mut s, a, _) = doc();
+    let anchor = |smooth: Value| {
+        let mut v = json!({"x": 20, "y": 20, "in": [10, 20], "out": [30, 20]});
+        if !smooth.is_null() {
+            v["smooth"] = smooth;
+        }
+        v
+    };
+    for (smooth, kind, read) in [(json!(false), AnchorKind::Corner, "PointType.CORNER"), (Value::Null, AnchorKind::Smooth, "PointType.SMOOTH")] {
+        let subpaths = json!([{"anchors": [anchor(smooth.clone()), {"x": 60, "y": 20}], "closed": false}]);
+        s.execute("path.setAnchors", &json!({"id": a.0, "subpaths": subpaths})).unwrap();
+        assert_eq!(node(&s, a).path_data().unwrap().subpaths[0].anchors[0].kind, kind, "smooth {smooth}");
+        assert_eq!(log(&mut s, "vc.log(app.activeDocument.pathItems[0].pathPoints[0].pointType);"), vec![json!(read)], "smooth {smooth}");
+    }
 }
 
 #[test]

@@ -6,8 +6,10 @@
 //!
 //! A `PathPoints` object holds its path's handle, and a `PathPoint` the path's handle and the
 //! point's index, counted across the path's subpaths in order. Each read looks the path up again.
-//! Every change runs one command (`path.setAnchors` for the geometry), inside the run's one undo
-//! step, and a change that changes nothing runs no command.
+//! Every change runs one command inside the run's one undo step, and a change that changes nothing
+//! runs no command. Changes to the points of one path wait in the run's [`super::State`] and are
+//! written together with one `path.setAnchors` ([`flush`]) before any other member, command or
+//! path's points are read or changed, and when the script ends.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `Document.pathItems` lists the document's paths in the order of `pageItems`, paths inside
@@ -15,12 +17,14 @@
 //! - A change to the geometry or paint of a path that is hidden or locked, or that is in a hidden
 //!   or locked layer or group, throws `Cannot edit` with nothing changed.
 //! - A path in a compound path or compound shape reads that owner's paint, which the paint
-//!   commands change in its place. A paint or stroke change leaves the paint for new art, the
-//!   active proxy and the recent colors as they were.
+//!   commands change in its place, and a gradient that `filled = true` gives it is placed on that
+//!   owner's bounds. A paint or stroke change leaves the paint for new art, the active proxy and
+//!   the recent colors as they were. `fillOverprint` and `strokeOverprint` read and change the top
+//!   fill or stroke only.
 //! - `closed` is true when every subpath of the path is closed, and assigning it opens or closes
 //!   them all.
-//! - `pathItems.add()` makes a path with no points on top of the active layer, painted as new art
-//!   is. `filled` and `stroked` set to true give a path with no fill or stroke new art's fill or
+//! - `pathItems.add()` and the shape creators make their path on top of the active layer, whatever
+//!   the drawing mode, painted as new art is; `add()` makes a path with no points. `filled` and `stroked` set to true give a path with no fill or stroke new art's fill or
 //!   stroke (solid, gradient or pattern), or black when new art has none. `PathPoints.add()` adds
 //!   a corner point with no handles at the last point, or at `[0, 0]` on a path with no points.
 //!   Removing the last points leaves the path, with no points.
@@ -28,7 +32,8 @@
 //! - Shape creators take sizes and radii that are finite and not negative; `sides` is a whole
 //!   number from 3 to 1000 and `points` one from 2 to 1000. `inscribed` true throws an error that
 //!   says it is not available yet. `rotateAbout` and `scaleAbout` default to
-//!   `Transformation.CENTER`.
+//!   `Transformation.CENTER`. A transform that leaves the path where it is (`rotate(360)`,
+//!   `resize(100, 100)`) checks its arguments and runs no command, on a path with no points too.
 //! - The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
 //!   `changeStrokePattern` given as different values throw an error; gradients move with the art,
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
@@ -46,8 +51,8 @@ use vectorcraft_tools::params::gradient_params;
 
 use super::{
     Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
-    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, property,
-    this_doc, typename_of, whole, with_doc,
+    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
+    point_method, point_property, property, this_doc, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -117,14 +122,14 @@ fn path_ref(h: &super::Host, item: Item) -> Data {
     host_ref("PathItem", &[float(h.run), float(item.doc.uid), high, low])
 }
 
-/// How many points a path has, across its subpaths.
-fn point_count(pd: &PathData) -> usize {
-    pd.subpaths.iter().map(|sp| sp.anchors.len()).sum()
+/// How many points a path with the subpaths `subs` has.
+fn point_count(subs: &[SubPath]) -> usize {
+    subs.iter().map(|sp| sp.anchors.len()).sum()
 }
 
-/// The subpath and the place in it of point `i`.
-fn locate(pd: &PathData, mut i: usize) -> Option<(usize, usize)> {
-    for (s, sp) in pd.subpaths.iter().enumerate() {
+/// The subpath and the place in it of point `i`, among the subpaths `subs`.
+fn locate(subs: &[SubPath], mut i: usize) -> Option<(usize, usize)> {
+    for (s, sp) in subs.iter().enumerate() {
         if i < sp.anchors.len() {
             return Some((s, i));
         }
@@ -137,14 +142,69 @@ fn anchor_json(a: &Anchor) -> Value {
     json!({"x": a.p.x, "y": a.p.y, "in": [a.h_in.x, a.h_in.y], "out": [a.h_out.x, a.h_out.y], "smooth": a.kind == AnchorKind::Smooth})
 }
 
-/// Gives the path of `item` the subpaths `subs` with `path.setAnchors`, unless it has them.
-fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::Result<(), HostError> {
-    let (same, ok) = read_path(h, item, |st, _, pd| (pd.subpaths == subs, editable(&st.doc, item.id)))?;
-    if same {
-        return Ok(());
+fn same_path(a: Item, b: Item) -> bool {
+    a.doc.uid == b.doc.uid && a.id == b.id
+}
+
+/// Reads the subpaths of the path of `item` with `f`, its waiting point changes included.
+fn read_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&[SubPath]) -> T) -> std::result::Result<T, HostError> {
+    if let Some((waiting, subs)) = &*h.dom.pending.borrow()
+        && same_path(*waiting, item)
+    {
+        return Ok(f(subs));
     }
-    if !ok {
-        return Err(cannot_edit(item.id));
+    read_path(h, item, |_, _, pd| f(&pd.subpaths))
+}
+
+/// Changes the subpaths of the path of `item` with `f`. The change waits in [`super::State`] with
+/// the path's other point changes until [`flush`] writes them. The first change of a path writes
+/// the waiting changes of another path first, and throws `Cannot edit` when the path is hidden or
+/// locked, unless it changes nothing. A path that is aligned to the pixel grid, or is in an object
+/// that is, is written at once, so that its points read as the grid snaps them.
+fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>) -> T) -> std::result::Result<T, HostError> {
+    if let Some((waiting, subs)) = &mut *h.dom.pending.borrow_mut()
+        && same_path(*waiting, item)
+    {
+        return Ok(f(subs));
+    }
+    flush(h)?;
+    let mut subs = read_path(h, item, |_, _, pd| pd.subpaths.clone())?;
+    let r = f(&mut subs);
+    let (same, ok, aligned) = read_path(h, item, |st, _, pd| {
+        let d = &st.doc;
+        let aligned = d.ancestry(item.id).is_some_and(|a| a.iter().chain([&item.id]).any(|i| d.node(*i).is_some_and(|n| n.extras().pixel_aligned)));
+        (pd.subpaths == subs, editable(d, item.id), aligned)
+    })?;
+    if !same {
+        if !ok {
+            return Err(cannot_edit(item.id));
+        }
+        *h.dom.pending.borrow_mut() = Some((item, subs));
+        if aligned {
+            flush(h)?;
+        }
+    }
+    Ok(r)
+}
+
+/// Gives the path of `item` the subpaths `subs` ([`edit_points`]).
+fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::Result<(), HostError> {
+    edit_points(h, item, |s| *s = subs)
+}
+
+/// Writes the waiting point changes of a path ([`edit_points`]) with one `path.setAnchors`, unless
+/// the path has those points already.
+pub(super) fn flush(h: &super::Host) -> std::result::Result<(), HostError> {
+    let Some((item, subs)) = h.dom.pending.borrow_mut().take() else { return Ok(()) };
+    let same = {
+        let s = h.session.borrow();
+        let node = s.documents().iter().find(|d| d.uid == item.doc.uid).and_then(|st| st.doc.node(item.id));
+        node.and_then(|n| n.path_data()).map(|pd| pd.subpaths == subs)
+    };
+    match same {
+        Some(true) => return Ok(()),
+        Some(false) => {}
+        None => return Err(HostError::Error(STALE_ITEM.into())),
     }
     let subpaths: Vec<Value> =
         subs.iter().map(|sp| json!({"anchors": sp.anchors.iter().map(anchor_json).collect::<Vec<_>>(), "closed": sp.closed})).collect();
@@ -152,7 +212,23 @@ fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::R
     Ok(())
 }
 
-/// Runs `id` with `params` and `ids: [item]` on the item, which must be one the user could edit.
+/// The object whose paint the path `n` with id `id` shows: its compound path or compound shape
+/// when it is a member of one, since the paint commands paint that owner in its place.
+fn paint_owner<'a>(d: &'a crate::Document, id: NodeId, n: &'a crate::doc::Node) -> &'a crate::doc::Node {
+    d.parent_of(id).and_then(|p| d.node(p)).filter(|p| matches!(p.kind, NodeKind::Compound { .. }) || p.is_compound_shape()).unwrap_or(n)
+}
+
+/// Runs `f` with the drawing mode set to normal, so that the paths it makes go on top of the active
+/// layer, then puts the drawing mode back.
+fn drawing_normally<T>(h: &super::Host, f: impl FnOnce() -> T) -> T {
+    let kept = std::mem::replace(&mut h.session.borrow_mut().draw_mode, crate::DrawMode::Normal);
+    let r = f();
+    h.session.borrow_mut().draw_mode = kept;
+    r
+}
+
+/// Runs `id` with `params` and `ids: [item]` (unless `params` names its `ids`) on the item, which
+/// must be one the user could edit.
 /// The paint for new art, the active Fill or Stroke proxy, the last color and gradient and the
 /// recent colors, which `paint.setFill`, `paint.setStroke` and `stroke.set` also set, are put
 /// back afterwards, so the edit changes only the path.
@@ -162,7 +238,7 @@ fn edit_path(h: &super::Host, item: Item, id: &str, mut params: Value) -> std::r
         return Err(cannot_edit(item.id));
     }
     if let Some(o) = params.as_object_mut() {
-        o.insert("ids".into(), json!([item.id.0]));
+        o.entry("ids").or_insert_with(|| json!([item.id.0]));
     }
     keeping_paint(h, || edit_item(h, item, id, &params))
 }
@@ -273,11 +349,11 @@ fn made_id(r: &Data) -> std::result::Result<NodeId, HostError> {
     id.map(NodeId).ok_or_else(|| HostError::Error("the path was not made".into()))
 }
 
-/// Runs the command `id` that makes a path in `doc`, the selection kept, and reverses the new
-/// path's direction when `reversed`. → the new path.
+/// Runs the command `id` that makes a path in `doc` on top of the active layer, the selection kept,
+/// and reverses the new path's direction when `reversed`. → the new path.
 fn make(h: &super::Host, doc: Doc, id: &str, params: &Value, reversed: bool) -> Answer {
     let made = on_doc(h, doc.uid, true, |h| {
-        let id = made_id(&command(h, id, params)?)?;
+        let id = made_id(&drawing_normally(h, || command(h, id, params))?)?;
         if reversed {
             command(h, "path.reverse", &json!({"ids": [id.0]}))?;
         }
@@ -426,8 +502,8 @@ fn items_star(h: &super::Host, a: &[Data]) -> Answer {
     make(h, doc, "shape.star", &json!({"cx": c.x, "cy": c.y, "radius1": r1, "radius2": r2, "points": points}), reversed)
 }
 
-/// `pathItems.add()`: a path with no points, from `path.create` with empty path data, painted as
-/// new art. When new art has no fill and no stroke, the black stroke `path.create` gives an open
+/// `pathItems.add()`: a path with no points on top of the active layer, from `path.create` with
+/// empty path data, painted as new art. When new art has no fill and no stroke, the black stroke `path.create` gives an open
 /// path is set back to none in the same step.
 fn items_add(h: &super::Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
@@ -436,7 +512,7 @@ fn items_add(h: &super::Host, a: &[Data]) -> Answer {
             let ap = h.session.borrow().new_art();
             ap.fill_paint().is_none() && ap.stroke_paint().is_none()
         };
-        let id = made_id(&command(h, "path.create", &json!({"d": ""}))?)?;
+        let id = made_id(&drawing_normally(h, || command(h, "path.create", &json!({"d": ""})))?)?;
         if unpainted {
             keeping_paint(h, || command(h, "paint.setStroke", &json!({"none": true, "ids": [id.0]})))?;
         }
@@ -457,14 +533,13 @@ fn path_points(h: &super::Host, a: &[Data]) -> Answer {
 
 fn path_closed(h: &super::Host, a: &[Data]) -> Answer {
     let item = this_path(h, a)?;
-    read_path(h, item, |_, _, pd| Data::Bool(!pd.subpaths.is_empty() && pd.subpaths.iter().all(|sp| sp.closed)))
+    read_points(h, item, |subs| Data::Bool(!subs.is_empty() && subs.iter().all(|sp| sp.closed)))
 }
 
 fn path_set_closed(h: &super::Host, a: &[Data]) -> Answer {
     let closed = boolean(arg(a, 1), "closed")?;
     let item = this_path(h, a)?;
-    let subs = read_path(h, item, |_, _, pd| pd.subpaths.iter().map(|sp| SubPath { anchors: sp.anchors.clone(), closed }).collect())?;
-    write_path(h, item, subs)?;
+    edit_points(h, item, |subs| subs.iter_mut().for_each(|sp| sp.closed = closed))?;
     Ok(Data::Undefined)
 }
 
@@ -517,8 +592,9 @@ fn path_set_entire(h: &super::Host, a: &[Data]) -> Answer {
         return Err(HostError::Range(format!("setEntirePath takes at most {MAX_POINTS} points")));
     }
     let script: Vec<[f64; 2]> = list.iter().map(|d| point(d, "each point")).collect::<std::result::Result<_, _>>()?;
-    let (f, closed) = read_path(h, item, |st, _, pd| (frame(st), !pd.subpaths.is_empty() && pd.subpaths.iter().all(|sp| sp.closed)))?;
-    let (f, c) = (f?, h.dom.coords.get());
+    let f = with_doc(h, item.doc, |_, st| frame(st))?;
+    let closed = read_points(h, item, |subs| !subs.is_empty() && subs.iter().all(|sp| sp.closed))?;
+    let c = h.dom.coords.get();
     let anchors: Vec<Anchor> = script.iter().map(|p| Anchor::corner(f.to_document(c, *p))).collect();
     let subs = if anchors.is_empty() { Vec::new() } else { vec![SubPath::new(anchors, closed)] };
     write_path(h, item, subs)?;
@@ -546,13 +622,7 @@ struct Look {
 /// since the paint commands paint that owner in its place.
 fn look(h: &super::Host, item: Item) -> std::result::Result<Look, HostError> {
     read_path(h, item, |st, n, _| {
-        let d = &st.doc;
-        let owner = d
-            .parent_of(item.id)
-            .and_then(|p| d.node(p))
-            .filter(|p| matches!(p.kind, NodeKind::Compound { .. }) || p.is_compound_shape())
-            .unwrap_or(n);
-        let ap = &owner.appearance;
+        let ap = &paint_owner(&st.doc, item.id, n).appearance;
         let fill = ap.fill();
         let stroke = ap.stroke();
         Look {
@@ -597,7 +667,8 @@ fn set_paint(h: &super::Host, item: Item, fill: bool, color: Option<Color>) -> s
 
 /// The paint new art gets for its fill or stroke, as `paint.setFill` or `paint.setStroke` params for
 /// the path `item`: a solid color, linked to its global or spot swatch while the document has that
-/// swatch; a gradient, a placed one moved onto the path's bounds as new art takes it; or a pattern.
+/// swatch; a gradient, a placed one moved onto the bounds of the path or of the compound path or
+/// compound shape whose paint it shows, as new art takes it; or a pattern.
 /// A fill or stroke of none gives black. A pattern that its swatch does not give as new art has it
 /// (its own placement, or a pattern the document does not have) throws an error.
 fn new_art_params(h: &super::Host, item: Item, fill: bool) -> std::result::Result<Value, HostError> {
@@ -619,7 +690,7 @@ fn new_art_params(h: &super::Host, item: Item, fill: bool) -> std::result::Resul
         Paint::Gradient(g) => {
             let mut g = g.clone();
             if g.geom.is_some() || g.freeform.is_some() {
-                match read_path(h, item, |_, n, _| n.geometric_bounds())? {
+                match read_path(h, item, |st, n, _| paint_owner(&st.doc, item.id, n).geometric_bounds())? {
                     Some(b) => {
                         ap.rebase_gradients(GraphicStyle::UNIT_BOX, b);
                         if let Paint::Gradient(placed) = top(&ap) {
@@ -827,10 +898,15 @@ fn set_overprint(h: &super::Host, a: &[Data], fill: bool) -> Answer {
     let (item, look) = this_look(h, a)?;
     let (now, paint) = if fill { (look.fill_overprint, &look.fill) } else { (look.stroke_overprint, &look.stroke) };
     if now != on {
-        if paint.is_none() {
+        // The top fill or stroke of the object `look` reads, as `item` names it to the command.
+        let top = read_path(h, item, |st, n, _| {
+            let owner = paint_owner(&st.doc, item.id, n);
+            owner.appearance.items.iter().rposition(|i| i.is_fill() == fill).map(|index| (owner.id, index))
+        })?;
+        let (Some((owner, index)), false) = (top, paint.is_none()) else {
             return Err(HostError::Error(format!("the path has no {key} to overprint")));
-        }
-        edit_path(h, item, "object.setOverprint", json!({key: on}))?;
+        };
+        edit_path(h, item, "object.setOverprint", json!({key: on, "item": index, "ids": [owner.0]}))?;
     }
     Ok(Data::Undefined)
 }
@@ -845,16 +921,23 @@ fn path_set_stroke_overprint(h: &super::Host, a: &[Data]) -> Answer {
 
 // ---- PathItem transforms ----
 
-/// The point of the path's geometric bounds `r`, in document coordinates, that a `Transformation`
-/// value names (left out: the center).
-fn about(h: &super::Host, item: Item, d: &Data, r: Rect) -> std::result::Result<Point, HostError> {
+/// The member of `Transformation` that `d` names (left out: `CENTER`).
+fn about_name(d: &Data) -> std::result::Result<&'static str, HostError> {
     let name = match d {
         Data::Undefined => "Transformation.CENTER",
         Data::String(s) => s.as_str(),
         _ => return Err(HostError::Type("give a Transformation value".into())),
     };
+    let members = ENUMS.iter().find(|(e, _)| *e == "Transformation").map_or(&[][..], |(_, m)| *m);
+    let member = name.strip_prefix("Transformation.").and_then(|m| members.iter().find(|x| **x == m));
+    member.copied().ok_or_else(|| HostError::Type("give a Transformation value".into()))
+}
+
+/// The point of the path's geometric bounds `r`, in document coordinates, that the `Transformation`
+/// member `name` ([`about_name`]) names.
+fn about(h: &super::Host, item: Item, name: &str, r: Rect) -> std::result::Result<Point, HostError> {
     let (cx, cy) = ((r.x0 + r.x1) / 2.0, (r.y0 + r.y1) / 2.0);
-    Ok(match name.strip_prefix("Transformation.").unwrap_or("") {
+    Ok(match name {
         "CENTER" => Point::new(cx, cy),
         "TOP" => Point::new(cx, r.y0),
         "BOTTOM" => Point::new(cx, r.y1),
@@ -914,11 +997,13 @@ fn path_translate(h: &super::Host, a: &[Data]) -> Answer {
 fn path_rotate(h: &super::Host, a: &[Data]) -> Answer {
     let angle = number(arg(a, 1), "angle")?;
     let item = this_path(h, a)?;
-    let (r, _) = item_rect(h, item, false)?;
-    let origin = about(h, item, arg(a, 6), r)?;
-    let mut params = json!({"angle": angle, "origin": [origin.x, origin.y]});
+    let place = about_name(arg(a, 6))?;
+    let mut params = json!({"angle": angle});
     transform_options(a, 2, &mut params)?;
     if angle.rem_euclid(360.0) != 0.0 {
+        let (r, _) = item_rect(h, item, false)?;
+        let origin = about(h, item, place, r)?;
+        params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.rotate", params)?;
     }
     Ok(Data::Undefined)
@@ -937,9 +1022,8 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
         return Err(HostError::Range("changeLineWidths must be from 0 to 100000 percent".into()));
     }
     let item = this_path(h, a)?;
-    let (r, _) = item_rect(h, item, false)?;
-    let origin = about(h, item, arg(a, 8), r)?;
-    let mut params = json!({"sx": sx, "sy": sy, "origin": [origin.x, origin.y], "basis": "page", "strokes": false});
+    let place = about_name(arg(a, 8))?;
+    let mut params = json!({"sx": sx, "sy": sy, "basis": "page", "strokes": false});
     transform_options(a, 3, &mut params)?;
     let width = look(h, item)?.width;
     let new_width = widths.map(|w| width * w / 100.0);
@@ -947,6 +1031,9 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
         return Err(HostError::Range("changeLineWidths would make the stroke weight more than 1000 points".into()));
     }
     if sx != 100.0 || sy != 100.0 {
+        let (r, _) = item_rect(h, item, false)?;
+        let origin = about(h, item, place, r)?;
+        params["origin"] = json!([origin.x, origin.y]);
         edit_path(h, item, "object.scale", params)?;
     }
     if let Some(w) = new_width
@@ -967,7 +1054,7 @@ fn points_path(h: &super::Host, a: &[Data]) -> std::result::Result<Item, HostErr
 
 fn points_length(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
-    read_path(h, item, |_, _, pd| num(float(point_count(pd) as u64)))
+    read_points(h, item, |subs| num(float(point_count(subs) as u64)))
 }
 
 fn points_parent(h: &super::Host, a: &[Data]) -> Answer {
@@ -984,7 +1071,7 @@ fn points_at(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    let n = read_path(h, item, |_, _, pd| point_count(pd))?;
+    let n = read_points(h, item, point_count)?;
     Ok(if i < n { point_ref(h, item, i) } else { Data::Undefined })
 }
 
@@ -1001,22 +1088,19 @@ fn points_index(h: &super::Host, a: &[Data]) -> Answer {
 
 fn points_add(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
-    let (mut subs, n, origin) = read_path(h, item, |st, _, pd| {
-        let origin = frame(st).map(|f| f.to_document(h.dom.coords.get(), [0.0, 0.0]));
-        (pd.subpaths.clone(), point_count(pd), origin)
-    })?;
+    let origin = with_doc(h, item.doc, |_, st| frame(st).map(|f| f.to_document(h.dom.coords.get(), [0.0, 0.0])));
+    let (n, last) = read_points(h, item, |subs| (point_count(subs), subs.iter().rev().find_map(|sp| sp.anchors.last()).map(|a| a.p)))?;
     if n >= MAX_POINTS {
         return Err(HostError::Range(format!("PathPoints.add takes a path to at most {MAX_POINTS} points")));
     }
-    let p = match subs.iter().rev().find_map(|sp| sp.anchors.last()) {
-        Some(last) => last.p,
+    let p = match last {
+        Some(p) => p,
         None => origin?,
     };
-    match subs.last_mut() {
+    edit_points(h, item, |subs| match subs.last_mut() {
         Some(sp) => sp.anchors.push(Anchor::corner(p)),
         None => subs.push(SubPath::new(vec![Anchor::corner(p)], false)),
-    }
-    write_path(h, item, subs)?;
+    })?;
     Ok(point_ref(h, item, n))
 }
 
@@ -1034,7 +1118,7 @@ pub(super) fn this_point(h: &super::Host, a: &[Data]) -> std::result::Result<(It
     let [run, uid, high, low, i] = handle.as_slice() else { return Err(HostError::Type("this is not a PathPoint".into())) };
     let item = path_at(h, *run, *uid, *high, *low)?;
     let i = whole(*i).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
-    let n = read_path(h, item, |_, _, pd| point_count(pd))?;
+    let n = read_points(h, item, point_count)?;
     if i >= n {
         return Err(HostError::Error(STALE_POINT.into()));
     }
@@ -1045,9 +1129,9 @@ pub(super) fn this_point(h: &super::Host, a: &[Data]) -> std::result::Result<(It
 fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords, &Anchor) -> Data) -> Answer {
     let (item, i) = this_point(h, a)?;
     let c = h.dom.coords.get();
-    read_path(h, item, |st, _, pd| {
-        let fr = frame(st)?;
-        let anchor = locate(pd, i).and_then(|(s, j)| pd.subpaths.get(s).and_then(|sp| sp.anchors.get(j)));
+    let fr = with_doc(h, item.doc, |_, st| frame(st))?;
+    read_points(h, item, |subs| {
+        let anchor = locate(subs, i).and_then(|(s, j)| subs.get(s).and_then(|sp| sp.anchors.get(j)));
         anchor.map(|an| f(&fr, c, an)).ok_or_else(|| HostError::Error(STALE_POINT.into()))
     })?
 }
@@ -1056,12 +1140,13 @@ fn read_point(h: &super::Host, a: &[Data], f: impl FnOnce(&super::Frame, Coords,
 /// coordinates (for a point property) or the value itself.
 fn edit_point(h: &super::Host, a: &[Data], f: impl FnOnce(&mut Anchor)) -> Answer {
     let (item, i) = this_point(h, a)?;
-    let mut subs = read_path(h, item, |_, _, pd| pd.subpaths.clone())?;
-    let (s, j) = read_path(h, item, |_, _, pd| locate(pd, i))?.ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
-    if let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j)) {
-        f(an);
-    }
-    write_path(h, item, subs)?;
+    edit_points(h, item, |subs| {
+        if let Some((s, j)) = locate(subs, i)
+            && let Some(an) = subs.get_mut(s).and_then(|sp| sp.anchors.get_mut(j))
+        {
+            f(an);
+        }
+    })?;
     Ok(Data::Undefined)
 }
 
@@ -1121,15 +1206,16 @@ fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
 /// `remove()`: deletes the point; a subpath left with no points goes too.
 fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
     let (item, i) = this_point(h, a)?;
-    let mut subs = read_path(h, item, |_, _, pd| pd.subpaths.clone())?;
-    let (s, j) = read_path(h, item, |_, _, pd| locate(pd, i))?.ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
-    if let Some(sp) = subs.get_mut(s) {
-        sp.anchors.remove(j);
-        if sp.anchors.is_empty() {
-            subs.remove(s);
+    edit_points(h, item, |subs| {
+        if let Some((s, j)) = locate(subs, i)
+            && let Some(sp) = subs.get_mut(s)
+        {
+            sp.anchors.remove(j);
+            if sp.anchors.is_empty() {
+                subs.remove(s);
+            }
         }
-    }
-    write_path(h, item, subs)?;
+    })?;
     Ok(Data::Undefined)
 }
 
@@ -1138,14 +1224,14 @@ fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
 /// The members `PathItem` adds to `PageItem`'s.
 pub(super) fn path_item_members(l: &Link) -> Vec<(String, HostMember)> {
     let mut m = named(vec![
-        ("pathPoints", get(l, path_points)),
-        ("closed", property(l, path_closed, path_set_closed)),
+        ("pathPoints", point_get(l, path_points)),
+        ("closed", point_property(l, path_closed, path_set_closed)),
         ("evenodd", property(l, path_evenodd, path_set_evenodd)),
         ("area", get(l, path_area)),
         ("length", get(l, path_length)),
         ("guides", get(l, path_guides)),
         ("clipping", get(l, path_clipping)),
-        ("setEntirePath", method(l, path_set_entire)),
+        ("setEntirePath", point_method(l, path_set_entire)),
         ("filled", property(l, path_filled, path_set_filled)),
         ("fillColor", property(l, path_fill_color, path_set_fill_color)),
         ("fillOverprint", property(l, path_fill_overprint, path_set_fill_overprint)),
@@ -1193,13 +1279,13 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             None,
             named(vec![
                 ("typename", typename_of("PathPoints")),
-                ("length", get(l, points_length)),
-                ("parent", get(l, points_parent)),
-                ("index", method(l, points_index)),
-                ("add", method(l, points_add)),
-                ("removeAll", method(l, points_remove_all)),
+                ("length", point_get(l, points_length)),
+                ("parent", point_get(l, points_parent)),
+                ("index", point_method(l, points_index)),
+                ("add", point_method(l, points_add)),
+                ("removeAll", point_method(l, points_remove_all)),
             ]),
-            Some(super::function(l, points_at)),
+            Some(super::point_function(l, points_at)),
         ),
         class(
             "PathPoint",
@@ -1207,12 +1293,12 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             {
                 let mut m = named(vec![
                     ("typename", typename_of("PathPoint")),
-                    ("parent", get(l, pt_parent)),
-                    ("anchor", property(l, pt_anchor, pt_set_anchor)),
-                    ("leftDirection", property(l, pt_left, pt_set_left)),
-                    ("rightDirection", property(l, pt_right, pt_set_right)),
-                    ("pointType", property(l, pt_type, pt_set_type)),
-                    ("remove", method(l, pt_remove)),
+                    ("parent", point_get(l, pt_parent)),
+                    ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
+                    ("leftDirection", point_property(l, pt_left, pt_set_left)),
+                    ("rightDirection", point_property(l, pt_right, pt_set_right)),
+                    ("pointType", point_property(l, pt_type, pt_set_type)),
+                    ("remove", point_method(l, pt_remove)),
                 ]);
                 m.push(later(l, "PathPoint", "selected"));
                 m

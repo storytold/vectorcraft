@@ -88,14 +88,17 @@ const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, and whether a call's own savepoint
-/// ([`atomically`]) is open.
+/// page items, kept while that document is unchanged, the point changes of a path not written yet,
+/// and whether a call's own savepoint ([`atomically`]) is open.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     /// The last list of a document's paths ([`paths`]), kept while that document is unchanged.
     paths: RefCell<Option<ItemList>>,
+    /// A path and its subpaths with the point changes the run has made to it and not written yet
+    /// ([`flush`]).
+    pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
     saving: Cell<bool>,
 }
 
@@ -134,13 +137,32 @@ type Answer = std::result::Result<Data, HostError>;
 /// A member function: the run's host and the call's arguments, `this` first.
 type Member = fn(&Host, &[Data]) -> Answer;
 
+/// A member function that first writes the point changes waiting in [`State`] ([`flush`]).
 fn function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, true)
+}
+
+/// A member function of the points of a path, which reads and adds to the point changes waiting in
+/// [`State`] instead of writing them first.
+fn point_function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, false)
+}
+
+fn call(link: &Link, f: Member, flushing: bool) -> HostFunction {
     let l = link.clone();
     Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
         h.charge_call(16 + a.iter().map(data_size).sum::<u64>())?;
+        if flushing {
+            flush(&h)?;
+        }
         f(&h, &a)
     })
+}
+
+/// Writes the point changes of a path that wait in [`State`] with one command ([`paths::flush`]).
+pub(super) fn flush(h: &Host) -> std::result::Result<(), HostError> {
+    paths::flush(h)
 }
 
 fn get(link: &Link, f: Member) -> HostMember {
@@ -153,6 +175,19 @@ fn property(link: &Link, g: Member, s: Member) -> HostMember {
 
 fn method(link: &Link, f: Member) -> HostMember {
     HostMember::Method(function(link, f))
+}
+
+/// [`get`], [`property`] and [`method`] for a member of the points of a path ([`point_function`]).
+fn point_get(link: &Link, f: Member) -> HostMember {
+    HostMember::Get(point_function(link, f))
+}
+
+fn point_property(link: &Link, g: Member, s: Member) -> HostMember {
+    HostMember::Property { get: point_function(link, g), set: point_function(link, s) }
+}
+
+fn point_method(link: &Link, f: Member) -> HostMember {
+    HostMember::Method(point_function(link, f))
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
