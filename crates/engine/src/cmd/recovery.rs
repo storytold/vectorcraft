@@ -874,6 +874,11 @@ struct Meta {
     /// images were kept apart: the document entry holds them).
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     images: BTreeMap<String, ImageRef>,
+    /// A command a script ran opened or changed the document since the person last saved it
+    /// ([`crate::DocState::by_script`]): the commands scripts run treat the restored document as
+    /// one a script opened.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    by_script: bool,
 }
 
 /// One of a copy's images: its entry in the copy's area.
@@ -1195,6 +1200,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             links_from: st.links_from.clone().filter(|_| st.path.is_none()),
             // Filled in as the copy is written.
             images: BTreeMap::new(),
+            by_script: st.by_script.is_some(),
         };
         out.push(RecoveryJob { uid: st.uid, file, title, meta, save, store: store.clone() });
     }
@@ -1517,6 +1523,9 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     st.imported_from = meta.imported_from.clone();
     st.import_losses = meta.import_losses.clone();
     st.format = SAVE_FORMATS.iter().copied().find(|f| *f == meta.format).unwrap_or("vectorcraft");
+    if meta.by_script {
+        st.by_script = Some(crate::doc_state::ByScript::Opened);
+    }
     if let Some(pdf) = meta.native_pdf_compatible {
         st.save_options.insert("pdfCompatible".into(), json!(pdf));
     }

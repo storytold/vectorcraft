@@ -479,6 +479,116 @@ fn a_scripts_export_reads_the_files_the_documents_open_before_it_link_to() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A script line that runs command `id` with `params` and logs `ok`, or `denied` when the gate
+/// refuses a file.
+fn tried(id: &str, params: &str) -> String {
+    format!(
+        "try {{ vc.run('{id}', {params}); vc.log('ok'); }} \
+         catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+    )
+}
+
+/// A document a script opened from a file that only a link let it read is not written in that run
+/// or a later one, and gives a later run no access to its file once no document the person left
+/// links to it.
+#[test]
+fn a_document_a_script_opened_from_a_linked_file_stays_read_only_in_later_runs() {
+    use crate::tests_links::{RED, open, place, png, save, session, write};
+    let art = fresh_folder("gate-linked-runs").join("art");
+    std::fs::create_dir_all(&art).unwrap();
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (pic, inner, poster) = (p(art.join("photo.png")), p(art.join("inner.vectorcraft")), p(art.join("poster.vectorcraft")));
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    save(&mut s, &inner);
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    place(&mut s, &inner);
+    save(&mut s, &poster);
+    s.execute("file.close", &json!({})).unwrap();
+    open(&mut s, &poster);
+    let bytes = std::fs::read(&inner).unwrap();
+    let opened = run(&mut s, &[tried("document.open", &format!("{{path: {inner:?}}}")), tried("document.save", "{}")].concat()).unwrap();
+    assert_eq!(opened["log"], json!(["ok", "denied"]), "{opened}");
+    assert_eq!(s.doc().unwrap().path.as_deref(), Some(inner.as_str()));
+    let mut log = vec![];
+    let next = run(&mut s, &tried("document.save", "{}")).unwrap();
+    log.push(next["log"][0].clone());
+    // The person closes the document that links to it.
+    let at = s.documents().iter().position(|d| d.path.as_deref() == Some(poster.as_str())).unwrap();
+    assert!(s.set_active(at));
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let later = run(&mut s, &tried("file.place", &format!("{{path: {inner:?}, at: [200, 150]}}"))).unwrap();
+    log.push(later["log"][0].clone());
+    assert_eq!(log, [json!("denied"), json!("denied")], "a save in the next run, then a read once nothing the person left links to it");
+    assert_eq!(std::fs::read(&inner).unwrap(), bytes, "the linked file is as it was");
+    let _ = std::fs::remove_dir_all(art.parent().unwrap());
+}
+
+/// A data set value a script gives a document, and a document a script opens, let no later run
+/// read the files they name; once the person saves the document, the files its data sets name are
+/// read again.
+#[test]
+fn what_a_script_adds_to_the_documents_lets_no_later_run_read_more() {
+    use crate::tests_links::{RED, place, png, session, write};
+    let dir = fresh_folder("gate-linked-later");
+    let (inside, art) = (dir.join("in"), dir.join("art"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&art).unwrap();
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (secret, other, mine) = (p(art.join("secret.png")), p(inside.join("other.vectorcraft")), p(inside.join("mine.vectorcraft")));
+    write(&secret, &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &secret);
+    s.execute("document.save", &json!({"path": other})).unwrap();
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let read_secret = tried("file.place", &format!("{{path: {secret:?}, at: [200, 150]}}"));
+    let set = format!(
+        "vc.run('variable.define', {{name: 'Photo', kind: 'image'}});\nvc.run('dataset.new', {{name: 'X', values: {{Photo: {secret:?}}}}});\n"
+    );
+    run(&mut s, &set).unwrap();
+    let mut log = vec![];
+    log.push(run(&mut s, &read_secret).unwrap()["log"][0].clone());
+    let own = s.active_index().unwrap();
+    let r = run_allowed(&mut s, &inside, &tried("document.open", &format!("{{path: {other:?}}}"))).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "{r}");
+    log.push(run(&mut s, &read_secret).unwrap()["log"][0].clone());
+    assert_eq!(log, [json!("denied"), json!("denied")], "after a data set value, then after a document a script opened");
+    assert!(s.set_active(own));
+    s.execute("document.save", &json!({"path": mine})).unwrap();
+    let saved = run(&mut s, &read_secret).unwrap();
+    assert_eq!(saved["log"], json!(["ok"]), "saved by the person: {saved}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A save the person started before a script's command changed the document, and that finishes
+/// after it, does not let a later run read the files that change names.
+#[test]
+fn a_save_started_before_a_scripts_change_lets_no_later_run_read_more() {
+    use crate::cmd::fileio::{SaveMode, save_job, save_plan};
+    use crate::tests_links::{RED, png, session, write};
+    let dir = fresh_folder("gate-linked-save");
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (secret, mine) = (p(dir.join("secret.png")), p(dir.join("mine.vectorcraft")));
+    write(&secret, &png(60, 30, RED));
+    let mut s = session();
+    let uid = s.doc().unwrap().uid;
+    let plan = save_plan(&s, SaveMode::SaveAs, &json!({"path": mine})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let set = format!(
+        "vc.run('variable.define', {{name: 'Photo', kind: 'image'}});\nvc.run('dataset.new', {{name: 'X', values: {{Photo: {secret:?}}}}});\n"
+    );
+    run(&mut s, &set).unwrap();
+    job.write(|_, _| Ok(())).unwrap();
+    job.complete(&mut s, uid);
+    let r = run(&mut s, &tried("file.place", &format!("{{path: {secret:?}, at: [200, 150]}}"))).unwrap();
+    assert_eq!(r["log"], json!(["denied"]), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A command a script runs does not save into the app's own libraries; the same command run
 /// outside a script does.
 #[test]

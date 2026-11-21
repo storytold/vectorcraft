@@ -28,7 +28,7 @@
 //! are read from, and the places its `File` and `Folder` objects read and write, inside the roots.
 //! [`ScriptGate`] holds the same places for the commands the script runs with `vc.run`, with the
 //! files of the open documents, and for reading, the files the documents open when the run began
-//! link to.
+//! link to, each as the person last left the document.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -277,53 +277,37 @@ impl ScopeHandle {
 
 /// What a command a running script runs (`vc.run`) may read and write: the places the script's
 /// `File` and `Folder` objects may ([`ScriptScope`]), and the files the documents open in the app
-/// were opened from or saved to. Reading, and only reading, the files the documents open when the
-/// run began link to is allowed as well ([`ScriptGate::linked`]). The automation roots apply as
-/// well. A path refused by its name alone ([`ScriptScope::refused_by_name`]) is refused here too.
+/// were opened from or saved to by the person ([`crate::DocState::as_person_left`]). Reading, and
+/// only reading, the files the documents link to as the person left them when the run began is
+/// allowed as well ([`ScriptGate::linked`]). The automation roots apply as well. A path refused by
+/// its name alone ([`ScriptScope::refused_by_name`]) is refused here too.
 #[derive(Clone, Debug)]
 pub(crate) struct ScriptGate {
     pub(crate) read: ScriptScope,
     pub(crate) write: ScriptScope,
-    /// The paths of the open documents' files, as the documents hold them.
+    /// The paths of the open documents' files, as the documents held them when the person last
+    /// opened or saved them. A document a script's command opened has none here.
     pub(crate) documents: Vec<String>,
-    /// The files the documents open when the run began link to: readable, not writable.
+    /// The files the documents link to as the person left them when the run began: readable, not
+    /// writable.
     pub(crate) linked: LinkedFiles,
     /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
     pub(crate) also: Option<Arc<ScriptGate>>,
 }
 
 /// The files the commands a script runs may only read because the documents open when the run
-/// began link to them ([`ScriptGate::linked`]), and the paths a command read through them alone.
-/// Clones share the record of those paths.
+/// began link to them as the person left them ([`ScriptGate::linked`]).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct LinkedFiles {
     /// The real paths of the files, as they were when the run's first command was run, sorted. A
     /// path that leads to another file now is not one of them.
     files: Arc<[PathBuf]>,
-    /// The paths, absolute as a document holds its file, that a command read only because they led
-    /// to one of `files` when it read them. A document opened from one of them stays read-only for
-    /// the rest of the run, wherever the path leads later.
-    read: Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 impl LinkedFiles {
     /// Is `real`, a real path, one of the files?
     fn has(&self, real: &Path) -> bool {
         self.files.binary_search_by(|f| f.as_path().cmp(real)).is_ok()
-    }
-
-    /// The paths read through the files alone so far.
-    fn read_paths(&self) -> Vec<String> {
-        self.read.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
-    }
-
-    /// Notes that `path` was read through the files alone.
-    fn note_read(&self, path: &str) {
-        let path = crate::cmd::fileio::absolute_path(path);
-        let mut read = self.read.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !read.contains(&path) {
-            read.push(path);
-        }
     }
 }
 
@@ -340,23 +324,7 @@ impl ScriptGate {
             .collect();
         real.sort();
         real.dedup();
-        LinkedFiles { files: real.into(), read: Arc::default() }
-    }
-
-    /// This gate without the documents whose files only [`ScriptGate::linked`] lets it read, unless
-    /// they are among `before`, the files of the documents open when the run began: a document the
-    /// run opened from such a file is read, never written. A document counts as one when a command
-    /// read its file through the linked files alone, whatever the path leads to or the script may
-    /// read now, and when its file is one of them now that nothing else lets the gate read.
-    pub(crate) fn keeping_linked_read_only(mut self, before: &[String]) -> Self {
-        let plain = ScriptGate { documents: vec![], linked: LinkedFiles::default(), also: None, ..self.clone() };
-        let (linked, read) = (self.linked.clone(), self.linked.read_paths());
-        let only_linked = |d: &String| {
-            let real = if ScriptScope::refused_by_name(Path::new(d)) { None } else { resolve(d).ok() };
-            read.contains(d) || (real.is_some_and(|real| linked.has(&real)) && plain.check(d, Access::Read).is_err())
-        };
-        self.documents.retain(|d| before.contains(d) || !only_linked(d));
-        self
+        LinkedFiles { files: real.into() }
     }
 
     /// This gate with `next` at the end of its chain of `also` gates, so a path must pass every
@@ -380,14 +348,7 @@ impl ScriptGate {
                 Access::Read => self.read.allows(&real) || self.write.allows(&real),
                 Access::Write => self.write.allows(&real),
             };
-            if scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) {
-                return true;
-            }
-            let linked = matches!(access, Access::Read) && self.linked.has(&real);
-            if linked {
-                self.linked.note_read(path);
-            }
-            linked
+            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || (matches!(access, Access::Read) && self.linked.has(&real))
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -429,6 +390,11 @@ fn check_gate(path: &str, access: Access) -> Result<(), String> {
         return Ok(());
     }
     GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))
+}
+
+/// Whether this thread runs a command a script runs ([`with_script_gate`]).
+pub(crate) fn in_script_command() -> bool {
+    GATE.with(|g| g.borrow().is_some())
 }
 
 /// The roots in force on this thread, if any.
@@ -1072,59 +1038,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(base);
     }
 
-    /// A document the run opened from a file only the linked files let it read is not written
-    /// through the document-file rule; one open when the run began, and one in the script's own
-    /// places, still is.
+    /// A path read through the linked files gives no access to the file it leads to after it is
+    /// pointed elsewhere by a link in one of its folders.
     #[test]
-    fn a_document_opened_from_a_linked_file_stays_read_only() {
-        let (base, _) = folders("linked-doc");
-        let (secret, own) = (s(base.join("outside/secret.svg")), s(base.join("in/a.svg")));
-        let gate = ScriptGate {
-            read: ScriptScope::of_folder(&base.join("in")),
-            write: ScriptScope::of_folder(&base.join("in")),
-            documents: vec![secret.clone(), own.clone()],
-            linked: ScriptGate::real_files([secret.clone(), own.clone()]),
-            also: None,
-        };
-        let opened = gate.clone().keeping_linked_read_only(&[]);
-        assert!(opened.check(&secret, Access::Read).is_ok());
-        assert!(opened.check(&secret, Access::Write).is_err(), "opened by the run from a linked file");
-        assert!(opened.check(&own, Access::Write).is_ok(), "a file in the script's own places");
-        let before = gate.keeping_linked_read_only(std::slice::from_ref(&secret));
-        assert!(before.check(&secret, Access::Write).is_ok(), "open when the run began");
-        let _ = std::fs::remove_dir_all(base);
-    }
-
-    /// A document opened from a file a command read through the linked files alone stays
-    /// read-only after the script is allowed to read that file's folder, and after the file is
-    /// replaced by another one.
-    #[test]
-    fn a_document_read_through_a_linked_file_stays_read_only_after_a_read_grant() {
-        let (base, _) = folders("linked-granted");
-        let secret = s(base.join("outside/secret.svg"));
-        let linked = ScriptGate::real_files([secret.clone()]);
-        let gate = |read: &str, documents: Vec<String>| ScriptGate {
-            read: ScriptScope::of_folder(&base.join(read)),
-            write: ScriptScope::default(),
-            documents,
-            linked: linked.clone(),
-            also: None,
-        };
-        assert!(gate("in", vec![]).check(&secret, Access::Read).is_ok(), "the command that opens it reads it through the linked file");
-        let granted = gate("outside", vec![secret.clone()]).keeping_linked_read_only(&[]);
-        assert!(granted.check(&secret, Access::Read).is_ok());
-        assert!(granted.check(&secret, Access::Write).is_err(), "a read grant made later does not make it writable");
-        std::fs::remove_file(&secret).unwrap();
-        std::fs::write(&secret, "<svg><rect/></svg>").unwrap();
-        let replaced = gate("in", vec![secret.clone()]).keeping_linked_read_only(&[]);
-        assert!(replaced.check(&secret, Access::Write).is_err(), "replaced by another file");
-        let _ = std::fs::remove_dir_all(base);
-    }
-
-    /// A document opened from a file a command read through the linked files alone gives no
-    /// access to the file its path leads to after the path is pointed elsewhere by a link.
-    #[test]
-    fn a_document_read_through_a_linked_file_gives_nothing_once_its_path_leads_elsewhere() {
+    fn a_path_read_through_a_linked_file_gives_nothing_once_it_leads_elsewhere() {
         let (base, _) = folders("linked-redirected");
         #[cfg(unix)]
         let made = |target: &Path, link: &Path| std::os::unix::fs::symlink(target, link).is_ok();
@@ -1144,20 +1061,18 @@ mod tests {
             return;
         }
         let (doc, elsewhere) = (s(via.join("a.svg")), s(second.join("a.svg")));
-        let linked = ScriptGate::real_files([doc.clone()]);
-        let gate = |documents: Vec<String>| ScriptGate {
+        let gate = ScriptGate {
             read: ScriptScope::default(),
             write: ScriptScope::default(),
-            documents,
-            linked: linked.clone(),
+            documents: vec![],
+            linked: ScriptGate::real_files([doc.clone()]),
             also: None,
         };
-        assert!(gate(vec![]).check(&doc, Access::Read).is_ok(), "the command that opens it reads it through the linked file");
+        assert!(gate.check(&doc, Access::Read).is_ok(), "read through the linked file");
         std::fs::remove_dir(&via).or_else(|_| std::fs::remove_file(&via)).unwrap();
         assert!(made(&second, &via));
-        let opened = gate(vec![doc.clone()]).keeping_linked_read_only(&[]);
         for (path, access) in [(&doc, Access::Read), (&doc, Access::Write), (&elsewhere, Access::Read), (&elsewhere, Access::Write)] {
-            assert!(opened.check(path, access).is_err(), "{path} {access:?}");
+            assert!(gate.check(path, access).is_err(), "{path} {access:?}");
         }
         let _ = std::fs::remove_dir_all(base);
     }

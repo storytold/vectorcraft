@@ -54,8 +54,9 @@
 //!   for, loses the grant before that code runs. A run with nobody to ask gets `null` and
 //!   [`NO_PICKER`].
 //! - The commands a script runs with `vc.run` read and write only in the places above and in the
-//!   files of the open documents ([`crate::file_access::ScriptGate`]). They also read the files that
-//!   the documents open when the run began link to, as those links were then.
+//!   files the person gave the open documents ([`crate::file_access::ScriptGate`]). They also read
+//!   the files that the documents open when the run began link to, as the person last left those
+//!   documents and as those links led then.
 //! - `open('w')` empties the file at once; what a script writes is kept in memory, at most
 //!   [`MAX_FILE_BYTES`] a file, and written when it closes the file or the run ends; a run writes at
 //!   most [`MAX_RUN_BYTES`] in all and ends past that. `write` encodes in the file's encoding (an
@@ -455,8 +456,8 @@ impl Disk {
         }
     }
 
-    /// The gate for a command the script runs: the places it reads and writes now, the files of the
-    /// open documents, `documents`, and the files it may only read because the documents open when
+    /// The gate for a command the script runs: the places it reads and writes now, the files the
+    /// person gave the open documents, `documents`, and the files it may only read because the documents open when
     /// the run began link to them, `linked`.
     pub(crate) fn gate(&self, documents: Vec<String>, linked: crate::file_access::LinkedFiles) -> crate::file_access::ScriptGate {
         crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, linked, also: None }

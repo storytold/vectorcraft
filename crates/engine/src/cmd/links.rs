@@ -410,7 +410,8 @@ fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
 /// finds each linked image's and placed document's file from `base` and from no document (as
 /// output reads them, [`full_linked_images`]), the plate files of their own of images placed from
 /// DCS files, and the image files its data sets name. The commands a script runs may read these
-/// for the documents open when the run began ([`crate::file_access::ScriptGate::linked`]).
+/// for the documents open when the run began, as the person left them
+/// ([`crate::file_access::ScriptGate::linked`]).
 pub(crate) fn files_linked(d: &Document, base: LinkBase) -> Vec<String> {
     let mut out = vec![];
     for g in groups(d, None) {

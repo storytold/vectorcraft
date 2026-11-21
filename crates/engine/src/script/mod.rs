@@ -799,15 +799,13 @@ struct Host {
     dollar: dollar::RunState,
     /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
     args: RefCell<(Data, u64)>,
-    /// The documents open when the run began, each with its own file and the file it was read from
-    /// ([`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
+    /// The documents open when the run began as the person last left them, each with its own file
+    /// and the file it was read from ([`crate::DocState::as_person_left`],
+    /// [`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
     /// they link to from them ([`Host::linked`]).
     run_docs: RefCell<Vec<RunDoc>>,
-    /// The files of the documents open when the run began
-    /// ([`crate::file_access::ScriptGate::keeping_linked_read_only`]).
-    opened_before: Vec<String>,
-    /// The files the documents open when the run began link to, and the paths the run's commands
-    /// read through them alone ([`crate::file_access::ScriptGate::linked`]).
+    /// The files the documents open when the run began link to as the person left them
+    /// ([`crate::file_access::ScriptGate::linked`]).
     linked: std::cell::OnceCell<crate::file_access::LinkedFiles>,
 }
 
@@ -816,9 +814,9 @@ type RunDoc = (Arc<crate::Document>, Option<String>, Option<String>);
 
 impl Host {
     /// The files the commands the run runs may read because the documents open when the run began
-    /// link to them, found once, from those documents as they were then: a link the run adds or
-    /// changes, and a document it opens, give it no file to read. Every command's gate shares the
-    /// record of the paths read through them.
+    /// link to them, found once, from those documents as the person left them: a link a script's
+    /// command added or changed, in this run or an earlier one, and a document it opened, give it
+    /// no file to read.
     fn linked(&self) -> crate::file_access::LinkedFiles {
         self.linked
             .get_or_init(|| {
@@ -1269,12 +1267,19 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
-    // The command reads and writes only where the script's own files may, and the open documents' files;
-    // it also reads the files the documents open when the run began link to, and does not write a document
-    // the run opened from one of those.
-    let linked = host.linked();
-    let gate = host.disk.borrow().gate(s.docs.iter().filter_map(|d| d.path.clone()).collect(), linked).keeping_linked_read_only(&host.opened_before);
+    // The command reads and writes only where the script's own files may, and the files the person gave
+    // the open documents; it also reads the files the documents open when the run began link to, as the
+    // person left them. A document a script's command opened gives it no file.
+    let documents = s.docs.iter().filter_map(|d| d.as_person_left().and_then(|(_, path, _)| path.map(str::to_string))).collect();
+    let gate = host.disk.borrow().gate(documents, host.linked());
+    let was: Vec<(u64, RunDoc)> = s.docs.iter().map(|d| (d.uid, (d.doc.clone(), d.path.clone(), d.links_from.clone()))).collect();
     let r = crate::file_access::with_script_gate(gate, || s.execute(id, params));
+    // What the command opened, changed or gave another file is not as the person left it.
+    for st in &mut s.docs {
+        let prior = was.iter().find(|(uid, _)| *uid == st.uid);
+        st.note_script_command(prior.map(|(_, (doc, path, from))| (doc, path, from)));
+    }
+    drop(was);
     // A file a command wrote before it failed is on disk all the same.
     let mut written = host.written.borrow_mut();
     for path in crate::file_access::finish_recording_writes(r.is_ok()) {
@@ -2074,8 +2079,13 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
-            run_docs: RefCell::new(self.docs.iter().map(|st| (st.doc.clone(), st.path.clone(), st.links_from.clone())).collect()),
-            opened_before: self.docs.iter().filter_map(|st| st.path.clone()).collect(),
+            run_docs: RefCell::new(
+                self.docs
+                    .iter()
+                    .filter_map(DocState::as_person_left)
+                    .map(|(doc, path, from)| (doc.clone(), path.map(str::to_string), from.map(str::to_string)))
+                    .collect(),
+            ),
             linked: std::cell::OnceCell::new(),
         });
         *link.borrow_mut() = Some(host.clone());
