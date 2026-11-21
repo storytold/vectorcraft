@@ -377,7 +377,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     crate::ime::controls_without_editor(app, ctx);
-    let to_labels = handle_clipboard(app, ctx, textless_paste);
+    let (labels_copy, labels_cut) = handle_clipboard(app, ctx, textless_paste);
     // Alt tapped on its own: the Quick Pen tool's next action.
     if alt_tapped && app.session.tool_claims_key(ToolKey::AltTap, view) {
         let r = app.session.tool_key(ToolKey::AltTap, Mods::default(), view);
@@ -402,8 +402,14 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     };
     // An Escape that ended a ruler-origin drag or floating Tools move runs no command bound to it.
     let gesture_escape = |chord: &craft_keymap::Chord| escape_ended_gesture && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
-    // A Copy or Cut left to the labels runs neither command from the keymap.
-    let labels_clip = |hit: &Hit| to_labels && matches!(hit.command.id.as_str(), "edit.copy" | "edit.cut");
+    // A Copy or Cut left to the labels does not run again from the keymap. A Cut key in the frame of
+    // a Copy left to the labels still runs; a Copy key in the frame of a Cut left to them does not,
+    // since the Cut copies too and the labels keep one command per pass.
+    let labels_clip = |hit: &Hit| match hit.command.id.as_str() {
+        "edit.copy" => labels_copy || labels_cut,
+        "edit.cut" => labels_cut,
+        _ => false,
+    };
     let hits = dispatch(app, ctx, |hit| {
         let chord = &hit.trigger.chord;
         let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
@@ -813,8 +819,8 @@ fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: boo
 }
 
 /// Route clipboard events to the system clipboard or the app's rich-format paste path. → whether
-/// a Copy or Cut is left to the labels, so no shortcut runs it.
-fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_paste: Option<Modifiers>) -> bool {
+/// a Copy and whether a Cut is left to the labels, so no shortcut runs that command.
+fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_paste: Option<Modifiers>) -> (bool, bool) {
     // A clipboard image (eframe's `clipboard` feature, 0.37): the host's text paste path never
     // carries it. With the app's rich-format `SystemClipboard`, it is only the signal that the
     // clipboard holds no text — the next tick invokes Paste, whose `adopt_system_clipboard` reads
@@ -863,7 +869,7 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         let held = ctx.input(|i| i.modifiers);
         app.clipboard_in = Some(Flavour { mime: vectorcraft_engine::cmd::clipboard::PNG, data: png });
         crate::menus::invoke(app, paste_command(held), json!({}));
-        return false;
+        return (false, false);
     }
     // Clipboard keys arrive as events, not key presses; the chord held says which paste. Copy and
     // Cut with text selected in a label copy that text ([`leave_to_labels`]), unless another window
@@ -906,7 +912,7 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         app.clipboard_in = text.map(|t| Flavour { mime: TEXT, data: t.into_bytes() });
         crate::menus::invoke(app, id, json!({}));
     }
-    labels_copy || labels_cut
+    (labels_copy, labels_cut)
 }
 
 /// Copy or Cut (`id`) on a key that egui does not send as a Copy or Cut event (F3 and F2 off

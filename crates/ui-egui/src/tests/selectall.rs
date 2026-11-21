@@ -422,6 +422,24 @@ fn copy_then_cut_with_text_selected_in_another_window_copy_and_cut_the_art() {
     assert_eq!(objects(&a), 1, "Cut cut the selected object a frame later");
 }
 
+/// #8432: with text selected in another window's label, a Copy event and Cut on Cmd+F2 in the same
+/// frame cut the art: the Copy left to the labels does not stop the Cut key. A Cut event and Copy
+/// on Cmd+F3 in the same frame cut it too: the Copy key does not replace the Cut left to the labels.
+#[test]
+fn a_copy_and_a_cut_in_one_frame_with_text_selected_in_another_window_cut_the_art() {
+    for (event, key, what) in [(Event::Copy, Key::F2, "Copy and Cmd+F2"), (Event::Cut, Key::F3, "Cut and Cmd+F3")] {
+        let mut a = App::new();
+        crate::keymap::set_override(&mut a.app.ui.shortcut_overrides, "edit.copy", "Cmd+F3");
+        crate::keymap::set_override(&mut a.app.ui.shortcut_overrides, "edit.cut", "Cmd+F2");
+        select_label_text_in_another_window(&mut a);
+        let out = a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), event, press(key, Modifiers::COMMAND)]);
+        let after = a.frame(vec![release(key), Event::ModifiersChanged(Modifiers::NONE)]);
+        a.frame(vec![]);
+        assert_eq!(objects(&a), 1, "{what}: the selected object was cut");
+        assert!(copied(&out).iter().chain(&copied(&after)).any(|t| t.starts_with("<?xml")), "{what}: the art was copied");
+    }
+}
+
 /// #8432: with text selected in another window's label, a Cut that runs a pass later cuts the
 /// object selected when it was pressed, not the objects a Select All in the same frame selected.
 /// The objects Select All selected stay selected after it.
