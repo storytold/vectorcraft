@@ -788,7 +788,8 @@ fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
 /// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from
 /// elsewhere, art, and a swatch dragged from another document whose name the active document also
 /// has delete nothing, ask nothing and are not outlined. A secondary button released while a swatch
-/// is held over the button ends the drag without asking.
+/// is held over the button ends the drag without asking, and a swatch deleted while it is dragged
+/// leaves alone a new swatch made under its name.
 #[test]
 fn delete_swatch_ignores_other_drags() {
     let mut app = app();
@@ -848,6 +849,23 @@ fn delete_swatch_ignores_other_drags() {
     assert!(app.session.doc().unwrap().doc.swatch("Orange").is_some() && undo_steps(&app) == undo_new, "the other document keeps Orange");
     assert!(app.session.set_active(0));
     unchanged(&app, "the first document");
+    // A swatch deleted while it is dragged, and a new swatch made under its name before the drop.
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 5.0);
+    let from = tile_center(&ctx, "Orange");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, 5.1);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, 5.2);
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_some(), "Orange is dragged");
+    let orange = app.session.doc().unwrap().doc.swatch("Orange").cloned();
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#f7931e"})).unwrap();
+    let (replaced, undo_replaced) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    assert_eq!(replaced.swatch("Orange").cloned(), orange, "the new swatch is the same as the one deleted");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 5.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 5.4);
+    assert!(!outlined(&held, trash), "the new swatch of that name is not outlined");
+    frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 5.5);
+    assert_eq!(dialog_message(&app), None, "the new swatch of that name asks nothing");
+    assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (replaced, undo_replaced), "the new swatch of that name is kept");
 }
 
 /// Swatches dragged from the list onto New Swatch are duplicated without a dialog, in thumbnail
@@ -920,7 +938,8 @@ fn swatches_dropped_on_new_swatch_are_duplicated() {
 
 /// New Swatch duplicates only swatches dragged from the active document's list that are still in
 /// it: a paint dragged from elsewhere, art, a swatch dragged from another document, and a swatch
-/// deleted while it is dragged duplicate nothing. A secondary button released while a swatch is
+/// deleted while it is dragged duplicate nothing, nor does a new swatch made under the name of a
+/// swatch deleted while it is dragged. A secondary button released while a swatch is
 /// held over the button ends the drag without duplicating, and a click still opens New Swatch.
 #[test]
 fn new_swatch_ignores_other_drags() {
@@ -976,6 +995,25 @@ fn new_swatch_ignores_other_drags() {
     assert!(!outlined(&held, new), "a deleted swatch is not outlined");
     frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 4.5);
     assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (gone, undo_gone), "a deleted swatch is not duplicated");
+    app.run("edit.undo", json!({})).unwrap();
+    // A swatch deleted while it is dragged, and a new swatch made under its name before the drop.
+    hold_orange(&mut app, 4.6);
+    let orange = app.session.doc().unwrap().doc.swatch("Orange").cloned();
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    app.run("swatch.new", json!({"name": "Orange", "color": "#f7931e"})).unwrap();
+    let (replaced, undo_replaced) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    assert_eq!(replaced.swatch("Orange").cloned(), orange, "the new swatch is the same as the one deleted");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 4.85);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 4.9);
+    assert!(!outlined(&held, new), "the new swatch of that name is not outlined");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 4.95);
+    assert!(app.ui.dialog.is_none(), "the new swatch of that name opens no dialog");
+    assert_eq!(
+        (app.session.doc().unwrap().doc.clone(), undo_steps(&app)),
+        (replaced, undo_replaced),
+        "the new swatch of that name is not duplicated"
+    );
+    app.run("edit.undo", json!({})).unwrap();
     app.run("edit.undo", json!({})).unwrap();
     // A swatch dragged from this document while another document with the same swatches becomes
     // active.

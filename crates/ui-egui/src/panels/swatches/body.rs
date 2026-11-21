@@ -1,4 +1,4 @@
-use super::actions::{DRAG_DOC, bottom, edit_group};
+use super::actions::{bottom, drag_started, edit_group};
 use super::dnd::{TileEvents, apply_drop, click_selection, highlighted, selection, tile_input, zone_input};
 use super::tiles::{
     draw_folder, draw_registration, folder_tile, global_mark, list_icons, list_row, list_row_name, pattern_thumb, tile_grid, tile_id,
@@ -133,7 +133,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
         None => {}
     }
     if ev.started {
-        set_pstate(ui.ctx(), DRAG_DOC, app.session.active().map(|st| st.uid));
+        drag_started(app, ui.ctx());
     }
     if let Some(drop) = ev.drop {
         apply_drop(app, drop);

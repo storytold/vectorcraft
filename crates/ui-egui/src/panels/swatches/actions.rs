@@ -1,8 +1,13 @@
+use std::sync::{Arc, Weak};
+
+use vectorcraft_color::SwatchGroup;
+use vectorcraft_engine::DocState;
+
 use super::dnd::{group_of, selection};
 use super::libraries::SwatchLibraries;
 use super::{
-    Kind, LibraryKind, PanelDrag, Response, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate, set_pstate,
-    widgets,
+    Document, Kind, LibraryKind, PanelDrag, Response, Swatch, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate,
+    set_pstate, widgets,
 };
 
 /// The selected swatches and groups that can be deleted: every color group in the document and
@@ -117,9 +122,81 @@ pub(super) fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
 /// The panel state key of the document (`uid`) the swatches being dragged from the list belong to.
 pub(super) const DRAG_DOC: &str = "swatch-drag-doc";
 
+/// The panel state key of the rows being dragged from the list ([`HeldRows`]).
+const DRAG_ROWS: &str = "swatch-drag-rows";
+
+/// A row dragged from the list as it was when the drag started: its swatch or its color group.
+#[derive(Clone, PartialEq)]
+enum HeldRow {
+    Swatch(Swatch),
+    Group(SwatchGroup),
+}
+
+impl HeldRow {
+    /// Row `name` of `d`: its swatch, else the color group of that name.
+    fn of(d: &Document, name: &str) -> Option<Self> {
+        match d.swatch(name) {
+            Some(w) => Some(HeldRow::Swatch(w.clone())),
+            None => d.swatch_groups.iter().find(|g| g.name == name).cloned().map(HeldRow::Group),
+        }
+    }
+    /// Whether `d` holds this row unchanged.
+    fn unchanged_in(&self, d: &Document) -> bool {
+        match self {
+            HeldRow::Swatch(w) => d.swatch(&w.name) == Some(w),
+            HeldRow::Group(g) => d.swatch_groups.iter().any(|x| x == g),
+        }
+    }
+}
+
+/// The rows being dragged from the list, in the order of the drag's names, and the document they
+/// were last checked against. A row is `None` once a state of the document since the drag started
+/// did not hold it unchanged: deleted, edited, or deleted and made again under its name, also with
+/// the same paint.
+#[derive(Clone, Default)]
+struct HeldRows {
+    doc: Weak<Document>,
+    rows: Vec<(String, Option<HeldRow>)>,
+}
+
+/// Records the document and the rows a drag from the list started with this frame, so that New
+/// Swatch and Delete Swatch act only on rows that stay unchanged until it is dropped.
+pub(super) fn drag_started(app: &VectorcraftApp, ctx: &egui::Context) {
+    let st = app.session.active();
+    set_pstate(ctx, DRAG_DOC, st.map(|st| st.uid));
+    let held = match (st, egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref()) {
+        (Some(st), Some(PanelDrag::Paint { rows: Some(r), .. })) => {
+            HeldRows { doc: Arc::downgrade(&st.doc), rows: r.names.iter().map(|n| (n.clone(), HeldRow::of(&st.doc, n))).collect() }
+        }
+        _ => HeldRows::default(),
+    };
+    set_pstate(ctx, DRAG_ROWS, held);
+}
+
+/// The dragged rows ([`HeldRows`]) checked against every state document `st` passed through since
+/// they were last checked: the states its undo steps kept since then, and the current one. When
+/// the last checked state is not among them (an undo, or steps dropped past the history's limits),
+/// only the current state is checked.
+fn held_rows(st: &DocState, ctx: &egui::Context) -> HeldRows {
+    let mut held: HeldRows = pstate(ctx, DRAG_ROWS);
+    if std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&st.doc)) {
+        return held;
+    }
+    let since = st.history.undo.iter().rposition(|e| std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&e.doc)));
+    let between = since.and_then(|i| st.history.undo.get(i + 1..)).unwrap_or_default();
+    for (_, row) in &mut held.rows {
+        if row.as_ref().is_some_and(|r| !(between.iter().all(|e| r.unchanged_in(&e.doc)) && r.unchanged_in(&st.doc))) {
+            *row = None;
+        }
+    }
+    held.doc = Arc::downgrade(&st.doc);
+    set_pstate(ctx, DRAG_ROWS, held.clone());
+    held
+}
+
 /// The swatches and color groups of the active document being dragged from the list that Delete
-/// Swatch can delete: neither None nor Registration, and still in the document. Empty for any other
-/// drag, and for a drag started in another document.
+/// Swatch can delete: neither None nor Registration, and still in the document unchanged. Empty for
+/// any other drag, and for a drag started in another document.
 fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
     let d = &st.doc;
@@ -127,16 +204,25 @@ fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
 }
 
 /// The names of the swatches or color groups of the active document being dragged from the list,
-/// in panel order. Empty for any other drag, and for a drag started in another document.
+/// in panel order, that the document has held unchanged since the drag started ([`held_rows`]).
+/// Empty for any other drag, and for a drag started in another document.
 fn dragged_rows(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
     if pstate::<Option<u64>>(ctx, DRAG_DOC) != Some(st.uid) {
         return vec![];
     }
-    match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
-        Some(PanelDrag::Paint { rows: Some(r), .. }) => r.names.clone(),
-        _ => vec![],
+    let drag = egui::DragAndDrop::payload::<PanelDrag>(ctx);
+    let Some(PanelDrag::Paint { rows: Some(r), .. }) = drag.as_deref() else { return vec![] };
+    let held = held_rows(st, ctx);
+    if held.rows.len() != r.names.len() {
+        return vec![];
     }
+    r.names
+        .iter()
+        .zip(&held.rows)
+        .filter(|(n, (h, row))| *n == h && row.as_ref().is_some_and(|row| row.unchanged_in(&st.doc)))
+        .map(|(n, _)| n.clone())
+        .collect()
 }
 
 /// Swatches or color groups (`names`) dragged onto Delete Swatch (`button`): the button is
@@ -157,8 +243,8 @@ fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: V
 }
 
 /// The swatches of the active document being dragged from the list that New Swatch can duplicate,
-/// in panel order: the dragged rows ([`dragged_rows`]) that are swatches still in the document,
-/// other than None and Registration.
+/// in panel order: the dragged rows ([`dragged_rows`]) that are swatches still in the document
+/// unchanged, other than None and Registration.
 fn dragged_swatches(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
     dragged_rows(app, ctx).into_iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).collect()
