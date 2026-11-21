@@ -462,14 +462,16 @@ fn write_layers(
     Ok(rewritten)
 }
 
-/// A form's box as large as a page can be, for a layer's form whose mark gives no paper.
-const UNBOXED: &[u8] = b"[-32767 -32767 32767 32767]";
-
 /// Give the layer's form `o` a box round its art and the paper its mark gives ([`layer_form`]):
 /// the box of a layer's form is only the bounds of its art, and a reader that makes a clipping
 /// group of a form's box (as importers do) would gather a layer's art and its sublayers' in one
 /// group, which no layer can hold. A box round the whole paper clips nothing, and its bounds stay
 /// those of the page and the art (#2181).
+///
+/// When the mark gives no paper (a form whose mark was rewritten without its paper corners, or
+/// whose corners don't read as whole numbers), the box is still a real one in the form's own
+/// space: the form's finite art box, ordered — never a page-max box, which is what inflated the
+/// document bounds on import (#6299). With no finite art either, the writer's box stays as it is.
 fn rebox(pdf: &[u8], o: &Object<'_>, patch: &mut Patch) -> Result<(), PdfError> {
     let Obj::Dict { start, end, .. } = o.dict else { return Err(bad("a layer's form has no dictionary")) };
     let dict = pdf.get(start..end).ok_or_else(|| bad("a layer's form can't be read"))?;
@@ -491,7 +493,13 @@ fn rebox(pdf: &[u8], o: &Object<'_>, patch: &mut Patch) -> Result<(), PdfError> 
             format!("[{} {} {} {}]", lo(x0, a0), lo(y0, b0), hi(x1, a1), hi(y1, b1)).into_bytes()
         }
         (Some([x0, y0, x1, y1]), _) => format!("[{x0} {y0} {x1} {y1}]").into_bytes(),
-        _ => UNBOXED.to_vec(),
+        (None, &[a0, b0, a1, b1]) if [a0, b0, a1, b1].iter().all(|v| v.is_finite()) => {
+            // No paper: the art's box, ordered, in the form's own space.
+            format!("[{} {} {} {}]", a0.min(a1), b0.min(b1), a0.max(a1), b0.max(b1)).into_bytes()
+        }
+        // No paper and no finite art: nothing real to round; keep the writer's box rather than
+        // writing a page-max one.
+        (None, _) => return Ok(()),
     };
     patch.replace(start + open, start + close, new);
     Ok(())
