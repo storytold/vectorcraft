@@ -173,11 +173,13 @@ pub(super) fn face(rings: &[&Ring], points: &[Vec<Point>], step: &Along, budget:
 
 /// The outline of a wall's quad `quad` (`a`, `a'`, `b'`, `b` projected: the edge at `near` from
 /// `a` to `a'`, then the edge at `far` back from `b'` to `b`), whose edges along the profile follow
-/// `span`. An edge without its outline stays straight. `None` when neither edge is curved.
-pub(super) fn wall(span: &Span, quad: &[Point], near: Option<&Along>, far: Option<&Along>, budget: &mut Budget) -> Option<PathData> {
+/// `span`'s curve from `t.0` to `t.1` (all of `span`, or the piece of it one cut of a twisted wall
+/// takes). An edge without its outline stays straight. `None` when neither edge is curved.
+pub(super) fn wall(span: &Span, t: (f64, f64), quad: &[Point], near: Option<&Along>, far: Option<&Along>, budget: &mut Budget) -> Option<PathData> {
     let [a, a2, b2, b] = <[Point; 4]>::try_from(quad).ok()?;
-    let front = near.and_then(|near| piece(near, span, span.t0, span.t1, (span.t1, span.t0), a, a2, budget));
-    let back = far.and_then(|far| piece(far, span, span.t1, span.t0, (span.t0, span.t1), b2, b, budget));
+    let (t0, t1) = t;
+    let front = near.and_then(|near| piece(near, span, t0, t1, (t1, t0), a, a2, budget));
+    let back = far.and_then(|far| piece(far, span, t1, t0, (t0, t1), b2, b, budget));
     if front.is_none() && back.is_none() {
         return None;
     }
@@ -194,4 +196,41 @@ pub(super) fn wall(span: &Span, quad: &[Point], near: Option<&Along>, far: Optio
     }
     path.close_path();
     Some(PathData::from_bezpath(&path))
+}
+
+/// A piece of curve one edge of a face follows: the span, and the parameters on its curve where the
+/// edge starts and ends.
+pub(super) type EdgeCurve = (Span, f64, f64);
+
+/// The outline of a face whose contours `points` (projected) have some edges along pieces of curve:
+/// `curves[c][k]` is the piece edge `k` of contour `c` follows, at `step`, or `None` for a straight
+/// edge. `None` when no edge is curved.
+pub(super) fn edges(points: &[Vec<Point>], curves: &[Vec<Option<EdgeCurve>>], step: &Along, budget: &mut Budget) -> Option<PathData> {
+    if points.len() != curves.len() || curves.iter().flatten().all(Option::is_none) {
+        return None;
+    }
+    let mut path = BezPath::new();
+    let mut curved = false;
+    for (points, curves) in points.iter().zip(curves) {
+        let n = points.len();
+        let Some(&first) = points.first() else { continue };
+        if curves.len() != n {
+            return None;
+        }
+        path.move_to(first);
+        for (k, c) in curves.iter().enumerate() {
+            let (p, q) = (points.get(k).copied().unwrap_or(first), points.get((k + 1) % n).copied().unwrap_or(first));
+            match c.as_ref().and_then(|(span, t0, t1)| piece(step, span, *t0, *t1, (*t1, *t0), p, q, budget)) {
+                Some(cubics) => {
+                    curved = true;
+                    cubics.iter().for_each(|c| path.curve_to(c.p1, c.p2, c.p3));
+                }
+                // The edge back to the first point is drawn by `close_path`.
+                None if k + 1 < n => path.line_to(q),
+                None => {}
+            }
+        }
+        path.close_path();
+    }
+    curved.then(|| PathData::from_bezpath(&path))
 }

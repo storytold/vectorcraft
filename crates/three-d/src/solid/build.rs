@@ -271,14 +271,10 @@ impl<'a> Builder<'a> {
     /// The band between two partner rings (same length), as one quad per edge, or for a twisted
     /// wall with `cuts` (see [`cuts`]) as `cuts[i]` quads along edge `i`. `outward` is the
     /// direction (before rotation) the band faces away from the solid, for orienting normals.
-    pub(super) fn band(&mut self, a: &[V3], b: &[V3], cuts: &[usize], outward: impl Fn(usize) -> V3) -> Result<(), String> {
-        self.curved_band(a, b, cuts, outward, None, None)
-    }
-
-    /// [`Builder::band`], with `curves` the pieces of curve the rings' edges follow and the
-    /// outlines at `a` and `b`: a quad whose edge is not cut keeps its edges along the profile curved.
-    /// With `side`, each quad carries where its corners lie on the side unrolled flat
-    /// ([`Facet::surface`]).
+    /// With `curves`, the pieces of curve the rings' edges follow and the outlines at `a` and `b`,
+    /// each quad keeps its edges along the profile curved. An edge cut into pieces is cut at points
+    /// of its curve, each piece taking an equal share of the edge's piece of curve. With `side`,
+    /// each quad carries where its corners lie on the side unrolled flat ([`Facet::surface`]).
     pub(super) fn curved_band(
         &mut self,
         a: &[V3],
@@ -303,9 +299,22 @@ impl<'a> Builder<'a> {
         for i in 0..n {
             let j = (i + 1) % n;
             let pieces = cuts.get(i).copied().unwrap_or(1).max(1);
+            let span = curves.as_ref().and_then(|w| w.spans.get(i).copied().flatten());
+            let places = curves.as_ref().map_or([None, None], |w| w.places);
+            // Where the edge's curve is at share `s` of it.
+            let t = |s: f64| span.map_or(0.0, |span| span.t0 + (span.t1 - span.t0) * s);
+            // A cut corner on a ring that follows a curve lies on the curve, so the pieces' edges
+            // follow the same curve as the cap's edge they meet.
+            let corner = |p: V3, q: V3, s: f64, ring: usize| match (span, places.get(ring).copied().flatten()) {
+                (Some(span), Some(place)) if s > 0.0 && s < 1.0 => {
+                    let v = place(&span, t(s));
+                    if v.0.is_finite() && v.1.is_finite() && v.2.is_finite() { v } else { lerp(p, q, s) }
+                }
+                _ => lerp(p, q, s),
+            };
             for k in 0..pieces {
                 let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
-                let quad = vec![lerp(a[i], a[j], s0), lerp(a[i], a[j], s1), lerp(b[i], b[j], s1), lerp(b[i], b[j], s0)];
+                let quad = vec![corner(a[i], a[j], s0, 0), corner(a[i], a[j], s1, 0), corner(b[i], b[j], s1, 1), corner(b[i], b[j], s0, 1)];
                 // A twist bends the strip between two slices into a saddle: its normal is the whole
                 // quad's average (Newell's), not one corner's triangle, which leans far to one side.
                 let mut normal = newell(std::slice::from_ref(&quad));
@@ -343,10 +352,14 @@ impl<'a> Builder<'a> {
                         });
                     }
                 }
-                if let Some(w) = curves.as_mut().filter(|_| pieces == 1)
-                    && let Some(span) = w.spans.get(i).copied().flatten()
+                if let Some(w) = curves.as_mut()
+                    && let Some(span) = span
                 {
-                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, quad, w.near, w.far, w.budget)));
+                    // An edge cut on its chord, with no place on the curve for its cut corners,
+                    // stays straight.
+                    let near = w.near.filter(|_| pieces == 1 || w.places[0].is_some());
+                    let far = w.far.filter(|_| pieces == 1 || w.places[1].is_some());
+                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, (t(s0), t(s1)), quad, near, far, w.budget)));
                 }
             }
         }
@@ -397,8 +410,14 @@ pub(super) struct WallCurves<'a> {
     pub(super) spans: &'a [Option<Span>],
     pub(super) near: Option<&'a Along<'a>>,
     pub(super) far: Option<&'a Along<'a>>,
+    /// Where a point of a span's curve lies in view space on the band's two rings, for the corners
+    /// where a twisted wall's edge is cut ([`cuts`]).
+    pub(super) places: [Option<&'a Place<'a>>; 2],
     pub(super) budget: &'a mut Budget,
 }
+
+/// Where the point at `t` on a span's curve lies in view space on one ring.
+pub(super) type Place<'a> = dyn Fn(&Span, f64) -> V3 + 'a;
 
 /// Where a band of the side lies on the side unrolled flat ([`super::side`]): the x of each end of
 /// each edge of its rings, and the y of its two rings.
@@ -704,12 +723,19 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     // and within the sampling tolerance (which the inset rings themselves keep to) where it is.
     let sampled = (size / 2000.0).max(0.05);
     let maps: Vec<Placing> = steps.iter().map(|s| Placing::new(&camera, bounds.center(), Turn::new(bounds, o.twist, o.taper, s.t), z(s.t))).collect();
-    let at: Vec<_> = steps
+    let places: Vec<_> = steps
         .iter()
         .zip(&maps)
         .map(|(s, m)| {
-            let (w, camera) = (s.inset, &camera);
-            move |span: &Span, t: f64| camera.project(m.place(offset(span, t, w)))
+            let w = s.inset;
+            move |span: &Span, t: f64| m.place(offset(span, t, w))
+        })
+        .collect();
+    let at: Vec<_> = places
+        .iter()
+        .map(|place| {
+            let camera = &camera;
+            move |span: &Span, t: f64| camera.project(place(span, t))
         })
         .collect();
     // A step that is not inset moves the art point by point, affinely without perspective.
@@ -762,10 +788,16 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             } else {
                 0.0
             };
-            // The edges a band shares with a cap follow the cap's curves; the edges between two bands
-            // stay straight, within the sampling tolerance.
-            let (near, far) = (along.get(k).filter(|_| k == 0), along.get(k + 1).filter(|_| k + 2 == steps.len()));
-            let curves = (near.is_some() || far.is_some()).then(|| WallCurves { spans: &traced.spans, near, far, budget: &mut budget });
+            // Each ring of a band follows the outline at its step: the edges a band shares with a cap
+            // follow the cap's curves, and an edge two bands share follows the same curves in both.
+            let place = |k: usize| places.get(k).map(|p| p as &Place);
+            let curves = Some(WallCurves {
+                spans: &traced.spans,
+                near: along.get(k),
+                far: along.get(k + 1),
+                places: [place(k), place(k + 1)],
+                budget: &mut budget,
+            });
             let side = unrolled.and_then(|(_, x, y)| Some(SideBand { x, y: [*y.get(k)?, *y.get(k + 1)?] }));
             b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves, side)?;
         }
