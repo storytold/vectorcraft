@@ -38,6 +38,10 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod clipboard;
+mod matrix;
+pub mod preferences;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -1713,6 +1717,9 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("getIsFileOpen", method(l, app_is_open)),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(preferences::app_members());
+    application.extend(matrix::app_members(l));
+    application.extend(clipboard::app_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -1723,6 +1730,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     };
     let mut classes = vec![
         class("Application", None, application, None),
+        preferences::class(l),
         preset,
         class(
             "Documents",

@@ -2676,6 +2676,37 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `app.preferences` (https://ai-scripting.docsforadobe.dev/jsobjref/Preferences/) has `getBooleanPreference(key)`,
+  `getIntegerPreference(key)`, `getRealPreference(key)`, `getStringPreference(key)`, the four matching `set…(key,
+  value)` and `removePreference(key)`. The key `ShowExternalJSXWarning` is the preference `showExternalScriptWarning`.
+  Setting it to `true` or removing it turns the warning on. VectorCraft's own rule: setting it to `false` while the
+  warning is on shows a confirm, with No as its default, and turns the warning off only after Yes; with nobody to ask
+  (a run with `script.run` outside the app, or a call from a callback of a built-in function) it throws an error that
+  names `ShowExternalJSXWarning` and changes nothing, and `answers` cannot answer that confirm. Other keys are
+  stored with the preferences under `scriptPreferences`, with the type they were set as, and are kept across runs and restarts; a run that fails or is stopped puts them back.
+  VectorCraft's own rules: a key that was never set reads as `false`, `0`, `0` or `""`; a getter of another type
+  converts the value as `Boolean`, `Number` and `String` do, and `getIntegerPreference` drops the fraction and gives
+  `0` for a value that is not a number. A key has 1 to 256 characters and no control characters, a string value at
+  most 65,536 bytes, and the store at most 4,096 keys and 1,048,576 bytes (each value that is not a string counts 8);
+  `setIntegerPreference` takes a whole number within ±2^53 and `setRealPreference` a finite number. A value of the
+  wrong type or past a limit throws an error and stores nothing, and removing a key that is not stored does nothing.
+- `app.getIdentityMatrix()`, `getTranslationMatrix(deltaX?, deltaY?)` (points), `getScaleMatrix(scaleX?, scaleY?)`
+  (percent), `getRotationMatrix(angle?)` (degrees, counterclockwise), `concatenateMatrix(matrix, secondMatrix)`,
+  `concatenateTranslationMatrix(matrix, deltaX?, deltaY?)`, `concatenateScaleMatrix(matrix, scaleX?, scaleY?)`,
+  `concatenateRotationMatrix(matrix, angle?)`, `invertMatrix(matrix)`, `isEqualMatrix(matrix, secondMatrix)` and
+  `isSingularMatrix(matrix)` work on `Matrix` records (https://ai-scripting.docsforadobe.dev/jsobjref/Matrix/): plain
+  objects with `mValueA`, `mValueB`, `mValueC`, `mValueD`, `mValueTX`, `mValueTY` and `typename` `"Matrix"`. Each
+  function gives a new record and leaves the ones passed to it unchanged. A record maps `(x, y)` to
+  `(a·x + c·y + tx, b·x + d·y + ty)`, as a PDF `cm` matrix does (ISO 32000-1, 8.3.4), with Y up. VectorCraft's own
+  rules: `concatenateMatrix(m, n)` applies `m` and then `n`, and the other `concatenate…` functions apply the record
+  and then the transformation they make; a left-out move or angle is 0, a left-out `scaleX` is 100 and a left-out
+  `scaleY` is `scaleX`; quarter turns are exact; a matrix whose determinant is 0 is singular, and `invertMatrix` of one
+  throws; `isEqualMatrix` compares the six values exactly. A value that is not a finite number throws a `TypeError`,
+  and a result too large for a number throws a `RangeError`.
+- `app.copy()`, `app.cut()` and `app.paste()` (https://ai-scripting.docsforadobe.dev/jsobjref/Application/) run
+  `edit.copy`, `edit.cut` and `edit.paste` on the active document inside the run's transaction. With nothing selected
+  `copy` and `cut` do nothing, and with the clipboard empty `paste` does nothing; `paste` with no document open throws
+  `No active document`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -2790,7 +2821,9 @@ while the run went on keeps that change. On an uncaught error, a limit or `scrip
 session go back to their state before the run. A script can write files through the commands it runs, such as
 export commands. A file written before the run failed stays on disk, and the error names it. A run from the menu
 shows a warning first, unless you ticked Do not show this warning again or set the preference
-`showExternalScriptWarning` to false.
+`showExternalScriptWarning` to false. A script asks for it with
+`app.preferences.setBooleanPreference("ShowExternalJSXWarning", false)`, which turns the warning off only after you
+answer Yes.
 
 While a script runs, every other command that changes anything ends with the error `a script is running: stop it or
 wait for it to finish`. MCP reports that error as JSON-RPC error `-32003`. `script.stop {}` stops the run and

@@ -28,6 +28,7 @@
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
 use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
+use vectorcraft_engine::script::dom::preferences::WARNING_OFF_QUESTION;
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, ScriptDialog};
 
@@ -259,10 +260,17 @@ fn answer_button(ui: &mut egui::Ui, label: &str, default: bool) -> bool {
     if default { widgets::primary_button_enabled(ui, label, true).clicked() } else { widgets::secondary_button(ui, label).clicked() }
 }
 
+/// The dialog's message: a script's own text as it is, and the question the app asks before a
+/// script turns off the external script warning in the current language.
+fn notice_message(d: &Dialog) -> String {
+    let message = d.str("message");
+    if message == WARNING_OFF_QUESTION { crate::i18n::msg(&message) } else { message }
+}
+
 fn notice_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAction {
     let t = Tokens::get(ui.ctx());
     let kind = d.str("kind");
-    let message = shown_text(&d.str("message"), true);
+    let message = shown_text(&notice_message(d), true);
     ui.horizontal_top(|ui| {
         if d.bool("errorIcon") {
             ui.label(egui::RichText::new("!").font(theme::semibold(22.0)).color(t.error));

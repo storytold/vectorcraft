@@ -201,18 +201,7 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
         if key == "engine_prefs"
             && let (Some(Value::Object(was)), Some(Value::Object(now)), Some(Value::Object(theirs))) = (was, now, out.get_mut(key))
         {
-            let names: std::collections::BTreeSet<&String> = was.keys().chain(now.keys()).collect();
-            for name in names {
-                match (was.get(name), now.get(name)) {
-                    (a, b) if a == b => {}
-                    (_, Some(v)) => {
-                        theirs.insert(name.clone(), v.clone());
-                    }
-                    (_, None) => {
-                        theirs.remove(name);
-                    }
-                }
-            }
+            put_changes(was, now, theirs, MERGED_BY_KEY);
             continue;
         }
         match now {
@@ -243,6 +232,61 @@ fn merge_changes(base: &serde_json::Value, mine: &serde_json::Value, on_disk: se
     }
     keep_current_action_set(&mut out, chosen_from.as_ref());
     Value::Object(out)
+}
+
+/// Engine preferences that hold values set one key at a time (`app.preferences` in scripts): a
+/// save merges them key by key, so two windows that set different keys keep both.
+const MERGED_BY_KEY: &[&str] = &["scriptPreferences"];
+
+/// Whether `store`, a saved `scriptPreferences`, reads as a store within the limits
+/// `app.preferences` keeps; one that does not read is not within them.
+fn script_store_fits(store: &serde_json::Map<String, serde_json::Value>) -> bool {
+    serde_json::from_value::<std::collections::BTreeMap<String, vectorcraft_engine::ScriptPreference>>(serde_json::Value::Object(store.clone()))
+        .is_ok_and(|s| vectorcraft_engine::script::dom::preferences::within_limits(&s))
+}
+
+/// `theirs` with each entry that changed from `was` to `now` set to `now`'s value, or removed when
+/// `now` lacks it. The entries named in `by_key` that are maps (or missing) are merged key by key.
+fn put_changes(
+    was: &serde_json::Map<String, serde_json::Value>,
+    now: &serde_json::Map<String, serde_json::Value>,
+    theirs: &mut serde_json::Map<String, serde_json::Value>,
+    by_key: &[&str],
+) {
+    use serde_json::{Map, Value};
+    let empty = Map::new();
+    let names: std::collections::BTreeSet<&String> = was.keys().chain(now.keys()).collect();
+    for name in names {
+        let (a, b) = (was.get(name), now.get(name));
+        if a == b {
+            continue;
+        }
+        if by_key.contains(&name.as_str())
+            && let (Some(a), Some(b)) = (a.map_or(Some(&empty), Value::as_object), b.map_or(Some(&empty), Value::as_object))
+        {
+            let mut inner = match theirs.remove(name) {
+                Some(Value::Object(m)) => m,
+                _ => Map::new(),
+            };
+            put_changes(a, b, &mut inner, &[]);
+            // A merge past the store's limits saves this window's store as it is.
+            if !script_store_fits(&inner) {
+                inner = b.clone();
+            }
+            if !inner.is_empty() {
+                theirs.insert(name.clone(), Value::Object(inner));
+            }
+            continue;
+        }
+        match b {
+            Some(v) => {
+                theirs.insert(name.clone(), v.clone());
+            }
+            None => {
+                theirs.remove(name);
+            }
+        }
+    }
 }
 
 /// Point the saved current Actions set (`action_set`) at the same set in the merged
@@ -363,6 +407,45 @@ mod tests {
         let mine = json!({"workspace": "Essentials", "toolbar": true, "engine_prefs": {"uiAccent": "blue", "uiScaling": 1.25}});
         let merged = merge_changes(&base, &mine, on_disk);
         assert_eq!(merged, json!({"workspace": "Painting", "toolbar": true, "engine_prefs": {"uiAccent": "violet", "uiScaling": 1.25}}));
+    }
+
+    #[test]
+    fn script_preference_keys_from_two_windows_are_both_saved() {
+        let base = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": true}, "gone": {"integer": 1}}}});
+        // The other window set `b`; this one set `c`, changed `a` and removed `gone`.
+        let on_disk = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": true}, "b": {"string": "x"}, "gone": {"integer": 1}}}});
+        let mine = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": false}, "c": {"real": 0.5}}}});
+        let want = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": false}, "b": {"string": "x"}, "c": {"real": 0.5}}}});
+        assert_eq!(merge_changes(&base, &mine, on_disk), want);
+        // A window that started with no keys and removed none keeps the other window's.
+        let base = json!({"engine_prefs": {}});
+        let on_disk = json!({"engine_prefs": {"scriptPreferences": {"b": {"string": "x"}}}});
+        let mine = json!({"engine_prefs": {"scriptPreferences": {"c": {"real": 0.5}}}});
+        let want = json!({"engine_prefs": {"scriptPreferences": {"b": {"string": "x"}, "c": {"real": 0.5}}}});
+        assert_eq!(merge_changes(&base, &mine, on_disk), want);
+        // Removing the last key of either window leaves the field out.
+        let base = json!({"engine_prefs": {"scriptPreferences": {"a": {"boolean": true}}}});
+        let on_disk = base.clone();
+        let mine = json!({"engine_prefs": {}});
+        assert_eq!(merge_changes(&base, &mine, on_disk), json!({"engine_prefs": {}}));
+    }
+
+    #[test]
+    fn script_preference_keys_merged_past_the_limits_save_this_windows_keys() {
+        use vectorcraft_engine::script::dom::preferences::MAX_KEYS;
+        let keys = |prefix: &str| -> serde_json::Map<String, serde_json::Value> {
+            (0..MAX_KEYS).map(|i| (format!("{prefix}{i}"), json!({"boolean": true}))).collect()
+        };
+        // Each window added a full store of its own keys.
+        let base = json!({"engine_prefs": {}});
+        let on_disk = json!({"engine_prefs": {"scriptPreferences": keys("theirs")}});
+        let mine = json!({"engine_prefs": {"scriptPreferences": keys("mine")}});
+        assert_eq!(merge_changes(&base, &mine, on_disk), mine);
+        // A merge within the limits keeps both windows' keys.
+        let on_disk = json!({"engine_prefs": {"scriptPreferences": {"theirs": {"boolean": true}}}});
+        let mine = json!({"engine_prefs": {"scriptPreferences": {"mine": {"integer": 2}}}});
+        let want = json!({"engine_prefs": {"scriptPreferences": {"mine": {"integer": 2}, "theirs": {"boolean": true}}}});
+        assert_eq!(merge_changes(&base, &mine, on_disk), want);
     }
 
     #[test]

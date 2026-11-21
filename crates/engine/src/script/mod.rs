@@ -542,19 +542,35 @@ impl Choices {
 }
 
 /// The preferences after a run: `current`, the session's, which the app may have changed while the
-/// run went on, with each preference the run changed from `start` set to the run's value.
+/// run went on, with each preference the run changed from `start` set to the run's value. A
+/// preference the run emptied, which is then left out of the saved form, is left out of the result.
+/// The values scripts store with `app.preferences` are merged the same way one key at a time.
 fn merged_prefs(start: &crate::Prefs, run: &crate::Prefs, current: &crate::Prefs) -> crate::Prefs {
-    let (Ok(Value::Object(start)), Ok(Value::Object(run)), Ok(Value::Object(mut out))) =
+    const SCRIPT_KEYS: &str = "scriptPreferences";
+    let (Ok(Value::Object(start_json)), Ok(Value::Object(run_json)), Ok(Value::Object(mut out))) =
         (serde_json::to_value(start), serde_json::to_value(run), serde_json::to_value(current))
     else {
         return current.clone();
     };
-    for (key, value) in run {
-        if start.get(&key) != Some(&value) {
+    for key in start_json.keys().filter(|k| *k != SCRIPT_KEYS && !run_json.contains_key(*k)) {
+        out.remove(key);
+    }
+    for (key, value) in run_json {
+        if key != SCRIPT_KEYS && start_json.get(&key) != Some(&value) {
             out.insert(key, value);
         }
     }
-    serde_json::from_value(Value::Object(out)).unwrap_or_else(|_| current.clone())
+    let mut merged: crate::Prefs = serde_json::from_value(Value::Object(out)).unwrap_or_else(|_| current.clone());
+    let script = &mut merged.script_preferences;
+    for key in start.script_preferences.keys().filter(|k| !run.script_preferences.contains_key(*k)) {
+        script.remove(key);
+    }
+    for (key, value) in &run.script_preferences {
+        if start.script_preferences.get(key) != Some(value) {
+            script.insert(key.clone(), value.clone());
+        }
+    }
+    merged
 }
 
 impl World {
@@ -1840,10 +1856,19 @@ impl Session {
 
     /// Gives the dialog the running script waits at its answer; the next [`Session::script_pump`]
     /// goes on from the call. → false when nothing waits, the answer is for another kind of
-    /// dialog, or a prompt's text is longer than [`dialogs::MAX_PROMPT_BYTES`].
+    /// dialog, or a prompt's text is longer than [`dialogs::MAX_PROMPT_BYTES`]. Yes to a confirm the
+    /// app opened for the script ([`dialogs::Dialogs::ask`]) also does what it asked.
     pub fn script_answer(&mut self, answer: DialogAnswer) -> bool {
         let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return false };
-        with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
+        with_job(k, |j| {
+            let given = j.host.dialogs.answer(&mut j.realm, answer);
+            // Between slices the run's preferences are in its working copy.
+            if let Some(dialogs::OnYes::ExternalScriptWarningOff) = j.host.dialogs.take_approved() {
+                j.world.choices.prefs.show_external_script_warning = false;
+            }
+            given
+        })
+        .unwrap_or(false)
     }
 
     /// The file dialog (`File.openDialog`, `File.saveDialog`, `Folder.selectDialog` and the objects'
