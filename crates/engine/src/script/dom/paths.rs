@@ -28,7 +28,9 @@
 //!   stroke (solid, gradient or pattern), or black when new art has none. `PathPoints.add()` adds
 //!   a corner point with no handles at the last point, or at `[0, 0]` on a path with no points.
 //!   Removing the last points leaves the path, with no points.
-//! - A point whose index is past the end of its path throws `Stale path point`.
+//! - A point whose index is past the end of its path throws `Stale path point`, and so does a
+//!   point read before the run removed a point of its path or replaced its points
+//!   (`PathPoint.remove()`, `PathPoints.removeAll()`, `setEntirePath`).
 //! - Shape creators take sizes and radii that are finite and not negative; `sides` is a whole
 //!   number from 3 to 1000 and `points` one from 2 to 1000. `inscribed` true throws an error that
 //!   says it is not available yet. `rotateAbout` and `scaleAbout` default to
@@ -56,7 +58,8 @@ use super::{
 };
 use crate::{DocState, NodeId, NodeKind};
 
-/// The error of a point whose index is past the end of its path.
+/// The error of a point whose index is past the end of its path, or that was read before the run
+/// removed or replaced points of its path.
 pub const STALE_POINT: &str = "Stale path point";
 /// The most points `setEntirePath` takes.
 pub const MAX_POINTS: usize = 100_000;
@@ -598,6 +601,7 @@ fn path_set_entire(h: &super::Host, a: &[Data]) -> Answer {
     let anchors: Vec<Anchor> = script.iter().map(|p| Anchor::corner(f.to_document(c, *p))).collect();
     let subs = if anchors.is_empty() { Vec::new() } else { vec![SubPath::new(anchors, closed)] };
     write_path(h, item, subs)?;
+    cut_points(h, item);
     Ok(Data::Undefined)
 }
 
@@ -1064,7 +1068,20 @@ fn points_parent(h: &super::Host, a: &[Data]) -> Answer {
 
 fn point_ref(h: &super::Host, item: Item, i: usize) -> Data {
     let [high, low] = id_parts(item.id);
-    host_ref("PathPoint", &[float(h.run), float(item.doc.uid), high, low, float(i as u64)])
+    host_ref("PathPoint", &[float(h.run), float(item.doc.uid), high, low, float(i as u64), float(point_cuts(h, item))])
+}
+
+/// How many times the run has removed or replaced points of `item`.
+fn point_cuts(h: &super::Host, item: Item) -> u64 {
+    h.dom.point_cuts.borrow().get(&(item.doc.uid, item.id.0)).copied().unwrap_or(0)
+}
+
+/// Notes that the run removed or replaced points of `item`, which makes the points read before
+/// stale.
+fn cut_points(h: &super::Host, item: Item) {
+    let mut cuts = h.dom.point_cuts.borrow_mut();
+    let n = cuts.entry((item.doc.uid, item.id.0)).or_insert(0);
+    *n = n.saturating_add(1);
 }
 
 fn points_at(h: &super::Host, a: &[Data]) -> Answer {
@@ -1107,16 +1124,21 @@ fn points_add(h: &super::Host, a: &[Data]) -> Answer {
 fn points_remove_all(h: &super::Host, a: &[Data]) -> Answer {
     let item = points_path(h, a)?;
     write_path(h, item, Vec::new())?;
+    cut_points(h, item);
     Ok(Data::Undefined)
 }
 
 // ---- PathPoint ----
 
-/// The path and the index of the point `this` names, which must still be in the path.
+/// The path and the index of the point `this` names, which must still be in the path, with no
+/// point of the path removed or replaced since `this` was read.
 pub(super) fn this_point(h: &super::Host, a: &[Data]) -> std::result::Result<(Item, usize), HostError> {
     let Some(handle) = handle_of(arg(a, 0), "PathPoint") else { return Err(HostError::Type("this is not a PathPoint".into())) };
-    let [run, uid, high, low, i] = handle.as_slice() else { return Err(HostError::Type("this is not a PathPoint".into())) };
+    let [run, uid, high, low, i, cuts] = handle.as_slice() else { return Err(HostError::Type("this is not a PathPoint".into())) };
     let item = path_at(h, *run, *uid, *high, *low)?;
+    if whole(*cuts) != Some(point_cuts(h, item)) {
+        return Err(HostError::Error(STALE_POINT.into()));
+    }
     let i = whole(*i).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
     let n = read_points(h, item, point_count)?;
     if i >= n {
@@ -1216,6 +1238,7 @@ fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
             }
         }
     })?;
+    cut_points(h, item);
     Ok(Data::Undefined)
 }
 

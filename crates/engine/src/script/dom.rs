@@ -89,7 +89,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
 /// page items, kept while that document is unchanged, the point changes of a path not written yet,
-/// and whether a call's own savepoint ([`atomically`]) is open.
+/// how many times it removed or replaced each path's points, and whether a call's own savepoint
+/// ([`atomically`]) is open.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -99,6 +100,9 @@ pub(super) struct State {
     /// A path and its subpaths with the point changes the run has made to it and not written yet
     /// ([`flush`]).
     pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// How many times the run has removed or replaced points of each path, by document uid and
+    /// path id ([`paths`]).
+    point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
     saving: Cell<bool>,
 }
 

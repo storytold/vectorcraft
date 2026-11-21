@@ -259,6 +259,32 @@ fn path_point_wrapper_goes_stale_after_remove() {
 }
 
 #[test]
+fn points_read_before_a_removal_or_replacement_go_stale() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], q = app.activeDocument.pathItems[1];\
+         var second = p.pathPoints[1], other = q.pathPoints[1]; p.pathPoints[0].remove();\
+         try { second.anchor = [0, 0]; } catch (e) { vc.log(e.message); } try { second.anchor; } catch (e) { vc.log(e.message); }\
+         vc.log(other.anchor); var first = p.pathPoints[0]; vc.log(first.anchor);\
+         p.setEntirePath([[1, 1], [2, 2], [3, 3]]); try { first.anchor; } catch (e) { vc.log(e.message); }\
+         var again = p.pathPoints[0]; vc.log(again.anchor); p.pathPoints.removeAll(); try { again.anchor; } catch (e) { vc.log(e.message); }",
+    );
+    assert_eq!(
+        out,
+        vec![
+            json!("Stale path point"),
+            json!("Stale path point"),
+            json!([150, 200]),
+            json!([40, 280]),
+            json!("Stale path point"),
+            json!([1, 1]),
+            json!("Stale path point")
+        ]
+    );
+}
+
+#[test]
 fn fill_color_round_trips_rgb_cmyk_gray_lab() {
     let (mut s, a, _) = doc();
     let out = log(
