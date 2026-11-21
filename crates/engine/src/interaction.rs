@@ -10,6 +10,9 @@ pub struct Interaction {
     pub preview: Option<(String, Value)>,
     /// A replaced or canceled preview restores these new-art paints from before the interaction.
     pub(crate) paint: vectorcraft_tools::PaintDefaults,
+    /// A preview of the interaction gave `defaultsOnly: true`: every later preview and a cancel put
+    /// `paint` back, whichever preview is the latest.
+    pub(crate) used_defaults_only: bool,
     /// An accepted batch preview uses these final paints after changing the document color mode.
     pub(crate) preview_paint: Option<vectorcraft_tools::PaintDefaults>,
     /// Conversion of new-art paints waits until a color-mode preview is accepted.
