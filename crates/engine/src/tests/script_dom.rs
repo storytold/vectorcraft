@@ -119,6 +119,27 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
 }
 
 #[test]
+fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let other = format!("{:?}", s.active().unwrap().doc.node(b));
+    let out = log(
+        &mut s,
+        "var i = app.activeDocument.selection[0], h = i.height;\
+         i.width = 80; vc.log([i.width, i.height - h]);\
+         i.height = 90; vc.log([i.width, i.height]);\
+         var g = i.geometricBounds; vc.log([g[2] - g[0], g[1] - g[3]]);",
+    );
+    let pairs: Vec<[f64; 2]> = out.iter().map(|v| [v[0].as_f64().unwrap(), v[1].as_f64().unwrap()]).collect();
+    for (got, want) in pairs.iter().zip([[80.0, 0.0], [80.0, 90.0], [80.0, 90.0]]) {
+        assert!((got[0] - want[0]).abs() < 1e-6 && (got[1] - want[1]).abs() < 1e-6, "{out:?}");
+    }
+    assert_eq!(pairs.len(), 3, "{out:?}");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.node(b)), other, "the other object stays as it was");
+}
+
+#[test]
 fn convert_coordinate_pair_is_inverse_and_y_up() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();

@@ -1392,7 +1392,9 @@ fn item_set_top(h: &Host, a: &[Data]) -> Answer {
     move_to(h, a, None, Some(y))
 }
 
-/// Scales the item about its top-left corner to `size` points wide (`width`) or tall.
+/// Scales the item about its top-left corner along the page's axes to `size` points wide (`width`)
+/// or tall, so the page-aligned bounds that `width` and `height` read have that size, rotated
+/// objects included.
 fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
     let what = if width { "width" } else { "height" };
     let size = number(arg(a, 1), what)?;
