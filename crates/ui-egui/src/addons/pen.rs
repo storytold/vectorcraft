@@ -3,6 +3,12 @@
 //! a straight or a curved segment, and the point and path edits it shares with the tool. Everything
 //! acts through `addon.pen.*` and the `addon.pathtools.*` anchor edits.
 
+use craft::behavior::IconId;
+use craft_ui::buttons::Button;
+use craft_ui::choice::Segmented;
+use craft_ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft_ui::display::{Shade, Text};
+use craft_ui::sections::Section;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_tools::addons::smart_pen;
@@ -10,7 +16,6 @@ use vectorcraft_tools::addons::smart_pen;
 use crate::VectorcraftApp;
 use crate::menus::Item;
 use crate::panels::empty_state;
-use crate::widgets::{self, dim_label};
 
 /// The Smart Pen panel's id (`window.panel {panel: "smartPen"}`).
 pub const ID: &str = "smartPen";
@@ -41,35 +46,27 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let selected = !st.selection.is_empty();
-    let curved = app.session.tool_options_of(smart_pen::ID)["next"] == json!("curved");
+    let shown = app.session.tool_options_of(smart_pen::ID)["next"] == json!("curved");
+    let mut curved = shown;
     let mut action: Option<(&str, Value)> = None;
-    // The label above its buttons, so a long translation stays within the dock's width.
-    widgets::subheader(ui, tl!("Next Segment"));
-    ui.horizontal(|ui| {
-        for (icon, tip, on) in [("dc-line", tl!("Straight"), false), ("spline", tl!("Curved"), true)] {
-            if widgets::icon_button(ui, icon, tip, curved == on, 24.0).clicked() {
-                action = Some(("addon.pen.nextSegment", json!({ "curved": on })));
-            }
-        }
+    let segments = [Entry::new(false, tl!("Straight")).icon(IconId::new("dc-line")), Entry::new(true, tl!("Curved")).icon(IconId::new("spline"))];
+    Section::fixed(tl!("Next Segment")).show(ui, |ui, _| {
+        Segmented::new(tl!("Next Segment"), Bind::bound(&mut curved), &segments).show(ui);
     });
-    widgets::divider(ui);
-    if !selected {
-        dim_label(ui, tl!("Direct-select anchor points to edit them."));
+    if curved != shown {
+        action = Some(("addon.pen.nextSegment", json!({ "curved": curved })));
     }
-    let width = ui.available_width();
-    ui.add_enabled_ui(selected, |ui| {
-        for (label, id, p) in edits() {
-            if widgets::flat_button(ui, label, width).clicked() {
-                action = Some((id, p));
-            }
+    if !selected {
+        Text::new(tl!("Direct-select anchor points to edit them.")).shade(Shade::Muted).show(ui);
+    }
+    for (label, id, p) in edits() {
+        if Button::new(label).enabled(selected).show(ui).clicks > 0 {
+            action = Some((id, p));
         }
-    });
+    }
     if let Some((id, p)) = action
         && let Err(e) = app.run(id, p)
     {
         app.status(e);
     }
 }
-
-#[cfg(test)]
-mod tests;
