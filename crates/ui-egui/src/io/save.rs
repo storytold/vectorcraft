@@ -1,9 +1,294 @@
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use craft::dialogs::save::{SAVE_IN_PROGRESS, SaveDocument, SaveFlow, SaveStep, SaveTarget};
+use craft::host::{FileFilter, Files, PickRequest, Picked, Wake};
+use craft::platform::watch::FileWatch;
+use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
+
 use super::export::file_url;
-use super::open::{note_recent, open_options};
+use super::open::note_recent;
 use super::{
-    EngineError, FilePick, Format, Progress, SAVE_FORMATS, SaveMode, SavePlan, SavedView, Services, TEMPLATE_FORMATS, Value, VectorcraftApp, Writer,
-    background, dialogs, fileio, json, progress, svg_options,
+    EngineError, Format, Progress, SAVE_FORMATS, SaveMode, SavePlan, SavedView, Services, TEMPLATE_FORMATS, Value, VectorcraftApp, Writer, background,
+    dialogs, fileio, json, progress, svg_options,
 };
+use crate::file_asks::{self, Owner};
+
+/// What runs once a save is written, failed or cancelled.
+pub(crate) type Done = Box<dyn FnOnce(&mut VectorcraftApp, Result<Value, String>)>;
+
+/// What [`pump`] needs to go on with a document's save once its flow answers.
+struct SaveDone {
+    mode: SaveMode,
+    params: Value,
+    ask_options: bool,
+    /// The name the picker suggested: a typed extension is compared with it.
+    suggested: String,
+    /// The picker's filters: the index of the picked type names one of them.
+    filters: Vec<FileFilter>,
+    /// The read-only fallback's Save As: options of the original format carry through it.
+    retrying: bool,
+    retry: Option<super::read_only_save::Retry>,
+    /// The changed-on-disk question, while it is open.
+    question: Option<DialogId>,
+    then: Option<Done>,
+}
+
+/// The saves of the app: one [`SaveFlow`] per document, and what the flows need to ask and write.
+pub(crate) struct Saves {
+    flows: HashMap<u64, SaveFlow<u64>>,
+    /// The version of each document's file the app last read or wrote.
+    pub(crate) watch: FileWatch<u64>,
+    /// The files written beside each document's file, which its next save replaces.
+    pub(crate) written_beside: HashMap<u64, Vec<String>>,
+    /// The files the OK of the replace question allows the save it runs again to replace.
+    pub(crate) replace_files_ok: Vec<String>,
+    done: HashMap<u64, SaveDone>,
+}
+
+impl Saves {
+    /// No save in progress; `wake` runs a frame when the watcher has news.
+    pub(crate) fn new(wake: Wake) -> Self {
+        Self { flows: HashMap::new(), watch: FileWatch::new(wake), written_beside: HashMap::new(), replace_files_ok: Vec::new(), done: HashMap::new() }
+    }
+
+    fn start(&mut self, files: &dyn Files, document: SaveDocument<u64>, target: SaveTarget) -> SaveStep<u64> {
+        let Self { flows, watch, .. } = self;
+        flows.entry(document.key).or_default().start(files, watch, document, target)
+    }
+
+    /// Frees the document's flow after a write that wrote nothing.
+    pub(super) fn release(&mut self, uid: u64) {
+        if let Some(flow) = self.flows.get_mut(&uid) {
+            flow.failed(&uid);
+        }
+    }
+}
+
+/// Calls the `then` of the document's save, once.
+fn terminate(app: &mut VectorcraftApp, uid: u64, r: Result<Value, String>) {
+    if let Some(then) = app.saves.done.remove(&uid).and_then(|d| d.then) {
+        then(app, r);
+    }
+}
+
+/// A save's end: the flow is free again (and the watcher knows the new version of a file the
+/// document took), and the caller that waits for it is told, unless a question or a fallback
+/// picker goes on with it.
+fn finish(app: &mut VectorcraftApp, uid: u64, retargets: bool, out: &Result<Value, String>) {
+    let written = out.as_ref().ok().filter(|v| v.get("cancelled").is_none() && v.get("pending").is_none());
+    let flow = app.saves.flows.entry(uid).or_default();
+    match written.and_then(|v| v["path"].as_str()) {
+        Some(path) if flow.is_busy() || retargets => flow.written(&mut app.saves.watch, uid, Path::new(path)),
+        _ => flow.failed(&uid),
+    }
+    if !matches!(out, Ok(v) if v.get("pending").is_some()) {
+        terminate(app, uid, out.clone());
+    }
+}
+
+/// Cancels the document's save (its picker, a question or an options dialog); the caller that
+/// waits for it is told.
+pub(crate) fn cancel(app: &mut VectorcraftApp, uid: u64) {
+    if let Some(flow) = app.saves.flows.get_mut(&uid) {
+        flow.cancel(app.host.files());
+    }
+    terminate(app, uid, Err("cancelled".into()));
+}
+
+/// Lets the save that runs again replace `files`, which the OK of the replace question allowed.
+pub(crate) fn allow_replacing(app: &mut VectorcraftApp, files: &[String]) {
+    for f in files {
+        if !app.saves.replace_files_ok.contains(f) {
+            app.saves.replace_files_ok.push(f.clone());
+        }
+    }
+}
+
+/// [`save`] that calls `done` once the save is written, failed or cancelled, also after a picker or
+/// a question.
+pub(crate) fn save_reporting(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, done: Done) -> Result<Value, String> {
+    let uid = app.session.active().ok_or("no document")?.uid;
+    // Saves of one document finish in order.
+    if app.background.busy_with(uid) {
+        background::wait_all(app);
+    }
+    if app.saves.flows.get(&uid).is_some_and(|f| f.is_busy()) {
+        return Err(SAVE_IN_PROGRESS.english.into());
+    }
+    if let Some(old) = app.saves.done.remove(&uid).and_then(|d| d.then) {
+        old(app, Err("cancelled".into()));
+    }
+    let waiting = SaveDone {
+        mode,
+        params: p.clone(),
+        ask_options: false,
+        suggested: String::new(),
+        filters: Vec::new(),
+        retrying: false,
+        retry: None,
+        question: None,
+        then: Some(done),
+    };
+    app.saves.done.insert(uid, waiting);
+    let r = save(app, mode, p, true);
+    if r.is_err() {
+        terminate(app, uid, r.clone());
+    }
+    r
+}
+
+/// Takes what the flows and their questions have answered since the last pass: the pick, the
+/// changed-on-disk question's answer. A save whose document closed is cancelled and forgotten.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let busy: Vec<u64> = app.saves.flows.iter().filter(|(_, f)| f.is_busy()).map(|(uid, _)| *uid).collect();
+    for uid in busy {
+        if !app.session.documents().iter().any(|d| d.uid == uid) {
+            terminate(app, uid, Err(file_asks::CLOSED.into()));
+            if let Some(mut flow) = app.saves.flows.remove(&uid) {
+                flow.cancel(app.host.files());
+            }
+            app.saves.watch.forget(&uid);
+            continue;
+        }
+        let Some(step) = next_step(app, uid) else { continue };
+        if let Err(e) = run_step(app, uid, step)
+            && e != "cancelled"
+        {
+            app.status(e);
+        }
+    }
+}
+
+/// The step the document's flow has reached since the last pass: its question's answer, else its
+/// pick.
+fn next_step(app: &mut VectorcraftApp, uid: u64) -> Option<SaveStep<u64>> {
+    if let Some(id) = app.saves.done.get(&uid).and_then(|d| d.question) {
+        let answer = app.dialogs().take_by_id::<StandardPrompt>(id)?;
+        if let Some(done) = app.saves.done.get_mut(&uid) {
+            done.question = None;
+        }
+        let flow = app.saves.flows.get_mut(&uid)?;
+        return match answer {
+            DialogResult::Ok(a) if a.choice == PromptChoice::Proceed => Some(flow.replace()),
+            DialogResult::Ok(a) if a.choice == PromptChoice::Alternate => Some(flow.save_elsewhere(app.host.files())),
+            _ => flow.cancel(app.host.files()),
+        };
+    }
+    let Saves { flows, watch, .. } = &mut app.saves;
+    flows.get_mut(&uid)?.take_pick(app.host.files(), watch)
+}
+
+/// Runs `step` of the document `uid`'s save; a failure frees the flow and tells the caller.
+fn run_step(app: &mut VectorcraftApp, uid: u64, step: SaveStep<u64>) -> Result<Value, String> {
+    let r = proceed(app, step);
+    if r.is_err() {
+        app.saves.release(uid);
+        terminate(app, uid, r.clone());
+    }
+    r
+}
+
+fn proceed(app: &mut VectorcraftApp, step: SaveStep<u64>) -> Result<Value, String> {
+    match step {
+        SaveStep::Picking => Ok(json!({ "pending": "fileDialog" })),
+        SaveStep::AskChangedOnDisk { key, path } => {
+            let name = fileio::file_name(&path.to_string_lossy());
+            // PLAN: assumed `app.dialogs() -> &mut DialogHost` (hub-w1).
+            let id = app.dialogs().open(StandardPrompt::changed_on_disk(name).instance(("changed-on-disk", key)));
+            if let Some(done) = app.saves.done.get_mut(&key) {
+                done.question = Some(id);
+            }
+            Ok(json!({ "pending": "changedOnDisk" }))
+        }
+        SaveStep::Write { key, path, target, file_type } => write_step(app, key, &path.to_string_lossy(), target, file_type),
+        SaveStep::Cancelled { key } => {
+            terminate(app, key, Err("cancelled".into()));
+            Err("cancelled".into())
+        }
+        SaveStep::Busy => Err(SAVE_IN_PROGRESS.english.into()),
+    }
+}
+
+/// The flow's `Write` step for document `uid`: its own file written as it is, or a picked path
+/// made into the file the picked type names, asking before it replaces a file the panel did not
+/// ask about.
+fn write_step(app: &mut VectorcraftApp, uid: u64, path: &str, target: SaveTarget, file_type: Option<usize>) -> Result<Value, String> {
+    let index = app.session.documents().iter().position(|d| d.uid == uid).ok_or(file_asks::CLOSED)?;
+    if app.session.active_index() != Some(index) {
+        app.run("document.activate", json!({ "index": index }))?;
+    }
+    let (mode, params, ask, suggested, retrying, retry, picked_ext) = {
+        let done = app.saves.done.get_mut(&uid).ok_or(file_asks::CLOSED)?;
+        // `None` without a picked type: the typed or suggested extension decides (macOS has no type menu).
+        let picked_ext = file_type.and_then(|i| done.filters.get(i)).and_then(|f| f.extensions.first().cloned());
+        (done.mode, done.params.clone(), done.ask_options, done.suggested.clone(), done.retrying, done.retry.take(), picked_ext)
+    };
+    let own = target == SaveTarget::InPlace && app.session.active().is_some_and(|st| st.path.as_deref() == Some(path));
+    if own {
+        return plan(app, mode, &params).and_then(|plan| write_plan(app, plan, (save_command(mode), params), retry));
+    }
+    let first = plan(app, mode, &acknowledged(&params))?;
+    let answered = path.to_string();
+    let path = with_picked_type(&answered, &suggested, picked_ext.as_deref(), first.format, mode);
+    // The flow ends here: the questions and options dialogs that follow run on the path alone.
+    app.saves.release(uid);
+    replaces_unasked(app, &answered, &path, move |app, path| finish_picked(app, mode, &params, ask, &path, retrying))
+}
+
+/// What [`start_flow`] needs besides the plan.
+struct Start<'a> {
+    mode: SaveMode,
+    params: &'a Value,
+    ask_options: bool,
+    target: SaveTarget,
+    retry: Option<super::read_only_save::Retry>,
+    name: String,
+    directory: Option<PathBuf>,
+    retrying: bool,
+}
+
+/// Starts the active document's save on its flow: the picker, or the changed-on-disk check of
+/// its own file, then the write.
+fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Result<Value, String> {
+    let st = app.session.active().ok_or("no document")?;
+    let uid = st.uid;
+    let template = s.mode == SaveMode::Template;
+    let id = first.format.id;
+    let document = SaveDocument {
+        key: uid,
+        name: s.name.clone(),
+        path: st.path.clone().map(PathBuf::from),
+        extension: first.format.extensions.first().map_or_else(String::new, |e| (*e).to_string()),
+        filters: file_asks::filters(&if template { fileio::template_filters(id) } else { fileio::save_filters(id) }),
+        purpose: if template { "template" } else { "document" }.into(),
+        saved: None,
+        directory: s.directory,
+    };
+    let filters = document.filters.clone();
+    let mut step = app.saves.start(app.host.files(), document.clone(), s.target);
+    if matches!(step, SaveStep::Busy) && app.background.busy_with(uid) {
+        background::wait_all(app);
+        step = app.saves.start(app.host.files(), document, s.target);
+    }
+    if matches!(step, SaveStep::Busy) {
+        return Err(SAVE_IN_PROGRESS.english.into());
+    }
+    let then = app.saves.done.remove(&uid).and_then(|d| d.then);
+    let done = SaveDone {
+        mode: s.mode,
+        params: s.params.clone(),
+        ask_options: s.ask_options,
+        suggested: s.name,
+        filters,
+        retrying: s.retrying,
+        retry: s.retry,
+        question: None,
+        then,
+    };
+    app.saves.done.insert(uid, done);
+    run_step(app, uid, step)
+}
 
 /// The status once a save running in the background was canceled.
 pub const SAVE_CANCELED: &str = "Save canceled";
@@ -69,27 +354,57 @@ pub(crate) fn is_web(app: &VectorcraftApp) -> bool {
 }
 
 /// Write `bytes` to `path`, else to a file picked in a save panel that suggests `name` next to the
-/// document and shows its file type, [`file_types`] (the web downloads them as `name`) → where
-/// they went.
-pub(crate) fn write_named(app: &mut VectorcraftApp, path: Option<String>, name: &str, bytes: &[u8]) -> Result<String, String> {
-    let path = match path {
-        Some(p) => p,
-        None => {
-            let (_, folder) = suggested(app, "");
-            let filters = file_types(&fileio::extension(name));
-            pick_path(app, &FilePick { name: name.to_string(), folder, filters }, |_| false)?
-        }
-    };
-    write_reporting(app, &path, bytes)?;
-    Ok(path)
+/// document and shows its file type, [`file_types`] (the web downloads them as `name`); `then`
+/// gets where they went. While the panel is open the reply is `{pending: "fileDialog"}`.
+pub(crate) fn write_named(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    name: &str,
+    bytes: Vec<u8>,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    let ext = fileio::extension(name);
+    let (_, folder) = suggested(app, "");
+    let filters = file_types(&ext);
+    ask_path(app, path, name.to_string(), folder, filters, ext, |_| false, move |app, path| {
+        write_reporting(app, &path, &bytes)?;
+        then(app, path)
+    })
 }
 
 /// Where a file goes when no path was given: the suggested name on the web (a download), else the
 /// save panel's choice with the suggested name's extension, [`with_written_extension`]: a name
-/// typed with the extension of a format `keeps` takes stays as typed too.
-fn pick_path(app: &mut VectorcraftApp, pick: &FilePick, keeps: impl Fn(&Format) -> bool) -> Result<String, String> {
-    let ext = fileio::extension(&pick.name);
-    pick_finished(app, pick, |picked, _| with_written_extension(picked, &ext, &keeps))
+/// typed with the extension of a format `keeps` takes stays as typed too. `then` gets the path:
+/// at once for a given one, else once the panel is answered (the reply is then `{pending:
+/// "fileDialog"}`; a cancelled panel runs nothing).
+#[allow(clippy::too_many_arguments)]
+fn ask_path(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    name: String,
+    folder: Option<String>,
+    filters: Vec<FileFilter>,
+    ext: String,
+    keeps: impl Fn(&Format) -> bool + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    if let Some(p) = path {
+        return then(app, p);
+    }
+    if is_web(app) {
+        return then(app, with_written_extension(&name, &ext, &keeps));
+    }
+    let mut request = PickRequest::save("export").file_name(name);
+    request.filters = filters;
+    if let Some(folder) = folder {
+        request = request.directory(folder);
+    }
+    Ok(file_asks::ask(app, request, Owner::Document, move |app, picked| {
+        let Picked::Saved { path: picked, .. } = picked else { return Err("cancelled".into()) };
+        let picked = picked.to_string_lossy().into_owned();
+        let path = with_written_extension(&picked, &ext, &keeps);
+        replaces_unasked(app, &picked, &path, then)
+    }))
 }
 
 /// `path` as typed in a save panel for a file with extension `ext`: kept when its extension is
@@ -105,22 +420,22 @@ fn with_written_extension(path: &str, ext: &str, keeps: impl Fn(&Format) -> bool
     with_extension(path, ext, keeps)
 }
 
-/// The suggested name made into a path by `finish` on the web (a download), else the save panel's
-/// choice made into one, with the extension of the file type picked in the panel when it reports
-/// one ([`crate::picks::PickAnswer`]). When `finish` changed the choice (an extension added or
-/// replaced) and a file is there, which the panel did not ask about, a question asks before
-/// replacing it ([`crate::picks::ask_to_replace`]) and this answers "cancelled"; the question's OK
-/// runs what asked again.
-fn pick_finished(app: &mut VectorcraftApp, pick: &FilePick, finish: impl Fn(&str, Option<&str>) -> String) -> Result<String, String> {
-    if is_web(app) {
-        return Ok(finish(&pick.name, None));
+/// `then` on `path`, the file the save panel's answer `picked` was made into. When that changed
+/// the name (an extension added or replaced) and a file is there, which the panel did not ask
+/// about, a question asks before replacing it and `then` runs on its OK (the reply is `{pending:
+/// "replaceFile"}`).
+fn replaces_unasked(
+    app: &mut VectorcraftApp,
+    picked: &str,
+    path: &str,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    let there = path != picked && !is_web(app) && app.services.exists.as_ref().is_some_and(|exists| exists(path));
+    if !there {
+        return then(app, path.to_string());
     }
-    let (picked, file_type) = crate::picks::save_with_type(app, pick).ok_or("cancelled")?;
-    let path = finish(&picked, file_type.as_deref());
-    if path != picked && crate::picks::ask_to_replace(app, crate::picks::PickRequest::Save(pick.clone()), &picked, file_type.as_deref(), &path) {
-        return Err("cancelled".into());
-    }
-    Ok(path)
+    let path = path.to_string();
+    Ok(file_asks::ask_replace(app, &path.clone(), picked, move |app| then(app, path)))
 }
 
 /// `path` as typed in a save panel: kept when it ends in `ext` or its extension names a format
@@ -165,25 +480,39 @@ const FILE_TYPES: &[(&str, &[&str])] = &[
 
 /// The file type a save panel shows for a file with extension `ext`: its format's, else its
 /// [`FILE_TYPES`] row; none for any other extension.
-fn file_types(ext: &str) -> Vec<crate::FileFilter> {
+fn file_types(ext: &str) -> Vec<FileFilter> {
     if let Some(f) = fileio::format(ext) {
-        return vec![FilePick::filter(f.label, f.extensions)];
+        return file_asks::filters(&[(f.label, f.extensions)]);
     }
     let ext = ext.trim_start_matches('.').to_ascii_lowercase();
-    FilePick::filters(FILE_TYPES.iter().find(|(_, exts)| exts.contains(&ext.as_str())).copied())
+    let row = FILE_TYPES.iter().find(|(_, exts)| exts.contains(&ext.as_str())).copied();
+    // PLAN: assumed `file_asks::filters(&[(&str, &[&str])]) -> Vec<FileFilter>` (files-w5), which translates the names.
+    file_asks::filters(&row.into_iter().collect::<Vec<_>>())
 }
 
-/// `path`, else one picked in a save panel (the web: the suggested name) for the active document
-/// with extension `ext`, filtered to its file type when it has one ([`file_types`]). A name typed
-/// with another format's extension gets `ext` instead ([`with_written_extension`]).
-pub(crate) fn target_path(app: &mut VectorcraftApp, path: Option<String>, ext: &str) -> Result<String, String> {
-    target_path_keeping(app, path, ext, |_| false)
+/// `then` on `path`, else on one picked in a save panel (the web: the suggested name) for the
+/// active document with extension `ext`, filtered to its file type when it has one
+/// ([`file_types`]). A name typed with another format's extension gets `ext` instead
+/// ([`with_written_extension`]). While the panel is open the reply is `{pending: "fileDialog"}`.
+pub(crate) fn target_path(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    ext: &str,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    target_path_keeping(app, path, ext, |_| false, then)
 }
 
 /// [`target_path`] for an export in format `f` (Export As's OK and [`export`]): a name typed with
 /// `.svgz` for an SVG stays as typed, and [`export`] writes it compressed.
-pub(crate) fn export_path(app: &mut VectorcraftApp, path: Option<String>, f: &Format) -> Result<String, String> {
-    target_path_keeping(app, path, f.extensions[0], |g| f.id == "svg" && g.id == "svgz")
+pub(crate) fn export_path(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    f: &Format,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    let id = f.id;
+    target_path_keeping(app, path, f.extensions.first().copied().unwrap_or_default(), move |g| id == "svg" && g.id == "svgz", then)
 }
 
 /// [`target_path`], keeping a typed extension of a format `keeps` takes.
@@ -191,14 +520,11 @@ pub(super) fn target_path_keeping(
     app: &mut VectorcraftApp,
     path: Option<String>,
     ext: &str,
-    keeps: impl Fn(&Format) -> bool,
-) -> Result<String, String> {
-    if let Some(p) = path {
-        return Ok(p);
-    }
+    keeps: impl Fn(&Format) -> bool + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
     let (name, folder) = suggested(app, ext);
-    let filters = file_types(ext);
-    pick_path(app, &FilePick { name, folder, filters }, keeps)
+    ask_path(app, path, name, folder, file_types(ext), ext.to_string(), keeps, then)
 }
 
 /// Keep the active document's saved view current before a save (native files reopen at it), and
@@ -292,8 +618,19 @@ pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Optio
     }
     let retry = super::read_only_save::Retry::new(&first, folder);
     // Only `path` was asked about: the files written beside it are checked against the file the
-    // document was read from when the save writes them.
-    write_plan(app, plan(app, SaveMode::Save, p)?, ("file.save", p.clone()), Some(retry))
+    // document was read from when the save writes them. The flow checks that another app did not
+    // change the file since.
+    let start = Start {
+        mode: SaveMode::Save,
+        params: p,
+        ask_options: false,
+        target: SaveTarget::InPlace,
+        retry: Some(retry),
+        name: first.name.clone(),
+        directory: first.folder.clone().map(PathBuf::from),
+        retrying: false,
+    };
+    start_flow(app, &first, start)
 }
 
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
@@ -311,13 +648,14 @@ pub fn save(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bo
     save_suggesting(app, mode, p, ask_options, None)
 }
 
-/// Reuse Save As with a captured name and folder, without changing the document before writing.
+/// Reuse Save As with a captured name and folder (`suggestion`), without changing the document
+/// before writing.
 pub(super) fn save_suggesting(
     app: &mut VectorcraftApp,
     mode: SaveMode,
     p: &Value,
     ask_options: bool,
-    suggestion: Option<&FilePick>,
+    suggestion: Option<(&str, Option<PathBuf>)>,
 ) -> Result<Value, String> {
     remember_view(app);
     // Writing over the file the document was read from is asked about here, not refused.
@@ -335,21 +673,35 @@ pub(super) fn save_suggesting(
         return write_plan(app, plan(app, mode, p)?, (save_command(mode), with_path(p, &path)), None);
     }
     if is_web(app) && ask_options {
-        return Ok(open_options(app, mode.command(), first.format, &first.name, true));
+        return Ok(dialogs::save_options::open(app, mode.command(), first.format, &first.name, true));
     }
-    let filters = FilePick::filters(match mode {
-        SaveMode::Template => fileio::template_filters(first.format.id),
-        _ => fileio::save_filters(first.format.id),
-    });
-    let pick = FilePick {
-        name: suggestion.map_or_else(|| first.name.clone(), |s| s.name.clone()),
-        folder: suggestion.map_or_else(|| first.folder.clone(), |s| s.folder.clone()),
-        filters,
+    let retrying = suggestion.is_some();
+    let (name, directory) = match suggestion {
+        Some((name, directory)) => (name.to_string(), directory),
+        None => (first.name.clone(), first.folder.clone().map(PathBuf::from)),
     };
-    let picked = pick_finished(app, &pick, |picked, file_type| with_picked_type(picked, &pick.name, file_type, first.format, mode))?;
+    // The web downloads under the suggested name: no panel.
+    if is_web(app) {
+        let picked = with_picked_type(&name, &name, None, first.format, mode);
+        return finish_picked(app, mode, p, ask_options, &picked, retrying);
+    }
+    let directory = if mode == SaveMode::Template { fileio::templates_dialog_folder(&app.session.prefs).map(PathBuf::from) } else { directory };
+    let target = match mode {
+        SaveMode::Save => SaveTarget::InPlace,
+        SaveMode::SaveAs => SaveTarget::As,
+        SaveMode::Copy | SaveMode::Template => SaveTarget::Copy,
+    };
+    start_flow(app, &first, Start { mode, params: p, ask_options, target, retry: None, name, directory, retrying })
+}
+
+/// The rest of a save to the path the save panel's answer was made into: the options dialog of
+/// the picked format, or the write.
+fn finish_picked(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, ask_options: bool, picked: &str, retrying: bool) -> Result<Value, String> {
+    let first = plan(app, mode, &acknowledged(p))?;
+    let ask = ask_options && !has_options(p);
     // Only the read-only retry carries options for the original format through Save As.
     // A different format must use its own normal options flow instead.
-    let changed_retry_format = suggestion.is_some() && fileio::format_for_name(&picked).is_some_and(|f| f.id != first.format.id);
+    let changed_retry_format = retrying && fileio::format_for_name(picked).is_some_and(|f| f.id != first.format.id);
     // The picked file type wins over a `format` param.
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
@@ -394,9 +746,10 @@ pub(super) fn replaced_files<'a>(
 
 /// The `exists` service with which a save or export checks the files it writes beside the one
 /// picked ([`replaced_files`]), none on the web (downloads), and the files it replaces without
-/// asking: those the OK of the question about them allowed while it runs that again.
-pub(super) fn checks_replaced(app: &VectorcraftApp) -> (Option<crate::ExistsFn>, Vec<String>) {
-    (app.services.exists.clone().filter(|_| !is_web(app)), app.picks.replace_files_ok.clone())
+/// asking: those the OK of the question about them allowed while it runs that again (taken: the
+/// allowance is for that one save).
+pub(super) fn checks_replaced(app: &mut VectorcraftApp) -> (Option<crate::ExistsFn>, Vec<String>) {
+    (app.services.exists.clone().filter(|_| !is_web(app)), std::mem::take(&mut app.saves.replace_files_ok))
 }
 
 /// Ask before a save or export of the document `doc` (its uid) replaces `files`, files that are
@@ -429,7 +782,11 @@ fn acknowledged(p: &Value) -> Value {
 /// out (hidden text, art or layers VectorCraft can't read yet): asks first, and OK runs `command`
 /// with `params` and `acknowledgeLoss` → `{pending}` while it asks, `None` when nothing is lost.
 pub(super) fn ask_before_losing(app: &mut VectorcraftApp, path: &str, command: &str, params: &Value) -> Option<Value> {
-    let what = fileio::losses_summary(fileio::overwrite_losses(app.session.active()?, path, params)?);
+    let st = app.session.active()?;
+    let what = fileio::losses_summary(fileio::overwrite_losses(st, path, params)?);
+    // The question's Cancel has no step of the flow to answer: the OK runs the command again.
+    let uid = st.uid;
+    app.saves.release(uid);
     let name = fileio::file_name(path);
     let message = crate::i18n::fmt(tl!("Replace “{name}”, the file this document was opened from?"), &[("name", &name)]);
     let detail = crate::i18n::fmt(
@@ -473,7 +830,7 @@ pub fn ask_format_options(app: &mut VectorcraftApp, mode: SaveMode, f: &Format, 
             svg_options::open(app, m, Some(path));
             Ok(json!({ "pending": svg_options::KIND, "dialog": svg_options::KIND, "path": path }))
         }
-        _ => Ok(open_options(app, mode.command(), f, path, false)),
+        _ => Ok(dialogs::save_options::open(app, mode.command(), f, path, false)),
     }
 }
 
@@ -482,10 +839,8 @@ pub fn ask_format_options(app: &mut VectorcraftApp, mode: SaveMode, f: &Format, 
 pub fn ask_pdf_options(app: &mut VectorcraftApp, mode: SaveMode, path: &str) -> Result<Value, String> {
     let mut p = Value::Object(plan(app, mode, &json!({ "path": path, "format": "pdf" }))?.options);
     p["path"] = json!(path);
-    dialogs::open_save_pdf(app, &p)?;
-    let d = app.ui.dialog.as_mut().ok_or("the Save PDF dialog didn't open")?;
-    d.fields.insert("__save".into(), json!(mode.command()));
-    Ok(json!({ "pending": d.kind }))
+    // PLAN: assumed `dialogs::save_pdf::open_for_save(app, &Value, SaveMode) -> Result<Value, String>` (export-w17, ex.A12).
+    dialogs::save_pdf::open_for_save(app, &p, mode)
 }
 
 /// The Save PDF dialog's OK during a save (`mode`): `params` are its `document.exportPdf` options
@@ -615,7 +970,7 @@ fn write_plan(
     // A native file streams into the file as it is encoded (desktop; not to a download).
     let stream = app.services.stream_shared.clone().filter(|_| job.streams() && !is_web(app));
     let (exists, allowed) = checks_replaced(app);
-    let known: Vec<String> = allowed.iter().chain(app.picks.written_beside.get(&uid).into_iter().flatten()).cloned().collect();
+    let known: Vec<String> = allowed.iter().chain(app.saves.written_beside.get(&uid).into_iter().flatten()).cloned().collect();
     // The progress window's Cancel: a save canceled before it replaces its file writes nothing.
     let progress = Progress::new();
     let (reporting, asked) = (progress.clone(), progress.clone());
@@ -655,12 +1010,16 @@ fn write_plan(
     // The status line before the save starts: on the worker, the save sets one line ("<label>…")
     // right after this; written right away, it sets none before `then` runs.
     let (sets, started_line) = (app.ui.status_sets, format!("{label}…"));
-    let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
+    // The read-only fallback's picker takes over the save: its end is the save's end.
+    let handed = std::rc::Rc::new(std::cell::Cell::new(false));
+    let handing = handed.clone();
+    let outcome = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         if r.is_err()
             && location_refused.load(std::sync::atomic::Ordering::Relaxed)
             && let Some(retry) = retry
             && let Some(r) = retry.instead(app, uid)
         {
+            handing.set(true);
             return r;
         }
         // Not written: the document keeps its file, format and modified state, and the user is told.
@@ -695,7 +1054,7 @@ fn write_plan(
             // The files written beside the document's file, which its next save replaces.
             let beside = ["files", "linked"].iter().flat_map(|k| r[*k].as_array().into_iter().flatten()).filter_map(Value::as_str);
             let beside: Vec<String> = beside.filter(|p| *p != path).map(str::to_string).collect();
-            app.picks.written_beside.insert(uid, beside);
+            app.saves.written_beside.insert(uid, beside);
         }
         // A line set while the file was written (another command's, another job's) stays. A Cancel
         // that came once the file was being replaced said it was canceled: the file is saved, which
@@ -708,6 +1067,13 @@ fn write_plan(
             app.background.save_cancel_line = Some(app.ui.status_sets);
         }
         Ok(r)
+    };
+    let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
+        let out = outcome(app, r);
+        if !handed.get() {
+            finish(app, uid, retargets, &out);
+        }
+        out
     };
     let mut r = background::run_saving(app, enabled, label, uid, progress, work, then)?;
     if let Some(path) = target.filter(|_| r.get("path").is_none()) {

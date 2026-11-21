@@ -1,5 +1,5 @@
-//! File I/O through the injected services (pick, read, write, download, reveal); the engine's
-//! `fileio` decodes, encodes and saves every format.
+//! File I/O through the injected services (read, write, download, reveal) and the file service's
+//! pickers; the engine's `fileio` decodes, encodes and saves every format.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
@@ -10,13 +10,12 @@ use vectorcraft_engine::cmd::fileio::{self, Format, SAVE_FORMATS, SaveMode, Save
 
 use crate::background::{self, Writer};
 use crate::dialogs::svg_options;
-use crate::state::Dialog;
-use crate::{FilePick, Services, VectorcraftApp, dialogs};
+use crate::{Services, VectorcraftApp, dialogs};
 
 mod export;
 mod open;
 mod read_only_save;
-mod save;
+pub(crate) mod save;
 
 #[cfg(test)]
 mod tests_read_only_save;
@@ -40,7 +39,7 @@ pub use save::{
     SAVE_CANCELED, ask_format_options, ask_pdf_options, cancel_saves, hide_saves, remember_active_artboard, remember_view, save, save_pdf,
 };
 pub(crate) use save::{
-    clear_notes_left, export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to,
+    clear_notes_left, export_path, is_web, notes_of, report_saved, save_reporting, show_with_notes, target_path, write_named, write_reporting, write_to,
 };
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
@@ -73,6 +72,14 @@ mod tests {
         (VectorcraftApp::new(Session::new(), services), written)
     }
 
+    /// The message dialog open on the host, closed: its message and detail.
+    // PLAN: assumed widgets-w10's `dialogs::confirm::Message` with `message()` and `detail()`, and `app.dialogs()`.
+    fn told(app: &mut VectorcraftApp) -> Option<(String, String)> {
+        let m = app.dialogs().get::<dialogs::confirm::Message>().map(|m| (m.message().to_string(), m.detail().to_string()))?;
+        app.dialogs().cancel::<dialogs::confirm::Message>(&egui::Context::default());
+        Some(m)
+    }
+
     /// #861: a file the user opens that can't be opened is reported in a dialog they close, not
     /// only in the status bar; a file an agent opens by path only answers with the error.
     #[test]
@@ -80,15 +87,11 @@ mod tests {
         let (mut app, _) = app();
         app.services.read = Some(Box::new(|_: &str| Err("no such file".into())));
         assert!(open_reporting(&mut app, "/docs/gone.ai").is_err());
-        let d = app.ui.dialog.take().expect("a dialog says so");
-        assert_eq!(
-            (d.kind.as_str(), d.str("message"), d.str("detail")),
-            (dialogs::confirm::MESSAGE, "Can't open “gone.ai”.".to_string(), "no such file".to_string())
-        );
+        assert_eq!(told(&mut app), Some(("Can't open “gone.ai”.".to_string(), "no such file".to_string())), "a dialog says so");
         assert!(app.ui.status.contains("gone.ai"));
         // An agent's `file.open {path}` gets the error back and no dialog.
         assert!(app.run("file.open", json!({"path": "/docs/gone.ai"})).is_err());
-        assert!(app.ui.dialog.is_none());
+        assert!(app.dialogs().stack().is_empty());
     }
 
     /// A file opened with a note about its page first and a note that its layers weren't read
@@ -144,7 +147,7 @@ mod tests {
         assert_eq!(app.ui.status, opened_after_notice(&notice, 2, layers));
         assert!(app.ui.status.starts_with(&notice) && app.ui.status.ends_with(&opened_with_notes(2, layers)), "{}", app.ui.status);
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), vec![layers.clone(), page.clone()])));
-        assert!(app.ui.dialog.is_none());
+        assert!(app.dialogs().stack().is_empty());
     }
 
     /// File › New from Template… shows the notes of the file it opens, as File › Open does.
@@ -238,36 +241,34 @@ mod tests {
         ] {
             let e = app.run(command, json!({"path": path})).unwrap_err();
             assert!(e.contains("Access is denied"), "{command}: {e}");
-            let d = app.ui.dialog.take().unwrap_or_else(|| panic!("{command}: a dialog says so"));
-            assert_eq!((d.kind.as_str(), d.str("message").as_str()), (dialogs::confirm::MESSAGE, message), "{command}");
-            assert_eq!(d.str("detail"), format!("{path}: Access is denied. (os error 5)"), "{command}");
+            let (told_message, detail) = told(&mut app).unwrap_or_else(|| panic!("{command}: a dialog says so"));
+            assert_eq!(told_message, message, "{command}");
+            assert_eq!(detail, format!("{path}: Access is denied. (os error 5)"), "{command}");
             assert_eq!(unsaved(&app), (true, None), "{command}");
         }
         // An agent waiting on its request gets the error as its reply, and no dialog.
         app.ui.answering_control = true;
         assert!(app.run("file.save", json!({"path": "/docs/Poster.vectorcraft"})).is_err());
         app.ui.answering_control = false;
-        assert!(app.ui.dialog.is_none() && app.ui.told.is_empty());
+        assert!(app.dialogs().stack().is_empty() && app.told.is_empty());
         // Under another dialog (a background save that fails later) the message waits its turn,
         // once, and is drawn when that dialog is closed.
         dialogs::confirm::ask(&mut app, "Delete the swatch?", "", "edit.undo", json!({}));
         for _ in 0..2 {
             report_write_error(&mut app, false, "/docs/Poster.vectorcraft", "the disk is full");
         }
-        assert_eq!((app.ui.dialog.as_ref().map(|d| d.kind.as_str()), app.ui.told.len()), (Some(dialogs::confirm::KIND), 1));
-        app.ui.dialog = None;
+        // PLAN: assumed `app.told` (widgets-w10's `Told`) with `len()`.
+        assert_eq!((app.dialogs().stack().is_empty(), app.told.len()), (false, 1));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let question = app.dialogs().stack().top().expect("the question is open");
+        app.dialogs().cancel_by_id(&ctx, question);
         for _ in 0..2 {
-            let ctx = egui::Context::default();
-            crate::theme::install_fonts(&ctx);
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs::show(&mut app, ui.ctx()));
             out.textures_delta.clear();
         }
-        let d = app.ui.dialog.as_ref().expect("the message is shown, and stays");
-        assert_eq!(
-            (d.kind.as_str(), d.str("message").as_str(), d.str("detail").as_str()),
-            (dialogs::confirm::MESSAGE, "Can't save “Poster.vectorcraft”.", "the disk is full")
-        );
-        assert!(app.ui.told.is_empty());
+        assert_eq!(told(&mut app), Some(("Can't save “Poster.vectorcraft”.".to_string(), "the disk is full".to_string())), "the message is shown");
+        assert!(app.told.is_empty());
     }
 
     /// #1693: a browser download that can't be started is a failed save: the document stays
@@ -289,10 +290,16 @@ mod tests {
         assert!(e.contains("the browser refused the download"), "{e}");
         assert_eq!(unsaved(&app), (true, None));
         // Save Changes › Save: not saved, so not closed.
-        let (i, uid) = (app.session.active_index().unwrap(), app.session.doc().unwrap().uid);
-        app.ui.dialog = Some(crate::state::Dialog::new(crate::unsaved::KIND, json!({"index": i, "uid": uid, "name": "Poster", "then": "close"})));
+        let i = app.session.active_index().unwrap();
         app.session.doc_mut().unwrap().path = Some("Poster.vectorcraft".into());
-        assert!(crate::unsaved::confirm(&mut app).is_err());
+        let ctx = egui::Context::default();
+        // PLAN: assumed shell-w12's `unsaved::close(app, index)`, `unsaved::pump(app, ctx)` and the Save answer's field.
+        crate::unsaved::close(&mut app, i);
+        let question = app.dialogs().stack().top().expect("Save Changes asks");
+        app.dialogs().set_json_field(&ctx, question, "answer", json!("save")).unwrap();
+        app.dialogs().confirm_by_id(&ctx, question);
+        crate::unsaved::pump(&mut app, &ctx);
+        assert!(app.ui.status.contains("the browser refused the download"), "{}", app.ui.status);
         assert_eq!((app.session.documents().len(), app.session.doc().unwrap().is_dirty()), (1, true));
         // Once the download starts, the save counts.
         *started.borrow_mut() = true;
@@ -434,9 +441,10 @@ mod tests {
         let files = r["files"].as_array().unwrap();
         assert_eq!(files.len(), 2);
         assert_eq!(files[0]["name"], "Artboard-2.pdf");
-        assert!(app.ui.dialog.is_none());
+        assert!(app.dialogs().stack().is_empty());
         app.run("file.exportForScreens", Value::Null).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("exportForScreens"));
+        // PLAN: assumed `OpenDialog::key` names the dialog.
+        assert!(app.dialogs().open_dialogs().iter().any(|d| d.key == "exportForScreens"));
     }
 
     #[test]
@@ -444,9 +452,13 @@ mod tests {
         let (mut app, written) = app();
         app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
-        app.services.pick_save = Some(Box::new(|_: &FilePick| Some("/tmp/sel.svg".into())));
-        app.run("document.exportSelection", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("svgOptions"), "the picked format's options follow");
+        // PLAN: assumed fl.A20's `scripted(&mut app) -> Picker` (`answer_saved`, `requests`) and `poll(&mut app)`.
+        let picker = scripted(&mut app);
+        let r = app.run("document.exportSelection", json!({})).unwrap();
+        assert_eq!(r["pending"], "fileDialog", "the format comes from the picked path: the panel asks first");
+        picker.answer_saved("/tmp/sel.svg", None);
+        poll(&mut app);
+        assert!(app.dialogs().open_dialogs().iter().any(|d| d.key == "svgOptions"), "the picked format's options follow");
         assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["path"], "/tmp/sel.svg");
         app.run("document.exportSelection", json!({"path": "/tmp/sel.png"})).unwrap();
         let w = written.borrow();
@@ -460,19 +472,16 @@ mod tests {
         let (mut app, written) = app();
         app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
-        let asked = Rc::new(RefCell::new(0));
-        let count = asked.clone();
-        app.services.pick_save = Some(Box::new(move |_: &FilePick| {
-            *count.borrow_mut() += 1;
-            Some("/tmp/sel.png".into())
-        }));
+        let picker = scripted(&mut app);
         let r = app.run("document.exportSelection", json!({"scale": 2})).unwrap();
-        assert_eq!(*asked.borrow(), 1, "the save panel picks the file");
-        assert!(app.ui.dialog.is_none(), "no options dialog follows");
-        assert_eq!(r["path"], "/tmp/sel.png");
+        assert_eq!(r["pending"], "fileDialog");
+        assert_eq!(picker.requests().len(), 1, "the save panel picks the file");
+        picker.answer_saved("/tmp/sel.png", None);
+        poll(&mut app);
+        assert!(app.dialogs().stack().is_empty(), "no options dialog follows");
         assert_eq!(&written.borrow()[0].1[1..4], b"PNG");
         app.run("document.exportSelection", json!({"path": "/tmp/sel2.png", "scale": 2})).unwrap();
-        assert_eq!(*asked.borrow(), 1, "a path writes without the save panel");
+        assert_eq!(picker.requests().len(), 1, "a path writes without the save panel");
         let w = written.borrow();
         assert_eq!(w.len(), 2);
         assert_eq!(w[0].0, "/tmp/sel.png", "the picked file");
@@ -490,7 +499,7 @@ mod tests {
     fn control_export_without_path_returns_bytes() {
         let (mut app, written) = app();
         app.session.execute("file.new", &json!({"width": 30, "height": 20})).unwrap();
-        let (req, _) = crate::control::ControlRequest::new("app.export", json!({"format": "png", "scale": 2}));
+        let (req, _) = craft::automation::control::ControlRequest::new("app.export", json!({"format": "png", "scale": 2}));
         let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
         assert_eq!(r["ok"], true, "{r}");
         let png = vectorcraft_format::base64_decode(r["result"]["dataBase64"].as_str().unwrap()).unwrap();
