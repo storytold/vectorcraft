@@ -173,6 +173,7 @@ pub fn pixels_per_metre(ppi: f64) -> u32 {
 }
 
 /// PNG CRC-32 (the polynomial ZIP uses) of `parts` read one after another.
+#[cfg(test)]
 fn crc32(parts: &[&[u8]]) -> u32 {
     let mut crc = !0u32;
     for &b in parts.iter().flat_map(|p| p.iter()) {
@@ -186,33 +187,14 @@ fn crc32(parts: &[&[u8]]) -> u32 {
 
 /// A whole `pHYs` chunk (length, type, data, CRC) declaring `x` × `y` pixels per inch.
 pub fn phys_chunk(x: f64, y: f64) -> Vec<u8> {
-    let [x, y] = [x, y].map(|v| pixels_per_metre(v).to_be_bytes());
-    // x, y, unit 1 = metre.
-    let data = [x.as_slice(), y.as_slice(), &[1]].concat();
-    let mut out = Vec::with_capacity(21);
-    out.extend_from_slice(&9u32.to_be_bytes());
-    out.extend_from_slice(b"pHYs");
-    out.extend_from_slice(&data);
-    out.extend_from_slice(&crc32(&[b"pHYs", &data]).to_be_bytes());
-    out
+    let ppm = (pixels_per_metre(x).max(1), pixels_per_metre(y).max(1));
+    craft_image_codecs::raw_metadata::png_pixels_per_meter_chunk(ppm).map_or_else(|_| Vec::new(), |chunk| chunk.to_vec())
 }
 
 /// `png` with a `pHYs` chunk declaring `ppi` right after the header (any existing one is replaced).
 pub fn with_png_resolution(png: &[u8], (x, y): (f64, f64)) -> Vec<u8> {
-    let Some(head) = be32(png, 8).and_then(|len| slice(png, 0, 20usize.checked_add(len as usize)?)) else { return png.to_vec() };
-    let chunk = phys_chunk(x, y);
-    let mut out = Vec::with_capacity(png.len() + chunk.len());
-    out.extend_from_slice(head);
-    out.extend_from_slice(&chunk);
-    let mut at = head.len();
-    while let Some(chunk) = be32(png, at).and_then(|len| slice(png, at, 12usize.checked_add(len as usize)?)) {
-        if chunk.get(4..8) != Some(b"pHYs") {
-            out.extend_from_slice(chunk);
-        }
-        at += chunk.len();
-    }
-    out.extend_from_slice(png.get(at..).unwrap_or_default());
-    out
+    let resolution = (pixels_per_metre(x), pixels_per_metre(y));
+    craft_image_codecs::raw_metadata::with_png_pixels_per_meter(png, resolution, png.len().saturating_add(21)).unwrap_or_else(|_| png.to_vec())
 }
 
 #[cfg(test)]
