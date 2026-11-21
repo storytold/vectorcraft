@@ -99,10 +99,15 @@ fn predict(row: &[u8], depth: u16) -> Vec<u8> {
     }
 }
 
-/// A channel of `n` samples of `v` (in 32 bits, `v` / 255 as a float) at `depth`, raw, zipped
-/// (with prediction when `zip` is `Some(true)`) or PackBits rows of `width` when `rle`.
+/// One sample of `v` at `depth` (in 32 bits, `v` / 255 as a float).
+fn sample_of(v: u8, depth: u16) -> Vec<u8> {
+    if depth == 32 { (f32::from(v) / 255.0).to_be_bytes().to_vec() } else { vec![v; usize::from(depth / 8)] }
+}
+
+/// A channel of `n` samples of `v` (see [`sample_of`]) at `depth`, raw, zipped (with prediction
+/// when `zip` is `Some(true)`) or PackBits rows of `width` when `rle`.
 fn channel(v: u8, n: usize, width: usize, depth: u16, rle: bool, psb: bool, zip: Option<bool>) -> Vec<u8> {
-    let sample = if depth == 32 { (f32::from(v) / 255.0).to_be_bytes().to_vec() } else { vec![v; usize::from(depth / 8)] };
+    let sample = sample_of(v, depth);
     let row: Vec<u8> = std::iter::repeat_n(sample.as_slice(), width).flatten().copied().collect();
     if let Some(predicted) = zip {
         let rows = n.checked_div(width).unwrap_or(0);
@@ -157,14 +162,14 @@ fn layer_info(layers: &[L], depth: u16, rle: bool, psb: bool) -> Vec<u8> {
         if let (Some(pixels), Some((_, d))) = (&l.alpha, channels.first_mut()) {
             *d = vec![0, 0];
             for &p in pixels {
-                d.extend(std::iter::repeat_n(p, usize::from(depth / 8)));
+                d.extend(sample_of(p, depth));
             }
         }
         let mut mask = vec![];
         if let Some(([mt, ml, mb, mr], default, flags, pixels)) = &l.mask {
             let mut d = vec![0, 0];
             for &p in pixels {
-                d.extend(std::iter::repeat_n(p, usize::from(depth / 8)));
+                d.extend(sample_of(p, depth));
             }
             channels.push((-2, d));
             for v in [mt, ml, mb, mr] {
@@ -1841,8 +1846,10 @@ fn an_adjustment_layer_over_transparent_pixels_changes_what_is_below_the_group()
 /// A layer or group whose layer mask hides all of it draws nothing: an adjustment layer above it in
 /// a pass-through group still changes what is below the group, and a shallow knockout hidden that
 /// way merges nothing, so the adjustment layers below it stay kept. A layer's mask hides all of it
-/// when it hides each pixel that isn't fully transparent. The layers in a pass-through group hidden
-/// that way don't count as drawing below an adjustment layer above the group.
+/// when it hides each of its pixels that isn't fully transparent, and a group's when it hides each
+/// such pixel of the group's layers, whatever the mask's value elsewhere; a layer hidden that way
+/// hides the layers clipped to it too. The layers in a pass-through group hidden that way don't
+/// count as drawing below an adjustment layer above the group.
 #[test]
 fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_group() {
     let black = |l: L| L { mask: Some(([0, 0, 1, 2], 0, 0, vec![0, 0])), ..l };
@@ -1892,7 +1899,7 @@ fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_gr
         black(group("Hidden", b"pass")),
         adjustment("Invert", b"nvrt", &[]),
         group("Inner", b"pass"),
-        layer("Blue", [0, 0, 1, 1], [0, 0, 255, 255]),
+        layer("Blue", [0, 0, 1, 1], [0, 0, 100, 255]),
         adjustment("Posterize", b"post", &[0, 4, 0, 0]),
         group("Folder", b"pass"),
         dodge(),
@@ -1905,8 +1912,43 @@ fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_gr
         group_end(),
         adjustment("Invert", b"nvrt", &[]),
         black(group("Hidden", b"pass")),
-        layer("Blue", [0, 0, 1, 1], [0, 0, 255, 255]),
+        layer("Blue", [0, 0, 1, 1], [0, 0, 100, 255]),
         adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // A mask over only the pixels that aren't fully transparent, white outside it.
+    let corner = |l: L| L { mask: Some(([0, 0, 1, 1], 255, 0, vec![0])), ..l };
+    let half_photo = || L { alpha: Some(vec![255, 0]), ..photo() };
+    let corner_layer = [under(), group_end(), corner(half_photo()), adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), dodge()];
+    let corner_group = [
+        under(),
+        group_end(),
+        group_end(),
+        half_photo(),
+        corner(group("Inner", b"norm")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // The same mask over a group with a pixel drawn outside it: the group draws there.
+    let drawn_group = [
+        under(),
+        group_end(),
+        group_end(),
+        photo(),
+        corner(group("Inner", b"norm")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // A layer its mask hides, with a layer clipped to it.
+    let clipped_base = [
+        under(),
+        group_end(),
+        black(photo()),
+        L { clipped: true, ..layer("Red", [0, 0, 1, 2], [200, 0, 0, 255]) },
+        adjustment("Invert", b"nvrt", &[]),
         group("Folder", b"pass"),
         dodge(),
     ];
@@ -1916,8 +1958,12 @@ fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_gr
         ("group", &masked_group[..], inverted),
         ("knockout", &masked_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
         ("transparent knockout", &transparent_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
-        ("pass-through group", &masked_pass[..], [[0, 0, 255, 255], [255, 255, 255, 255]]),
-        ("adjustment in a pass-through group", &masked_invert[..], [[0, 0, 255, 255], [10, 20, 30, 255]]),
+        ("pass-through group", &masked_pass[..], [[0, 0, 85, 255], [255, 255, 255, 255]]),
+        ("adjustment in a pass-through group", &masked_invert[..], [[0, 0, 85, 255], [10, 20, 30, 255]]),
+        ("layer covered where it draws", &corner_layer[..], inverted),
+        ("group covered where it draws", &corner_group[..], inverted),
+        ("group drawn outside its mask", &drawn_group[..], [[10, 20, 30, 255], [155, 155, 155, 255]]),
+        ("clipped base", &clipped_base[..], inverted),
     ];
     let rows = |layers: &[L]| {
         let (s, _) = open(&file(2, 1, layers, 8, false, false), json!({}));
