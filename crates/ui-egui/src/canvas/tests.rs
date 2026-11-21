@@ -12660,6 +12660,41 @@ fn rearrange_places_the_selected_artboards_with_enter_and_lets_space_pan() {
     assert_eq!(undo(&app), steps + 1);
 }
 
+/// Once a pen has been seen, a finger press on the canvas navigates and does not place a waiting
+/// Rearrange; a mouse press then places it.
+#[test]
+fn rearrange_is_not_placed_by_a_finger_once_a_pen_was_seen() {
+    use crate::touch::{Source, set_pen_seen, set_source};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    app.select_tool("artboard");
+    app.session.set_tool_option("selected", &json!([1]));
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (before, steps) = (boards(&app), undo(&app));
+    crate::panels::artboards::open_rearrange_selected(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.ui.rearrange_placement.is_some());
+    let at = app.canvas_rect.unwrap().center() + vec2(40.0, 30.0);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    set_source(Source::Pen);
+    set_source(Source::Finger);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    let finger = (app.ui.rearrange_placement.is_some(), boards(&app), undo(&app));
+    set_source(Source::Mouse);
+    set_pen_seen(false);
+    assert_eq!(finger, (true, before.clone(), steps), "the finger navigates");
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    assert!(app.ui.rearrange_placement.is_none(), "the mouse places it");
+    assert_ne!(boards(&app), before);
+    assert_eq!(undo(&app), steps + 1);
+}
+
 /// A waiting Rearrange is dropped when its artboards change places in the list before the click,
 /// so the click moves no artboard the tool did not select.
 #[test]

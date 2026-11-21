@@ -140,7 +140,9 @@ pub(crate) fn placement_input(app: &mut VectorcraftApp, ui: &egui::Ui, resp: &eg
         ui.ctx().request_repaint();
     }
     let xf = Xf::at(rect, app.view().unwrap_or(&View::default()), app.canvas_ui_zoom);
-    let pressed = pointer.interact_pos().filter(|p| pointer.primary_pressed() && resp.hovered() && rect.contains(*p));
+    // A finger press once a pen has been seen navigates the view and places nothing.
+    let navigates = crate::touch::finger_navigates_only();
+    let pressed = pointer.interact_pos().filter(|p| pointer.primary_pressed() && !navigates && resp.hovered() && rect.contains(*p));
     // Enter belongs to the control that has the keyboard focus, when another one has it.
     let free_keys = ui.memory(|m| m.focused().is_none_or(|id| id == resp.id));
     let entered = armed && free_keys && ui.input(|i| i.key_pressed(egui::Key::Enter));
