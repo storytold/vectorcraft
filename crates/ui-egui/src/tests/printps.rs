@@ -17,7 +17,7 @@ struct Counting(Rc<RefCell<usize>>);
 
 impl PrintService for Counting {
     fn printers(&mut self) -> Vec<Printer> {
-        vec![Printer { name: "Office".into(), default: true }]
+        vec![Printer::new("Office").is_default(true)]
     }
 
     fn print(&mut self, _: &PrintJob) -> Result<String, String> {

@@ -1,171 +1,97 @@
 //! Edit → Print Presets: every preset in a list ([Default], protected, then the saved ones) with
 //! how the selected one differs from [Default] beside it; New… (a preset starting from the
 //! selected one), Edit… (saved presets), Delete, Import… and Export… (the selected preset) under
-//! the list. New… and Edit… open the preset editor (the Print dialog, kind `printPreset`), whose OK
-//! comes back here.
-//!
-//! Field: `selected` (a preset's name).
+//! the list. New… and Edit… open the preset editor (the Print dialog in its editor mode), whose OK
+//! comes back here. The manager is the shared presets manager (`preset_manager`); this module is
+//! what is particular to print presets.
 
+// PLAN: assumed `preset_manager` API (export-w19): `PresetManager::new(key, title, rows, actions).selected(name)`,
+// `ManagerRow::new(key, label).protected()`, `Detail::{Title, Heading, Line, Note}`, `ManagerAction::{New, Edit, Delete,
+// Import, Export}`, `ManagerEvent::{Select(name), Action(ManagerAction)}`.
+use craft::host::files::PickRequest;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::printpresets::{DEFAULT_PRESET, PRESET_EXTS, PRESET_FORMAT, changes};
 
-use super::DialogSpec;
-use super::print::{open_preset, option_label, section_of};
-use super::save_pdf::option_rows;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use super::preset_manager::{Detail, ManagerAction, ManagerEvent, ManagerRow, PresetManager};
+use super::print::{changed_lines, open_preset, section_of};
+use crate::VectorcraftApp;
+use crate::file_asks::{Owner, ask};
 
-/// The dialog kind of Print Presets.
-pub const KIND: &str = "printPresets";
-
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Print Presets").into(),
-    body,
-    confirm: |app, _| {
-        app.ui.dialog = None;
-        Ok(Value::Null)
-    },
-    ok: None,
-    min_width: 620.0,
-    ..DialogSpec::FORM
-};
+/// The key of the Print Presets dialog.
+pub(super) const KEY: &str = "printPresets";
 
 /// Open the presets manager on `selected` (default: [Default]).
 pub fn open(app: &mut VectorcraftApp, selected: Option<&str>) {
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "selected": selected.unwrap_or(DEFAULT_PRESET) })));
+    let Some(dialogs) = app.dialogs() else { return };
+    let actions = vec![ManagerAction::New, ManagerAction::Edit, ManagerAction::Delete, ManagerAction::Import, ManagerAction::Export];
+    let manager = PresetManager::new(KEY, tl!("Print Presets"), rows(app), actions).selected(selected.unwrap_or(DEFAULT_PRESET));
+    dialogs.with(|h| h.open(manager));
 }
 
-/// What a button asked for, done once the list and the details are drawn.
-pub(super) enum Action {
-    Select(String),
-    New,
-    Edit,
-    Delete,
-    Import,
-    Export,
+/// The list: [Default] (protected, translated), then the saved presets.
+pub(super) fn rows(app: &VectorcraftApp) -> Vec<ManagerRow> {
+    std::iter::once(ManagerRow::new(DEFAULT_PRESET, tl!(DEFAULT_PRESET)).protected())
+        .chain(app.session.prefs.print_presets.iter().map(|p| ManagerRow::new(p.name.as_str(), p.name.as_str())))
+        .collect()
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let saved = &app.session.prefs.print_presets;
-    let selected = d.str("selected");
-    // 0 is [Default]; saved presets follow.
-    let i = saved.iter().position(|p| p.name.eq_ignore_ascii_case(selected.trim())).map_or(0, |i| i + 1);
-    let name = i.checked_sub(1).and_then(|k| saved.get(k)).map_or(DEFAULT_PRESET, |p| p.name.as_str()).to_string();
-    let builtin = i == 0;
-    let mut act = None;
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
-            ui.set_width(280.0);
-            widgets::dim_label(ui, tl!("Presets:"));
-            widgets::list_box(ui, |ui| {
-                egui::ScrollArea::vertical().id_salt("print-presets").min_scrolled_height(240.0).max_height(240.0).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.set_min_height(240.0);
-                    for (k, n) in std::iter::once(DEFAULT_PRESET).chain(saved.iter().map(|p| p.name.as_str())).enumerate() {
-                        if ui.selectable_label(k == i, if k == 0 { tl!(n) } else { n }).clicked() {
-                            act = Some(Action::Select(n.to_string()));
-                        }
-                    }
-                });
-            });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
-                if widgets::flat_button(ui, tl!("New…"), 48.0).on_hover_text(tl!("A new preset starting from the selected one")).clicked() {
-                    act = Some(Action::New);
-                }
-                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, tl!("Edit…"), 48.0)).inner.clicked() {
-                    act = Some(Action::Edit);
-                }
-                if ui.add_enabled_ui(!builtin, |ui| widgets::flat_button(ui, tl!("Delete"), 52.0)).inner.clicked() {
-                    act = Some(Action::Delete);
-                }
-                if widgets::flat_button(ui, tl!("Import…"), 60.0).clicked() {
-                    act = Some(Action::Import);
-                }
-                if widgets::flat_button(ui, tl!("Export…"), 60.0).on_hover_text(tl!("Save the selected preset to a file")).clicked() {
-                    act = Some(Action::Export);
-                }
-            });
-        });
-        ui.add_space(18.0);
-        ui.vertical(|ui| {
-            ui.set_width(300.0);
-            ui.label(egui::RichText::new(&name).color(t.text_strong).strong());
-            ui.add_space(8.0);
-            widgets::dim_label(ui, &crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", DEFAULT_PRESET)]));
-            let settings = i.checked_sub(1).and_then(|k| saved.get(k)).map(|p| &p.settings);
-            let mut changed = settings.map(|s| changes(s, &Default::default())).unwrap_or_default();
-            changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()).0);
-            egui::ScrollArea::vertical().id_salt("print-preset-details").max_height(200.0).show(ui, |ui| {
-                if changed.is_empty() {
-                    ui.label(egui::RichText::new(tl!("None.")).color(t.text_dim).size(11.5));
-                }
-                option_rows(ui, &changed, option_label);
-            });
-            if builtin {
-                ui.add_space(6.0);
-                ui.label(egui::RichText::new(tl!("[Default] is protected: New… starts an editable copy.")).color(t.text_dim).size(11.5));
-            }
-        });
-    });
-    if let Some(a) = act {
-        let r = match a {
-            // Their file dialogs, shown off the UI thread, import into or export from the dialog
-            // as it is then.
-            Action::Import | Action::Export => {
-                let (current, export) = (name.clone(), matches!(a, Action::Export));
-                crate::picks::in_dialog(app, d, move |app, d| run(app, d, if export { Action::Export } else { Action::Import }, &current))
-            }
-            a => run(app, d, a, &name),
-        };
-        if let Err(e) = r {
-            app.status(e);
-        }
+/// What the manager shows beside the list for the preset `name`: how it differs from [Default].
+pub(super) fn detail(app: &VectorcraftApp, name: &str) -> Vec<Detail> {
+    let builtin = name == DEFAULT_PRESET;
+    let title = if builtin { tl!(DEFAULT_PRESET).to_string() } else { name.to_string() };
+    let mut out = vec![Detail::Title(title), Detail::Heading(crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", DEFAULT_PRESET)]))];
+    let settings = app.session.prefs.print_presets.iter().find(|p| p.name == name).map(|p| &p.settings);
+    let mut changed = settings.map(|s| changes(s, &Default::default())).unwrap_or_default();
+    changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()).0);
+    let lines = changed_lines(&changed);
+    if lines.is_empty() {
+        out.push(Detail::Note(tl!("None.").to_string()));
     }
-    false
+    out.extend(lines.into_iter().map(Detail::Line));
+    if builtin {
+        out.push(Detail::Note(tl!("[Default] is protected: New… starts an editable copy.").to_string()));
+    }
+    out
 }
 
-fn select(d: &mut Dialog, name: &str) {
-    d.fields.insert("selected".into(), json!(name));
-}
-
-pub(super) fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action, current: &str) -> Result<(), String> {
-    match act {
-        Action::Select(name) => select(d, &name),
-        // The editor replaces this dialog; its OK comes back here.
-        Action::New => {
-            open_preset(app, &json!({ "preset": current }))?;
-            *d = app.ui.dialog.take().ok_or("no preset editor")?;
+/// Do what a manager event asks of the preset `current`; the preset to select afterwards, when it changes.
+pub(super) fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<Option<String>, String> {
+    let action = match event {
+        ManagerEvent::Select(name) => return Ok(Some(name.clone())),
+        ManagerEvent::Action(action) => action,
+    };
+    match action {
+        // The editor replaces the manager; its OK comes back here.
+        ManagerAction::New | ManagerAction::Edit => {
+            let params = if matches!(action, ManagerAction::New) { json!({ "preset": current }) } else { json!({ "name": current }) };
+            open_preset(app, &params)?;
+            // PLAN: assumed `app.ui_ctx: Option<egui::Context>` (lib.rs:203).
+            if let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
+                dialogs.with(|h| h.cancel::<PresetManager>(&ctx));
+            }
+            Ok(None)
         }
-        Action::Edit => {
-            open_preset(app, &json!({ "name": current }))?;
-            *d = app.ui.dialog.take().ok_or("no preset editor")?;
-        }
-        Action::Delete => {
+        ManagerAction::Delete => {
             let i = app.session.prefs.print_presets.iter().position(|p| p.name == current);
             app.run("print.presets.delete", json!({ "name": current }))?;
             // The one above it takes its place ([Default] above the first saved one).
             let next = i.and_then(|i| i.checked_sub(1)).and_then(|i| app.session.prefs.print_presets.get(i)).map(|p| p.name.clone());
-            select(d, next.as_deref().unwrap_or(DEFAULT_PRESET));
+            Ok(Some(next.unwrap_or_else(|| DEFAULT_PRESET.to_string())))
         }
-        Action::Import => {
-            // On the web the picked file arrives later and imports through `io::open_bytes`.
-            if crate::picks::open_async(app) {
-                return Ok(());
-            }
-            let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Print presets", PRESET_EXTS)], ..Default::default() };
-            let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
-            let r = app.run("print.presets.import", json!({ "path": path }))?;
-            if let Some(first) = r["imported"].get(0).and_then(Value::as_str) {
-                select(d, first);
-            }
+        ManagerAction::Import => {
+            let request = PickRequest::open("print-presets").filter("Print presets", PRESET_EXTS);
+            // PLAN: assumed `Picked::path(&self) -> Option<String>`.
+            ask(app, request, Owner::Free, |app, picked| {
+                let path = picked.path().ok_or("cancelled")?;
+                let r = app.run("print.presets.import", json!({ "path": path }))?;
+                open(app, r["imported"].get(0).and_then(Value::as_str));
+                Ok(r)
+            });
+            Ok(None)
         }
-        Action::Export => {
+        ManagerAction::Export => {
             crate::io::save_command_output(app, "print.presets.export", PRESET_FORMAT, json!({ "names": [current] }))?;
+            Ok(None)
         }
     }
-    Ok(())
 }
