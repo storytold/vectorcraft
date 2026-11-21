@@ -2,6 +2,7 @@ use serde_json::json;
 use vectorcraft_engine::cmd::fileio;
 
 use super::tests_export::{app, frame, kind};
+use super::tests_raster_formats::fields;
 use super::{confirm, png_options};
 
 #[test]
@@ -9,11 +10,11 @@ fn raster_options_preserve_supplied_values_through_the_png_command() {
     let (mut app, written) = app(1);
     app.run("file.export.png", json!({"ppi": 300, "background": "#204080", "antiAlias": "type", "interlaced": true})).unwrap();
     assert_eq!(kind(&app), Some("pngOptions"));
-    let fields = &app.ui.dialog.as_ref().unwrap().fields;
-    assert_eq!(fields["ppi"], 300);
-    assert_eq!(fields["background"], "#204080");
-    assert_eq!(fields["antiAlias"], "type");
-    assert_eq!(fields["interlaced"], true);
+    let f = fields(&app);
+    assert_eq!(f.number("ppi"), Some(300.0));
+    assert_eq!(f.text("background"), Some("#204080"));
+    assert_eq!(f.text("antiAlias"), Some("type"));
+    assert_eq!(f.bool("interlaced"), Some(true));
     frame(&mut app);
     confirm(&mut app).unwrap();
     {
@@ -29,26 +30,26 @@ fn raster_options_preserve_supplied_values_through_the_png_command() {
     }
 
     png_options::open(&mut app, fileio::format("jpg").unwrap(), json!({"format": "jpg", "path": "/out/supplied.jpg", "ppi": 144, "quality": 40}));
-    let fields = &app.ui.dialog.as_ref().unwrap().fields;
-    assert_eq!(fields["quality"], 40);
-    assert_eq!(fields["ppi"], 144);
-    assert_eq!(fields["background"], "white");
+    let f = fields(&app);
+    assert_eq!(f.number("quality"), Some(40.0));
+    assert_eq!(f.number("ppi"), Some(144.0));
+    assert_eq!(f.text("background"), Some("white"));
     frame(&mut app);
     confirm(&mut app).unwrap();
     assert_eq!(written.borrow().len(), 2);
 
+    // Opening again replaces the open dialog of the same kind.
     for omitted in [json!({}), json!({"ppi": null, "background": null, "antiAlias": null, "interlaced": null})] {
         app.run("file.export.png", omitted).unwrap();
-        let fields = &app.ui.dialog.as_ref().unwrap().fields;
-        assert_eq!(fields["ppi"], 72);
-        assert_eq!(fields["background"], "transparent");
-        assert_eq!(fields["antiAlias"], "art");
-        assert_eq!(fields["interlaced"], false);
-        app.ui.dialog = None;
+        let f = fields(&app);
+        assert_eq!(f.number("ppi"), Some(72.0));
+        assert_eq!(f.text("background"), Some("transparent"));
+        assert_eq!(f.text("antiAlias"), Some("art"));
+        assert_eq!(f.bool("interlaced"), Some(false));
     }
 
     app.run("file.export.png", json!({"ppi": 0})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["ppi"], 0);
+    assert_eq!(fields(&app).number("ppi"), Some(0.0));
     assert!(confirm(&mut app).unwrap_err().contains("ppi must be a positive number"));
     assert_eq!(written.borrow().len(), 2);
 }
