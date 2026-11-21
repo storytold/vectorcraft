@@ -78,6 +78,9 @@ pub struct HitOptions {
     /// Off, the empty part of the frame (away from its edge and its lines of type) takes no
     /// clicks, so they reach the art behind (#7274).
     pub area_type_interior: bool,
+    /// The point hit tests ([`hit_test`], [`hit_test_visible`] and [`hit_test_visible_skipping`])
+    /// hit the art on a layer whose Preview is off as painted, not in outline.
+    pub ignore_layer_preview: bool,
 }
 
 impl Default for HitOptions {
@@ -90,6 +93,7 @@ impl Default for HitOptions {
             skip_guides: false,
             clip_outlines: false,
             area_type_interior: false,
+            ignore_layer_preview: false,
             scope: None,
         }
     }
@@ -847,7 +851,7 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
             continue;
         }
         chain.push(layer.id);
-        let opt = if matches!(layer.kind, NodeKind::Layer { preview: false, .. }) { HitOptions { outline: true, ..opt } } else { opt };
+        let opt = if !opt.ignore_layer_preview && previews_off(layer) { HitOptions { outline: true, ..opt } } else { opt };
         if let Some(h) = hit_children(layer, p, opt, &symbols, skip, &mut chain, editable_only) {
             return Some(finish(h));
         }
@@ -1211,7 +1215,9 @@ fn hit_children(
         chain.push(c.id);
         let hit = plain(i == 0 && clip.is_some(), || match &c.kind {
             // A sublayer whose Preview is off is clicked in outline, like an outline view.
-            NodeKind::Layer { preview: false, .. } => hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only),
+            NodeKind::Layer { preview: false, .. } if !opt.ignore_layer_preview => {
+                hit_children(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, editable_only)
+            }
             NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
                 hit_children(c, p, opt, symbols, skip, chain, editable_only)
             }
@@ -1325,7 +1331,7 @@ fn art_hit(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes, accept: &
     match &n.kind {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Intertwine { children } => {
             // A layer with Preview off is clicked in outline, as [`hit_children`] clicks it.
-            let opt = HitOptions { outline: opt.outline || previews_off(n), ..opt };
+            let opt = HitOptions { outline: opt.outline || !opt.ignore_layer_preview && previews_off(n), ..opt };
             if n.clips()
                 && let Some(clip) = children.first()
             {
