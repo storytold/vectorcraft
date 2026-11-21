@@ -831,19 +831,21 @@ pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>, saved:
 
 /// The settings object `field` that `ui.dialog.set` set, with the options it leaves out taken from
 /// `old`. When the dialog had none (never set, or set to null), they come from Save PDF's preset,
-/// as the save takes them, and from the default settings in the preset editor. A null is kept as
-/// it was set.
+/// as the save takes them, and from the default settings in the preset editor. The same holds for
+/// an object set where `old` holds a null object (`compression.color`). A null is kept as it was
+/// set.
 fn keep_unset_options(d: &mut Dialog, field: &str, old: Option<&Value>, saved: &[PdfPreset]) -> Result<(), String> {
     let preset = if d.kind == KIND { d.str("preset") } else { String::new() };
     let Some(new) = d.fields.get_mut(field).filter(|v| !v.is_null()) else { return Ok(()) };
     if !new.is_object() {
         return Err(format!("{field} must be an object of options, not {new}"));
     }
+    let section = preset_section(&preset, field, saved).or_else(|| DEFAULTS.get(field).cloned()).unwrap_or_default();
     let mut merged = match old.filter(|o| o.is_object()) {
         Some(o) => o.clone(),
-        None => preset_section(&preset, field, saved).or_else(|| DEFAULTS.get(field).cloned()).unwrap_or_default(),
+        None => section.clone(),
     };
-    merge_options(&mut merged, new);
+    merge_options(&mut merged, new, Some(&section));
     *new = merged;
     Ok(())
 }
@@ -857,12 +859,19 @@ fn preset_section(name: &str, field: &str, saved: &[PdfPreset]) -> Option<Value>
     serde_json::to_value(settings).ok()?.get_mut(field).map(Value::take)
 }
 
-/// Set the options `over` holds on `base`, object by object.
-fn merge_options(base: &mut Value, over: &Value) {
+/// Set the options `over` holds on `base`, object by object. An object set where `base` has none
+/// starts from the matching object of `preset`.
+fn merge_options(base: &mut Value, over: &Value, preset: Option<&Value>) {
+    if base.is_null()
+        && over.is_object()
+        && let Some(p) = preset.filter(|p| p.is_object())
+    {
+        *base = p.clone();
+    }
     match (base, over) {
         (Value::Object(b), Value::Object(o)) => {
             for (k, v) in o {
-                merge_options(b.entry(k.as_str()).or_insert(Value::Null), v);
+                merge_options(b.entry(k.as_str()).or_insert(Value::Null), v, preset.and_then(|p| p.get(k)));
             }
         }
         (b, o) => *b = o.clone(),

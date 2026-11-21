@@ -1081,6 +1081,17 @@ fn ui_dialog_set_keeps_the_options_a_settings_object_leaves_out() {
     assert_eq!(r["ok"], true, "{r}");
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((get(d, "marks.trim"), get(d, "marks.offset"), get(d, "marks.weight")), (&json!(true), &json!(9.0), &json!(0.25)));
+
+    // The same for a null object inside a settings object: an object set there later takes the
+    // options it leaves out from the preset's object.
+    app.run("pdf.preset.save", json!({"name": "Low", "compression": {"color": {"ppi": 150}}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Low"})).unwrap();
+    for value in [json!({"color": null}), json!({"color": {}})] {
+        let r = dialog_set(&mut app, json!([{"field": "compression", "value": value}]));
+        assert_eq!(r["ok"], true, "{r}");
+    }
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(get(d, "compression.color.ppi"), &json!(150.0), "{:?}", d.fields.get("compression"));
 }
 
 /// A `ui.dialog.set` request whose later field is refused leaves the whole dialog as it was
