@@ -8,22 +8,34 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
-use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
+use craft::behavior::{IconId, Selection, SelectionModel as _};
+use craft::keymap::Mods;
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::{Bind, DropAt, DropPlace, Entry, ListDrag, PopupKind, Props as _, SelectMode, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::Divider;
+use craft::ui::form::Field;
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::patterns::presets::{PresetBrowser, PresetDrop, PresetEvent, PresetRow, PresetRowMenu, PresetState, PresetView, ThumbInfo};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::textures::{Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::primitives::{ContentPainterCx, IconSpec};
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::sections::{DropAction, FooterAction, FooterBar, FooterOutput, Panel};
+use craft::ui::style::DataColor;
+use egui::{Color32, Rect, Ui};
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_engine::DocState;
 use vectorcraft_engine::cmd::clipboard::{ArtResources, art_resources};
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_engine::cmd::symbollib::{self, SymbolLibrary};
 
-use super::library_panel::{self, LibraryKind, LibraryRef, Row};
+use super::library_panel::{self, LibraryKey, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
-use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::caches::SymbolInstances;
 use crate::menus::Item;
-use crate::theme::Tokens;
-use crate::widgets::{self, PanelDrag, menu_item};
+use crate::panel_drag::PanelDrag;
 
 /// The largest side of a symbol thumbnail, in pixels. A larger chip draws its thumbnail scaled up.
 const MAX_THUMB_PX: f32 = 1024.0;
@@ -35,31 +47,86 @@ fn thumb_px(size: f32, pixels_per_point: f32) -> u32 {
     if px.is_nan() { 8 } else { px.clamp(8.0, MAX_THUMB_PX) as u32 }
 }
 
-/// A thumbnail of symbol `name` (an instance at its natural size), cached by its key in `keys`
-/// ([`Thumbs`]).
-fn thumb(ui: &Ui, doc: &Document, keys: &Thumbs, name: &str, size: f32) -> Option<egui::TextureHandle> {
-    thread_local! {
-        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: crate::graphics::TexCache<HashMap<(u64, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
+/// A symbol in the Symbols panel: the uid of the document it belongs to and its name. It keys the
+/// panel's rows and is what a symbol dragged out of the panel carries (`ListDrag<SymbolKey>`), so a
+/// drop knows the document the symbol came from.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct SymbolKey {
+    /// The uid of the document whose Symbols panel showed the symbol.
+    pub doc: u64,
+    /// The symbol's name.
+    pub name: String,
+}
+
+/// Which picture of a symbol a thumbnail is, keyed by the symbol's [`Thumbs`] key, which changes
+/// with anything the picture shows.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum SymbolThumb {
+    /// An instance at its natural size ([`render_thumb`]).
+    Symbol { key: u64 },
+    /// The art's bounds (`art`, as `f64` bits) stretched to `w` × `h` pixels ([`render_art`]).
+    Art { key: u64, w: u32, h: u32, art: [u64; 4] },
+}
+
+/// Makes the pictures of symbol `name` of `doc`.
+struct SymbolPictures<'a> {
+    doc: &'a Document,
+    name: &'a str,
+}
+
+impl ThumbSource<SymbolThumb> for SymbolPictures<'_> {
+    /// The key already names the symbol's content, so one key has one picture.
+    fn revision(&self, key: &SymbolThumb, _: &ThumbRequest) -> Revision {
+        Revision::of(key)
     }
-    let px = thumb_px(size, ui.ctx().pixels_per_point());
-    let key = (*keys.keys.get(name)?, px);
-    if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
-        return Some(t);
+
+    /// Rendered on the UI thread, which the store limits to a few renders a pass. An art picture is
+    /// `w` × `h`, which never exceeds the request's side: both come from the same cell, the side
+    /// rounded up ([`paint_symbol_art`]).
+    fn render(&self, key: &SymbolThumb, request: &ThumbRequest) -> ThumbRender {
+        #[cfg(test)]
+        counters::RENDERED.with(|c| c.set(c.get() + 1));
+        let mut renderer = vectorcraft_render::Renderer::new();
+        let img = match key {
+            SymbolThumb::Symbol { .. } => render_thumb(&mut renderer, self.doc, self.name, request.side),
+            SymbolThumb::Art { w, h, art, .. } => {
+                let [x0, y0, x1, y1] = art.map(f64::from_bits);
+                render_art(&mut renderer, self.doc, self.name, vectorcraft_geom::Rect::new(x0, y0, x1, y1), (*w, *h))
+            }
+        };
+        img.map_or(ThumbRender::Blank, |img| ThumbRender::Ready(crate::canvas::color_image_owned(img)))
     }
-    #[cfg(test)]
-    counters::RENDERED.with(|c| c.set(c.get() + 1));
-    let img = RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), doc, name, px))?;
-    let color = crate::canvas::color_image(&img);
-    let tex = ui.ctx().load_texture(format!("sym-{name}-{px}"), color, egui::TextureOptions::LINEAR);
-    CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        if c.len() > 512 {
-            c.clear();
-        }
-        c.insert(key, tex.clone());
-    });
-    Some(tex)
+}
+
+/// Paints the picture `key` of symbol `name` of `doc` into `rect`, on white paper, from the one
+/// store of symbol thumbnails (the panel, library panels and dialogs share it).
+fn paint_picture(cx: &ContentPainterCx<'_>, rect: Rect, doc: &Document, name: &str, key: &SymbolThumb) {
+    let ctx = cx.painter.ctx();
+    let thumbs = Thumbnails::<SymbolThumb>::in_context(ctx, "symbols", ThumbnailOptions::new().max_side(MAX_THUMB_PX as u32));
+    let request = ThumbRequest::for_cell(rect.width().max(rect.height()), cx.pixels_per_point());
+    let state = thumbs.state(ctx, &SymbolPictures { doc, name }, key, &request, Priority::VISIBLE);
+    thumbs.paint(cx, rect, &state, &ThumbPaint::default().paper(DataColor::new(Color32::WHITE)));
+}
+
+/// Symbol `name`'s thumbnail (keyed by `keys`, [`document_symbols`] or [`library_symbols`] of
+/// `doc`) on white in `rect`: the panel's tiles and rows, a library panel's, and the 3D dialogs'
+/// graphics.
+// PLAN: ap.AS10 gives `doc: &Arc<Document>`, but a symbol library's document is a plain
+// `Document` (`SymbolLibrary::doc`); `&Document` takes both, as an `&Arc<Document>` coerces.
+pub(crate) fn paint_symbol(cx: &ContentPainterCx<'_>, rect: Rect, doc: &Document, keys: &Thumbs, name: &str) {
+    let Some(&key) = keys.keys.get(name) else { return };
+    paint_picture(cx, rect, doc, name, &SymbolThumb::Symbol { key });
+}
+
+/// Symbol `name`'s art on white in `rect`, its bounds `art` (at its own size, as a mapped graphic
+/// measures them) stretched to fill `rect`, as a box the art is scaled into shows it. The art is
+/// rendered at most [`MAX_THUMB_PX`] pixels on a side, keyed by its key in `keys`.
+pub(crate) fn paint_symbol_art(cx: &ContentPainterCx<'_>, rect: Rect, doc: &Document, keys: &Thumbs, name: &str, art: vectorcraft_geom::Rect) {
+    let Some(&key) = keys.keys.get(name) else { return };
+    let ppp = cx.pixels_per_point();
+    let (w, h) = (thumb_px(rect.width(), ppp), thumb_px(rect.height(), ppp));
+    let art = [art.x0, art.y0, art.x1, art.y1].map(f64::to_bits);
+    paint_picture(cx, rect, doc, name, &SymbolThumb::Art { key, w, h, art });
 }
 
 /// The thumbnail keys of a document version's or a library's symbols, worked out once for it
@@ -97,12 +164,12 @@ impl Thumbs {
     }
 }
 
-/// [`Thumbs`] of the document version `st` shows.
-pub(crate) fn document_symbols(st: &DocState) -> Rc<Thumbs> {
+/// [`Thumbs`] of document `doc` at `revision`.
+pub(crate) fn document_symbols(doc: &Arc<Document>, revision: u64) -> Rc<Thumbs> {
     thread_local! {
         static MEMO: RefCell<Memo<Document, Thumbs>> = RefCell::new(Memo::default());
     }
-    MEMO.with(|m| m.borrow_mut().get(&st.doc, st.revision, || Thumbs::of(&st.doc)))
+    MEMO.with(|m| m.borrow_mut().get(doc, revision, || Thumbs::of(doc)))
 }
 
 /// [`Thumbs`] of symbol library `lib`.
@@ -134,50 +201,6 @@ fn render_thumb(r: &mut vectorcraft_render::Renderer, doc: &Document, name: &str
     let xf = vectorcraft_geom::Affine::scale_non_uniform(w / 20.0, h / 20.0);
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: name.into(), xf })).ok()?;
     r.render_thumbnail(&d, id, px)
-}
-
-/// Symbol `name`'s thumbnail (keyed by `keys`, [`document_symbols`] or [`library_symbols`] of
-/// `doc`) on white in `r`: the panel's tiles and the chip a dragged symbol shows at the pointer.
-pub(crate) fn chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: &str) {
-    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-    if let Some(tex) = thumb(ui, doc, keys, name, r.width()) {
-        ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
-    }
-}
-
-/// The cache key of an [`art_chip`]: the symbol's key, the pixels across and down, and the bits of
-/// the art's bounds.
-type ArtKey = (u64, u32, u32, [u64; 4]);
-
-/// Symbol `name`'s art on white in `r`, its bounds `art` (at its own size, as a mapped graphic
-/// measures them) stretched to fill `r`, as a box the art is scaled into shows it. The art is
-/// rendered at most [`MAX_THUMB_PX`] pixels on a side, cached by its key in `keys`.
-pub(crate) fn art_chip(ui: &Ui, doc: &Document, keys: &Thumbs, r: egui::Rect, name: &str, art: vectorcraft_geom::Rect) {
-    thread_local! {
-        static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
-        static CACHE: crate::graphics::TexCache<HashMap<ArtKey, egui::TextureHandle>> = crate::graphics::TexCache::default();
-    }
-    ui.painter().rect_filled(r, 0.0, egui::Color32::WHITE);
-    let ppp = ui.ctx().pixels_per_point();
-    let (w, h) = (thumb_px(r.width(), ppp), thumb_px(r.height(), ppp));
-    let Some(&symbol) = keys.keys.get(name) else { return };
-    let key = (symbol, w, h, [art.x0, art.y0, art.x1, art.y1].map(f64::to_bits));
-    let tex = match CACHE.with(|c| c.borrow().get(&key).cloned()) {
-        Some(t) => t,
-        None => {
-            let Some(img) = RENDERER.with(|rr| render_art(&mut rr.borrow_mut(), doc, name, art, (w, h))) else { return };
-            let tex = ui.ctx().load_texture(format!("sym-art-{name}-{w}x{h}"), crate::canvas::color_image(&img), egui::TextureOptions::LINEAR);
-            CACHE.with(|c| {
-                let mut c = c.borrow_mut();
-                if c.len() > 64 {
-                    c.clear();
-                }
-                c.insert(key, tex.clone());
-            });
-            tex
-        }
-    };
-    ui.painter().image(tex.id(), r, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
 }
 
 /// Symbol `name` of `doc` (an instance at its natural size, as [`render_thumb`] places it) drawn
@@ -218,6 +241,23 @@ thread_local! {
     static INSTANCE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// The symbol instances in the selection of `st` and in its groups, in one walk of the selected
+/// subtrees.
+fn walk_instances(st: &DocState) -> SymbolInstances {
+    #[cfg(test)]
+    INSTANCE_SCANS.with(|n| n.set(n.get() + 1));
+    let mut found = SymbolInstances::default();
+    for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        n.walk(&mut |c| {
+            if matches!(c.kind, NodeKind::SymbolInstance { .. }) {
+                found.changed |= !c.extras().symbol_overrides.is_empty();
+                found.ids.push(c.id);
+            }
+        });
+    }
+    found
+}
+
 /// The symbol instances in the selection and in its groups, found in one walk of the selected
 /// subtrees per (document uid, revision) ([`crate::caches::CanvasCache::symbol_instances`]);
 /// `None` without a document.
@@ -225,24 +265,65 @@ fn selected_instances(app: &mut VectorcraftApp) -> Option<&mut SymbolInstances> 
     let st = app.session.active()?;
     let key = (st.uid, st.revision);
     if app.canvas.symbol_instances.as_ref().is_none_or(|(k, _)| *k != key) {
-        #[cfg(test)]
-        INSTANCE_SCANS.with(|n| n.set(n.get() + 1));
-        let mut found = SymbolInstances::default();
-        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-            n.walk(&mut |c| {
-                if matches!(c.kind, NodeKind::SymbolInstance { .. }) {
-                    found.changed |= !c.extras().symbol_overrides.is_empty();
-                    found.ids.push(c.id);
-                }
-            });
-        }
-        app.canvas.symbol_instances = Some((key, found));
+        app.canvas.symbol_instances = Some((key, walk_instances(st)));
     }
     app.canvas.symbol_instances.as_mut().map(|(_, found)| found)
 }
 
 fn has_instances_selected(app: &mut VectorcraftApp) -> bool {
     selected_instances(app).is_some_and(|found| !found.ids.is_empty())
+}
+
+/// Whether one of the instances `ids` of `doc` has a scale, rotation or shear that Reset
+/// Transformation would change.
+fn transformed(doc: &Document, ids: &[NodeId]) -> bool {
+    ids.iter().filter_map(|id| doc.node(*id)).any(|n| vectorcraft_engine::cmd::reset_transformation_changes(doc, n))
+}
+
+/// What the selected symbol instances allow, for the panel menu's states.
+#[derive(Clone, Copy, Debug, Default)]
+struct InstanceFlags {
+    /// The selection holds an instance.
+    any: bool,
+    /// One has appearance changes of its own ([`changed_instances_selected`]).
+    changed: bool,
+    /// One has a transform Reset Transformation changes ([`transformed_instances_selected`]).
+    transformed: bool,
+}
+
+/// [`InstanceFlags`] read without writing the canvas cache: from the cache while it holds the
+/// active document version, else from a walk of the selection.
+// PLAN: A15's `menu_rows(&VectorcraftApp)` and `menu_states(&VectorcraftApp, ..)` cannot fill
+// `CanvasCache::symbol_instances`; they read it while it is fresh (the panel and the Properties
+// panel fill it) and walk the selection otherwise (hub-w2: passing `&mut` would let them fill it).
+fn instance_flags(app: &VectorcraftApp) -> InstanceFlags {
+    let Some(st) = app.session.active() else { return InstanceFlags::default() };
+    let walked;
+    let found = match &app.canvas.symbol_instances {
+        Some((key, found)) if *key == (st.uid, st.revision) => found,
+        _ => {
+            walked = walk_instances(st);
+            &walked
+        }
+    };
+    InstanceFlags { any: !found.ids.is_empty(), changed: found.changed, transformed: found.transformed.unwrap_or_else(|| transformed(&st.doc, &found.ids)) }
+}
+
+/// The names of the symbols the selected instances are instances of, each once.
+fn linked_symbols(app: &mut VectorcraftApp) -> Vec<String> {
+    let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return vec![] };
+    let Some(found) = selected_instances(app) else { return vec![] };
+    let mut names: Vec<String> = found
+        .ids
+        .iter()
+        .filter_map(|id| match doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::SymbolInstance { symbol, .. }) => Some(symbol.clone()),
+            _ => None,
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
 }
 
 /// Collect the IDs of selected instances of symbol `name` (including inside groups).
@@ -262,49 +343,59 @@ fn selected_symbol_instances(app: &VectorcraftApp, name: &str) -> Vec<u64> {
     ids
 }
 
-/// A symbol item's context menu.
-fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
-    let center = app
-        .view()
-        .map(|v| v.center)
-        .or_else(|| app.session.active().and_then(|st| st.doc.artboards.first().map(|a| a.rect.center())))
-        .unwrap_or(vectorcraft_geom::Point::ZERO);
+/// The rows of a symbol's context menu ([`PresetRowMenu::Host`]): the command each row reports and
+/// its label.
+const ITEM_PLACE: &str = "place";
+const ITEM_EDIT: &str = "edit";
+const ITEM_DUPLICATE: &str = "duplicate";
+const ITEM_DELETE: &str = "delete";
+const ITEM_BREAK_LINK: &str = "breakLink";
+const ITEM_SELECT_INSTANCES: &str = "selectInstances";
+const ITEM_ROWS: [(&str, &str); 6] = [
+    (ITEM_PLACE, "Place Symbol Instance"),
+    (ITEM_EDIT, "Edit Symbol"),
+    (ITEM_DUPLICATE, "Duplicate Symbol"),
+    (ITEM_DELETE, "Delete Symbol"),
+    (ITEM_BREAK_LINK, "Break Link to Symbol"),
+    (ITEM_SELECT_INSTANCES, "Select All Instances"),
+];
 
-    if menu_item(ui, tl!("Place Symbol Instance"), true, false) {
-        if let Err(e) = app.run("symbol.place", json!({ "name": name, "x": center.x, "y": center.y })) {
-            app.status(e);
+/// The context menu of symbol `name`; Break Link to Symbol is enabled while the selection holds an
+/// instance of it (`linked`, [`linked_symbols`]).
+fn item_rows(linked: &[String], name: &str) -> Vec<Entry<String>> {
+    let has_instances = linked.iter().any(|n| n == name);
+    ITEM_ROWS.iter().map(|&(command, label)| Entry::new(command.to_string(), tl!(label)).enabled(command != ITEM_BREAK_LINK || has_instances)).collect()
+}
+
+/// Runs the context menu row `command` ([`item_rows`]) on symbol `name`.
+fn item_command(app: &mut VectorcraftApp, name: &str, command: &str) {
+    match command {
+        ITEM_PLACE => {
+            let center = app
+                .view()
+                .map(|v| v.center)
+                .or_else(|| app.session.active().and_then(|st| st.doc.artboards.first().map(|a| a.rect.center())))
+                .unwrap_or(vectorcraft_geom::Point::ZERO);
+            run_reported(app, "symbol.place", json!({ "name": name, "x": center.x, "y": center.y }));
         }
-        ui.close();
-    }
-    if menu_item(ui, tl!("Edit Symbol"), true, false) {
-        if let Err(e) = app.run("symbol.edit", json!({ "name": name })) {
-            app.status(e);
+        ITEM_EDIT => run_reported(app, "symbol.edit", json!({ "name": name })),
+        ITEM_DUPLICATE => run_reported(app, "symbol.duplicate", json!({ "name": name })),
+        ITEM_DELETE => delete(app, &[], Some(name), false),
+        ITEM_BREAK_LINK => {
+            let ids = selected_symbol_instances(app, name);
+            if !ids.is_empty() {
+                run_reported(app, "symbol.breakLink", json!({ "ids": ids }));
+            }
         }
-        ui.close();
+        ITEM_SELECT_INSTANCES => run_reported(app, "symbol.selectInstances", json!({ "name": name })),
+        _ => {}
     }
-    if menu_item(ui, tl!("Duplicate Symbol"), true, false) {
-        if let Err(e) = app.run("symbol.duplicate", json!({ "name": name })) {
-            app.status(e);
-        }
-        ui.close();
-    }
-    if menu_item(ui, tl!("Delete Symbol"), true, false) {
-        delete(app, &[], Some(name), false);
-        ui.close();
-    }
-    let break_ids = selected_symbol_instances(app, name);
-    let break_enabled = !break_ids.is_empty();
-    if menu_item(ui, tl!("Break Link to Symbol"), break_enabled, false) {
-        if let Err(e) = app.run("symbol.breakLink", json!({ "ids": break_ids })) {
-            app.status(e);
-        }
-        ui.close();
-    }
-    if menu_item(ui, tl!("Select All Instances"), true, false) {
-        if let Err(e) = app.run("symbol.selectInstances", json!({ "name": name })) {
-            app.status(e);
-        }
-        ui.close();
+}
+
+/// Runs command `id` with `params`; a failure goes to the status bar.
+fn run_reported(app: &mut VectorcraftApp, id: &str, params: Value) {
+    if let Err(e) = app.run(id, params) {
+        app.status(e);
     }
 }
 
@@ -320,9 +411,7 @@ fn transformed_instances_selected(app: &mut VectorcraftApp) -> bool {
     let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return false };
     let Some(found) = selected_instances(app) else { return false };
     let ids = &found.ids;
-    *found
-        .transformed
-        .get_or_insert_with(|| ids.iter().filter_map(|id| doc.node(*id)).any(|n| vectorcraft_engine::cmd::reset_transformation_changes(&doc, n)))
+    *found.transformed.get_or_insert_with(|| transformed(&doc, ids))
 }
 
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
@@ -346,411 +435,381 @@ fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>),
 /// and the Reset button, which gives them their symbol's scale, rotation and shear again
 /// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/transform-symbols.html>).
-/// Edit Symbol, Replace with its menu and Reset each show only while the row has room for them and
-/// `reserve` after them, and the controls after one left out are left out too.
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
-    let Some(symbols) = selected_instance_symbols(app) else { return };
-    let Some(st) = app.session.active() else { return };
-    let names: Vec<String> = st.doc.symbols.iter().map(|s| s.name.clone()).collect();
+/// The controls are one ranked row of the bar: a bar too narrow for it leaves the whole group out
+/// by its rank before the Transform link. Returns whether it drew them (symbol instances alone are
+/// selected).
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
+    let Some(symbols) = selected_instance_symbols(app) else { return false };
+    let Some(st) = app.session.active() else { return false };
+    let entries: Vec<Entry<String>> = st.doc.symbols.iter().map(|s| Entry::new(s.name.clone(), s.name.clone())).collect();
     let shared = symbols.first().filter(|first| symbols.iter().all(|s| s == *first)).cloned().unwrap_or_default();
-    let mut fit = crate::chrome::Fit::new(reserve);
-    // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
-    if !shared.is_empty()
-        && fit.room(ui, &[24.0])
-        && widgets::icon_button(ui, "dc-place-symbol", tl!("Edit Symbol"), false, 24.0).clicked()
-        && let Err(e) = app.run("symbol.edit", json!({}))
-    {
-        app.status(e);
-    }
-    let replace = egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text);
-    if fit.room(ui, &[widgets::text_width(ui, replace.clone()), 140.0]) {
-        ui.label(replace);
-        let options: Vec<&str> = names.iter().map(String::as_str).collect();
-        if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
-            && *name != shared
-            && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
-        {
-            app.status(e);
-        }
-    }
     // Reset: Reset Transformation, enabled while an instance's scale, rotation or shear differs
     // from its symbol's.
-    let reset = transformed_instances_selected(app);
-    if fit.room(ui, &[widgets::flat_button_fit_width(ui, tl!("Reset"), 48.0)])
-        && ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
-        && let Err(e) = app.run("symbol.instance.resetTransform", json!({}))
-    {
-        app.status(e);
+    let transformed = transformed_instances_selected(app);
+    // PLAN: assumed `crate::chrome::rank::GROUP: u8` (ch.P9, chrome-w16).
+    let mut shown = craft::ui::layout_components::Row::new().fit_rank(crate::chrome::rank::GROUP).show(ui, |ui, _| {
+        Divider::vertical().show(ui);
+        // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
+        let edit = !shared.is_empty()
+            && IconButton::new(IconSpec::svg(IconId::new("dc-place-symbol"))).label(tl!("Edit Symbol")).tooltip(tl!("Edit Symbol")).show(ui).clicked();
+        // The select reports a pick of another symbol only.
+        let replace = Field::new(tl!("Replace:"))
+            .show(ui, |ui, _| Select::new(tl!("Replace:"), Bind::given(shared.clone()), &entries).show(ui))
+            .inner
+            .and_then(|out| out.events.committed().cloned());
+        let reset = Button::new(tl!("Reset")).tooltip(tl!("Reset Transformation")).enabled(transformed).show(ui).clicked();
+        (edit, replace, reset)
+    });
+    let (edit, replace, reset) = shown.settle(|_, picked| std::mem::take(picked)).unwrap_or_default();
+    if edit {
+        run_reported(app, "symbol.edit", json!({}));
     }
-    if ui.available_width() >= reserve + 4.0 {
-        ui.add_space(4.0);
+    if let Some(name) = replace.filter(|name| *name != shared) {
+        run_reported(app, "symbol.replace", json!({ "name": name }));
     }
+    if reset {
+        run_reported(app, "symbol.instance.resetTransform", json!({}));
+    }
+    true
 }
 
+/// The footer's actions, by their index in the order [`show`] gives them: the first [`AT_START`]
+/// sit at the start edge (Library, Place, Break Link, Options), then Delete at the end edge with
+/// New before it.
+const AT_LIBRARY: usize = 0;
+const AT_PLACE: usize = 1;
+const AT_BREAK_LINK: usize = 2;
+const AT_OPTIONS: usize = 3;
+const AT_DELETE: usize = 4;
+const AT_NEW: usize = 5;
+const AT_START: usize = 4;
+
+/// The panel: the document's symbols in a preset browser, over the footer's actions.
+///
+/// A click makes a symbol current and a double click edits it; a symbol drags out to the canvas,
+/// onto New Symbol (duplicated) or onto Delete Symbol. Art dragged off the canvas and dropped on the
+/// list becomes a symbol (Shift at the release keeps the art as ordinary art); dropped on a symbol
+/// with Alt it redefines that symbol in one undo step.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let Some((doc, keys, document)) = app.session.active().map(|d| (d.doc.clone(), document_symbols(d), d.uid)) else { return };
-    let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
-    let view = app.ui.symbols_view;
+    let Some((doc, revision, uid, has_sel)) = app.session.active().map(|st| (st.doc.clone(), st.revision, st.uid, !st.selection.is_empty())) else {
+        return;
+    };
+    let keys = document_symbols(&doc, revision);
     let sel = current(app);
-    let uid = app.session.active().map(|d| d.uid);
-    let marked = marked(ui.ctx(), uid, &names);
-    // The symbols drawn selected: the ones Select All Unused picked, else the current one.
-    let on = |n: &str| if marked.is_empty() { sel.as_deref() == Some(n) } else { marked.iter().any(|m| m == n) };
-    let mut clicked: Option<(String, bool)> = None;
-    // Art released on a symbol with Alt (Option) held redefines that symbol; while Alt art is over
-    // a symbol, the list does not take it as a new symbol.
-    let mut redefine: Option<(String, Vec<u64>)> = None;
-    let mut over_symbol = false;
-    let list_rect = widgets::list_box(ui, |ui| {
-        ui.set_min_height(110.0);
-        ui.set_width(ui.available_width());
-        if names.is_empty() {
-            super::empty_state(ui, "spray-can", tl!("No symbols in this document"), tl!("Select art and click New Symbol to make one."));
-            return ui.min_rect();
-        }
-        if let Some((h, side, text)) = view.row() {
-            for n in &names {
-                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click_and_drag());
-                // Dragged onto the canvas, the symbol is placed there.
-                widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
-                if on(n) {
-                    ui.painter().rect_filled(r, 0.0, t.row_selected);
-                } else if resp.hovered() {
-                    ui.painter().rect_filled(r, 0.0, t.hover);
-                }
-                chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(3.0 + side / 2.0, 0.0), vec2(side, side)), n);
-                ui.painter().text(r.left_center() + vec2(side + 10.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(text), t.text);
-                if let Some(ids) = art_redefine_drop(ui, &resp, &doc, uid, &mut over_symbol) {
-                    redefine = Some((n.clone(), ids));
-                }
-                let resp = resp.on_hover_text(n);
-                if resp.double_clicked() {
-                    clicked = Some((n.clone(), true));
-                } else if resp.clicked() {
-                    clicked = Some((n.clone(), false));
-                }
-                if resp.secondary_clicked() && (sel.as_deref() != Some(n) || !marked.is_empty()) {
-                    set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
-                    if let Err(e) = app.run("symbol.setCurrent", json!({ "name": n })) {
-                        app.status(e);
-                    }
-                }
-                resp.context_menu(|ui| item_context_menu(app, ui, n));
-            }
-        } else {
-            ui.horizontal_wrapped(|ui| {
-                for n in &names {
-                    let (r, resp) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::click_and_drag());
-                    widgets::drag_source(ui, &resp, || PanelDrag::Symbol { document, name: n.clone() });
-                    chip(ui, &doc, &keys, r.shrink(2.0), n);
-                    let on = on(n);
-                    ui.painter().rect_stroke(
-                        r,
-                        0.0,
-                        Stroke::new(if on { 2.0 } else { 1.0 }, if on { t.accent } else { t.border }),
-                        StrokeKind::Inside,
-                    );
-                    if let Some(ids) = art_redefine_drop(ui, &resp, &doc, uid, &mut over_symbol) {
-                        redefine = Some((n.clone(), ids));
-                    }
-                    let resp = resp.on_hover_text(n);
-                    if resp.double_clicked() {
-                        clicked = Some((n.clone(), true));
-                    } else if resp.clicked() {
-                        clicked = Some((n.clone(), false));
-                    }
-                    if resp.secondary_clicked() && (sel.as_deref() != Some(n) || !marked.is_empty()) {
-                        set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
-                        if let Err(e) = app.run("symbol.setCurrent", json!({ "name": n })) {
-                            app.status(e);
-                        }
-                    }
-                    resp.context_menu(|ui| item_context_menu(app, ui, n));
-                }
-            });
-        }
-        ui.min_rect()
-    });
-    let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
-    if !over_symbol && let Some(ids) = widgets::art_drop(ui, &zone) {
-        // Shift held at the release that ends the drag keeps the dropped art as ordinary art.
-        let mut p = json!({ "ids": ids, "type": "dynamic" });
-        if modifiers_at_release(ui).shift {
-            p["keepArt"] = json!(true);
-        }
-        if let Err(e) = app.run("symbol.new", p) {
-            app.status(e);
-        }
-    }
-    // Redefine Symbol with the dropped art, which becomes an instance of it, in one undo step.
-    if let Some((name, ids)) = redefine
-        && let Err(e) = app.run("symbol.update", json!({ "name": name, "ids": ids }))
-    {
-        app.status(e);
-    }
-    // A double-click edits the symbol in symbol editing mode.
-    if let Some((n, edit)) = clicked {
-        // A click picks one symbol again.
-        set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
-        app.run("symbol.setCurrent", json!({"name": n})).ok();
-        if edit && let Err(e) = app.run("symbol.edit", json!({"name": n})) {
-            app.status(e);
-        }
-    }
-    let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
+    let marked = marked(app);
     let inst = has_instances_selected(app);
-    widgets::bottom_bar(ui, |ui| {
-        let open = library_panel::any_open::<SymbolLibraries>(&app.ui);
-        let lr = widgets::icon_button(ui, "library", SymbolLibraries::MENU, open, 24.0);
-        egui::Popup::menu(&lr).show(|ui| {
-            ui.set_min_width(200.0);
-            library_panel::library_menu::<SymbolLibraries>(app, ui);
+    let linked = linked_symbols(app);
+    let key = |name: &str| SymbolKey { doc: uid, name: name.to_string() };
+    let rows: Vec<PresetRow<SymbolKey>> = doc.symbols.iter().map(|s| PresetRow::item(key(&s.name), s.name.clone(), 0)).collect();
+    // The symbols drawn selected: the ones Select All Unused picked, which further picks change,
+    // else the current one.
+    let (mut selection, select) = if marked.is_empty() {
+        (sel.as_deref().map(|name| Selection::single(key(name))).unwrap_or_default(), SelectMode::Single)
+    } else {
+        (Selection::new(marked.iter().map(|name| key(name)).collect(), None, None), SelectMode::Multi)
+    };
+    let (view, zoom) = app.ui.symbols_view.preset();
+    let browser_id = ui.make_persistent_id("symbols-browser");
+    let list = PresetBrowser::<SymbolKey>::list_id(browser_id);
+    // A symbol dragged from this panel's list, of the document it shows.
+    let ours = move |drag: &ListDrag<SymbolKey>| drag.list == list && drag.grabbed.doc == uid;
+    let svg = |name: &'static str| IconSpec::svg(IconId::new(name));
+    let actions = [
+        FooterAction::new(svg("library"), tl!(SymbolLibraries::MENU))
+            .popup(PopupKind::Menu)
+            .pressed(library_panel::any_open::<SymbolLibraries>(&app.ui)),
+        FooterAction::new(svg("dc-place-symbol"), tl!("Place Symbol Instance")).enabled(sel.is_some()),
+        FooterAction::new(svg("link-2-off"), tl!("Break Link to Symbol")).enabled(inst),
+        // Symbol Options on the current symbol, as the panel menu's Symbol Options… opens it.
+        FooterAction::new(svg("dc-options"), tl!("Symbol Options")).enabled(sel.is_some()),
+        FooterAction::new(svg("trash-2"), tl!("Delete Symbol"))
+            .enabled(sel.is_some() || !marked.is_empty())
+            .takes_drops_disabled(true)
+            .accepts_drops(ours),
+        // A symbol dropped here is duplicated with or without art selected.
+        FooterAction::new(svg("dc-new-item"), tl!("New Symbol")).enabled(has_sel).takes_drops_disabled(true).accepts_drops(ours),
+    ];
+    let footer: RefCell<Option<FooterOutput>> = RefCell::new(None);
+    let mut shown = Panel::new(tl!("Symbols"))
+        .footer(|ui, _| *footer.borrow_mut() = Some(FooterBar::actions(actions.clone()).at_start(AT_START).show_footer(ui)))
+        .show(ui, |ui, _| {
+            // Art dropped anywhere on the list becomes a symbol; dropped on a symbol, the browser's
+            // own target takes it.
+            DropAction::<PanelDrag>::new(move |drag| art_of(drag, uid).is_some()).show(ui, |ui, _| {
+                let mut state = PresetState::new();
+                state.zoom = zoom;
+                PresetBrowser::new(tl!("Symbols"), Bind::bound(&mut state), &rows)
+                    .browser_id(browser_id)
+                    .selection(Bind::given(selection.clone()))
+                    .select(select)
+                    .view_lock(view)
+                    .drags(true)
+                    .row_menu(PresetRowMenu::Host)
+                    .row_items(|key: &SymbolKey| item_rows(&linked, &key.name))
+                    .thumb(|cx: &ContentPainterCx<'_>, rect: Rect, info: ThumbInfo<'_, SymbolKey>| paint_symbol(cx, rect, &doc, &keys, &info.key.name))
+                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |drag: &PanelDrag, _: &DropAt<SymbolKey>| art_of(drag, uid).is_some()))
+                    .empty(tl!("No symbols in this document"))
+                    .show(ui)
+            })
         });
-        if widgets::icon_button_enabled(ui, "dc-place-symbol", tl!("Place Symbol Instance"), false, sel.is_some(), 24.0).clicked() {
-            app.run("symbol.place", json!({})).ok();
-        }
-        if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link to Symbol"), false, inst, 24.0).clicked() {
-            app.run("symbol.breakLink", json!({})).ok();
-        }
-        // Opens Symbol Options on the current symbol, as the panel menu's Symbol Options… does;
-        // Alt does the same.
-        if widgets::icon_button_enabled(ui, "dc-options", tl!("Symbol Options"), false, sel.is_some(), 24.0).clicked() {
-            app.run("ui.symbolOptions", json!({"edit": true, "name": sel})).ok();
-        }
-        ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0);
-        // A symbol dragged from the panel and dropped on New Symbol is duplicated, with or without
-        // art selected.
-        if let Some(name) = symbol_dropped(ui, &new, &names, uid) {
-            if let Err(e) = app.run("symbol.duplicate", json!({ "name": name })) {
-                app.status(e);
-            }
-        } else if new.clicked() {
-            // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
-            // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
-            // Both are read as the button went up on it.
-            let m = modifiers_released_in(ui, new.interact_rect, new.clicked_by(egui::PointerButton::Primary));
-            let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
-            if m.shift {
-                p["keepArt"] = json!(true);
-            }
-            app.run(cmd, p).ok();
-        }
-        // Alt deletes an unused symbol without asking; a symbol with instances still asks.
-        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some() || !marked.is_empty(), 24.0);
-        // A symbol dragged from the panel and dropped on Delete Symbol is deleted as a click deletes
-        // it: the dragged symbol, or every symbol Select All Unused picked when it is one of them.
-        if let Some(name) = symbol_dropped(ui, &trash, &names, uid) {
-            let picked = if marked.contains(&name) { &marked[..] } else { &[] };
-            delete(app, picked, Some(&name), alt_at_release(ui));
-        } else if trash.clicked() {
-            let pointer = trash.clicked_by(egui::PointerButton::Primary);
-            delete(app, &marked, sel.as_deref(), modifiers_released_in(ui, trash.interact_rect, pointer).alt);
-        }
+    let taken = shown.settle(|_, list| {
+        let dropped = list.output.dropped.take().map(|drag| (drag, list.output.mods));
+        (dropped, list.inner.take().map(|out| out.events).unwrap_or_default())
     });
-}
-
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel = current(app);
-    let names: Vec<String> = app.session.active().map(|d| d.doc.symbols.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-    let uid = app.session.active().map(|d| d.uid);
-    let marked = marked(ui.ctx(), uid, &names);
-    let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
-    let inst = has_instances_selected(app);
-    let name = json!({"name": sel});
-    // Shift, held as the button went up on New Symbol… or Redefine Symbol, keeps the selected art
-    // as ordinary art instead of making it an instance.
-    let items: [(&str, bool, &str, Value, bool); 3] = [
-        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({}), true),
-        (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", name.clone(), true),
-        (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone(), false),
-    ];
-    for (label, enabled, cmd, mut params, keeps_art) in items {
-        let top = ui.cursor().min.y;
-        let item = widgets::menu_item_response(ui, label, enabled, false);
-        if item.clicked() {
-            let row = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().min.y);
-            if keeps_art && modifiers_released_in(ui, row, item.clicked_by(egui::PointerButton::Primary)).shift {
-                params["keepArt"] = json!(true);
-            }
-            app.run(cmd, params).ok();
-        }
+    let footer = footer.into_inner();
+    if let Some(opener) = footer.as_ref().and_then(|out| out.responses.get(AT_LIBRARY)) {
+        Menu::new(tl!(SymbolLibraries::MENU))
+            .opened_by(opener, Trigger::Press)
+            .show(ui, |ui, _| library_panel::library_menu::<SymbolLibraries>(app, ui));
     }
-    // Asks first, as the panel's button does; the menu item has no Alt shortcut.
-    if menu_item(ui, tl!("Delete Symbol"), sel.is_some() || !marked.is_empty(), false) {
-        delete(app, &marked, sel.as_deref(), false);
-    }
-    let items: [(&str, bool, &str, Value); 8] = [
-        (tl!("Symbol Options…"), sel.is_some(), "ui.symbolOptions", json!({"edit": true, "name": sel})),
-        // The selected instance, else the symbol selected in the panel.
-        (tl!("Edit Symbol"), inst || sel.is_some(), "symbol.edit", if inst { json!({}) } else { name.clone() }),
-        (tl!("Place Symbol Instance"), sel.is_some(), "symbol.place", name.clone()),
-        (tl!("Replace Symbol"), inst && sel.is_some(), "symbol.replace", name.clone()),
-        (tl!("Break Link to Symbol"), inst, "symbol.breakLink", json!({})),
-        (tl!("Reset Symbol Instance"), changed_instances_selected(app), "symbol.instance.reset", json!({})),
-        (tl!("Reset Transformation"), transformed_instances_selected(app), "symbol.instance.resetTransform", json!({})),
-        (tl!("Select All Instances"), sel.is_some(), "symbol.selectInstances", name),
-    ];
-    for (label, enabled, cmd, params) in items {
-        if menu_item(ui, label, enabled, false) {
-            app.run(cmd, params).ok();
-        }
-    }
-    ui.separator();
-    // Select All Unused (#4918): the symbols nothing places show selected, and Delete Symbol
-    // deletes them all.
-    if menu_item(ui, tl!("Select All Unused"), !names.is_empty(), false)
-        && let Ok(r) = app.run("symbol.unused", json!({}))
-    {
-        let unused: Vec<String> = serde_json::from_value(r["names"].clone()).unwrap_or_default();
-        if unused.is_empty() {
-            app.status(tl!("No unused symbols"));
-        }
-        set_pstate(ui.ctx(), MARKED, (uid, unused));
-    }
-    // The document's symbols in name order, as one undo step.
-    if menu_item(ui, tl!("Sort by Name"), names.len() > 1, false)
-        && let Err(e) = app.run("symbol.sortByName", json!({}))
-    {
-        app.status(e);
-    }
-    ui.separator();
-    let view = app.ui.symbols_view;
-    for (v, label) in View::ALL {
-        if menu_item(ui, tl!(label), true, view == v)
-            && let Err(e) = app.run("ui.panelView", json!({ "panel": "symbols", "view": v }))
+    if let Some((dropped, events)) = taken {
+        if let Some((drag, mods)) = dropped
+            && let Some(ids) = art_of(&drag, uid)
         {
-            app.status(e);
+            new_symbol(app, ids, mods.shift);
+        }
+        for event in events {
+            match event {
+                PresetEvent::Select { key, .. } => pick(app, &key.name),
+                PresetEvent::Activate { key, .. } => {
+                    pick(app, &key.name);
+                    run_reported(app, "symbol.edit", json!({ "name": key.name }));
+                }
+                PresetEvent::Selection(change) => {
+                    selection.apply(change);
+                    let mut names: Vec<String> = selection.items.iter().filter(|key| key.doc == uid).map(|key| key.name.clone()).collect();
+                    // One symbol left selected is the current one again (a secondary press on another
+                    // symbol, a Cmd-click that leaves one), not a pick.
+                    if names.len() == 1
+                        && let Some(name) = names.pop()
+                    {
+                        pick(app, &name);
+                    } else {
+                        set_picks(app, names);
+                    }
+                }
+                PresetEvent::Dropped { at, payload, mods, .. } => {
+                    let Some(ids) = payload.get::<PanelDrag>().and_then(|drag| art_of(drag, uid)) else { continue };
+                    if !mods.alt {
+                        new_symbol(app, ids, mods.shift);
+                    } else if let Some(target) = at.key()
+                        && redefines(&doc, ids)
+                    {
+                        // Redefine Symbol with the dropped art, which becomes an instance of it, in one
+                        // undo step. Alt art that cannot redefine changes nothing.
+                        run_reported(app, "symbol.update", json!({ "name": target.name, "ids": node_ids(ids) }));
+                    }
+                }
+                PresetEvent::Menu { target, command, .. } => item_command(app, &target.name, &command),
+                _ => {}
+            }
         }
     }
-    ui.separator();
-    ui.menu_button(tl!("Open Symbol Library"), |ui| library_panel::library_menu::<SymbolLibraries>(app, ui));
-    let has_symbols = app.session.active().is_some_and(|d| !d.doc.symbols.is_empty());
-    if menu_item(ui, tl!("Save Symbol Library…"), has_symbols, false) {
-        save_library(app, sel.into_iter().collect());
-    }
-}
-
-/// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
-/// released on `button` this frame, if any; `button` is outlined while one is held over it, also
-/// when it is disabled for clicks. A symbol dragged from another document is ignored. Only the
-/// release of the primary button drops the symbol; the release of another button ends the drag.
-fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
-    let held = button.dnd_hover_payload::<PanelDrag>()?;
-    let PanelDrag::Symbol { document, name } = &*held else { return None };
-    if !names.contains(name) || Some(*document) != uid {
-        return None;
-    }
-    widgets::drop_target_outline(ui, button.rect);
-    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-        return None;
-    }
-    button.dnd_release_payload::<PanelDrag>().map(|_| name.clone())
-}
-
-/// The ids of the art dragged off the canvas of the active document `doc` (`uid`) and released
-/// with Alt (Option) held on the symbol tile or row `item` this frame, if any. While such art is
-/// held over `item` with Alt, `over` is set and `item` is outlined. Art of another document, or
-/// whose objects `doc` no longer has, is not taken. Only the release of the primary button drops
-/// the art; the release of another button ends the drag.
-fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option<u64>, over: &mut bool) -> Option<Vec<u64>> {
-    if !alt_at_release(ui) {
-        return None;
-    }
-    let held = item.dnd_hover_payload::<PanelDrag>()?;
-    let PanelDrag::Art(ids) = &*held else { return None };
-    *over = true;
-    let ours = uid.is_some() && widgets::art_drag_doc(ui.ctx()) == uid;
-    if !ours || ids.is_empty() || !ids.iter().all(|id| doc.node(*id).is_some_and(|n| !n.is_layer())) {
-        return None;
-    }
-    widgets::drop_target_outline(ui, item.rect);
-    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
-        return None;
-    }
-    item.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
-}
-
-/// Whether Alt (Option) is held for a drop: as [`modifiers_at_release`] gives it.
-fn alt_at_release(ui: &Ui) -> bool {
-    modifiers_at_release(ui).alt
-}
-
-/// The modifiers held for a click on the widget whose interact rectangle is `rect`: when the
-/// primary button last went up in this frame as a click (the pointer stayed within egui's click
-/// distance of where the button went down) after going down over `rect` or within egui's interact
-/// radius of it (egui gives a press that close to the widget), as it went up (egui reports the
-/// click of the last such release in the frame); else, when no such click happened in this frame,
-/// as the first release of the frame went up, which ends a press of an earlier frame that egui
-/// counted as the click; else now. A release that ends a drag is not a click and is skipped.
-/// `pointer` is whether egui reports the widget clicked by the primary button; when it is false,
-/// the click came from the keyboard or a screen reader and the modifiers held now are used.
-fn modifiers_released_in(ui: &Ui, rect: egui::Rect, pointer: bool) -> egui::Modifiers {
-    if !pointer {
-        return ui.input(|i| i.modifiers);
-    }
-    let radius = ui.ctx().global_style().interaction.interact_radius;
-    let max_click_dist = ui.ctx().options(|o| o.input_options.max_click_dist);
-    ui.input(|i| {
-        // Where the button went down in this frame, and whether the pointer has since moved too far
-        // for a click.
-        let mut origin: Option<egui::Pos2> = None;
-        let mut moved = false;
-        // Whether a button went down earlier in this frame; until one does, a release ends a press
-        // of an earlier frame.
-        let mut pressed_here = false;
-        // The modifiers of the release that ends a press of an earlier frame.
-        let mut early = None;
-        let mut found = None;
-        for e in &i.events {
-            match e {
-                egui::Event::PointerMoved(pos) => {
-                    moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
-                }
-                egui::Event::PointerButton { pos, pressed: true, .. } => {
-                    origin = Some(*pos);
-                    moved = false;
-                    pressed_here = true;
-                }
-                egui::Event::PointerButton { pos, button, pressed: false, modifiers } => {
-                    moved |= origin.is_some_and(|o| o.distance(*pos) > max_click_dist);
-                    let over = origin.is_some_and(|o| rect.distance_sq_to_pos(o) <= radius * radius);
-                    if *button == egui::PointerButton::Primary {
-                        if !pressed_here {
-                            early = early.or(Some(*modifiers));
-                        } else if !moved && over {
-                            found = Some(*modifiers);
-                        }
-                    }
-                    origin = None;
-                    moved = false;
+    let Some(out) = footer else { return };
+    match &out.dropped {
+        Some(dropped) => {
+            let Some(drag) = dropped.payload::<ListDrag<SymbolKey>>() else { return };
+            let name = &drag.grabbed.name;
+            // A symbol deleted while it was dragged drops nothing.
+            if !doc.symbols.iter().any(|s| s.name == *name) {
+                return;
+            }
+            match dropped.index {
+                AT_NEW => run_reported(app, "symbol.duplicate", json!({ "name": name })),
+                // The dragged symbol, or every symbol Select All Unused picked when it is one of them.
+                AT_DELETE => {
+                    let picked: &[String] = if marked.contains(name) { &marked } else { &[] };
+                    delete(app, picked, Some(name), out.mods.alt);
                 }
                 _ => {}
             }
         }
-        // egui tracks a press of an earlier frame. A widget it reports clicked by the pointer, with
-        // no click on it after a press of this frame, was clicked by the early release.
-        found.or(early).unwrap_or(i.modifiers)
+        None => match out.picked {
+            Some(AT_PLACE) => run_reported(app, "symbol.place", json!({})),
+            Some(AT_BREAK_LINK) => run_reported(app, "symbol.breakLink", json!({})),
+            Some(AT_OPTIONS) => run_reported(app, "ui.symbolOptions", json!({ "edit": true, "name": sel })),
+            Some(AT_NEW) => {
+                // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
+                // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
+                let (id, mut params) = if out.mods.alt { ("symbol.new", json!({ "type": "dynamic" })) } else { ("ui.symbolOptions", json!({})) };
+                fired_params(id, &mut params, out.mods);
+                run_reported(app, id, params);
+            }
+            // Alt deletes an unused symbol without asking; a symbol with instances still asks.
+            Some(AT_DELETE) => delete(app, &marked, sel.as_deref(), out.mods.alt),
+            _ => {}
+        },
+    }
+}
+
+/// The ids of art dragged off the canvas of document `uid`; `None` for another drag or art of
+/// another document.
+fn art_of(drag: &PanelDrag, uid: u64) -> Option<&[NodeId]> {
+    match drag {
+        PanelDrag::Art { document, ids, .. } if *document == uid && !ids.is_empty() => Some(ids),
+        _ => None,
+    }
+}
+
+/// Whether the art `ids` can redefine a symbol of `doc`: every object is still there and none is a
+/// layer.
+fn redefines(doc: &Document, ids: &[NodeId]) -> bool {
+    ids.iter().all(|id| doc.node(*id).is_some_and(|n| !n.is_layer()))
+}
+
+/// The ids as the symbol commands take them.
+fn node_ids(ids: &[NodeId]) -> Vec<u64> {
+    ids.iter().map(|id| id.0).collect()
+}
+
+/// A dynamic symbol of the art `ids`, which stays ordinary art when `keep_art`.
+fn new_symbol(app: &mut VectorcraftApp, ids: &[NodeId], keep_art: bool) {
+    let mut params = json!({ "ids": node_ids(ids), "type": "dynamic" });
+    if keep_art {
+        params["keepArt"] = json!(true);
+    }
+    run_reported(app, "symbol.new", params);
+}
+
+/// Makes `name` the current symbol and drops the symbols Select All Unused picked: a click picks
+/// one symbol again.
+fn pick(app: &mut VectorcraftApp, name: &str) {
+    set_picks(app, vec![]);
+    if current(app).as_deref() != Some(name) {
+        run_reported(app, "symbol.setCurrent", json!({ "name": name }));
+    }
+}
+
+/// The parameters of a command fired with `mods` from the panel's menu or its New Symbol button:
+/// Shift keeps the art as ordinary art (`keepArt`) for New Symbol… (`ui.symbolOptions` for a new
+/// symbol), Redefine Symbol (`symbol.update`) and New Symbol with Alt (`symbol.new`). Other commands
+/// and Symbol Options… on an existing symbol are left as they are.
+pub(crate) fn fired_params(id: &str, params: &mut Value, mods: Mods) {
+    let keeps_art = match id {
+        "symbol.update" | "symbol.new" => true,
+        "ui.symbolOptions" => params.get("edit").is_none_or(|edit| *edit == json!(false)) && params.get("name").is_none_or(Value::is_null),
+        _ => false,
+    };
+    if !(mods.shift && keeps_art) {
+        return;
+    }
+    if params.is_null() {
+        *params = json!({});
+    }
+    if let Some(p) = params.as_object_mut() {
+        p.insert("keepArt".into(), json!(true));
+    }
+}
+
+/// The panel menu's rows that have no catalog command: `ui.symbols.<row>`, run by [`run`].
+const ROW_DELETE: &str = "ui.symbols.delete";
+const ROW_SELECT_UNUSED: &str = "ui.symbols.selectUnused";
+const ROW_SAVE_LIBRARY: &str = "ui.symbols.saveLibrary";
+
+/// One row of the panel menu with the state it shows.
+enum MenuLine {
+    Command(CommandRef, CommandState),
+    Separator,
+    /// Open Symbol Library, a submenu of the libraries.
+    Libraries,
+}
+
+/// The panel menu in its order, each row with its state: one list for [`menu_rows`] and
+/// [`menu_states`], so a row and its state cannot part.
+fn menu_lines(app: &VectorcraftApp) -> Vec<MenuLine> {
+    let sel = current(app);
+    let (symbols, has_sel) = app.session.active().map_or((0, false), |st| (st.doc.symbols.len(), !st.selection.is_empty()));
+    let picked = !marked(app).is_empty();
+    let inst = instance_flags(app);
+    let name = json!({ "name": sel });
+    let row = |id: &str, params: Value, enabled: bool| MenuLine::Command(CommandRef::with_params(id, params), CommandState::new().enabled(enabled));
+    let view = app.ui.symbols_view;
+    let views = View::ALL.iter().map(|&(v, _)| {
+        let params = json!({ "panel": "symbols", "view": v });
+        MenuLine::Command(CommandRef::with_params("ui.panelView", params), CommandState::new().checked(view == v))
+    });
+    let mut lines = vec![
+        // Shift on New Symbol… and Redefine Symbol keeps the selected art as ordinary art
+        // ([`fired_params`]).
+        row("ui.symbolOptions", json!({}), has_sel),
+        row("symbol.update", name.clone(), has_sel && sel.is_some()),
+        row("symbol.duplicate", name.clone(), sel.is_some()),
+        // Asks first, as the panel's button does; the menu row has no Alt shortcut.
+        row(ROW_DELETE, Value::Null, sel.is_some() || picked),
+        row("ui.symbolOptions", json!({ "edit": true, "name": sel }), sel.is_some()),
+        // The selected instance's symbol, else the symbol selected in the panel.
+        row("symbol.edit", if inst.any { json!({}) } else { name.clone() }, inst.any || sel.is_some()),
+        row("symbol.place", name.clone(), sel.is_some()),
+        row("symbol.replace", name.clone(), inst.any && sel.is_some()),
+        row("symbol.breakLink", json!({}), inst.any),
+        row("symbol.instance.reset", json!({}), inst.changed),
+        row("symbol.instance.resetTransform", json!({}), inst.transformed),
+        row("symbol.selectInstances", name, sel.is_some()),
+        MenuLine::Separator,
+        // Select All Unused (#4918): the symbols nothing places show selected, and Delete Symbol
+        // deletes them all.
+        row(ROW_SELECT_UNUSED, Value::Null, symbols > 0),
+        // The document's symbols in name order, as one undo step.
+        row("symbol.sortByName", json!({}), symbols > 1),
+        MenuLine::Separator,
+    ];
+    lines.extend(views);
+    lines.extend([MenuLine::Separator, MenuLine::Libraries, row(ROW_SAVE_LIBRARY, Value::Null, symbols > 0)]);
+    lines
+}
+
+/// The panel menu's rows.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    menu_lines(app)
+        .into_iter()
+        .map(|line| match line {
+            MenuLine::Command(command, _) => PanelRow::Command(command),
+            MenuLine::Separator => PanelRow::Separator,
+            // PLAN: assumed `library_panel::library_rows::<K: LibraryKind>(app: &VectorcraftApp) -> Vec<PanelRow>`
+            // (appearance-w17; ap.AS9 names `library_menu` and `library_items` only).
+            MenuLine::Libraries => PanelRow::Submenu(tl!("Open Symbol Library").into(), library_panel::library_rows::<SymbolLibraries>(app)),
+        })
+        .collect()
+}
+
+/// The enabled and checked states of the panel menu's rows.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    for line in menu_lines(app) {
+        if let MenuLine::Command(command, state) = line {
+            states.set(command, state);
+        }
+    }
+}
+
+/// Runs the panel menu's own rows (`ui.symbols.<row>`); `None` for another id.
+pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
+    let sel = current(app);
+    Some(match id {
+        ROW_DELETE => {
+            let picked = marked(app);
+            delete(app, &picked, sel.as_deref(), false);
+            Ok(Value::Null)
+        }
+        ROW_SELECT_UNUSED => select_unused(app),
+        ROW_SAVE_LIBRARY => {
+            save_library(app, sel.into_iter().collect());
+            Ok(Value::Null)
+        }
+        _ => return None,
     })
 }
 
-/// The modifiers held for a drop: when the primary button went up in this frame, as it first went
-/// up, which is the release that ends a drag under way when the frame starts; else now.
-fn modifiers_at_release(ui: &Ui) -> egui::Modifiers {
-    ui.input(|i| {
-        i.events
-            .iter()
-            .find_map(|e| match e {
-                egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
-                _ => None,
-            })
-            .unwrap_or(i.modifiers)
-    })
+/// Select All Unused: picks the symbols nothing places, which show selected and which Delete
+/// Symbol deletes.
+fn select_unused(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let r = app.run("symbol.unused", json!({}))?;
+    let unused: Vec<String> = serde_json::from_value(r["names"].clone()).unwrap_or_default();
+    if unused.is_empty() {
+        app.status(tl!("No unused symbols"));
+    }
+    set_picks(app, unused);
+    Ok(Value::Null)
 }
-
-/// The panel state key of the symbols Select All Unused picked.
-const MARKED: &str = "sym-unused";
 
 /// The panel's views: Thumbnail View (the default) and the Small and Large List Views, whose rows
 /// show each symbol's thumbnail and name (`ui.panelView {panel: "symbols", view}`).
@@ -766,25 +825,38 @@ pub enum View {
 impl View {
     const ALL: [(View, &'static str); 3] =
         [(View::Thumbnail, "Thumbnail View"), (View::SmallList, "Small List View"), (View::LargeList, "Large List View")];
-    /// Row height, thumbnail side and name size of the list views; None for the thumbnail grid.
-    fn row(self) -> Option<(f32, f32, f32)> {
+    /// The browser's view and thumbnail zoom that show this view: the grid at its own tile, or the
+    /// list with small or large thumbnails (the browser's list takes small ones below a zoom of 0.75
+    /// and large ones from 1.5).
+    // PLAN: the sheet keeps `View::row` (row height, thumbnail side, text size of the old egui rows);
+    // the browser lays its own rows out, so the view maps to the browser's view and zoom instead.
+    fn preset(self) -> (PresetView, f64) {
         match self {
-            View::Thumbnail => None,
-            View::SmallList => Some((18.0, 14.0, 12.0)),
-            View::LargeList => Some((26.0, 22.0, 12.5)),
+            View::Thumbnail => (PresetView::Grid, 1.0),
+            View::SmallList => (PresetView::List, 0.6),
+            View::LargeList => (PresetView::List, 1.5),
         }
     }
 }
 
-/// The symbols Select All Unused picked in the active document (`uid`) that it still has (`names`);
-/// none once another document is active.
-fn marked(ctx: &egui::Context, uid: Option<u64>, names: &[String]) -> Vec<String> {
-    let (of, mut marked): (Option<u64>, Vec<String>) = pstate(ctx, MARKED);
-    if of != uid {
+/// The symbols Select All Unused picked in the active document that it still has; none once
+/// another document is active.
+fn marked(app: &VectorcraftApp) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    // PLAN: assumed `UiState::symbol_picks: (u64, Vec<String>)` (hub-w1, ap.AS17): the uid of the
+    // document and the names picked in it.
+    let (of, picks) = &app.ui.symbol_picks;
+    if *of != st.uid {
         return vec![];
     }
-    marked.retain(|m| names.contains(m));
-    marked
+    picks.iter().filter(|m| st.doc.symbols.iter().any(|s| s.name == **m)).cloned().collect()
+}
+
+/// Picks the symbols `names` of the active document, as Select All Unused does; none clears the
+/// picks.
+fn set_picks(app: &mut VectorcraftApp, names: Vec<String>) {
+    let uid = app.session.active().map_or(0, |st| st.uid);
+    app.ui.symbol_picks = (uid, names);
 }
 
 /// Delete Symbol: the symbols Select All Unused picked (`marked`) when there are any, asked about
@@ -849,22 +921,26 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    /// Find matches a symbol's name as shown and as stored.
-    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
-        lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
+    fn rows<'a>(lib: &'a Self::Lib, _id: &str) -> Vec<Row<'a, LibSymbol>> {
+        lib.iter().map(|s| Row { name: s.name(), item: Some(s) }).collect()
     }
     /// A built-in library's symbol in the UI language; a User Defined or loaded library's symbol as
     /// it is named.
     fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
         super::label_or_name(name, symbollib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
-    /// The symbol's art on white, as the Symbols panel shows it.
-    fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, s: &LibSymbol, selected: bool, hovered: bool) {
-        chip(ui, &s.lib.doc, &library_symbols(&s.lib), r, s.name());
-        super::graphic_styles::outline(ui, r, selected, hovered);
+    /// Find matches a symbol's name as shown (`label`) and as stored.
+    fn row(id: &str, s: &LibSymbol, label: &str) -> PresetRow<LibraryKey> {
+        let key = LibraryKey { panel: library_panel::panel_id(Self::KIND, id), name: s.name().to_string(), folder: false };
+        let mut row = PresetRow::item(key, label, 0);
+        row.search_name = Some(s.name().to_string());
+        row
     }
-    fn row_icons(_: &Ui, _: egui::Rect, _: &LibSymbol) {}
+    /// The symbol's art on white, as the Symbols panel shows it.
+    // PLAN: assumed ap.AS9's `thumb(app, ..)` takes `app: &VectorcraftApp`, as `draw` did.
+    fn thumb(_: &VectorcraftApp, cx: &ContentPainterCx<'_>, rect: Rect, s: &LibSymbol) {
+        paint_symbol(cx, rect, &s.lib.doc, &library_symbols(&s.lib), s.name());
+    }
     /// Its natural size.
     fn describe(s: &LibSymbol) -> String {
         let (w, h) = symbol_size(&s.lib.doc, s.name());
@@ -879,23 +955,16 @@ impl LibraryKind for SymbolLibraries {
         add(app, json!({"library": id, "names": names}));
     }
     /// Dragged onto the canvas, the symbol is added and an instance placed where it is dropped.
-    fn drag(id: &str, name: &str) -> Option<PanelDrag> {
-        Some(PanelDrag::LibrarySymbol { library: id.to_string(), name: name.to_string() })
+    fn drags() -> bool {
+        true
     }
-    fn menu_tail(app: &mut VectorcraftApp, ui: &mut Ui) {
-        ui.separator();
+    fn menu_tail(_: &mut VectorcraftApp, ui: &mut Ui) {
+        Divider::horizontal().show(ui);
         // As a command, so its file dialog, shown off the UI thread, loads the library when it
         // answers.
-        if menu_item(ui, tl!("Other Library…"), true, false)
-            && let Err(e) = app.run("window.symbolLibrary.other", json!({}))
-        {
-            app.status(e);
-        }
-        let has_symbols = app.session.active().is_some_and(|d| !d.doc.symbols.is_empty());
-        if menu_item(ui, tl!("Save Symbols…"), has_symbols, false) {
-            let sel = current(app);
-            save_library(app, sel.into_iter().collect());
-        }
+        MenuItem::command(CommandRef::new("window.symbolLibrary.other")).show(ui);
+        // The panel menu's Save Symbol Library…, enabled while the document has symbols.
+        MenuItem::command(CommandRef::new(ROW_SAVE_LIBRARY)).show(ui);
     }
 }
 
@@ -928,10 +997,9 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 /// Other Library…: load the symbols of the document at `path`, else of one picked in an open
 /// dialog.
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    match library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SymbolLibraries::KIND))? {
-        Some(path) => load_library(app, json!({ "path": path })),
-        None => Ok(Value::Null),
-    }
+    library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SymbolLibraries::KIND), |app, path| {
+        load_library(app, json!({ "path": path }))
+    })
 }
 
 /// The id prefix of the Window → Symbol Libraries → User Defined slots.
@@ -968,5 +1036,7 @@ pub(crate) fn window_menu() -> Vec<Item> {
     items
 }
 
+// PLAN: decisions.md has the lead split this inline module into `symbols/tests.rs` (`mod tests;`)
+// before this set writes; the split is not in this tree, so the module is left as it was for it.
 #[cfg(test)]
 mod tests;
