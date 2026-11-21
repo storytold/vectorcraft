@@ -368,7 +368,7 @@ fn stack_preview_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog
 }
 
 fn effect_label(id: &str) -> String {
-    vectorcraft_effects::effect_info(id).map(|e| tl!(e.label).trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string())
+    crate::i18n::effect_name(crate::i18n::current(), id).unwrap_or_else(|| id.to_string())
 }
 
 /// Where the preview rasters sit: one document point per pixel, origin at the top-left.
@@ -614,7 +614,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             egui::ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
                 for e in &effects {
                     let picked = e.id == sel;
-                    let name = tl!(e.label).trim_end_matches('…').to_string();
+                    let name = effect_label(e.id);
                     let image = egui::Image::from_texture(&thumb_tex(ui.ctx(), e.id)).fit_to_exact_size(egui::vec2(THUMB as f32, THUMB as f32));
                     #[cfg(test)]
                     THUMBS_PAINTED.with(|c| c.set(c.get() + 1));

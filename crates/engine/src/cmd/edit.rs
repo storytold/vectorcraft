@@ -808,6 +808,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.redo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    turned.effect = e.effect;
     let paints = e.color_mode_paints.clone();
     turned.color_mode_paints = e.color_mode_paints;
     turned.recost_paints();
@@ -844,6 +845,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.undo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    turned.effect = e.effect;
     let paints = e.color_mode_paints.clone();
     turned.color_mode_paints = e.color_mode_paints;
     turned.recost_paints();
