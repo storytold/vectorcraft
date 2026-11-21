@@ -1374,6 +1374,30 @@ fn bundled_catalogs_are_consistent() {
     }
 }
 
+/// A translated message starts and ends with whitespace only where its English does, so a status
+/// message is not shown with a stray space.
+#[test]
+fn message_translations_keep_their_english_edges() {
+    let mut wrong = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let sources: Vec<&str> = if plural { src.split('|').collect() } else { vec![src.as_str()] };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for (i, form) in forms.into_iter().enumerate() {
+                let english = sources.get(i).or(sources.last()).copied().unwrap_or_default();
+                let lead = form.starts_with(char::is_whitespace) && !english.starts_with(char::is_whitespace);
+                let trail = form.ends_with(char::is_whitespace) && !english.ends_with(char::is_whitespace);
+                if lead || trail {
+                    wrong.push(format!("{}: {src:?} -> {form:?}", l.code));
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{} message translations add whitespace at an edge:\n{}", wrong.len(), wrong.join("\n"));
+}
+
 /// A catalog that doesn't claim complete menus may still only hold strings the UI shows (menu
 /// labels, command labels, `tl!` literals), so labels from other apps don't creep in.
 #[test]
@@ -6859,7 +6883,7 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da", "id",
+    "nl", "da", "id", "bg",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
