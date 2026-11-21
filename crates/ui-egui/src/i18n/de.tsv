@@ -1930,6 +1930,7 @@ file-filter	Templates	Vorlagen
 	Import PDF Presets	PDF-Vorgaben importieren
 	Import Perspective Grid Presets	Vorgaben für Perspektivenraster importieren
 	Import Print Presets	Druckvorgaben importieren
+	Import Text Paragraphs…	Textabsätze importieren…
 	Import Transparency Flattener Presets	Vorgaben für Transparenzreduzierung importieren
 	Imported {what}: {}	{what} importiert: {}
 	Import…	Importieren…
@@ -1984,6 +1985,7 @@ file-filter	Templates	Vorlagen
 	Italian	Italienisch
 	Japanese	Japanisch
 	Join	Zusammenfügen
+	Join Lines into Paragraphs	Zeilen zu Absätzen zusammenfassen
 	Join Our Discord	Unserem Discord beitreten
 	Join our Discord	Unserem Discord beitreten
 	Join the ArtCraft community on Discord (discord.gg/artcraft)	Treten Sie der ArtCraft-Community auf Discord bei (discord.gg/artcraft)
@@ -2136,6 +2138,7 @@ file-filter	Templates	Vorlagen
 	Line	Linie
 	Line Art and Text Resolution:	Auflösung für Strichgrafiken und Text:
 	Line Breaks	Zeilenumbrüche
+	Line Breaks in Paragraphs:	Zeilenumbrüche in Absätzen:
 	Line Color	Linienfarbe
 	Line Cut	Linienschnitt
 	Line Cut Tool	Linienschnitt-Werkzeug
@@ -4557,6 +4560,7 @@ effect	Points	Punkte
 	Workspace {i}	Arbeitsbereich {i}
 	Wrinkle Tool	Zerknittern-Werkzeug
 	Write Layers	Ebenen schreiben
+	Write Paragraph IDs	Absatz-IDs schreiben
 	XML ID	XML-ID
 	Yards	Yard
 	Yellow	Gelb

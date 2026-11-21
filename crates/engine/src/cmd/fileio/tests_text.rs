@@ -88,6 +88,164 @@ fn varied_art() -> Session {
 }
 
 #[test]
+fn text_export_joins_lines_of_point_type_into_paragraphs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 500})).unwrap();
+    let line = |s: &mut Session, x: f64, y: f64, size: f64, t: &str| {
+        s.execute("text.create", &json!({"x": x, "y": y, "size": size, "text": t})).unwrap()["id"].as_u64().unwrap()
+    };
+    line(&mut s, 10.0, 40.0, 20.0, "Title");
+    // Two justified columns, 9 pt on 12 pt: the first runs on into the second, and a short line
+    // ends a paragraph. A wrapped line's last space is left out.
+    let full = |n: u32| format!("{n} lorem ipsum dolor sit amet consectetur ");
+    for (k, t) in [full(1), full(2), "Short end.".into(), full(3), full(4)].iter().enumerate() {
+        line(&mut s, 10.0, 100.0 + 12.0 * k as f64, 9.0, t);
+    }
+    line(&mut s, 300.0, 100.0, 9.0, &full(5));
+    line(&mut s, 300.0, 112.0, 9.0, "Last one.");
+    // Ragged lines: a line all bold (a heading) is a paragraph of its own, and a line starting
+    // bold among lines that don't (a lead-in) starts one.
+    for (k, (t, bold)) in [("Notes", 5), ("A: first", 2), ("second", 0), ("B: third", 2), ("fourth", 0)].iter().enumerate() {
+        let id = line(&mut s, 10.0, 300.0 + 8.4 * k as f64, 7.0, t);
+        if *bold > 0 {
+            s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": bold, "style": "Bold"})).unwrap();
+        }
+    }
+    // A story keeps its own paragraphs.
+    s.execute("text.create", &json!({"x": 10, "y": 400, "text": "Story one\nStory two", "area": {"width": 200, "height": 60}})).unwrap();
+
+    let export = |s: &mut Session, p: Value| {
+        String::from_utf8(b64(&s.execute("document.export", &merge(json!({"format": "txt", "paragraphs": true}), p)).unwrap())).unwrap()
+    };
+    let full = |n: u32| format!("{n} lorem ipsum dolor sit amet consectetur");
+    let want = format!(
+        "Title\r\n{}\n{}\nShort end.\r\n{}\n{}\n{}\nLast one.\r\nNotes\r\nA: first\nsecond\r\nB: third\nfourth\r\nStory one\r\nStory two\r\n",
+        full(1),
+        full(2),
+        full(3),
+        full(4),
+        full(5)
+    );
+    assert_eq!(export(&mut s, json!({"lineEndings": "crlf"})), want);
+    assert_eq!(export(&mut s, json!({"lineEndings": "crlf", "lineBreaks": "space"})), want.replace('\n', " ").replace("\r ", "\r\n"));
+    assert_eq!(export(&mut s, json!({"lineBreaks": "crlf"})).lines().count(), want.lines().count(), "every line still on its own");
+    assert!(s.execute("document.export", &json!({"format": "txt", "paragraphs": true, "lineBreaks": "tab"})).is_err());
+    // Without paragraphs, every line ends alike, as before.
+    assert_eq!(String::from_utf8(b64(&s.execute("document.export", &json!({"format": "txt"})).unwrap())).unwrap().matches('\n').count(), 15);
+}
+
+/// A paragraph's lines don't run on into lines on another artboard (a PDF's next pages), nor into
+/// a table's column far to its right, though their baselines line up and are spaced alike; and a
+/// bold heading in the body's font and size, a little further up and to the left, doesn't cut the
+/// first line off from the rest.
+#[test]
+fn paragraphs_stay_on_their_artboard_and_next_to_their_column() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 500})).unwrap();
+    s.execute("artboard.new", &json!({"x": 650, "y": 0, "width": 600, "height": 500})).unwrap();
+    let line =
+        |s: &mut Session, x: f64, y: f64, t: &str| s.execute("text.create", &json!({"x": x, "y": y, "size": 8, "text": t})).unwrap()["id"].clone();
+    let heading = line(&mut s, 302.0, 88.8, "Verkaufs- und Lieferbedingungen");
+    s.execute("text.setRangeStyle", &json!({"id": heading, "start": 0, "end": 31, "style": "Bold"})).unwrap();
+    line(&mut s, 300.0, 100.0, "Es gelten unsere Allgemeinen Verkaufs- und Lieferbedingungen, die zum");
+    line(&mut s, 300.0, 108.5, "Zeitpunkt der Bestellung Gültigkeit haben.");
+    // A table's column on the next artboard, and one far to the right on this one.
+    for x in [700.0, 30.0] {
+        line(&mut s, x, 100.0, "Stück");
+        line(&mut s, x, 108.5, "Stück");
+    }
+    let got =
+        String::from_utf8(b64(&s.execute("document.export", &json!({"format": "txt", "paragraphs": true, "lineBreaks": "space"})).unwrap())).unwrap();
+    assert!(
+        got.contains(
+            "Verkaufs- und Lieferbedingungen\nEs gelten unsere Allgemeinen Verkaufs- und Lieferbedingungen, die zum Zeitpunkt der Bestellung Gültigkeit haben.\n"
+        ),
+        "{got}"
+    );
+    assert_eq!(got.matches("Stück Stück\n").count(), 2, "{got}");
+
+    // Ragged lines that mostly run nearly as long as the longest aren't justified: a shorter line
+    // that ends no sentence goes on.
+    let ragged = [
+        "Verpackung und Bearbeitung 15,- € netto. Bestellungen von Lagerartikeln,",
+        "die an einem Arbeitstag bis 14.00 Uhr eingehen, werden im Laufe des",
+        "nächsten Arbeitstages ausgeliefert. Ist eine Belieferung bis 09.00 Uhr am",
+        "Folgetag gewünscht, ist diese als „Express-Lieferung“ (max. 30 kg) gegen",
+        "eine Kostenpauschale in Höhe 40,- € netto möglich. Bei schwereren Teilen",
+        "werden die tatsächlich anfallenden Porto- und Verpackungskosten",
+        "berechnet.",
+    ];
+    for (k, t) in ragged.iter().enumerate() {
+        line(&mut s, 30.0, 300.0 + 8.5 * k as f64, t);
+    }
+    let got =
+        String::from_utf8(b64(&s.execute("document.export", &json!({"format": "txt", "paragraphs": true, "lineBreaks": "space"})).unwrap())).unwrap();
+    assert!(got.contains(&format!("{}\n", ragged.join(" "))), "{got}");
+}
+
+#[test]
+fn paragraphs_with_ids_come_back_edited() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 500})).unwrap();
+    let line = |s: &mut Session, x: f64, y: f64, t: &str| {
+        s.execute("text.create", &json!({"x": x, "y": y, "size": 9, "text": t})).unwrap()["id"].as_u64().unwrap()
+    };
+    let title = s.execute("text.create", &json!({"x": 10, "y": 40, "size": 20, "text": "Title"})).unwrap()["id"].as_u64().unwrap();
+    // A justified paragraph that runs on from one column into the next.
+    let full = |n: u32| format!("{n} lorem ipsum dolor sit amet consectetur");
+    let mut lines = vec![];
+    for (k, t) in [full(1), full(2), full(3), full(4)].iter().enumerate() {
+        lines.push(line(&mut s, 10.0, 100.0 + 12.0 * k as f64, t));
+    }
+    lines.push(line(&mut s, 300.0, 100.0, &full(5)));
+    lines.push(line(&mut s, 300.0, 112.0, "Last one."));
+    let story = s.execute("text.create", &json!({"x": 10, "y": 400, "text": "Story one\nStory two", "area": {"width": 200, "height": 60}})).unwrap()
+        ["id"]
+        .as_u64()
+        .unwrap();
+
+    let export =
+        |s: &mut Session, p: Value| String::from_utf8(b64(&s.execute("document.export", &merge(json!({"format": "txt"}), p)).unwrap())).unwrap();
+    let with_ids = export(&mut s, json!({"ids": true, "lineBreaks": "space"}));
+    let first = lines[0];
+    assert_eq!(
+        with_ids,
+        format!(
+            "[#{title}] Title\n[#{first}] {} {} {} {} {} Last one.\n[#{story}.1] Story one\n[#{story}.2] Story two\n",
+            full(1),
+            full(2),
+            full(3),
+            full(4),
+            full(5)
+        )
+    );
+
+    // Translated: the paragraph, a story's second paragraph; the title as it was; an id it hasn't.
+    let new = "Ein viel längerer Absatz, der sich jetzt in den Rahmen umbricht und weiterläuft, wohin auch immer er will.";
+    let file = format!("[#{title}] Title\r\n[#{first}] {new}\r\n[#{story}.2] Geschichte\nzwei\r\n[#999999] nowhere\r\n");
+    let r = s.execute("text.importParagraphs", &json!({ "data": file })).unwrap();
+    assert_eq!((r["replaced"].as_u64(), r["unchanged"].as_u64(), r["missing"].clone()), (Some(2), Some(1), json!(["999999"])), "{r}");
+    // One frame per column, threaded; the first keeps the first line's id, and the lines are gone.
+    let threads = s.execute("text.thread.info", &json!({})).unwrap();
+    let thread: Vec<u64> = threads[0].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!((thread.len(), thread[0]), (2, first), "{threads}");
+    let doc = s.doc().unwrap().doc.clone();
+    assert!(lines[1..].iter().all(|id| thread.contains(id) || doc.node(vectorcraft_doc::NodeId(*id)).is_none()));
+    let Some(vectorcraft_doc::NodeKind::Text(t)) = doc.node(vectorcraft_doc::NodeId(first)).map(|n| &n.kind) else { panic!("no frame") };
+    assert!(matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }));
+    assert_eq!(t.para.justify, vectorcraft_doc::Justify::JustifyLeft, "justified as the lines were");
+    let plain = export(&mut s, json!({}));
+    assert_eq!(plain, format!("Title\n{new}\nStory one\nGeschichte\u{2028}zwei\n"));
+    // The same file again changes nothing: the frames answer to the paragraph's id.
+    let again = s.execute("text.importParagraphs", &json!({ "data": file })).unwrap();
+    assert_eq!((again["replaced"].as_u64(), again["unchanged"].as_u64()), (Some(0), Some(3)), "{again}");
+    // One undo step puts the lines back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(export(&mut s, json!({"ids": true, "lineBreaks": "space"})), with_ids);
+    assert!(s.execute("text.importParagraphs", &json!({"data": "no ids"})).is_err());
+}
+
+#[test]
 fn webp_is_lossless_by_default_and_lossy_when_asked() {
     let mut s = varied_art();
     let export = |s: &mut Session, p: Value| -> (Vec<u8>, Value) {

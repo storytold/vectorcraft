@@ -41,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             export::export
         ),
         cmd!(
+            "text.importParagraphs",
+            "Import Text Paragraphs…",
+            ["File"],
+            None,
+            "{path | data (the text) | dataBase64} put edited or translated paragraphs back by the ids the text export writes with ids: true (`[#58] …`; each id starts a paragraph that runs to the next, UTF-8 or UTF-16 with a byte order mark): a paragraph of lines of point type becomes area type in its first line's font, size and leading, justified or aligned left as the lines were, the text wrapping (one frame per column it ran through, threaded, the last growing with its text; the first frame keeps the first line's id); a story's paragraph is replaced in place, its lines joined by forced line breaks. Paragraphs whose text is unchanged and ids the document doesn't have are left alone; one undo step; selects what changed → {replaced, unchanged, missing: [ids], ids, overflow?}",
+            has_doc,
+            super::text::import_paragraphs
+        ),
+        cmd!(
             "document.exportSelection",
             "Export Selection…",
             ["File"],
