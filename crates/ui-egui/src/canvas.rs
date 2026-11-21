@@ -923,7 +923,7 @@ fn cache_key(
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
         backdrop: backdrop(app, st, app.outline_view()),
-        color: (vectorcraft_color::cms::active_settings(), vectorcraft_color::cms::profiles_generation()),
+        color: (vectorcraft_color::cms::active_settings(), vectorcraft_color::cms::working_settings(), vectorcraft_color::cms::profiles_generation()),
     }
 }
 

@@ -4882,13 +4882,27 @@ fn color_settings_and_a_reloaded_profile_render_the_canvas_again() {
     };
     load(&mut app, cms::GENERIC_CMYK);
     app.run("edit.assignProfile", json!({"cmyk": name})).unwrap();
-    let assigned = middle(&mut app).unwrap_or(first);
+    let assigned = middle(&mut app).expect("assigning a profile re-renders the canvas");
     assert!(near(assigned, generic), "through the assigned copy of the working space: {assigned:?}, not {generic:?}");
     assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
     // The same name, the settings as they were: only the profile's file is new.
     load(&mut app, cms::DEVICE_CMYK);
     let reloaded = middle(&mut app).expect("the profile loaded again re-renders the canvas");
     assert!(near(reloaded, device), "through the profile's new file: {reloaded:?}, not {device:?}");
+    assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
+
+    // A proof of the working CMYK space converts through the working settings. With the document's
+    // assigned profile in place of the working CMYK space, a new working CMYK space leaves the
+    // active settings as they were and changes only the proof.
+    app.run("view.proofSetup", json!({"target": "workingCmyk"})).unwrap();
+    app.run("view.proofColors", json!({"on": true})).unwrap();
+    let proofed = middle(&mut app).expect("Proof Colors re-renders the canvas");
+    assert_eq!(middle(&mut app), None, "nothing changed: no re-render");
+    let active = cms::active_settings();
+    app.run("edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let reproofed = middle(&mut app).expect("a new working CMYK space re-renders the proof");
+    assert_eq!(cms::active_settings(), active, "the assigned profile keeps the active settings");
+    assert!(!near(reproofed, [proofed[0], proofed[1], proofed[2]]), "the proof through the new working CMYK space: {reproofed:?}, not {proofed:?}");
     assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
 }
 
