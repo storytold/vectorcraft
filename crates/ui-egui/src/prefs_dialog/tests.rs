@@ -2439,8 +2439,9 @@ fn hovering_a_slices_row_shows_its_description() {
     assert!(painted(&after, color) && !painted(&after, numbers), "the Line Color row's sentence shows: {after:?}");
 }
 
-/// Tab from the search field reaches Slices' first control, the Show Slice Numbers box: the line
-/// shows its sentence and a screen reader gets it as the control's description.
+/// Tab from the search field reaches Slices' Show Slice Numbers box and then its Line Color control,
+/// in that order: the line shows each one's sentence in turn, and a screen reader gets it as the
+/// focused control's description.
 #[test]
 fn keyboard_focus_on_a_slices_row_shows_its_description() {
     let mut a = app();
@@ -2451,16 +2452,11 @@ fn keyboard_focus_on_a_slices_row_shows_its_description() {
     description_frame(&mut a, &ctx, vec![]);
     description_frame(&mut a, &ctx, vec![]);
     let numbers = descriptions::description("showSliceNumbers").expect("Show Slice Numbers has a sentence");
-    let mut shown = None;
-    for _ in 0..40 {
-        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
-        if painted(&texts, numbers) {
-            shown = Some(described);
-            break;
-        }
+    let color = descriptions::description("sliceLineColor").expect("Line Color has a sentence");
+    let first = tab_to_each(&mut a, &ctx, &[numbers, color]);
+    for ((described, _), sentence) in first.iter().zip([numbers, color]) {
+        assert_eq!(described.as_deref(), Some(sentence), "the focused control carries the sentence");
     }
-    let described = shown.expect("Tab reaches the Show Slice Numbers row and its sentence shows");
-    assert!(described.iter().any(|d| d == numbers), "the focused control carries the sentence: {described:?}");
 }
 
 /// Whether `sentence` is one of `texts` and is drawn on the description line of the frame that
