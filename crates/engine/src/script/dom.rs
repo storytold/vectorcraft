@@ -459,17 +459,17 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
     // inside the isolated group, or a symbol's object is now hidden) changes nothing, and the
     // objects are selected as below.
     if let Some(t) = before.target.filter(keep)
-        && command(h, "layer.target", &json!({"id": t.0})).is_ok()
+        && done_unless_refused(command(h, "layer.target", &json!({"id": t.0})))?
     {
         return Ok(());
     }
     if let Some(p) = before.symbol_part.as_ref().filter(|p| keep(&p.instance))
-        && command(h, "symbol.instance.selectPart", &json!({"id": p.instance.0, "path": p.path})).is_ok()
+        && done_unless_refused(command(h, "symbol.instance.selectPart", &json!({"id": p.instance.0, "path": p.path})))?
     {
         return Ok(());
     }
     if let Some(m) = before.on_path_member.filter(keep)
-        && command(h, "object.objectsOnPath.selectMember", &json!({"member": m.0})).is_ok()
+        && done_unless_refused(command(h, "object.objectsOnPath.selectMember", &json!({"member": m.0})))?
     {
         return Ok(());
     }
@@ -504,7 +504,7 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
     // Guides that are locked now, and a key that no longer qualifies (the objects beside it are
     // gone), stay unselected: those commands refuse them and change nothing.
     if !picked.is_empty() {
-        let _ = command(h, "guide.select", &json!({"indexes": picked, "toggle": true}));
+        done_unless_refused(command(h, "guide.select", &json!({"indexes": picked, "toggle": true})))?;
     }
     let key = if let Some((id, (p, k))) = before.key_anchor.filter(|(id, _)| keep(id)) {
         Some(json!({"id": id.0, "anchor": [p, k]}))
@@ -514,9 +514,20 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
         before.key_guide.as_ref().and_then(index).map(|g| json!({"guide": g}))
     };
     if let Some(key) = key {
-        let _ = command(h, "select.key", &key);
+        done_unless_refused(command(h, "select.key", &key))?;
     }
     Ok(())
+}
+
+/// The result `r` of a selection command that [`restore_selection`] runs: `true` when it ran and
+/// `false` when it refused (an `Error`, which changes nothing). Any other error, such as an
+/// internal failure or a request to stop, is returned, so the run ends with it.
+fn done_unless_refused(r: std::result::Result<Data, HostError>) -> std::result::Result<bool, HostError> {
+    match r {
+        Ok(_) => Ok(true),
+        Err(HostError::Error(_)) => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 /// Runs `f` with the document `uid` active, and makes the document that was active before active
@@ -1812,4 +1823,18 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restoring_the_selection_falls_back_only_on_a_refusal() {
+        assert_eq!(done_unless_refused(Ok(Data::Undefined)), Ok(true));
+        assert_eq!(done_unless_refused(Err(HostError::Error("refused".into()))), Ok(false));
+        // An internal failure or a stop ends the run instead of being taken for a refusal.
+        assert_eq!(done_unless_refused(Err(HostError::Abort("canceled".into()))), Err(HostError::Abort("canceled".into())));
+        assert_eq!(done_unless_refused(Err(HostError::Range("too large".into()))), Err(HostError::Range("too large".into())));
+    }
 }
