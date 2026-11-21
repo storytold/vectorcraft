@@ -533,6 +533,17 @@ mod tests {
         assert!(RadialDrag::hit(&c, h.instances_at, Mods { alt: true, ..Mods::default() }).is_none());
     }
 
+    /// With the Selection tool, a handle drag reads where it is released, and a tool switch cancels
+    /// it.
+    #[test]
+    fn a_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let (doc, selection) = radial();
+        let paint = paint();
+        let c = cx(&doc, &selection, &paint);
+        let at = RadialHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap().instances_at;
+        crate::testutil::check_widget_release_and_tool_switch(&c, at, at + Vec2::new(0.0, 32.0), at + Vec2::new(0.0, 64.0));
+    }
+
     #[test]
     fn dragging_the_radius_handle_moves_the_circle_in_and_out() {
         let (doc, selection) = radial();
