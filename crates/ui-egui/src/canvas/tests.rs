@@ -6964,6 +6964,23 @@ fn a_star_shows_corner_widgets_with_direct_selection() {
     assert_eq!(widgets(&mut app), 0);
 }
 
+/// #1232: with two of a star's corners picked, Direct Selection still draws all ten widgets; the
+/// two picked ones have a dot in the layer color at their center and the others are hollow.
+#[test]
+fn direct_selection_draws_picked_corner_widgets_with_a_dot() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.star", &json!({"cx": 200, "cy": 150, "radius1": 80, "radius2": 40})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.anchors", &json!({"id": id, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    let layer = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+    let ctx = egui::Context::default();
+    app.select_tool("directSelection");
+    let drawn = shapes(&mut app, &ctx);
+    let discs = drawn.iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == 3.0 && c.fill == Color32::WHITE)).count();
+    let dots = drawn.iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == 1.0 && c.fill == layer)).count();
+    assert_eq!((discs, dots), (10, 2));
+}
+
 /// The type widget beside selected type's bounding box: hollow (white) on point type, filled
 /// in the layer colour on area type.
 #[test]
