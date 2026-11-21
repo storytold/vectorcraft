@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Conflicts",
             [],
             None,
-            "{profileMismatch?: as edit.paste} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb, the pasted colour as the paste brings it, converted when profileMismatch or the policy converts it): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none, unless the paste converts its colours",
+            "{profileMismatch?: as edit.paste, allArtboards?: false (true: for edit.pasteOnAllArtboards, which leaves the background colors of copied artboards behind)} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb, the pasted colour as the paste brings it, converted when profileMismatch or the policy converts it): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none, unless the paste converts its colours",
             has_doc,
             conflicts
         ),
@@ -568,9 +568,12 @@ fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
 fn conflicts(s: &mut Session, p: &Value) -> Result<Value> {
     let hex = |w: &Swatch| w.paint.color().map(|c| c.to_hex());
     // The swatches as the paste brings them: converted from another profile when it converts.
-    let profile = super::colormgmt::PasteProfile::param(p, "clipboard.conflicts")?;
+    const CMD: &str = "clipboard.conflicts";
+    let profile = super::colormgmt::PasteProfile::param(p, CMD)?;
+    // Paste on All Artboards leaves the copied artboards, and so their backgrounds, behind.
+    let all_artboards = super::switch_or(p, "allArtboards", false, CMD)?;
     let st = s.doc()?;
-    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile, true);
+    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile, !all_artboards);
     let list: Vec<Value> = converted
         .as_ref()
         .unwrap_or(&s.clipboard)
