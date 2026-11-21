@@ -132,12 +132,22 @@ thread_local! {
     /// opens and the pass after it; `None` otherwise. A row reads it without a lookup in the
     /// context's data.
     static OPENING: std::cell::Cell<Option<Opening>> = const { std::cell::Cell::new(None) };
+    /// While [`combo_list`] draws a list: a key of the names of the [`option_row`]s drawn so far and
+    /// the font they are drawn in, rows out of view included; `None` otherwise.
+    static ROWS: std::cell::Cell<Option<egui::Id>> = const { std::cell::Cell::new(None) };
 }
 
 /// One option of a dropdown list, `selected` for the current one. On the pass the list opens and
 /// the next one, the first current option scrolls to the middle of the list, or as near to it as
 /// the list's ends allow, so that it shows whole (#5941).
 fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
+    let atoms = atoms.into_atoms();
+    if let Some(rows) = ROWS.get() {
+        // The font a button draws a plain name in: the style's font override, else its text style
+        // override, else the button text style.
+        let font = egui::FontSelection::Default.resolve_with_fallback(ui.style(), egui::TextStyle::Button.into());
+        ROWS.set(Some(rows.with((atoms.text().as_deref(), font))));
+    }
     let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
     if let Some(opening) = OPENING.get() {
         let scroll = selected && !opening.scrolled;
@@ -365,16 +375,25 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
     style.apply(&mut popup_style);
     let margins = egui::Frame::popup(&popup_style).total_margin().sum();
     let height = (floor - screen.top() - margins.y).max(ui.spacing().interact_size.y);
-    // A list that was wider than the window keeps its scroll bar in view: until it closes, it is no
-    // wider than it measured or than the window, its names cut short and shown in full on hover.
+    // A list that was wider than the window keeps its scroll bar in view: until it closes or its
+    // options change, it is no wider than it measured or than the window, its names cut short and
+    // shown in full on hover.
     // Only a size measured while the list is open counts: egui keeps the last one after it closes.
     // The width it needs is its rows' width on the last pass before it was narrowed, with its
     // margins, and the bar's column while the rows scroll.
     let too_wide_key = id.with("too-wide");
     let natural_key = id.with("natural-width");
     let scrolls_key = id.with("scrolls");
+    // A list that was too wide is measured again when the names of its options or their font
+    // change while it is open: laid out unseen with its names in full, as on the pass it opens.
+    let rows_key = id.with("rows");
+    let remeasure_key = id.with("remeasure");
+    let remeasure = ctx.data_mut(|d| d.remove_temp::<bool>(remeasure_key)).unwrap_or(false);
     let open_last_pass = ctx.read_response(id).is_some();
-    if popup.get_expected_size().is_some_and(|size| open_last_pass && size.x > screen.width()) {
+    // The pass that measures again lays the list out with its names in full. The size from the last
+    // pass is of the list narrowed to the window, so it does not count, even when the window has
+    // narrowed since.
+    if !remeasure && popup.get_expected_size().is_some_and(|size| open_last_pass && size.x > screen.width()) {
         // The first measurement is kept: later ones are of the list already narrowed.
         ctx.data_mut(|d| {
             if d.get_temp::<f32>(too_wide_key).is_none() {
@@ -385,7 +404,7 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
     }
     let (measured, scrolls) = ctx.data(|d| (d.get_temp::<f32>(too_wide_key), d.get_temp::<bool>(scrolls_key).unwrap_or(false)));
     let too_wide = measured.is_some();
-    let shown = popup.align(align).align_alternatives(&[]).show(|ui| {
+    let shown = popup.align(align).align_alternatives(&[]).sizing_pass(remeasure).show(|ui| {
         if let Some(rows) = measured {
             let bar = if scrolls { list_scroll_style().allocated_width() } else { 0.0 };
             ui.set_max_width((rows + bar).min(screen.width() - margins.x).max(0.0));
@@ -397,17 +416,31 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
         // Labels widen a narrow list rather than wrap, as in egui's combo box.
         ui.style_mut().wrap_mode = Some(if too_wide { egui::TextWrapMode::Truncate } else { egui::TextWrapMode::Extend });
         let painted = ui.ctx().graphics(|g| g.get(ui.layer_id()).map_or(0, |shapes| shapes.all_entries().len()));
+        let outer = ROWS.replace(Some(rows_key));
         let shown = egui::ScrollArea::vertical().max_height(height).show(ui, list);
+        let rows = ROWS.replace(outer).unwrap_or(rows_key);
         if too_wide {
             show_shortened_rows(ui, painted);
         }
-        ui.data_mut(|d| {
+        let measure_again = ui.data_mut(|d| {
+            let changed = d.get_temp::<egui::Id>(rows_key).is_some_and(|last| last != rows);
+            d.insert_temp(rows_key, rows);
+            let remeasure = too_wide && changed;
+            if remeasure {
+                d.remove::<f32>(too_wide_key);
+                d.remove::<f32>(natural_key);
+                d.insert_temp(remeasure_key, true);
+            }
             if !too_wide {
                 d.insert_temp(natural_key, shown.content_size.x);
             }
             d.insert_temp(scrolls_key, shown.content_size.y > shown.inner_rect.height());
             d.insert_temp(area_key, shown.id);
+            remeasure
         });
+        if measure_again {
+            ui.ctx().request_repaint();
+        }
         shown.inner
     });
     if shown.is_some() {
@@ -417,6 +450,8 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
             d.remove::<f32>(too_wide_key);
             d.remove::<f32>(natural_key);
             d.remove::<bool>(scrolls_key);
+            d.remove::<egui::Id>(rows_key);
+            d.remove::<bool>(remeasure_key);
         });
     }
     shown.map(|r| r.inner)
