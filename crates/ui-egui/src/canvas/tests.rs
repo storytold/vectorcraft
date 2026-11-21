@@ -3059,7 +3059,9 @@ fn the_art_renders_within_the_largest_texture_side() {
 
 /// Run a test that compares two renders with the color settings that are active when it starts.
 /// A test on another thread can change the process's active settings; this thread keeps its own.
+/// The proof view is process-wide, so the tests that change it wait until this one ends.
 fn keeping_color_settings(test: fn()) {
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     vectorcraft_color::cms::with_active(vectorcraft_color::cms::active(), test);
 }
 
