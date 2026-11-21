@@ -35,6 +35,52 @@ impl AltTap {
     pub(crate) fn other(&mut self) {
         self.spoiled = true;
     }
+
+    /// A frame whose keys the menu bar took: an Alt press under way is no tap, and Alt let go
+    /// during the frame ends it. A press that starts later in the same frame is followed as usual.
+    pub(crate) fn taken_by_menu_bar(&mut self, ctx: &egui::Context) {
+        self.spoiled = self.down;
+        let alt = ctx.input(|i| {
+            for e in &i.events {
+                self.event(e);
+            }
+            i.modifiers.alt
+        });
+        if !alt {
+            *self = Self::default();
+        } else if !self.down {
+            *self = Self { down: true, spoiled: true };
+        }
+    }
+
+    /// Whether the last of `events`, the start of a frame's events, ends an Alt tap after the
+    /// presses followed so far.
+    pub(crate) fn taps_after(&self, events: &[egui::Event]) -> bool {
+        let mut tap = *self;
+        let mut tapped = false;
+        for e in events {
+            tapped = tap.event(e);
+        }
+        tapped
+    }
+
+    /// Follows one event; true when it ends a tap.
+    fn event(&mut self, e: &egui::Event) -> bool {
+        match e {
+            egui::Event::ModifiersChanged(m) => {
+                let (alt, alone) = alt_alone(*m);
+                self.modifiers(alt, alone)
+            }
+            egui::Event::Key { pressed: true, .. }
+            | egui::Event::PointerButton { .. }
+            | egui::Event::MouseWheel { .. }
+            | egui::Event::Touch { .. } => {
+                self.other();
+                false
+            }
+            _ => false,
+        }
+    }
 }
 
 fn alt_alone(m: egui::Modifiers) -> (bool, bool) {
@@ -52,17 +98,7 @@ pub(super) fn follow(tap: &mut AltTap, ctx: &egui::Context, focused: bool) -> bo
     ctx.input(|i| {
         let mut tapped = false;
         for e in &i.events {
-            match e {
-                egui::Event::ModifiersChanged(m) => {
-                    let (alt, alone) = alt_alone(*m);
-                    tapped |= tap.modifiers(alt, alone);
-                }
-                egui::Event::Key { pressed: true, .. }
-                | egui::Event::PointerButton { .. }
-                | egui::Event::MouseWheel { .. }
-                | egui::Event::Touch { .. } => tap.other(),
-                _ => {}
-            }
+            tapped |= tap.event(e);
         }
         let (alt, alone) = alt_alone(i.modifiers);
         tapped | tap.modifiers(alt, alone)

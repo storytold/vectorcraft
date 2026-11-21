@@ -570,7 +570,15 @@ fn refresh_targets(app: &VectorcraftApp, ctx: &Context, state: &mut State) {
     }
 }
 
-fn modifiers_changed(app: &VectorcraftApp, ctx: &Context, state: &mut State, m: &Modifiers, pointer_activity: bool, owned: &mut bool) {
+fn modifiers_changed(
+    app: &mut VectorcraftApp,
+    ctx: &Context,
+    state: &mut State,
+    m: &Modifiers,
+    so_far: &[Event],
+    pointer_activity: bool,
+    owned: &mut bool,
+) {
     let plain_alt = m.alt && !m.ctrl && !m.command && !m.mac_cmd;
     if plain_alt && !state.alt_down {
         state.alt_armed = !pointer_activity;
@@ -578,10 +586,11 @@ fn modifiers_changed(app: &VectorcraftApp, ctx: &Context, state: &mut State, m: 
     }
     if !m.alt && state.alt_down {
         if state.alt_armed && !state.alt_used {
-            *owned = true;
             if state.active {
+                *owned = true;
                 cancel(ctx, state, true);
-            } else {
+            } else if !tool_takes_alt_tap(app, ctx, so_far) {
+                *owned = true;
                 choose_root(app, ctx, state, "File".into(), false);
             }
         }
@@ -596,6 +605,17 @@ fn modifiers_changed(app: &VectorcraftApp, ctx: &Context, state: &mut State, m: 
         *owned = false;
     }
     state.alt_down = m.alt;
+}
+
+/// The Alt let go at the end of `so_far` reaches the active tool, which takes it (the Quick Pen
+/// switches its action), so it does not activate the menu bar. A tap with a text field focused, or
+/// one that starts while Shift is held, does not reach the tool and activates the menu bar.
+fn tool_takes_alt_tap(app: &mut VectorcraftApp, ctx: &Context, so_far: &[Event]) -> bool {
+    if ctx.egui_wants_keyboard_input() || !app.alt_tap.taps_after(so_far) {
+        return false;
+    }
+    let view = app.view_info();
+    app.session.tool_claims_key(vectorcraft_tools::ToolKey::AltTap, view)
 }
 
 fn consume_event(consumed: &mut [bool], at: usize) {
@@ -754,7 +774,9 @@ pub(crate) fn handle_input(app: &mut VectorcraftApp, ctx: &Context) -> bool {
             _ => {}
         }
         match event {
-            Event::ModifiersChanged(m) => modifiers_changed(app, ctx, &mut state, m, pointer_activity, &mut owned),
+            Event::ModifiersChanged(m) => {
+                modifiers_changed(app, ctx, &mut state, m, events.get(..=at).unwrap_or_default(), pointer_activity, &mut owned)
+            }
             Event::Key { pressed: true, .. } => pressed_key(app, ctx, &mut state, &events, at, &mut consumed, &mut owned),
             Event::Text(text) => text_event(app, ctx, &mut state, text, &mut consumed, at, &mut owned),
             Event::PointerButton { .. } | Event::MouseWheel { .. } => {
