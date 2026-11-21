@@ -34,6 +34,7 @@ mod command;
 pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
+pub mod curvature_circle_options;
 pub mod custom_dictionary;
 pub mod dimension;
 mod document_setup;
@@ -478,6 +479,7 @@ registry! {
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
     CircleOptions: [circle_options::KIND] => circle_options::SPEC,
+    CurvatureCircleOptions: [curvature_circle_options::KIND] => curvature_circle_options::SPEC,
     ThreePointArcOptions: [three_point_arc_options::KIND] => three_point_arc_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,

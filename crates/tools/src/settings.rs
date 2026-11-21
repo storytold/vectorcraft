@@ -80,6 +80,8 @@ const ROWS: &[Row] = &[
     (&["ellipse"], None, &["anchors"]),
     // Circle Tool Options (`circle::CircleTool`).
     (&[crate::circle::ID], None, &["center", "radii", "diameter", "color", "standardAnchors", "dragThird"]),
+    // Curvature Circle Tool Options (`curvature_circle::CurvatureCircleTool`).
+    (&[crate::curvature_circle::ID], None, &["snapTolerance", "snapWithoutGuides", "annotateRadius", "standardAnchors", "constantRadius"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (
