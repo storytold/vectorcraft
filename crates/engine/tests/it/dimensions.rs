@@ -2352,6 +2352,50 @@ fn a_dimension_is_dragged_only_where_the_canvas_hits_it() {
     assert!(!boxes.iter().any(|r| r.x1 > 399.0), "the rectangle is not outlined: {boxes:?}");
 }
 
+/// A geometry effect on a part of a dimension other than the one pressed keeps the Dimension tool
+/// from dragging it, and the effect stays on that part.
+#[test]
+fn a_geometry_effect_on_another_part_keeps_the_dimension_in_place() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (mut s, first) = level_start(plain);
+    let extension = {
+        let doc = &s.doc().unwrap().doc;
+        let parts = doc.node(NodeId(first)).unwrap().children().unwrap();
+        // The extension line at x = 100, which the press below on the dimension line misses.
+        let line = parts.iter().find(|c| c.geometric_bounds().is_some_and(|r| r.x1 < 101.0 && r.height() > 10.0));
+        line.unwrap().id.0
+    };
+    run(&mut s, "effect.apply", json!({"effect":"distort.transform","ids":[extension],"params":{"moveH":-60}}));
+    run(&mut s, "select.none", json!({}));
+    for (kind, y) in [(PointerKind::Move, 170.0), (PointerKind::Down, 170.0), (PointerKind::Drag, 130.0), (PointerKind::Up, 130.0)] {
+        s.pointer(&PointerEvent::new(kind, 150.0, y), plain).unwrap();
+    }
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    let kept = s.doc().unwrap().doc.node(NodeId(extension)).is_some_and(|n| !n.appearance.effects.is_empty());
+    assert!(kept, "the extension line keeps its effect");
+}
+
+/// In isolation mode, art outside the isolated group does not take a press on a dimension inside
+/// it: the drag moves the dimension.
+#[test]
+fn art_outside_isolation_does_not_take_the_press_on_a_dimension() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (mut s, first) = level_start(plain);
+    // A line across the dimension line, outside the group isolated below. The press, a point below
+    // the dimension line, is nearer to it than to the dimension line.
+    run(&mut s, "path.create", json!({"d": "M150 100 L150 250"}));
+    run(&mut s, "select.set", json!({"ids":[first]}));
+    let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "object.isolate", json!({"id": group}));
+    run(&mut s, "select.none", json!({}));
+    for (kind, y) in [(PointerKind::Move, 171.0), (PointerKind::Down, 171.0), (PointerKind::Drag, 131.0), (PointerKind::Up, 131.0)] {
+        s.pointer(&PointerEvent::new(kind, 150.0, y), plain).unwrap();
+    }
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+}
+
 /// A dimension pasted into a document that had none is dragged with the Dimension tool like one
 /// drawn there.
 #[test]

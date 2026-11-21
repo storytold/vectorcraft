@@ -157,6 +157,11 @@ fn constrained(cx: &ToolContext, last: Point, at: Point) -> Point {
 
 /// Nearest editable segment, with bounded work and no snapping to dimension artwork itself.
 pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
+    pick_among(cx, p, cx.doc.layers.iter().rev().map(|n| n.as_ref()))
+}
+
+/// [`pick`] among `roots`, topmost first, and what they hold.
+fn pick_among<'a>(cx: &ToolContext, p: Point, roots: impl Iterator<Item = &'a Node>) -> Option<SegmentRef> {
     let mut best = None;
     let mut dist = cx.tol(8.0);
     let mut budget = 20_000usize;
@@ -186,7 +191,7 @@ pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
             }
         }
     }
-    for n in cx.doc.layers.iter().rev() {
+    for n in roots {
         visit(n, p, &mut budget, &mut dist, &mut best);
     }
     best
@@ -601,11 +606,21 @@ fn dimension_under(cx: &ToolContext, p: Point) -> Option<(NodeId, f64)> {
     let nodes: Vec<&Node> = chain.iter().filter_map(|id| cx.doc.node(*id)).collect();
     let below = scope_at.map_or(0, |i| i + 1);
     let outline = opt.outline || nodes.iter().skip(below).any(|n| matches!(n.kind, NodeKind::Layer { preview: false, .. }));
-    let displaced = nodes.iter().enumerate().any(|(i, n)| {
-        vectorcraft_effects::has_geometry(&n.appearance.effects)
-            || (i >= at && n.appearance.items.iter().any(|item| item.visible() && vectorcraft_effects::has_geometry(item.effects())))
+    let item_geometry = |n: &Node| n.appearance.items.iter().any(|item| item.visible() && vectorcraft_effects::has_geometry(item.effects()));
+    let displaced = nodes.iter().enumerate().any(|(i, n)| vectorcraft_effects::has_geometry(&n.appearance.effects) || (i >= at && item_geometry(n)));
+    // The parts of the dimension the press did not land on count too: a geometry effect on any of
+    // them is drawn elsewhere as well.
+    let parts_displaced = cx.doc.node(id).is_some_and(|d| {
+        d.try_walk(&mut |n| {
+            if vectorcraft_effects::has_geometry(&n.appearance.effects) || item_geometry(n) {
+                std::ops::ControlFlow::Break(())
+            } else {
+                std::ops::ControlFlow::Continue(())
+            }
+        })
+        .is_break()
     });
-    if !outline && displaced {
+    if !outline && (displaced || parts_displaced) {
         return None;
     }
     let n = cx.doc.node(id).filter(|_| cx.doc.is_editable(id))?;
@@ -1199,7 +1214,12 @@ impl Tool for DimensionTool {
                     && self.lines.is_empty()
                     && let Some((id, d)) = dimension_under(cx, ev.pos)
                 {
-                    let art = pick(cx, ev.pos).and_then(|e| nearest_on(cx, &e, ev.pos)).map(|q| q.distance(ev.pos));
+                    // In isolation mode only art inside the isolated object competes for the press.
+                    let edge = match cx.hit_options().scope.and_then(|s| cx.doc.node(s)) {
+                        Some(isolated) => pick_among(cx, ev.pos, std::iter::once(isolated)),
+                        None => pick(cx, ev.pos),
+                    };
+                    let art = edge.and_then(|e| nearest_on(cx, &e, ev.pos)).map(|q| q.distance(ev.pos));
                     if art.is_none_or(|a| d < a) {
                         self.grab = Some(id);
                     }
