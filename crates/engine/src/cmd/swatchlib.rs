@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document, the colors patterns brought included], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, and for a color the same process, global or spot kind, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy; a global or spot color it links to that the document lacks comes in with it. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document, the colors patterns, tints and gradients brought included], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -1151,20 +1151,31 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // alone, as adding that swatch finds it under its own name. Paints are compared with their
     // colors linked as `links` says ([`relinked`]).
     let same_kind = |x: &Swatch, w: &Swatch| x.global == w.global && x.spot == w.spot;
+    // A color is the same swatch only as the same kind: a library global color is not the
+    // document's process color of the same name and paint, which a tint cannot link to.
+    let same_color_kind = |x: &Swatch, w: &Swatch| w.paint.color().is_none() || same_kind(x, w);
     let numbered = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| {
         let c = copies.get(w.name.as_str())?;
-        let own = |x: &Swatch| lib_by_name.get(x.name.as_str()).is_some_and(|l| relinked(&l.paint, links) == x.paint);
+        let own = |x: &Swatch| lib_by_name.get(x.name.as_str()).is_some_and(|l| relinked(&l.paint, links) == x.paint && same_color_kind(x, l));
         let found = c.iter().find(|x| !own(x) && x.paint == *paint && same_kind(x, w));
         found.map(|x| x.name.clone())
     };
     let unlinked = HashMap::new();
+    // Whether a library global or spot color that paint `p` links to has no place in `links`
+    // while the document gives its name another swatch, which such a link would find instead.
+    let misplaced = |p: &Paint, links: &HashMap<String, String>| {
+        linked_names(p)
+            .into_iter()
+            .any(|n| !links.contains_key(n) && by_name.contains_key(n) && lib_by_name.get(n).is_some_and(|b| b.global || b.spot))
+    };
     // `paint` is `w`'s paint with the colors it links to as `links` has them in the document.
     let there = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| match (&w.paint, &patterns) {
         (Paint::Pattern { pattern, .. }, Some(src)) => {
             patternlib::present_pattern(d, src, pattern).and_then(|target| library_pattern_swatch(d, w, &target))
         }
+        _ if misplaced(&w.paint, links) => None,
         _ => match by_name.get(w.name.as_str()) {
-            Some(x) if x.paint == *paint => Some(w.name.clone()),
+            Some(x) if x.paint == *paint && same_color_kind(x, w) => Some(w.name.clone()),
             Some(_) => numbered(w, paint, links),
             None if group_names.contains(w.name.as_str()) => numbered(w, paint, links),
             None => (w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == *paint)).then(|| w.name.clone()),
@@ -1324,14 +1335,21 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     // A color a pattern added earlier in this call brought with its art is that
                     // swatch when it shows the library swatch's color: it moves to the library
                     // swatch's place, when its colors link where the library swatch's do: to the
-                    // names `links` gives them, and not elsewhere for a color this call has yet to
-                    // add.
+                    // names `links` gives them, not elsewhere for a color this call has yet to add,
+                    // and otherwise to a color of the library color's paint and process, global or spot kind,
+                    // or under the same name when the library has no such swatch (Registration).
                     let fits = |x: &Paint| {
                         let (ours, theirs) = (linked_names(&w.paint), linked_names(x));
                         ours.len() == theirs.len()
                             && ours.iter().zip(&theirs).all(|(l, t)| match links.get(*l) {
                                 Some(to) => to == t,
-                                None => !picked_names.contains(l),
+                                None => {
+                                    !picked_names.contains(l)
+                                        && match lib_by_name.get(*l) {
+                                            Some(b) => d.swatch(t).is_some_and(|x| x.paint == b.paint && same_kind(x, b)),
+                                            None => l == t,
+                                        }
+                                }
                             })
                     };
                     let same = |to: &str| {
@@ -1381,6 +1399,26 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     None => d.swatches.push(sw),
                 }
                 out.push((w.name.clone(), name));
+            }
+            // A library global or spot color that a tint or gradient added here links to, which the
+            // document does not have and nothing in this call brought, comes in with it, as pasting
+            // art painted with the tint brings its color. It is listed with the colors patterns
+            // brought.
+            let mut wanted: Vec<&str> = vec![];
+            let mut seen: HashSet<&str> = HashSet::new();
+            for (_, w) in &pending {
+                for n in linked_names(&w.paint) {
+                    if n != REGISTRATION && !links.contains_key(n) && seen.insert(n) {
+                        wanted.push(n);
+                    }
+                }
+            }
+            for n in wanted {
+                let Some(b) = lib_by_name.get(n).filter(|b| b.global || b.spot) else { continue };
+                let name = free_copy_in(&mut taken, &b.name, |x| lib_by_name.contains_key(x));
+                d.swatches.push(Swatch { name: name.clone(), ..(*b).clone() });
+                links.insert(n.to_string(), name.clone());
+                brought.push((n.to_string(), name));
             }
             relink_in(d, &pending, &links);
             Ok((out, reused, brought))

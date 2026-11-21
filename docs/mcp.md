@@ -5807,8 +5807,10 @@ another color is the document's numbered copy of the same color when it has one,
 again adds nothing. A pattern the document already holds with its art linked to the document's own color of that name
 is used as it is. A library tint or gradient whose global or spot color comes in under a numbered name, or is in the
 document as such a numbered copy, links to that copy, whether the color is picked before or after it, was added
-earlier or came with a pattern's art. `added` lists the colors
-the pattern's art brings too. A document with
+earlier or came with a pattern's art. A library global color is not the document's process color of the same name and
+paint: it comes in numbered. A global or spot color that a library tint or gradient links to and the document lacks
+comes in with the tint or gradient, under a numbered name when the document gives its name another swatch. `added`
+lists the colors the pattern's art, a tint or a gradient brings too. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
 "`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
 Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
