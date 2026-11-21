@@ -20,8 +20,11 @@
 //! shows that piece. With Smart Guides on, the end of a continuous arc goes onto the nearest tick
 //! of that protractor when the tick lies within the snapping tolerance of the pointer, no other
 //! Smart Guide snaps the point, and neither the grid nor pixels snap drawn points. A sharp-corner
-//! arc sweeps its arc size, so its end is not snapped to a tick. Shift does not constrain Quick Pen
-//! points, so it does not change the snapping.
+//! arc, and a continuous arc that has no direction to follow, sweep the arc size, so their ends are
+//! not snapped to a tick. After a snap setting changes under a still pointer, the hover's preview,
+//! protractor, distance label and Smart Guides are hidden until the pointer moves; when the view,
+//! the document or the selection changes, the canvas hovers the still pointer again. Shift does
+//! not constrain Quick Pen points, so it does not change the snapping.
 
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
@@ -31,7 +34,7 @@ use vectorcraft_doc::{Document, MAX_COORD, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
 
 use crate::draw2::FEEDBACK;
-use crate::guides::{DrawSnap, Leave};
+use crate::guides::{DrawSnap, Leave, SnapSettings};
 use crate::pen::{continue_from, open_end_at};
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
@@ -237,12 +240,14 @@ pub fn arc_circle(sp: &SubPath, piece: &Piece) -> Option<ArcCircle> {
 
 /// The protractor tick nearest the end of a continuous arc ending at `piece.to`: the point on the
 /// arc's circle ([`arc_circle`]) where the sweep is a whole number of [`TICK_STEP`]s. None for
-/// other pieces, an arc without a circle, a sweep that rounds to nothing or to a whole circle, and
-/// a tick past the document's coordinate limit.
+/// other pieces, a continuous arc with no direction to follow (it sweeps the arc size, as a
+/// sharp-corner arc does), an arc without a circle, a sweep that rounds to nothing or to a whole
+/// circle, and a tick past the document's coordinate limit.
 pub fn tick_end(sp: &SubPath, piece: &Piece) -> Option<Point> {
     if piece.stroke != Stroke::ContinuousArc {
         return None;
     }
+    arrival(sp)?;
     let arc = arc_circle(sp, piece)?;
     let step = TICK_STEP.to_radians();
     let s = (arc.sweep / step).round() * step;
@@ -374,10 +379,11 @@ pub struct QuickPenTool {
     press: Option<Press>,
     hover: Option<Point>,
     snap: DrawSnap,
-    /// The pointer while it hovers, and whether it lies on a Smart Guide target ([`Self::landed`]);
-    /// `hover` is where Smart Guides put it. The protractor's tick is applied when the point is
-    /// used ([`Self::hover_end`]), for the action chosen then. A press clears it.
-    pointer: Option<(Point, bool)>,
+    /// The pointer while it hovers, whether it lies on a Smart Guide target ([`Self::landed`]), and
+    /// the snap settings then; `hover` is where Smart Guides put it. The protractor's tick is
+    /// applied when the point is used ([`Self::hover_end`]), for the action chosen then. A press
+    /// clears it.
+    pointer: Option<(Point, bool, SnapSettings)>,
 }
 
 impl Default for QuickPenTool {
@@ -508,10 +514,20 @@ impl QuickPenTool {
 
     /// Where the next click's piece after `sp` ends while the pointer hovers: the hover's snapped
     /// point, on the protractor's tick when [`Self::on_tick`] puts it there. None before the
-    /// pointer moves after a press.
+    /// pointer moves after a press, and while the hover is stale ([`Self::hover_stale`]).
     fn hover_end(&self, cx: &ToolContext, sp: &SubPath) -> Option<Point> {
-        let ((p, landed), q) = (self.pointer?, self.hover?);
+        let (&(p, landed, _), q) = (self.pointer.as_ref()?, self.hover?);
+        if self.hover_stale(cx) {
+            return None;
+        }
         Some(self.on_tick(cx, sp, self.piece_to(q), p, q, landed))
+    }
+
+    /// Whether the snap settings changed since the pointer last moved: the hover's snapped point
+    /// and its tick may then not be where a click puts the point, so the hover shows nothing until
+    /// the pointer moves again.
+    fn hover_stale(&self, cx: &ToolContext) -> bool {
+        self.pointer.as_ref().is_some_and(|(_, _, at)| *at != SnapSettings::of(cx))
     }
 
     /// During a press that adds a piece: the points before that piece, as the press found them
@@ -636,13 +652,20 @@ impl Tool for QuickPenTool {
                 let (on, from) = self.leave(cx).unzip();
                 let q = self.snap.hover(cx, p, on.as_slice(), from.as_ref());
                 self.hover = Some(q);
-                self.pointer = Some((p, on.is_some() && self.landed(cx, p, q, from.as_ref())));
+                self.pointer = Some((p, on.is_some() && self.landed(cx, p, q, from.as_ref()), SnapSettings::of(cx)));
                 vec![]
             }
             PointerKind::Down => {
                 if self.press.is_some() {
                     return vec![];
                 }
+                // The hover shows again when the pointer moves after the press: the point the press
+                // places can lie on a tick away from it. A stale hover's guides stay hidden, also
+                // when the press snaps nothing.
+                if self.hover_stale(cx) {
+                    self.snap.clear();
+                }
+                self.hover = None;
                 self.pointer = None;
                 self.press_down(cx, p)
             }
@@ -812,8 +835,14 @@ impl Tool for QuickPenTool {
         self.pointer = None;
     }
 
+    /// A hover's snapped point and its tick depend on the art and the view under a still pointer.
+    fn wants_rehover(&self) -> bool {
+        self.pointer.is_some()
+    }
+
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let mut o = self.snap.guides().to_vec();
+        // A stale hover's Smart Guides go with its preview.
+        let mut o = if self.hover_stale(cx) { vec![] } else { self.snap.guides().to_vec() };
         let Some((id, sp)) = self.active(cx) else { return o };
         let end = if self.press.is_none() { self.hover_end(cx, sp) } else { None };
         // The arc being drawn: the piece a press drags, or the piece the next click adds while the
@@ -832,6 +861,7 @@ impl Tool for QuickPenTool {
             o.push(Overlay::Line { a: c - Vec2::new(0.0, arm), b: c + Vec2::new(0.0, arm), color: FEEDBACK, dashed: false });
         }
         if self.press.is_none()
+            && !self.hover_stale(cx)
             && let Some(h) = end.or(self.hover)
         {
             if cx.pen_rubber_band

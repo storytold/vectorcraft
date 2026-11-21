@@ -616,6 +616,23 @@ fn a_click_puts_a_continuous_arc_end_on_a_tick() {
     }
 }
 
+/// After a click puts a continuous arc's end on a tick away from the pointer, no preview runs from
+/// the placed end back to where the pointer was; the next move shows the preview again.
+#[test]
+fn a_click_on_a_tick_leaves_no_preview_back_to_the_pointer() {
+    let at = arc_end_61();
+    let v = ViewInfo::default();
+    let mut s = session();
+    continuous_arc_after_a_line(&mut s, v);
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), v).unwrap();
+    press_in(&mut s, &[(at.x, at.y)], v);
+    assert!(drawn_end(&s).distance(tick_60()) < 1e-6);
+    let label = |s: &mut Session| s.overlays(v).iter().any(|o| matches!(o, Overlay::Measure { .. }));
+    assert!(!label(&mut s), "no distance label back to the pointer");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 400.0, 300.0), v).unwrap();
+    assert!(label(&mut s));
+}
+
 /// Hovering near a tick as a continuous arc puts the distance label beside the tick; after Alt
 /// switches the action, the same hover puts it beside the pointer.
 #[test]
@@ -638,6 +655,78 @@ fn a_hover_snaps_to_a_tick_only_for_a_continuous_arc() {
         key(&mut s, ToolKey::AltTap);
         assert!((label(&mut s).unwrap() - off).distance(at) < 1e-9, "{:?}", s.tool_options()["action"]);
     }
+}
+
+/// A hover made with Smart Guides off shows nothing once they are turned on under the still
+/// pointer, so it shows no tick that a click would not use (another path's anchor under the
+/// pointer takes the click). The next move shows the hover again, its label beside the anchor;
+/// once Smart Guides are turned off again, its guides are hidden with it, also after a click.
+#[test]
+fn a_hover_shows_nothing_after_smart_guides_change() {
+    let at = arc_end_61();
+    let off = ViewInfo { smart_guides: false, ..Default::default() };
+    let on = ViewInfo::default();
+    let mut s = session();
+    s.execute("shape.line", &json!({"x1": at.x, "y1": at.y, "x2": 600, "y2": at.y})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    continuous_arc_after_a_line(&mut s, off);
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), off).unwrap();
+    let label = |s: &mut Session, v: ViewInfo| {
+        s.overlays(v).iter().find_map(|o| match o {
+            Overlay::Measure { p, .. } => Some(*p),
+            _ => None,
+        })
+    };
+    assert!(label(&mut s, off).is_some());
+    assert_eq!(label(&mut s, on), None, "the hover from before the change shows nothing");
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), on).unwrap();
+    let off_anchor = label(&mut s, on).unwrap() - at;
+    assert!(off_anchor.x > 0.0 && (off_anchor.x - off_anchor.y).abs() < 1e-9, "the label sits diagonally off the anchor: {off_anchor:?}");
+    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
+    assert!(!only_points(&mut s, on));
+    assert!(only_points(&mut s, off), "only the path's points show");
+    // A click before the pointer moves does not bring the stale hover back.
+    press_in(&mut s, &[(400.0, 300.0)], off);
+    assert_eq!(label(&mut s, off), None, "no label for the stale hover after the click");
+}
+
+/// While the pointer hovers, the tool asks the canvas to hover it again when the view, the document
+/// or the selection changes under a still pointer, so the snapped point follows the art; a press
+/// stops it until the next move.
+#[test]
+fn a_hover_is_hovered_again_when_the_art_changes() {
+    let mut s = session();
+    continuous_arc_after_a_line(&mut s, view());
+    assert!(!s.tool_wants_rehover());
+    s.pointer(&PointerEvent::new(PointerKind::Move, 280.0, 180.0), view()).unwrap();
+    assert!(s.tool_wants_rehover());
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 180.0), view()).unwrap();
+    assert!(!s.tool_wants_rehover());
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 180.0), view()).unwrap();
+    assert!(!s.tool_wants_rehover());
+}
+
+/// A hover on the path's last point, which another path's anchor shares, shows that anchor's Smart
+/// Guide; after Smart Guides are turned off, a click there adds nothing and the guide stays hidden
+/// while the button is held and after it is let go.
+#[test]
+fn a_click_that_adds_nothing_keeps_a_stale_hover_hidden() {
+    let off = ViewInfo { smart_guides: false, ..Default::default() };
+    let on = ViewInfo::default();
+    let mut s = session();
+    s.execute("shape.line", &json!({"x1": 200, "y1": 100, "x2": 200, "y2": 400})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    continuous_arc_after_a_line(&mut s, on);
+    s.pointer(&PointerEvent::new(PointerKind::Move, 200.0, 100.0), on).unwrap();
+    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
+    assert!(!only_points(&mut s, on), "the anchor's guide shows");
+    assert!(only_points(&mut s, off));
+    let steps = undo_steps(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), off).unwrap();
+    assert!(only_points(&mut s, off), "the guide stays hidden while the button is held");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 100.0), off).unwrap();
+    assert_eq!(undo_steps(&s), steps, "the click adds nothing");
+    assert!(only_points(&mut s, off), "the guide stays hidden");
 }
 
 /// While a press drags an arc, the tool shows its protractor; while it drags a line, it shows none.
