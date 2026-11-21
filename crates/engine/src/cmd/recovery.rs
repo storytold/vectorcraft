@@ -1465,8 +1465,18 @@ fn targets(s: &mut Session, store: &dyn RecoveryStore, cmd: &str, p: &Value) -> 
 /// (for Save As) and format. The copy moves into this session's area (another crash keeps it).
 fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> Result<Value> {
     let bytes = store.read(&format!("{file}{DOC_EXT}")).map_err(EngineError::Other)?;
-    let meta_bytes = store.read(&format!("{file}{META_EXT}")).unwrap_or_default();
-    let meta: Meta = serde_json::from_slice(&meta_bytes).unwrap_or_default();
+    // A details entry that is missing or can't be parsed does not say whether a script's command
+    // changed the document: the copy restores as one a script opened, and the details written for
+    // it say so.
+    let read = store.read(&format!("{file}{META_EXT}")).ok().and_then(|b| serde_json::from_slice::<Meta>(&b).ok().map(|m| (m, b)));
+    let (meta, meta_bytes) = match read {
+        Some(both) => both,
+        None => {
+            let meta = Meta { by_script: true, ..Meta::default() };
+            let bytes = serde_json::to_vec_pretty(&meta).map_err(|e| EngineError::Other(e.to_string()))?;
+            (meta, bytes)
+        }
+    };
     let (mut doc, _, mut warnings) = fileio::native_file(&bytes).map_err(|e| EngineError::Other(format!("recovery copy `{file}`: {e}")))?;
     // A frame whose first paragraph continues from the frame before draws it without the
     // paragraph's first-line indent and list marker.

@@ -1756,3 +1756,28 @@ fn a_crash_while_a_copy_is_restored_keeps_a_scripts_change() {
         assert!(st.by_script.is_some(), "every restored copy keeps the script's change: {}", st.title());
     }
 }
+
+/// A copy whose details entry is missing or can't be parsed restores as a document a script
+/// opened, and so does the copy that restore writes, after a later crash; a valid details entry
+/// without the script's mark restores as the person left it.
+#[test]
+fn a_copy_without_readable_details_restores_as_a_scripts_document() {
+    let cases: [Option<&[u8]>; 3] = [Some(b"{ not json"), None, Some(b"{}")];
+    for details in cases {
+        let store = Arc::new(MemoryStore::default());
+        let mut s = session_in(&store);
+        let r = s.execute("file.recovery.save", &json!({})).unwrap();
+        let entry = format!("{}.json", r["saved"][0]["file"].as_str().unwrap());
+        drop(s);
+        match details {
+            Some(bytes) => store.write(&entry, bytes).unwrap(),
+            None => store.remove(&entry).unwrap(),
+        }
+        let by_script = details != Some(b"{}".as_slice());
+        for round in 1..=2 {
+            let mut s = relaunch(&store);
+            assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1, "{details:?}, restore {round}");
+            assert_eq!(s.doc().unwrap().by_script.is_some(), by_script, "{details:?}, restore {round}");
+        }
+    }
+}
