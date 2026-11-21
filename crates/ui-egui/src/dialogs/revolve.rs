@@ -739,6 +739,15 @@ fn rail_width(ui: &egui::Ui) -> f32 {
     (ui.available_width() - VALUE_W - 24.0 - 18.0).clamp(40.0, 134.0)
 }
 
+/// The value text typed into a [`number`] field showing `suffix` reads as: a length in `unit` (read
+/// in the `typed` unit when one is given), otherwise a number with the field arithmetic.
+fn typed_value(text: &str, suffix: &str, unit: Option<Unit>, typed: Option<Unit>) -> Option<f64> {
+    match unit {
+        Some(u) => typed.unwrap_or(u).parse(text).map(|v| u.from_pt(v)),
+        None => widgets::typed_number_with(text, suffix),
+    }
+}
+
 /// A value can be typed, dragged, scrubbed by its label, or moved on its slider.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64, f64), suffix: &str, decimals: usize, unit: Option<Unit>) {
@@ -770,12 +779,7 @@ pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, r
                         .max_decimals(decimals)
                         .suffix(&suffix)
                         .update_while_editing(false)
-                        .custom_parser(|s| {
-                            unit.map_or_else(
-                                || vectorcraft_doc::parse_number(&s.replace(['°', '%'], "")),
-                                |u| typed.unwrap_or(u).parse(s).map(|v| u.from_pt(v)),
-                            )
-                        }),
+                        .custom_parser(|s| typed_value(s, &suffix, unit, typed)),
                 )
             })
             .inner;

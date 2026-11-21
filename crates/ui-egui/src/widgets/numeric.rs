@@ -947,14 +947,58 @@ fn bounded_field_reading(
 /// automatic value as `(12)`), one pair of parentheses around the whole text is dropped first, so
 /// `(12)` reads as 12. Any other parentheses are refused: `(10+5)*2` reads as nothing, not as
 /// `10+5*2`. A decimal comma is read ([`decimal_point`]) after the suffix, `%`, `°` and that pair
-/// are dropped, so `(1,000)` and `1,000%` are refused as thousands rather than read as 1.
+/// are dropped, so `(1,000)` and `1,000%` are refused as thousands rather than read as 1. The
+/// suffix, `%` or `°` between two digits is refused: `1%2` reads as nothing, not as 12. A suffix
+/// that is a multiplication sign (the Stroke panel's Limit, `4 x`) is the suffix only at the end of
+/// the text, so `2x3` reads as 6.
 pub(super) fn field_number(buf: &str, suffix: &str, parentheses: bool) -> Option<f64> {
     let suffix = suffix.trim();
+    let (buf, suffix) = if matches!(suffix, "x" | "X" | "×") { (buf.trim_end().strip_suffix(suffix).unwrap_or(buf), "") } else { (buf, suffix) };
+    if !marks_follow_operands(buf, suffix) {
+        return None;
+    }
     let bare = if suffix.is_empty() { buf.to_string() } else { buf.replace(suffix, "") };
     let bare = bare.replace(['%', '°'], "");
     let bare = bare.trim();
     let bare = if parentheses { bare.strip_prefix('(').and_then(|b| b.strip_suffix(')')).unwrap_or(bare) } else { bare };
     vectorcraft_doc::parse_number(&decimal_point(bare))
+}
+
+/// Whether each `suffix`, `%` and `°` in `buf` comes right after an operand (a digit, a decimal
+/// point or comma, or `)`) and is followed only by an operator, `)` or the end of the text.
+fn marks_follow_operands(buf: &str, suffix: &str) -> bool {
+    [suffix, "%", "°"].into_iter().filter(|m| !m.is_empty()).all(|mark| {
+        buf.match_indices(mark).all(|(at, m)| {
+            let before = buf.get(..at).and_then(|s| s.trim_end().chars().next_back());
+            let after = buf.get(at + m.len()..).and_then(|s| s.trim_start().chars().next());
+            before.is_some_and(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | ')'))
+                && after.is_none_or(|c| matches!(c, '+' | '-' | '*' | '/' | 'x' | 'X' | '×' | ')' | '%' | '°'))
+        })
+    })
+}
+
+/// A unitless number typed into a field that is not a [`bounded_field`] (an `egui::DragValue`'s
+/// parser, a dialog's text field): the same `+ - * /` and `x` arithmetic and decimal comma as
+/// [`field_number`], so `45*2`, `4x3` and `12,5` read as 90, 12 and 12.5. `%` and `°` are refused.
+pub(crate) fn typed_number(text: &str) -> Option<f64> {
+    typed_number_with(text, "")
+}
+
+/// [`typed_number`] for a field showing `suffix` after its value (`s`, `%` or `°`), which may
+/// follow any operand as in [`field_number`]. `%` and `°` are refused unless they are the suffix.
+/// A minus sign (U+2212) reads as `-`, as `egui::DragValue`'s own parser reads it.
+pub(crate) fn typed_number_with(text: &str, suffix: &str) -> Option<f64> {
+    let suffix = suffix.trim();
+    if ['%', '°'].into_iter().any(|mark| text.contains(mark) && !suffix.contains(mark)) {
+        return None;
+    }
+    field_number(&text.replace('\u{2212}', "-"), suffix, false)
+}
+
+/// A length typed into a field that is not a length field widget, in points: a bare number is in
+/// points, and a unit, arithmetic and a decimal comma read as in a length field (`4x3`, `2 mm`).
+pub(crate) fn typed_points(text: &str) -> Option<f64> {
+    vectorcraft_doc::Unit::Points.parse(&decimal_point(&text.replace('\u{2212}', "-")))
 }
 
 /// The text [`plain_field`] shows for `value`: at most `decimals` places, without trailing zeros,

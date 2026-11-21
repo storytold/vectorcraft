@@ -2320,7 +2320,8 @@ fn hold_row(ui: &mut egui::Ui, t: &Tokens, d: &mut Dialog) {
             ui.label(egui::RichText::new(tl!("Hold Shortcut Delay")).color(t.text_dim));
             let (min, max) = vectorcraft_engine::KEY_HOLD_DELAY_RANGE;
             let mut delay = dialog_hold_delay(d);
-            if ui.add(egui::DragValue::new(&mut delay).range(min..=max).speed(0.01).fixed_decimals(2).suffix(" s")).changed() {
+            let field = egui::DragValue::new(&mut delay).range(min..=max).speed(0.01).fixed_decimals(2).suffix(" s");
+            if ui.add(field.custom_parser(|s| crate::widgets::typed_number_with(s, "s"))).changed() {
                 d.fields.insert("keyHoldDelay".into(), json!(delay));
             }
         }
@@ -3879,6 +3880,45 @@ mod tests {
         assert!(app.take_prefs_changed(), "OK asks the host to write the preferences file");
         assert_eq!(app.ui.engine_prefs["holdShortcuts"], json!(true));
         assert_eq!(app.ui.engine_prefs["keyHoldDelay"], json!(0.5));
+    }
+
+    /// The Hold Shortcut Delay reads typed text as other number fields do, its `s` after any operand:
+    /// `0.25 s x 2` is half a second.
+    #[test]
+    fn the_hold_shortcut_delay_takes_field_arithmetic() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("holdShortcuts".into(), json!(true));
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out.shapes
+                .into_iter()
+                .filter_map(|c| match c.shape {
+                    egui::Shape::Text(t) => Some((t.galley.text().to_string(), t.visual_bounding_rect())),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        frame(&mut app, vec![]);
+        let texts = frame(&mut app, vec![]);
+        let shown = format!("{:.2}", dialog_hold_delay(app.ui.dialog.as_ref().unwrap()));
+        let at = texts.iter().find(|(t, _)| *t == shown).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{shown}` in {texts:?}"));
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(true)]);
+        frame(&mut app, vec![button(false)]);
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![egui::Event::Text("0.25 s x 2".into())]);
+        frame(&mut app, vec![enter]);
+        frame(&mut app, vec![]);
+        // Enter may also end the dialog with OK, which writes the delay to the preferences.
+        let delay = app.ui.dialog.as_ref().map_or(app.session.prefs.key_hold_delay, dialog_hold_delay);
+        assert_eq!(delay, 0.5, "0.25 s x 2");
     }
 
     /// The info button shows how hold shortcuts work.

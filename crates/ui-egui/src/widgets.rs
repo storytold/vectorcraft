@@ -62,7 +62,7 @@ pub use dropdowns::{
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
 pub(crate) use labels::{dim_label_width, field_panel_label, label_field, take_previous_label, text_width};
-pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
+pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_number, typed_number_with, typed_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
     num_field_within_empty, opt_field, opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped,
@@ -655,6 +655,47 @@ mod field_number_tests {
         }
         assert_eq!(field_number("45*2°", "°", false), Some(90.0));
         assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
+    }
+
+    /// A field that is not a numeric field widget (a drag value's text, a dialog's text field) reads
+    /// what a plain field reads: arithmetic, `x` as a multiplication sign and a decimal comma, with
+    /// `%` and `°` only when the field shows them.
+    #[test]
+    fn typed_numbers_take_field_arithmetic() {
+        for (text, want) in [("45*2", 90.0), ("4x3", 12.0), (" 10 + 5 ", 15.0), ("100/4", 25.0), ("12,5", 12.5), ("7", 7.0)] {
+            assert_eq!(super::typed_number(text), Some(want), "{text}");
+        }
+        for text in ["", "abc", "1,000", "(12)", "3%", "2°", "1e3", "1 000"] {
+            assert_eq!(super::typed_number(text), None, "{text}");
+        }
+        assert_eq!(super::typed_number_with("12,5%", "%"), Some(12.5));
+        assert_eq!(super::typed_number_with("45°", "°"), Some(45.0));
+        assert_eq!(super::typed_number_with("45%", "°"), None, "a mark the field does not show");
+        assert_eq!(super::typed_points("4x3"), Some(12.0));
+        assert_eq!(super::typed_points("1 in"), Some(72.0));
+        assert_eq!(super::typed_points("\u{2212}2"), Some(-2.0));
+        assert_eq!(super::typed_number("\u{2212}5"), Some(-5.0), "a minus sign");
+        assert_eq!(super::typed_number_with("0.25 s x 2", "s"), Some(0.5), "the field's suffix");
+        assert_eq!(super::typed_number("0.25 s"), None, "a suffix the field does not show");
+        // The suffix, `%` and `°` only follow an operand; between two digits they are refused.
+        for (text, suffix) in [("1%2", "%"), ("4°5", "°"), ("0.2s5", "s"), ("%5", "%"), ("2 % 3", "%")] {
+            assert_eq!(super::typed_number_with(text, suffix), None, "{text}");
+        }
+        assert_eq!(field_number("1%2", "%", false), None, "a numeric field's own suffix");
+        assert_eq!(field_number("1%2", "", false), None, "`%` in any field");
+        assert_eq!(field_number("50%-2", "%", false), Some(48.0), "subtraction after the suffix");
+        assert_eq!(super::typed_number_with("45°\u{2212}15", "°"), Some(30.0), "a minus sign after the suffix");
+        assert_eq!(super::typed_number_with("25% + 5%", "%"), Some(30.0));
+    }
+
+    /// A field whose suffix is a multiplication sign (the Stroke panel's Limit, `4 x`) reads `x`
+    /// inside the text as multiplication and only a final one as its suffix.
+    #[test]
+    fn a_multiplication_sign_suffix_still_multiplies() {
+        for (text, want) in [("2x3", 6.0), ("4 x", 4.0), ("2 x 3 x", 6.0), ("5", 5.0), ("10x", 10.0)] {
+            assert_eq!(field_number(text, " x", false), Some(want), "{text}");
+        }
+        assert_eq!(field_number("x4", " x", false), None);
     }
 
     /// A resolution field reads the unit it shows: "200 ppp" in a French interface.

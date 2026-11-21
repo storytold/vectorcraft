@@ -88,10 +88,12 @@ pub(super) fn contour_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     ui.label(egui::RichText::new(tl!("Contour")).color(t.text_strong));
-                    // The distance: a drag or typed value is applied when it ends, as one step.
+                    // The distance: a drag or typed value is applied when it ends, as one step. Typed
+                    // text reads as a length field's does (`4x3`, `2 mm`).
                     let key = egui::Id::unique("contour-bar-offset");
                     let mut v = ui.data(|d| d.get_temp::<f64>(key)).unwrap_or(shown);
-                    let resp = ui.add(egui::DragValue::new(&mut v).speed(0.5).range(-1e5..=1e5).suffix(" pt"));
+                    let resp =
+                        ui.add(egui::DragValue::new(&mut v).speed(0.5).range(-1e5..=1e5).suffix(" pt").custom_parser(crate::widgets::typed_points));
                     if resp.dragged() || resp.has_focus() {
                         ui.data_mut(|d| d.insert_temp(key, v));
                     }

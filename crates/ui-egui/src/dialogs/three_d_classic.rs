@@ -128,7 +128,8 @@ pub(super) fn map_art_controls(app: &crate::VectorcraftApp, ui: &mut egui::Ui, d
             next = Some(current - 1);
         }
         let mut typed = current;
-        let field = ui.add_sized([44.0, 24.0], egui::DragValue::new(&mut typed).range(1..=count).speed(0.1));
+        let field = egui::DragValue::new(&mut typed).range(1..=count).speed(0.1).custom_parser(crate::widgets::typed_number);
+        let field = ui.add_sized([44.0, 24.0], field);
         field.widget_info(|| egui::WidgetInfo::labeled(egui::Role::SpinButton, true, tl!("Surface")));
         if field.changed() {
             next = Some(typed);

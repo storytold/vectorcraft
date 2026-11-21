@@ -111,14 +111,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// A number field's value: a number, or a string that reads as one (`"3"`, `"40%"`); `None` for a
-/// blank field. `Err` names the field when it holds anything else.
-fn number(d: &Dialog, key: &str, name: &str) -> Result<Option<f64>, String> {
+/// A number field's value: a number, or a string that reads as one (`"3"`, `"20*2"`, and `"40%"`
+/// when `suffix` is `%`); `None` for a blank field. `Err` names the field when it holds anything else.
+fn number(d: &Dialog, key: &str, name: &str, suffix: &str) -> Result<Option<f64>, String> {
     let v = match d.fields.get(key) {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::String(s)) if s.trim().is_empty() => return Ok(None),
         Some(Value::Number(n)) => n.as_f64(),
-        Some(Value::String(s)) => s.trim().trim_end_matches('%').trim().parse::<f64>().ok(),
+        Some(Value::String(s)) => crate::widgets::typed_number_with(s, suffix),
         Some(_) => None,
     };
     v.filter(|v| v.is_finite()).map(Some).ok_or_else(|| format!("{name} must be a number"))
@@ -135,7 +135,7 @@ fn params(d: &Dialog) -> Result<Map<String, Value>, String> {
     let unchanged = |key: &str, v: &Value| initial.and_then(|m| m.get(key)) == Some(v);
     let opened_with = |key: &str, v: f64| initial.and_then(|m| m.get(key)).and_then(Value::as_f64) == Some(v);
     let mut p = Map::new();
-    if let Some(n) = number(d, "warichuLines", "Lines")?.filter(|&n| !opened_with("warichuLines", n)) {
+    if let Some(n) = number(d, "warichuLines", "Lines", "")?.filter(|&n| !opened_with("warichuLines", n)) {
         let n = n.round().clamp(f64::from(*WARICHU_LINES.start()), f64::from(*WARICHU_LINES.end()));
         // Within 1..6 after the clamp, so the cast keeps the value.
         let v = json!(n as u8);
@@ -155,7 +155,7 @@ fn params(d: &Dialog) -> Result<Map<String, Value>, String> {
     {
         p.insert("warichuGap".into(), json!(v));
     }
-    if let Some(n) = number(d, "warichuScale", "Scale")?.filter(|&n| !opened_with("warichuScale", n)) {
+    if let Some(n) = number(d, "warichuScale", "Scale", "%")?.filter(|&n| !opened_with("warichuScale", n)) {
         let v = n.clamp(*WARICHU_SCALE.start(), *WARICHU_SCALE.end());
         if !opened_with("warichuScale", v) {
             p.insert("warichuScale".into(), json!(v));
@@ -255,6 +255,25 @@ mod tests {
         assert_eq!(params(&d), Ok(Map::new()));
         d.fields.insert("warichuGap".into(), json!(150.0));
         assert_eq!(params(&d).unwrap().get("warichuGap"), Some(&json!(MAX_WARICHU_GAP)));
+    }
+
+    /// Lines and Scale given as text read as other number fields read it: `1+2` lines and `30x2%`.
+    #[test]
+    fn warichu_settings_dialog_reads_field_arithmetic() {
+        let opened = json!({"warichuLines": 2, "warichuGap": 0.0, "warichuScale": 50.0});
+        let mut fields = opened.clone();
+        fields[INITIAL] = opened;
+        let mut d = Dialog::new(KIND, fields);
+        d.fields.insert("warichuLines".into(), json!("1+2"));
+        d.fields.insert("warichuScale".into(), json!("30x2%"));
+        let p = params(&d).unwrap();
+        assert_eq!((p.get("warichuLines"), p.get("warichuScale")), (Some(&json!(3)), Some(&json!(60.0))));
+        // `%` only in Scale, and neither field reads an exponent or a mark between two digits.
+        for (key, text) in [("warichuLines", "3%"), ("warichuLines", "1e0"), ("warichuScale", "1%2"), ("warichuScale", "2e1")] {
+            let mut d = d.clone();
+            d.fields.insert(key.into(), json!(text));
+            assert!(params(&d).is_err(), "{key} {text}");
+        }
     }
 
     /// Characters that differ open a blank field; OK leaves that value alone and sets the others.
