@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 
 use craft::automation::actions::{ActionColor, ActionList, ActionStep};
 use craft::automation::ui::actions::LibraryPrompt;
-use craft::ui_panels::dialog::PromptChoice; // PLAN: assumed path of craft-ui-panels in the app
+use craft::ui::dialog::PromptChoice; // PLAN: assumed path of craft-ui-panels in the app
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 

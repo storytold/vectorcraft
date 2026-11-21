@@ -10,7 +10,7 @@ use vectorcraft_engine::Session;
 use super::brushes::BrushLibraries;
 use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
 use crate::VectorcraftApp;
-use crate::widgets::PanelDrag;
+use crate::panel_drag::PanelDrag;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

@@ -30,7 +30,7 @@ use crate::VectorcraftApp;
 use crate::dialogs::blend_options::SPACING;
 // PLAN: assumed `edits` module path for wg.A16 and `widgets::general_lengths` for cv.B5b
 use crate::edits::{EditPath, apply_edits};
-use crate::widgets::general_lengths;
+use crate::canvas::general_lengths;
 
 pub const ID: &str = "blend";
 

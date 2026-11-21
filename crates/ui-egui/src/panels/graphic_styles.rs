@@ -43,7 +43,7 @@ use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::{alt_held, selection_len};
 use crate::VectorcraftApp;
 use crate::menus::Item;
-use crate::widgets::PanelDrag;
+use crate::panel_drag::PanelDrag;
 
 /// A style of the panel: its name, which is unique in a document.
 pub(crate) type StyleKey = String;

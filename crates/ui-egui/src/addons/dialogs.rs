@@ -10,8 +10,8 @@ use egui::Context;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-// PLAN: assumed `crate::dialogs::form::LivePreview` (widgets-w11 owns wg.A20, the module is not given)
-use crate::dialogs::form::LivePreview;
+// PLAN: assumed `crate::dialogs::preview::LivePreview` (widgets-w11 owns wg.A20, the module is not given)
+use crate::dialogs::preview::LivePreview;
 
 #[cfg(test)]
 pub(crate) mod tests;

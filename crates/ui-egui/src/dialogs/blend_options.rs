@@ -16,7 +16,7 @@ use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue,
 use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Value, json};
 
-use super::form::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
+use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
 use super::host::{HeldOptions, open_held_with};
 use crate::VectorcraftApp;
 use crate::units::general_lengths; // PLAN: assumed path of cv.B5b's `general_lengths`

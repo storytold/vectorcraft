@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::{SIMPLIFY_LEVEL, SMOOTH_AUTO_LEVEL, auto_simplify_level, simplify_level_tolerance};
 use vectorcraft_geom::Rect;
 
-use super::form::LivePreview;
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
 
 /// Which command a slider strip previews.

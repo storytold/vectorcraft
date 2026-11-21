@@ -33,7 +33,7 @@ use std::sync::atomic::Ordering;
 use craft::ui::docking::Action;
 use craft::behavior::dock::DockEdge;
 use craft::ui::runtime::commands::keymap::CommandRef;
-use craft::ui::patterns::panels::RailFooter;
+use craft::ui::rails::RailFooter;
 use craft::ui::patterns::form_dialogs::{
     ActionEnabled, DialogFields, FieldValue, HostedListManager, HostedParamDialog, ListManagerAction, ListManagerChoice, ListManagerEntry,
     ListManagerWords, Param, ParamDialog, ParamKind, ParamResult,
@@ -340,8 +340,8 @@ fn open_new(app: &mut VectorcraftApp) -> Result<(), String> {
 }
 
 /// The id Manage Toolbars' dialog has on the host.
-fn manage_id() -> craft::ui::patterns::panels::DialogId {
-    craft::ui::patterns::panels::dialog_id(MANAGE_KEY)
+fn manage_id() -> craft::ui::dialog::DialogId {
+    craft::ui::dialog::dialog_id(MANAGE_KEY)
 }
 
 /// Opens Manage Toolbars; one already open stays.
@@ -626,7 +626,7 @@ mod tests {
         // Without a name: New Toolbar opens on the dialog host, and makes no toolbar by itself.
         window_frame(&mut app, &ctx, 0.0, 800.0);
         assert_eq!(app.run("window.toolbar.new", json!({})).unwrap(), Value::Null);
-        assert!(app.dialogs().get_mut_by_id::<HostedParamDialog>(craft::ui::patterns::panels::dialog_id(NEW_KEY)).is_some());
+        assert!(app.dialogs().get_mut_by_id::<HostedParamDialog>(craft::ui::dialog::dialog_id(NEW_KEY)).is_some());
         assert_eq!(app.ui.custom_toolbars.len(), 1);
         app.run("window.toolbar.new", json!({"name": "Toolbar 1"})).unwrap();
         let names: Vec<&str> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();

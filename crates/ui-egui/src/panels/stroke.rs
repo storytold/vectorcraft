@@ -20,8 +20,8 @@ use craft::ui::primitives::{
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::style::DataColor;
-use craft::ui::text::linked::{LinkMode, LinkedFields};
-use craft::ui::text::number::{NumberField, NumberOutput, NumberPick, StepArrows};
+use craft::ui::text::{LinkMode, LinkedFields};
+use craft::ui::text::{NumberField, NumberOutput, NumberPick, StepArrows};
 use egui::{Rect, Ui, pos2};
 use serde::Serialize;
 use serde::de::DeserializeOwned;

@@ -9,7 +9,7 @@ use vectorcraft_engine::cmd::webexport;
 use vectorcraft_render::encode::web::ColorSort;
 
 // PLAN: assumed path `craft::ui::patterns::form_dialogs::save_for_web` for the ex.W9 items.
-use craft::ui::patterns::form_dialogs::save_for_web::{ColorTableEdit, ColorTableEvent, TableMarks, TableOrder};
+use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, TableMarks, TableOrder};
 
 /// `c` as lowercase `#rrggbb`.
 fn hex(c: [u8; 3]) -> String {

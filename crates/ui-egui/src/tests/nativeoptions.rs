@@ -2,7 +2,7 @@
 //! Linked Files, Embed ICC Profiles, Create PDF-Compatible File, Use Compression and Preview; the
 //! web's Save As dialog shows them too.
 
-use craft::ui::patterns::panels::dialog::{OpenDialog, StandardPrompt};
+use craft::ui::dialog::{OpenDialog, StandardPrompt};
 use serde_json::{Value, json};
 
 use crate::dialogs::confirm::{REPLACE_FILES, ReplaceFiles};

@@ -12,7 +12,7 @@ use vectorcraft_geom::Point;
 use super::{CarriedArt, Dropped, Payload, apply_drop};
 use crate::panels::graphic_styles::StyleKey;
 use crate::panels::symbols::SymbolKey;
-use crate::widgets::PanelDrag;
+use crate::panel_drag::PanelDrag;
 use crate::{VectorcraftApp, canvas};
 
 /// One frame of the canvas inside a central panel. → nothing; the app's view is set by it.

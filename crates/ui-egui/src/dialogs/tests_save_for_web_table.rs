@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::cmd::webexport;
 
 // PLAN: assumed path `craft::ui::patterns::form_dialogs::save_for_web` for the ex.W9 items.
-use craft::ui::patterns::form_dialogs::save_for_web::{ColorTableEdit, ColorTableEvent, TableOrder};
+use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, TableOrder};
 
 use super::save_for_web::color_table::{apply, marks, restore, shift};
 use super::tests_export::{frame, set};

@@ -41,7 +41,7 @@ use vectorcraft_engine::cmd::swatchlib;
 use super::swatches::{self, colour_libraries, limit_key, limit_name};
 use super::{active_paint, apply_click, color_json, library_panel, paint_params};
 use crate::VectorcraftApp;
-use crate::widgets::PanelDrag;
+use crate::panel_drag::PanelDrag;
 
 /// The base colour before one is set: an orange.
 const DEFAULT_BASE: Color = Color::Rgb { r: 230.0 / 255.0, g: 120.0 / 255.0, b: 40.0 / 255.0 };

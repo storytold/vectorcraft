@@ -5,7 +5,8 @@
 use std::sync::{Arc, Mutex};
 
 use craft::host::PickRequest;
-use craft::ui::behavior::{CanvasView, DropOperation};
+use craft::behavior::CanvasView;
+use craft::ui::contract::DropOperation;
 use craft::ui::buttons::{Button, Link};
 use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, Trigger, clicked};
 use craft::ui::display::{Badge, Picture, PictureSize, Shade, Text};

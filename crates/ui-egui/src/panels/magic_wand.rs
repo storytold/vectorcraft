@@ -18,7 +18,7 @@ use vectorcraft_engine::cmd::wand::color_tolerance_max;
 use super::{part_hidden, set_part_hidden};
 use crate::VectorcraftApp;
 // PLAN: assumed `widgets::stroke_lengths(app) -> LengthUnits` beside `general_lengths` (cv.B5b)
-use crate::widgets::stroke_lengths;
+use crate::canvas::stroke_lengths;
 
 const STROKE_KEY: &str = "wand-hide-stroke";
 const TRANSPARENCY_KEY: &str = "wand-hide-transparency";

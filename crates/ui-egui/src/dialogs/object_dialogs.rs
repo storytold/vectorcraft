@@ -8,8 +8,8 @@ use super::{
     path_ops, perspective_grid, perspective_presets, saved_names, shapes, simplify_slider, slices, smooth_slider, transform, transform_each,
     width_point,
 };
-// PLAN: assumed crate::widgets::LivePreview (widgets-w11)
-use crate::widgets::LivePreview;
+// PLAN: assumed crate::dialogs::preview::LivePreview (widgets-w11)
+use crate::dialogs::preview::LivePreview;
 use crate::VectorcraftApp;
 
 /// What the object dialogs keep between frames. Held OK records are `app.held`, not here.

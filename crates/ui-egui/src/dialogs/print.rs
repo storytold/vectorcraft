@@ -19,7 +19,8 @@
 use std::sync::{Arc, LazyLock, mpsc};
 
 use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
-use craft::ui::behavior::{Anchor9, EditEvent, EditEvents, Mixed};
+use craft::ui::pickers::Anchor9;
+use craft::behavior::{EditEvent, EditEvents, Mixed};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
 use craft::ui::patterns::presets::{NamedPresetEvent, PresetRow};
 use craft::ui::runtime::env::units::{LengthUnits, UnitKind};

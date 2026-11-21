@@ -18,7 +18,7 @@ use vectorcraft_geom::PathData;
 
 use super::form;
 // PLAN: assumed `LivePreview` is exported by `dialogs::form` (wg.A20, widgets-w11).
-use super::form::LivePreview;
+use super::preview::LivePreview;
 use super::host::{HeldOptions, open_held, open_held_with};
 use crate::VectorcraftApp;
 

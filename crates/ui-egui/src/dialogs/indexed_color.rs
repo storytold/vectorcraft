@@ -12,7 +12,7 @@ use vectorcraft_render::encode::quantize::{Dither, Reduction};
 
 use super::host::open_held;
 use crate::VectorcraftApp;
-use crate::widgets::LivePreview;
+use crate::dialogs::preview::LivePreview;
 
 /// The dialog kind of Convert to Indexed Color.
 pub const KIND: &str = "indexedColor";

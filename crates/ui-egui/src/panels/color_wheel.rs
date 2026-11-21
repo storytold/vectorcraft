@@ -538,8 +538,8 @@ fn document_colors_row(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut U
         .activate(ActivateOn::Click)
         // The row picks by click and holds no selection of its own.
         .selection(Bind::given(Selection::default()))
-        // PLAN: assumed `crate::widgets::PanelDrag::paint` survives widgets-w15 as the panel drag payload.
-        .drag_payload(move |d| d.keys.first().and_then(|&i| drag.colors.get(i)).map(|u| crate::widgets::PanelDrag::paint(u.paint())))
+        // PLAN: assumed `crate::panel_drag::PanelDrag::paint` survives widgets-w15 as the panel drag payload.
+        .drag_payload(move |d| d.keys.first().and_then(|&i| drag.colors.get(i)).map(|u| crate::panel_drag::PanelDrag::paint(u.paint())))
         .show_all(ui);
     out.open.and_then(|i| cache.colors.get(i).cloned())
 }

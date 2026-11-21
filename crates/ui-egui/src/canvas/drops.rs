@@ -22,7 +22,7 @@ use crate::panels::brushes::BrushKey;
 use crate::panels::graphic_styles::StyleKey;
 use crate::panels::libraries::{LibraryKey, LibraryKind}; // PLAN: assumed `LibraryKind::of_panel(&str) -> Option<LibraryKind>` with Graphic, Symbol, Brush
 use crate::panels::symbols::SymbolKey;
-use crate::widgets::PanelDrag;
+use crate::panel_drag::PanelDrag;
 
 /// Artwork a Selection move carries out of its canvas: the objects the move started with (an Alt-copy's preview copies
 /// are not carried), the press point they were grabbed at, and the source's revision when the carry began, so an edited

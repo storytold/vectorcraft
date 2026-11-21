@@ -24,8 +24,8 @@ use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
 use craft::ui::contract::SelectMode;
 // PLAN: assumed `craft::ui::patterns::form_dialogs::FieldValue` and `craft::ui::runtime::env::Label` paths.
-use craft::ui::patterns::panels::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
-use craft::ui::patterns::panels::sections::{DialogRole, FooterButton};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
+use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};

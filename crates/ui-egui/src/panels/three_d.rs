@@ -18,7 +18,8 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::menu::Menu;
 use craft::ui::tabs::{TabKind, TabStrip};
 // PLAN: assumed `craft::ui::form_dialogs` re-exports these form-dialog items.
-use craft::ui::patterns::form_dialogs::{DialogFields, EditEvents, FieldValue, Param, ParamRows};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamRows};
+use craft::behavior::EditEvents;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};

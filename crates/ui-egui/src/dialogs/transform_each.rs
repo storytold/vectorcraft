@@ -32,7 +32,7 @@ use egui::{Response, Ui};
 use serde_json::{Value, json};
 use std::ops::RangeInclusive;
 
-use super::form::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
+use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
 use super::host::{HeldOptions, open_held_with};
 use super::transform::{add_object_options, add_scale_options, with_scale_options}; // PLAN: assumed (app, &DialogFields, ..) forms of od.OS6
 use crate::VectorcraftApp;

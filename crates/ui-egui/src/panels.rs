@@ -761,7 +761,7 @@ pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui, heading: bool
         let (row, col) = (i / per_row, i % per_row);
         let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
         let resp = ui.interact(cell, scope.with(("recent", i)), Sense::click_and_drag());
-        crate::widgets::drag_source(ui, &resp, || crate::widgets::PanelDrag::paint(Paint::solid(*c)));
+        crate::widgets::drag_source(ui, &resp, || crate::panel_drag::PanelDrag::paint(Paint::solid(*c)));
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
         if resp.on_hover_text(c.to_hex()).clicked() {
             chosen = Some(*c);
@@ -824,7 +824,7 @@ mod tests {
         use egui::{Event, Modifiers, PointerButton};
         use vectorcraft_color::{Color, Paint};
 
-        use crate::widgets::PanelDrag;
+        use crate::panel_drag::PanelDrag;
 
         let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();

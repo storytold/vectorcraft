@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 // PLAN: assumed import paths of the framework items below: `craft::ui::primitives::IconId`,
 // `craft::ui::runtime::commands::{CommandState, CommandStates}`, `craft::ui::menu::PanelRow`,
-// `craft::ui::patterns::presets::*`, `crate::widgets::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
+// `craft::ui::patterns::presets::*`, `crate::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton, SplitButton, ToggleButton};
 use craft::ui::choice::Checkbox;
@@ -37,7 +37,7 @@ use vectorcraft_engine::cmd::TracePresetChange;
 use super::first_node;
 use crate::VectorcraftApp;
 use crate::chrome::rank;
-use crate::widgets::edits::{self, EditPath};
+use crate::edits::{self, EditPath};
 
 pub(crate) mod rows;
 use rows::{RowsData, RowsHost, RowsOutput, Sampler};

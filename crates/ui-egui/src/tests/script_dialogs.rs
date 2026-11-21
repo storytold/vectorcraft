@@ -3,7 +3,7 @@
 //! given by a run with nobody to ask. The helpers over the dialog host are shared with the other
 //! script tests.
 
-use craft::ui::patterns::panels::dialog::{DialogId, StackDialog, StandardPrompt};
+use craft::ui::dialog::{DialogId, StackDialog, StandardPrompt};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
@@ -73,7 +73,7 @@ pub(super) fn cancel(app: &mut VectorcraftApp, key: &str) {
 
 /// Opens a question the run knows nothing about, over whatever is open.
 pub(super) fn open_blocker(app: &VectorcraftApp) {
-    let blocker = StandardPrompt::custom("Blocked").button(craft::ui::patterns::panels::dialog::PromptChoice::Proceed, "OK");
+    let blocker = StandardPrompt::custom("Blocked").button(craft::ui::dialog::PromptChoice::Proceed, "OK");
     script_run::with_host(app, |host, _| host.open(CloseQuestion(blocker))).unwrap();
 }
 

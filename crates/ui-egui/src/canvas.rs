@@ -46,8 +46,7 @@ use home::home;
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 pub(crate) use drops::panel_drop;
-// PLAN: canvas-w15 names the final home of these (rulers.rs assumed).
-pub(crate) use rulers::{RulerScale, ruler_label, ruler_origin_dragging};
+pub(crate) use rulers::{RulerScale, general_lengths, ruler_label, ruler_origin_dragging, type_lengths};
 pub(crate) use grid::{checker_texture, checker_tile};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
