@@ -4906,6 +4906,52 @@ fn color_settings_and_a_reloaded_profile_render_the_canvas_again() {
     assert_eq!(middle(&mut app), None, "nothing changed since: no re-render");
 }
 
+/// A frame from the render worker whose color key is not the current one is not shown, and the
+/// canvas asks for the frame again. The worker converts colors with the settings in force while it
+/// renders, so a frame asked for before a change of the color settings may hold colors of the new
+/// settings under the old key, and a return to the old settings would keep it.
+#[test]
+fn a_worker_frame_of_other_color_settings_is_not_shown() {
+    keeping_color_settings(a_worker_frame_of_other_color_settings);
+}
+
+fn a_worker_frame_of_other_color_settings() {
+    use vectorcraft_color::cms;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let raw =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(1.0), ..Default::default() };
+        ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app);
+    done_tx.send(finished(&jobs.try_recv().expect("the first frame"))).unwrap();
+    frame(&mut app);
+    let first = app.canvas.key.clone().expect("the first frame is shown");
+
+    // A pan's frame goes to the worker, and the color settings change before it is finished.
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app);
+    let pan = jobs.try_recv().expect("the pan's frame goes to the worker");
+    let settings = cms::ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..cms::active_settings() };
+    assert_ne!(settings, cms::active_settings(), "other color settings");
+    cms::with_active(std::sync::Arc::new(cms::Cms::new(&settings).unwrap()), || {
+        done_tx.send(finished(&pan)).unwrap();
+        frame(&mut app);
+        assert_eq!(app.canvas.key.as_ref(), Some(&first), "the pan's frame, of other color settings, is not shown");
+        let again = jobs.try_recv().expect("the pan's frame is asked for with the current color settings");
+        assert_ne!(again.key.color, pan.key.color);
+    });
+    // Back to the settings in the pan's key: the pan's frame is asked for again.
+    frame(&mut app);
+    let back = jobs.try_recv().expect("the pan's frame is asked for again");
+    assert_eq!(back.key, pan.key);
+}
+
 /// Guides & Grid › Show Pixel Grid (Above 600% Zoom) (#394): in Pixel Preview at 600% zoom and
 /// above, a line at every document pixel over the art; none below 600%, out of Pixel Preview,
 /// or with the option off.
