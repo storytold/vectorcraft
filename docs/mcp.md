@@ -7328,6 +7328,15 @@ arc size of 180°, its 15° steps, the side an arc bulges to, what C and `[` `]`
 path are VectorCraft's own rules. The tool keeps `action` and `turn` with the preferences
 (`tool.setOption {tool: "quickPen", key, value}`).
 
+While an arc is drawn, by a drag or as the piece the next click adds, the tool shows a protractor around the arc's
+center: a tick across the arc's circle every 15° from where the arc starts, a longer tick every 90°, and one where the
+arc ends. The piece the next click adds shows its protractor only while Enable Rubber Band for the Pen tool shows
+that piece. With Smart Guides on, the end of a continuous arc snaps onto the nearest tick of its protractor, on the same
+circle, when that tick lies within the Smart Guides snapping tolerance of the pointer, no other Smart Guide snaps the
+point, and neither Snap to Grid nor Snap to Pixel snaps drawn points. A sharp-corner arc sweeps the arc size, so its end
+does not snap to a tick. Shift does not constrain Quick Pen points, so it does not change the tick snapping. The
+protractor, its 15° step and the tick snapping are VectorCraft's own behavior.
+
 Selecting the tool shows its toolbar on the canvas: Straight Line, Continuous Arc and Sharp Corner Arc set `action`,
 Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which first finishes any pending tool edit,
 which can change the document, then returns false and changes nothing more when the Quick Pen tool is not active
