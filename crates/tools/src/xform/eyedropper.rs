@@ -249,29 +249,26 @@ fn drawn_live<'d>(doc: &'d Document, ancestry: &[NodeId]) -> Option<&'d Node> {
 /// The color the art blend or envelope `n` draws shows at `p`, sampled as [`art_color_at`] samples
 /// art: a blend's keys and steps, an envelope's distorted contents, symbol instances in them by
 /// their symbols' art. Evaluating it counts the objects it holds, and the art made counts its
-/// objects. When less work is left than the steps of its blends make, it is not evaluated.
+/// objects. When less work is left than the steps of its blends make in all, the steps that copy
+/// a nested blend included ([`vectorcraft_doc::blend::blend_steps_made`]), it is not evaluated.
 fn live_color_at(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, p: Point) -> Option<Color> {
-    let steps = blend_steps_in(n);
+    let steps = vectorcraft_doc::blend::blend_steps_made(n);
     if s.work < steps {
         // Too little work is left for the steps the blends make.
         s.spend(steps)?;
     }
     s.spend(n.count())?;
+    #[cfg(test)]
+    EXPANSIONS.with(|e| e.set(e.get() + 1));
     let art = vectorcraft_effects::expand_live_deep(Some(s.doc), n);
     s.spend(art.count())?;
     art_color_at(s, levels, [art], p)
 }
 
-/// The steps the blends in `n` and its subtree make between their keys, at the least: a blend
-/// inside another blend's keys is counted once, not once for each step that copies it.
-fn blend_steps_in(n: &Node) -> usize {
-    let mut steps = 0usize;
-    n.walk(&mut |c| {
-        if let NodeKind::Blend { children, spec } = &c.kind {
-            steps = vectorcraft_doc::blend::blend_steps(children, spec).into_iter().fold(steps, usize::saturating_add);
-        }
-    });
-    steps
+#[cfg(test)]
+thread_local! {
+    /// The blends and envelopes [`live_color_at`] has evaluated on this thread.
+    static EXPANSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The color `n` shows at `p`: an image's pixels, a mesh's interpolated patch color, a symbol
@@ -2027,10 +2024,12 @@ mod tests {
     }
 
     /// A blend's steps count as work before it is evaluated: the steps of every blend it holds
-    /// are counted, and with less work left than that the sample gives no color.
+    /// are counted, and with less work left than that the sample gives no color and the blend is
+    /// not evaluated.
     #[test]
     fn blend_steps_count_before_the_blend_is_evaluated() {
         use vectorcraft_doc::Document;
+        use vectorcraft_doc::blend::blend_steps_made;
         use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
         use vectorcraft_geom::Rect;
         let blend = |d: &mut Document, steps: u32| {
@@ -2042,11 +2041,11 @@ mod tests {
         let mut scratch = Document::new(500.0, 500.0);
         let (big, small) = (blend(&mut scratch, 1000), blend(&mut scratch, 3));
         let rect = solid_rect(&mut scratch, Rect::new(0.0, 0.0, 10.0, 10.0), Color::rgb(0.0, 1.0, 0.0));
-        assert_eq!(blend_steps_in(&big), 1000);
-        assert_eq!(blend_steps_in(&rect), 0);
+        assert_eq!(blend_steps_made(&big), 1000);
+        assert_eq!(blend_steps_made(&rect), 0);
         let group =
             Node::new(scratch.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(big), std::sync::Arc::new(small)], clip: false });
-        assert_eq!(blend_steps_in(&group), 1003, "every blend in the group");
+        assert_eq!(blend_steps_made(&group), 1003, "every blend in the group");
 
         let d = doc_with_live_over_green(|d| blend(d, 1000));
         let (sel, p) = (Selection::default(), paint());
@@ -2054,11 +2053,54 @@ mod tests {
         let opts = sample_options(&cx);
         let mut levels: Vec<Option<Document>> = (0..MAX_NESTING).map(|_| None).collect();
         let at = Point::new(360.0, 310.0);
+        let evaluated = || EXPANSIONS.with(std::cell::Cell::get);
+        let before = evaluated();
         let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes: 0, work: 900, exhausted: false, patterns: 0 };
         assert_eq!(color_under(&mut s, &d, &mut levels, at, opts).map(|(c, _)| c.to_hex()), None);
         assert!(s.exhausted, "less work left than the blend's 1,000 steps");
+        assert_eq!(evaluated(), before, "the blend is not evaluated");
         let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes: 0, work: MAX_WORK, exhausted: false, patterns: 0 };
         assert!(color_under(&mut s, &d, &mut levels, at, opts).is_some(), "a step is drawn at the point");
+        assert!(evaluated() > before, "with enough work the blend is evaluated");
+    }
+
+    /// Each step of a blend whose keys are blends is a copy of one of them, so the steps it makes
+    /// in all count before it is evaluated: an outer blend of 20 steps between two blends of 100
+    /// steps makes more than 2,000, though its blends have 220 steps between their own keys.
+    #[test]
+    fn steps_that_copy_a_nested_blend_count_before_it_is_evaluated() {
+        use vectorcraft_doc::Document;
+        use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+        use vectorcraft_geom::Rect;
+        let blend = |d: &mut Document, keys: Vec<Node>, steps: u32| {
+            let spec = BlendSpec { spacing: BlendSpacing::Steps(steps), ..Default::default() };
+            Node::new(d.alloc_id(), NodeKind::Blend { children: keys.into_iter().map(std::sync::Arc::new).collect(), spec: Box::new(spec) })
+        };
+        let inner = |d: &mut Document, y: f64| {
+            let red = solid_rect(d, Rect::new(300.0, y, 320.0, y + 10.0), Color::rgb(1.0, 0.0, 0.0));
+            let blue = solid_rect(d, Rect::new(400.0, y, 420.0, y + 10.0), Color::rgb(0.0, 0.0, 1.0));
+            blend(d, vec![red, blue], 100)
+        };
+        let d = doc_with_live_over_green(|d| {
+            let (a, b) = (inner(d, 300.0), inner(d, 330.0));
+            blend(d, vec![a, b], 20)
+        });
+        let outer = d.layers[0].children().unwrap().last().unwrap();
+        assert!(vectorcraft_doc::blend::blend_steps_made(outer) > 2_000, "the copies' steps count");
+        let (sel, p) = (Selection::default(), paint());
+        let cx = cx(&d, &sel, &p);
+        let opts = sample_options(&cx);
+        let mut levels: Vec<Option<Document>> = (0..MAX_NESTING).map(|_| None).collect();
+        let at = Point::new(310.0, 305.0);
+        let evaluated = || EXPANSIONS.with(std::cell::Cell::get);
+        let before = evaluated();
+        let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes: 0, work: 1_000, exhausted: false, patterns: 0 };
+        assert_eq!(color_under(&mut s, &d, &mut levels, at, opts).map(|(c, _)| c.to_hex()), None);
+        assert!(s.exhausted, "less work left than the steps the outer blend makes");
+        assert_eq!(evaluated(), before, "the outer blend is not evaluated");
+        let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes: 0, work: MAX_WORK, exhausted: false, patterns: 0 };
+        assert!(color_under(&mut s, &d, &mut levels, at, opts).is_some(), "a key is drawn at the point");
+        assert!(evaluated() > before, "with enough work the outer blend is evaluated");
     }
 
     /// For a Shift-click on an envelope, the hover names the envelope where its distorted contents
