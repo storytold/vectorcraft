@@ -6,6 +6,7 @@ pub mod color;
 pub mod compounds;
 pub mod contour;
 pub mod cutting;
+pub(crate) mod dialogs;
 pub mod document;
 pub mod enclosing_lasso;
 pub mod image;
@@ -19,6 +20,23 @@ pub mod typetools;
 pub mod units;
 
 use crate::menus::Item;
+
+/// The add-on panels' state, which lasts for the run and is not saved with a document.
+#[derive(Default)]
+pub(crate) struct Panels {
+    /// The last Artwork Cleanup scan, shown until the next.
+    pub cleanup: Option<cleanup::Results>,
+    /// The colour the Color Effects panel last picked.
+    pub color: color::Picked,
+    /// The fold lines of the Packaging Tools panel.
+    pub fold: packaging::FoldLines,
+    /// The Packaging Tools preview's view.
+    pub fold_view: packaging::preview::View,
+    /// The Anchor Inspector panel's settings.
+    pub inspector: pathtools::Inspector,
+    /// The Unit Converter panel's values.
+    pub units: units::Converter,
+}
 
 /// The add-ons' submenus, then a separator: the head of Object › Plug-ins.
 pub fn plugin_menu() -> Vec<Item> {
