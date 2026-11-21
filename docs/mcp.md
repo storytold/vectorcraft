@@ -2556,10 +2556,10 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 - `menuCommands.strings` lists the string literals the script passes to `executeMenuCommand`
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
-- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used),
-  `filesOpened` (files opened in other apps), `network`, `nativeCode`, `otherApps` (messages to other apps),
-  `environment` (environment variables), `unseenCode` (`eval`, `new Function` and `$.evalFile`) and
-  `preferences` (the reference app's preferences changed).
+- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
+  File object's `length`, `hidden` or `readonly` counts too), `filesOpened` (files opened in other apps), `network`,
+  `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
+  `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
   template literals and XML literals that aren't closed, brackets that don't match, syntax newer than ES3 and
   unknown directives) and notes on its text (bytes that aren't valid UTF-8, mixed line endings, and nesting deeper
