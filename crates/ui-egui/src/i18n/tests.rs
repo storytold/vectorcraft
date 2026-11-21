@@ -517,6 +517,22 @@ fn attributes_panel_options_strings_are_in_complete_catalogs() {
     }
 }
 
+/// Rearrange for selected artboards: the Artboards panel menu's Rearrange…, its dialog's count and
+/// the message while it waits for its click on the canvas.
+#[test]
+fn rearrange_selected_artboards_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Rearrange…", "Selected Artboards: {n}"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let hint = crate::dialogs::rearrange_artboards::PLACE_HINT;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, hint), hint, "{code}");
+    }
+}
+
 /// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
 /// falling back to the plain row).
 #[test]

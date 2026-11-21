@@ -22,6 +22,10 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     if (cancelled && pointer.primary_pressed()) || crate::dialogs::brush_key_color_input(app, ui, resp, rect) {
         return;
     }
+    // Rearrange's placement takes the press or Enter that places the artboards, and Esc.
+    if crate::dialogs::rearrange_artboards::placement_input(app, ui, resp, rect, modal, space) {
+        return;
+    }
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
     // A lifted pen or finger takes the pointer away in the frame it lifts (egui's `PointerGone`),
