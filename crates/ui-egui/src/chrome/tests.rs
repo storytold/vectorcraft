@@ -1099,6 +1099,17 @@ fn text_center(texts: &[StatusText], text: &str) -> egui::Pos2 {
     at.clip.intersect(at.bounds).center()
 }
 
+/// While Cmd/Ctrl is held, Current Tool names the selection tool a press would borrow: Direct
+/// Selection with the Selection tool chosen, and the Selection tool again once the key is let go.
+#[test]
+fn current_tool_names_the_selection_tool_cmd_lends() {
+    let (app, _ctx) = status_readout_app();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(super::status_bar::info_text(&app, &cmd).0, "Direct Selection");
+    assert_eq!(super::status_bar::info_text(&app, &Default::default()).0, "Selection");
+}
+
 /// The status bar's info field shows the readout `view.statusBarShow` chooses: the navigator's
 /// artboard name, the tool in use, the date and time, the undo and redo counts, or the document's
 /// color profile.
@@ -1130,7 +1141,7 @@ fn the_status_bar_info_field_shows_the_chosen_readout() {
     // The labels take the UI language's colon (#7991).
     let fr = crate::i18n::Lang::from_code("fr").unwrap();
     crate::i18n::set_current(fr);
-    let (french, _) = super::status_bar::info_text(&app);
+    let (french, _) = super::status_bar::info_text(&app, &Default::default());
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(french, format!("{}\u{a0}: {before}  {}\u{a0}: 1", crate::i18n::tr(fr, "Undos"), crate::i18n::tr(fr, "Redos")));
 

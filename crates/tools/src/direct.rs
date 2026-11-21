@@ -385,20 +385,23 @@ pub(crate) fn in_scope(doc: &vectorcraft_doc::Document, scope: Option<NodeId>, i
 /// shapes, its first child, are left out unless they are the isolated object (Construction mode),
 /// as clicks leave them out.
 fn walk_pickable<'a>(doc: &'a vectorcraft_doc::Document, scope: Option<NodeId>, mut f: impl FnMut(&'a Node)) {
-    fn walk<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
-        f(n);
-        for c in n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())) {
-            walk(c, f);
-        }
-    }
     if let Some(id) = scope
         && let Some(n) = doc.node(id)
     {
-        walk(n, &mut f);
+        walk_pickable_from(n, &mut f);
     } else if scope.is_none() {
         for l in &doc.layers {
-            walk(l, &mut f);
+            walk_pickable_from(l, &mut f);
         }
+    }
+}
+
+/// Visit `n` and the nodes inside it that Direct Selection may pick: a Shaper Group's original
+/// shapes are left out ([`walk_pickable`]).
+fn walk_pickable_from<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
+    f(n);
+    for c in n.children().into_iter().flatten().skip(usize::from(n.extras().shaper.is_some())) {
+        walk_pickable_from(c, f);
     }
 }
 
@@ -592,6 +595,56 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
         let pd = cx.doc.node(id).and_then(editable_path)?;
         nearest_anchor(&pd, p, tol, None).map(|(si, ai, a)| (id, si, ai, a))
     })
+}
+
+/// Is `p` on a part of a selected object that Direct Selection edits: a gradient mesh point, a
+/// blend's spine point or segment, an anchor, the end of a direction handle or a segment, within
+/// the selection tolerance? A selected group or compound path counts through the editable paths
+/// inside it.
+pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
+    if cx.selection.objects.is_empty() {
+        return false;
+    }
+    let tol = cx.point_tol();
+    let seg_tol = cx.pick_tol();
+    if hit_handle(cx, p, tol).is_some()
+        || MeshEdit::default().hit(cx, &cx.selection.objects, p).is_some()
+        || selected_spines(cx).iter().any(|(_, path)| path.anchors().any(|(_, _, a)| a.p.distance(p) <= tol))
+        || hit_spine_segment(cx, p, seg_tol).is_some()
+    {
+        return true;
+    }
+    // The editable paths' control bounds are listed once per document state and selection; a
+    // hover measures only the paths whose bounds it is near.
+    let boxes = crate::select::selected_part_boxes(cx, || {
+        let editable = cx.doc.editable();
+        let mut v = vec![];
+        for root in cx.selection.objects.iter().filter_map(|&id| cx.doc.node(id)) {
+            walk_pickable_from(root, &mut |n| {
+                if editable(n.id)
+                    && let Some(b) = editable_path(n).and_then(|pd| pd.control_bounds())
+                {
+                    v.push((n.id, b));
+                }
+            });
+        }
+        v.into()
+    });
+    let reach = tol.max(seg_tol);
+    boxes.iter().any(|&(id, b)| {
+        b.inflate(reach, reach).contains(p)
+            && cx.doc.node(id).and_then(editable_path).is_some_and(|pd| {
+                #[cfg(test)]
+                MEASURED_PARTS.set(MEASURED_PARTS.get() + 1);
+                nearest_anchor(&pd, p, tol, None).is_some() || pd.nearest(p).is_some_and(|(.., d)| d <= seg_tol)
+            })
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many paths [`over_selected_part`] has measured on this thread.
+    static MEASURED_PARTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// Is `p` within a press's reach of an anchor of type on a path's path? The anchor wins over a

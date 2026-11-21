@@ -7121,6 +7121,44 @@ fn hidden_shape_widgets_leave_the_bounding_box() {
     assert_eq!(app.session.cursor(at, Mods::default(), view), Cursor::CornerRadius);
 }
 
+/// With the Selection tool, Cmd held lends Direct Selection away from the selection, and a selected
+/// blend's widgets, which only the Selection and Blend tools press, hide while the key is down.
+#[test]
+fn blend_widgets_hide_while_cmd_lends_direct_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 90, "y": 190, "width": 20, "height": 20})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 290, "y": 190, "width": 20, "height": 20})).unwrap());
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let blend = id(app.session.execute("object.blend.make", &json!({})).unwrap());
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
+    let ctx = egui::Context::default();
+    let widgets = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
+        app.canvas.selection_marks = Default::default();
+        let events = vec![egui::Event::ModifiersChanged(modifiers)];
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let r = vectorcraft_tools::blendwidget::RADIUS_PX;
+        let mut n = 0;
+        let mut count = |s: &Shape| n += usize::from(matches!(s, Shape::Circle(c) if c.radius == r));
+        for c in &out.shapes {
+            match &c.shape {
+                Shape::Vec(v) => v.iter().for_each(&mut count),
+                s => count(s),
+            }
+        }
+        n
+    };
+    let plain = widgets(&mut app, egui::Modifiers::NONE);
+    assert!(plain >= 2, "the Appearance and Easing widgets: {plain}");
+    let held = widgets(&mut app, egui::Modifiers::COMMAND);
+    assert!(held + 2 <= plain, "hidden while Cmd lends Direct Selection: {held} of {plain}");
+    assert_eq!(widgets(&mut app, egui::Modifiers::NONE), plain, "back when the key is let go");
+}
+
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
 /// Path tools.
 #[test]

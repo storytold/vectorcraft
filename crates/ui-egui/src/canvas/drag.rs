@@ -272,6 +272,12 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
+/// The keys held now, with `space` set while Space lends a view tool ([`space_lends_view_tools`]).
+pub(crate) fn held_mods(app: &VectorcraftApp, ctx: &egui::Context) -> Mods {
+    let (m, space) = ctx.input(|i| (i.modifiers, i.key_down(egui::Key::Space)));
+    mods(m, space_lends_view_tools(app, m, space))
+}
+
 /// Whether Space, held with the modifiers `m`, lends the Hand, Rotate View or Zoom tool. While the
 /// Type tool edits text, Space types a space, and only Cmd+Space still lends the Zoom tool.
 pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, space: bool) -> bool {
@@ -384,7 +390,7 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_e
         return;
     }
     // A press lent to a selection tool (Cmd/Ctrl held) does not use the tool of a held key.
-    if ev.kind == PointerKind::Down && app.session.lent_tool_id(&ev.mods).is_none() {
+    if ev.kind == PointerKind::Down && !app.session.press_lends_tool(ev, view) {
         crate::shortcuts::note_tool_use(app);
     }
     let r = app.session.pointer(ev, view);

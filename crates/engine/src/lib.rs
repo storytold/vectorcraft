@@ -106,6 +106,16 @@ pub struct Session {
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,
+    /// Direct Selection or Group Selection, whichever was chosen last: the one Cmd lends the
+    /// Selection tool. None until one is chosen.
+    pub(crate) last_part_selection_tool: Option<&'static str>,
+    /// The selection tool Cmd lent the last press, which also takes the double-click or
+    /// triple-click that follows it. None when the press was not lent.
+    pub(crate) press_lent: Option<&'static str>,
+    /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
+    /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none). None when it was last asked
+    /// without Cmd.
+    pub(crate) hover_lent: Option<Option<&'static str>>,
     pub(crate) last_view: ViewInfo,
     /// The selection tools' measurements for the active document as it is: a pointer move or a
     /// cursor asked for again over an unchanged document and selection measures nothing again.
