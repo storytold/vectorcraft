@@ -1,7 +1,8 @@
-use super::build::{Builder, Built, Camera, Keep, Order, Turn, check_bounds, cuts, fit, newell, outward};
+use super::build::{Builder, Built, Camera, Keep, Order, Place, Placing, Turn, WallCurves, check_bounds, cuts, fit, newell, outward};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
-use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
-use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, PlanarFace, Point, Rect, V3, Vec2, View};
+use super::outline::{self, Along, Budget, CURVE_TOLERANCE, EdgeCurve};
+use super::rings::{MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings_traced};
+use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, V3, Vec2, View};
 
 /// The slices the sides are cut into: more to follow a twist or taper.
 fn slices(o: &Inflate) -> usize {
@@ -11,6 +12,8 @@ fn slices(o: &Inflate) -> usize {
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
 struct Puff {
     rings: Vec<Vec<Point>>,
+    /// The rings with the piece of curve each edge follows.
+    traced: Vec<Ring>,
     /// The index of the rings' edges.
     edges: Edges,
     cell: f64,
@@ -50,7 +53,8 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     PUFFED.with(|n| n.set(n.get() + 1));
     let size = bounds.width().max(bounds.height());
     let most = outline_pieces(path, bounds, o)?;
-    let rings = solid_rings(path, rule, size, MAX_SOLID_POINTS, most)?;
+    let traced = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    let rings: Vec<Vec<Point>> = traced.iter().map(|r| r.points.clone()).collect();
     if rings.is_empty() {
         return Ok(None);
     }
@@ -73,7 +77,7 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     }
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
     let height = 2.0 * m.peak.sqrt() * o.volume / 50.0;
-    Ok(Some(Puff { rings, edges, cell, nx, ny, m, height }))
+    Ok(Some(Puff { rings, traced, edges, cell, nx, ny, m, height }))
 }
 
 /// Inflate: the shape puffed out like a cushion, its edge kept where the art's outline is.
@@ -209,6 +213,10 @@ thread_local! {
 /// cells together ([`crate::mesh::flat_triangles`]).
 pub(super) const MAX_FLAT_WORK: usize = 1 << 26;
 
+/// Most edges of the outline one inflated surface may look at to find the edges of its cells that
+/// lie along the outline ([`Edges::holding`]). Past it, the cells' remaining edges stay straight.
+pub(super) const MAX_RIM_WORK: usize = 1 << 22;
+
 /// Most corners the pieces of one such cell may have.
 pub(super) const MAX_FLAT_CORNERS: usize = 4096;
 
@@ -242,7 +250,7 @@ fn mark_surface(b: &mut Builder<'_>, before: usize, points: [Point; 3], center: 
 fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Keep) -> Result<Built, String> {
     #[cfg(test)]
     INFLATED.with(|n| n.set(n.get() + 1));
-    let Puff { rings, edges, cell, nx, ny, m, height } = p;
+    let Puff { rings, traced, edges, cell, nx, ny, m, height } = p;
     let outline: Vec<(Rect, vectorcraft_geom::SubPath)> = rings
         .iter()
         .filter_map(|r| {
@@ -286,6 +294,58 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
     let half = o.depth / 2.0;
     // The back: turned and scaled by the twist and taper, its puff too.
     let back_turn = Turn::new(bounds, o.twist, o.taper, 1.0);
+    // The outline of the front and the back where the surface meets it, through the art's curves:
+    // the cells' edges along it follow its curves within the sampling tolerance, as the cells'
+    // corners there lie on its sampled points and edges.
+    let mut budget = Budget::default();
+    let sampled = (bounds.width().max(bounds.height()) / 2000.0).max(0.05);
+    let (front_map, back_map) =
+        (Placing::new(&camera, center, Turn::new(bounds, 0.0, 1.0, 0.0), half), Placing::new(&camera, center, back_turn, -half));
+    let (front_at, back_at) = (
+        |span: &Span, t: f64| camera.project(front_map.place(span.curve.eval(t))),
+        |span: &Span, t: f64| camera.project(back_map.place(span.curve.eval(t))),
+    );
+    let (front_point, back_point) = (|p: Point| camera.project(front_map.place(p)), |p: Point| camera.project(back_map.place(p)));
+    let affine = camera.center_and_eye().1.is_none();
+    let front_rim = Along { at: &front_at, map: Some(&front_point), affine, tolerance: sampled };
+    let back_rim = Along { at: &back_at, map: Some(&back_point), affine, tolerance: sampled };
+    // Where each ring's edges start among all the rings' edges, as the edge index counts them.
+    let starts: Vec<usize> = rings
+        .iter()
+        .scan(0usize, |s, r| {
+            let at = *s;
+            *s = s.saturating_add(r.len());
+            Some(at)
+        })
+        .collect();
+    let rim_work = std::cell::Cell::new(MAX_RIM_WORK);
+    // The pieces of curve the edges of `pieces` (art points, lifted by `lifts`) follow where they
+    // lie along the outline: an edge whose two ends are on the outline, on one of its edges.
+    let rim = |pieces: &[Vec<Point>], lifts: &[Vec<f64>]| -> Vec<Vec<Option<EdgeCurve>>> {
+        pieces
+            .iter()
+            .zip(lifts)
+            .map(|(p, h)| {
+                let n = p.len();
+                (0..n)
+                    .map(|k| {
+                        let (a, b) = (*p.get(k)?, *p.get((k + 1) % n)?);
+                        if h.get(k).copied() != Some(0.0) || h.get((k + 1) % n).copied() != Some(0.0) {
+                            return None;
+                        }
+                        let mut work = rim_work.get();
+                        let found = edges.holding(a, b, 1e-9, &mut work);
+                        rim_work.set(work);
+                        let (e, sa, sb) = found?;
+                        let r = starts.partition_point(|s| *s <= e).checked_sub(1)?;
+                        let span = traced.get(r)?.spans.get(e - starts.get(r)?)?.as_ref().copied()?;
+                        let t = |s: f64| span.t0 + (span.t1 - span.t0) * s;
+                        (sa != sb).then(|| (span, t(sa), t(sb)))
+                    })
+                    .collect()
+            })
+            .collect()
+    };
     // The grid's cells, those the surface rises steeply across (near the outline) cut into
     // halves or quarters each way, so the steep rim is drawn in facets as fine as its curve.
     // Every corner sits on one fine lattice (a quarter cell), computed the same way wherever it
@@ -477,7 +537,10 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                     if let Some(triangles) = triangles {
                         let order = if flat { Order::Last } else { Order::Depth };
                         for points in triangles {
-                            let front = points.map(|q| camera.place(q, half + lift(q)));
+                            let lifts = points.map(&lift);
+                            let front: [V3; 3] = std::array::from_fn(|k| camera.place(points[k], half + lifts[k]));
+                            let found = std::cell::OnceCell::new();
+                            let curves = || found.get_or_init(|| rim(&[points.to_vec()], &[lifts.to_vec()]));
                             let before = b.facets.len();
                             let outward = newell(&[front.to_vec()]);
                             if smoothed {
@@ -485,11 +548,13 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                             } else {
                                 b.face(vec![front.to_vec()], outward, order)?;
                             }
+                            b.outline(before, |c| outline::edges(c, curves(), &front_rim, &mut budget));
                             if o.map_surface {
                                 mark_surface(&mut b, before, points, center, outward, PlanarFace::Front);
                             }
                             if o.both_sides && o.cap {
-                                let back = points.map(|q| camera.place(back_turn.apply(q), -half - lift(q) * back_turn.scale));
+                                let back: [V3; 3] =
+                                    std::array::from_fn(|k| camera.place(back_turn.apply(points[k]), -half - lifts[k] * back_turn.scale));
                                 let before = b.facets.len();
                                 let n = newell(&[back.to_vec()]);
                                 // The back winds the same way round as the front, so its outward
@@ -506,6 +571,7 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                                 } else {
                                     b.face(vec![back.to_vec()], outward, order)?;
                                 }
+                                b.outline(before, |c| outline::edges(c, curves(), &back_rim, &mut budget));
                                 if o.map_surface {
                                     mark_surface(&mut b, before, points, center, outward, PlanarFace::Back);
                                 }
@@ -521,7 +587,11 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                         pieces.iter().zip(&lifts).map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(*q, half + h)).collect()).collect();
                     let n = newell(&front);
                     let order = if flat { Order::Last } else { Order::Depth };
+                    let found = std::cell::OnceCell::new();
+                    let curves = || found.get_or_init(|| rim(&pieces, &lifts));
+                    let before = b.facets.len();
                     b.face(front, n, order)?;
+                    b.outline(before, |c| outline::edges(c, curves(), &front_rim, &mut budget));
                     if o.both_sides && o.cap {
                         // The back winds the same way round as the front, so its outward normal is
                         // reversed.
@@ -531,7 +601,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                             .map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(back_turn.apply(*q), -half - h * back_turn.scale)).collect())
                             .collect();
                         let n = newell(&back);
+                        let before = b.facets.len();
                         b.face(back, V3(-n.0, -n.1, -n.2), order)?;
+                        b.outline(before, |c| outline::edges(c, curves(), &back_rim, &mut budget));
                     }
                 }
             }
@@ -541,7 +613,12 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
         let back: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(back_turn.apply(*p), -half)).collect()).collect();
         // The back turned toward the viewer covers the walls it overlaps, even those nearer than
         // its center: twisted walls, and the walls of a fill inside the solid of its stroke.
+        let before = b.len();
         b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), Order::Last)?;
+        // The flat back is the art turned and scaled: its curves map exactly without perspective.
+        let along = Along { tolerance: CURVE_TOLERANCE, ..back_rim };
+        let traced: Vec<&Ring> = traced.iter().collect();
+        b.outline(before, |c| outline::face(&traced, c, &along, &mut budget));
     }
     if o.depth > 0.0 {
         // The sides, cut into slices that follow a twist or taper.
@@ -558,10 +635,45 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
         if b.len().saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
             return Err(TOO_COMPLEX_SURFACE.into());
         }
-        let sides = |b: &mut Builder<'_>, pieces: &[Vec<usize>]| -> Result<(), String> {
-            for (ring, pieces) in rings.iter().zip(pieces) {
+        // Each slice's ring follows the art's curves, turned and scaled, at its depth.
+        let maps: Vec<Placing> = (0..=slices)
+            .map(|k| {
+                let t = k as f64 / slices as f64;
+                Placing::new(&camera, center, Turn::new(bounds, o.twist, o.taper, t), half - o.depth * t)
+            })
+            .collect();
+        let places: Vec<_> = maps.iter().map(|m| move |span: &Span, t: f64| m.place(span.curve.eval(t))).collect();
+        let slice_at: Vec<_> = places
+            .iter()
+            .map(|place| {
+                let camera = &camera;
+                move |span: &Span, t: f64| camera.project(place(span, t))
+            })
+            .collect();
+        let point_maps: Vec<_> = maps
+            .iter()
+            .map(|m| {
+                let camera = &camera;
+                move |p: Point| camera.project(m.place(p))
+            })
+            .collect();
+        let along: Vec<Along> = slice_at
+            .iter()
+            .zip(&point_maps)
+            .map(|(at, map)| Along { at, map: Some(map as &dyn Fn(Point) -> Point), affine, tolerance: CURVE_TOLERANCE })
+            .collect();
+        let place = |k: usize| places.get(k).map(|p| p as &Place);
+        let sides = |b: &mut Builder<'_>, pieces: &[Vec<usize>], budget: &mut Budget| -> Result<(), String> {
+            for ((ring, traced), pieces) in rings.iter().zip(&traced).zip(pieces) {
                 for k in 0..slices {
-                    b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;
+                    let curves = WallCurves {
+                        spans: &traced.spans,
+                        near: along.get(k),
+                        far: along.get(k + 1),
+                        places: [place(k), place(k + 1)],
+                        budget: &mut *budget,
+                    };
+                    b.curved_band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0), Some(curves), None)?;
                 }
             }
             Ok(())
@@ -578,11 +690,11 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                 own_sides = Some((own, b.mesh.take()));
             }
         }
-        sides(&mut b, &pieces)?;
+        sides(&mut b, &pieces, &mut budget)?;
         if let Some((own, faces)) = own_sides {
             let mut m = Builder::new(&camera, o.cap, false, Keep::Faces);
             m.mesh = faces;
-            match sides(&mut m, &own) {
+            match sides(&mut m, &own, &mut budget) {
                 Ok(()) => b.mesh = m.mesh,
                 Err(_) => b.lose_mesh(),
             }
