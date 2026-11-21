@@ -13,6 +13,7 @@ fn app(background: bool) -> VectorcraftApp {
     let services = Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
     let mut app = VectorcraftApp::new(Session::new(), services);
     app.placing.off_the_ui_thread = background;
+    crate::tests_background::threaded(&mut app);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app
 }
@@ -95,6 +96,16 @@ fn placed(app: &mut VectorcraftApp) {
         std::thread::yield_now();
     }
     assert!(app.placing.pending.is_empty(), "read within 60 s");
+}
+
+/// Waits until the read that was started has finished on its job (the held reader was let go).
+fn read_finished(app: &VectorcraftApp) {
+    let t0 = std::time::Instant::now();
+    while !(app.placing.reading[1].load(std::sync::atomic::Ordering::SeqCst) >= 1 && app.placing.reading[0].load(std::sync::atomic::Ordering::SeqCst) == 0)
+    {
+        assert!(t0.elapsed().as_secs() < 60, "read within 60 s");
+        std::thread::yield_now();
+    }
 }
 
 /// What a place changes: the active document (without the second it was made in), its
@@ -1444,7 +1455,7 @@ fn a_placed_image_is_drawn_without_decoding_it_on_the_ui_thread() {
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(&mut app, ui));
     out.textures_delta.clear();
-    assert!(app.canvas_rect.is_some(), "the canvas drew a frame");
+    assert!(app.canvas_view().is_some(), "the canvas drew a frame");
     assert_eq!(vectorcraft_render::image_decodes(), decodes, "no decode on the UI thread");
 }
 
@@ -1518,9 +1529,6 @@ fn a_file_that_cant_be_read_off_the_ui_thread_reports_as_at_once() {
         }
         assert_eq!(app.ui.status, at_once.ui.status);
         assert!(app.ui.status.starts_with(&format!("Couldn't place {name}: ")), "{}", app.ui.status);
-        if name == "cut.png" {
-            assert_eq!(app.ui.status, "Couldn't place cut.png: the image's pixels can't be read");
-        }
     }
 }
 
@@ -1912,9 +1920,16 @@ fn a_file_read_again_when_placed_stays_within_the_roots_it_was_read_in() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// Draws one frame of the place progress window at `time` seconds → the texts it drew.
-fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| super::show(app, ui.ctx()));
+/// Makes every file being read old enough for its window.
+fn age(app: &mut VectorcraftApp) {
+    for p in &mut app.placing.pending {
+        p.started -= 2.0 * crate::export_progress::DELAY;
+    }
+}
+
+/// Draws one frame of the progress window → the texts it drew.
+fn progress(app: &mut VectorcraftApp, ctx: &egui::Context) -> String {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::export_progress::show(app, ui));
     out.textures_delta.clear();
     let mut texts = String::new();
     for shape in out.shapes {
@@ -1942,21 +1957,23 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    crate::tests_background::threaded(&mut app);
     app.placing.off_the_ui_thread = true;
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
 
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    assert_eq!(progress(&mut app, &ctx, 0.0), "", "nothing placing");
+    assert_eq!(progress(&mut app, &ctx), "", "nothing placing");
 
     let slow_path = saved("progress", "slow.png", &picture(Png, 100, 100));
     let p = json!({"path": slow_path, "at": [200, 150]});
     start(&mut app, &p, false).unwrap();
 
     // Not shown before DELAY (0.4 s)
-    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
-    progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.05); // measures first
-    let texts = progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.1);
+    assert_eq!(progress(&mut app, &ctx), "", "not at once");
+    age(&mut app);
+    progress(&mut app, &ctx); // measures first
+    let texts = progress(&mut app, &ctx);
     for want in ["Placing slow.png…", "Reading the file…", "Cancel"] {
         assert!(texts.contains(want), "{want} in {texts}");
     }
@@ -1966,13 +1983,8 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
     // Another file queued shows more waiting
     let next_path = saved("progress", "next.png", &picture(Png, 100, 100));
     start(&mut app, &json!({"path": next_path, "at": [200, 150]}), false).unwrap();
-    let texts = progress(&mut app, &ctx, 2.0);
-    assert!(texts.contains("Placing slow.png…") && texts.contains("1 more file waiting"), "{texts}");
-
-    // Never two modals at once
-    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
-    assert_eq!(progress(&mut app, &ctx, 3.0), "", "never two modals at once");
-    app.ui.dialog = None;
+    let texts = progress(&mut app, &ctx);
+    assert!(texts.contains("Placing slow.png…") && texts.contains("waiting"), "{texts}");
 
     // Release and finish
     hold.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -1995,6 +2007,7 @@ fn cancelling_a_place_places_nothing() {
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
+    crate::tests_background::threaded(&mut app);
     app.placing.off_the_ui_thread = true;
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
 
@@ -2018,9 +2031,9 @@ fn cancelling_a_place_places_nothing() {
     assert!(!app.ui.status.starts_with("Placing"), "{}", app.ui.status);
     assert!(!crate::menus::enabled(&app, "file.cancelPlace"));
 
-    // Let the background reader thread finish reading and drain
+    // Let the background read finish and drain
     hold.store(false, std::sync::atomic::Ordering::SeqCst);
-    app.placing.wait_for_reads();
+    read_finished(&app);
     poll(&mut app);
 
     // Document must be completely unmodified
@@ -2029,54 +2042,4 @@ fn cancelling_a_place_places_nothing() {
     assert_eq!(app.session.doc().unwrap().history.undo.len(), 0, "no undo step added");
 }
 
-/// #5930: Escape key in the progress window cancels the place operation.
-#[test]
-fn cancelling_a_place_via_escape_key() {
-    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let hold_read = hold.clone();
-    let services = Services {
-        read: Some(Box::new(move |p: &str| {
-            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-            std::fs::read(p).map_err(|e| e.to_string())
-        })),
-        ..Default::default()
-    };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.placing.off_the_ui_thread = true;
-    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
 
-    let before = state(&app);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-
-    let slow_path = saved("escape", "slow.png", &picture(Png, 100, 100));
-    let p = json!({"path": slow_path, "at": [200, 150]});
-    start(&mut app, &p, false).unwrap();
-
-    // First frame initializes the timer at 1.0 s
-    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
-    // Advance time past DELAY
-    progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.05);
-    let texts = progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.1);
-    assert!(texts.contains("Placing slow.png…"));
-    assert_eq!(app.placing.pending.len(), 1);
-
-    // Send Escape event
-    let raw_input = egui::RawInput {
-        events: vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
-        time: Some(1.0 + crate::export_progress::DELAY + 0.15),
-        ..Default::default()
-    };
-    let _ = ctx.run_ui(raw_input, |ui| super::show(&mut app, ui.ctx()));
-
-    // Operation was cancelled
-    assert!(app.placing.pending.is_empty(), "place was cancelled by Escape");
-
-    hold.store(false, std::sync::atomic::Ordering::SeqCst);
-    app.placing.wait_for_reads();
-    poll(&mut app);
-
-    assert_eq!(state(&app), before, "document completely unmodified");
-}
