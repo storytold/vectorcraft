@@ -875,7 +875,7 @@ pub(crate) fn catalog_index() -> &'static std::collections::HashMap<&'static str
     INDEX.get_or_init(|| effect_catalog().into_iter().map(|e| (e.id, e)).collect())
 }
 
-/// The id and menu label of built-in effect `id`, as the catalogue holds them (no plug-in
+/// The id and menu label of built-in effect `id`, as the catalog holds them (no plug-in
 /// effects).
 pub fn built_in_effect(id: &str) -> Option<(&'static str, &'static str)> {
     catalog_index().get(id).map(|e| (e.id, e.label))
