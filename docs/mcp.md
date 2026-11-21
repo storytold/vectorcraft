@@ -2412,6 +2412,9 @@ and `amount` in `color.harmony`; `angle` in `paint.editGradient` and in the `gra
 `paint.freeform.splitLine`; `tolerance` and `gap` in `shapeBuilder.merge`; `gap` in `shapeBuilder.regions` and `shapeBuilder.copyRegion`; and
 `width` and `tolerance` in `livePaint.strokeEdge`. A null is read as a key left out. A gradient stop that names a
 swatch refuses a `tint` that is not a number with `` stop 0: `tint` must be a number ``.
+`shape.flare` takes the rings' end point as both `x2` and `y2` or neither: given only one of them, with the other left
+out or null, it answers `` missing number `y2` `` (or `` missing number `x2` ``), draws nothing and adds no undo step.
+With neither, `pathLength` and `direction` place the end point.
 
 The Edit, document, guide and slice commands also check the type of each param and change nothing when one is
 wrong. A value that is not a number gets `` `dx` must be a number, not "10" ``: `dx` and `dy` in `edit.duplicate`,
