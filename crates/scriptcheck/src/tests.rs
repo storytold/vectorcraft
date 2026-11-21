@@ -530,6 +530,40 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
 }
 
+/// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
+/// them and setting them on another object does not.
+#[test]
+fn setting_a_files_length_or_flags_writes_it() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "f.length = 0;\n",
+        "f.readonly = true;\n",
+        "f.hidden |= 1;\n",
+        "f.length++;\n",
+        "new File(q).length = 4;\n",
+        "if (x) --f.length;\n",
+        "f['readonly'] = false;\n",
+        "++\n",
+        "f.length;\n",
+        "var k = ++\n",
+        "f['length'];\n",
+        "++f.length.x; var z = new File(i++).length;\n",
+        "var n = f.length;\n",
+        "if (f.readonly == true) {}\n",
+        "o.length = 0;\n",
+        "o.f.length = 0;\n",
+        "var s = [1]; s.length = 0;\n",
+        "var m = f['length'];\n",
+        "i++\n",
+        "f.length;\n",
+        "f.length\n",
+        "++i;\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[2, 3, 4, 5, 6, 7, 8, 10, 12][..])]);
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3, 4, 5, 6, 7, 8, 10, 12][..]));
+}
+
 #[test]
 fn a_function_after_a_line_that_ends_a_statement_is_a_declaration() {
     let r = report("var n = 1\nfunction File() {}\nFile('x');\nvar m = 2 /* a\n */ function Socket() {}\nnew Socket();\n");
