@@ -72,9 +72,8 @@ const INSIDE: &[(&str, &str)] = &[
     ),
 ];
 
-/// The name the checker does not read, which also stands for its members: `script.check` reads
-/// scripts written for the reference app, `vc` is VectorCraft's own API, and what `vc.run` does
-/// depends on the command it runs.
+/// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
+/// own API, and what `vc.run` does depends on the command it runs.
 const NOT_CHECKED: &str = "vc";
 
 /// An expression whose value is the list of names, one to a line.
