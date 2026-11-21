@@ -7270,8 +7270,10 @@ it touches and, with Measurement Labels on, its radius by the pointer, followed 
 radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
 Shift held at the press puts the circle on the other side of the path. On a straight segment, at a cusp, at a corner
 anchor, or where the circle would reach past the canvas, the pointer shows "Straight segment", "Cusp", "Corner" or
-"Circle too large", and a click draws nothing. The pointer passes over the circles the tool drew until another tool
-is chosen or an edit, Undo or Redo is made outside the tool.
+"Circle too large", and a click draws nothing. The pointer passes over the circles the tool drew until Deselect or a
+selection made outside the tool leaves none of them selected, another tool is chosen, another document becomes
+active, or an edit, Undo or Redo is made outside the tool. Selecting one of them again does not put it back out of
+reach.
 
 ```json
 {"name":"run_command","arguments":{"command":"shape.curvatureCircle","params":{"id":12,"segment":0,"t":0.5}}}
