@@ -17,7 +17,7 @@ path = "src/main.rs"
 vectorcraft-engine = { workspace = true, features = ["bundled-fonts", "heif"] }
 vectorcraft-ui-egui = { workspace = true }
 # The page command API (storytold/craft-libs#413): the request plumbing behind window.vectorcraft.
-craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e", version = "0.1.0" }
+craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3", version = "0.1.0" }
 vectorcraft-format = { workspace = true }
 vectorcraft-text = { workspace = true }
 egui = { workspace = true }
