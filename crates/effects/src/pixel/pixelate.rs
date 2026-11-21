@@ -437,7 +437,7 @@ impl Screen {
 
 /// Color Halftone: each channel screened at its angle in square cells sized so that a dot of
 /// `max_radius` (pixels of the document's raster grid, `space.line` each) fills one; each cell's
-/// dot covers the share of it that is the channel's mean there (white stays white, black black).
+/// dot covers the mean ink coverage of that cell (white stays white, black black).
 /// Coverage stays as it is.
 pub(super) fn color_halftone(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, max_radius: f64, angles: [f64; 4]) {
     let Some(place) = Place::new(space, w, h) else { return };
@@ -446,7 +446,8 @@ pub(super) fn color_halftone(px: &mut [[u8; 4]], w: usize, h: usize, space: &Pix
     if !(side.is_finite() && side / place.px >= 3.0) {
         return;
     }
-    let channels = space.channels;
+    // Screen RGB as dark ink against white, like the CMY channel previews.
+    let channels = if space.channels == Channels::Rgb { Channels::CmyPlane } else { space.channels };
     let n = split([0; 4], channels).1;
     let limit = w.saturating_mul(h).saturating_add(4096);
     let mut screens = Vec::with_capacity(n);
