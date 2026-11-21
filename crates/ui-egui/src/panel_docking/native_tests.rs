@@ -358,6 +358,61 @@ fn saved_native_geometry_updates_before_viewport_metadata_is_available() {
     assert_eq!(h.host.borrow().windows[&viewport].rect.min, ORIGIN + vec2(480.0, 260.0));
 }
 
+/// Swatches and Color as tabs of one native window, with its OS window drawn.
+fn native_tab_group(h: &mut Harness) -> ViewportId {
+    let viewport = h.float("swatches");
+    h.app.run("window.panel.float", json!({"panel": "color", "onto": "swatches"})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("color"), viewport);
+    viewport
+}
+
+#[test]
+fn a_deferred_group_float_of_one_accordion_entry_leaves_the_accordion_window_alone() {
+    let mut h = Harness::new();
+    let viewport = native_tab_group(&mut h);
+    let mut layout = layout_of(&h.app.ui);
+    let entry = |panel: &str| craft_ui::docking::StackEntry { panel: panel.to_string(), open: true, height: None };
+    layout.floating.iter_mut().find(|w| w.contains(&"swatches".to_string())).unwrap().root =
+        Node::Stack { entries: vec![entry("swatches"), entry("color")] };
+    h.app.ui.docking = Some(layout);
+    h.frames(3);
+    let before = h.host.borrow().windows[&viewport].rect;
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
+    h.frames(3);
+    assert_eq!(h.viewport("color"), viewport);
+    assert_ne!(h.viewport("swatches"), viewport, "the entry floats in a window of its own");
+    assert_eq!(h.host.borrow().windows[&viewport].rect, before, "the accordion's window keeps its place and size");
+}
+
+#[test]
+fn a_deferred_group_float_of_a_tab_group_resizes_its_native_window() {
+    let mut h = Harness::new();
+    let viewport = native_tab_group(&mut h);
+    let id = floating_window(&layout_of(&h.app.ui), "swatches").unwrap().id;
+    let before = h.host.borrow().windows[&viewport].rect;
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "group": true, "width": 400})).unwrap();
+    h.frames(3);
+    assert_eq!(floating_window(&layout_of(&h.app.ui), "swatches").unwrap().id, id);
+    assert_eq!(h.viewport("color"), viewport);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, Rect::from_min_size(before.min, vec2(400.0, before.height())));
+}
+
+#[test]
+fn deferred_native_geometry_does_not_show_panels_hidden_before_it_applies() {
+    let mut h = Harness::new();
+    h.float("swatches");
+    h.app.ui_ctx = None;
+    h.app.run("window.panel.float", json!({"panel": "swatches", "width": 350})).unwrap();
+    h.app.run("window.panels", json!({})).unwrap();
+    assert!(!h.app.ui.dock);
+    h.frames(3);
+    assert!(!h.app.ui.dock, "the panels stay hidden");
+    assert_eq!(floating_window(&layout_of(&h.app.ui), "swatches").and_then(|w| w.native).map(|n| n[2]), Some(350.0));
+}
+
 #[test]
 fn a_floated_panel_opens_its_own_os_window_where_the_backend_has_viewports() {
     let mut h = Harness::new();
