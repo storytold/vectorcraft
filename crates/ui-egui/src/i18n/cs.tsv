@@ -36,6 +36,7 @@
 	Quit VectorCraft	Ukončit VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Umístit grafiku
+@id	language.name	Čeština
 @msg	{key} must be [x, y] with finite coordinates	{key} musí být [x, y] s konečnými souřadnicemi
 @msg	ids must contain 1–10000 object ids	ids musí obsahovat 1–10000 identifikátorů objektů
 

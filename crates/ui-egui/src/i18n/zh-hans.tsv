@@ -156,6 +156,7 @@
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
 	Anti-aliasing Method	消除锯齿方法
+@id	language.name	简体中文
 antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强

@@ -28,6 +28,7 @@
 	Light	Svijetlo
 	Quit VectorCraft	Zatvori VectorCraft
 	Drop Artwork	Ispusti crtež
+@id	language.name	Bosanski
 @msg	{key} must be [x, y] with finite coordinates	{key} mora biti [x, y] s konačnim koordinatama
 @msg	ids must contain 1–10000 object ids	ids mora sadržavati 1–10000 ID-ova objekata
 	File	Datoteka
