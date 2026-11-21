@@ -46,6 +46,34 @@ fn a_refused_fidelity_keeps_the_dialog_open() {
     assert_eq!(app.session.tool_options_of("smooth")["fidelity"], json!(5.0));
 }
 
+/// Smooth Tool Options shows Smoothness under Fidelity, at 50% until it is set, and OK sets it; a
+/// Smoothness the tool refuses keeps the dialog open with nothing set. The other freehand tools have
+/// no Smoothness.
+#[test]
+fn smooth_tool_options_set_the_smoothness() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "smooth"})).unwrap();
+    let text = painted(&mut app);
+    assert!(text.contains("Smoothness:") && text.contains("50%"), "{text}");
+    assert!(text.find("Fidelity:") < text.find("Smoothness:"), "{text}");
+    app.ui.dialog.as_mut().unwrap().fields.insert("smoothness".into(), json!(120));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert_eq!(e, "tool `smooth`: `smoothness` must be a number from 0 to 100");
+    assert!(app.ui.dialog.is_some(), "the dialog stays open");
+    assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(50.0));
+    app.ui.dialog.as_mut().unwrap().fields.insert("smoothness".into(), json!(30));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(30.0));
+    app.run("tool.options", json!({"tool": "smooth"})).unwrap();
+    assert!(painted(&mut app).contains("30%"));
+    for tool in ["pencil", "paintbrush", "blobBrush", "eraser"] {
+        app.run("tool.options", json!({"tool": tool})).unwrap();
+        let text = painted(&mut app);
+        assert!(!text.contains("Smoothness:"), "{tool}: {text}");
+    }
+}
+
 #[test]
 fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
     for roundness in [-5.0, 0.0, 0.05, 0.1, 1.0, 50.0, 100.0, 120.0] {
@@ -186,8 +214,8 @@ fn each_tool_shows_its_options_and_ok_sets_them() {
     let pb_text = painted(&mut app);
     assert!(pb_text.contains("Paintbrush Tool Options"));
     assert!(!pb_text.contains("Alt key toggles to Smooth Tool") && !pb_text.contains("Live preview"), "{pb_text}");
-    // Smooth has Fidelity only, the Eraser Size only, and the Blob Brush Fidelity, Size, Keep selected and Merge only
-    // with selection.
+    // Smooth has Fidelity and Smoothness only, the Eraser Size only, and the Blob Brush Fidelity, Size, Keep selected
+    // and Merge only with selection.
     app.run("tool.options", json!({"tool": "smooth"})).unwrap();
     let text = painted(&mut app);
     assert!(text.contains("Smooth Tool Options") && text.contains("Fidelity:"), "{text}");

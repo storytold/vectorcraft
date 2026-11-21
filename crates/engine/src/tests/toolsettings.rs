@@ -473,6 +473,54 @@ fn alt_smoothing_takes_the_smooth_tools_fidelity() {
     }
 }
 
+/// The Smoothness an Alt smoothing drag sends with `path.smoothRegion` on a selected path.
+fn alt_smoothness(s: &mut Session) -> Option<f64> {
+    use vectorcraft_tools::Action;
+    let mods = Mods { alt: true, ..Default::default() };
+    let mut last = vec![];
+    for (kind, x, y) in [(PointerKind::Down, 50.0, 150.0), (PointerKind::Drag, 150.0, 150.0), (PointerKind::Up, 250.0, 160.0)] {
+        let ev = PointerEvent { mods, ..PointerEvent::new(kind, x, y) };
+        last = s.with_tool_cx(ViewInfo::default(), |t, cx| t.pointer(cx, &ev));
+    }
+    last.iter().find_map(|a| match a {
+        Action::Exec(c, v) if c == "path.smoothRegion" => v["smoothness"].as_f64(),
+        _ => None,
+    })
+}
+
+/// Smooth Tool Options' Smoothness is kept with the preferences (50% until it is set), and Alt
+/// smoothing with the Pencil, Paintbrush and Blob Brush uses it. A Smoothness outside 0 to 100 is
+/// an error that sets nothing.
+#[test]
+fn the_smooth_tools_smoothness_is_kept_and_alt_smoothing_takes_it() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    select(&mut s, "smooth");
+    assert_eq!(s.tool_options()["smoothness"], json!(50.0));
+    for bad in [json!(-1), json!(100.5), json!("30"), json!(null)] {
+        let e = s.set_tool_option_cmd(&json!({"key": "smoothness", "value": bad})).unwrap_err();
+        assert_eq!(e, "tool `smooth`: `smoothness` must be a number from 0 to 100", "{bad}");
+    }
+    assert_eq!(s.tool_options()["smoothness"], json!(50.0));
+    s.set_tool_option("smoothness", &json!(80));
+    assert_eq!(s.prefs.tool_settings["smooth"]["smoothness"], json!(80.0));
+    for id in ["pencil", "paintbrush", "blobBrush"] {
+        select(&mut s, id);
+        if id == "pencil" {
+            s.set_tool_option("altSmooth", &json!(true));
+        }
+        assert_eq!(alt_smoothness(&mut s), Some(80.0), "{id}");
+        assert!(s.tool_options().get("smoothness").is_none(), "{id} has no Smoothness of its own");
+    }
+    s.set_tool_option_cmd(&json!({"tool": "smooth", "key": "smoothness", "value": 10})).unwrap();
+    assert_eq!(alt_smoothness(&mut s), Some(10.0), "the Blob Brush takes the new Smoothness");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "smooth");
+    assert_eq!(next.tool_options()["smoothness"], json!(10.0));
+}
+
 /// `tool.setOption` with a value of the wrong type, a number out of range, an unknown value or an
 /// option the tool doesn't have is an error naming the tool and the option. Nothing is set, also
 /// when another option given with it is good, and nothing is saved or recorded for undo.

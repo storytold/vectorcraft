@@ -2848,6 +2848,7 @@ digits	Malayalam	Malajalam
 	Close paths when ends are within:	Sulje polut, kun päät ovat etäisyydellä:
 	Edit selected paths within:	Muokkaa valittuja polkuja etäisyydellä:
 	Fidelity:	Tarkkuus:
+	Smoothness:	Pehmeys:
 	Fill new strokes	Täytä uudet viivat
 	Alt key toggles to Smooth Tool	Alt-näppäin vaihtaa Tasoitustyökaluun
 	Live curve fitting	Käyrän sovitus piirrettäessä
