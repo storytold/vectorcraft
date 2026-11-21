@@ -425,6 +425,26 @@ fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     assert!(!text.contains("Variation:") && !text.contains("Fixed"), "{text}");
 }
 
+/// The Blob Brush's Size menu offers Stylus Wheel beside Fixed and Pressure, Fixed still the
+/// default; OK sets it with the Variation.
+#[test]
+fn the_blob_brush_size_offers_the_stylus_wheel() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    assert!(painted(&mut app).contains("Fixed"));
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.str("sizeMode"), "fixed", "Fixed by default");
+    d.fields.insert("sizeMode".into(), json!("stylusWheel"));
+    d.fields.insert("sizeVariation".into(), json!(5));
+    let text = painted(&mut app);
+    assert!(text.contains("Stylus Wheel") && !text.contains("Fixed"), "{text}");
+    super::super::confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("blobBrush");
+    assert_eq!((o["sizeMode"].clone(), o["sizeVariation"].as_f64()), (json!("stylusWheel"), Some(5.0)));
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    assert!(painted(&mut app).contains("Stylus Wheel"));
+}
+
 /// Eraser Tool Options gives Angle, Roundness and Size each a variation menu with a Variation
 /// field; OK sets the modes and Variations. The Blob Brush keeps one menu, on Size.
 #[test]

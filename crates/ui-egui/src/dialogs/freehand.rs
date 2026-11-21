@@ -185,7 +185,7 @@ struct Varied<'a> {
 
 /// The rows of a tip value with a variation menu: the value with its menu of `modes` before the
 /// field, then the Variation field the menu's modes other than Fixed take (greyed while the
-/// menu is Fixed). The Blob Brush's Size offers Fixed and Pressure, and the Eraser's Angle,
+/// menu is Fixed). The Blob Brush's Size offers Fixed, Pressure and Stylus Wheel, and the Eraser's Angle,
 /// Roundness and Size every mode.
 fn varied(ui: &mut egui::Ui, d: &mut Dialog, v: &Varied, modes: &[Variation]) {
     let (mode_key, var_key) = (format!("{}Mode", v.key), format!("{}Variation", v.key));
@@ -296,7 +296,7 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     // The Eraser's Size rows are above.
     if !eraser && d.fields.contains_key("sizeMode") {
-        size_rows(ui, d, &[Variation::Fixed, Variation::Pressure]);
+        size_rows(ui, d, &vectorcraft_tools::draw2::BLOB_SIZE_MODES);
     } else if !eraser && d.fields.contains_key("size") {
         number(ui, d, ("size", tl!("Size:")), "pt", 1, (0.1, 1000.0));
     }
