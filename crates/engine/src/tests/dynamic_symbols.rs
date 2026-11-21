@@ -741,6 +741,32 @@ fn a_picked_clipping_path_is_outlined_by_its_own_geometry() {
     assert!((b.x0 - 10.0).abs() < 0.5 && (b.x1 - 50.0).abs() < 0.5, "the clipping path's own edge: {b:?}");
 }
 
+/// A symbol instance in a dynamic symbol's art whose own art is a clip group takes the instance's
+/// fill effect on the clip group's members, which the canvas draws moved: Direct Selection picks it
+/// where its member is drawn, not where the member's own shape is, and outlines it there.
+#[test]
+fn a_nested_instance_of_a_clip_group_is_picked_where_the_fill_effect_draws_its_art() {
+    use vectorcraft_doc::hit::HitOptions;
+    let opt = HitOptions { tol: 1.0, ..Default::default() };
+    let mut s = session();
+    let content = square(&mut s, 10.0);
+    let clip = id(&s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 200, "height": 60})).unwrap());
+    s.execute("object.clippingMask.make", &json!({"ids": [content.0, clip.0]})).unwrap();
+    let group = top(&s);
+    assert!(node(&s, group).clips());
+    let inner = id(&s.execute("symbol.new", &json!({"name": "Inner", "ids": [group.0]})).unwrap());
+    let b = square(&mut s, 160.0);
+    let inst = id(&s.execute("symbol.new", &json!({"name": "Outer", "ids": [inner.0, b.0], "type": "dynamic"})).unwrap());
+    row_effect(&mut s, inst, true, "distort.transform", json!({"moveH": 100}));
+    // The member is drawn at x 110..150, inside the clipping path.
+    assert_eq!(pixel(&s, 130, 30), BLUE, "the canvas draws the member moved");
+    assert_ne!(pixel(&s, 30, 30), BLUE, "and not in its own place");
+    assert_eq!(part_at(&s, inst, (130.0, 30.0), opt), Some(vec![0]), "the nested instance where its member is drawn");
+    assert_eq!(part_at(&s, inst, (30.0, 30.0), opt), None, "the member's own place");
+    let o = part_outline_box(&s, inst, &[0]);
+    assert!((o.x0 - 110.0).abs() < 0.5 && (o.x1 - 150.0).abs() < 0.5, "the outline follows the moved member: {o:?}");
+}
+
 #[test]
 fn a_drag_of_a_picked_object_moves_nothing_and_says_why() {
     let mut s = session();

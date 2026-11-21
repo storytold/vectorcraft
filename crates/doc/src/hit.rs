@@ -131,6 +131,20 @@ pub fn set_instance_row_art(f: InstanceRowArt) {
     let _ = INSTANCE_ROW_ART.set(f);
 }
 
+/// Does a symbol instance's active fill or stroke carry a visible geometry effect, which the art it
+/// places takes on each of its fills and strokes ([`set_instance_row_art`])? Effects are classified
+/// above this crate, so the engine registers one with [`set_instance_reshapes`].
+pub type InstanceReshapes = fn(&Node) -> bool;
+
+static INSTANCE_RESHAPES: OnceLock<InstanceReshapes> = OnceLock::new();
+
+/// Register how Direct Selection tells whether a symbol instance's fill or stroke effects reshape
+/// its art (the first registration stays).
+pub fn set_instance_reshapes(f: InstanceReshapes) {
+    // Already set: the same engine, registered by another session.
+    let _ = INSTANCE_RESHAPES.set(f);
+}
+
 /// The shapes that [`ImagePaint`] gives for one object.
 type Painted = Vec<(BezPath, FillRule, AppearanceItem)>;
 
@@ -1603,17 +1617,18 @@ fn painted_hit(painted: &Painted, p: Point, opt: HitOptions) -> Option<HitKind> 
     })
 }
 
-/// Is `n` a symbol instance whose active fill or stroke has geometry effects that reshape the art
-/// it draws ([`image_paint`])? Callers ask [`own_effects_art`] first, which takes an instance whose
+/// Is `n` a symbol instance whose active fill or stroke has a visible geometry effect, which
+/// reshapes the art it draws ([`set_instance_reshapes`])? This holds whatever that art is, clip
+/// groups and type included. Callers ask [`own_effects_art`] first, which takes an instance whose
 /// own effects change what it draws; an instance whose own effects add only pixels (a drop shadow)
 /// is tested here. Never with `outline`, where the canvas draws no effects, nor while a
-/// [`DrawnOff`] guard lives.
-fn reshapes_instance_art(n: &Node, symbols: &SymbolBoxes, outline: bool) -> bool {
+/// [`DrawnOff`] guard lives, nor while nothing is registered.
+fn reshapes_instance_art(n: &Node, outline: bool) -> bool {
     !outline
         && !DRAWN_OFF.get()
         && matches!(n.kind, NodeKind::SymbolInstance { .. })
         && n.appearance.items.iter().any(|i| !i.effects().is_empty())
-        && !image_paint(Some(symbols.document()), n).is_empty()
+        && INSTANCE_RESHAPES.get().is_some_and(|f| f(n))
 }
 
 /// How many objects `n` holds with its opacity masks' art ([`Node::count_with_masks`]), what
@@ -1905,7 +1920,7 @@ impl FindPart<'_> {
                 let _art_only = ArtOnly::set();
                 return hit_any(&art, self.p, opt, self.symbols);
             }
-            if reshapes_instance_art(&placed, self.symbols, opt.outline) {
+            if reshapes_instance_art(&placed, opt.outline) {
                 return drawn_instance_hit(&placed, self.p, opt, self.symbols);
             }
         }
@@ -2235,7 +2250,7 @@ fn outline_within(n: &Node, symbols: &SymbolBoxes, limit: Option<Rect>, outline:
         return;
     }
     if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
-        && reshapes_instance_art(n, symbols, outline)
+        && reshapes_instance_art(n, outline)
     {
         if symbols.art(symbol).is_some()
             && let Some(art) = InstanceArt::nested(symbols.document(), n)

@@ -3041,8 +3041,14 @@ fn a_click_counts_the_members_of_an_intertwine_group_in_symbol_art_toward_one_li
     assert_eq!(with_art_limit(100, || at(140.0)).0, Some(id), "on the squares' paths");
 }
 
+/// Whether a symbol instance's fill or stroke effects reshape its art, for these tests: when
+/// [`painted_far_away`] gives it shapes.
+fn reshapes_when_painted(n: &Node) -> bool {
+    !painted_far_away(None, n).is_empty()
+}
+
 /// An instance of the symbol named `symbol`, not moved, whose fill has a geometry effect:
-/// [`painted_far_away`] gives it shapes when the name starts with "Painted", so a part pick and a
+/// [`reshapes_when_painted`] holds for it when the name starts with "Painted", so a part pick and a
 /// part outline walk its art as drawn with its fill's effects ([`InstanceArt::drawn`]).
 fn painted_instance_of(d: &mut Document, symbol: &str) -> Arc<Node> {
     let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
@@ -3075,6 +3081,7 @@ fn painted_chain(d: &mut Document) -> NodeId {
 #[test]
 fn a_parts_outline_walks_nested_reshaped_symbol_instances_within_one_limit() {
     set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
     let mut d = Document::new(600.0, 400.0);
     let id = painted_chain(&mut d);
     let n = d.node(id).unwrap();
@@ -3093,6 +3100,7 @@ fn a_parts_outline_walks_nested_reshaped_symbol_instances_within_one_limit() {
 #[test]
 fn a_part_pick_walks_nested_reshaped_symbol_instances_within_one_limit() {
     set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
     let mut d = Document::new(600.0, 400.0);
     let id = painted_chain(&mut d);
     let opt = HitOptions::default();
