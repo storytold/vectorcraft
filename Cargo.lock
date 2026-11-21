@@ -1010,6 +1010,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-cdr"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=9b28b56bc7207ef7ce806f37df72cb94c0ad5c37#9b28b56bc7207ef7ce806f37df72cb94c0ad5c37"
+dependencies = [
+ "crc32fast",
+ "flate2",
+]
+
+[[package]]
 name = "craft-cms"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
@@ -1051,7 +1060,7 @@ dependencies = [
 [[package]]
 name = "craft-eps"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=7258e42d8#7258e42d8dd909f2176fb08f09aae048611f3eaf"
+source = "git+https://github.com/storytold/craft-libs?rev=cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec#cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec"
 
 [[package]]
 name = "craft-eps"
@@ -1253,9 +1262,9 @@ dependencies = [
 [[package]]
 name = "craft-ps"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=7258e42d8#7258e42d8dd909f2176fb08f09aae048611f3eaf"
+source = "git+https://github.com/storytold/craft-libs?rev=cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec#cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec"
 dependencies = [
- "craft-eps 0.1.0 (git+https://github.com/storytold/craft-libs?rev=7258e42d8)",
+ "craft-eps 0.1.0 (git+https://github.com/storytold/craft-libs?rev=cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec)",
  "flate2",
  "kurbo 0.13.1",
  "miniz_oxide 0.8.9",
@@ -6721,6 +6730,7 @@ dependencies = [
  "craft-image-codecs",
  "crc32fast",
  "proptest",
+ "vectorcraft-affinity",
 ]
 
 [[package]]
@@ -6759,16 +6769,6 @@ dependencies = [
  "vectorcraft-geom 0.24.1",
  "vectorcraft-pathops 0.24.1",
  "vectorcraft-text",
-]
-
-[[package]]
-name = "vectorcraft-cdr"
-version = "0.24.1"
-dependencies = [
- "crc32fast",
- "flate2",
- "proptest",
- "vectorcraft-cdr",
 ]
 
 [[package]]
@@ -6855,6 +6855,7 @@ version = "0.24.1"
 dependencies = [
  "cfb",
  "chrono",
+ "craft-cdr",
  "craft-docpath",
  "craft-image-codecs",
  "craft-jxl",
@@ -6886,7 +6887,6 @@ dependencies = [
  "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
- "vectorcraft-cdr",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-eps",
@@ -7083,6 +7083,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom 0.24.1",
+ "vectorcraft-pdf",
  "vectorcraft-testkit",
  "vectorcraft-text",
 ]
@@ -7102,6 +7103,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-geom 0.24.1",
  "wasmi",
+ "wasmparser 0.228.0",
  "wat",
  "web-time",
 ]

@@ -380,7 +380,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
-        "ui.perspectivePlane" => app.session.active().is_some(),
+        "ui.perspectivePlane" | "ui.findAndReplace" | "ui.retype" => app.session.active().is_some(),
         "window.newWindow" => app.session.active().is_some(),
         // Tile and Cascade with two windows or more (documents, or views of one from New Window);
         // Float in Window for a current window under the tabs; Float All in Windows while a window

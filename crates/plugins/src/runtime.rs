@@ -4,6 +4,7 @@ use wasmi::{
     Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, Val,
     WasmParams, WasmResults,
 };
+use wasmparser::{Validator, WasmFeatures};
 
 use crate::host::{self, Bridge, Deadline, Host, Report, Run};
 use crate::manifest::{MAX_MANIFEST_BYTES, Manifest};
@@ -26,6 +27,44 @@ const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64,
 
 /// Bytes a bulk memory instruction copies or fills for each unit of fuel.
 pub const BYTES_COPIED_PER_FUEL: u32 = FUEL_COSTS.bytes_copied_per_fuel;
+
+/// The WebAssembly proposals a plug-in may use, as `docs/plugins.md` lists them. `GC_TYPES` lets
+/// reference types use `funcref` and `externref`; the garbage collection proposal stays off. Every
+/// proposal not listed here is off, whatever wasmi's defaults and crate features turn on.
+const WASM_FEATURES: WasmFeatures = WasmFeatures::MUTABLE_GLOBAL
+    .union(WasmFeatures::SIGN_EXTENSION)
+    .union(WasmFeatures::SATURATING_FLOAT_TO_INT)
+    .union(WasmFeatures::MULTI_VALUE)
+    .union(WasmFeatures::BULK_MEMORY)
+    .union(WasmFeatures::REFERENCE_TYPES)
+    .union(WasmFeatures::GC_TYPES)
+    .union(WasmFeatures::TAIL_CALL)
+    .union(WasmFeatures::EXTENDED_CONST)
+    .union(WasmFeatures::FLOATS);
+
+/// Validates `bytes` with only [`WASM_FEATURES`] on, before wasmi reads the module. A module that
+/// uses any other proposal is refused with the validator's error, which names the proposal.
+fn check_features(bytes: &[u8]) -> Result<()> {
+    Validator::new_with_features(WASM_FEATURES).validate_all(bytes).map(|_| ()).map_err(|e| Error::Module(e.to_string()))
+}
+
+/// Sets each WebAssembly proposal that wasmi's `Config` has a setter for in this build on or off,
+/// to match [`WASM_FEATURES`].
+fn set_features(config: &mut Config) -> &mut Config {
+    config
+        .wasm_mutable_global(true)
+        .wasm_sign_extension(true)
+        .wasm_saturating_float_to_int(true)
+        .wasm_multi_value(true)
+        .wasm_bulk_memory(true)
+        .wasm_reference_types(true)
+        .wasm_tail_call(true)
+        .wasm_extended_const(true)
+        .floats(true)
+        .wasm_multi_memory(false)
+        .wasm_custom_page_sizes(false)
+        .wasm_wide_arithmetic(false)
+}
 
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
@@ -171,8 +210,9 @@ impl Plugin {
         if !bytes.starts_with(b"\0asm") {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
         }
+        check_features(bytes)?;
         let mut config = Config::default();
-        config
+        set_features(&mut config)
             .consume_fuel(true)
             .fuel_cost(FUEL_COSTS)
             .enforced_limits(EnforcedLimits::strict())
