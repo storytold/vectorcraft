@@ -266,29 +266,27 @@ fn insert_look_turned(
     Ok(json!({ "id": id.0 }))
 }
 
-/// Draw Inside's clip group for `target`, the object new art goes inside: the clip group
-/// [mask copy, target, …] `target` already is the clipped object of, else one made where `target`
-/// was, holding an unpainted clipping copy of it and then `target`. New art and pastes go on top
-/// of its children.
+/// Draw Inside's clip group for `target`, the object new art goes inside: the clip group `target`
+/// already is the clipping path of, else one made where `target` was, with `target` as its
+/// clipping path. `target` keeps its appearance, so its fills paint behind the art drawn inside it
+/// and its strokes over that art, unclipped ([`Node::clip_paint`], #8753). New art and pastes go
+/// on top of the group's children.
 pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeId) -> Result<NodeId> {
     if let Some(p) = d.parent_of(target)
-        && d.node(p).is_some_and(|pn| matches!(&pn.kind, NodeKind::Group { clip: true, children } if children.get(1).is_some_and(|c| c.id == target)))
+        && d.node(p)
+            .is_some_and(|pn| matches!(&pn.kind, NodeKind::Group { clip: true, children } if children.first().is_some_and(|c| c.id == target)))
     {
         return Ok(p);
     }
     let (par, idx, _) = d.position(target).ok_or(crate::EngineError::NoNode(target))?;
-    // The mask is a copy with ids of its own, its subpaths' too (a compound path's).
-    let original = d.node(target).cloned().ok_or(crate::EngineError::NoNode(target))?;
-    let mut mask = d.reid(&original);
-    mask.appearance = Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0).into();
-    if let NodeKind::Path { clipping, .. } = &mut mask.kind {
+    let gid = d.alloc_id();
+    d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![], clip: true }))?;
+    d.move_node(target, Some(gid), 0)?;
+    // A compound path or type is the clipping path by being the group's first child; a path is
+    // marked as well, as Make Clipping Mask marks it.
+    if let Some(NodeKind::Path { clipping, .. }) = d.node_mut(target).map(|n| &mut n.kind) {
         *clipping = true;
     }
-    let gid = d.alloc_id();
-    d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![std::sync::Arc::new(mask)], clip: true }))?;
-    d.move_node(target, Some(gid), usize::MAX)?;
-    // Copied type whose layout caches `reid` dropped has them again.
-    super::typecmd::refresh_bounds_of(d, &[gid]);
     Ok(gid)
 }
 
