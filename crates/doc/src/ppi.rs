@@ -159,12 +159,8 @@ fn webp(b: &[u8]) -> Option<(f64, f64)> {
 }
 
 fn bmp(b: &[u8]) -> Option<(f64, f64)> {
-    // BITMAPINFOHEADER (40 bytes or longer) at 14: pixels per metre at +24 and +28.
-    if le32(b, 14)? < 40 {
-        return None;
-    }
-    let ppm = |at| le32(b, at).filter(|v| (1..=i32::MAX as u32).contains(v)).map(per_metre);
-    Some((ppm(38)?, ppm(42)?))
+    let (x, y) = craft_image_codecs::bmp_probe::pixels_per_meter(b)?;
+    Some((per_metre(x.unsigned_abs()), per_metre(y.unsigned_abs())))
 }
 
 /// Pixels per metre for a resolution in pixels per inch (the unit `pHYs` stores).
@@ -239,6 +235,35 @@ mod tests {
         assert_eq!((img.width(), img.height()), (4, 3));
         // Every PNG ends with this IEND chunk CRC.
         assert_eq!(crc32(&[b"IEND"]), 0xAE42_6082);
+    }
+
+    #[test]
+    fn bmp_resolution_keeps_fractional_axes_and_rounds_near_whole_ppi() {
+        let bmp = bmp_resolution_header(108, 6001, 11811);
+        let (horizontal, vertical) = resolution(&bmp).expect("recorded physical resolution");
+        assert!((horizontal - 152.4254).abs() < 1e-9);
+        assert_eq!(vertical, 300.0);
+    }
+
+    #[test]
+    fn bmp_resolution_requires_complete_positive_density_in_range() {
+        let bmp = bmp_resolution_header(40, 3937008, 6001);
+        assert_eq!(resolution(&bmp).map(|(x, _)| x), Some(100_000.0));
+        for len in 0..bmp.len() {
+            assert_eq!(resolution(&bmp[..len]), None, "only {len} header bytes");
+        }
+        for (dib_size, x, y) in [(12, 11811, 11811), (40, -1, 11811), (40, 11811, 0), (40, 1, 11811), (40, 11811, 3937009)] {
+            assert_eq!(resolution(&bmp_resolution_header(dib_size, x, y)), None, "DIB {dib_size}, density {x} by {y}");
+        }
+    }
+
+    fn bmp_resolution_header(dib_size: u32, x: i32, y: i32) -> [u8; 46] {
+        let mut header = [0; 46];
+        header[..2].copy_from_slice(b"BM");
+        header[14..18].copy_from_slice(&dib_size.to_le_bytes());
+        header[38..42].copy_from_slice(&x.to_le_bytes());
+        header[42..46].copy_from_slice(&y.to_le_bytes());
+        header
     }
 
     /// RIFF chunk `ty` holding `data`, padded to an even length.
