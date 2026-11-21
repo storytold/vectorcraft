@@ -74,13 +74,250 @@ fn stroke_subpath(pts: &[Point], tol: Option<f64>, closed: bool) -> SubPath {
     }
 }
 
-/// Pencil's Edit Selected Paths in the middle of a path: a stroke from one point of a subpath of
-/// `pd` to another, each within `within` of it, replaces the section between them (the shorter
-/// way round a closed subpath) with the stroke fitted at `tol` (with no `tol`, unfitted). The
-/// subpath's index and its new shape; None when the stroke doesn't start and end on the same
-/// subpath, or meets it once.
+/// The anchor of `sp` at the point of it nearest to `q`: the one there, else a new one, and
+/// whether it was added.
+fn anchor_at(sp: &mut SubPath, q: Point) -> Option<(usize, bool)> {
+    let (_, seg, t, _, _) = PathData::single(sp.clone()).nearest(q)?;
+    let n = sp.anchors.len();
+    if n == 0 {
+        return None;
+    }
+    Some(if t <= 1e-6 {
+        (seg % n, false)
+    } else if t >= 1.0 - 1e-6 {
+        ((seg + 1) % n, false)
+    } else {
+        (sp.insert_anchor(seg, t), true)
+    })
+}
+
+/// The direction `sp` leaves anchor `k` going forward (towards the next anchor).
+fn forward_at(sp: &SubPath, k: usize) -> Option<kurbo::Vec2> {
+    let a = sp.anchors.get(k)?;
+    let n = sp.anchors.len();
+    let next = if sp.closed || k + 1 < n { sp.anchors.get((k + 1) % n) } else { None };
+    let toward = if a.h_out != a.p {
+        a.h_out
+    } else if let Some(b) = next {
+        if b.h_in != b.p { b.h_in } else { b.p }
+    } else {
+        // The last anchor of an open subpath: forward goes on the way it arrived.
+        let prev = sp.anchors.get(k.checked_sub(1)?)?;
+        return Some(a.p - if a.h_in != a.p { a.h_in } else { prev.p });
+    };
+    let v = toward - a.p;
+    (v.hypot() > 1e-9).then_some(v)
+}
+
+/// The direction stroke `pts` leaves its first point: towards its first point farther than
+/// `reach` from it, or its last point.
+fn heading(pts: &[Point], reach: f64) -> Option<kurbo::Vec2> {
+    let (&p0, rest) = pts.split_first()?;
+    let to = rest.iter().find(|q| q.distance(p0) > reach).or(rest.last())?;
+    let v = *to - p0;
+    (v.hypot() > 1e-9).then_some(v)
+}
+
+/// `stroke` (its first point moved onto anchor `a` of the path it leaves) fitted at `tol`: its
+/// anchors, the first of which is at `a`.
+fn fit_from(a: Point, pts: &[Point], tol: Option<f64>, reach: f64) -> Vec<Anchor> {
+    let mut stroke = pts.to_vec();
+    bend_ends(&mut stroke, Some(a), None, reach);
+    stroke_subpath(&stroke, tol, false).anchors.into_vec()
+}
+
+/// Bend the ends of `stroke` onto `a` (its start) and `b` (its end): each end moves all the way
+/// and the stroke behind it less and less, to not at all `reach` along it (Edit selected paths
+/// within), so a stroke that starts or ends near the path joins it smoothly instead of with a
+/// straight piece. A stroke shorter than `reach` bends over its own length, so each end still
+/// lands on its target and the other end's bend doesn't move it off.
+fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f64) {
+    let (Some(&first), Some(&last)) = (stroke.first(), stroke.last()) else { return };
+    // How far along the stroke each point lies, measured before anything moves.
+    let mut along = Vec::with_capacity(stroke.len());
+    let mut total = 0.0;
+    let mut prev = first;
+    for p in stroke.iter() {
+        total += prev.distance(*p);
+        prev = *p;
+        along.push(total);
+    }
+    let reach = reach.min(total);
+    if !reach.is_finite() || reach <= 0.0 {
+        // No length to bend over: only the ends move.
+        if let (Some(a), Some(p)) = (a, stroke.first_mut()) {
+            *p = a;
+        }
+        if let (Some(b), Some(p)) = (b, stroke.last_mut()) {
+            *p = b;
+        }
+        return;
+    }
+    let weight = |d: f64| (1.0 - d / reach).max(0.0);
+    let (shift_a, shift_b) = (a.map(|a| a - first), b.map(|b| b - last));
+    for (p, &d) in stroke.iter_mut().zip(&along) {
+        if let Some(s) = shift_a {
+            *p += s * weight(d);
+        }
+        if let Some(s) = shift_b {
+            *p += s * weight(total - d);
+        }
+    }
+}
+
+/// Pencil's Edit Selected Paths for a stroke that starts on a subpath of `pd` (within `within` of
+/// it) and ends away from it (#2850 follow-up): the path follows the stroke and ends where the
+/// stroke does. A closed subpath opens where the stroke starts and keeps its whole outline, run
+/// so that it arrives there heading the stroke's way. An open subpath is cut there and keeps the
+/// part behind the stroke: the part the stroke heads along is dropped. The subpath's index and its
+/// new shape; None when the stroke doesn't start on `pd`.
+fn redraw_extend(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -> Option<(usize, SubPath)> {
+    let first = *pts.first()?;
+    let (si, _, _, _, d) = pd.nearest(first)?;
+    if d > within || pts.len() < 2 {
+        return None;
+    }
+    let mut sp = pd.subpaths.get(si)?.clone();
+    if sp.anchors.len() < 2 {
+        return None;
+    }
+    let (mut k, _) = anchor_at(&mut sp, first)?;
+    let last = sp.anchors.len() - 1;
+    // Run the subpath so the stroke goes on from `k` forward; the result runs the subpath's own way
+    // again below, so a shape's holes stay holes under the non-zero fill rule. A closed subpath
+    // arrives at `k` heading the stroke's way. An open one drops the part the stroke heads along;
+    // one it leaves nearly square to it (more than 70° from its direction) drops its shorter
+    // part, never most of the path. From one of its ends it drops nothing.
+    let dir = heading(pts, within.max(tol.unwrap_or(0.0) * 2.0))?;
+    let cos = forward_at(&sp, k).map_or(0.0, |f| f.dot(dir) / (f.hypot() * dir.hypot()).max(1e-12));
+    let flipped = if sp.closed {
+        cos < 0.0
+    } else if k == 0 || k == last {
+        k == 0
+    } else if cos.abs() >= 0.34 {
+        cos < 0.0
+    } else {
+        let len = |i: usize, j: usize| (i..j).map(|s| kurbo::ParamCurveArclen::arclen(&sp.segment(s), 0.01)).sum::<f64>();
+        len(0, k) < len(k, last)
+    };
+    if flipped {
+        sp.reverse();
+        k = sp.anchors.len().checked_sub(1 + k)?;
+    }
+    let at = *sp.anchors.get(k)?;
+    let mut anchors: Vec<Anchor> = if sp.closed {
+        // From `k` all the way round back to `k`: the shape opens there.
+        let mut v: Vec<Anchor> = sp.anchors.get_range(k..)?.into_iter().chain(sp.anchors.get_range(..k)?).collect();
+        if let Some(a0) = v.first_mut() {
+            *a0 = Anchor::with_handles(a0.p, a0.p, a0.h_out);
+        }
+        v.push(at);
+        v
+    } else {
+        sp.anchors.get_range(..=k)?
+    };
+    let fit = fit_from(at.p, pts, tol, within);
+    let (f0, rest) = fit.split_first()?;
+    if let Some(a) = anchors.last_mut() {
+        *a = Anchor::with_handles(a.p, a.h_in, f0.h_out);
+    }
+    anchors.extend_from_slice(rest);
+    let mut out = SubPath::new(anchors, false);
+    if flipped {
+        out.reverse();
+    }
+    Some((si, out))
+}
+
+/// A stroke that leaves anchor `k` of `sp` and comes back to it: the stroke is inserted there as a
+/// loop out of the path (#2850 follow-up).
+fn redraw_loop(mut sp: SubPath, k: usize, pts: &[Point], tol: Option<f64>, within: f64) -> Option<SubPath> {
+    let at = *sp.anchors.get(k)?;
+    let mut stroke = pts.to_vec();
+    bend_ends(&mut stroke, Some(at.p), Some(at.p), within);
+    let fit = stroke_subpath(&stroke, tol, false).anchors.into_vec();
+    let (Some(f0), Some(fl)) = (fit.first().copied(), fit.last().copied()) else { return None };
+    if fit.len() < 3 {
+        return None;
+    }
+    let inner = fit.get(1..fit.len() - 1)?;
+    let mut anchors = sp.anchors.get_range(..k)?;
+    anchors.push(Anchor::with_handles(at.p, at.h_in, f0.h_out));
+    anchors.extend_from_slice(inner);
+    anchors.push(Anchor::with_handles(at.p, fl.h_in, at.h_out));
+    anchors.extend_from_slice(&sp.anchors.get_range(k + 1..)?);
+    sp.anchors = anchors.into();
+    Some(sp)
+}
+
+/// How far, on average, the run of `sp`'s segments from anchor `i` forward to anchor `j` lies from
+/// stroke `pts` (sampled along both; the stroke thinned to at most 200 points).
+fn run_distance(sp: &SubPath, i: usize, j: usize, pts: &[Point]) -> f64 {
+    let (sum, count) = run_distance_sum(sp, i, j, pts);
+    if count == 0 { f64::INFINITY } else { sum / count as f64 }
+}
+
+/// [`run_distance`]'s sum of the samples' distances and their count.
+fn run_distance_sum(sp: &SubPath, i: usize, j: usize, pts: &[Point]) -> (f64, usize) {
+    use kurbo::ParamCurve;
+    let n = sp.anchors.len();
+    if n == 0 || pts.is_empty() {
+        return (0.0, 0);
+    }
+    let step = pts.len().div_ceil(200).max(1);
+    let line: Vec<Point> = pts.iter().step_by(step).chain(pts.last()).copied().collect();
+    let to_line = |q: Point| {
+        line.windows(2)
+            .map(|w| {
+                let (a, b) = (w[0], w[1]);
+                let ab = b - a;
+                let t = if ab.hypot2() > 1e-18 { ((q - a).dot(ab) / ab.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
+                q.distance(a + ab * t)
+            })
+            .fold(line.first().map_or(f64::INFINITY, |a| q.distance(*a)), f64::min)
+    };
+    let segs = (j + n - i) % n;
+    let (mut sum, mut count) = (0.0, 0usize);
+    for k in 0..segs {
+        let c = sp.segment((i + k) % n);
+        for m in 1..=8 {
+            sum += to_line(c.eval(f64::from(m) / 8.0));
+            count += 1;
+        }
+    }
+    (sum, count)
+}
+
+/// An open subpath `sp` redrawn by a stroke from anchor `from` to anchor `to` across its open
+/// ends: the part between them stays, the ends beyond them go, and the stroke closes the path.
+fn redraw_across_gap(sp: &SubPath, from: usize, to: usize, pts: &[Point], tol: Option<f64>, within: f64) -> Option<SubPath> {
+    let (lo, hi) = (from.min(to), from.max(to));
+    let (a_lo, a_hi) = (*sp.anchors.get(lo)?, *sp.anchors.get(hi)?);
+    // The path runs lo → hi, then the stroke from hi back to lo.
+    let mut stroke = pts.to_vec();
+    if from == lo {
+        stroke.reverse();
+    }
+    bend_ends(&mut stroke, Some(a_hi.p), Some(a_lo.p), within);
+    let fit = stroke_subpath(&stroke, tol, false).anchors.into_vec();
+    let (Some(f0), Some(fl)) = (fit.first().copied(), fit.last().copied()) else { return None };
+    let mut anchors = sp.anchors.get_range(lo..=hi)?;
+    if let Some(a) = anchors.first_mut() {
+        *a = Anchor::with_handles(a.p, fl.h_in, a.h_out);
+    }
+    if let Some(a) = anchors.last_mut() {
+        *a = Anchor::with_handles(a.p, a.h_in, f0.h_out);
+    }
+    anchors.extend_from_slice(fit.get(1..fit.len().saturating_sub(1)).unwrap_or_default());
+    Some(SubPath::new(anchors, true))
+}
+
+/// Pencil's Edit Selected Paths in the middle of a path: a stroke that starts and ends within
+/// `within` of a subpath of `pd` replaces the section between with the stroke fitted at `tol` (with
+/// no `tol`, unfitted), its ends bent onto the path ([`bend_ends`]). On a closed subpath that is the
+/// way round that lies nearer the stroke, so the stroke takes the side it was drawn along. The subpath's index and its new shape; None
+/// when the stroke doesn't start and end on the same subpath.
 fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -> Option<(usize, SubPath)> {
-    use kurbo::ParamCurveArclen;
     let (first, last) = (*pts.first()?, *pts.last()?);
     let (si, _, _, _, d_a) = pd.nearest(first)?;
     let (sj, _, _, _, d_b) = pd.nearest(last)?;
@@ -91,35 +328,37 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
     if sp.anchors.len() < 2 {
         return None;
     }
-    // The anchor nearest to `q`: the one there, else a new one, and whether it was added. Each
-    // point is looked up on the subpath as it is by then: splitting a straight segment makes two
-    // new ones, which a `t` along the old one doesn't measure.
-    let place = |sp: &mut SubPath, q: Point| {
-        let (_, seg, t, _, _) = PathData::single(sp.clone()).nearest(q)?;
-        let n = sp.anchors.len();
-        Some(if t <= 1e-6 {
-            (seg % n, false)
-        } else if t >= 1.0 - 1e-6 {
-            ((seg + 1) % n, false)
-        } else {
-            (sp.insert_anchor(seg, t), true)
-        })
-    };
-    let (mut from, _) = place(&mut sp, first)?;
-    let (to, added) = place(&mut sp, last)?;
+    // Each point is looked up on the subpath as it is by then: splitting a straight segment makes
+    // two new ones, which a `t` along the old one doesn't measure.
+    let (mut from, _) = anchor_at(&mut sp, first)?;
+    let (to, added) = anchor_at(&mut sp, last)?;
     if added && to <= from {
         from += 1;
     }
     if from == to {
-        return None;
+        // The stroke starts and ends on the same point: it is a loop out of the path there.
+        return redraw_loop(sp, from, pts, tol, within).map(|sp| (si, sp));
     }
     let n = sp.anchors.len();
-    // The length of the run of segments from anchor i forward to anchor j.
-    let run = |i: usize, j: usize| (0..(j + n - i) % n).map(|k| sp.segment((i + k) % n).arclen(0.01)).sum::<f64>();
+    // On an open subpath the stroke replaces the part it lies along: the run between where it
+    // starts and ends, or the ends beyond them and the gap between, which closes the path.
+    if !sp.closed {
+        let (lo, hi) = (from.min(to), from.max(to));
+        let inner = run_distance(&sp, lo, hi, pts);
+        let (s1, c1) = run_distance_sum(&sp, 0, lo, pts);
+        let (s2, c2) = run_distance_sum(&sp, hi, n - 1, pts);
+        // Both ends taken: the stroke only spans the gap.
+        let outer = if c1 + c2 == 0 { 0.0 } else { (s1 + s2) / (c1 + c2) as f64 };
+        if outer < inner {
+            return redraw_across_gap(&sp, from, to, pts, tol, within).map(|sp| (si, sp));
+        }
+    }
     // The stroke goes from `start` to `end` and replaces the run between them; `kept` runs from
     // `end` round to `start`, then the stroke's inner anchors follow.
     let (start, end, reversed) = if sp.closed {
-        if run(from, to) <= run(to, from) { (from, to, false) } else { (to, from, true) }
+        // The way round that lies along the stroke: carving across a shape replaces the part the
+        // stroke cuts off, drawing round outside it replaces the part it follows.
+        if run_distance(&sp, from, to, pts) <= run_distance(&sp, to, from, pts) { (from, to, false) } else { (to, from, true) }
     } else if from < to {
         (from, to, false)
     } else {
@@ -129,10 +368,8 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
     if reversed {
         stroke.reverse();
     }
-    let (Some(s0), Some(s1)) = (stroke.first_mut(), sp.anchors.get(start)) else { return None };
-    *s0 = s1.p;
-    let (Some(e0), Some(e1)) = (stroke.last_mut(), sp.anchors.get(end)) else { return None };
-    *e0 = e1.p;
+    let (Some(s1), Some(e1)) = (sp.anchors.get(start), sp.anchors.get(end)) else { return None };
+    bend_ends(&mut stroke, Some(s1.p), Some(e1.p), within);
     let fit = stroke_subpath(&stroke, tol, false).anchors.into_vec();
     let (Some(f0), Some(f1)) = (fit.first().copied(), fit.last().copied()) else { return None };
     let inner = fit.get(1..fit.len().saturating_sub(1)).unwrap_or_default();
@@ -212,6 +449,9 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
     // The undo step's name: a stroke painted with a brush is a Paintbrush stroke, whatever its style.
     let label = if brush || brush_name.is_some() { "Paintbrush" } else { "Pencil" };
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
+    // The Pencil's preview of a stroke that redraws a path draws it as a new path but leaves the
+    // selection as it is: the path being redrawn stays selected until the release redraws it.
+    let leave_selection = switch_or(p, "leaveSelection", false, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     let extend = p.get("extend").filter(|v| !v.is_null());
     if extend.is_none() && p.get("connect").is_some_and(|v| !v.is_null()) {
@@ -416,7 +656,9 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         // shortcut: a stroke's pressure, tilt, bearing and rotation profiles are left as they
         // were, measured along the old path; fit them to the new length if strokes drawn with a
         // pen get redrawn.
-        if let Some((si, sp)) = redraw_section(&pd, &pts, fit_tol, within) {
+        // A stroke that ends back on the path redraws the section between; one that ends away from
+        // it takes the path with it (it is where the pen is lifted that decides).
+        if let Some((si, sp)) = redraw_section(&pd, &pts, fit_tol, within).or_else(|| redraw_extend(&pd, &pts, fit_tol, within)) {
             // A member path of a compound path is redrawn in it: the compound path is what is
             // selected, and what a brush paints.
             let whole = brush_target(&s.doc()?.doc, id);
@@ -461,7 +703,7 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         }
     }
     let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected)?;
-    if !keep_selected {
+    if !keep_selected && !leave_selection {
         // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
         // by dropping the earlier selection, it does not keep it (#5752).
         s.select(|_, sel| sel.clear())?;
@@ -627,4 +869,33 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": keep.0 }))
+}
+
+#[cfg(test)]
+mod bend_tests {
+    use super::*;
+
+    /// The ends move onto their targets, the stroke behind them less and less, and nothing farther
+    /// along than `reach`.
+    #[test]
+    fn bend_ends_moves_the_ends_and_fades_out_along_the_reach() {
+        let mut pts: Vec<Point> = (0..=10).map(|i| Point::new(f64::from(i) * 10.0, 0.0)).collect();
+        bend_ends(&mut pts, Some(Point::new(0.0, 8.0)), Some(Point::new(100.0, -8.0)), 40.0);
+        assert_eq!(pts[0], Point::new(0.0, 8.0));
+        assert_eq!(pts[10], Point::new(100.0, -8.0));
+        assert!((pts[2].y - 8.0 * 0.5).abs() < 1e-9, "halfway along the reach, half the shift: {:?}", pts[2]);
+        assert!((pts[8].y + 8.0 * 0.5).abs() < 1e-9, "{:?}", pts[8]);
+        assert_eq!(pts[5], Point::new(50.0, 0.0), "the middle doesn't move");
+    }
+
+    /// A stroke shorter than `reach` still has both ends on their targets: bending one end onto
+    /// its target doesn't pull the other end off its own.
+    #[test]
+    fn bend_ends_keeps_both_ends_on_target_for_a_short_stroke() {
+        let mut pts = vec![Point::new(40.0, -12.0), Point::new(44.0, -12.0), Point::new(48.0, -12.0)];
+        bend_ends(&mut pts, Some(Point::new(40.0, 0.0)), Some(Point::new(48.0, 0.0)), 16.0);
+        assert_eq!(pts[0], Point::new(40.0, 0.0), "{pts:?}");
+        assert_eq!(pts[2], Point::new(48.0, 0.0), "{pts:?}");
+        assert_eq!(pts[1], Point::new(44.0, 0.0), "halfway, half of each end's shift: {pts:?}");
+    }
 }
