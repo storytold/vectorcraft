@@ -89,6 +89,9 @@ struct Input<'a> {
     pressure: f32,
     /// Pointer Events' `tangentialPressure`, −1..1: an airbrush pen's finger wheel.
     tangential: f32,
+    /// Whether the event names an element the pointer moved onto (`relatedTarget`): a pen leaving
+    /// one element for another is still in its hover range.
+    entered: bool,
     modifiers: egui::Modifiers,
 }
 
@@ -262,8 +265,10 @@ impl Pointers {
                         if kind == "pointerleave" && self.primary.is_none() && on_canvas {
                             self.events.push(Event::PointerGone);
                         }
-                        // Left the hover range or canceled: the pen reads its wheel afresh.
-                        let gone = (kind == "pointerleave" && on_canvas && self.pen.is_none()) || kind == "pointercancel";
+                        // Left the hover range (a leave onto no element, on the canvas or off it)
+                        // or canceled: the pen reads its wheel afresh. Moving onto another element
+                        // keeps what it read.
+                        let gone = (kind == "pointerleave" && !e.entered && self.pen.is_none()) || kind == "pointercancel";
                         if gone && self.wheel.is_some_and(|w| w.id == id) {
                             self.wheel = None;
                         }
@@ -359,6 +364,7 @@ pub fn install(runner: &eframe::WebRunner, canvas: &web_sys::HtmlCanvasElement, 
                 button: e.button(),
                 pressure: e.pressure(),
                 tangential: e.tangential_pressure(),
+                entered: e.related_target().is_some(),
                 // Same semantics as eframe's modifiers_from_mouse_event.
                 modifiers: egui::Modifiers {
                     alt: e.alt_key(),
@@ -407,7 +413,7 @@ mod tests {
     use super::*;
 
     fn input(pointer_type: &str, button: i16) -> Input<'_> {
-        Input { pointer_type, id: 7, button, pressure: 0.6, tangential: 0.0, modifiers: egui::Modifiers::default() }
+        Input { pointer_type, id: 7, button, pressure: 0.6, tangential: 0.0, entered: false, modifiers: egui::Modifiers::default() }
     }
 
     fn reset() {
@@ -565,7 +571,7 @@ mod tests {
     }
 
     fn pen_at(button: i16, tangential: f32) -> Input<'static> {
-        Input { pointer_type: "pen", id: 7, button, pressure: 0.6, tangential, modifiers: egui::Modifiers::default() }
+        Input { pointer_type: "pen", id: 7, button, pressure: 0.6, tangential, entered: false, modifiers: egui::Modifiers::default() }
     }
 
     fn wheels(feed: &StylusFeed) -> Vec<Option<f32>> {
@@ -655,6 +661,30 @@ mod tests {
             assert_eq!(feed.pose(), None, "{pointer_type} {kind}");
             assert!(feed.take_moves().is_empty(), "{pointer_type} {kind}");
         }
+        reset();
+    }
+
+    /// A hovering pen that moves off the canvas onto another element and back keeps what it read
+    /// of its wheel; one that leaves the hover range off the canvas reads it afresh.
+    #[test]
+    fn the_wheel_survives_crossing_the_canvas_edge() {
+        reset();
+        let mut p = Pointers::default();
+        let feed = p.stylus();
+        assert!(p.feed("pointerdown", &pen_at(0, 0.5), Pos2::ZERO, &[], true));
+        assert!(p.feed("pointerup", &pen_at(0, 0.5), Pos2::ZERO, &[], true));
+        let mut hover = pen_at(-1, 0.0);
+        hover.pressure = 0.0;
+        let mut onto = pen_at(-1, 0.0);
+        (onto.pressure, onto.entered) = (0.0, true);
+        p.feed("pointerleave", &onto, Pos2::ZERO, &[], true);
+        assert!(!p.feed("pointermove", &hover, Pos2::ZERO, &[], false));
+        assert!(p.feed("pointermove", &hover, Pos2::ZERO, &[], true));
+        assert_eq!(wheels(&feed).last(), Some(&Some(0.5)), "moved onto another element and back");
+        p.feed("pointerleave", &onto, Pos2::ZERO, &[], true);
+        p.feed("pointerleave", &hover, Pos2::ZERO, &[], false);
+        assert!(p.feed("pointermove", &hover, Pos2::ZERO, &[], true));
+        assert_eq!(wheels(&feed).last(), Some(&None), "left the hover range off the canvas");
         reset();
     }
 
