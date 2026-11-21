@@ -7565,8 +7565,8 @@ allowed. In EMF each piece stores only the pixels inside its clip, with a pixel 
 clip, so they write the image as the parallelogram nearest its corners and warn. Corners that would fold the image over
 itself, put three corners on one line, join two corners, cross the warp's horizon or lie too close together for a
 perspective map are an error, and nothing changes. A transform that squeezes the corners past what a perspective map
-can place leaves the image at the parallelogram nearest them. A file whose `image_quad` holds other than four points,
-or breaks these rules, opens with the image placed by its transform. A drag is one undo step, and a distort that leaves
+can place leaves the image at the parallelogram nearest them. A file whose `image_quad` is not a list, holds other than four points
+(an entry that is not a point included), or breaks these rules, opens with the image placed by its transform. A drag is one undo step, and a distort that leaves
 the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
