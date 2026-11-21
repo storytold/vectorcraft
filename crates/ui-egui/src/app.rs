@@ -11,8 +11,8 @@ use super::state::{
 use super::{
     Arc, AutomationRoots, ControlRequest, Ordering, Receiver, Session, UiState, Value, VectorcraftApp, View, ViewInfo, background, canvas, chrome,
     clipboard_probe, dialogs, export_progress, file_access, fileio, font_menu, graphics, i18n, io, json, menus, native_menu, opening, palette,
-    panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, screen_color, scrub, shortcut_editor, shortcuts, theme,
-    titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
+    panel_docking, panels, picks, place, placing, plugin_runs, prefs_dialog, recovery, retype_runs, screen_color, scrub, shortcut_editor, shortcuts,
+    theme, titlebar, toolbar, tools_float, trace_runs, unsaved, updates_ui, widgets,
 };
 
 mod clipboard;
@@ -165,6 +165,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            retype_runs: Default::default(),
             toasts: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
@@ -270,6 +271,7 @@ impl VectorcraftApp {
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
+        retype_runs::poll(self);
     }
 
     /// The language the UI is drawn in: the Preferences dialog's choice while it is open (so a
@@ -388,6 +390,7 @@ impl VectorcraftApp {
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
+            || self.retype_runs.running.is_some()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -645,6 +648,7 @@ impl VectorcraftApp {
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
         placing::show(self, &ctx);
+        retype_runs::show(self, &ctx);
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);

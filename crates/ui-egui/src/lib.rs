@@ -69,6 +69,7 @@ pub mod prefs_dialog;
 pub mod print;
 pub mod recovery;
 pub mod render_worker;
+pub mod retype_runs;
 pub mod screen_color;
 pub mod script_runs;
 pub mod scripts_menu;
@@ -297,6 +298,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// Retype's search of the installed fonts, off the UI thread ([`retype_runs`]).
+    pub retype_runs: retype_runs::RetypeRuns,
     /// The messages shown over the window ([`toasts`]).
     pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).
