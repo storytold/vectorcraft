@@ -939,6 +939,32 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
     }
 }
 
+/// With a working RGB space other than sRGB, `color.contrast` writes the background in working RGB,
+/// the form `against` takes: a given brown comes back as it was given, and the background read
+/// behind the selection, given back, answers the same ratio.
+#[test]
+fn contrast_writes_the_background_as_against_takes_it_with_another_working_space() {
+    let _g = settings();
+    let before = cms::active_settings();
+    let mut s = session();
+    exec(&mut s, "edit.colorSettings", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    let given = s.execute("color.contrast", &json!({"color": "#000000", "against": "#806040"}));
+    exec(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    exec(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 80.3, "height": 160}));
+    exec(&mut s, "paint.setFill", json!({"color": "#2050a0"}));
+    exec(&mut s, "object.lock", json!({}));
+    exec(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}));
+    exec(&mut s, "paint.setFill", json!({"color": "#808080"}));
+    let below = s.execute("color.contrast", &json!({}));
+    let again = below.as_ref().ok().and_then(|b| s.execute("color.contrast", &json!({"against": b["against"].clone()})).ok());
+    cms::set_active(&before).unwrap();
+    let given = given.unwrap();
+    assert_eq!(given["against"], "#806040", "{given}");
+    let (below, again) = (below.unwrap(), again.unwrap());
+    assert_eq!(below["against"], again["against"], "{below} {again}");
+    assert!((below["ratio"].as_f64().unwrap() - again["ratio"].as_f64().unwrap()).abs() < 1e-9, "{below} {again}");
+}
+
 /// View › Proof Setup › Customize's Preserve CMYK Numbers proofs each color from its own inks:
 /// with Device CMYK as the working space, C50 M50 Y50 and K50 show as the same gray, and on
 /// VectorCraft Generic CMYK they print, and so proof, as different grays; a pattern's tile art
