@@ -163,10 +163,16 @@ pub fn row_click<K: Copy + PartialEq>(order: &[K], highlighted: &[K], anchor: Op
 /// Layers panel's: a toggled row is appended (or taken off, even the last one), a range replaces the
 /// rows or adds those not there yet, top-down.
 pub fn apply_row_click<K: Copy + Eq + Hash>(highlighted: &mut Vec<K>, click: &RowClick<K>) {
+    // `rows` keeps the highlight order. With more than 8 rows to add, `held` holds the same rows as a
+    // set and answers each lookup; with fewer, each lookup searches `rows`, as in `layer.highlight`.
     let add = |rows: &mut Vec<K>, add: &[K]| {
-        let mut held: HashSet<K> = rows.iter().copied().collect();
+        let mut held: Option<HashSet<K>> = (add.len() > 8).then(|| rows.iter().copied().collect());
         for k in add {
-            if held.insert(*k) {
+            let new = match &mut held {
+                Some(h) => h.insert(*k),
+                None => !rows.contains(k),
+            };
+            if new {
                 rows.push(*k);
             }
         }
@@ -320,5 +326,34 @@ mod row_click_tests {
         apply_row_click(&mut set, &RowClick::Range(range.clone()));
         assert_eq!(set, searched(Vec::new(), &range));
         assert_eq!(set.len(), 5_000);
+    }
+
+    /// A range of 8 rows or fewer searches the highlighted rows and builds no set: no row is hashed.
+    /// A range of 9 rows looks them up in a set.
+    #[test]
+    fn a_small_range_searches_the_rows_without_hashing_them() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static HASHED: AtomicUsize = AtomicUsize::new(0);
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct Row(u32);
+        impl std::hash::Hash for Row {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                HASHED.fetch_add(1, Ordering::Relaxed);
+                std::hash::Hash::hash(&self.0, state);
+            }
+        }
+        let rows = |ids: &[u32]| ids.iter().map(|i| Row(*i)).collect::<Vec<_>>();
+        let mut added = rows(&[30, 50, 70]);
+        apply_row_click(&mut added, &RowClick::AddRange(rows(&[30])));
+        assert_eq!(added, rows(&[30, 50, 70]), "an anchor row already highlighted stays once");
+        apply_row_click(&mut added, &RowClick::AddRange(rows(&[10, 20, 30, 40, 50, 60, 60, 80])));
+        assert_eq!(added, rows(&[30, 50, 70, 10, 20, 40, 60, 80]));
+        let mut set = rows(&[30]);
+        apply_row_click(&mut set, &RowClick::Range(rows(&[10, 20, 30])));
+        assert_eq!(set, rows(&[10, 20, 30]));
+        assert_eq!(HASHED.load(Ordering::Relaxed), 0, "no row is hashed for a range of 8 rows or fewer");
+        apply_row_click(&mut added, &RowClick::AddRange(rows(&[1, 2, 3, 4, 5, 6, 7, 8, 30])));
+        assert_eq!(added, rows(&[30, 50, 70, 10, 20, 40, 60, 80, 1, 2, 3, 4, 5, 6, 7, 8]));
+        assert!(HASHED.load(Ordering::Relaxed) > 0, "a range of 9 rows looks them up in a set");
     }
 }
