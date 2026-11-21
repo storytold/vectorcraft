@@ -96,26 +96,6 @@ const LIGHTNESS_STEPS: usize = 32;
 /// The golden-section steps [`closest_passing`] takes to find the highest ratio between samples,
 /// which leave it within 1e-7 of the step.
 const PEAK_STEPS: usize = 32;
-/// The halvings [`closest_passing`] makes of the chroma when sRGB cannot show it.
-const CHROMA_STEPS: usize = 24;
-
-/// The display sRGB of OKLCH lightness `l`, chroma `c` and the hue whose sine and cosine are `sc`,
-/// with the chroma lowered until the color fits in sRGB.
-fn oklch_in_gamut(l: f64, c: f64, (sin, cos): (f64, f64)) -> [f32; 3] {
-    let at = |c: f64| crate::libraries::oklab_to_srgb(l, c * cos, c * sin);
-    let fits = |rgb: &[f64; 3]| rgb.iter().all(|v| (-1e-6..=1.0 + 1e-6).contains(v));
-    let mut rgb = at(c);
-    if !fits(&rgb) {
-        let (mut lo, mut hi) = (0.0, c);
-        for _ in 0..CHROMA_STEPS {
-            let mid = (lo + hi) / 2.0;
-            if fits(&at(mid)) { lo = mid } else { hi = mid }
-        }
-        rgb = at(lo);
-    }
-    rgb.map(|v| v.clamp(0.0, 1.0) as f32)
-}
-
 /// Where between `lo` and `hi` `f` is highest, by golden-section search, which finds the top of a
 /// single peak between them. `f` is called 34 times.
 pub fn peak_between(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> f64) -> f64 {
@@ -138,7 +118,8 @@ pub fn peak_between(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> f64) -> f64 {
 
 /// The display sRGB color closest to `srgb` whose `ratio` is at least `minimum`: the same OKLCH hue
 /// (<https://bottosson.github.io/posts/oklab/>) with the lightness raised or lowered, whichever
-/// takes the smaller step, and the chroma lowered where sRGB cannot show it. Each side is tested at
+/// takes the smaller step, and the chroma lowered where sRGB cannot show it, to the largest chroma
+/// below it that fits ([`crate::oklab::from_oklch`]). Each side is tested at
 /// 16 even steps up to white or black, and the step before the first that passes is narrowed down.
 /// When no step passes, the highest ratio between the neighbors of the highest step is looked for,
 /// so a color that passes only in a narrow band between white and black (as under a Difference
@@ -150,11 +131,10 @@ pub fn closest_passing(srgb: [f32; 3], minimum: f64, ratio: &dyn Fn([f32; 3]) ->
     if passes(srgb) {
         return Some(srgb);
     }
-    let [l, a, b] = crate::libraries::srgb_to_oklab(srgb);
-    let (c, sc) = (a.hypot(b), b.atan2(a).sin_cos());
+    let [l, c, h] = crate::oklab::to_oklch(srgb);
     let mut best: Option<(f64, [f32; 3])> = None;
     for end in [1.0, 0.0] {
-        let at = |t: f64| oklch_in_gamut(l + (end - l) * t, c, sc);
+        let at = |t: f64| crate::oklab::from_oklch(l + (end - l) * t, c, h).0;
         let step = |k: usize| k as f64 / LIGHTNESS_SAMPLES as f64;
         let ratios: Vec<f64> = (1..=LIGHTNESS_SAMPLES).map(|k| ratio(at(step(k)))).collect();
         // `lo` fails and `hi` passes, the step before the first sample that passes.
@@ -278,6 +258,20 @@ mod tests {
         let fix = closest_passing([1.0; 3], 3.0, &ratio).unwrap();
         let r = ratio(fix);
         assert!((3.0..3.01).contains(&r), "{fix:?}: {r}");
+    }
+
+    /// Just below blue's lightness the chromas sRGB holds at blue's hue come in two stretches, so a
+    /// blue that needs a little more contrast keeps nearly all of its chroma.
+    #[test]
+    fn a_blue_that_darkens_a_little_keeps_its_chroma() {
+        let gray = hex("b8b8b8");
+        let ratio = |c: [f32; 3]| contrast_ratio(c, gray);
+        let blue = [0.0, 0.0, 1.0];
+        assert!(ratio(blue) < 4.5, "{}", ratio(blue));
+        let fix = closest_passing(blue, 4.5, &ratio).unwrap();
+        let ([_, c, h], [_, blue_c, blue_h]) = (crate::oklab::to_oklch(fix), crate::oklab::to_oklch(blue));
+        assert!(ratio(fix) >= 4.5 && (h - blue_h).abs() < 1.0, "{fix:?}");
+        assert!(c > blue_c - 0.02, "{fix:?}: chroma {c}, blue's {blue_c}");
     }
 
     #[test]
