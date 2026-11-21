@@ -2029,7 +2029,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.runScript",
         "Other Script…",
         "Cmd+F12",
-        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`); without a file pick one (the web opens the browser's file picker)",
+        "{path? | source?, name?} run a .js or .jsx file (script.run), after the warning unless Preferences › General › Show External Script Warning is off (dialog `scriptRun`: `name`, `script`, `dontShow`, and `__reaches`: the `kind`, `needs`, `outside`, `includes` and `truncated` of script.check's report on the script, which the warning lists, or null when the check failed); without a file pick one (the web opens the browser's file picker)",
     ),
     (
         "ui.runInstalledScript",

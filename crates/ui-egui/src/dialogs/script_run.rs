@@ -5,7 +5,16 @@
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
 //! asks for a `.js` or `.jsx` file (the web opens the browser's file picker). With Preferences ›
 //! General › Show External Script Warning off, the chosen script runs at once. Warning fields:
-//! `name`, `script` (`script.run`'s params) and `dontShow` (true: turn the warning off).
+//! `name`, `script` (`script.run`'s params), `dontShow` (true: turn the warning off) and
+//! `__reaches`, which `ui.dialog.set` cannot set: the `kind`, `needs`, `outside`, `includes` and
+//! `truncated` of `script.check`'s report on the script, read without running it (a path also
+//! checks the files its `#include` lines name), or null when the check fails. The warning lists
+//! what the report finds the script reaches outside the document (each of `script.check`'s
+//! `outside` categories, such as files it writes, moves or deletes, files it opens in other apps,
+//! the network, native code, environment variables and code the checker can't read), the files
+//! and dialogs it needs, features only the reference app has, and its includes. It says when the
+//! script is too large to check, compiled or not a script, when the check failed, and when a list
+//! was cut short at its limit. The listing is information: Run runs the script as before.
 //!
 //! A script's dialog (kind `scriptDialog`) has the fields `kind` (alert, confirm or prompt),
 //! `message`, `title` (null: Script Alert), `errorIcon`, `noAsDefault` and `value` (the prompt's
@@ -151,8 +160,80 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         return app.run("script.run", params);
     }
     let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
-    app.ui.dialog = Some(Dialog::new(KIND, json!({"name": name, "script": params, "dontShow": false})));
+    let reaches = reaches(app, &params);
+    app.ui.dialog = Some(Dialog::new(KIND, json!({"name": name, "script": params, "dontShow": false, REACHES: reaches})));
     Ok(Value::Null)
+}
+
+/// The warning's field with what the script reaches outside the document.
+const REACHES: &str = "__reaches";
+
+/// The parts of `script.check`'s report on the script `script.run`'s `params` name that the
+/// warning lists, read without running the script; a path also checks the files its `#include`
+/// lines name. Null when the check fails: the run reports why the script can't be read.
+fn reaches(app: &mut VectorcraftApp, params: &Value) -> Value {
+    let check = match (params.get("path"), params.get("source")) {
+        (Some(path), _) => json!({"path": path, "includes": true}),
+        (None, Some(source)) => json!({"data": source}),
+        (None, None) => return Value::Null,
+    };
+    let Ok(r) = app.session.execute("script.check", &check) else { return Value::Null };
+    json!({"kind": r["kind"], "needs": r["needs"], "outside": r["outside"], "includes": r["includes"], "truncated": r["truncated"]})
+}
+
+/// What the report `r` finds the script reaches outside the document; nothing for a script that
+/// was checked and reaches nothing. A failed check (null) says the script was not read.
+fn reach_rows(ui: &mut egui::Ui, r: &Value, t: &Tokens) {
+    use super::script_check::{list, need_label, outside_label, place, row, section, status_label, tally};
+    let unchecked = match r["kind"].as_str() {
+        Some("script") => None,
+        Some("compiled") => Some(tl!("Compiled script: ask its author for the .jsx file")),
+        Some("tooLarge") => Some(tl!("Too large to check")),
+        _ if r.is_null() => Some(tl!("Not read")),
+        _ => Some(tl!("Not a script for the reference app")),
+    };
+    if let Some(text) = unchecked {
+        ui.add_space(8.0);
+        widgets::dim_label(ui, text);
+        return;
+    }
+    let outside: Vec<(&str, &Value)> = list(r, "outside").iter().filter_map(|o| Some((o["id"].as_str().and_then(outside_label)?, o))).collect();
+    let needs: Vec<&str> =
+        list(r, "needs").iter().filter_map(Value::as_str).filter(|n| matches!(*n, "files" | "dialogs" | "hostOnly")).filter_map(need_label).collect();
+    let includes = list(r, "includes");
+    let truncated = r["truncated"].as_bool() == Some(true);
+    if outside.is_empty() && needs.is_empty() && includes.is_empty() && !truncated {
+        return;
+    }
+    ui.add_space(8.0);
+    widgets::dim_label(ui, tl!("VectorCraft read this script without running it."));
+    egui::ScrollArea::vertical().id_salt("script-reaches").max_height(220.0).show(ui, |ui| {
+        if !outside.is_empty() || !needs.is_empty() {
+            section(ui, tl!("Outside the document"), |ui| {
+                for (label, o) in outside {
+                    let modes: Vec<&str> = list(o, "modes").iter().filter_map(Value::as_str).collect();
+                    let label = if modes.is_empty() { label.to_string() } else { format!("{label} ({})", modes.join(", ")) };
+                    row(ui, t, &label, false, &tally(o));
+                }
+                for need in needs {
+                    row(ui, t, need, false, "");
+                }
+            });
+        }
+        if !includes.is_empty() {
+            section(ui, tl!("Includes"), |ui| {
+                for i in includes {
+                    let status = i["status"].as_str().and_then(status_label).unwrap_or_default();
+                    let note = [status.to_string(), place(i)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+                    row(ui, t, i["value"].as_str().unwrap_or_default(), true, &note);
+                }
+            });
+        }
+    });
+    if truncated {
+        ui.add_space(6.0);
+        widgets::dim_label(ui, tl!("Some lists were cut short at their limit."));
+    }
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -160,6 +241,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.label(egui::RichText::new(d.fields.get("name").and_then(Value::as_str).unwrap_or_default()).font(theme::semibold(12.5)).color(t.text_strong));
     ui.add_space(4.0);
     ui.label(tl!("A script can change the open documents and can write files through the commands it runs. Run only scripts you trust."));
+    if let Some(r) = d.fields.get(REACHES) {
+        reach_rows(ui, r, &t);
+    }
     ui.add_space(8.0);
     let dont_show = d.fields.get("dontShow").and_then(Value::as_bool).unwrap_or(false);
     if widgets::check(ui, tl!("Do not show this warning again"), dont_show, true) {
