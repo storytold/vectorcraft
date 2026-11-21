@@ -573,6 +573,16 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The Nature Icons library and its symbols display in each complete UI language.
+#[test]
+fn nature_symbol_library_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for name in ["Nature Icons", "Leaf", "Flower", "Tree", "Mountain", "Wave"] {
+            assert!(lang.catalog().plain(name).is_some(), "{} is missing {name}", lang.code);
+        }
+    }
+}
+
 /// The errors of Perspective Distort and Free Distort on an image, and of the image commands that
 /// refuse a distorted image, are in every complete-message catalog.
 #[test]
@@ -842,7 +852,7 @@ fn built_in_library_symbol_names_are_in_complete_catalogs() {
             .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
             .collect(),
     );
-    assert_eq!(names.len(), 38, "{names:?}");
+    assert_eq!(names.len(), 43, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

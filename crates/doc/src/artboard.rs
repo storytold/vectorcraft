@@ -174,6 +174,21 @@ impl ArtboardSide {
     }
 }
 
+#[cfg(any(test, feature = "locked-artboard-count"))]
+thread_local! {
+    /// How many objects [`LockedArtboards::overlaps`] has measured on this thread.
+    static LOCKED_ARTBOARD_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many objects [`LockedArtboards::overlaps`] has measured on this thread, for other crates'
+/// tests that count how often art is measured to find what a locked artboard holds (the
+/// `locked-artboard-count` feature, dev-dependencies only).
+#[cfg(any(test, feature = "locked-artboard-count"))]
+#[doc(hidden)]
+pub fn locked_artboard_measures() -> usize {
+    LOCKED_ARTBOARD_MEASURES.with(std::cell::Cell::get)
+}
+
 /// A document's locked artboards ([`Document::locked_artboards`]).
 pub struct LockedArtboards<'a> {
     pub(crate) rects: Vec<Rect>,
@@ -210,6 +225,8 @@ impl LockedArtboards<'_> {
         if let Some(held) = self.held.borrow().get(&n.id) {
             return *held;
         }
+        #[cfg(any(test, feature = "locked-artboard-count"))]
+        LOCKED_ARTBOARD_MEASURES.with(|c| c.set(c.get() + 1));
         let held =
             n.visual_bounds_with(&self.symbols).is_some_and(|b| self.rects.iter().any(|r| b.x0 < r.x1 && b.x1 > r.x0 && b.y0 < r.y1 && b.y1 > r.y0));
         self.held.borrow_mut().insert(n.id, held);
