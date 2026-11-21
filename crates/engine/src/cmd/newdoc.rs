@@ -561,7 +561,7 @@ pub(crate) fn side_error(cmd: &str, units: Unit) -> crate::EngineError {
     bad(cmd, format!("width and height must be more than 0 and at most {limit}"))
 }
 /// Largest artboard spacing, points.
-const MAX_SPACING: f64 = 1.0e5;
+pub(crate) const MAX_SPACING: f64 = 1.0e5;
 
 pub fn color_mode_id(m: ColorMode) -> &'static str {
     match m {

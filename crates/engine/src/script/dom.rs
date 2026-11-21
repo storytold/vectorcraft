@@ -763,8 +763,8 @@ impl NewDoc<'_> {
         }
         if let Some(d) = self.spacing {
             let v = number(d, "artboardSpacing")?;
-            if !(0.0..=MAX_SIZE).contains(&v) {
-                return Err(HostError::Range("artboardSpacing must be from 0 to 3999856 points".into()));
+            if !(0.0..=crate::cmd::newdoc::MAX_SPACING).contains(&v) {
+                return Err(HostError::Range("artboardSpacing must be from 0 to 100000 points".into()));
             }
             layout.insert("spacing".into(), json!(v));
         }

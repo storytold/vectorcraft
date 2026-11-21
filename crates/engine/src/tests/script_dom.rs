@@ -62,6 +62,9 @@ fn app_documents_track_active_tab_and_new_document() {
     assert!(failure(&mut s, "app.documents.add(DocumentColorSpace.RGB, -5);").contains("width"));
     assert!(failure(&mut s, "app.documents.add('RGB');").contains("colorSpace"));
     assert!(failure(&mut s, "app.documents.add(undefined, 10, 10, 101);").contains("numArtBoards"));
+    // The spacing is refused at file.new's limit, with the script's own name for it.
+    let spacing = "app.documents.add(undefined, 10, 10, 2, DocumentArtboardLayout.Row, 100001);";
+    assert!(failure(&mut s, spacing).contains("artboardSpacing must be from 0 to 100000 points"));
     assert!(failure(&mut s, "app.documents.index('none');").contains("Not found"));
     assert_eq!(s.documents().len(), 3);
 }
