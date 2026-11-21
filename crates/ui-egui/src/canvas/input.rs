@@ -139,8 +139,10 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         if held {
             drag_held(app, ui, &f, d, p);
         } else {
-            // The drag ends where its button went up: the moves after the release in this frame are hover.
-            drag_released(app, ui, &f, d, release_pos(ui, button, false).unwrap_or(p));
+            // The drag ends where its button went up, with the modifiers held then: the moves and
+            // modifier changes after the release in this frame do not count.
+            let up = Pointing { m: release_mods(ui, button).unwrap_or(f.m), ..f };
+            drag_released(app, ui, &up, d, release_pos(ui, button, false).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
         // A press on an artboard's name starts no drag: the moves while it is held are not hover.
@@ -741,6 +743,16 @@ fn release_pos(ui: &Ui, button: egui::PointerButton, last: bool) -> Option<Pos2>
             _ => None,
         });
         if last { releases.next_back() } else { releases.next() }
+    })
+}
+
+/// The modifiers held when `button` first went up in this frame, the release that ends a drag.
+fn release_mods(ui: &Ui, button: egui::PointerButton) -> Option<egui::Modifiers> {
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::PointerButton { button: b, pressed: false, modifiers, .. } if *b == button => Some(*modifiers),
+            _ => None,
+        })
     })
 }
 
