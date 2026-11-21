@@ -1,64 +1,67 @@
-use super::*;
+use craft::automation::actions::{Action, ActionList, ActionPlayer, ActionRunner, ActionStep, PlaybackBudget, StepOutcome};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
-impl Action {
-    /// The included steps as `command.batch` takes them. A recorded `command.batch` step (an action
-    /// played, or a panel operation that runs as one batch, while recording) gives its own steps,
-    /// since batches do not nest. With [`Action::automatic_align_to`], each `object.align` copy, also
-    /// one in a recorded Batch run (`action.batch`), gets `to: "auto"` and loses any stored
-    /// `artboard`; the stored steps keep their recorded params.
-    pub(crate) fn included_commands(&self) -> Vec<Value> {
-        self.playback_steps().into_iter().map(|s| s.command).collect()
-    }
+use super::model::{self, recording_room};
+use crate::VectorcraftApp;
 
-    /// [`Action::included_commands`], each with the index in [`Action::steps`] of the step it comes
-    /// from: the steps of a recorded `command.batch` share its index.
-    fn playback_steps(&self) -> Vec<PlayStep> {
-        self.steps
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| !self.excluded_steps.contains(i))
-            .flat_map(|(row, (command, params))| match params.get("commands").and_then(Value::as_array) {
-                Some(steps) if command == "command.batch" => steps.iter().map(|c| PlayStep { row, command: c.clone() }).collect(),
-                _ => vec![PlayStep { row, command: json!({"command": command, "params": params}) }],
-            })
-            .map(|mut play| {
-                if self.automatic_align_to {
-                    automatic_align(&mut play.command);
-                    if play.command.get("command").and_then(Value::as_str) == Some("action.batch")
-                        && let Some(Value::Array(steps)) = play.command.get_mut("params").and_then(|p| p.get_mut("commands"))
-                    {
-                        steps.iter_mut().for_each(automatic_align);
-                    }
+/// The included steps of `action` as `command.batch` takes them. A recorded `command.batch` step
+/// (an action played, or a panel operation that runs as one batch, while recording) gives its own
+/// steps, since batches do not nest. With Automatic Align To ([`model::automatic_align_to`]), each
+/// `object.align` copy, also one in a recorded Batch run (`action.batch`), gets `to: "auto"` and
+/// loses any stored `artboard`; the stored steps keep their recorded params.
+// PLAN: menus-w13's root `actions.rs` needs `pub(crate) use playback::included_commands` for menus-w20's `dialogs/action_batch.rs`.
+pub(crate) fn included_commands(action: &Action) -> Vec<Value> {
+    playback_steps(action).into_iter().map(|s| s.command).collect()
+}
+
+/// [`included_commands`], each with the index in the action's steps of the step it comes from: the
+/// steps of a recorded `command.batch` share its index.
+fn playback_steps(action: &Action) -> Vec<PlayStep> {
+    let align = model::automatic_align_to(action);
+    action
+        .enabled_steps()
+        .flat_map(|(row, step)| match step.params.get("commands").and_then(Value::as_array) {
+            Some(steps) if step.command == "command.batch" => steps.iter().map(|c| PlayStep { row, command: c.clone() }).collect(),
+            _ => vec![PlayStep { row, command: json!({"command": step.command, "params": step.params}) }],
+        })
+        .map(|mut play| {
+            if align {
+                automatic_align(&mut play.command);
+                if play.command.get("command").and_then(Value::as_str) == Some("action.batch")
+                    && let Some(Value::Array(steps)) = play.command.get_mut("params").and_then(|p| p.get_mut("commands"))
+                {
+                    steps.iter_mut().for_each(automatic_align);
                 }
-                play
-            })
-            .collect()
-    }
+            }
+            play
+        })
+        .collect()
+}
 
-    /// The steps whose command `known` does not hold, in order, as (step index, the index of the
-    /// command in a `command.batch` step, command id). A `command.batch` step's own commands are
-    /// checked one by one, as playback runs them ([`Action::included_commands`]); a command of one
-    /// with no command id has the id "". With `included_only`, excluded steps are passed over.
-    pub(crate) fn unknown_commands<'a>(
-        &'a self,
-        known: &'a KnownCommands,
-        included_only: bool,
-    ) -> impl Iterator<Item = (usize, Option<usize>, &'a str)> + 'a {
-        self.steps.iter().enumerate().filter(move |(i, _)| !(included_only && self.excluded_steps.contains(i))).flat_map(
-            |(i, (command, params))| -> Vec<(usize, Option<usize>, &'a str)> {
-                match params.get("commands").and_then(Value::as_array) {
-                    Some(steps) if command == "command.batch" => steps
-                        .iter()
-                        .enumerate()
-                        .map(|(j, step)| (i, Some(j), step.get("command").and_then(Value::as_str).unwrap_or_default()))
-                        .filter(|(_, _, id)| !known.has(id))
-                        .collect(),
-                    _ if known.has(command) => vec![],
-                    _ => vec![(i, None, command.as_str())],
-                }
-            },
-        )
-    }
+/// The steps of `action` whose command `known` does not hold, in order, as (step index, the index
+/// of the command in a `command.batch` step, command id). A `command.batch` step's own commands are
+/// checked one by one, as playback runs them ([`included_commands`]); a command of one with no
+/// command id has the id "". With `included_only`, excluded steps are passed over.
+pub(crate) fn unknown_commands<'a>(
+    action: &'a Action,
+    known: &'a KnownCommands,
+    included_only: bool,
+) -> impl Iterator<Item = (usize, Option<usize>, &'a str)> + 'a {
+    action.steps.iter().enumerate().filter(move |(i, _)| !included_only || action.step_enabled(*i)).flat_map(
+        move |(i, step)| -> Vec<(usize, Option<usize>, &'a str)> {
+            match step.params.get("commands").and_then(Value::as_array) {
+                Some(steps) if step.command == "command.batch" => steps
+                    .iter()
+                    .enumerate()
+                    .map(|(j, inner)| (i, Some(j), inner.get("command").and_then(Value::as_str).unwrap_or_default()))
+                    .filter(|(_, _, id)| !known.has(id))
+                    .collect(),
+                _ if known.has(&step.command) => vec![],
+                _ => vec![(i, None, step.command.as_str())],
+            }
+        },
+    )
 }
 
 /// The command ids a step of an action can run now: the built-in engine commands, the commands the
@@ -80,8 +83,8 @@ impl KnownCommands {
     }
 }
 
-/// The one-based place of a step that [`Action::unknown_commands`] gives: `3` for the third step,
-/// `3.2` for the second command of a `command.batch` third step.
+/// The one-based place of a step that [`unknown_commands`] gives: `3` for the third step, `3.2`
+/// for the second command of a `command.batch` third step.
 pub(crate) fn step_place(step: usize, in_batch: Option<usize>) -> String {
     match in_batch {
         Some(j) => format!("{}.{}", step + 1, j + 1),
@@ -100,16 +103,25 @@ pub(crate) fn shown_text(text: &str) -> String {
     shown
 }
 
-/// A step that playback runs: a command as `command.batch` takes it, and the index in
-/// [`Action::steps`] of the step it comes from, which an error names.
+/// A step that playback runs: a command as `command.batch` takes it, and the index in the action's
+/// steps of the step it comes from, which an error names.
 #[derive(Clone, Debug)]
 pub(super) struct PlayStep {
     pub(super) row: usize,
     pub(super) command: Value,
 }
 
+impl PlayStep {
+    /// The step as the playback's snapshot ([`Playing::list`]) holds it.
+    fn into_step(self) -> ActionStep {
+        let id = self.command.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+        let params = self.command.get("params").cloned().unwrap_or(Value::Null);
+        ActionStep::new(id, params)
+    }
+}
+
 /// Gives `step`, a command as `command.batch` takes it, `to: "auto"` and no `artboard` when it is
-/// an `object.align` step ([`Action::automatic_align_to`]); other steps stay as they are.
+/// an `object.align` step ([`model::automatic_align_to`]); other steps stay as they are.
 fn automatic_align(step: &mut Value) {
     if step.get("command").and_then(Value::as_str) != Some("object.align") {
         return;
@@ -126,28 +138,27 @@ fn automatic_align(step: &mut Value) {
 }
 
 /// Plays an action at the speed [`UiState::action_playback`](crate::UiState::action_playback) sets.
-/// Accelerated runs every included step at once as a single undoable batch → what `command.batch`
-/// returns, {results}. Step by Step and Pause For run the first step now, each as its own undo step,
-/// and leave the rest to [`tick_playback`] → {results: [the first step's result], pending: the steps
-/// left}. While a paced playback is in progress, another action does not play. An action with an
-/// included step whose command is not known now ([`KnownCommands`]), a plug-in's command after the
-/// plug-in was removed for one, does not play: the error names the first such step and its command,
-/// and no step runs. An excluded step is not checked.
+/// Accelerated runs every included step at once as a single undoable batch. Step by Step and Pause
+/// For run the first step now, each as its own undo step, and leave the rest to [`tick_playback`].
+/// While a paced playback is in progress, another action does not play. An action with an included
+/// step whose command is not known now ([`KnownCommands`]), a plug-in's command after the plug-in
+/// was removed for one, does not play: the error names the first such step and its command, and no
+/// step runs. An excluded step is not checked.
 ///
 /// An action with an included stop ([`STOP_STEP`]) plays up to the stop and waits there at any speed
-/// ([`continue_playback`]). At Accelerated, the steps between two stops are one undo step. → {results:
-/// [the results of the steps run], pending: the steps left, stops included, atStop: true when it waits}
+/// ([`continue_playback`]). At Accelerated, the steps between two stops are one undo step.
 ///
 /// A View menu step ([`is_ui_step`]) runs on its own at every speed, in its place among the steps, and
-/// adds no undo step ([`run_steps`]). At Accelerated the steps before it and the steps after it are
+/// adds no undo step ([`play_ui_step`]). At Accelerated the steps before it and the steps after it are
 /// then one undo step each.
 ///
 /// At every speed, the error of a step that fails names the step by its place in the action, 1 for
-/// the first, counting excluded steps and stops ([`step_error`]).
+/// the first, counting excluded steps and stops ([`step_error`]). → {results: the results of the
+/// steps run, pending: the steps left, stops included, atStop: true when it waits at a stop}
 pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, String> {
-    let Some(a) = app.ui.action_sets.get(set).and_then(|s| s.actions.get(idx)).cloned() else { return Err("no such action".into()) };
-    let commands = a.playback_steps();
-    if commands.is_empty() {
+    let Some(a) = model::flat(&app.ui.actions, set, idx).and_then(|i| app.ui.actions.action(i)) else { return Err("no such action".into()) };
+    let steps = playback_steps(a);
+    if steps.is_empty() {
         return Err("the action has no included steps".into());
     }
     if app.ui.action_playing.is_some() {
@@ -156,82 +167,145 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     // A step whose command is not known now would fail only when playback reaches it, after the
     // steps before it changed the document.
     let known = KnownCommands::now();
-    if let Some((step, in_batch, command)) = a.unknown_commands(&known, true).next() {
+    if let Some((step, in_batch, command)) = unknown_commands(a, &known, true).next() {
         let (step, action, command) = (step_place(step, in_batch), shown_text(&a.name), shown_text(command));
         return Err(format!("step {step} of “{action}” runs the unknown command `{command}`"));
     }
-    let options = app.ui.action_playback;
-    if commands.iter().any(|s| is_stop(&s.command)) {
-        return play_with_stops(app, a.name, commands, options);
-    }
-    if options.speed == PlaybackSpeed::Accelerated {
-        return Ok(json!({"results": run_steps(app, &a.name, commands)?}));
-    }
-    let mut steps: std::collections::VecDeque<PlayStep> = commands.into();
-    let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
-    let result = play_step(app, &a.name, first)?;
-    let pending = steps.len();
-    if pending > 0 {
-        let hold = options.speed == PlaybackSpeed::Step;
-        let doc = active_doc(app);
-        let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
-        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc, played_in, stop: None });
-        if let Some(ctx) = &app.ui_ctx {
-            ctx.request_repaint();
-        }
-    }
-    Ok(json!({"results": [result], "pending": pending}))
+    let name = a.name.clone();
+    let (rows, steps): (Vec<usize>, Vec<ActionStep>) = steps.into_iter().map(|s| (s.row, s.into_step())).unzip();
+    let mut list = ActionList::new();
+    list.push(Action::new(name, steps)).map_err(|e| e.to_string())?;
+    let playing = Playing {
+        list,
+        rows,
+        from: 0,
+        budget: PlaybackBudget::new(),
+        options: app.ui.action_playback,
+        next_at: None,
+        hold: false,
+        doc: None,
+        played_in: app.tick_iteration.filter(|&t| t == app.host_iteration),
+        stop: None,
+    };
+    let results = advance(app, playing)?;
+    Ok(playback_result(app, results))
 }
 
-/// Runs one step of a paced playback as its own undo step, named `label`, or a View menu step with
-/// no undo step ([`run_steps`]) → the step's result.
-fn play_step(app: &mut VectorcraftApp, label: &str, step: PlayStep) -> Result<Value, String> {
-    Ok(run_steps(app, label, vec![step])?.into_iter().next().unwrap_or(Value::Null))
-}
-
-/// Whether a step as [`Action::included_commands`] gives it is a View menu command that the app runs
+/// Whether a step as [`included_commands`] gives it is a View menu command that the app runs
 /// itself ([`crate::menus::plays_in_app`]), which `command.batch` does not run.
 pub(crate) fn is_ui_step(step: &Value) -> bool {
     step.get("command").and_then(Value::as_str).is_some_and(crate::menus::plays_in_app)
 }
 
-/// Runs `steps` in order, as saved steps ([`VectorcraftApp::replay`]) → their results. The steps
-/// between two View menu steps ([`is_ui_step`]) run as one `command.batch` named `label`, which is one
-/// undo step; a View menu step runs on its own ([`play_ui_step`]). A step that fails ends the run with
-/// its error: the batch it is in changes nothing, and the steps before that batch stay done. The error
-/// of a step names the step's place in the action ([`step_error`]).
-fn run_steps(app: &mut VectorcraftApp, label: &str, steps: Vec<PlayStep>) -> Result<Vec<Value>, String> {
-    fn batch(app: &mut VectorcraftApp, label: &str, run: Vec<PlayStep>, results: &mut Vec<Value>) -> Result<(), String> {
-        if run.is_empty() {
-            return Ok(());
+/// The app's side of [`ActionPlayer::play`] for one call: it runs the snapshot's steps as saved
+/// steps ([`VectorcraftApp::replay`]) at the playback's speed and keeps their results. It lives
+/// for the call only; what goes on between calls is in [`Playing`].
+struct Runner<'a> {
+    app: &'a mut VectorcraftApp,
+    speed: PlaybackSpeed,
+    /// The place in the action of each step of the snapshot ([`Playing::rows`]).
+    rows: &'a [usize],
+    /// At Accelerated, the end of the steps the last batch ran: the player reaches them after the
+    /// batch, and they answer `Done` without running again.
+    ran_to: usize,
+    results: Vec<Value>,
+    /// The params of the stop the playback reached.
+    stop: Option<Value>,
+}
+
+impl ActionRunner for Runner<'_> {
+    /// A stop pauses. Otherwise a View menu step runs on its own, and any other step runs as one
+    /// batch with, at Accelerated, the steps after it up to the next stop or View menu step. At
+    /// Step by Step and Pause For each step waits for the next one's turn. The snapshot has no
+    /// excluded step, so a run covers only steps the player would reach.
+    fn run_step(&mut self, action: &Action, index: usize, step: &ActionStep, _: bool, _: &mut PlaybackBudget) -> StepOutcome {
+        if step.command == STOP_STEP {
+            self.stop = Some(step.params.clone());
+            return StepOutcome::Paused;
         }
-        let (rows, run): (Vec<usize>, Vec<Value>) = run.into_iter().map(|s| (s.row, s.command)).unzip();
-        let r = match app.replay("command.batch", json!({"label": label, "commands": run})) {
-            Ok(r) => r,
-            Err(e) => {
-                // The batch numbers its steps from 0 within this run of them, not within the action.
-                if let Some((n, id, reason)) = batch_step_failure(&e)
-                    && let Some(&row) = rows.get(n)
-                {
-                    return step_error(row, id, reason);
-                }
-                return Err(e);
-            }
-        };
-        results.extend(r.get("results").and_then(Value::as_array).cloned().unwrap_or_default());
-        Ok(())
-    }
-    let mut results = Vec::with_capacity(steps.len());
-    let mut run = vec![];
-    for step in steps {
-        if is_ui_step(&step.command) {
-            batch(app, label, std::mem::take(&mut run), &mut results)?;
-            results.push(play_ui_step(app, &step)?);
+        if index < self.ran_to {
+            return StepOutcome::Done(Value::Null);
+        }
+        // PLAN: the snapshot holds a recorded `command.batch`'s commands as steps of their own, so a stop nested in one holds (`a_stop_nested_in_a_recorded_batch_holds_too`); `rows` gives the player's index its place in the action for `step_error`.
+        let ran = if crate::menus::plays_in_app(&step.command) {
+            let row = self.rows.get(index).copied().unwrap_or(index);
+            play_ui_step(self.app, row, step).map(|r| vec![r])
         } else {
-            run.push(step);
+            let end = match self.speed {
+                PlaybackSpeed::Accelerated => action
+                    .steps
+                    .iter()
+                    .enumerate()
+                    .skip(index + 1)
+                    .find(|(_, s)| s.command == STOP_STEP || crate::menus::plays_in_app(&s.command))
+                    .map_or(action.steps.len(), |(i, _)| i),
+                PlaybackSpeed::Step | PlaybackSpeed::Pause => index + 1,
+            };
+            self.ran_to = end;
+            run_batch(self.app, &action.name, self.rows.get(index..end).unwrap_or_default(), action.steps.get(index..end).unwrap_or_default())
+        };
+        match ran {
+            Err(e) => StepOutcome::Failed(e),
+            Ok(results) => {
+                let first = results.first().cloned().unwrap_or(Value::Null);
+                self.results.extend(results);
+                match self.speed {
+                    PlaybackSpeed::Accelerated => StepOutcome::Done(first),
+                    PlaybackSpeed::Step | PlaybackSpeed::Pause => StepOutcome::Wait(first),
+                }
+            }
         }
     }
-    batch(app, label, run, &mut results)?;
+}
+
+/// Runs `steps`, whose places in the action are `rows`, in order as one `command.batch` named
+/// `label`, which is one undo step → their results. A step that fails ends the batch with its
+/// error, which names the step's place in the action ([`step_error`]), and the batch changes
+/// nothing.
+fn run_batch(app: &mut VectorcraftApp, label: &str, rows: &[usize], steps: &[ActionStep]) -> Result<Vec<Value>, String> {
+    let commands: Vec<Value> = steps.iter().map(|s| json!({"command": s.command, "params": s.params})).collect();
+    let r = match app.replay("command.batch", json!({"label": label, "commands": commands})) {
+        Ok(r) => r,
+        Err(e) => {
+            // The batch numbers its steps from 0 within this run of them, not within the action.
+            if let Some((n, id, reason)) = batch_step_failure(&e)
+                && let Some(&row) = rows.get(n)
+            {
+                return step_error(row, id, reason);
+            }
+            return Err(e);
+        }
+    };
+    Ok(r.get("results").and_then(Value::as_array).cloned().unwrap_or_default())
+}
+
+/// Plays `playing` on from its next step at its speed → the results of the steps that ran. The
+/// playback stays in progress ([`crate::UiState::action_playing`]) while steps are left after a
+/// Step by Step or Pause For step, and while it waits at a stop. It ends after its last step, and
+/// at a step that fails, whose error it returns: the steps before it stay done.
+fn advance(app: &mut VectorcraftApp, mut playing: Playing) -> Result<Vec<Value>, String> {
+    let mut runner = Runner { app: &mut *app, speed: playing.options.speed, rows: &playing.rows, ran_to: 0, results: vec![], stop: None };
+    let report = ActionPlayer::play(&playing.list, 0, playing.from, &mut runner, &mut playing.budget);
+    let (results, stop) = (runner.results, runner.stop);
+    if let Some(failure) = report.failed {
+        return Err(failure.message);
+    }
+    let Some(at) = report.paused_at else { return Ok(results) };
+    playing.from = at + 1;
+    playing.next_at = None;
+    // A step of the action may open, close or switch documents itself.
+    playing.doc = active_doc(app);
+    match stop {
+        Some(params) => hold_at_stop(app, playing, params),
+        None if playing.pending() > 0 => {
+            playing.hold = playing.options.speed == PlaybackSpeed::Step;
+            app.ui.action_playing = Some(playing);
+        }
+        None => return Ok(results),
+    }
+    if let Some(ctx) = &app.ui_ctx {
+        ctx.request_repaint();
+    }
     Ok(results)
 }
 
@@ -253,71 +327,28 @@ fn step_error<T>(row: usize, id: &str, reason: &str) -> Result<T, String> {
     Err(format!("action step {} (`{id}`) failed: {reason}", row + 1))
 }
 
-/// Runs a View menu step as its menu item runs it, which adds no undo step → its result. While an
-/// action records, the step goes into the recording too, as a stop does, unless it does not fit in
-/// the action ([`recording_room`]): then the status bar shows the reason.
-fn play_ui_step(app: &mut VectorcraftApp, step: &PlayStep) -> Result<Value, String> {
-    let command = step.command.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
-    let params = step.command.get("params").filter(|p| !p.is_null()).cloned().unwrap_or_else(|| json!({}));
-    let r = match app.replay(&command, params.clone()) {
+/// Runs a View menu step, at place `row` in the action, as its menu item runs it, which adds no
+/// undo step → its result. While an action records, the step goes into the recording too, as a
+/// stop does, unless it does not fit in the action ([`recording_room`]): then the status bar shows
+/// the reason.
+fn play_ui_step(app: &mut VectorcraftApp, row: usize, step: &ActionStep) -> Result<Value, String> {
+    let params = if step.params.is_null() { json!({}) } else { step.params.clone() };
+    let r = match app.replay(&step.command, params.clone()) {
         Ok(r) => r,
-        Err(e) => return step_error(step.row, &command, &e),
+        Err(e) => return step_error(row, &step.command, &e),
     };
     if app.ui.recording.is_some() {
-        match recording_room(app, &command, &params) {
-            Ok(()) => app.session.journal.push((command, params)),
+        match recording_room(app, &step.command, &params) {
+            Ok(()) => app.session.journal.push((step.command.clone(), params)),
             Err(e) => app.status(e),
         }
     }
     Ok(r)
 }
 
-/// [`play`] for an action with a stop: runs what comes before the first stop, or at Step by Step and
-/// Pause For the first step, and leaves the rest to [`tick_playback`] and [`continue_playback`].
-fn play_with_stops(app: &mut VectorcraftApp, label: String, commands: Vec<PlayStep>, options: PlaybackOptions) -> Result<Value, String> {
-    let mut steps: std::collections::VecDeque<PlayStep> = commands.into();
-    let run = next_run(&mut steps, options.speed);
-    let ran = !run.is_empty();
-    let results = if ran { run_steps(app, &label, run)? } else { vec![] };
-    app.ui.action_playing = Some(Playing { label, steps, options, next_at: None, hold: false, doc: None, played_in: None, stop: None });
-    after_run(app, ran);
-    Ok(playback_result(app, results))
-}
-
-/// Takes the steps that run next as one undo step off the front of `steps`: at Accelerated all of
-/// them up to the next stop, at the other speeds one. None when a stop comes next.
-fn next_run(steps: &mut std::collections::VecDeque<PlayStep>, speed: PlaybackSpeed) -> Vec<PlayStep> {
-    let mut run = vec![];
-    while steps.front().is_some_and(|s| !is_stop(&s.command)) {
-        run.extend(steps.pop_front());
-        if speed != PlaybackSpeed::Accelerated {
-            break;
-        }
-    }
-    run
-}
-
-/// Sets up the playback in progress after steps ran (`ran`), or none did: the next pause and frame
-/// start over, and a stop that comes next at Accelerated, or with no step run before it, holds now.
-fn after_run(app: &mut VectorcraftApp, ran: bool) {
-    let doc = active_doc(app);
-    let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
-    let Some(playing) = app.ui.action_playing.as_mut() else { return };
-    playing.doc = doc;
-    playing.played_in = played_in;
-    playing.next_at = None;
-    playing.hold = ran && playing.options.speed == PlaybackSpeed::Step;
-    if (!ran || playing.options.speed == PlaybackSpeed::Accelerated) && playing.steps.front().is_some_and(|s| is_stop(&s.command)) {
-        hold_at_stop(app);
-    }
-    if let Some(ctx) = &app.ui_ctx {
-        ctx.request_repaint();
-    }
-}
-
 /// What [`play`] and [`continue_playback`] return.
 fn playback_result(app: &VectorcraftApp, results: Vec<Value>) -> Value {
-    let pending = app.ui.action_playing.as_ref().map_or(0, |p| p.steps.len());
+    let pending = app.ui.action_playing.as_ref().map_or(0, Playing::pending);
     let mut result = json!({"results": results, "pending": pending});
     if waiting_at_stop(app) {
         result["atStop"] = json!(true);
@@ -325,16 +356,16 @@ fn playback_result(app: &VectorcraftApp, results: Vec<Value>) -> Value {
     result
 }
 
-/// The command id of a stop in [`Action::steps`], with {message, allowContinue} as its params. No
+/// The command id of a stop in an action's steps, with {message, allowContinue} as its params. No
 /// command runs under this id: playback holds where the step is.
 pub const STOP_STEP: &str = "action.stop";
 
-/// Whether a step as [`Action::included_commands`] gives it is a stop.
+/// Whether a step as [`included_commands`] gives it is a stop.
 fn is_stop(step: &Value) -> bool {
     step.get("command").and_then(Value::as_str) == Some(STOP_STEP)
 }
 
-/// Whether one of the steps as [`Action::included_commands`] gives them is a stop.
+/// Whether one of the steps as [`included_commands`] gives them is a stop.
 pub(crate) fn has_stop(commands: &[Value]) -> bool {
     commands.iter().any(is_stop)
 }
@@ -366,17 +397,15 @@ pub(super) struct AtStop {
     pub(super) shown: bool,
 }
 
-/// Takes the stop at the front of the playback's steps and waits there. A recording in progress
-/// records the stop too, unless the stop does not fit in its action ([`recording_room`]): then the
-/// status bar shows the reason.
-fn hold_at_stop(app: &mut VectorcraftApp) {
-    let Some(playing) = app.ui.action_playing.as_mut() else { return };
-    let Some(step) = playing.steps.pop_front() else { return };
-    let params = step.command.get("params").cloned().unwrap_or(Value::Null);
+/// Waits at the stop with `params` that `playing` reached. A recording in progress records the
+/// stop too, unless the stop does not fit in its action ([`recording_room`]): then the status bar
+/// shows the reason.
+fn hold_at_stop(app: &mut VectorcraftApp, mut playing: Playing, params: Value) {
     let message = params.get("message").and_then(Value::as_str).unwrap_or_default().to_string();
     let allow_continue = params.get("allowContinue").and_then(Value::as_bool).unwrap_or(false);
     playing.stop = Some(AtStop { message, allow_continue, shown: false });
     playing.hold = false;
+    app.ui.action_playing = Some(playing);
     if app.ui.recording.is_some() {
         match recording_room(app, STOP_STEP, &params) {
             Ok(()) => app.session.journal.push((STOP_STEP.to_string(), params)),
@@ -388,11 +417,11 @@ fn hold_at_stop(app: &mut VectorcraftApp) {
 
 /// Opens the message box of the stop the playback waits at, once, when no other dialog is open.
 fn show_stop_message(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_some() {
+    if app.any_dialog_open() {
         return;
     }
     let Some(playing) = app.ui.action_playing.as_mut() else { return };
-    let label = playing.label.clone();
+    let label = playing.name().to_string();
     let Some(stop) = playing.stop.as_mut().filter(|s| !s.shown) else { return };
     stop.shown = true;
     let (message, allow_continue) = (stop.message.clone(), stop.allow_continue);
@@ -401,9 +430,8 @@ fn show_stop_message(app: &mut VectorcraftApp) {
 
 /// Closes the message box of a stop, if it is open.
 pub(super) fn close_stop_message(app: &mut VectorcraftApp) {
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::action_stop::MESSAGE_KIND) {
-        app.ui.dialog = None;
-    }
+    // PLAN: assumed menus-w20's `pub(crate) fn close_message(app: &VectorcraftApp)` (decision: cancel then take the `StopMessage`).
+    crate::dialogs::action_stop::close_message(app);
 }
 
 /// Whether the playback in progress waits at a stop.
@@ -419,19 +447,13 @@ pub const CONTINUE_PLAYBACK: &str = "ui.action.continue";
 /// up to the next stop as one undo step; a failing step ends the playback with its error. With no
 /// playback waiting at a stop it is an error. → {results, pending, atStop?}, as [`play`]
 pub fn continue_playback(app: &mut VectorcraftApp, _: &Value) -> Result<Value, String> {
-    let Some(playing) = app.ui.action_playing.as_mut().filter(|p| p.stop.is_some()) else {
+    let Some(mut playing) = app.ui.action_playing.take_if(|p| p.stop.is_some()) else {
         return Err("no action is waiting at a stop".into());
     };
     playing.stop = None;
-    let run = next_run(&mut playing.steps, playing.options.speed);
-    let label = playing.label.clone();
-    if playing.steps.is_empty() {
-        app.ui.action_playing = None;
-    }
+    playing.played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
     close_stop_message(app);
-    let ran = !run.is_empty();
-    let results = if ran { run_steps(app, &label, run).inspect_err(|_| app.ui.action_playing = None)? } else { vec![] };
-    after_run(app, ran);
+    let results = advance(app, playing)?;
     Ok(playback_result(app, results))
 }
 
@@ -472,12 +494,21 @@ pub fn deserialize_playback<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Pl
     Ok(serde_json::from_value::<PlaybackOptions>(v).ok().filter(|o| PAUSE_SECONDS.contains(&o.seconds)).unwrap_or_default())
 }
 
-/// A paced playback in progress: the steps still to run.
+/// A playback in progress, between the steps it runs: one that waits for its next step at Step by
+/// Step or Pause For, or at a stop.
 #[derive(Clone, Debug)]
 pub struct Playing {
-    /// The action's name, which names each step's undo step.
-    pub(super) label: String,
-    pub(super) steps: std::collections::VecDeque<PlayStep>,
+    /// The action as it plays, alone in a list: its included steps as [`included_commands`] gives
+    /// them (Automatic Align applied, a recorded `command.batch`'s commands one by one), under the
+    /// action's name, which names each undo step. Edits to the panel's list while it plays do not
+    /// change it.
+    list: ActionList,
+    /// The place in the action of each step of [`Playing::list`], which an error names.
+    rows: Vec<usize>,
+    /// The index in [`Playing::list`] of the next step to play.
+    from: usize,
+    /// The steps the playback has run, counted against the player's limit.
+    budget: PlaybackBudget,
     /// The options the action started playing with.
     pub(super) options: PlaybackOptions,
     /// With Pause For, when the next step runs (seconds on the app's clock); none until the frame
@@ -491,15 +522,32 @@ pub struct Playing {
     /// The [`uid`](vectorcraft_engine::DocState::uid) of the document that was active after the
     /// last step played, if any.
     pub(super) doc: Option<u64>,
-    /// The host iteration in which Play ran the first step, when that iteration's [`tick`] had
-    /// already begun (a control request, or the UI pass after it): the pause before the second step
+    /// The host iteration in which Play or Continue ran a step, when that iteration's [`tick`] had
+    /// already begun (a control request, or the UI pass after it): the pause before the next step
     /// starts in a later iteration.
     ///
     /// [`tick`]: VectorcraftApp::tick
     played_in: Option<u64>,
     /// The stop the playback waits at, if any: no step runs until [`continue_playback`] or
-    /// [`stop`].
+    /// [`stop`](super::stop).
     pub(super) stop: Option<AtStop>,
+}
+
+impl Playing {
+    /// The action's name.
+    fn name(&self) -> &str {
+        self.list.action(0).map_or("", |a| a.name.as_str())
+    }
+
+    /// The steps still to play, stops included.
+    fn pending(&self) -> usize {
+        self.list.step_count(0).saturating_sub(self.from)
+    }
+
+    /// Whether the next step is a stop.
+    fn stop_next(&self) -> bool {
+        self.list.action(0).and_then(|a| a.steps.get(self.from)).is_some_and(|s| s.command == STOP_STEP)
+    }
 }
 
 fn active_doc(app: &VectorcraftApp) -> Option<u64> {
@@ -513,8 +561,9 @@ fn active_doc(app: &VectorcraftApp) -> Option<u64> {
 /// frame does not shorten it. A step that fails ends the playback and shows its error. When a step
 /// is due and the active document is not the one that was active after the last step (another
 /// document was made active, or that one was closed), the playback ends with a status and the rest
-/// do not run, except that a stop is held whichever document is active. → the seconds until the window should draw again while playback goes on (none while
-/// Step by Step waits for a UI pass, which asks for the next frame itself)
+/// do not run, except that a stop is held whichever document is active. → the seconds until the
+/// window should draw again while playback goes on (none while Step by Step waits for a UI pass,
+/// which asks for the next frame itself)
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let doc = active_doc(app);
     let playing = app.ui.action_playing.as_mut()?;
@@ -535,36 +584,18 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
             return Some(due - now);
         }
     }
-    if playing.steps.front().is_some_and(|s| is_stop(&s.command)) {
-        hold_at_stop(app);
-        return None;
-    }
-    if playing.doc != doc {
+    if !playing.stop_next() && playing.doc != doc {
         app.ui.action_playing = None;
         app.status("the action stopped playing: its document is no longer active");
         return None;
     }
-    let Some(step) = playing.steps.pop_front() else {
-        app.ui.action_playing = None;
-        return None;
-    };
-    let label = playing.label.clone();
-    if playing.steps.is_empty() {
-        app.ui.action_playing = None;
-    }
-    if let Err(e) = play_step(app, &label, step) {
-        app.ui.action_playing = None;
+    let playing = app.ui.action_playing.take()?;
+    if let Err(e) = advance(app, playing) {
         app.status(e);
         return None;
     }
-    let doc = active_doc(app);
-    let playing = app.ui.action_playing.as_mut()?;
-    // A step of the action may open, close or switch documents itself.
-    playing.doc = doc;
-    // With Pause For, the next frame starts the next pause.
-    playing.next_at = None;
-    playing.hold = playing.options.speed == PlaybackSpeed::Step;
-    Some(0.0)
+    // A step that waits for its turn asks for the frame that starts it; a stop waits for the user.
+    app.ui.action_playing.as_ref().filter(|p| p.stop.is_none()).map(|_| 0.0)
 }
 
 /// Whether a Step by Step playback waits for a frame that shows its last step ([`playback_drawn`]).
@@ -618,29 +649,20 @@ pub fn playback_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
 pub const PLAY_ACTION: &str = "ui.action.play";
 
 /// `ui.action.play {action, set?}`: plays the action named `action` at the Playback Options speed,
-/// as Play Current Selection does ([`play`]). `set` names the set to look in (default: every set); a
-/// `set` that is not a string is an error. A name that no action has is an error, and so is a name
-/// that more than one action in the sets looked in has: then nothing plays. → what [`play`] returns:
-/// at Accelerated, what `command.batch` returns; at Step by Step and Pause For, {results, pending}
+/// as Play Current Selection does ([`play`]). Names are unique in the list; `set` names the set the
+/// action must be in (default: any set), and a `set` that is not a string is an error. A name that
+/// no action has, or none in `set`, is an error, and then nothing plays. → what [`play`] returns
 pub fn play_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let name = p.get("action").and_then(Value::as_str).ok_or("no such action")?;
     let in_set = match p.get("set") {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_str().ok_or("no such action set")?),
     };
-    let found: Vec<(usize, usize)> = app
-        .ui
-        .action_sets
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| in_set.is_none_or(|n| s.name == n))
-        .flat_map(|(si, s)| s.actions.iter().enumerate().filter(|(_, a)| a.name == name).map(move |(ai, _)| (si, ai)))
-        .collect();
-    match found[..] {
-        [] => Err("no such action".into()),
-        [(s, a)] => play(app, s, a),
-        _ => Err(format!("more than one action is named “{}”", name)),
-    }
+    let list = &app.ui.actions;
+    let index =
+        list.actions().iter().position(|a| a.name == name && in_set.is_none_or(|set| a.set.as_deref() == Some(set))).ok_or("no such action")?;
+    let (set, at) = model::place(list, index).ok_or("no such action")?;
+    play(app, set, at)
 }
 
 /// The command that plays an action by its place in the panel ([`play_at`]).

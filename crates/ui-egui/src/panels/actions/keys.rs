@@ -1,4 +1,9 @@
-use super::*;
+use craft::automation::actions::ActionList;
+use craft::keymap::{Chord, Platform};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use super::model;
 
 /// The highest function key an action can play with: F1 to F15.
 pub const FUNCTION_KEYS: u8 = 15;
@@ -23,7 +28,7 @@ impl FunctionKey {
     }
 
     /// The chord the key is pressed as; none when `key` is not 1 to [`FUNCTION_KEYS`].
-    pub fn chord(self) -> Option<craft_keymap::Chord> {
+    pub fn chord(self) -> Option<Chord> {
         (1..=FUNCTION_KEYS).contains(&self.key).then(|| crate::keymap::vc_chord(&self.shortcut())).flatten()
     }
 
@@ -52,7 +57,7 @@ impl FunctionKey {
 /// The function returns an error message if the function key is invalid or reserved on this platform.
 pub fn key_error(key: FunctionKey) -> Option<String> {
     let Some(chord) = key.chord() else { return Some("no such function key".into()) };
-    if crate::keymap::platform() == craft_keymap::Platform::Windows && (key.key == 1 || key.cmd && !key.shift && matches!(key.key, 4 | 6)) {
+    if crate::keymap::platform() == Platform::Windows && (key.key == 1 || key.cmd && !key.shift && matches!(key.key, 4 | 6)) {
         return Some(format!("{} cannot be used on Windows", key.text()));
     }
     if crate::keymap::template().is_reserved(&chord) {
@@ -61,63 +66,14 @@ pub fn key_error(key: FunctionKey) -> Option<String> {
     None
 }
 
-pub(super) fn playable_chord(key: FunctionKey) -> Option<craft_keymap::Chord> {
+pub(super) fn playable_chord(key: FunctionKey) -> Option<Chord> {
     key_error(key).is_none().then(|| key.chord()).flatten()
 }
 
-crate::shortcut_editor::ui_mirror!(fn function_key_chords() -> Vec<craft_keymap::Chord>);
-
-/// Mirrors the actions' function keys for code without app access (cheap when unchanged).
-pub fn sync_function_keys(ui: &crate::UiState) {
-    let chords: Vec<craft_keymap::Chord> = ui.action_sets.iter().flat_map(|s| s.actions.iter().filter_map(|a| playable_chord(a.key?))).collect();
-    if function_key_chords().read().is_ok_and(|v| *v != chords)
-        && let Ok(mut v) = function_key_chords().write()
-    {
-        *v = chords;
-    }
-}
-
-/// Whether `chord` plays an action, by the function keys [`sync_function_keys`] last mirrored.
-pub(crate) fn plays_an_action(chord: &craft_keymap::Chord) -> bool {
-    let platform = crate::keymap::platform();
-    let chord = chord.effective(platform);
-    function_key_chords().read().is_ok_and(|v| v.iter().any(|c| c.effective(platform) == chord))
-}
-
-/// Plays each action whose function key was pressed this frame, in the order of the presses and
-/// before any command with the same shortcut, and takes those key presses. The frame's other
-/// events stay for the command, panel and tool shortcuts.
-pub fn play_function_key(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let keys: Vec<(craft_keymap::Chord, (usize, usize))> = app
-        .ui
-        .action_sets
-        .iter()
-        .enumerate()
-        .flat_map(|(si, s)| s.actions.iter().enumerate().filter_map(move |(ai, a)| Some((playable_chord(a.key?)?, (si, ai)))))
-        .collect();
-    if keys.is_empty() {
-        return;
-    }
-    let platform = crate::keymap::platform();
-    let hits: Vec<(usize, usize)> = ctx.input_mut(|i| {
-        let mut hits = Vec::new();
-        i.events.retain(|e| {
-            let hit = match e {
-                egui::Event::Key { key, pressed: true, modifiers, .. } => craft_keymap::Key::from_egui(*key)
-                    .map(|k| craft_keymap::Chord::new(craft_keymap::Mods::from_egui(modifiers, platform), k))
-                    .and_then(|c| keys.iter().find(|(k, _)| *k == c).map(|(_, at)| *at)),
-                _ => None,
-            };
-            if !matches!(e, egui::Event::Key { repeat: true, .. }) {
-                hits.extend(hit);
-            }
-            hit.is_none()
-        });
-        hits
-    });
-    for (set, action) in hits {
-        if let Err(e) = play(app, set, action) {
-            app.status(e);
-        }
-    }
+/// The actions of `list` that a function key plays, in list order: each action's name and the
+/// chord its key is pressed as. The shortcut catalogue makes a row of each; a key that
+/// [`key_error`] refuses on this platform gives none, so it never plays.
+// PLAN: menus-w13's root `actions.rs` needs `pub use keys::function_keys` for menus-w5's catalogue builder.
+pub fn function_keys(list: &ActionList) -> Vec<(String, Chord)> {
+    list.actions().iter().filter_map(|a| Some((a.name.clone(), playable_chord(model::function_key(a)?)?))).collect()
 }
