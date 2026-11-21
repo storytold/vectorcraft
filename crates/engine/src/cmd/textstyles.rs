@@ -502,11 +502,21 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
         let mut changed = false;
         // The first character whose leading the new definition changed.
         let mut leading_at = None;
+        // With Block on, every leading is the one Block gives (size plus line gap), not an
+        // override: the old definition's leading stands in for it so the new one applies.
+        let block = t.dynamic_text && matches!(t.kind, vectorcraft_doc::TextKind::Area { .. });
+        let old_leading = old
+            .get("leading")
+            .filter(|_| block && old.get("leading") != new.get("leading"))
+            .and_then(|v| serde_json::from_value::<Option<f64>>(v.clone()).ok());
         match kind {
             Kind::Char => {
                 let mut off = 0;
                 for r in &mut t.runs {
                     if r.style.style_name == target {
+                        if let Some(l) = old_leading {
+                            r.style.leading = l;
+                        }
                         let was = r.style.leading;
                         r.style = font_change(&r.style, restyle(&r.style, char_attrs, old, new, &base), new);
                         changed = true;

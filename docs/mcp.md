@@ -11329,14 +11329,14 @@ lines. The rest are VectorCraft's own rules:
   `text.setRangeStyle {leading}` (the Character panel's and the Properties panel's Leading field and its list),
   `type.step {attribute: "leading"}` (the Type tool's Alt+arrow leading steps), `charStyle.apply` with a style that sets
   a leading (or with `clearOverrides` when the Normal style sets one), `charStyle.edit` and `charStyle.setAttrs` when
-  the new definition gives its users another leading, `appearance.copyFrom` copying character attributes (the
-  Eyedropper) and `addon.type.textTweaker {attribute: "leading"}` (from its first changed character). `"auto"` takes
-  the first character's Auto leading. Every line then spreads or tightens by the change to that character's leading.
-  In a shaped frame where the moved lines take another size, the gap is worked out again from the new size, up to four
-  times, and the leading set can then differ by the last change in that size. Area Type Options and the Properties
-  panel show the new Line Gap. When the changed characters share one size and the gap is within its range, the Leading
-  field shows the leading set. Otherwise each character takes its own size plus the gap, and the field is blank where
-  those differ.
+  the new definition gives its users another leading, and `addon.type.textTweaker {attribute: "leading"}`. Text
+  Tweaker's ramp sets the gap from its first changed character, and every other character then takes its size plus
+  that gap, so the ramp does not vary the leading. `"auto"` takes the first character's Auto leading. Every line then
+  spreads or tightens by the change to that character's leading. The Eyedropper (`appearance.copyFrom`) copies a whole
+  character style, so it leaves `lineGap` as it is. In a shaped frame where the moved lines take another size, the gap
+  is worked out again from the new size, up to four times, and the leading set can then differ by the last change in
+  that size. When the changed characters share one size and the gap is within its range, the Leading field shows the
+  leading set. Otherwise each character takes its own size plus the gap, and the field is blank where those differ.
   `keepLineGap: true` on `text.setStyle` and `text.setRangeStyle` leaves `lineGap` as it is, and the Character panel's
   Reset Panel sends it, so a reset to Auto leading keeps the frame's Line Gap. Point type, type on a path and area type
   with Block off keep their own leading.

@@ -359,7 +359,7 @@ pub(crate) fn refresh_with_leading(t: &mut TextObject, at: usize, leading: Optio
 }
 
 /// [`refresh_with_leading`] with the leading the character at `at` was just given (a character
-/// style, the Eyedropper, Text Tweaker).
+/// style, Text Tweaker).
 pub(crate) fn refresh_with_given_leading(t: &mut TextObject, at: usize) {
     if block::given_leading_to_line_gap(t, at) {
         refresh_fitted(t);

@@ -727,7 +727,7 @@ fn a_leading_change_with_block_on_moves_the_line_gap() {
 
     // The gap stays within its range.
     s.execute("text.setStyle", &json!({"ids": [id], "leading": 5000})).unwrap();
-    assert_eq!(text(&s, id).area.line_gap, 1296.0);
+    assert_eq!(text(&s, id).area.line_gap, vectorcraft_doc::AreaOptions::LINE_GAP.1);
     // From a gap that holds every leading at its least, the leading given still applies.
     s.execute("text.areaOptions", &json!({"lineGap": -1296})).unwrap();
     s.execute("text.setStyle", &json!({"ids": [id], "leading": 1})).unwrap();
@@ -861,6 +861,25 @@ fn a_character_style_edited_to_a_leading_with_block_on_moves_the_line_gap() {
     let t = text(&s, id);
     assert!((t.area.line_gap - (60.0 - t.runs[0].style.size)).abs() < 1e-6, "edit: line gap {}", t.area.line_gap);
     assert!(leading_at(&t, 0).is_some_and(|l| (l - 60.0).abs() < 1e-6));
+    assert_spread(&t);
+
+    // Once Block has given the characters other leadings than the style's (a new line gap here), a
+    // new leading in the style still applies: Block's leadings are not overrides.
+    s.execute("text.areaOptions", &json!({"lineGap": 0})).unwrap();
+    let gap = text(&s, id).area.line_gap;
+    s.execute("charStyle.edit", &json!({"name": "Plain", "to": "Plain", "attrs": {"tracking": 0, "leading": 70}})).unwrap();
+    let t = text(&s, id);
+    assert!(t.area.line_gap != gap, "the line gap moved");
+    assert!(leading_at(&t, 0).is_some_and(|l| (l - 70.0).abs() < 1e-6), "{:?}", leading_at(&t, 0));
+    assert_spread(&t);
+}
+
+/// Every character's leading is its size plus the frame's line gap (at least the least size), so
+/// every line spread or tightened by the same amount.
+fn assert_spread(t: &TextObject) {
+    let gap = t.area.line_gap;
+    let least = super::block::SIZES.0;
+    assert!(t.runs.iter().all(|r| r.style.leading.is_some_and(|l| (l - (r.style.size + gap).max(least)).abs() < 1e-6)), "{:?}", t.runs);
 }
 
 /// A character style that sets a leading, applied to Block text, moves the line gap.
@@ -873,6 +892,7 @@ fn a_character_style_leading_applied_with_block_on_moves_the_line_gap() {
     let t = text(&s, id);
     assert!((t.area.line_gap - (50.0 - t.runs[0].style.size)).abs() < 1e-6, "apply: line gap {}", t.area.line_gap);
     assert!(leading_at(&t, 0).is_some_and(|l| (l - 50.0).abs() < 1e-6));
+    assert_spread(&t);
 
     // Clearing overrides gives the text the leading of the Normal style.
     s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"leading": 44}})).unwrap();
@@ -881,9 +901,12 @@ fn a_character_style_leading_applied_with_block_on_moves_the_line_gap() {
     s.execute("charStyle.apply", &json!({"name": "Plain", "id": id, "clearOverrides": true})).unwrap();
     let t = text(&s, id);
     assert!(leading_at(&t, 0).is_some_and(|l| (l - 44.0).abs() < 1e-6), "clear: {:?}", leading_at(&t, 0));
+    assert!((t.area.line_gap - (44.0 - t.runs[0].style.size)).abs() < 1e-6, "clear: line gap {}", t.area.line_gap);
+    assert_spread(&t);
 }
 
-/// Text Tweaker's leading ramp on Block text moves the line gap to its first character's value.
+/// Text Tweaker's leading ramp on Block text moves the line gap to its first character's value;
+/// Block then gives every other character its size plus that gap.
 #[test]
 fn a_text_tweaker_leading_with_block_on_moves_the_line_gap() {
     let mut s = session();
@@ -892,18 +915,20 @@ fn a_text_tweaker_leading_with_block_on_moves_the_line_gap() {
     let t = text(&s, id);
     assert!((t.area.line_gap - (40.0 - t.runs[0].style.size)).abs() < 1e-6, "line gap {}", t.area.line_gap);
     assert!(leading_at(&t, 0).is_some_and(|l| (l - 40.0).abs() < 1e-6));
+    assert_spread(&t);
 }
 
-/// The Eyedropper copying a leading onto Block text moves the line gap, so the first character
-/// takes the copied leading.
+/// The Eyedropper copies a whole character style, so the leading it copies onto Block text is not
+/// a leading change: the line gap stays, and Block gives every character its size plus the gap.
 #[test]
-fn an_eyedropper_leading_with_block_on_moves_the_line_gap() {
+fn an_eyedropper_copy_onto_block_text_keeps_the_line_gap() {
     let mut s = session();
     let source = point(&mut s, "source", json!({}));
     s.execute("text.setStyle", &json!({"ids": [source], "leading": 33})).unwrap();
     let id = block_text(&mut s);
+    let gap = text(&s, id).area.line_gap;
     s.execute("appearance.copyFrom", &json!({"source": source, "ids": [id]})).unwrap();
     let t = text(&s, id);
-    assert!(t.area.line_gap != 0.0, "the line gap moved");
-    assert!(leading_at(&t, 0).is_some_and(|l| (l - 33.0).abs() < 1e-6), "{:?}", leading_at(&t, 0));
+    assert_eq!(t.area.line_gap, gap);
+    assert_spread(&t);
 }

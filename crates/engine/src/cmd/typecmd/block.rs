@@ -6,7 +6,7 @@ use vectorcraft_doc::{CharStyle, TextKind, TextObject, TextRun};
 
 /// The font size range a line's first character is fitted within, in document points (the
 /// Character panel's).
-const SIZES: (f64, f64) = (0.1, 1296.0);
+pub(crate) const SIZES: (f64, f64) = (0.1, 1296.0);
 
 /// Most passes a refit runs to correct lines that still wrap after the first fit; each pass measures
 /// the lines and runs at most one more area layout.
@@ -194,7 +194,7 @@ pub(crate) fn leading_to_line_gap(t: &mut TextObject, at: usize, leading: Option
 }
 
 /// [`leading_to_line_gap`] with the leading the character at `at` was just given (a character
-/// style, the Eyedropper, Text Tweaker), read before Block sets it again.
+/// style, Text Tweaker), read before Block sets it again.
 pub(crate) fn given_leading_to_line_gap(t: &mut TextObject, at: usize) -> bool {
     let Some(leading) = run_at(&t.runs, at).map(|r| r.style.leading) else { return false };
     leading_to_line_gap(t, at, leading)
