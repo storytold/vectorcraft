@@ -4561,6 +4561,64 @@ fn an_earlier_grants_file_put_back_grants_nothing() {
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked from the edited file doesn't come back");
 }
 
+/// A grant revoked while the grants file is gone, or while another file that grants nothing (one
+/// without a MAC, or one that doesn't hold a list) is in its place, doesn't come back with the last
+/// signed file put back: the revoke raises the generation. A revoke that a signed file without an
+/// entry for the plug-in already covers, or one while the key store holds no key, leaves the
+/// generation as it is.
+#[test]
+fn a_grant_revoked_without_a_signed_file_doesnt_come_back_with_one() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+    let folder = crate::tests_links::Folder::new("plugin-store-revoke-without-file");
+    let id = "test.engine.permissions.revokedgone";
+    let other = "test.engine.permissions.revokedgoneother";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.store_grant(other, None), "nothing to revoke in an empty folder");
+    assert_eq!(kept(&folder.0), None, "without a key nothing is signed, so no generation is kept");
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let signed = std::fs::read(&grants).unwrap();
+    assert_eq!(kept(&folder.0), Some(1));
+    assert!(s.store_grant(other, None));
+    assert_eq!(kept(&folder.0), Some(1), "the signed file names no grant for it, so nothing is raised");
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false));
+
+    // The file is gone when the grant is revoked.
+    std::fs::remove_file(&grants).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.store_grant(id, None));
+    assert_eq!(kept(&folder.0), Some(2));
+    std::fs::write(&grants, &signed).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked while the file was gone doesn't come back");
+
+    // A file without a MAC that names no grant for it is in place.
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let signed = std::fs::read(&grants).unwrap();
+    std::fs::write(&grants, b"[]").unwrap();
+    assert!(s.store_grant(id, None));
+    assert_eq!(std::fs::read(&grants).unwrap(), b"[]", "the unsigned file is left as it is");
+    std::fs::write(&grants, &signed).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked over an unsigned file doesn't come back");
+
+    // A file that doesn't hold a list is in place: the revoke isn't recorded, and still raises the
+    // generation.
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let signed = std::fs::read(&grants).unwrap();
+    std::fs::write(&grants, br#""not a list""#).unwrap();
+    assert!(!s.store_grant(id, None));
+    std::fs::write(&grants, &signed).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked over a file without a list doesn't come back");
+}
+
 /// Every signed write of the grants file is at the next generation, which the key store then keeps,
 /// and the file stays signed; removing the last grant raises the generation too.
 #[test]
@@ -4652,6 +4710,29 @@ fn a_key_without_a_generation_reads_generation_zero() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A grant revoked while the file signed at generation 0 is gone doesn't come back with that file
+/// put back: with a key kept, the revoke raises the generation from 0.
+#[test]
+fn a_grant_revoked_while_a_generation_zero_file_is_gone_doesnt_come_back() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::with_key(crate::store::grant_keys::GrantKey::from_bytes([6; 32])));
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let folder = crate::tests_links::Folder::new("plugin-store-generation-zero-revoke");
+    let id = "test.engine.permissions.generationzerorevoke";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    let file = crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": sha256_hex(&wasm), "permissions": ["doc.read"]}]).to_string());
+    assert_eq!(generation_of(&file), Some(0));
+    std::fs::write(folder.0.join(format!("{}.wasm", crate::store::file_stem(id))), &wasm).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.store_grant(id, None));
+    assert_eq!(kept_generation(&keys, &folder.0), Some(1));
+    std::fs::write(&grants, &file).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the file at generation 0 grants nothing");
+}
+
 /// When the key store can't keep the generation of a write, the file written is one generation ahead
 /// of the kept one and grants nothing, so its plug-ins ask again; so does a file one generation
 /// behind the kept one, as a write that kept its generation and then failed to write the file would
@@ -4687,6 +4768,39 @@ fn a_grants_file_whose_generation_was_not_kept_grants_nothing() {
     assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file at the kept generation keeps its grant");
     crate::store::grant_keys::GrantKeyStore::set_generation(keys.as_ref(), &store, 2).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "a file one generation behind grants nothing");
+}
+
+/// A revoke over a signed file whose generation wasn't kept raises the generation past the file's,
+/// so the file left in place still grants nothing.
+#[test]
+fn a_revoke_over_a_file_ahead_of_its_generation_leaves_it_granting_nothing() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let shared = SharedKeys::new(&keys);
+    let fail = shared.generation_writes_fail.clone();
+    let _keys = ThreadKeys::using(shared);
+    let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+    let folder = crate::tests_links::Folder::new("plugin-store-revoke-ahead");
+    let id = "test.engine.permissions.revokeahead";
+    let other = "test.engine.permissions.revokeaheadother";
+    let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})));
+    let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    fail.store(true, std::sync::atomic::Ordering::SeqCst);
+    _ = s.execute("plugin.install", &json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    fail.store(false, std::sync::atomic::Ordering::SeqCst);
+    let ahead = std::fs::read(&grants).unwrap();
+    assert_eq!((generation_of(&ahead), kept(&folder.0)), (Some(2), Some(1)));
+
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.store_grant("test.engine.permissions.revokeaheadnone", None));
+    assert_eq!(std::fs::read(&grants).unwrap(), ahead, "the file is left as it is");
+    assert_eq!(kept(&folder.0), Some(3), "the generation is past the file's");
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the file still grants nothing");
+    assert_eq!(starts_from(&folder.0, other, &other_data), (false, true));
 }
 
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next
