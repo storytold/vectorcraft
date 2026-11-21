@@ -7113,8 +7113,10 @@ result and the original path stay within `tolerance` of each other, except that 
 is dropped, so a small circle in a compound path can be removed at a large `tolerance`. A segment that would need more
 than 65,536 samples at that tolerance stays as it is, and so does a segment after a run's first 16,777,216 samples or
 2,097,152 result segments. With `straightLines`, such a segment becomes evenly spaced lines, up to 65,536, and past those
-limits the lines can be farther than `tolerance` from the segment. With `level` or `auto`, the reply also has the `level`
-used:
+limits the lines can be farther than `tolerance` from the segment. A closed path keeps its start, where its dashes
+begin: it starts at its old first anchor when the refit keeps an anchor there, otherwise at a new anchor where the refit
+passes nearest that point when the result with that anchor still has fewer anchors than the path had, and otherwise at
+the refit's anchor nearest that point. It runs the same way around as before. With `level` or `auto`, the reply also has the `level` used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.simplify","params":{"auto":true}}}
@@ -7123,7 +7125,8 @@ used:
 With segments of a path direct-selected (`select.segments`, or `select.anchors` with both anchors of a segment), Simplify
 refits only each run of consecutive selected segments, between the run's end anchors: they stay where they are, with
 their handles on the side away from the run, and every other anchor and segment of the path stays exactly as it was. A
-closed path's run may cross its start point; the path then starts at the run's end anchor. Separate runs on one path
+closed path's run may cross its start point; the path then keeps its start as a whole path does, with the new start on
+that run. Separate runs on one path
 simplify independently, in one undo step, and the runs stay direct-selected (as segments when segments were picked).
 A path with only lone anchors selected, and every path with `wholePaths: true`, simplifies whole:
 
@@ -7151,7 +7154,7 @@ side) to 100 (maximum smoothing); `auto: true` (Auto-Smooth) uses level 50, the 
 its length (by up to 5% of its longer side; none at level 0) and refitted with curves within 0.1% to 2.5% of it,
 keeping a corner only where it turns back on itself, so bumps, jags and kinks become one curve; with anchor points or
 segments of a path direct-selected (and no `ids`), only the sections between them are smoothed, as Simplify does. A refit never has more anchor points than the path had, so a shape whose corners the tolerance can't
-round, such as a rectangle, stays as it is. Closed paths stay closed and open paths keep their end points. The reply has the anchor counts `before` and `after` and the `level` used:
+round, such as a rectangle, stays as it is. Closed paths stay closed and keep their start as Simplify keeps it, and open paths keep their end points. The reply has the anchor counts `before` and `after` and the `level` used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.smooth","params":{"level":80}}}

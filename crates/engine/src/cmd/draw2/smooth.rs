@@ -1,4 +1,5 @@
 use vectorcraft_pathops::addons::pathtools as pt;
+use vectorcraft_pathops::start_nearest;
 
 use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, subpath_len, target_paths};
 use super::{
@@ -321,84 +322,6 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<A
         *a = Anchor::with_handles(a.p, a.h_in, a.h_out);
     }
     out.into_vec()
-}
-
-/// Distance (points) from an anchor within which a smoothed closed path starts at that anchor
-/// instead of at a new one split in beside it.
-const START_SNAP: f64 = 1e-3;
-
-/// Distance (points) within which two points of a smoothed closed path count as equally near its
-/// old start.
-const START_TIE: f64 = 1e-6;
-
-/// Where `p` lies along the closed `orig` from its first anchor: the segment index and parameter of
-/// the point of `orig` nearest `p`, the first such point in its order. Sorts after every finite place
-/// when there is none.
-fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
-    let mut best: Option<(f64, usize, f64)> = None;
-    for j in 0..orig.anchors.len() {
-        let hit = orig.segment(j).nearest(p, 1e-9);
-        if hit.distance_sq.is_finite() && hit.t.is_finite() && best.is_none_or(|(d, ..)| hit.distance_sq < d) {
-            best = Some((hit.distance_sq, j, hit.t));
-        }
-    }
-    best.map_or((usize::MAX, f64::INFINITY), |(_, j, t)| (j, t))
-}
-
-/// The closed `sp` started at the point on it nearest `start`: at the anchor there, or at a new
-/// anchor split into the segment there, which leaves the outline as it is. Of points equally near
-/// `start`, the one earliest along `orig` (the path before smoothing) from its first anchor is used,
-/// then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest point,
-/// is returned as it is.
-fn start_nearest(mut sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
-    let n = sp.anchors.len();
-    if !sp.closed || n < 2 {
-        return sp;
-    }
-    // (distance, place along `orig` once a tie needs it, segment of `sp`, parameter)
-    type Best = (f64, Option<(usize, f64)>, usize, f64);
-    let mut best: Option<Best> = None;
-    for i in 0..n {
-        let c = sp.segment(i);
-        let hit = c.nearest(start, 1e-9);
-        if !hit.distance_sq.is_finite() || !hit.t.is_finite() {
-            continue;
-        }
-        let d = hit.distance_sq.sqrt();
-        match &mut best {
-            None => best = Some((d, None, i, hit.t)),
-            Some((bd, bplace, bi, bt)) if (d - *bd).abs() <= START_TIE => {
-                let held = *bplace.get_or_insert_with(|| place_along(orig, sp.segment(*bi).eval(*bt)));
-                let place = place_along(orig, c.eval(hit.t));
-                if place.0 < held.0 || (place.0 == held.0 && place.1 < held.1) {
-                    best = Some((d, Some(place), i, hit.t));
-                }
-            }
-            Some((bd, ..)) if d < *bd => best = Some((d, None, i, hit.t)),
-            Some(_) => {}
-        }
-    }
-    let Some((_, _, i, t)) = best else { return sp };
-    let c = sp.segment(i);
-    let at = c.eval(t);
-    let first = if at.distance(c.p0) <= START_SNAP {
-        i
-    } else if at.distance(c.p3) <= START_SNAP {
-        (i + 1) % n
-    } else {
-        let mid = if sp.segment_is_line(i) {
-            Anchor::corner(at)
-        } else {
-            let (l, r) = (c.subsegment(0.0..t), c.subsegment(t..1.0));
-            sp.anchors[i].h_out = l.p1;
-            sp.anchors[(i + 1) % n].h_in = r.p2;
-            Anchor::with_handles(at, l.p2, r.p1)
-        };
-        sp.anchors.insert(i + 1, mid);
-        i + 1
-    };
-    sp.anchors.rotate_left(first);
-    sp
 }
 
 /// Pieces of curve that one Smooth drag measures against the drag while it searches the segments
@@ -1009,6 +932,8 @@ pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use vectorcraft_pathops::START_SNAP;
+
     use super::*;
 
     /// A closed ring of four smooth anchors round (100, 100) with radius 50.
