@@ -2652,7 +2652,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   directly below it. An object of another document throws `Cross-document placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `duplicate` on a path inside a compound path throws
-  `Duplicating a path inside a compound path is not available yet`. A script that holds a placed image keeps the
+  `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
   same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
   enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
@@ -2665,7 +2666,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
-  kept from an earlier run, throws `Stale page item`; `index` and `getByName` throw `Not found`; and
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
   nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
@@ -8883,8 +8888,9 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
 rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
-an error with another layout; a preset keeps the rows until `columns` without `rows`, or another layout, is given,
-and New Document drops them when Columns or the layout changes),
+an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
+fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
+the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),
 `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
 value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
 [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).

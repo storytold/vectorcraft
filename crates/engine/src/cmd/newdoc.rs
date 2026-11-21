@@ -265,8 +265,9 @@ impl DocSettings {
     pub fn to_json(&self) -> Value {
         let mut layout =
             json!({"layout": self.layout.id(), "columns": self.grid_columns(), "spacing": self.spacing, "rightToLeft": self.right_to_left});
-        if let (Some(rows), Some(o)) = (self.grid_rows(), layout.as_object_mut()) {
-            o.insert("rows".into(), json!(rows));
+        // The rows as set, also when there are fewer artboards than rows.
+        if let Some(o) = layout.as_object_mut().filter(|_| self.grid_rows().is_some()) {
+            o.insert("rows".into(), json!(self.rows));
         }
         json!({
             "name": self.name,
@@ -560,7 +561,7 @@ pub(crate) fn side_error(cmd: &str, units: Unit) -> crate::EngineError {
     bad(cmd, format!("width and height must be more than 0 and at most {limit}"))
 }
 /// Largest artboard spacing, points.
-const MAX_SPACING: f64 = 1.0e5;
+pub(crate) const MAX_SPACING: f64 = 1.0e5;
 
 pub fn color_mode_id(m: ColorMode) -> &'static str {
     match m {
