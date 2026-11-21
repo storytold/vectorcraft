@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use krilla::geom::PathBuilder;
 use krilla::graphic::Graphic;
 use std::sync::Arc;

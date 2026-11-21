@@ -4,8 +4,8 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use craft_pdf::write::backend as krilla;
-use craft_pdf::write::{self, Metadata};
+use craft::pdf::write::backend as krilla;
+use craft::pdf::write::{self, Metadata};
 use krilla::color::separation::{Color as SepColor, SeparationColorant, SeparationSpace};
 use krilla::color::{cmyk, luma, rgb};
 use krilla::configure::{Archival, PdfVersion};

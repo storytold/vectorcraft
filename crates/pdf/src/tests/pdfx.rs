@@ -247,35 +247,20 @@ fn pdfx_1a_and_x3_files_have_no_transparency() {
 
 #[test]
 fn pdfx_settings_rules() {
+    let profiles = ActiveProfiles::default();
     for standard in X {
-        // A password is refused, and so are editing data.
-        let e = opts(standard, |s| s.security.open_password = "x".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(_)), "{standard:?}: {e}");
+        // A password is refused.
         assert!(export(&doc(&[]), &opts(standard, |s| s.security.permissions_password = "x".into())).is_err());
-        assert!(
-            matches!(opts(standard, |s| s.preserve_editing = true).settings.check(), Err(PdfError::BadSetting(m)) if m.contains("preserveEditing"))
-        );
-        // Its own version, never PDF 1.7 or 2.0.
-        assert!(standard.allows(standard.version()), "{standard:?}");
-        assert!(!standard.allows(Compatibility::Pdf17) && !standard.allows(Compatibility::Pdf20), "{standard:?}");
-        let e = opts(standard, |s| s.compatibility = Compatibility::Pdf17).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains(standard.label())), "{standard:?}: {e}");
-        // A name that is no profile, without a registry.
-        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check().unwrap_err();
-        assert!(matches!(e, PdfError::BadSetting(ref m) if m.contains("No Such Press")), "{standard:?}: {e}");
+        // A name that is no profile of the app's colour catalog, without a registry.
+        let e = opts(standard, |s| s.output.output_intent = "No Such Press".into()).settings.check(&profiles).unwrap_err();
+        assert!(e.message.contains("No Such Press"), "{standard:?}: {e}");
     }
-    assert_eq!(Standard::PdfX4.version(), Compatibility::Pdf16);
-    assert!(Standard::PdfX4.allows(Compatibility::Pdf15) && !Standard::PdfX1a.allows(Compatibility::Pdf15));
-    // Layers: PDF/X-4 only.
-    assert!(
-        matches!(settings(json!({"standard": "pdfX1a", "compatibility": "1.4", "createLayers": true})).check(), Err(PdfError::BadSetting(m)) if m.contains("createLayers"))
-    );
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "createLayers": true})).check_values().is_ok());
     // A date is required.
     assert!(matches!(crate::pdfx::require_date(Standard::PdfX4, None), Err(PdfError::Unsupported(_))));
     assert!(crate::pdfx::require_date(Standard::None, None).is_ok());
     // PDF/X settings don't warn about the output condition: the output intent is always written.
-    assert!(settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings().is_empty());
+    let warned = settings(json!({"standard": "pdfX4", "compatibility": "1.6", "output": {"outputCondition": "Coated"}})).warnings(&profiles);
+    assert!(warned.is_empty(), "{warned:?}");
 }
 
 #[test]

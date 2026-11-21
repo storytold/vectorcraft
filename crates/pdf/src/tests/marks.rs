@@ -87,15 +87,15 @@ fn a_pdfx_file_leaves_out_the_document_bleed_side_by_side() {
     let x4 = |bleed: serde_json::Value| settings(json!({"standard": "pdfX4", "bleed": bleed}));
     let mut d = doc();
     d.setup.bleed = [6.0, 0.0, 0.0, 0.0];
-    assert!(x4(json!({})).leaves_out_bleed(&d));
-    assert!(x4(json!({"bottom": 1})).leaves_out_bleed(&d), "the top is left out");
-    assert!(!x4(json!({"top": 1})).leaves_out_bleed(&d), "the sides without a document bleed don't count");
-    assert!(!x4(json!({"useDocument": true})).leaves_out_bleed(&d));
-    assert!(!settings(json!({})).leaves_out_bleed(&d), "not a PDF/X file");
+    assert!(leaves_out_bleed(&x4(json!({})), &d));
+    assert!(leaves_out_bleed(&x4(json!({"bottom": 1})), &d), "the top is left out");
+    assert!(!leaves_out_bleed(&x4(json!({"top": 1})), &d), "the sides without a document bleed don't count");
+    assert!(!leaves_out_bleed(&x4(json!({"useDocument": true})), &d));
+    assert!(!leaves_out_bleed(&settings(json!({})), &d), "not a PDF/X file");
     // A document bleed read from a file counts as it is kept in range.
     d.setup.bleed = [f64::INFINITY, f64::NAN, -3.0, 0.0];
-    assert!(!x4(json!({})).leaves_out_bleed(&d));
-    assert!(!x4(json!({"useDocument": true})).leaves_out_bleed(&d));
+    assert!(!leaves_out_bleed(&x4(json!({})), &d));
+    assert!(!leaves_out_bleed(&x4(json!({"useDocument": true})), &d));
 }
 
 /// Each page's `UserUnit` and media box as the file holds them (in its units).
@@ -228,7 +228,7 @@ fn every_preset_and_version_keeps_a_20_m_page_or_says_why_not() {
             )
         );
     };
-    for preset in crate::builtin_presets() {
+    for preset in crate::builtin_presets(APP) {
         let name = preset.name.as_str();
         match report(&d, PdfSettings { long_pages_in_points: false, ..preset.settings.clone() }) {
             Err(e) if matches!(name, "PDF/X-1a:2001" | "PDF/X-3:2002") => refused(e, name),
@@ -310,7 +310,7 @@ fn pdfa2b_at_pdf_1_4_writes_a_long_page_as_pdf_1_6_within_14400_units() {
 /// a side that isn't a whole number, or art that needs a real number past 32,767, gets the error.
 #[test]
 fn pdf_1_4_writes_a_page_up_to_32767_pt_in_points() {
-    let presets = crate::builtin_presets();
+    let presets = crate::builtin_presets(APP);
     let preset = |name: &str| presets.iter().find(|p| p.name == name).unwrap().settings.clone();
     let sets = [
         ("PDF 1.3", PdfSettings { compatibility: Compatibility::Pdf13, ..PdfSettings::default() }),
@@ -437,7 +437,7 @@ fn a_page_of_14400_pt_stays_in_points_and_one_point_more_does_not() {
 #[test]
 fn a_page_within_14400_pt_is_written_as_before_at_every_version() {
     let d = sized(14_400.0, 14_400.0);
-    let mut sets: Vec<PdfSettings> = crate::builtin_presets().into_iter().map(|p| p.settings).collect();
+    let mut sets: Vec<PdfSettings> = crate::builtin_presets(APP).into_iter().map(|p| p.settings).collect();
     for c in [Compatibility::Pdf13, Compatibility::Pdf14, Compatibility::Pdf15, Compatibility::Pdf16, Compatibility::Pdf17, Compatibility::Pdf20] {
         sets.push(PdfSettings { compatibility: c, ..PdfSettings::default() });
     }
@@ -514,7 +514,7 @@ fn long_pages_in_points_keeps_every_version_and_changes_nothing_where_pages_are_
             assert_eq!(r.bytes, report(&d, set).unwrap().bytes, "{}", c.label());
         }
     }
-    let x4 = crate::builtin_presets().into_iter().find(|p| p.name == "PDF/X-4:2010").unwrap().settings;
+    let x4 = crate::builtin_presets(APP).into_iter().find(|p| p.name == "PDF/X-4:2010").unwrap().settings;
     assert_eq!(report(&d, with(&x4)).unwrap().bytes, report(&d, x4).unwrap().bytes);
 }
 
@@ -608,7 +608,7 @@ fn marks_are_drawn_in_registration_on_every_plate_inside_the_media_box() {
     assert!(text.contains("/Separation/All"), "Registration is the /All separation");
     assert!(text.contains("/Separation/Gold"), "the spot ink gets a colour bar patch");
     // MediaBox fits the marks: [top, bottom, left, right] around the trim box.
-    let [top, bottom, left, right] = settings(all).marks.printer_marks().reach([0.0; 4]);
+    let [top, bottom, left, right] = printer_marks(&settings(all).marks).reach([0.0; 4]);
     let (media, trim) = (page_box(&bytes, CropTo::Media), page_box(&bytes, CropTo::Trim));
     let near = |a: f64, b: f64| (a - b).abs() < 1e-3;
     assert!(near(media.width(), w + left + right) && near(media.height(), 100.0 + top + bottom), "{media:?}");
@@ -635,7 +635,7 @@ fn page_information_names_the_file_artboard_and_date() {
     assert_eq!(crate::marks::page_info(&d, " ", 0, None), "Untitled  ·  Artboard 1 (1 of 1)");
     // Its glyphs are filled in Registration under the band of bottom marks.
     let bytes = pdf(&d, json!({"marks": {"pageInfo": true}}));
-    let [top, ..] = settings(json!({"marks": {"pageInfo": true}})).marks.printer_marks().reach([0.0; 4]);
+    let [top, ..] = printer_marks(&settings(json!({"marks": {"pageInfo": true}})).marks).reach([0.0; 4]);
     let back = import(&bytes).unwrap();
     let glyphs = painted(&back, Paint::is_registration);
     assert!(!glyphs.is_empty());

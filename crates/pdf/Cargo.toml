@@ -27,7 +27,7 @@ image = { workspace = true }
 craft-image-codecs = { workspace = true }
 # CMYK JPEGs (src/images.rs; the image crate writes RGB and grey ones only).
 jpeg-encoder = { workspace = true }
-craft-pdf = { workspace = true }
+craft = { workspace = true, features = ["pdf-interpret", "pdf-write"] }
 craft-stream-codecs = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
