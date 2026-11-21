@@ -8,7 +8,7 @@ use super::artboards::names_an_artboard;
 use super::input::marquee_through;
 use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors};
 use super::selection_marks::{MarkOptions, SelectionMarks};
-use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
+use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Point, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
@@ -452,6 +452,42 @@ pub(super) fn dashes_from(line: &[Pos2], s: Stroke, from: f64, out: &mut Vec<Sha
     segments(line, s, out);
 }
 
+/// Add to `out` the dashes of the screen line from `a` to `b` (screen points in full precision)
+/// that fall inside `clip` (grown by the stroke's width), with the pattern started at `a`: the
+/// dashes [`Shape::dashed_line`] gives for the whole line, without the ones outside `clip`. The
+/// line is clipped in `f64`, so a line millions of pixels long keeps the part on the canvas. A
+/// line with an end off at infinity draws nothing.
+pub(super) fn dashed_line_in(clip: egui::Rect, a: Point, b: Point, s: Stroke, out: &mut Vec<Shape>) {
+    if !(a.is_finite() && b.is_finite()) {
+        return;
+    }
+    let r = clip.expand(s.width.max(1.0));
+    let (left, right, top, bottom) = (f64::from(r.left()), f64::from(r.right()), f64::from(r.top()), f64::from(r.bottom()));
+    let d = b - a;
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    // Each edge as (the run toward it, the room before it), as `grid::clip_segment` does in `f32`.
+    for (run, room) in [(-d.x, a.x - left), (d.x, right - a.x), (-d.y, a.y - top), (d.y, bottom - a.y)] {
+        if run == 0.0 {
+            if room < 0.0 {
+                return;
+            }
+        } else if run < 0.0 {
+            t0 = t0.max(room / run);
+        } else {
+            t1 = t1.min(room / run);
+        }
+    }
+    if t0 > t1 {
+        return;
+    }
+    let at = |t: f64| {
+        let p = a + d * t;
+        egui::pos2(p.x as f32, p.y as f32)
+    };
+    // How far along the whole line the part on the canvas starts.
+    dashes_from(&[at(t0), at(t1)], s, d.hypot() * t0, out);
+}
+
 /// Add to `out` each line of `line` that has a length as its own [`Shape::LineSegment`], as
 /// [`Shape::dashed_line`] draws a dash.
 fn segments(line: &[Pos2], s: Stroke, out: &mut Vec<Shape>) {
@@ -562,11 +598,12 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
             }
             Overlay::Line { a, b, color, dashed } => {
                 let s = Stroke::new(1.0, c32(*color));
-                let (a, b) = (xf.to_screen(*a), xf.to_screen(*b));
                 if *dashed {
-                    p.extend(Shape::dashed_line(&[a, b], s, 4.0, 3.0));
+                    let mut dashes = vec![];
+                    dashed_line_in(p.clip_rect(), xf.affine() * *a, xf.affine() * *b, s, &mut dashes);
+                    p.extend(dashes);
                 } else {
-                    p.line_segment([a, b], s);
+                    p.line_segment([xf.to_screen(*a), xf.to_screen(*b)], s);
                 }
             }
             Overlay::Anchor { p: pt, color, filled, size } => anchor_square(p, xf.to_screen(*pt), c32(*color), *filled, *size),
