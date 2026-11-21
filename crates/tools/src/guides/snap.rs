@@ -376,6 +376,28 @@ impl SnapKey {
     }
 }
 
+/// Every setting that can move a snapped drawn point besides the document: the window and the
+/// zoom, the options and tolerances [`SnapKey`] holds except the guides' color and labels, and
+/// the construction guides' angles a [`Leave::segment`] follows. A tool that keeps a hover's
+/// snapped point compares two of these to see whether a click would still snap the same way.
+#[derive(PartialEq)]
+pub(crate) struct SnapSettings {
+    screen: Option<ScreenFrame>,
+    zoom: f64,
+    view: [bool; 7],
+    snap_to_glyph: Option<GlyphSnap>,
+    alignment_lines: bool,
+    tolerances: [f64; 2],
+    angles: &'static [f64],
+}
+
+impl SnapSettings {
+    pub(crate) fn of(cx: &ToolContext) -> Self {
+        let SnapKey { screen, view, snap_to_glyph, style, tolerances, .. } = SnapKey::of(cx, &[]);
+        Self { screen, zoom: cx.zoom, view, snap_to_glyph, alignment_lines: style.lines, tolerances, angles: cx.construction_angles }
+    }
+}
+
 /// The part of the document the window shows (none headless: all of it).
 pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;

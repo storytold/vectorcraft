@@ -259,6 +259,21 @@ fn a_tick_past_the_coordinate_limit_is_not_used() {
     assert!(tick_end(&sp, &inside).is_some(), "a tick inside the limit is used");
 }
 
+/// A continuous arc that starts a path has no direction to follow and sweeps the arc size, so its
+/// end has no tick to go to: with a 100° arc size, a tick at 105° would move the end off the arc
+/// the click draws.
+#[test]
+fn a_continuous_arc_without_a_direction_has_no_tick() {
+    let sp = start(pt(0.0, 0.0));
+    let pc = Piece { turn: 100.0, ..piece(100.0, 10.0, Stroke::ContinuousArc) };
+    let arc = arc_circle(&sp, &pc).unwrap();
+    assert!((arc.sweep.to_degrees() - 100.0).abs() < 1e-9, "{arc:?}");
+    assert!(tick_end(&sp, &pc).is_none());
+    // After a line, the same end has a tick.
+    let sp = build(&start(pt(-100.0, 0.0)), &[piece(0.0, 0.0, Stroke::Line)], false);
+    assert!(tick_end(&sp, &pc).is_some());
+}
+
 /// The protractor has a tick every 15° of the sweep, each across the arc's circle, the first
 /// through the arc's start; a sweep that is not a whole number of steps adds a tick at its end.
 #[test]
