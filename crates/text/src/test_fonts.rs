@@ -45,6 +45,136 @@ pub fn drop_kept_layouts() {
     crate::kept::drop_kept_layouts();
 }
 
+/// Who holds [`SteadyFonts`] and who changes fonts ([`font_change`]), guarded by [`steadiness`] and
+/// signaled through [`STEADINESS_CHANGED`].
+struct Steadiness {
+    /// Threads that hold a [`SteadyFonts`].
+    holders: usize,
+    /// Font changes waiting to start.
+    waiting: usize,
+    /// Of `waiting`, those made on a thread that holds a [`SteadyFonts`].
+    holders_waiting: usize,
+    /// Whether a font change is under way.
+    changing: bool,
+}
+
+static STEADINESS: std::sync::Mutex<Steadiness> = std::sync::Mutex::new(Steadiness { holders: 0, waiting: 0, holders_waiting: 0, changing: false });
+static STEADINESS_CHANGED: std::sync::Condvar = std::sync::Condvar::new();
+
+fn steadiness() -> std::sync::MutexGuard<'static, Steadiness> {
+    STEADINESS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Wait for [`STEADINESS_CHANGED`].
+fn await_steadiness(s: std::sync::MutexGuard<'static, Steadiness>) -> std::sync::MutexGuard<'static, Steadiness> {
+    STEADINESS_CHANGED.wait(s).unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+std::thread_local! {
+    /// How many [`SteadyFonts`] this thread holds.
+    static STEADY: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether this thread holds the [`FontChange`] under way.
+    static CHANGING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// While held, a cataloged font database's fonts and its
+/// [`FontDb::generation`](crate::FontDb::generation) change only on this thread: a change on another
+/// thread (a system font loaded for a character no loaded font covers, fonts added, a rescan, a
+/// composite font set or removed) waits until it is dropped, before it publishes anything. A change
+/// on this thread waits until no other thread holds one, unless every other thread that holds one is
+/// itself waiting to change fonts. Tests hold it to count the layouts that a cache keyed on the
+/// generation keeps. The guards one thread holds count as one, until the last of them is dropped, in
+/// whatever order they are.
+pub struct SteadyFonts {
+    /// Dropped on the thread that made it.
+    _thread: std::marker::PhantomData<*const ()>,
+}
+
+impl Drop for SteadyFonts {
+    fn drop(&mut self) {
+        let last = STEADY.with(|n| {
+            n.set(n.get() - 1);
+            n.get() == 0
+        });
+        if last {
+            steadiness().holders -= 1;
+            STEADINESS_CHANGED.notify_all();
+        }
+    }
+}
+
+/// [`SteadyFonts`] for `db`. Catalogs `db`'s installed fonts first: a first scan does not wait for
+/// any guard, so this thread can wait for one running on another thread while it holds a guard. A
+/// thread's first guard waits for the font changes under way or waiting.
+pub fn steady_fonts(db: &crate::FontDb) -> SteadyFonts {
+    db.ensure_catalog();
+    if STEADY.with(std::cell::Cell::get) == 0 {
+        let mut s = steadiness();
+        while !CHANGING.with(std::cell::Cell::get) && (s.changing || s.waiting > 0) {
+            s = await_steadiness(s);
+        }
+        s.holders += 1;
+    }
+    STEADY.with(|n| n.set(n.get() + 1));
+    SteadyFonts { _thread: std::marker::PhantomData }
+}
+
+/// Held while a font database's fonts change, from before the change is published until its
+/// generation has changed ([`font_change`]).
+pub(crate) struct FontChange {
+    /// Made while this thread already held one (a change made inside another, as a test hook run
+    /// when faces are published can).
+    nested: bool,
+}
+
+impl Drop for FontChange {
+    fn drop(&mut self) {
+        if !self.nested {
+            CHANGING.with(|c| c.set(false));
+            steadiness().changing = false;
+            STEADINESS_CHANGED.notify_all();
+        }
+    }
+}
+
+/// [`FontChange`]: waits until no other change is under way and no other thread holds a
+/// [`SteadyFonts`] (on a thread that holds one: none that is not itself waiting to change fonts).
+/// Inside a change this thread is making, it does not wait.
+pub(crate) fn font_change() -> FontChange {
+    if CHANGING.with(std::cell::Cell::get) {
+        return FontChange { nested: true };
+    }
+    let holder = STEADY.with(std::cell::Cell::get) > 0;
+    let mut s = steadiness();
+    #[cfg(test)]
+    font_changers().push(std::thread::current().id());
+    s.waiting += 1;
+    s.holders_waiting += usize::from(holder);
+    while s.changing || if holder { s.holders > s.holders_waiting } else { s.holders > 0 } {
+        s = await_steadiness(s);
+    }
+    s.waiting -= 1;
+    s.holders_waiting -= usize::from(holder);
+    s.changing = true;
+    CHANGING.with(|c| c.set(true));
+    FontChange { nested: false }
+}
+
+/// Whether a font change on another thread would wait now (a [`SteadyFonts`] is held, or another
+/// change is under way).
+#[cfg(test)]
+pub(crate) fn font_changes_held_back() -> bool {
+    let s = steadiness();
+    s.holders > 0 || s.changing
+}
+
+/// The threads that have asked to change a font database's generation ([`font_change`]).
+#[cfg(test)]
+pub(crate) fn font_changers() -> std::sync::MutexGuard<'static, Vec<std::thread::ThreadId>> {
+    static CHANGERS: std::sync::Mutex<Vec<std::thread::ThreadId>> = std::sync::Mutex::new(Vec::new());
+    CHANGERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// The family of [`variable_font`].
 pub const VARIABLE_FAMILY: &str = "Varitest Sans";
 

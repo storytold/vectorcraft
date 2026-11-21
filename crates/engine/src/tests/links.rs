@@ -2617,6 +2617,37 @@ fn confined_screens_rows_check_the_artboard_each_file_holds() {
     }
 }
 
+/// A confined caller's single-file PDF with Preserve Editing of several artboards carries the art
+/// of every artboard on its pages: an image linked outside the read roots on the second artboard
+/// alone refuses it. A single-file PDF of assets is refused before any link is checked.
+#[test]
+fn confined_single_file_pdf_checks_every_artboard_it_carries() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("single-pdf-away");
+    let home = Folder::new("single-pdf-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let p = |folder: &str| json!({"range": "1-2", "folder": home.file(folder), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let r = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("plain"))).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{r}");
+    let r = s.execute("file.place", &json!({"path": photo, "at": [2100, 100]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("linked"))).expect_err("second artboard links outside").to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+    assert!(!Path::new(&home.file("linked")).exists(), "the refused export writes no folder");
+    let asset = s.execute("assets.add", &json!({"ids": [rect.0]})).unwrap()["assets"][0].as_u64().unwrap();
+    let assets = json!({"assets": [asset], "folder": home.file("assets"), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let e = confine(roots.as_ref(), || s.execute("assets.export", &assets)).expect_err("single-file PDF of assets").to_string();
+    assert!(e.contains("pdfs `single` writes artboards as the pages of one PDF"), "{e}");
+    assert!(!Path::new(&home.file("assets")).exists(), "the refused export writes no folder");
+}
+
 /// A confined caller's native outputs (a native file or template, an EPS or `.ai` file, a PDF with
 /// Preserve Editing, a package's document) carry the document without the Export for Screens
 /// folder when it is outside the read roots, with the other export settings and the art; the open
