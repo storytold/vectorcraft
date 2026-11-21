@@ -10505,6 +10505,7 @@ breakText	Glyphs	Glyffer
 	Tangent Circle	Tangentcirkel
 	Tangent Circle Tool	Tangentcirkel-værktøj
 	No tangent circle here	Ingen tangentcirkel her
+	Add Points to Existing Paths	Tilføj punkter til eksisterende stier
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` nævner et objekt to gange
 @msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier

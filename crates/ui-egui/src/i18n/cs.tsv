@@ -8449,6 +8449,7 @@ breakText	Glyphs	Glyfy
 	Tangent Circle	Tečná kružnice
 	Tangent Circle Tool	Nástroj Tečná kružnice
 	No tangent circle here	Zde není žádná tečná kružnice
+	Add Points to Existing Paths	Přidat body do existujících cest
 	Circle:	Kružnice:
 @msg	`ids` names an object twice	`ids` uvádí některý objekt dvakrát
 @msg	select two or three paths or compound paths	vyberte dvě nebo tři cesty nebo složené cesty

@@ -99,14 +99,17 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
     app.ui.dialog.as_mut().unwrap().fields.insert("mode".into(), json!("arc"));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(app.session.tool_options_of("extendPath")["mode"], json!("arc"));
-    // The Tangent Circle tool's radius for Shift.
+    // The Tangent Circle tool's radius for Shift, and Add Points to Existing Paths (off to start).
     app.run("tool.options", json!({"tool": "tangentCircle"})).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", 0.0), 36.0);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("addPoints"));
     let text = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
-    assert!(text.contains("Tangent Circle Tool Options") && text.contains("Radius:"), "{text}");
+    assert!(text.contains("Tangent Circle Tool Options") && text.contains("Radius:") && text.contains("Add Points to Existing Paths"), "{text}");
     app.ui.dialog.as_mut().unwrap().fields.insert("radius".into(), json!(12.5));
+    app.ui.dialog.as_mut().unwrap().fields.insert("addPoints".into(), json!(true));
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(app.session.tool_options_of("tangentCircle")["radius"], json!(12.5));
+    assert_eq!(app.session.tool_options_of("tangentCircle")["addPoints"], json!(true));
     assert!(app.run("tool.options", json!({"tool": "measureInspect"})).is_err());
 }
 

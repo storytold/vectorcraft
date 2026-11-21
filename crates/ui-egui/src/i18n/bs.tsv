@@ -7636,6 +7636,7 @@ shape	Open	Otvoren
 	Tangent Circle	Tangentna kružnica
 	Tangent Circle Tool	Alat tangentna kružnica
 	No tangent circle here	Ovdje nema tangentne kružnice
+	Add Points to Existing Paths	Dodaj tačke postojećim putanjama
 	Circle:	Kružnica:
 @msg	`ids` names an object twice	`ids` navodi objekat dvaput
 @msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje
