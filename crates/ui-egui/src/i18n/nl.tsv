@@ -5526,6 +5526,14 @@ imageTrace	Outline	Contour
 	The script asks to read and write a folder you choose, with everything in it.	Het script vraagt een map die u kiest te lezen en te schrijven, met alles wat erin staat.
 	Allow Once	Eenmaal toestaan
 	Always Allow This Script	Dit script altijd toestaan
+	No script has kept file access.	Geen enkel script heeft bewaarde bestandstoegang.
+	Read file	Bestand lezen
+	Read and write file	Bestand lezen en schrijven
+	Read and write folder	Map lezen en schrijven
+	Revoke	Intrekken
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Intrekken verwijdert de toegang die voor elke versie van het script is bewaard. Toegang tot een map omvat alles erin.
+@msg	Script file access revoked	Bestandstoegang van script ingetrokken
+@msg	The script file access was already revoked	De bestandstoegang van het script was al ingetrokken
 	Deny	Weigeren
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Een script kan de geopende documenten wijzigen en via de uitgevoerde opdrachten bestanden schrijven. Voer alleen scripts uit die u vertrouwt.
 	Do not show this warning again	Deze waarschuwing niet meer tonen

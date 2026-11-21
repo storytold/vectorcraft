@@ -2790,6 +2790,14 @@ file-filter	Templates	範本
 	The script asks to read and write a folder you choose, with everything in it.	指令碼要求讀寫您選擇的資料夾及其中的所有內容。
 	Allow Once	允許一次
 	Always Allow This Script	一律允許此指令碼
+	No script has kept file access.	沒有指令碼保留檔案存取權。
+	Read file	讀取檔案
+	Read and write file	讀取和寫入檔案
+	Read and write folder	讀取和寫入資料夾
+	Revoke	收回權限
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「收回權限」會移除為指令碼每個版本保留的存取權。資料夾的存取權包含其中的所有內容。
+@msg	Script file access revoked	已收回指令碼的檔案存取權
+@msg	The script file access was already revoked	指令碼的檔案存取權已被收回
 	Deny	拒絕
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	指令碼可以變更開啟的文件，並可透過其執行的命令寫入檔案。請只執行您信任的指令碼。
 	Do not show this warning again	不再顯示此警告

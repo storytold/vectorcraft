@@ -5135,6 +5135,14 @@ imageTrace	Outline	Ääriviiva
 	The script asks to read and write a folder you choose, with everything in it.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi kansion ja kaiken sen sisällön.
 	Allow Once	Salli kerran
 	Always Allow This Script	Salli tämä komentosarja aina
+	No script has kept file access.	Millään komentosarjalla ei ole tallennettua tiedostojen käyttöoikeutta.
+	Read file	Tiedoston luku
+	Read and write file	Tiedoston luku ja kirjoitus
+	Read and write folder	Kansion luku ja kirjoitus
+	Revoke	Peruuta oikeus
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Peruuta oikeus poistaa käyttöoikeuden, joka on tallennettu komentosarjan jokaiselle versiolle. Kansion käyttöoikeus kattaa kaiken sen sisällön.
+@msg	Script file access revoked	Komentosarjan tiedostojen käyttöoikeus peruttu
+@msg	The script file access was already revoked	Komentosarjan tiedostojen käyttöoikeus oli jo peruttu
 	Deny	Estä
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen

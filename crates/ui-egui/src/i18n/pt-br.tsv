@@ -6097,6 +6097,14 @@ variable-list-end	{0}, {1}	{0} e {1}
 	The script asks to read and write a folder you choose, with everything in it.	O script pede para ler e gravar uma pasta que você escolher, com todo o seu conteúdo.
 	Allow Once	Permitir uma vez
 	Always Allow This Script	Sempre permitir este script
+	No script has kept file access.	Nenhum script manteve acesso a arquivos.
+	Read file	Ler arquivo
+	Read and write file	Ler e gravar arquivo
+	Read and write folder	Ler e gravar pasta
+	Revoke	Revogar
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revogar remove o acesso mantido para cada versão do script. O acesso a uma pasta abrange tudo o que ela contém.
+@msg	Script file access revoked	Acesso do script a arquivos revogado
+@msg	The script file access was already revoked	O acesso do script a arquivos já estava revogado
 	Deny	Negar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente

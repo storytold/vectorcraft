@@ -5415,6 +5415,14 @@ theme	Appearance	Giao diện
 	The script asks to read and write a folder you choose, with everything in it.	Tập lệnh yêu cầu đọc và ghi một thư mục bạn chọn, cùng mọi thứ bên trong.
 	Allow Once	Cho phép một lần
 	Always Allow This Script	Luôn cho phép tập lệnh này
+	No script has kept file access.	Không có tập lệnh nào được giữ quyền truy cập tệp.
+	Read file	Đọc tệp
+	Read and write file	Đọc và ghi tệp
+	Read and write folder	Đọc và ghi thư mục
+	Revoke	Thu hồi
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Thu hồi gỡ quyền truy cập đã giữ cho mọi phiên bản của tập lệnh. Quyền truy cập một thư mục bao gồm mọi thứ bên trong.
+@msg	Script file access revoked	Đã thu hồi quyền truy cập tệp của tập lệnh
+@msg	The script file access was already revoked	Quyền truy cập tệp của tập lệnh đã được thu hồi trước đó
 	Deny	Từ chối
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này

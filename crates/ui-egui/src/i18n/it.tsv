@@ -4953,6 +4953,14 @@ axis	Both	Entrambi
 	The script asks to read and write a folder you choose, with everything in it.	Lo script chiede di leggere e scrivere una cartella che scegli, con tutto il suo contenuto.
 	Allow Once	Consenti una volta
 	Always Allow This Script	Consenti sempre questo script
+	No script has kept file access.	Nessuno script ha conservato un accesso ai file.
+	Read file	Lettura file
+	Read and write file	Lettura e scrittura file
+	Read and write folder	Lettura e scrittura cartella
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca rimuove l'accesso conservato per ogni versione dello script. L'accesso a una cartella comprende tutto il suo contenuto.
+@msg	Script file access revoked	Accesso dello script ai file revocato
+@msg	The script file access was already revoked	L'accesso dello script ai file era già stato revocato
 	Deny	Nega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso

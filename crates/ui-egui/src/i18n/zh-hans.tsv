@@ -5444,6 +5444,14 @@ imageTrace	Outline	轮廓
 	The script asks to read and write a folder you choose, with everything in it.	脚本请求读写您选择的文件夹及其中的所有内容。
 	Allow Once	允许一次
 	Always Allow This Script	始终允许此脚本
+	No script has kept file access.	没有脚本保留了文件访问权限。
+	Read file	读取文件
+	Read and write file	读取和写入文件
+	Read and write folder	读取和写入文件夹
+	Revoke	收回权限
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	“收回权限”会移除为脚本每个版本保留的访问权限。文件夹的访问权限包括其中的所有内容。
+@msg	Script file access revoked	已收回脚本的文件访问权限
+@msg	The script file access was already revoked	脚本的文件访问权限已被收回
 	Deny	拒绝
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告

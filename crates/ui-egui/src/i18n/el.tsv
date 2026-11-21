@@ -2619,6 +2619,14 @@ axis	Both	Και τα δύο
 	The script asks to read and write a folder you choose, with everything in it.	Το σενάριο ζητά να διαβάσει και να γράψει έναν φάκελο που θα επιλέξετε, με όλο το περιεχόμενό του.
 	Allow Once	Να επιτραπεί μία φορά
 	Always Allow This Script	Να επιτρέπεται πάντα αυτό το σενάριο
+	No script has kept file access.	Κανένα σενάριο δεν έχει αποθηκευμένη πρόσβαση σε αρχεία.
+	Read file	Ανάγνωση αρχείου
+	Read and write file	Ανάγνωση και εγγραφή αρχείου
+	Read and write folder	Ανάγνωση και εγγραφή φακέλου
+	Revoke	Ανάκληση
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Η ανάκληση αφαιρεί την πρόσβαση που έχει αποθηκευτεί για κάθε έκδοση του σεναρίου. Η πρόσβαση σε φάκελο καλύπτει όλο το περιεχόμενό του.
+@msg	Script file access revoked	Η πρόσβαση του σεναρίου σε αρχεία ανακλήθηκε
+@msg	The script file access was already revoked	Η πρόσβαση του σεναρίου σε αρχεία είχε ήδη ανακληθεί
 	Deny	Άρνηση
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση

@@ -4643,6 +4643,14 @@ axis	Both	Her İkisi
 	The script asks to read and write a folder you choose, with everything in it.	Betik, seçtiğiniz bir klasörü içindeki her şeyle birlikte okumak ve yazmak için izin istiyor.
 	Allow Once	Bir Kez İzin Ver
 	Always Allow This Script	Bu Betiğe Her Zaman İzin Ver
+	No script has kept file access.	Hiçbir betiğin kayıtlı dosya erişimi yok.
+	Read file	Dosya Okuma
+	Read and write file	Dosya Okuma ve Yazma
+	Read and write folder	Klasör Okuma ve Yazma
+	Revoke	İzni Kaldır
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	İzni Kaldır, betiğin her sürümü için kayıtlı erişimi kaldırır. Bir klasöre erişim, içindeki her şeyi kapsar.
+@msg	Script file access revoked	Betiğin dosya erişimi kaldırıldı
+@msg	The script file access was already revoked	Betiğin dosya erişimi zaten kaldırılmıştı
 	Deny	Reddet
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme

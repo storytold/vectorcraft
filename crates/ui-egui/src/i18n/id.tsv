@@ -5526,6 +5526,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
 	Allow Once	Izinkan Sekali
 	Always Allow This Script	Selalu Izinkan Skrip Ini
+	No script has kept file access.	Tidak ada skrip yang memiliki akses berkas tersimpan.
+	Read file	Baca Berkas
+	Read and write file	Baca dan Tulis Berkas
+	Read and write folder	Baca dan Tulis Folder
+	Revoke	Cabut
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Cabut menghapus akses yang disimpan untuk setiap versi skrip. Akses ke folder mencakup semua isinya.
+@msg	Script file access revoked	Akses berkas skrip dicabut
+@msg	The script file access was already revoked	Akses berkas skrip sudah dicabut
 	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
