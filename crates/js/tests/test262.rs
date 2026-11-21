@@ -93,6 +93,17 @@ fn inside(dir: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// `dir` joined with `rel` as [`inside`] gives it, or `None` when nothing is at that path. A path
+/// whose metadata cannot be read, such as one under a folder that cannot be searched, gives an error.
+fn present(dir: &Path, rel: &str) -> Result<Option<PathBuf>, String> {
+    let path = inside(dir, rel)?;
+    match path.try_exists() {
+        Ok(true) => Ok(Some(path)),
+        Ok(false) => Ok(None),
+        Err(e) => Err(format!("cannot read {}: {e}", path.display())),
+    }
+}
+
 /// Reads a test or harness file: a regular file (not a symbolic link) of at most
 /// [`MAX_FILE_BYTES`], with invalid UTF-8 replaced.
 fn read_source(path: &Path) -> Result<String, String> {
@@ -229,11 +240,10 @@ fn annex_b_parse_subset() {
         println!("test262 Annex B parse: SKIPPED (no suite; run cargo xtask test262)");
         return;
     };
-    let language = or_fail(inside(&dir, "test/annexB/language"));
-    if !language.exists() {
+    let Some(language) = or_fail(present(&dir, "test/annexB/language")) else {
         println!("test262 Annex B parse: SKIPPED ({} has no test/annexB/language)", dir.display());
         return;
-    }
+    };
     let files = or_fail(test_files(&language));
     let ParseRun { main, with_features, modules, .. } = or_fail(parse_files(&dir, &files, true));
     assert!(main.positive + main.negative > 0, "no Annex B tests to parse under {}", language.display());
@@ -636,19 +646,17 @@ fn annex_b_runs() {
 /// [`ANNEX_B_BUILT_INS`] names, of any edition, prints the counts of each and writes the failures
 /// to `annexb-language-failures.txt` and `annexb-builtins-failures.txt` beside the suite.
 fn run_annex_b(dir: &Path) {
-    let annex_b = or_fail(inside(dir, "test/annexB"));
-    if !annex_b.exists() {
+    if or_fail(present(dir, "test/annexB")).is_none() {
         println!("test262 Annex B interpreter: SKIPPED ({} has no test/annexB)", dir.display());
         return;
     }
     let mut panicked = 0;
     let mut built_ins_report = String::new();
     for folder in std::iter::once(&ANNEX_B_LANGUAGE).chain(ANNEX_B_BUILT_INS) {
-        let root = or_fail(inside(dir, &format!("test/{folder}")));
-        if !root.exists() {
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
             println!("test262 {folder}: SKIPPED (not in this suite)");
             continue;
-        }
+        };
         let missing = if folder.ends_with("/String") {
             missing_builtins(&[TEXT_BUILTINS, STRING_METHODS_SHARED_WITH_ARRAY])
         } else {
@@ -843,6 +851,17 @@ fn harness_names_stay_inside_the_suite() {
     for name in ["harness/../../secret.js", "harness/./a.js", "/etc/passwd", "harness//a.js", "harness/a\\..\\b.js", "harness/C:a.js", ""] {
         assert!(inside(dir, name).is_err(), "{name:?} is allowed");
     }
+}
+
+#[test]
+fn an_unreadable_annex_b_folder_fails_and_only_an_absent_one_skips() {
+    let dir = scratch("present");
+    std::fs::create_dir_all(dir.join("test/annexB")).unwrap();
+    assert_eq!(present(&dir, "test/annexB"), Ok(Some(dir.join("test").join("annexB"))));
+    assert_eq!(present(&dir, "test/annexB/language"), Ok(None));
+    // A NUL byte in the path makes its metadata unreadable on every platform.
+    assert!(present(Path::new("suite\0dir"), "test/annexB").is_err(), "a path whose metadata cannot be read is skipped as absent");
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
