@@ -573,6 +573,30 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The Color Wheel panel's Show Opacity and the errors of `paint.setFill {opacity}`,
+/// `paint.setStroke {opacity}` and `ui.colorWheel {opacity}`.
+#[test]
+fn color_wheel_opacity_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        assert!(lang.catalog().plain("Show Opacity").is_some(), "{} is missing Show Opacity", lang.code);
+    }
+    let messages = [
+        "`opacity` must be a number from 0 to 100",
+        "`opacity` must be true or false",
+        "type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke",
+        "an object selected in a symbol instance has no fill or stroke opacity of its own",
+        "no target has that fill or stroke to take the opacity",
+    ];
+    let literals = message_literals();
+    for m in messages {
+        assert!(literals.contains(m), "{m}");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert_ne!(message(lang, m), m, "{code}");
+        }
+    }
+}
+
 /// The Nature Icons library and its symbols display in each complete UI language.
 #[test]
 fn nature_symbol_library_names_are_in_complete_catalogs() {

@@ -90,18 +90,23 @@ pub(super) fn chip_grid(g: &vectorcraft_color::Gradient, width: f32, height: f32
 /// A white and light gray checkerboard filling `rect`, with cells a quarter of its shorter side
 /// (3 to 8 points).
 fn checkerboard(ui: &Ui, rect: Rect) {
-    let p = ui.painter();
-    p.rect_filled(rect, 0.0, Color32::WHITE);
     let cell = (rect.width().min(rect.height()) / 4.0).clamp(3.0, 8.0);
+    ui.painter().extend(checkerboard_shapes(rect, cell));
+}
+
+/// The shapes of a white and light gray checkerboard filling `rect`, with `cell` point cells.
+pub(super) fn checkerboard_shapes(rect: Rect, cell: f32) -> Vec<egui::Shape> {
+    let mut shapes = vec![egui::Shape::rect_filled(rect, 0.0, Color32::WHITE)];
     let cols = (rect.width() / cell).ceil() as usize;
     let rows = (rect.height() / cell).ceil() as usize;
     for j in 0..rows {
         for i in (j % 2..cols).step_by(2) {
             let min = pos2(rect.left() + cell * i as f32, rect.top() + cell * j as f32);
             let square = Rect::from_min_size(min, Vec2::splat(cell)).intersect(rect);
-            p.rect_filled(square, 0.0, Color32::from_gray(204));
+            shapes.push(egui::Shape::rect_filled(square, 0.0, Color32::from_gray(204)));
         }
     }
+    shapes
 }
 
 /// The colours at the `(cols + 1) x (rows + 1)` grid points (row by row) of a `width` x `height`
