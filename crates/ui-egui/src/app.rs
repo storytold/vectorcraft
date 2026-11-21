@@ -318,6 +318,10 @@ impl VectorcraftApp {
         let dialog_was_open = self.ui.dialog.is_some();
         let lang = self.ui_language();
         i18n::set_current(lang);
+        let dir = craft_ui::direction::resolve(lang.code(), craft_ui::direction::Setting::Language);
+        if craft_ui::direction::HasDirection::direction(ctx) != dir {
+            craft_ui::direction::apply(ctx, dir);
+        }
         // The engine gives new type the Japanese defaults while the UI is in Japanese.
         if self.session.ui_language.as_deref() != Some(lang.code()) {
             self.session.ui_language = Some(lang.code().to_string());

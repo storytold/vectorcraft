@@ -112,12 +112,14 @@ pub fn japanese_ui_fonts(bold: bool) -> Vec<&'static CraftFont> {
 }
 
 /// The script of `c` that a `demand` web face is fetched for: `"Hang"` for Hangul (jamo,
-/// compatibility jamo, syllables and the halfwidth forms) and `"Deva"` for Devanagari (with its
-/// extended blocks and the Vedic extensions). `None` for every other character.
+/// compatibility jamo, syllables and the halfwidth forms), `"Deva"` for Devanagari (with its
+/// extended blocks and the Vedic extensions), and `"Hebr"` for Hebrew (including Alphabetic
+/// Presentation Forms). `None` for every other character.
 pub fn demand_script(c: char) -> Option<&'static str> {
     match c as u32 {
         0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7FF | 0xFFA0..=0xFFDC => Some("Hang"),
         0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF | 0x11B00..=0x11B5F => Some("Deva"),
+        0x0590..=0x05FF | 0xFB1D..=0xFB4F => Some("Hebr"),
         _ => None,
     }
 }
@@ -150,6 +152,9 @@ mod tests {
         for c in ['ह', 'ि', '्', '़', '।', '\u{A8F2}'] {
             assert_eq!(demand_script(c), Some("Deva"), "{c}");
         }
+        for c in ['א', 'ע', 'ת', '\u{05B0}'] {
+            assert_eq!(demand_script(c), Some("Hebr"), "{c}");
+        }
         for c in ['A', 'é', 'ا', 'ก', 'ა', '日', 'ロ', '中'] {
             assert_eq!(demand_script(c), None, "{c}");
         }
@@ -162,10 +167,12 @@ mod tests {
             web_font("Picked", false, false, &["Hang"]),
             web_font("Korean", false, true, &["Hang", "Kore"]),
             web_font("Devanagari", false, true, &["Deva"]),
+            web_font("Hebrew", false, true, &["Hebr"]),
         ];
         assert_eq!(demand_fonts(&fonts, "한국어".chars()), [2], "Korean fetches only the Korean face");
         assert_eq!(demand_fonts(&fonts, "हिन्दी".chars()), [3], "Hindi fetches only the Devanagari face");
-        assert_eq!(demand_fonts(&fonts, "हिन्दी 한국어 Layer".chars()), [2, 3], "each once, in list order");
+        assert_eq!(demand_fonts(&fonts, "עברית".chars()), [4], "Hebrew fetches only the Hebrew face");
+        assert_eq!(demand_fonts(&fonts, "हिन्दी 한국어 עברית Layer".chars()), [2, 3, 4], "each once, in list order");
         assert!(demand_fonts(&fonts, "English العربية 日本語".chars()).is_empty(), "other scripts fetch nothing");
         assert!(demand_fonts(&[], "한국어".chars()).is_empty(), "built without craft-fonts: nothing to fetch");
     }
@@ -234,7 +241,8 @@ mod tests {
         // Korean and Devanagari faces are fetched only on demand, never at startup or in the
         // background queue every session runs.
         let demand: Vec<_> = WEB_FONTS.iter().filter(|w| w.demand).map(|w| w.family).collect();
-        let expected: Vec<_> = ["NanumGothic", "Noto Sans Devanagari"].into_iter().filter(|n| CRAFT_FONTS.iter().any(|f| f.family == *n)).collect();
+        let expected: Vec<_> =
+            ["NanumGothic", "Noto Sans Devanagari", "Noto Sans Hebrew"].into_iter().filter(|n| CRAFT_FONTS.iter().any(|f| f.family == *n)).collect();
         assert_eq!(demand, expected);
         assert!(WEB_FONTS.iter().all(|w| !(w.startup && w.demand)));
     }
