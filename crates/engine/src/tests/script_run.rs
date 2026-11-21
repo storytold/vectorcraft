@@ -308,22 +308,40 @@ fn fresh_folder(name: &str) -> std::path::PathBuf {
 /// Starts `source` in the app after a folder dialog it opens first, and allows the script the folder
 /// `dir` there once.
 fn start_allowed(s: &mut Session, dir: &std::path::Path, source: &str) {
+    start_picked(s, "Folder.selectDialog('Folder')", dir, source);
+}
+
+/// Starts `source` in the app after `dialog`, a file dialog it opens first, and allows the script
+/// `path` there once.
+fn start_picked(s: &mut Session, dialog: &str, path: &std::path::Path, source: &str) {
     s.script_frames = true;
-    assert_eq!(run(s, &format!("Folder.selectDialog('Folder');\n{source}")).unwrap()["running"], true);
+    assert_eq!(run(s, &format!("{dialog};\n{source}")).unwrap()["running"], true);
     for _ in 0..10_000 {
         if s.script_picker().is_some() {
-            let paths = vec![dir.to_string_lossy().into_owned()];
+            let paths = vec![path.to_string_lossy().into_owned()];
             assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths, always: false }));
             return;
         }
-        assert!(s.script_pump().is_none(), "the run waits at its folder dialog");
+        assert!(s.script_pump().is_none(), "the run waits at its file dialog");
     }
-    panic!("the run did not open its folder dialog");
+    panic!("the run did not open its file dialog");
 }
 
 /// Runs `source` in the app as [`start_allowed`] starts it, to its end.
 fn run_allowed(s: &mut Session, dir: &std::path::Path, source: &str) -> Result<Value> {
     start_allowed(s, dir, source);
+    finish_picked(s)
+}
+
+/// Runs `source` in the app after an open dialog it opens first, where the script is allowed to
+/// read the file `file` once, to its end.
+fn run_reading(s: &mut Session, file: &std::path::Path, source: &str) -> Result<Value> {
+    start_picked(s, "File.openDialog('Open')", file, source);
+    finish_picked(s)
+}
+
+/// Runs the script [`start_picked`] started to its end.
+fn finish_picked(s: &mut Session) -> Result<Value> {
     let r = loop {
         if let Some(r) = s.script_pump() {
             break r;
@@ -414,6 +432,59 @@ fn a_scripts_commands_reach_only_its_own_places_and_the_open_documents() {
     let r = run(&mut s, &call("document.save", &own)).unwrap();
     assert_eq!(r["log"], json!(["ok"]), "a document's own file that was removed is made again: {r}");
     assert!(own.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A document a script's command opened from a file the script may only read stays read-only for
+/// scripts: no command a script runs saves, exports or writes over that file, in that run or a
+/// later one, until the person saves the document. A document opened from a file the script may
+/// write is saved as before.
+#[test]
+fn a_document_a_script_opened_from_a_file_it_may_only_read_stays_read_only_for_scripts() {
+    let dir = fresh_folder("gate-read-only");
+    let (read_only, writable) = (dir.join("read"), dir.join("write"));
+    std::fs::create_dir_all(&read_only).unwrap();
+    std::fs::create_dir_all(&writable).unwrap();
+    let (file, other) = (read_only.join("a.svg"), writable.join("b.svg"));
+    let mut s = two_docs();
+    for f in [&file, &other] {
+        s.execute("document.export", &json!({"path": f.to_string_lossy(), "format": "svg"})).unwrap();
+    }
+    let bytes = std::fs::read(&file).unwrap();
+    let tried = |what: String| {
+        format!(
+            "try {{ {what}; vc.log('ok'); }} catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let writes = |f: &std::path::Path| {
+        let p = f.to_string_lossy().into_owned();
+        [
+            tried(format!("vc.run('document.open', {{path: {p:?}}})")),
+            tried("vc.run('shape.rectangle', {x: 1, y: 1, width: 1, height: 1})".into()),
+            tried("vc.run('document.save', {})".into()),
+            tried(format!("vc.run('document.save', {{path: {p:?}}})")),
+            tried(format!("vc.run('document.export', {{path: {p:?}, format: 'svg'}})")),
+            format!("var f = new File({p:?}); vc.log(f.open('w') ? 'opened' : f.error); f.close();\n"),
+            format!("vc.log(new File({p:?}).rename('c.svg') ? 'renamed' : 'kept');\n"),
+        ]
+        .concat()
+    };
+    let r = run_reading(&mut s, &file, &writes(&file)).unwrap();
+    let denied = "Script file access denied";
+    assert_eq!(r["log"], json!(["ok", "ok", "denied", "denied", "denied", denied, "kept"]), "a file the script may only read: {r}");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes, "the file is as it was");
+    assert_eq!(s.active().and_then(|d| d.path.clone()), Some(file.to_string_lossy().into_owned()));
+    let save = tried("vc.run('document.save', {})".into());
+    let r = run(&mut s, &save).unwrap();
+    assert_eq!(r["log"], json!(["denied"]), "a later run cannot save it either: {r}");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes);
+    s.execute("document.save", &json!({})).unwrap();
+    let r = run(&mut s, &save).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "once the person saved it, it is the person's document: {r}");
+
+    let r = run_allowed(&mut s, &writable, &writes(&other)).unwrap();
+    assert_eq!(r["log"], json!(["ok", "ok", "ok", "ok", "ok", "opened", "renamed"]), "a file the script may write: {r}");
+    assert!(writable.join("c.svg").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

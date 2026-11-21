@@ -1238,9 +1238,19 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
-    // The command reads and writes only where the script's own files may, and the open documents' files.
-    let gate = host.disk.borrow().gate(s.docs.iter().filter_map(|d| d.path.clone()).collect());
+    // The command reads and writes only where the script's own files may, and the open documents' files:
+    // it writes a document's file only when the person gave the document that file.
+    let paths: Vec<(u64, Option<String>)> = s.docs.iter().map(|d| (d.uid, d.path.clone())).collect();
+    let documents = s.docs.iter().filter_map(|d| d.path.clone()).collect();
+    let writable = s.docs.iter().filter(|d| !d.path_from_script).filter_map(|d| d.path.clone()).collect();
+    let gate = host.disk.borrow().gate(documents, writable);
     let r = crate::file_access::with_script_gate(gate, || s.execute(id, params));
+    // A document the command opened from a file, or gave another file, has that file from the script.
+    for st in &mut s.docs {
+        if st.path.is_some() && !paths.iter().any(|(uid, path)| *uid == st.uid && *path == st.path) {
+            st.path_from_script = true;
+        }
+    }
     // A file a command wrote before it failed is on disk all the same.
     let mut written = host.written.borrow_mut();
     for path in crate::file_access::finish_recording_writes(r.is_ok()) {

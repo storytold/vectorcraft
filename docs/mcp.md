@@ -3020,6 +3020,10 @@ VectorCraft writes files by these rules of its own:
   `Script file access denied` and the path, saving into a user library (swatches, brushes, symbols or graphic
   styles) included; reading the app's own libraries is allowed. A script given as `source` that a person allowed nothing writes only in
   its `Folder.temp` and `Folder.userData` and to the open documents' own files.
+  A document's file that a script's command gave it, by opening the document from that file or saving it there, is only
+  read this way: a script's command writes it (Save, an export or a save over it) only where the script's `File` and
+  `Folder` objects may write, in that run and in later runs, until the person saves the document. A document opened
+  from a file the script may only read therefore stays read-only for scripts.
   A pick inside the folder that holds the settings gives `null` and sets `error` to `Script file access to the app's
   own folders is not allowed`.
 - A run with nobody to ask, as over MCP or the command line, gives `null` from every file dialog and sets `error` to

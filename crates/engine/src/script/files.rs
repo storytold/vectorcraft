@@ -54,7 +54,9 @@
 //!   for, loses the grant before that code runs. A run with nobody to ask gets `null` and
 //!   [`NO_PICKER`].
 //! - The commands a script runs with `vc.run` read and write only in the places above and in the
-//!   files of the open documents ([`crate::file_access::ScriptGate`]).
+//!   files of the open documents ([`crate::file_access::ScriptGate`]). A document's file that a
+//!   script's command gave it (opening it, or saving it there) is only read that way, in this run
+//!   and later ones, until the person saves the document.
 //! - `open('w')` empties the file at once; what a script writes is kept in memory, at most
 //!   [`MAX_FILE_BYTES`] a file, and written when it closes the file or the run ends; a run writes at
 //!   most [`MAX_RUN_BYTES`] in all and ends past that. `write` encodes in the file's encoding (an
@@ -454,10 +456,10 @@ impl Disk {
         }
     }
 
-    /// The gate for a command the script runs: the places it reads and writes now, and the files of
-    /// the open documents, `documents`.
-    pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
-        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, also: None }
+    /// The gate for a command the script runs: the places it reads and writes now, the files of the
+    /// open documents, `documents`, to read, and those of them in `writable` to write.
+    pub(crate) fn gate(&self, documents: Vec<String>, writable: Vec<String>) -> crate::file_access::ScriptGate {
+        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, writable, also: None }
     }
 
     /// The files written since this was last asked, to name in the report.
