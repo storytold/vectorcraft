@@ -15,9 +15,9 @@ use vectorcraft_ui_egui::{CacheKey, VectorcraftApp, canvas, trace_runs};
 const SAMPLE_TIP: &str = "Eyedropper: click the source image to sample the ignored color";
 
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> egui::FullOutput {
-    let mut raw = RawInput { events, focused: true, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))), ..Default::default() };
-    // raw_input_hook already begins the host iteration; do not begin a second one.
-    app.raw_input_hook(ctx, &mut raw);
+    let raw = RawInput { events, focused: true, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))), ..Default::default() };
+    // `before_input` already begins the host iteration; do not begin a second one.
+    craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
     ctx.run_ui(raw, |ui| {
         app.tick(ui.ctx());
         app.ui(ui);
@@ -156,8 +156,9 @@ fn samples_original_trace_pixels_without_painting() {
     let paint = app.session.paint.clone();
     click_control(&mut app, &ctx, SAMPLE_TIP);
     assert_eq!(app.session.tool_id(), "eyedropper");
-    let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
-    assert!(app.canvas_rect.unwrap().contains(at));
+    let view = app.canvas_view().unwrap();
+    let at = view.to_screen(point);
+    assert!(view.rect.contains(at));
     let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]).textures_delta.clear();
     frame(&mut app, &ctx, vec![press(false)]).textures_delta.clear();
@@ -382,8 +383,9 @@ fn a_stale_sampler_and_canvas_press_in_one_frame_do_not_reselect_the_source() {
     app.run("select.none", json!({})).unwrap();
     // The last real layout supplies the canvas rect and view. Canvas itself records this
     // context's zoom_factor as its UI-coordinate scale before routing input.
-    let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
-    assert!(app.canvas_rect.unwrap().contains(at));
+    let view = app.canvas_view().unwrap();
+    let at = view.to_screen(point);
+    assert!(view.rect.contains(at));
     let state = app.session.active().unwrap();
     let (document, selection, revision) = (state.doc.clone(), state.selection.clone(), state.revision);
     let history = (state.history.undo.len(), state.history.redo.len());
@@ -414,14 +416,14 @@ fn a_consumed_stale_sampler_press_does_not_complete_a_double_click() {
 }
 
 fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) {
-    let mut raw = RawInput {
+    let raw = RawInput {
         time: Some(time),
         events,
         focused: true,
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))),
         ..Default::default()
     };
-    app.raw_input_hook(ctx, &mut raw);
+    craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
     let mut out = ctx.run_ui(raw, |ui| {
         app.tick(ui.ctx());
         app.ui(ui);
@@ -461,8 +463,9 @@ fn check_sampler_double_click(sampler: bool) {
         assert_eq!(app.session.tool_id(), "eyedropper");
         assert!(app.ui.trace_ignore_sampler.is_some());
     }
-    let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
-    assert!(app.canvas_rect.unwrap().contains(at));
+    let view = app.canvas_view().unwrap();
+    let at = view.to_screen(point);
+    assert!(view.rect.contains(at));
     let (delay, hold) = ctx.options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_duration));
     assert!(delay.is_finite() && delay > 0.0 && hold.is_finite() && hold > 0.0);
     let step = delay.min(hold) / 8.0;
@@ -596,8 +599,9 @@ fn cancelling_a_borrowed_sampler_clears_the_restored_eyedropper() {
     fn borrow_and_release(app: &mut VectorcraftApp, ctx: &egui::Context, point: Point, stale: bool) {
         let modifiers = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
         assert_eq!(app.session.lent_tool_id(&modifiers), Some("selection"), "exercise the real engine loan");
-        let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
-        assert!(app.canvas_rect.unwrap().contains(at));
+        let view = app.canvas_view().unwrap();
+        let at = view.to_screen(point);
+        assert!(view.rect.contains(at));
         let press = |pressed| Event::PointerButton {
             pos: at,
             button: PointerButton::Primary,
@@ -708,9 +712,9 @@ fn review_gesture_group_fixture() -> (VectorcraftApp, egui::Context, Point, Node
 }
 
 fn review_gesture_screen(app: &VectorcraftApp, ctx: &egui::Context, point: Point) -> Pos2 {
-    let rect = app.canvas_rect.unwrap();
-    let at = canvas::Xf::at(rect, app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
-    assert!(rect.contains(at), "the real canvas contains the gesture point");
+    let view = app.canvas_view().unwrap();
+    let at = view.to_screen(point);
+    assert!(view.rect.contains(at), "the real canvas contains the gesture point");
     at
 }
 
@@ -956,8 +960,9 @@ fn review_preset_click_opaque_source(app: &mut VectorcraftApp, ctx: &egui::Conte
         Some([37, 83, 149, 255]),
         "fixture: the actual canvas point is an opaque original pixel"
     );
-    let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
-    assert!(app.canvas_rect.unwrap().contains(at), "fixture: the source point lies on the actual canvas");
+    let view = app.canvas_view().unwrap();
+    let at = view.to_screen(point);
+    assert!(view.rect.contains(at), "fixture: the source point lies on the actual canvas");
     let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame(app, ctx, vec![Event::PointerMoved(at), press(true)]).textures_delta.clear();
     frame(app, ctx, vec![press(false)]).textures_delta.clear();
@@ -1035,7 +1040,7 @@ fn review_followup_release_position_survives_a_later_hover_move() {
     app.run("select.none", json!({})).unwrap();
     let at = review_gesture_screen(&app, &ctx, point);
     let hover = at + vec2(80.0, 0.0);
-    assert!(app.canvas_rect.unwrap().contains(hover));
+    assert!(app.canvas_view().unwrap().rect.contains(hover));
     assert!(at.distance(hover) > ctx.options(|o| o.input_options.max_click_dist));
     let expected = review_gesture_state(&app);
     let (start, step) = review_gesture_times(&ctx);
@@ -1280,7 +1285,7 @@ fn review_596866_coalesced_fresh_suffix(dragged: bool) {
     let at = review_gesture_screen(&app, &ctx, point);
     let distance = ctx.options(|o| o.input_options.max_click_dist);
     let away = at + vec2(distance + 8.0, 0.0);
-    assert!(away.distance(at) > distance && app.canvas_rect.unwrap().contains(away));
+    assert!(away.distance(at) > distance && app.canvas_view().unwrap().rect.contains(away));
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     assert_eq!(app.session.tool_id(), "selection");
@@ -1421,7 +1426,7 @@ fn review_597048_a_later_drag_release_does_not_replace_a_qualified_double_click(
     let blank = review_gesture_screen(&app, &ctx, Point::new(340.0, 250.0));
     let distance = ctx.options(|o| o.input_options.max_click_dist);
     let away = blank + vec2(distance + 8.0, 0.0);
-    assert!(app.canvas_rect.unwrap().contains(away) && away.distance(blank) > distance);
+    assert!(app.canvas_view().unwrap().rect.contains(away) && away.distance(blank) > distance);
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     review_gesture_release(&mut app, &ctx, at, start + step);

@@ -1,5 +1,8 @@
-use super::bar::home_key;
-use super::invoke::menu_dialog;
+use craft::ui::canvas::{ViewCommands, ViewRequest};
+use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
+
+use super::invoke::open_menu_dialog;
+use super::model::home_key;
 use super::slots::{recent_readable, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::state::{checked, selected_image};
 use super::ui_commands::UI_COMMANDS;
@@ -8,12 +11,12 @@ use super::{Brightness, Face, SaveMode, Value, VectorcraftApp, io, json, next_zo
 /// Canonical panel id for `window.panel`: a dock tab's or an icon panel's id or display label,
 /// matched case-insensitively (`"Layers"`, `"swatches"`, `"Color Guide"`), or a library panel's id
 /// as it is (`library:swatches:pastels`).
-pub(crate) fn normalize_panel(input: &str) -> Option<&'static str> {
+pub(crate) fn normalize_panel(input: &str) -> Option<&str> {
     let name = input.trim();
     crate::state::all_panels()
         .find(|(id, label)| name.eq_ignore_ascii_case(id) || name.eq_ignore_ascii_case(label))
         .map(|(id, _)| id)
-        .or_else(|| crate::panels::library_panel::intern(input))
+        .or_else(|| crate::panels::library_panel::parse(input).map(|_| input))
 }
 
 /// An optional `{key?: bool}` param: none when it is omitted or null (the commands then toggle).
@@ -398,15 +401,7 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
         "effect.last" => match app.last_effect.clone() {
-            Some((e, params)) => {
-                let label = vectorcraft_effects::effect_info(&e).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_else(|| e.clone());
-                let mut fields = params.as_object().cloned().unwrap_or_default();
-                fields.insert("__effect".into(), json!(e));
-                fields.insert("__label".into(), json!(label));
-                fields.insert("preview".into(), json!(true));
-                app.ui.dialog = Some(crate::state::Dialog { kind: "effect".into(), fields });
-                Ok(Value::Null)
-            }
+            Some((e, params)) => crate::dialogs::effect::open_last(app, &e, params),
             None => Err("no effect applied yet".into()),
         },
         id if id.starts_with("type.recentFont") => {
@@ -489,7 +484,12 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "view.fitArtboard" | "view.fitAll" | "view.actualSize" => {
-            crate::canvas::fit(app, id);
+            let command = match id {
+                "view.fitArtboard" => ViewCommands::FitArtboard,
+                "view.fitAll" => ViewCommands::FitOnScreen,
+                _ => ViewCommands::ActualPixels,
+            };
+            app.request_view(ViewRequest::Command(command), None);
             Ok(Value::Null)
         }
         "view.goToArtboard" => go_to_artboard(app, p),
@@ -591,7 +591,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 }
             }
         }
-        "window.toolbar" => flag(&mut app.ui.toolbar),
+        "window.toolbar" => {
+            let on = !crate::toolbar::shown(&app.ui);
+            crate::toolbar::set_shown(&mut app.ui, on);
+            Ok(json!(on))
+        }
         "window.toolbarCompact" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.toolbar_compact);
             app.ui.toolbar_compact = on;
@@ -725,43 +729,28 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Err(e) => Err(e.to_string()),
             }
         }
-        "window.dock" => {
-            let ui = &mut app.ui;
-            // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
-            // another way since then (Window › Tools, Window › Control). Panels shown with Shift+Tab
-            // in between stay shown. Switching workspaces clears the record (`workspaces::apply`).
-            // A shown toolbar made with New Toolbar counts as a bar Tab hides, so a record with none
-            // of the three bars is of the toolbars made with New Toolbar alone.
-            let custom = ui.custom_toolbars.iter().any(|b| b.shown);
-            let hid = ui.tab_hid.take().filter(|_| !ui.toolbar && !ui.control_bar);
-            let on = if let Some(h) = hid {
-                ui.dock |= h.dock;
-                ui.toolbar = h.toolbar;
-                ui.control_bar = h.control_bar;
-                true
-            } else if ui.dock || ui.toolbar || ui.control_bar || custom {
-                ui.tab_hid = Some(crate::state::TabHid { dock: ui.dock, toolbar: ui.toolbar, control_bar: ui.control_bar });
-                ui.dock = false;
-                ui.toolbar = false;
-                ui.control_bar = false;
-                ui.open_panel = None;
-                false
-            } else {
-                ui.dock = true;
-                ui.toolbar = true;
-                ui.control_bar = true;
-                true
-            };
-            Ok(json!(on))
-        }
-        "window.panels" => {
-            let on = !app.ui.dock;
-            app.ui.dock = on;
-            if !on {
-                app.ui.open_panel = None;
+        "window.dock" => match app.ui_ctx.clone() {
+            // Tab: hide the panels, the toolbars and the Control bar, or show what the last Tab
+            // hid; the window's shell applies it in its next pass.
+            Some(ctx) => {
+                let hidden = craft::ui::shell::chrome_state(&ctx, egui::ViewportId::ROOT).hidden;
+                request_chrome_toggle(&ctx, egui::ViewportId::ROOT, if hidden { ChromeToggle::ShowPanels } else { ChromeToggle::Panels });
+                Ok(json!(hidden))
             }
-            Ok(json!(on))
-        }
+            None => Err("no window".into()),
+        },
+        "window.panels" => match app.ui_ctx.clone() {
+            // Shift+Tab: hide or show the panels, leaving the toolbars and the Control bar.
+            Some(ctx) => {
+                let hidden = craft::ui::shell::chrome_state(&ctx, egui::ViewportId::ROOT).panels_hidden;
+                request_chrome_toggle(&ctx, egui::ViewportId::ROOT, if hidden { ChromeToggle::ShowPanels } else { ChromeToggle::PanelsKeepTools });
+                if !hidden {
+                    app.ui.open_panel = None;
+                }
+                Ok(json!(hidden))
+            }
+            None => Err("no window".into()),
+        },
         "window.brightness" => match s("brightness").as_deref().and_then(Brightness::parse) {
             Some(b) => {
                 app.ui.brightness = b;
@@ -813,15 +802,13 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
-            let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+            let fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
             // Find and Replace has a dialog of its own, which stays open from match to match.
             if cmd == crate::dialogs::find_replace::COMMAND {
                 return Some(crate::dialogs::find_replace::open(app, &fields));
             }
-            fields.insert("__command".into(), json!(cmd));
-            fields.insert("__label".into(), json!(s("label").unwrap_or(cmd.clone())));
-            app.ui.dialog = Some(crate::state::Dialog { kind: "command".into(), fields });
-            Ok(Value::Null)
+            let label = s("label").unwrap_or(cmd.clone());
+            crate::dialogs::command::open(app, &cmd, &label, fields)
         }
         "effect.applyLast" => match app.last_effect.clone() {
             Some((e, params)) => app.run("effect.apply", json!({"effect": e, "params": params})),
@@ -995,7 +982,6 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::flattener_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
         }
-        "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.tracingPresetsDialog" => {
             crate::dialogs::tracing_presets::open(app, s("selected").as_deref());
             Ok(Value::Null)
@@ -1057,7 +1043,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
         "ui.recolorUndo" => crate::dialogs::recolor::step(app, true),
         "ui.recolorRedo" => crate::dialogs::recolor::step(app, false),
-        "ui.dialogReset" => crate::dialogs::reset(app),
+        "ui.dialogReset" => crate::dialogs::host::reset_top(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
         "ui.svgFilterDialog" => crate::dialogs::svg_filter::open(app, p),
@@ -1069,13 +1055,9 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::canvas::apply_requests(app, r);
             match s("command").as_deref() {
                 Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
-                c => match c.and_then(|c| menu_dialog(app, c)) {
-                    Some((kind, fields)) => {
-                        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                        Ok(Value::Null)
-                    }
-                    None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
-                },
+                c => c
+                    .and_then(|c| open_menu_dialog(app, c))
+                    .unwrap_or_else(|| Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into())),
             }
         }
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
@@ -1089,7 +1071,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
-        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::save_pdf_summary(app, p),
+
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
             Ok(Value::Null)
@@ -1279,6 +1261,6 @@ fn go_to_artboard(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> 
     }
     .min(last);
     crate::panels::artboards::select(app, to);
-    crate::canvas::fit(app, "view.fitArtboard");
+    app.request_view(ViewRequest::Command(ViewCommands::FitArtboard), None);
     Ok(json!({ "index": to }))
 }

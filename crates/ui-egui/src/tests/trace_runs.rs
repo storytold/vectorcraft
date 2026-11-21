@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use vectorcraft_engine::{EngineError, Session};
 
+use crate::export_progress::{self, DELAY};
 use crate::{VectorcraftApp, trace_runs};
 
 /// An app with a 100 × 100 pt document and a 40 × 40 px image placed in it, selected; traces run
@@ -74,7 +75,7 @@ fn undos(app: &VectorcraftApp) -> usize {
 
 /// Draws the progress window at `time` seconds → the texts it drew.
 fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| trace_runs::show(app, ui.ctx()));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| export_progress::show(app, ui.ctx()));
     out.textures_delta.clear();
     let mut texts = String::new();
     for shape in out.shapes {
@@ -281,15 +282,14 @@ fn a_trace_started_before_a_revert_does_not_apply() {
 #[test]
 fn the_progress_window_shows_a_trace() {
     let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
     assert!(!progress(&mut app, &ctx, 0.0).contains("Tracing the image"), "not before the delay");
-    progress(&mut app, &ctx, 1.0); // a new window measures itself unseen first
-    let shown = progress(&mut app, &ctx, 1.1);
+    progress(&mut app, &ctx, DELAY + 0.05); // a new window measures itself unseen first
+    let shown = progress(&mut app, &ctx, DELAY + 0.1);
     assert!(shown.contains("Tracing the image…") && shown.contains("Cancel") && shown.contains("Continue in Background"), "{shown}");
     assert_eq!(app.run("imageTrace.hideRuns", json!({})).unwrap(), json!({"hidden": 1}));
-    assert!(!progress(&mut app, &ctx, 2.0).contains("Tracing the image"));
+    assert!(!progress(&mut app, &ctx, DELAY + 1.0).contains("Tracing the image"));
     let before = undos(&app);
     wait(&mut app);
     assert_eq!(undos(&app), before + 1, "it went on");

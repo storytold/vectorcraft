@@ -11,11 +11,13 @@
 //! (Windows and Linux; `single_instance`).
 //!
 //! `--in-window-menus` (or `VECTORCRAFT_IN_WINDOW_MENUS=1`) keeps the menus inside the window on
-//! macOS instead of the macOS menu bar (`mac_menu`).
+//! macOS instead of the macOS menu bar.
 //!
-//! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`; a port from 1 to 65535, or the app doesn't
-//! start) starts a localhost JSON-lines control server:
+//! `--control <port>` (or `VECTORCRAFT_CONTROL_PORT`; a port from 0 to 65535, 0 picking a free
+//! one, or the app doesn't start) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
+//! `--control-token <token>` (or `VECTORCRAFT_CONTROL_TOKEN`) or `--control-token-file <file>`
+//! (or `VECTORCRAFT_CONTROL_TOKEN_FILE`) sets the token each connection sends first.
 //! See `vectorcraft_ui_egui::control` for the methods. `--automation-read-root` and
 //! `--automation-write-root` (or `VECTORCRAFT_AUTOMATION_READ_ROOT` / `_WRITE_ROOT`) confine the
 //! files its requests read and write (`vectorcraft_engine::file_access`); the person at the
@@ -26,42 +28,26 @@
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 mod automation_args;
-mod caps_lock;
 mod clipboard;
 #[cfg(feature = "wgpu")]
 mod compositor_gpu;
-mod control_server;
 mod cursor_theme;
 mod display_profile;
 #[cfg(feature = "wgpu")]
 mod gpu;
 mod hang_watch;
 #[cfg(target_os = "linux")]
-mod linux_screen_color;
-#[cfg(target_os = "linux")]
 mod linux_stylus;
 mod logging;
 #[cfg(all(target_os = "macos", feature = "wgpu"))]
 mod mac_color_space;
 #[cfg(target_os = "macos")]
-mod mac_cursor;
-#[cfg(target_os = "macos")]
 mod mac_fonts;
-#[cfg(target_os = "macos")]
-mod mac_menu;
-#[cfg(target_os = "macos")]
-mod mac_save_format;
-#[cfg(target_os = "macos")]
-mod mac_screen_color;
 mod mac_tablet;
 #[cfg(target_os = "macos")]
 mod mac_window;
 #[cfg(target_os = "macos")]
 mod open_documents;
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
-mod portal_request;
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", test))]
-mod portal_save;
 mod prefs_dir;
 mod presentation;
 mod printing;
@@ -72,53 +58,112 @@ mod single_instance;
 #[cfg(windows)]
 mod system_fonts;
 mod tablet;
-mod window;
 mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
-mod windows_screen_color;
 mod windows_stylus;
 mod xwayland;
 
+use std::sync::{Arc, Mutex};
+
+// PLAN: assumed paths: `craft::ui::shell::embed`, `craft::ui::{InstallSpec, register_app_icons}`, `craft::ui::runtime::PenSource`, `craft::window::{Prefix, SystemWindows}`, `craft::host::{AppInfo, Backend::X11}`, `craft::dialogs::{FilePanels, FileService}`
+use craft::automation::server::{self, Listening};
+use craft::automation::args::{ControlOptions, EnvNames};
+use craft::dialogs::service::{FilePanels, FileService};
+use craft::host::target::{Backend, ShellInfo};
+use craft::host::{AppInfo, Wake};
+use craft::settings::SharedSettings;
+use craft::ui::InstallSpec;
+use craft::ui::runtime::pen::PenSource;
+use craft::ui::shell::embed;
+use craft::window::policy::{TitleBarPref, decide_for};
+use craft::window::restore::Store;
+use craft::window::Prefix;
+use craft::window::system::SystemWindows;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_ui_egui::dialogs::safe_mode;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
-use vectorcraft_ui_egui::picks::PickRequest;
-use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, VectorcraftApp};
+use vectorcraft_ui_egui::settings::AppSettings;
+use vectorcraft_ui_egui::{Services, VectorcraftApp};
 
 mod app;
 mod host_services;
 mod prefs;
-mod titlebar;
 
 #[cfg(all(test, feature = "wgpu"))]
 use app::bring_window_forward;
 use app::native_input_hook;
 use app::open_or_hold;
-use host_services::services;
-#[cfg(all(test, feature = "wgpu"))]
-use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
-use prefs::{load_prefs, log_dir, prefs_enabled, prefs_path, read_prefs};
-#[cfg(all(test, feature = "wgpu", any(target_os = "macos", target_os = "windows")))]
-use titlebar::CUSTOM_TITLEBAR;
-#[cfg(feature = "wgpu")]
-use titlebar::adapter_summary;
-#[cfg(all(test, feature = "wgpu"))]
-use titlebar::custom_titlebar_from;
-#[cfg(all(test, feature = "wgpu"))]
-use titlebar::opted_into_system_title_bar;
+use host_services::{file_service, services, start_pen};
+use prefs::{load_prefs, log_dir, open_store, prefs_enabled};
+
+/// The window's size when no saved placement overrides it, and the smallest it may be, in points.
+const DEFAULT_SIZE: [f32; 2] = [1440.0, 900.0];
+const MIN_SIZE: [f32; 2] = [800.0, 500.0];
+
+/// The app id every OS window carries; it matches `packaging/linux/ai.storyteller.vectorcraft.desktop`.
+const WINDOW_APP_ID: &str = "ai.storyteller.vectorcraft";
+
+/// The window, Dock, taskbar and app-switcher icon (`assets/app-icon/`, see its README). macOS gets
+/// the version with Apple's transparent margin; elsewhere the full-bleed tile. The app ID matches
+/// `packaging/linux/ai.storyteller.vectorcraft.desktop` so Wayland docks find the launcher icon.
+fn app_icon() -> egui::IconData {
+    #[cfg(target_os = "macos")]
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/vectorcraft-macos-512.png");
+    #[cfg(not(target_os = "macos"))]
+    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.vectorcraft.png");
+    eframe::icon_data::from_png_bytes(png).unwrap_or_default()
+}
+
+/// Windows shows a window's big icon (`ICON_BIG`) in the taskbar and Alt+Tab; eframe sets only the
+/// small one (the title bar's), so the taskbar showed a generic icon. Set the big one too.
 #[cfg(windows)]
-use titlebar::set_taskbar_icon;
-#[cfg(all(test, feature = "wgpu"))]
-use titlebar::{app_draws_frame, caption_layout_from, opted_into_app_title_bar, start_frame, system_title_bar_applies};
-use titlebar::{custom_titlebar, native_options, titlebar_from_env};
+fn set_taskbar_icon(w: &winit::window::Window) {
+    use winit::platform::windows::WindowExtWindows as _;
+    let icon = app_icon();
+    // An icon that can't be made leaves the generic one: nothing else depends on it.
+    if let Ok(i) = winit::window::Icon::from_rgba(icon.rgba, icon.width, icon.height) {
+        w.set_taskbar_icon(Some(i));
+    }
+}
+
+/// "name (backend, kind)" of the adapter the window renders with, for Help › About and bug reports.
+#[cfg(feature = "wgpu")]
+fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
+    format!("{} ({:?}, {:?})", info.name.trim(), info.backend, info.device_type)
+}
+
+/// The window's options: the app draws the title bar when `custom_titlebar`, else the desktop does.
+fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("VectorCraft")
+            .with_inner_size(DEFAULT_SIZE)
+            .with_min_inner_size(MIN_SIZE)
+            .with_drag_and_drop(true)
+            .with_decorations(!custom_titlebar)
+            .with_fullsize_content_view(true)
+            .with_titlebar_shown(false)
+            .with_title_shown(false)
+            .with_icon(app_icon())
+            .with_app_id(WINDOW_APP_ID),
+        ..Default::default()
+    }
+}
 
 struct App {
     app: VectorcraftApp,
-    host_caps_lock: caps_lock::HostCapsLock,
+    /// The preferences, written through [`prefs::save_tick`] and on exit.
+    settings: SharedSettings<AppSettings>,
+    /// The file service the host's `Files` is, kept for the folders its picks chose.
+    files: Arc<FileService>,
+    /// Shows the native dialogs the file service was asked for.
+    file_panels: FilePanels,
+    /// Keeps the control server running while the app does.
+    _control_server: Option<Listening>,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
     /// The graphics device was lost and the unsaved changes are kept for Data Recovery.
@@ -130,14 +175,8 @@ struct App {
     /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635),
     /// and to take the window off screen on quit before the clipboard handles let go (`quit_windows`).
     winit_window: Option<std::sync::Arc<winit::window::Window>>,
-    /// A saved or fitted geometry asked for maximize once the window is mapped (Linux).
-    pending_maximize: bool,
-    /// Frames left to retry [`window::apply_pending_maximize`].
-    maximize_tries: u8,
     /// The command line's files, held back until the choice about a stopped plug-in is made.
     held_files: Vec<String>,
-    /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
-    monitors_listed: Option<(f64, f32)>,
     /// Reads the profile of the display that shows the main window, for the canvas.
     display_profile: display_profile::Reader,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
@@ -158,6 +197,10 @@ Opens the VectorCraft desktop app with the given files.
 Options:
   --control <port>               Start the localhost JSON-lines control server on <port>
                                  (or VECTORCRAFT_CONTROL_PORT)
+  --control-token <token>        The token control connections send first
+                                 (or VECTORCRAFT_CONTROL_TOKEN)
+  --control-token-file <file>    Read that token from <file>
+                                 (or VECTORCRAFT_CONTROL_TOKEN_FILE)
   --automation-read-root <dir>   Confine the files control requests read to <dir>
                                  (may be given more than once)
   --automation-write-root <dir>  Confine the files control requests write to <dir>
@@ -275,7 +318,7 @@ fn read_command_line(
 fn main() -> std::process::ExitCode {
     // Windows: the update helper is a copy of this program started with `--finish-update`.
     #[cfg(windows)]
-    if let Some(result) = craft_update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
+    if let Some(result) = craft::update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
         std::process::exit(i32::from(result.is_err()));
     }
     // Before any thread starts: the pointer must find a cursor theme on Wayland (#2450).
@@ -294,16 +337,24 @@ fn main() -> std::process::ExitCode {
             Err(code) => return code,
         };
     let automation_args::AutomationArgs { read_roots, write_roots, .. } = roots_args;
-    // After the arguments: `--control` and `--version` win over a bad environment value.
-    let control_port = match control.port {
-        Some(port) => Some(port),
-        None => match automation_args::env_control_port(std::env::var_os("VECTORCRAFT_CONTROL_PORT")) {
-            Ok(port) => port,
-            Err(e) => {
-                eprintln!("vectorcraft: {e}");
-                return std::process::ExitCode::FAILURE;
-            }
-        },
+    // After the arguments: the flags and `--version` win over a bad environment value.
+    // PLAN: assumed `ControlArg::into_options(self) -> ControlOptions` (shell-w12 edits `automation_args`)
+    let control_options = match ControlOptions::resolve(control.into_options(), &EnvNames::for_app("VECTORCRAFT")) {
+        Ok(options) => options,
+        Err(e) => {
+            eprintln!("vectorcraft: {e}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+    let control_port = control_options.port;
+    // Read before the window opens: a token file that can't be read keeps the app from starting
+    // rather than leaving the channel open without one.
+    let control_token = match control_port.map(|_| control_options.server_token()).transpose() {
+        Ok(token) => token.map(|token| (control_options.token_notice(&token), token)),
+        Err(e) => {
+            eprintln!("vectorcraft: {e}");
+            return std::process::ExitCode::FAILURE;
+        }
     };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
@@ -317,7 +368,6 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(target_os = "macos")]
     let _ = new_instance;
-    vectorcraft_ui_egui::i18n::detect_system_lang_in_background();
     // Before the first render: the cores the process may run on.
     #[cfg(windows)]
     windows_cores::install();
@@ -366,14 +416,19 @@ fn main() -> std::process::ExitCode {
             }
         }
     };
-    let saved = read_prefs();
-    let saved_window = saved.as_ref().and_then(|ui| ui.window);
+    let (settings, settings_report) = open_store();
+    if settings_report.has_problems() {
+        log::warn!("the preferences were not read as saved: {settings_report:?}");
+    }
+    // An engine preference the window's start reads before the app exists.
+    let engine_pref = |key: &str| settings.lock().get().ui.engine_prefs.get(key).cloned();
     #[cfg(feature = "wgpu")]
-    let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
+    let gpu_pref_value = engine_pref("gpuPreference");
+    #[cfg(feature = "wgpu")]
+    let gpu_pref = gpu_pref_value.as_ref().and_then(serde_json::Value::as_str);
     // Preferences › Performance › Low-Latency Drawing; anything but `true` in the file is off.
     #[cfg(feature = "wgpu")]
-    let low_latency_drawing =
-        saved.as_ref().and_then(|ui| ui.engine_prefs.get("lowLatencyDrawing")).and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let low_latency_drawing = engine_pref("lowLatencyDrawing").and_then(|v| v.as_bool()).unwrap_or(false);
     #[cfg(feature = "wgpu")]
     let power_env = eframe::wgpu::PowerPreference::from_env();
     #[cfg(feature = "wgpu")]
@@ -407,17 +462,15 @@ fn main() -> std::process::ExitCode {
     };
     #[cfg(feature = "wgpu")]
     let crash = left_out.crash.clone();
-    let (custom_titlebar, caption_layout) = custom_titlebar(saved.as_ref());
-    let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
     let mut forced_to_x11 = false;
     #[cfg(target_os = "linux")]
-    let options = {
-        let mut options = options;
-        let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
+    {
+        let pref_value = engine_pref("linuxDisplayServer");
+        let pref = pref_value.as_ref().and_then(serde_json::Value::as_str);
         if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
                 forced_to_x11 = true;
@@ -426,21 +479,34 @@ fn main() -> std::process::ExitCode {
                 } else {
                     log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
                 }
-                use winit::platform::x11::EventLoopBuilderExtX11 as _;
-                options.event_loop_builder = Some(Box::new(|builder| {
-                    builder.with_x11();
-                }));
             } else {
                 log::warn!("Linux Display Server is X11, but the X11 libraries aren't all installed: opening the window on Wayland");
             }
         }
-        options
-    };
+    }
     #[cfg(not(target_os = "linux"))]
     let forced_to_x11 = false;
-    // Preferences › User Interface notes under System Title Bar when the desktop draws the frame
-    // with it on or off.
-    let desktop_keeps_frame = titlebar::desktop_keeps_frame(forced_to_x11);
+    // A window forced onto XWayland runs on X11, whose window manager draws the frame: the
+    // framework decides the frame for that backend, from the platform, `VECTORCRAFT_TITLEBAR` and
+    // Preferences › User Interface › System Title Bar.
+    // PLAN: assumed `Backend::X11`
+    let shell_info = if forced_to_x11 { ShellInfo::current().backend(Backend::X11) } else { ShellInfo::current() };
+    let titlebar_pref =
+        if engine_pref("systemTitleBar").and_then(|v| v.as_bool()).unwrap_or(false) { TitleBarPref::System } else { TitleBarPref::Integrated };
+    let decision = decide_for(Prefix::new("VECTORCRAFT"), shell_info.backend, titlebar_pref);
+    let custom_titlebar = matches!(decision.frame, craft::window::Frame::App(_));
+    let options = native_options(custom_titlebar);
+    #[cfg(target_os = "linux")]
+    let options = {
+        let mut options = options;
+        if forced_to_x11 {
+            use winit::platform::x11::EventLoopBuilderExtX11 as _;
+            options.event_loop_builder = Some(Box::new(|builder| {
+                builder.with_x11();
+            }));
+        }
+        options
+    };
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
     // button held, and writes the pen's end into the pen feed (`windows_stylus`). It also notes the
@@ -538,7 +604,34 @@ fn main() -> std::process::ExitCode {
         run(
             options,
             Box::new(move |cc| {
-                VectorcraftApp::install_ime_reset_hooks(&cc.egui_ctx);
+                let ctx = &cc.egui_ctx;
+                let winit_window = cc.winit_window().cloned();
+                let pen = PenSource::default();
+                let spec = InstallSpec::new(shell_info, Arc::new(SystemWindows))
+                    .app_id(WINDOW_APP_ID)
+                    .placement(Arc::new(Mutex::new(Store::open("vectorcraft"))))
+                    .frame(decision)
+                    .pen(pen.clone());
+                embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts()).map_err(|e| e.to_string())?;
+                egui_extras::install_image_loaders(ctx);
+                // PLAN: assumed `craft::ui::register_app_icons(&[..])` and `cursors::CURSOR_ICONS` (cv.S13)
+                craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::icons::APP_ICONS);
+                craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::cursors::CURSOR_ICONS);
+                start_pen(&winit_window, &pen);
+                // PLAN: assumed `UiState::last_folders: HashMap<String, PathBuf>`, the folders the picks chose
+                let folders = settings.lock().get().ui.last_folders.clone();
+                let wake = {
+                    let ctx = ctx.clone();
+                    Wake::new(move || ctx.request_repaint())
+                };
+                let (file_service, file_panels) = file_service(wake, folders);
+                let files = Arc::new(file_service);
+                craft::host::Host::builder(AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
+                    // PLAN: assumed `vectorcraft_ui_egui::i18n::shared() -> Arc<I18n>`
+                    .i18n(vectorcraft_ui_egui::i18n::shared())
+                    .settings(Arc::new(settings.clone()))
+                    .files(files.clone())
+                    .install(ctx);
                 let mut session = Session::new();
                 // The profiles loaded before come back before the preferences name any of them.
                 prefs_dir::attach_profile_store(&mut session);
@@ -546,7 +639,9 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_color_settings(&mut session);
                 // Before any plug-in loads: this launch's marker in the Launch folder next to the
                 // preferences (none for runs without preferences), and Safe Mode.
-                let launch_dir = prefs_path().filter(|_| prefs_enabled()).and_then(|p| Some(p.parent()?.join("Launch")));
+                // PLAN: assumed `prefs::prefs_dir() -> Option<PathBuf>` (shell-w8), the one folder rule
+                let launch_dir = prefs::prefs_dir().filter(|_| prefs_enabled()).map(|d| d.join("Launch"));
+                let folder = |name: &str| prefs::prefs_dir().map(|d| d.join(name).to_string_lossy().to_string());
                 let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
@@ -556,9 +651,9 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_new_doc_profiles(&mut session);
                 prefs_dir::attach_proof_setups(&mut session);
                 prefs_dir::attach_script_data(&mut session);
-                let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
+                let mut app = VectorcraftApp::new(session, services());
                 app.set_startup_update_check(true);
-                load_prefs(&mut app, saved);
+                load_prefs(&mut app, &settings);
                 safe_mode::after_start(&mut app, stopped);
                 // The saved PDF presets live in their own folder (also read by vectorcraft-cli),
                 // which takes over from the copy the preferences file used to hold.
@@ -569,38 +664,27 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_arrowheads(&mut app.session);
                 // The custom bevels, kept in their own file next to the preferences.
                 prefs_dir::attach_bevels(&mut app.session);
-                // Fit the window to its monitor, or put it back where it was (still hidden).
-                let winit_window = cc.winit_window().cloned();
+                // The window's placement comes back through the framework's placement store.
+                #[cfg(windows)]
                 if let Some(w) = &winit_window {
-                    let g = window::restore(w, saved_window);
-                    app.ui.window = Some(g);
-                    #[cfg(windows)]
                     set_taskbar_icon(w);
                 }
-                // Linux may not map the window before the first frames, so a saved maximize is retried then (#3635).
-                let pending_maximize = cfg!(target_os = "linux") && app.ui.window.as_ref().is_some_and(|g| g.maximized);
                 // User Defined swatch, graphic style, symbol and brush libraries live next to the preferences.
-                let swatches = prefs_path().and_then(|p| Some(p.parent()?.join("Swatches").to_string_lossy().to_string()));
-                app.session.swatch_libraries.set_user_dir(swatches);
-                let styles = prefs_path().and_then(|p| Some(p.parent()?.join("Graphic Styles").to_string_lossy().to_string()));
-                app.session.style_libraries.set_user_dir(styles);
-                let symbols = prefs_path().and_then(|p| Some(p.parent()?.join("Symbols").to_string_lossy().to_string()));
-                app.session.symbol_libraries.set_user_dir(symbols);
-                let brushes = prefs_path().and_then(|p| Some(p.parent()?.join("Brushes").to_string_lossy().to_string()));
-                app.session.brush_libraries.set_user_dir(brushes);
+                app.session.swatch_libraries.set_user_dir(folder("Swatches"));
+                app.session.style_libraries.set_user_dir(folder("Graphic Styles"));
+                app.session.symbol_libraries.set_user_dir(folder("Symbols"));
+                app.session.brush_libraries.set_user_dir(folder("Brushes"));
                 // With the User Defined libraries listed, the persistent library panels reopen.
                 vectorcraft_ui_egui::panels::library_panel::restore(&mut app);
                 // So do the Libraries panel's libraries; runs without preferences (agents' test
                 // runs) keep theirs for the session only, never touching the user's.
                 if prefs_enabled() {
-                    let libraries = prefs_path().and_then(|p| Some(p.parent()?.join("Libraries").to_string_lossy().to_string()));
-                    app.session.libraries.set_dir(libraries);
+                    app.session.libraries.set_dir(folder("Libraries"));
                 }
                 // Data Recovery copies live next to the preferences too (none for runs without
                 // preferences, such as agents' test runs, unless the recoveryFolder preference is set).
                 if std::env::var_os("VECTORCRAFT_NO_PREFS").is_none() {
-                    let recovery = prefs_path().and_then(|p| Some(p.parent()?.join("Data Recovery").to_string_lossy().to_string()));
-                    app.session.recovery.set_default_folder(recovery);
+                    app.session.recovery.set_default_folder(folder("Data Recovery"));
                 }
                 let graphics_loss = GraphicsLoss::default();
                 #[cfg(feature = "wgpu")]
@@ -663,29 +747,32 @@ fn main() -> std::process::ExitCode {
                 if previous_hang.is_some() && app.ui.status.is_empty() {
                     vectorcraft_ui_egui::troubleshooting::last_session_stopped(&mut app);
                 }
-                app.titlebar_from_env = titlebar_from_env();
-                app.custom_titlebar = custom_titlebar;
-                app.caption_layout = caption_layout;
-                app.desktop_frame = !custom_titlebar;
-                app.desktop_keeps_frame = desktop_keeps_frame;
-                if let Some(port) = control_port {
-                    let rx = control_server::start(port, cc.egui_ctx.clone());
-                    app = app.with_control(rx).with_automation_roots(roots.clone());
-                    if let Some(roots) = &roots {
-                        // Everywhere the app doesn't say whose work it is (worker threads), the
-                        // roots hold: unconfined is only what the person at the keyboard does.
-                        file_access::confine_process(roots.clone());
-                        log::info!("control channel confined to the automation roots: {}", roots.describe());
+                let mut control_server = None;
+                if let (Some(port), Some((notice, token))) = (control_port, control_token) {
+                    match server::listen(port, token, craft::ui::runtime::windows::WindowHost::of(&cc.egui_ctx)) {
+                        Ok((rx, listening)) => {
+                            eprintln!("{notice}");
+                            log::info!("control channel: {listening:?}");
+                            control_server = Some(listening);
+                            app = app.with_control(rx).with_automation_roots(roots.clone());
+                            if let Some(roots) = &roots {
+                                // Everywhere the app doesn't say whose work it is (worker threads), the
+                                // roots hold: unconfined is only what the person at the keyboard does.
+                                file_access::confine_process(roots.clone());
+                                log::info!("control channel confined to the automation roots: {}", roots.describe());
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("no control channel on port {port}: {e}");
+                            eprintln!("vectorcraft: can't listen on port {port}: {e}");
+                        }
                     }
                 }
                 #[cfg(target_os = "macos")]
                 {
                     open_documents::set_ui(&cc.egui_ctx);
-                    // The macOS menu bar, installed now so winit's default menu doesn't stay up.
-                    if !in_window_menus {
-                        app.services.native_menu = mac_menu::install(&cc.egui_ctx, &app);
-                    }
-                    mac_cursor::install(&cc.egui_ctx, winit_window.as_ref());
+                    // PLAN: menus-w7 installs the macOS menu bar into `app.services.native_menu` here unless `in_window_menus`.
+                    let _ = in_window_menus;
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
@@ -700,17 +787,17 @@ fn main() -> std::process::ExitCode {
                 // The content and the pointer stay aligned on Windows (#1758).
                 let window_frame = window_frame::service(cc, custom_titlebar);
                 Ok(Box::new(App {
-                    host_caps_lock: caps_lock::HostCapsLock::new(winit_window.as_deref()),
                     app,
+                    settings,
+                    files,
+                    file_panels,
+                    _control_server: control_server,
                     graphics_loss,
                     graphics_lost: false,
                     frames: 0,
                     window_frame,
                     winit_window,
-                    pending_maximize,
-                    maximize_tries: 8,
                     held_files,
-                    monitors_listed: None,
                     display_profile: Default::default(),
                     frame_start: None,
                     min_frame,

@@ -40,6 +40,7 @@
 	Quit VectorCraft	Zakończ VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Upuść kompozycję
+@id	language.name	Polski
 @msg	{key} must be [x, y] with finite coordinates	{key} musi mieć postać [x, y] ze skończonymi współrzędnymi
 @msg	ids must contain 1–10000 object ids	ids musi zawierać od 1 do 10000 identyfikatorów obiektów
 

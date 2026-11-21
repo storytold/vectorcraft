@@ -17,16 +17,18 @@ path = "src/main.rs"
 vectorcraft-engine = { workspace = true, features = ["bundled-fonts", "heif"] }
 vectorcraft-ui-egui = { workspace = true }
 # The page command API (storytold/craft-libs#413): the request plumbing behind window.vectorcraft.
-craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "50b0ee7bf811e363b5f238382b5c77318cf33e46", version = "0.1.0" }
+craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f", version = "0.1.0" }
 vectorcraft-format = { workspace = true }
 vectorcraft-text = { workspace = true }
+craft = { workspace = true, features = ["ui", "keymap", "automation"] }
 egui = { workspace = true }
+egui_extras = { workspace = true }
 log = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `wgpu` pulls egui-wgpu's defaults: WebGPU plus the WebGL2 fallback.
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
-rfd = { workspace = true, features = ["file-handle-inner"] }
+
 wasm-bindgen = "0.2"
 serde_json = { workspace = true }
 wasm-bindgen-futures = "0.4"

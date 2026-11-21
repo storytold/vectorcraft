@@ -3,9 +3,10 @@
 //! (`dialogs::command`). Color Mask's opens the same dialog on the selected image's mask settings
 //! (the command's report, see `menus::invoke`), or the defaults for an image without one.
 
+use craft::menu::Node;
 use serde_json::json;
 
-use crate::menus::Item;
+use crate::menus::cp;
 
 /// Remove Background's command.
 pub const REMOVE_BACKGROUND: &str = "addon.image.removeBackground";
@@ -21,16 +22,16 @@ pub const BACKGROUNDS: &[(&str, &str)] = &[("Edge Color", "edges"), ("Corner Col
 pub const MATCHES: &[(&str, &str)] = &[("Distance", "distance"), ("Each Channel", "channels")];
 
 /// Object › Plug-ins › Image Tools.
-pub fn menu() -> Vec<Item> {
+pub fn menu() -> Vec<Node> {
     vec![
-        Item::Cmd(
+        cp(
             "Remove Background…",
             REMOVE_BACKGROUND,
             json!({"background": "edges", "colors": "#ffffff", "contiguous": true, "match": "distance", "tolerance": 10, "softness": 10}),
         ),
-        Item::Cmd("Color Mask…", COLOR_MASK, json!({})),
-        Item::Cmd("Remove Color Mask", REMOVE_COLOR_MASK, json!({})),
-        Item::Cmd("Apply Color Mask", APPLY_COLOR_MASK, json!({})),
+        cp("Color Mask…", COLOR_MASK, json!({})),
+        cp("Remove Color Mask", REMOVE_COLOR_MASK, json!({})),
+        cp("Apply Color Mask", APPLY_COLOR_MASK, json!({})),
     ]
 }
 

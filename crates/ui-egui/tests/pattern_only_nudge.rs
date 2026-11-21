@@ -52,7 +52,9 @@ impl Scene {
         app.run("select.set", json!({"ids": [fill.0, stroke.0, solid.0]})).unwrap();
         app.select_tool("selection");
         let ctx = egui::Context::default();
-        vectorcraft_ui_egui::theme::install_fonts(&ctx);
+        // PLAN: assumed `craft::ui::shell::{InstallSpec, ShellInfo}` and `craft::ui::testing::NoWindows` paths.
+        let spec = craft::ui::InstallSpec::new(craft::host::target::ShellInfo::default(), std::sync::Arc::new(craft::ui::testing::windows::NoWindows));
+        craft::ui::shell::embed::install(&ctx, spec, &vectorcraft_ui_egui::ui_fonts()).unwrap();
         let mut scene = Self { app, ctx, time: 0.0, fill, stroke, solid, other };
         for _ in 0..3 {
             scene.frame(vec![]);
@@ -63,13 +65,13 @@ impl Scene {
 
     fn frame(&mut self, events: Vec<Event>) {
         self.time += 1.0 / 30.0;
-        let mut raw = RawInput {
+        let raw = RawInput {
             events,
             time: Some(self.time),
             screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 800.0))),
             ..Default::default()
         };
-        self.app.raw_input_hook(&self.ctx, &mut raw);
+        craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| self.app.ui(ui));
         out.textures_delta.clear();
     }

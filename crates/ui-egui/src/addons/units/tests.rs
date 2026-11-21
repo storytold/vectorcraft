@@ -1,17 +1,13 @@
-//! Unit Converter's submenu and panel: one field per unit, typing in one updates the others and
-//! text that does not read leaves them alone, From Selection reads the selection's size, Apply
-//! sets the side picked as one undo step and adds none when nothing changes, and Copy writes the
-//! value with or without its unit.
+//! Unit Converter's state and commands: a typed length that shows in every unit replaces the
+//! length, From Selection reads the selection's size, Apply sets the side picked as one undo step
+//! and adds none when nothing changes, and Copy writes the value with or without its unit.
 
-use egui::{Event, Key, Modifiers, Pos2, Rect, vec2};
 use serde_json::json;
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::Session;
 
-use super::{Converter, ID, STATE, Side, apply, document_now, from_selection, show};
-use crate::panels::{pstate, set_pstate};
-use crate::tests_labels::{painted_text, shapes_text};
-use crate::{VectorcraftApp, menus};
+use super::{Converter, Side, apply, document_now, from_selection};
+use crate::VectorcraftApp;
 
 /// An app with a selected 72 × 36 pt rectangle.
 fn app() -> VectorcraftApp {
@@ -35,97 +31,17 @@ fn size(app: &mut VectorcraftApp) -> (f64, f64) {
     (r["width"]["points"].as_f64().unwrap(), r["height"]["points"].as_f64().unwrap())
 }
 
+/// A readable length replaces the length; one too large for some unit (Q and Ha) leaves it.
 #[test]
-fn the_submenu_opens_the_panel() {
-    let mut app = app();
-    let entries = menus::menu_entries(&app);
-    let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Unit Converter"] && e.label == "Unit Converter Panel").expect("listed");
-    menus::invoke(&mut app, "window.panel", item.params.clone());
-    assert!(crate::panel_docking::showing(&app.ui, ID), "the panel opens");
-}
-
-#[test]
-fn the_panel_has_a_field_for_every_unit_and_its_buttons() {
-    let mut app = app();
-    let text = painted_text(&mut app, |app, ui| {
-        set_pstate(ui.ctx(), STATE, Converter { points: Some(720.0 / 25.4), ..Converter::default() });
-        show(app, ui);
-    });
-    for u in Unit::EAST_ASIAN {
-        assert!(text.lines().any(|l| l == u.label()), "{} in {text}", u.label());
-    }
-    for s in ["10 mm", "1 cm", "0.3937 in", "28.346 pt", "40 Q", "40 H"] {
-        assert!(text.lines().any(|l| l == s), "{s} in {text}");
-    }
-    for s in ["Copy with Units", "Selection", "Width", "Height", "From Selection", "Apply"] {
-        assert!(text.lines().any(|l| l == s), "{s} in {text}");
-    }
-}
-
-#[test]
-fn typing_in_a_field_updates_the_others_and_text_that_does_not_read_leaves_them() {
-    let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut time = 0.0;
-    let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        time += 0.05;
-        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 800.0)));
-        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() }, |ui| show(app, ui));
-        out.textures_delta.clear();
-        (pstate::<Converter>(&ctx, STATE), shapes_text(&out))
-    };
-    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
-    frame(&mut app, vec![]);
-    frame(&mut app, vec![]);
-    // Tab reaches the first field, Points, which selects its text so typing replaces it.
-    frame(&mut app, vec![tab]);
-    frame(&mut app, vec![]);
-    let (st, _) = frame(&mut app, vec![Event::Text("1in/2".into())]);
-    assert!(st.points.is_some_and(|pt| near(pt, 36.0)), "{st:?}");
-    let (st, text) = frame(&mut app, vec![]);
-    assert!(near(st.points.unwrap(), 36.0));
-    for s in ["0.5 in", "3 p", "12.7 mm", "1.27 cm"] {
-        assert!(text.lines().any(|l| l == s), "{s} in {text}");
-    }
-    // Text that does not read keeps the length the other fields show.
-    let (st, text) = frame(&mut app, vec![Event::Text("x".into())]);
-    assert!(near(st.points.unwrap(), 36.0), "{st:?}");
-    assert!(text.lines().any(|l| l == "12.7 mm"), "{text}");
-    // So does a length too large to show in Q and Ha.
-    let select_all = Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND };
-    frame(&mut app, vec![select_all]);
-    // 1.7e308 pt: finite in points.
-    let (st, _) = frame(&mut app, vec![Event::Text(format!("17{}", "0".repeat(307)))]);
-    assert!(near(st.points.unwrap(), 36.0), "{st:?}");
-}
-
-#[test]
-fn a_number_typed_without_a_unit_in_the_picas_row_is_in_picas() {
-    let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // Numbers Without Units Are Points is on (its default), and stays on for other fields.
-    crate::widgets::set_bare_numbers_are_points(&ctx, true);
-    let mut time = 0.0;
-    let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        time += 0.05;
-        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 800.0)));
-        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect, focused: true, ..Default::default() }, |ui| show(app, ui));
-        out.textures_delta.clear();
-        pstate::<Converter>(&ctx, STATE)
-    };
-    let tab = Event::Key { key: Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
-    frame(&mut app, vec![]);
-    frame(&mut app, vec![]);
-    // Tab reaches the Points field, then the Picas field (the copy buttons are off with no length).
-    for _ in 0..2 {
-        frame(&mut app, vec![tab.clone()]);
-        frame(&mut app, vec![]);
-    }
-    let st = frame(&mut app, vec![Event::Text("2".into())]);
-    assert!(st.points.is_some_and(|pt| near(pt, 24.0)), "{st:?}");
-    assert_eq!(crate::widgets::typed_unit(&ctx, Unit::Picas), Unit::Points, "other fields still read points");
+fn a_typed_length_that_shows_in_every_unit_replaces_the_length() {
+    let mut st = Converter::default();
+    st.typed(Some(36.0));
+    assert_eq!(st.points, Some(36.0));
+    // 1.7e308 pt is finite in points but not in Q and Ha.
+    st.typed(Some(1.7e308));
+    assert_eq!(st.points, Some(36.0), "too large to show in every unit");
+    st.typed(None);
+    assert_eq!(st.points, Some(36.0), "a cleared field leaves the length");
 }
 
 #[test]
@@ -159,18 +75,15 @@ fn copy_writes_the_value_with_or_without_its_unit() {
     assert_eq!(Converter::default().copied(Unit::Points), None, "nothing to copy before a length");
 }
 
-/// Apply `st` in a frame whose shared reference point (the Transform panel's) is `reference`.
+/// Apply `st` with the Transform panel's shared reference point at `reference`.
 fn apply_at(app: &mut VectorcraftApp, st: &Converter, reference: usize) {
     try_apply_at(app, st, reference).unwrap();
 }
 
 /// [`apply_at`], with its result.
 fn try_apply_at(app: &mut VectorcraftApp, st: &Converter, reference: usize) -> Result<(), String> {
-    let ctx = egui::Context::default();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), reference));
-    let mut result = Ok(());
-    ctx.run_ui(Default::default(), |ui| result = apply(app, ui, st)).textures_delta.clear();
-    result
+    app.ui.transform_panel.reference_point = reference;
+    apply(app, st)
 }
 
 /// The selection's bounding box.
@@ -250,20 +163,18 @@ fn apply_keeps_a_symbol_instances_registration_point() {
 #[test]
 fn a_size_read_from_another_selection_is_dropped() {
     let mut app = app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let frame = |app: &mut VectorcraftApp| {
-        ctx.run_ui(Default::default(), |ui| show(app, ui)).textures_delta.clear();
-        pstate::<Converter>(&ctx, STATE)
-    };
     let mut st = Converter::default();
     from_selection(&mut app, &mut st).unwrap();
-    set_pstate(&ctx, STATE, st);
-    // Drawing the panel again with nothing changed keeps it.
-    assert_eq!(frame(&mut app).size, Some((72.0, 36.0)));
+    app.addon_panels.units = st;
+    // Nothing changed: the size stays.
+    let now = document_now(&app);
+    app.addon_panels.units.follow(now);
+    assert_eq!(app.addon_panels.units.size, Some((72.0, 36.0)));
     // Another object selected.
     app.run("shape.rectangle", json!({"x": 200, "y": 100, "width": 20, "height": 50})).unwrap();
-    let mut st = frame(&mut app);
+    let now = document_now(&app);
+    app.addon_panels.units.follow(now);
+    let mut st = app.addon_panels.units.clone();
     assert_eq!((st.size, st.points), (None, Some(72.0)), "{st:?}");
     st.pick(Side::Height);
     assert_eq!(st.points, Some(72.0), "not the first object's height");
@@ -285,38 +196,6 @@ fn a_size_read_from_another_selection_is_dropped() {
     app.run("prefs.set", json!({"key": "usePreviewBounds", "value": true})).unwrap();
     st.follow(document_now(&app));
     assert_eq!(st.size, None);
-}
-
-/// Each row's copy button reads as copying that row's unit, so a screen reader tells the twelve
-/// apart, and the fields are named by their rows.
-#[test]
-fn each_copy_button_and_field_is_named_with_its_unit() {
-    let mut app = app();
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    set_pstate(&ctx, STATE, Converter { points: Some(72.0), ..Converter::default() });
-    ctx.run_ui(Default::default(), |ui| show(&mut app, ui)).textures_delta.clear();
-    let mut out = ctx.run_ui(Default::default(), |ui| show(&mut app, ui));
-    out.textures_delta.clear();
-    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-    // A label node carries its text as its value.
-    let label_of = |id: egui::accesskit::NodeId| nodes.iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.label().or(n.value())).map(str::to_string);
-    let buttons: Vec<String> =
-        nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button).filter_map(|(_, n)| n.label().map(str::to_string)).collect();
-    for u in Unit::EAST_ASIAN {
-        let name = format!("Copy {}", u.label());
-        assert_eq!(buttons.iter().filter(|b| **b == name).count(), 1, "{name} in {buttons:?}");
-        // The row fits the 240 pt body of the default 260 pt floating panel, with 10 pt left for
-        // its scroll bar.
-        let button = nodes.iter().find(|(_, n)| n.label() == Some(name.as_str())).and_then(|(_, n)| n.bounds()).unwrap();
-        assert!(button.x1 <= 230.0, "{name} ends at {}", button.x1);
-        // The field of the row is labeled by the row's label.
-        let field = nodes
-            .iter()
-            .find(|(_, n)| n.role() != egui::accesskit::Role::Button && n.labelled_by().iter().any(|l| label_of(*l).as_deref() == Some(u.label())));
-        assert!(field.is_some(), "a field labeled {}", u.label());
-    }
 }
 
 #[test]

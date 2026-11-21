@@ -117,9 +117,9 @@ impl<S: PartialEq + Send + 'static, K: Send + 'static> ThumbWorker<S, K> {
                     if skip {
                         continue;
                     }
-                    let t0 = crate::now_ms();
+                    let t0 = craft::platform::clock::monotonic_ms();
                     let img = (job.run)(&mut r);
-                    let done = Done { key: job.key, img, ms: crate::now_ms() - t0 };
+                    let done = Done { key: job.key, img, ms: craft::platform::clock::monotonic_ms() - t0 };
                     // Sent under the lock, so a `forget` either drops it here or comes after it
                     // and finds it in the next `poll`.
                     let Ok(f) = gone.lock() else { break };

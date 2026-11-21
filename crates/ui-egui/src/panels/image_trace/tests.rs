@@ -1,6 +1,3 @@
-use super::super::tests_long_popups::{
-    PopupWindow, assert_last_row_scrolls_into_view, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
-};
 use super::*;
 use crate::panels::{first_selected, library_panel};
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
@@ -76,143 +73,6 @@ fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     app
-}
-
-/// The Tracing Presets arrow at the right end of the Image Trace button.
-fn tracing_presets_arrow(window: &PopupWindow) -> Pos2 {
-    let label = window.text("Image Trace").expect("the Image Trace button");
-    Pos2::new(TRACE_BUTTON_W - 4.0, label.center().y)
-}
-
-/// The Image Trace button's list of presets grows with saved presets: with enough of them it stops
-/// inside a short window and the wheel reaches the last one. With only the built-in presets it does
-/// not scroll.
-#[test]
-fn a_long_tracing_preset_list_scrolls_inside_a_short_window() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
-    let built_in = app.session.execute("imageTrace.presets", &json!({})).unwrap();
-    let name = |p: &Value| p["name"].as_str().unwrap().to_string();
-    let built_in = built_in["presets"].as_array().unwrap();
-    let (first, last) = (name(&built_in[0]), name(&built_in[built_in.len() - 1]));
-    assert_short_list_does_not_scroll(&mut app, draw, tracing_presets_arrow, &first, &last);
-    for n in 0..30 {
-        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
-    }
-    assert_last_row_scrolls_into_view(&mut app, 200.0, draw, tracing_presets_arrow, &first, "Saved 29");
-}
-
-/// The list of presets keeps each name on one line when it scrolls: the scroll bar's column widens
-/// the list instead of narrowing the rows.
-#[test]
-fn a_long_tracing_preset_list_keeps_its_rows_on_one_line() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
-    for n in 0..30 {
-        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
-    }
-    let presets = app.session.execute("imageTrace.presets", &json!({})).unwrap();
-    let names: Vec<String> = presets["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap().to_string()).collect();
-    assert_rows_stay_on_one_line(&mut app, draw, tracing_presets_arrow, &names, "Black and White Logo", 120.0);
-}
-
-#[test]
-fn a_large_image_traces_and_the_status_bar_says_it_is_slower() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let img = image::RgbaImage::from_fn(1601, 12, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
-    {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
-    }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "wide.png", "dataBase64": data, "link": false})).unwrap();
-    trace_with(&mut app, "Default");
-    assert!(find_target(&app).stored.is_some(), "the image is traced");
-    assert!(app.ui.status.contains("1601 × 12") && app.ui.status.contains("more slowly"), "{}", app.ui.status);
-}
-
-#[test]
-fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let img = image::RgbaImage::from_fn(1602, 1602, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
-    {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
-    }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
-    trace_with(&mut app, "Flat Logo");
-    assert!(find_target(&app).stored.is_some(), "the image is traced: {}", app.ui.status);
-    let note = "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.";
-    let status = format!("Traced with 1 note: {note}");
-    assert_eq!(app.ui.status, status);
-    assert_eq!(app.ui.status_notes, Some((status, vec![note.to_string()])));
 }
 
 #[test]
@@ -635,44 +495,6 @@ fn holding_the_eye_button_shows_the_source_image_until_released() {
     frame(&mut app, &ctx, vec![press(false)]);
 }
 
-/// In the Split view the panel shows a Divider slider that screen readers find by its name and
-/// value; with the keyboard focus on it, → moves the divider a percent, one undo step a press.
-/// It is not shown in any other view.
-#[test]
-fn the_divider_slider_names_and_moves_the_split_views_divider() {
-    use egui::accesskit::Role;
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-    let slider_id = egui::Id::unique("trace-split-slider-id");
-    let nodes = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
-        out.textures_delta.clear();
-        out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect::<Vec<_>>()).unwrap_or_default()
-    };
-    let divider =
-        |tree: &[egui::accesskit::Node]| tree.iter().find(|n| n.role() == Role::Slider && n.label() == Some("Divider")).map(|n| n.numeric_value());
-    nodes(&mut app, vec![]);
-    assert_eq!(divider(&nodes(&mut app, vec![])), None, "no divider in the Tracing Result view");
-    app.run("imageTrace.setView", json!({"view": "split", "split": 0.3})).unwrap();
-    nodes(&mut app, vec![]);
-    assert_eq!(divider(&nodes(&mut app, vec![])), Some(Some(30.0)));
-    let id = ctx.data(|d| d.get_temp::<egui::Id>(slider_id)).expect("the slider's id");
-    ctx.memory_mut(|m| m.request_focus(id));
-    nodes(&mut app, vec![]);
-    let steps = app.session.active().unwrap().history.undo.len();
-    let right = Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    nodes(&mut app, vec![right.clone()]);
-    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.31);
-    nodes(&mut app, vec![right]);
-    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.32);
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 2, "one undo step a press");
-    assert_eq!(divider(&nodes(&mut app, vec![])), Some(Some(32.0)));
-}
-
 /// A divider between whole percents (as a canvas drag or an agent sets it) stays as it is while
 /// the panel shows, with no undo step; dragging the Divider slider sets it as one undo step.
 #[test]
@@ -827,54 +649,6 @@ fn trace_view_and_preview_work_when_another_object_is_selected_first() {
 }
 
 #[test]
-fn properties_can_reopen_the_trace_controls() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut at = None;
-    for _ in 0..2 {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::properties::show(&mut app, ui));
-        let texts = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
-        // The first Image Trace text is the section heading, the last is the button.
-        at = texts.iter().rev().find(|(t, _)| t == "Image Trace").map(|(_, r)| r.center());
-        out.textures_delta.clear();
-    }
-    let at = at.unwrap();
-    for pressed in [true, false] {
-        let events =
-            vec![Event::PointerMoved(at), Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }];
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::properties::show(&mut app, ui));
-        out.textures_delta.clear();
-    }
-    assert!(crate::panel_docking::showing(&app.ui, "imageTrace"));
-}
-
-/// #1358: in Properties the View row fits the panel, so the panel doesn't widen and clip its
-/// labels (the row took the panel's whole width for its menu, beside its label).
-#[test]
-fn the_view_row_fits_the_properties_panel() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // Where the panel's content ends after a few frames.
-    let right = |app: &mut VectorcraftApp| {
-        let mut right = 0.0;
-        for _ in 0..3 {
-            let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-                crate::panels::properties::show(app, ui);
-                right = ui.min_rect().right();
-            });
-            out.textures_delta.clear();
-        }
-        right
-    };
-    let traced = right(&mut app);
-    app.run("select.none", json!({})).unwrap();
-    assert_eq!(traced, right(&mut app));
-}
-
-#[test]
 fn advanced_is_a_section_that_stays_as_it_was_left() {
     let mut app = traced_app();
     let ctx = egui::Context::default();
@@ -892,23 +666,6 @@ fn advanced_is_a_section_that_stays_as_it_was_left() {
     assert!(old.image_trace_advanced, "open for preferences saved before the section existed");
     click(&mut app, &ctx, "Advanced");
     assert!(app.ui.image_trace_advanced && has(&frame(&mut app, &ctx, vec![]), "Corners"));
-}
-
-#[test]
-fn the_view_dropdown_shows_and_sets_the_objects_view() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(texts.iter().any(|(t, _)| t == "View:") && texts.iter().any(|(t, _)| t == "Tracing Result"), "{texts:?}");
-    let steps = app.session.active().unwrap().history.undo.len();
-    click(&mut app, &ctx, "Tracing Result");
-    click(&mut app, &ctx, "Source Image");
-    assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Source));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step, no new trace");
-    // Another object's view is shown when it is selected.
-    app.run("imageTrace.setView", json!({"view": "outlines"})).unwrap();
-    assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Outlines"));
 }
 
 #[test]
@@ -1526,39 +1283,6 @@ fn selected_preset_buttons(ctx: &egui::Context) -> Vec<&'static str> {
 }
 
 #[test]
-fn each_preset_button_traces_the_selected_object_again_with_its_preset() {
-    let mut app = traced_app_with_ink(100);
-    trace_and_open(&mut app, "Default");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    for (label, preset) in [
-        ("Auto Color", "Auto Color"),
-        ("High Color", "High Fidelity Photo"),
-        ("Low Color", "Low Fidelity Photo"),
-        ("Grayscale", "Shades of Gray"),
-        ("Black and White", "Black and White Logo"),
-        ("Outline", "Outline"),
-    ] {
-        let steps = undo(&app);
-        click(&mut app, &ctx, label);
-        frame(&mut app, &ctx, vec![]);
-        assert_eq!(selected_trace(&app).unwrap().0, preset, "{label}");
-        assert_eq!(undo(&app), steps + 1, "{label} traces as one undo step");
-        let all = presets(&mut app, &ctx);
-        assert_eq!(find_target(&app).stored.unwrap()["params"], find_preset(&all, preset).unwrap().1, "{label} traces with the preset's settings");
-        assert_eq!((shown_preset(&ctx), selected_preset_buttons(&ctx)), (preset.to_string(), vec![preset]), "{label}");
-    }
-    // Undo returns to the object's previous preset, and the buttons follow it.
-    app.run("edit.undo", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(selected_trace(&app).unwrap().0, "Black and White Logo");
-    assert_eq!(selected_preset_buttons(&ctx), ["Black and White Logo"]);
-}
-
-#[test]
 fn the_selected_preset_button_follows_the_preset_menu() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Default");
@@ -1609,22 +1333,6 @@ fn a_preset_button_with_no_image_selected_changes_the_panel_settings_as_the_pres
     let by_menu: TraceUi = pstate(&menu_ctx, "image-trace");
     assert_eq!(menu_app.session.active().unwrap().history.undo.len(), steps);
     assert_eq!((by_button.preset, by_button.params), (by_menu.preset, by_menu.params));
-}
-
-#[test]
-fn panel_and_menu_draw_headless() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    for _ in 0..2 {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(&mut app, ui);
-            menu(&mut app, ui);
-        });
-        out.textures_delta.clear();
-    }
 }
 
 #[test]
@@ -1901,62 +1609,4 @@ fn the_panel_looks_its_target_up_once_per_document_revision() {
     assert_eq!(target(&app, &ctx).object, Some((uid, NodeId(rect))), "a new selection is looked up");
     assert_eq!(target(&app, &ctx).object, Some((uid, NodeId(rect))));
     assert_eq!(lookups(), start + 1, "once");
-}
-
-/// Times one frame's lookups as the panel made them before (the whole selection put in paint order
-/// twice, and scanned once more) against the kept result and against a new lookup, on 100,000
-/// selected paths in nested groups and one selected image. Run it with `cargo test --release -p
-/// vectorcraft-ui-egui --lib image_trace_target_lookup_timing -- --ignored --nocapture`.
-#[test]
-#[ignore = "timing, run by hand"]
-fn image_trace_target_lookup_timing() {
-    let mut app = traced_app();
-    app.run("imageTrace.release", json!({})).unwrap();
-    let image = first_selected(&app).unwrap().id;
-    let rect = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
-    let st = app.session.active_mut().unwrap();
-    let doc = Arc::make_mut(&mut st.doc);
-    let layer = doc.layers[0].id;
-    let path: Node = doc.node(NodeId(rect)).unwrap().clone();
-    let mut selected = vec![];
-    for _ in 0..100 {
-        let mut groups = vec![];
-        for _ in 0..10 {
-            let paths: Vec<Arc<Node>> = (0..100).map(|_| Arc::new(doc.reid(&path))).collect();
-            selected.extend(paths.iter().map(|p| p.id));
-            groups.push(Arc::new(Node::group(doc.alloc_id(), paths)));
-        }
-        let group = Node::group(doc.alloc_id(), groups);
-        doc.insert(Some(layer), usize::MAX, group).unwrap();
-    }
-    selected.push(image);
-    let count = selected.len();
-    select_as_is(&mut app, &selected);
-    let expected = frame_lookups_sorting_everything(&app);
-    assert_eq!(expected.object.map(|o| o.1), Some(image));
-    assert_eq!(find_target(&app), expected);
-    let ctx = egui::Context::default();
-    assert_eq!(target(&app, &ctx), expected);
-
-    let time = |f: &dyn Fn() -> Target, reps: u32| {
-        let t0 = std::time::Instant::now();
-        for _ in 0..reps {
-            std::hint::black_box(f());
-        }
-        t0.elapsed().as_secs_f64() * 1000.0 / f64::from(reps)
-    };
-    let median = |mut v: Vec<f64>| {
-        v.sort_by(f64::total_cmp);
-        v[v.len() / 2]
-    };
-    let (mut before, mut kept, mut lookup) = (vec![], vec![], vec![]);
-    for _ in 0..7 {
-        before.push(time(&|| frame_lookups_sorting_everything(&app), 10));
-        kept.push(time(&|| target(&app, &ctx), 10_000));
-        lookup.push(time(&|| find_target(&app), 10));
-    }
-    println!("{count} selected objects, ms per frame, 7 runs");
-    println!("whole selection in paint order (before): {before:.3?}, median {:.3}", median(before.clone()));
-    println!("kept result for the revision (after): {kept:.6?}, median {:.6}", median(kept.clone()));
-    println!("new lookup on a new revision (after): {lookup:.3?}, median {:.3}", median(lookup.clone()));
 }

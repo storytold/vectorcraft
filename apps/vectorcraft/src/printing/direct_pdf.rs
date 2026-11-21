@@ -19,7 +19,7 @@ mod imp {
         let printer = job
             .printer
             .map(str::to_string)
-            .or_else(|| craft_print::printers().into_iter().find(|p| p.default).map(|p| p.name))
+            .or_else(|| craft::print::printers().into_iter().find(|p| p.default).map(|p| p.name))
             .ok_or("direct PDF needs a selected printer")?;
         let (host, port) = tcp_port(&printer)?;
         send(&host, port, &pjl(job.title, job.pdf))?;

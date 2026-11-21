@@ -3,7 +3,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use super::FontDb;
+use super::{FontDb, HashMap, Path};
 
 /// How long a family counts as recently added after its newest font file was created: 30 days.
 pub const RECENTLY_ADDED_WITHIN: Duration = Duration::from_secs(30 * 24 * 60 * 60);
@@ -31,8 +31,25 @@ impl FontDb {
     /// is dated by the file the link leads to. Fonts loaded from bytes and the bundled fonts are
     /// never listed. Empty on wasm, which has no installed fonts.
     pub fn recently_added(&self, now: SystemTime) -> RecentlyAdded {
-        let catalog = self.read_catalog();
-        recently_added_of(catalog.values().map(|c| (c.name.as_str(), c.faces.iter().map(|f| f.created))), now)
+        let faces = self.catalog.faces();
+        // Each file's creation time once for all its faces (a collection or a variable font's
+        // named instances share one).
+        let mut created: HashMap<&Path, Option<SystemTime>> = HashMap::new();
+        // The families in catalog order, by ASCII-lowercased name, with their files' times.
+        let mut families: Vec<(&str, Vec<Option<SystemTime>>)> = Vec::new();
+        let mut index: HashMap<String, usize> = HashMap::new();
+        for f in faces.iter() {
+            let Some(path) = f.path.as_deref() else { continue };
+            let time = *created.entry(path).or_insert_with(|| std::fs::metadata(path).and_then(|m| m.created()).ok());
+            let i = *index.entry(f.family.to_ascii_lowercase()).or_insert_with(|| {
+                families.push((f.family.as_str(), Vec::new()));
+                families.len() - 1
+            });
+            if let Some((_, times)) = families.get_mut(i) {
+                times.push(time);
+            }
+        }
+        recently_added_of(families, now)
     }
 }
 

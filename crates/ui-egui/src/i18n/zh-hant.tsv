@@ -166,6 +166,7 @@
 	Anti-alias Rasters	點陣影像消除鋸齒
 	Anti-aliased Artwork	消除鋸齒的圖稿
 	Anti-aliasing Method	消除鋸齒方法
+@id	language.name	繁體中文
 antiAlias	Sharp	銳利
 	Crisp	清晰
 	Strong	強

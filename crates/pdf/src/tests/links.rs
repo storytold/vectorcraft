@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Dict, Name};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Dict, Name};
 use vectorcraft_color::Color;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, Rect, shapes};
@@ -32,7 +32,7 @@ fn links(pdf: &[u8]) -> Vec<Vec<(String, [f32; 4])>> {
                 .map(|a| {
                     let action = a.get::<Dict<'_>>(b"A").unwrap();
                     assert_eq!(action.get::<Name<'_>>(b"S").unwrap().as_ref(), b"URI");
-                    let uri = action.get::<craft_pdf::syntax::object::String<'_>>(b"URI").unwrap().as_bytes().to_vec();
+                    let uri = action.get::<craft::pdf::syntax::object::String<'_>>(b"URI").unwrap().as_bytes().to_vec();
                     let r: Vec<f32> = a.get::<Array<'_>>(b"Rect").unwrap().iter::<f32>().collect();
                     (String::from_utf8(uri).unwrap(), [r[0], r[1], r[2], r[3]])
                 })

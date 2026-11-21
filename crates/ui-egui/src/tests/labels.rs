@@ -1,11 +1,12 @@
 //! Neutral wording in menus and panels: what users read names VectorCraft's own features.
 
+use craft::menu::Node;
 use egui::epaint::Shape;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
-use crate::menus::{self, Item};
+use crate::menus;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -46,8 +47,8 @@ pub(crate) fn shapes_text(out: &egui::FullOutput) -> String {
 #[test]
 fn effect_menu_has_a_vector_effects_section() {
     let tree = menus::menu_tree();
-    let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
-    assert!(effect.iter().any(|i| matches!(i, Item::Header("Vector Effects"))));
+    let effect = &tree.iter().find(|menu| menu.title == "Effect").expect("Effect menu").children;
+    assert!(effect.iter().any(|n| matches!(n, Node::Heading(h) if h == "Vector Effects")));
 }
 
 /// Effect › Path: Offset Path… opens its dialog; Outline Object and Outline Stroke (no options)
@@ -275,13 +276,15 @@ fn effect_menu_lists_glowing_edges_in_the_raster_stylize_between_sharpen_and_tex
 #[test]
 fn effect_menu_keeps_glowing_edges_out_of_the_vector_stylize() {
     let tree = menus::menu_tree();
-    let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
-    let raster = effect.iter().position(|i| matches!(i, Item::Header("Raster Effects"))).expect("Raster Effects");
+    let effect = &tree.iter().find(|menu| menu.title == "Effect").expect("Effect menu").children;
+    let raster = effect.iter().position(|n| matches!(n, Node::Heading(h) if h == "Raster Effects")).expect("Raster Effects");
     let stylize: Vec<(usize, Vec<&str>)> = effect
         .iter()
         .enumerate()
-        .filter_map(|(i, it)| match it {
-            Item::Sub("Stylize", items) => Some((i, items.iter().filter_map(|c| if let Item::Cmd(l, ..) = c { Some(*l) } else { None }).collect())),
+        .filter_map(|(i, n)| match n {
+            Node::Submenu { label, children, .. } if label == "Stylize" => {
+                Some((i, children.iter().filter_map(|c| if let Node::Item(it) = c { Some(it.label.as_str()) } else { None }).collect()))
+            }
             _ => None,
         })
         .collect();
@@ -313,10 +316,11 @@ fn stroke_profiles_have_descriptive_names() {
 
 #[test]
 fn swatches_menu_offers_save_swatch_library() {
-    let mut app = app();
-    let text = painted_text(&mut app, crate::panels::swatches::menu);
-    assert!(text.contains("Save Swatch Library…"), "{text}");
-    assert!(!text.contains("ASE"), "{text}");
+    let app = app();
+    // PLAN: assumed `panels::swatches::menu_rows(&VectorcraftApp)` lists the menu's rows, each with a `label`
+    let labels: Vec<String> = crate::panels::swatches::menu_rows(&app).iter().map(|row| row.label.to_string()).collect();
+    assert!(labels.iter().any(|l| l == "Save Swatch Library…"), "{labels:?}");
+    assert!(!labels.iter().any(|l| l.contains("ASE")), "{labels:?}");
 }
 
 #[test]
@@ -339,24 +343,24 @@ fn clipboard_preferences_name_the_legacy_format_neutrally() {
 
 #[test]
 fn shortcut_set_old_name_is_accepted() {
-    use crate::shortcut_editor::{PRESETS, import_json};
+    use crate::shortcut_editor::{BUILTINS, PRESETS, import_json};
     let (old, _) = crate::shortcut_editor::LEGACY_PRESETS[0];
     assert_eq!(PRESETS, ["VectorCraft Defaults", "Classic Defaults"]);
     // UI preferences saved by an earlier version load (and save again) under the current name.
     let ui: crate::state::UiState = serde_json::from_value(json!({ "shortcut_set": old })).unwrap();
-    assert_eq!(ui.shortcut_set, "Classic Defaults");
+    assert_eq!(ui.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     let saved = serde_json::to_value(&ui).unwrap();
-    assert_eq!(saved["shortcut_set"], "Classic Defaults");
+    assert_eq!(saved["shortcut_sets"]["active"], "Classic Defaults");
     let back: crate::state::UiState = serde_json::from_value(saved).unwrap();
-    assert_eq!(back.shortcut_set, "Classic Defaults");
+    assert_eq!(back.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     let default: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
-    assert_eq!(default.shortcut_set, PRESETS[0]);
+    assert_eq!(default.shortcut_sets.active_name(&BUILTINS), PRESETS[0]);
     // The command and imported sets take the old name too.
     let mut app = app();
     app.run("shortcuts.preset", json!({ "name": old })).unwrap();
-    assert_eq!(app.ui.shortcut_set, "Classic Defaults");
+    assert_eq!(app.ui.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     app.run("shortcuts.preset", json!({ "name": "VectorCraft Defaults" })).unwrap();
-    assert_eq!(app.ui.shortcut_set, "VectorCraft Defaults");
+    assert_eq!(app.ui.shortcut_sets.active_name(&BUILTINS), "VectorCraft Defaults");
     assert!(app.run("shortcuts.preset", json!({ "name": "Nope" })).is_err());
     let (set, _) = import_json(&json!({ "set": old, "overrides": {} })).unwrap();
     assert_eq!(set, "Classic Defaults");

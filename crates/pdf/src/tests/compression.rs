@@ -5,7 +5,7 @@
 
 use std::io::Cursor;
 
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use image::{DynamicImage, ImageFormat};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -85,7 +85,7 @@ fn resampled_images_keep_their_color_beside_clear_pixels() {
                 .unwrap();
         settings.compression.compress_text = false;
         let bytes = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
-        let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(bytes)).unwrap();
         let rgb = file
             .objects()
             .into_iter()
@@ -107,7 +107,7 @@ fn resampled_images_keep_their_color_beside_clear_pixels() {
 
 /// The width and height of each image XObject in `pdf`.
 fn image_sizes(pdf: &[u8]) -> Vec<(u32, u32)> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     file.objects()
         .into_iter()
         .filter_map(|o| match o {
@@ -439,7 +439,7 @@ struct Written {
 
 /// Each image XObject of `pdf` other than soft masks.
 fn image_spaces(pdf: &[u8]) -> Vec<Written> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     let images: Vec<Stream<'_>> = file
         .objects()
         .into_iter()
@@ -470,7 +470,7 @@ fn image_spaces(pdf: &[u8]) -> Vec<Written> {
 
 /// The decoded samples of each image XObject of `pdf` other than soft masks.
 fn image_samples(pdf: &[u8]) -> Vec<Vec<u8>> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     let images: Vec<Stream<'_>> = file
         .objects()
         .into_iter()
@@ -485,7 +485,7 @@ fn image_samples(pdf: &[u8]) -> Vec<Vec<u8>> {
 
 /// The raw (still encoded) data of each image XObject of `pdf`.
 fn image_data(pdf: &[u8]) -> Vec<Vec<u8>> {
-    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let file = craft::pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
     file.objects()
         .into_iter()
         .filter_map(|o| match o {

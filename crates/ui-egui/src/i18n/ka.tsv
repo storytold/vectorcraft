@@ -43,6 +43,7 @@
 	Select Object on Path	ტრაექტორიაზე ობიექტის მონიშვნა
 	Weather Icons	ამინდის ხატულები
 	Media Controls	მედია მართვის საშუალებები
+@id	language.name	ქართული
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' და 'arguments' მკაცრი რეჟიმის ფუნქციებში ვერ გამოიყენება
 @msg	3D effects require finite coordinates within 100 million points	3D ეფექტებს სჭირდება სასრული კოორდინატები 100 მილიონი პუნქტის ფარგლებში
 @msg	3D effects require one to ten lights	3D ეფექტებს სჭირდება ერთიდან ათამდე სინათლის წყარო

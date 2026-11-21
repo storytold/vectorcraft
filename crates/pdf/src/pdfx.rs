@@ -25,65 +25,13 @@ use crate::lab_spot::find;
 use crate::patch::{Patch, Xref};
 use crate::{PdfError, PdfSettings, Standard};
 
-impl Standard {
-    /// A PDF/X standard.
-    pub fn is_pdfx(self) -> bool {
-        matches!(self, Self::PdfX1a | Self::PdfX3 | Self::PdfX4)
-    }
-
-    /// Files of this standard have no transparency (PDF/X-1a and PDF/X-3): it is flattened.
-    pub fn flattens(self) -> bool {
-        matches!(self, Self::PdfX1a | Self::PdfX3)
-    }
-
-    /// Every colour is CMYK, grey or a spot ink (PDF/X-1a).
-    pub fn cmyk_only(self) -> bool {
-        self == Self::PdfX1a
-    }
-
-    /// Files of this standard may have PDF layers (PDF/X-1a and PDF/X-3 are PDF 1.3, which has
-    /// none).
-    pub fn allows_layers(self) -> bool {
-        !self.flattens()
-    }
-
-    /// `/GTS_PDFXVersion` and `/GTS_PDFXConformance` (when the standard has one).
-    fn pdfx_ids(self) -> Option<(&'static str, Option<&'static str>)> {
-        match self {
-            Self::PdfX1a => Some(("PDF/X-1:2001", Some("PDF/X-1a:2001"))),
-            Self::PdfX3 => Some(("PDF/X-3:2002", None)),
-            Self::PdfX4 => Some(("PDF/X-4", None)),
-            Self::None | Self::PdfA2b => None,
-        }
-    }
-}
-
-/// Refuse a PDF/X output intent the file can't have: a grey profile, an RGB one in PDF/X-1a, or a
-/// name that isn't a profile, unless PDF/X-1a and PDF/X-3 name a registered printing condition
-/// (with a registry) without embedding a profile; PDF/X-4 always embeds one.
-pub(crate) fn check(set: &PdfSettings) -> Result<(), PdfError> {
-    let o = &set.output;
-    let name = o.output_intent.trim();
-    if !set.standard.is_pdfx() || name.is_empty() {
-        return Ok(());
-    }
-    let std = set.standard.label();
-    match cms::profile(name).map(|p| p.kind) {
-        Some(ProfileKind::Cmyk) => Ok(()),
-        Some(ProfileKind::Rgb) if !set.standard.cmyk_only() => Ok(()),
-        Some(ProfileKind::Rgb) => {
-            Err(PdfError::BadSetting(format!("output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile")))
-        }
-        Some(ProfileKind::Gray) => {
-            Err(PdfError::BadSetting(format!("output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent")))
-        }
-        None if !o.registry.trim().is_empty() && set.standard != Standard::PdfX4 => Ok(()),
-        None if set.standard == Standard::PdfX4 => {
-            Err(PdfError::BadSetting(format!("output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile")))
-        }
-        None => Err(PdfError::BadSetting(format!(
-            "output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)"
-        ))),
+/// `/GTS_PDFXVersion` and `/GTS_PDFXConformance` (when the standard has one).
+fn pdfx_ids(standard: Standard) -> Option<(&'static str, Option<&'static str>)> {
+    match standard {
+        Standard::PdfX1a => Some(("PDF/X-1:2001", Some("PDF/X-1a:2001"))),
+        Standard::PdfX3 => Some(("PDF/X-3:2002", None)),
+        Standard::PdfX4 => Some(("PDF/X-4", None)),
+        Standard::None | Standard::PdfA2b => None,
     }
 }
 
@@ -113,7 +61,7 @@ pub(crate) fn require_date(standard: Standard, created: Option<i64>) -> Result<(
 
 /// The document information entries naming `standard` (empty for other files).
 pub(crate) fn info_entries(standard: Standard) -> String {
-    let Some((version, conformance)) = standard.pdfx_ids() else { return String::new() };
+    let Some((version, conformance)) = pdfx_ids(standard) else { return String::new() };
     let mut out = format!("/GTS_PDFXVersion({version})");
     if let Some(c) = conformance {
         out.push_str(&format!("/GTS_PDFXConformance({c})"));
@@ -140,7 +88,7 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
     let data = data + obj.get(data..).map_or(0, |r| r.iter().take(2).take_while(|b| matches!(b, b'\r' | b'\n')).count());
     let xml = data.checked_add(length).and_then(|e| obj.get(data..e)).ok_or_else(bad)?;
     let mut edits: Vec<(usize, usize, Vec<u8>)> = vec![];
-    if let Some((version, _)) = standard.pdfx_ids().filter(|_| standard == Standard::PdfX4) {
+    if let Some((version, _)) = pdfx_ids(standard).filter(|_| standard == Standard::PdfX4) {
         // Into the writer's description, whose namespaces declare the `pdf` and `xmpMM` prefixes.
         let close = crate::lab_spot::rfind(xml, b"</rdf:Description>").ok_or_else(bad)?;
         let trapped = if trapped { "True" } else { "False" };

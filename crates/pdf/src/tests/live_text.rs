@@ -1,6 +1,6 @@
 //! PDF text in installed fonts imports as live type (one point type object per line).
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use krilla::geom::{Point as KPoint, Transform};
 use krilla::page::PageSettings;
 use krilla::text::{Font, TextDirection};

@@ -206,6 +206,7 @@
 	Anti-alias Rasters	Сглаживать растровые изображения
 	Anti-aliased Artwork	Сглаженный рисунок
 	Anti-aliasing Method	Метод сглаживания
+@id	language.name	Русский
 antiAlias	Sharp	Резкое
 	Crisp	Чёткое
 	Strong	Сильное

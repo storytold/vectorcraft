@@ -9,31 +9,27 @@ use serde_json::json;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::PathData;
-use vectorcraft_ui_egui::{UiState, VectorcraftApp, i18n, shortcut_editor, shortcuts};
+use vectorcraft_ui_egui::{UiState, VectorcraftApp, i18n};
 
 const SWITCH: &str = "tool.switchSelectionTools";
 static CASE: Mutex<()> = Mutex::new(());
 
-// Integration binaries use process-wide locale/keymap mirrors. Every case owns the guard,
-// starts from the same neutral keymap, and restores that keymap even if an assertion fails.
+// Integration binaries use a process-wide locale. Every case owns the guard and restores the
+// language even if an assertion fails.
 struct Globals {
     _lock: MutexGuard<'static, ()>,
     language: i18n::Lang,
-    neutral: UiState,
 }
 impl Globals {
     fn new() -> Self {
         let lock = CASE.lock().unwrap_or_else(|e| e.into_inner());
         let language = i18n::current();
-        let neutral = UiState::default();
         i18n::set_current(i18n::Lang::EN);
-        shortcut_editor::sync(&neutral);
-        Self { _lock: lock, language, neutral }
+        Self { _lock: lock, language }
     }
 }
 impl Drop for Globals {
     fn drop(&mut self) {
-        shortcut_editor::sync(&self.neutral);
         i18n::set_current(self.language);
     }
 }
@@ -44,7 +40,6 @@ fn app() -> (VectorcraftApp, NodeId) {
     let shape = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap();
     let id = NodeId(shape["id"].as_u64().unwrap());
     app.select_tool("selection");
-    shortcut_editor::sync(&app.ui);
     (app, id)
 }
 
@@ -74,7 +69,7 @@ impl Keyboard {
             },
             |ui| {
                 app.logic(ui.ctx());
-                shortcuts::handle(app, ui.ctx());
+                app.ui(ui);
             },
         );
         out.textures_delta.clear();
@@ -156,7 +151,6 @@ fn selection_tools_saved_binding_runs_and_reset_removes_it() {
     let saved = serde_json::to_string(&original.ui).unwrap();
     let (mut restored, id) = app();
     restored.ui = serde_json::from_str::<UiState>(&saved).unwrap();
-    shortcut_editor::sync(&restored.ui);
     let before = path_state(&restored, id);
     let mut keys = Keyboard::new();
     keys.tap(&mut restored, Key::Backtick, control());

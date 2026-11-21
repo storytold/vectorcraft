@@ -772,10 +772,6 @@ impl Tool for ShaperTool {
         use vectorcraft_geom::recognize::{Recognized, recognize};
         match ev.kind {
             PointerKind::Down => {
-                if let Some(a) = crate::shaperwidget::click(cx, ev.pos) {
-                    self.points.clear();
-                    return vec![a];
-                }
                 self.points = vec![ev.pos];
                 vec![]
             }
@@ -820,8 +816,6 @@ impl Tool for ShaperTool {
                     None => vec![],
                 }
             }
-            // The mode widget answers each click of a double-click on it.
-            PointerKind::DoubleClick if crate::shaperwidget::over_widget(cx, ev.pos) => vec![],
             PointerKind::DoubleClick => vec![
                 Action::Exec("shaper.select".into(), json!({"point": [ev.pos.x, ev.pos.y], "source": true})),
                 Action::SwitchTool("selection".into()),

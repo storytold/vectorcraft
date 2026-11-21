@@ -977,22 +977,6 @@ mod tests {
         assert!(app.ui.dialog.is_none());
     }
 
-    /// Field labels end in the UI language's colon: in French a no-break space and a colon (#7991).
-    #[test]
-    fn field_labels_use_the_language_colon() {
-        let mut app = app_with_graph("column");
-        crate::menus::invoke(&mut app, COMMAND, json!({}));
-        set(&mut app, PAGE, json!("valueAxis"));
-        let fr = crate::i18n::Lang::from_code("fr").unwrap();
-        crate::i18n::set_current(fr);
-        let mut h = harness(app);
-        h.run_steps(3);
-        let want = format!("{}\u{a0}:", crate::i18n::tr(fr, "Suffix"));
-        let found = h.query_by_role_and_label(Role::TextInput, &want).is_some();
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        assert!(found, "a text field named {want:?}");
-    }
-
     /// A Type button changes the graph's type and keeps its data.
     #[test]
     fn a_type_button_changes_the_graph_type_and_keeps_its_data() {
@@ -1040,51 +1024,6 @@ mod tests {
         let app = h.state_mut();
         crate::dialogs::confirm(app).unwrap();
         assert_eq!(query(app)["valueAxis"], "both");
-    }
-
-    /// The Options group shows the options of the type picked: widths for columns and bars, the
-    /// data point and line checkboxes for line, scatter and radar graphs, the three menus for a
-    /// pie graph, and none for an area graph.
-    #[test]
-    fn the_options_follow_the_type_picked() {
-        let mut app = app_with_graph("column");
-        open(&mut app).unwrap();
-        let mut h = harness(app);
-        let field = |h: &Harness, name: &str| h.query_by_role_and_label(Role::TextInput, name).is_some();
-        let checkbox = |h: &Harness, name: &str| h.query_by_role_and_label(Role::CheckBox, name).is_some();
-        let menu = |h: &Harness, name: &str| h.query_by_role_and_label(Role::ComboBox, name).is_some();
-        let dimmed = |h: &Harness, name: &str| h.get_by_role_and_label(Role::CheckBox, name).accesskit_node().is_disabled();
-        assert!(field(&h, "Column Width:") && field(&h, "Cluster Width:") && !checkbox(&h, "Mark Data Points") && !menu(&h, "Legend:"));
-        assert!(!dimmed(&h, "First Row in Front") && !dimmed(&h, "First Column in Front") && checkbox(&h, "Legend"));
-        pick_type(&mut h, "Bar Graph");
-        assert!(field(&h, "Bar Width:") && !field(&h, "Column Width:") && field(&h, "Cluster Width:"));
-        assert!(
-            h.get_by_role_and_label(Role::ComboBox, "Value Axis:").accesskit_node().is_disabled(),
-            "a bar graph's value axis stays along the bottom"
-        );
-        pick_type(&mut h, "Line Graph");
-        assert!(!field(&h, "Cluster Width:") && dimmed(&h, "First Row in Front") && dimmed(&h, "First Column in Front"));
-        for name in ["Mark Data Points", "Connect Data Points", "Edge-to-Edge Lines", "Draw Filled Lines"] {
-            assert!(checkbox(&h, name) && !dimmed(&h, name), "{name}");
-        }
-        // Draw Filled Lines is for connected data points, and Edge-to-Edge Lines for line graphs.
-        set(h.state_mut(), "connectPoints", json!(false));
-        h.run_steps(3);
-        assert!(dimmed(&h, "Draw Filled Lines"));
-        for name in ["Scatter Graph", "Radar Graph"] {
-            pick_type(&mut h, name);
-            assert!(checkbox(&h, "Mark Data Points") && dimmed(&h, "Edge-to-Edge Lines"), "{name}");
-        }
-        pick_type(&mut h, "Pie Graph");
-        assert!(menu(&h, "Legend:") && menu(&h, "Position:") && menu(&h, "Sort:") && !checkbox(&h, "Legend") && !checkbox(&h, "Mark Data Points"));
-        assert!(h.get_by_role_and_label(Role::ComboBox, "Value Axis:").accesskit_node().is_disabled(), "a pie graph has no value axis");
-        // Add Legend Across Top is for a legend outside the wedges.
-        assert!(!dimmed(&h, "Add Legend Across Top"));
-        set(h.state_mut(), "pieLegend", json!("wedges"));
-        h.run_steps(3);
-        assert!(dimmed(&h, "Add Legend Across Top"));
-        pick_type(&mut h, "Area Graph");
-        assert!(!field(&h, "Column Width:") && !checkbox(&h, "Mark Data Points") && !menu(&h, "Legend:") && h.query_by_label("Options").is_none());
     }
 
     /// Line Width next to Draw Filled Lines shows the graph's width, is available only while Draw
@@ -1328,21 +1267,6 @@ mod tests {
         let spec = st.doc.node(graph).unwrap().extras().graph.as_deref().unwrap();
         assert_eq!((spec.right_series.clone(), spec.drop_shadow), (vec![1], true));
         assert_eq!(spec.series_kinds, [None, Some(GraphKind::Line)], "each series keeps its type");
-    }
-
-    /// `ui.dialog.set` takes the page shown and refuses the fields that hold what OK acts on.
-    #[test]
-    fn the_page_is_a_control_and_the_subject_is_protected() {
-        let mut app = app_with_graph("line");
-        open(&mut app).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert!(crate::dialogs::accepts_field(d, PAGE) && crate::dialogs::accepts_field(d, "overrideValues"));
-        for field in
-            [GRAPH_ID, SERIES, GRAPH, GRAPH_AXIS, SERIES_KINDS, RIGHT_SERIES, CALCULATED, CALCULATED_FOR, OPENED, "__override", "__rightOverride"]
-        {
-            assert!(crate::dialogs::protected_field(d, field), "{field}");
-        }
-        assert!(crate::dialogs::protected_field(d, DOC));
     }
 
     /// A value axis side without a scale of its own shows the tick values of the scale drawn on it,

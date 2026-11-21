@@ -592,8 +592,8 @@ fn vertical_type_takes_the_fonts_position_vectors() {
 /// (whose charset maps them) take /DW's.
 #[test]
 fn vertical_font_metrics_are_read_from_w2_w_and_dw() {
-    use craft_pdf::syntax::Pdf;
-    use craft_pdf::syntax::object::{Dict, ObjectIdentifier};
+    use craft::pdf::syntax::Pdf;
+    use craft::pdf::syntax::object::{Dict, ObjectIdentifier};
     let n = first_extra(1);
     // CID → glyph: 10 → 5, 20 → 6, 30 → 7, 31 → 9, 40 → 8 (others 0).
     let mut map = [0u16; 41];

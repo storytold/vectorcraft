@@ -26,10 +26,10 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
+use craft::automation::{ControlRequest, Dispatch};
 use craft_web_api::methods::Methods;
 use craft_web_api::page::{PageApi, Request};
 use serde_json::{Value, json};
-use vectorcraft_ui_egui::{ControlRequest, ControlTicket as Ticket};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -92,7 +92,7 @@ const POLL_MS: i32 = 16;
 /// timeout fired) gives the request up if the app has not started it, so the app never runs it late.
 struct Waiting {
     reply: Receiver<Value>,
-    ticket: Ticket,
+    dispatch: Dispatch,
     answered: bool,
 }
 
@@ -116,7 +116,7 @@ impl Waiting {
 impl Drop for Waiting {
     fn drop(&mut self) {
         if !self.answered {
-            self.ticket.give_up();
+            self.dispatch.give_up();
         }
     }
 }
@@ -125,13 +125,13 @@ impl Drop for Waiting {
 /// `{ok: false, error}` object.
 fn send(method: &str, params: Value) -> Pin<Box<dyn Future<Output = Value>>> {
     let (req, rx) = ControlRequest::new(method, params);
-    let ticket = req.ticket();
+    let dispatch = req.dispatch.clone();
     let sent = TX.with(|t| t.borrow().as_ref().is_some_and(|tx| tx.send(req).is_ok()));
     if !sent {
         return Box::pin(async { json!({"ok": false, "error": "VectorCraft is not running yet"}) });
     }
     repaint();
-    let mut waiting = Waiting { reply: rx, ticket, answered: false };
+    let mut waiting = Waiting { reply: rx, dispatch, answered: false };
     Box::pin(async move {
         loop {
             if let Some(reply) = waiting.poll() {

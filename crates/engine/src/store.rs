@@ -42,7 +42,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
-use vectorcraft_pdf::{PdfPreset, builtin_preset};
+use vectorcraft_pdf::{APP, PdfPreset, builtin_preset};
 use vectorcraft_plugins::permissions::GrantToken;
 use vectorcraft_plugins::safe_mode;
 use vectorcraft_plugins::storage::{self, Meter, Storage, StorageError};
@@ -1555,7 +1555,7 @@ fn load_presets(dir: &Path) -> Vec<PdfPreset> {
         for mut preset in file.presets {
             let name = preset.name.trim().to_string();
             let usable = !name.is_empty()
-                && builtin_preset(&name).is_none()
+                && builtin_preset(&name, APP).is_none()
                 && !presets.iter().any(|q| q.name.eq_ignore_ascii_case(&name))
                 && preset.settings.check_values().is_ok()
                 && presets.len() < MAX_STORE_FILES;

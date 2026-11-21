@@ -67,7 +67,7 @@ fn drop_guides(nodes: &mut Vec<Arc<Node>>) {
 /// nothing is drawn get none.
 fn bitmap_document(cmd: &str, doc: &Document, set: &PrintSettings, rich_black: bool) -> Result<Document> {
     let regions = vectorcraft_pdf::print_regions(doc, set).map_err(|e| pdf_error(cmd, e))?;
-    let bleed = set.bleed.of(doc);
+    let bleed = vectorcraft_pdf::page_bleed(&set.bleed, doc);
     let mut art = doc.clone();
     drop_guides(&mut art.layers);
     let anti_alias = if doc.raster_effects.anti_alias { AntiAlias::Art } else { AntiAlias::None };

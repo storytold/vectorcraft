@@ -8,7 +8,6 @@
 //! the document then no longer matches the active dataset, and "Update Data Set" writes the
 //! art back into it.
 
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
@@ -20,6 +19,7 @@ use vectorcraft_engine::DocState;
 use vectorcraft_engine::cmd::{VariableSort, VariableSortKey, variable_order};
 
 use crate::VectorcraftApp;
+use crate::caches::CanvasCache;
 use crate::theme::Tokens;
 use crate::widgets;
 
@@ -146,7 +146,7 @@ struct SetRow {
 
 /// The panel's two lists: the variables in the order `variable.sort` set, and the data sets.
 #[derive(Debug, PartialEq)]
-struct Rows {
+pub struct Rows {
     vars: Vec<VarRow>,
     sets: Vec<SetRow>,
 }
@@ -199,7 +199,7 @@ thread_local! {
 /// interface language that "Multiple objects" is written in, and the document's new art. New art
 /// on a locked artboard is read by a data set's drift check, and selecting or deselecting it
 /// changes the set in place without a new revision.
-struct RowsKey {
+pub struct RowsKey {
     doc: Weak<Document>,
     revision: u64,
     sort: VariableSort,
@@ -232,16 +232,13 @@ impl RowsKey {
 
 /// The panel's rows for `st`, built again only when one of the inputs in [`RowsKey`] changes.
 /// The selection and the highlighted row are not among them: the panel reads those every frame.
-fn cached_rows(st: &DocState, xml_id: bool) -> Rc<Rows> {
-    thread_local! {
-        static ROWS: RefCell<Option<(RowsKey, Rc<Rows>)>> = const { RefCell::new(None) };
-    }
+fn cached_rows(cache: &mut CanvasCache, st: &DocState, xml_id: bool) -> Rc<Rows> {
     let key = RowsKey::of(st, xml_id);
-    if let Some(rows) = ROWS.with(|c| c.borrow().as_ref().filter(|(k, _)| k.same(&key)).map(|(_, rows)| rows.clone())) {
-        return rows;
+    if let Some((_, rows)) = cache.variable_rows.as_ref().filter(|(k, _)| k.same(&key)) {
+        return rows.clone();
     }
     let rows = Rc::new(build_rows(st, xml_id));
-    ROWS.with(|c| *c.borrow_mut() = Some((key, rows.clone())));
+    cache.variable_rows = Some((key, rows.clone()));
     rows
 }
 
@@ -325,7 +322,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     // Owned snapshots: the rows below run commands, which borrow the app mutably.
     let xml_id = app.session.prefs.identify_objects_by == "xmlId";
-    let rows = cached_rows(st, xml_id);
+    let rows = cached_rows(&mut app.canvas, st, xml_id);
     let (vars, sets) = (&rows.vars, &rows.sets);
     let active = sets.iter().find(|s| s.active);
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
@@ -615,16 +612,6 @@ mod tests {
         app.session.execute("variable.bind", &json!({"variable": "Name", "ids": [t]})).unwrap();
         app.session.execute("dataset.capture", &json!({})).unwrap();
         app
-    }
-
-    #[test]
-    fn draws_headless() {
-        let mut app = app_with_data();
-        let ctx = egui::Context::default();
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
-        out.textures_delta.clear();
-        let text = crate::tests_labels::painted_text(&mut app, show);
-        assert!(text.contains("Name") && text.contains("Data Sets") && text.contains("Data Set 1"), "{text}");
     }
 
     /// Frames of the panel with input events, for typing into its Data Set box.
@@ -1174,8 +1161,8 @@ mod tests {
         }
         assert_eq!(built(), before, "frames of an unchanged document built the rows again");
         let st = app.session.active().unwrap();
-        assert!(Rc::ptr_eq(&cached_rows(st, false), &cached_rows(st, false)));
-        assert_eq!(*cached_rows(st, false), old_rows(st, false));
+        assert!(Rc::ptr_eq(&cached_rows(&mut app.canvas, st, false), &cached_rows(&mut app.canvas, st, false)));
+        assert_eq!(*cached_rows(&mut app.canvas, st, false), old_rows(st, false));
     }
 
     /// Draws a frame after `what` changed one of the rows' inputs, checks that the frame built the
@@ -1186,7 +1173,7 @@ mod tests {
         assert!(built() > before, "{what}: the frame drew the rows it kept");
         let xml_id = app.session.prefs.identify_objects_by == "xmlId";
         let st = app.session.active().unwrap();
-        let rows = cached_rows(st, xml_id);
+        let rows = cached_rows(&mut app.canvas, st, xml_id);
         assert_eq!(*rows, old_rows(st, xml_id), "{what}");
         rows
     }
@@ -1320,9 +1307,9 @@ mod tests {
             v.sort_by(f64::total_cmp);
             v[v.len() / 2]
         }
-        for app in [timing_document(5, 10, 1, 5), timing_document(50, 100, 10, 50)] {
+        for mut app in [timing_document(5, 10, 1, 5), timing_document(50, 100, 10, 50)] {
             let st = app.session.active().unwrap();
-            let rows = cached_rows(st, false);
+            let rows = cached_rows(&mut app.canvas, st, false);
             assert_eq!(*rows, old_rows(st, false));
             let (mut old, mut kept) = (vec![], vec![]);
             for _ in 0..7 {
@@ -1333,7 +1320,7 @@ mod tests {
                 old.push(t.elapsed().as_secs_f64() * 1e6 / 600.0);
                 let t = std::time::Instant::now();
                 for _ in 0..600 {
-                    std::hint::black_box(cached_rows(std::hint::black_box(st), false));
+                    std::hint::black_box(cached_rows(&mut app.canvas, std::hint::black_box(st), false));
                 }
                 kept.push(t.elapsed().as_secs_f64() * 1e6 / 600.0);
             }

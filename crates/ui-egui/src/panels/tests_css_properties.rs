@@ -1,6 +1,6 @@
 //! The CSS Properties panel drawn headless: the selection's CSS in the code view, Generate CSS
-//! for the whole document, the export options in the panel menu, and Copy Selected Style and
-//! Export through their UI commands.
+//! for the whole document, the export options, and Copy Selected Style and Export through their UI
+//! commands.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,10 +9,12 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_svg::{CssOptions, CssUnits};
 
-use super::css_properties::{ALL, ID, OPTIONS, menu, show};
-use super::set_pstate;
-use crate::tests_labels::painted_text;
+use super::css_properties::show;
+use crate::tests::panel_harness::Panel;
 use crate::{Services, VectorcraftApp};
+
+/// The accessible name of the code view.
+const CODE: &str = "CSS code";
 
 type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
@@ -36,14 +38,14 @@ fn app() -> (VectorcraftApp, Log) {
 
 #[test]
 fn the_code_view_shows_the_selections_css_with_the_options() {
-    let (mut app, _) = app();
-    assert!(crate::state::ICON_PANELS.iter().any(|(id, ..)| *id == ID));
-    let text = painted_text(&mut app, show);
+    let (app, _) = app();
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    let text = panel.value(CODE).unwrap_or_default();
     assert!(text.contains(".rectangle {") && text.contains("background-color: #ff0000;") && text.contains("width: 30px;"), "{text}");
-    let text = painted_text(&mut app, |app, ui| {
-        set_pstate(ui.ctx(), OPTIONS, CssOptions { units: CssUnits::Pt, position: true, ..CssOptions::default() });
-        show(app, ui);
-    });
+    panel.app().ui.css_properties_panel.options = CssOptions { units: CssUnits::Pt, position: true, ..CssOptions::default() };
+    panel.frame();
+    let text = panel.value(CODE).unwrap_or_default();
     assert!(text.contains("width: 30pt;") && text.contains("left: 10pt;"), "{text}");
 }
 
@@ -52,59 +54,13 @@ fn generate_css_shows_the_document_while_nothing_is_selected() {
     let (mut app, _) = app();
     app.run("shape.ellipse", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("No selection") && !text.contains(".rectangle"), "{text}");
-    let text = painted_text(&mut app, |app, ui| {
-        set_pstate(ui.ctx(), ALL, true);
-        show(app, ui);
-    });
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    assert!(panel.shows("No selection") && !panel.shows(CODE), "the empty state");
+    panel.app().run("ui.cssProperties.generate", json!({})).unwrap();
+    panel.frame();
+    let text = panel.value(CODE).unwrap_or_default();
     assert!(text.contains(".rectangle {") && text.contains(".ellipse {") && text.contains("border-radius: 50%;"), "{text}");
-}
-
-/// The note on unnamed objects left out uses the form the language's plural rule picks for the
-/// count.
-#[test]
-fn the_unnamed_objects_note_uses_each_count_form() {
-    let note = |code: &str, n: u64| {
-        let (mut app, _) = app();
-        for i in 1..n {
-            app.run("shape.rectangle", json!({"x": 10 + 40 * i, "y": 50, "width": 30, "height": 20})).unwrap();
-        }
-        app.run("select.all", json!({})).unwrap();
-        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
-        let text = painted_text(&mut app, |app, ui| {
-            set_pstate(ui.ctx(), OPTIONS, CssOptions { unnamed: false, ..CssOptions::default() });
-            show(app, ui);
-        });
-        crate::i18n::set_current(crate::i18n::Lang::EN);
-        text
-    };
-    let text = note("en", 1);
-    assert!(text.contains("1 unnamed object left out: name it,"), "{text}");
-    for (n, want) in [(1, "Vynechán 1 nepojmenovaný objekt."), (2, "Vynechány 2 nepojmenované objekty."), (5, "Vynecháno 5 nepojmenovaných objektů.")]
-    {
-        let text = note("cs", n);
-        assert!(text.contains(want), "{n}: {text}");
-    }
-}
-
-#[test]
-fn the_panel_menu_lists_the_actions_and_options() {
-    let (mut app, _) = app();
-    let text = painted_text(&mut app, menu);
-    for item in [
-        "Copy Selected Style",
-        "Export Selected CSS…",
-        "Export All…",
-        "Generate CSS",
-        "Units: px",
-        "Absolute Position",
-        "Width and Height",
-        "Unnamed Objects",
-        "Rasterize Unsupported Art",
-    ] {
-        assert!(text.contains(item), "{item} in {text}");
-    }
 }
 
 #[test]

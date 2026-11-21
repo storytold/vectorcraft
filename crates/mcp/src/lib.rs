@@ -24,7 +24,7 @@ mod server;
 mod tools;
 mod ui_catalog;
 
-pub use backend::{Backend, Remote};
+pub use backend::{Backend, Remote, control_token};
 pub use headless::Headless;
 pub use prompts::{PROMPTS, PromptArg, PromptDef};
 pub use resources::{DOC_JSON_URI, DOC_URI, TEMPLATES};

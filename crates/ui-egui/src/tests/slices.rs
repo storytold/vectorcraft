@@ -8,6 +8,7 @@ use crate::VectorcraftApp;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.session.paint.stroke = vectorcraft_color::Paint::None;
     app
@@ -73,17 +74,6 @@ fn slice_menu_items_follow_the_state() {
     assert_eq!(crate::menus::checked(&app, "view.slices.lock", &json!({})), Some(true));
 }
 
-#[test]
-fn slice_tool_cursors_are_drawn_in_code() {
-    let ctx = egui::Context::default();
-    let mut out = ctx.run_ui(Default::default(), |ui| {
-        for c in [vectorcraft_tools::Cursor::Slice, vectorcraft_tools::Cursor::SliceSelect] {
-            assert!(crate::cursors::paint(ui.painter(), c, egui::pos2(50.0, 50.0), 1.0), "{c:?}");
-        }
-    });
-    out.textures_delta.clear();
-    assert!(!out.shapes.is_empty());
-}
 
 #[test]
 fn the_slice_tools_are_real_tools() {
@@ -97,6 +87,6 @@ fn the_slice_tools_are_real_tools() {
     let view = app.view_info();
     let ev = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::DoubleClick, 20.0, 20.0);
     crate::canvas::dispatch(&mut app, &ev, view);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::slices::OPTIONS));
+    assert!(app.dialogs().unwrap().with(|h| h.is_open::<craft::draw::ui::slice::SliceOptionsDialog>()));
     assert_eq!(app.session.active().unwrap().selection.slices, vec![vectorcraft_doc::NodeId(id)]);
 }

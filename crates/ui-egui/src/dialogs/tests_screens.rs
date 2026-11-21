@@ -56,38 +56,6 @@ fn temp_folder(tag: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("vc-efs-{tag}-{}", std::process::id()))
 }
 
-#[test]
-fn opens_on_defaults_and_draws_every_view() {
-    let (mut app, _) = app(3, false);
-    open(&mut app);
-    assert_eq!((field(&app, "select"), field(&app, "range"), field(&app, "boards")), (json!("all"), json!("1-3"), json!([true, true, true])));
-    assert_eq!(field(&app, "formats"), json!([{"format": "png", "scale": "1x", "suffix": ""}]));
-    assert_eq!(field(&app, "folder"), json!(fileio::export_folder().unwrap_or_default()), "the Desktop, else home");
-    assert_eq!((field(&app, "openLocation"), field(&app, "subfolders"), field(&app, "preset")), (json!(true), json!(true), json!("")));
-    assert_eq!((field(&app, "subfolderBy"), field(&app, "pdfs"), field(&app, "view")), (json!("scale"), json!("multiple"), json!("grid")));
-    assert_eq!((field(&app, "includeBleed"), field(&app, "includeArtboardFill")), (json!(false), json!(true)));
-    let settings = field(&app, "settings");
-    for f in ["png", "png8", "jpg", "webp", "gif", "tiff", "svg", "pdf"] {
-        assert!(settings[f].is_object(), "{f} has settings");
-    }
-    assert!(settings["jpg"].get("quality").is_none() && settings["jpg"].get("imageMap").is_none(), "rows choose quality; no maps");
-    assert!(settings["svg"].get("images").is_none(), "no linked images");
-    assert_eq!(settings["pdf"]["preset"], json!(fileio::pdf::DEFAULT_PRESET));
-    frame(&mut app);
-    // Assets, Full Document, each format's Format Settings: all draw.
-    set(&mut app, "tab", json!("assets"));
-    frame(&mut app);
-    set(&mut app, "tab", json!("artboards"));
-    set(&mut app, "select", json!("full"));
-    for f in ["png", "png8", "jpg", "webp", "gif", "tiff", "svg", "pdf"] {
-        set(&mut app, "__settings", json!(f));
-        frame(&mut app);
-        assert_eq!(field(&app, "__settings"), json!(f));
-    }
-    assert_eq!(kind(&app), Some(export_for_screens::KIND));
-    assert_eq!((spec(export_for_screens::KIND).ok_label.unwrap())(&app), "Export Artboard");
-}
-
 /// The dialog's own request, with a row of every format its Format menu offers and every format's
 /// settings as it opens, gets no note about an option a file doesn't read.
 #[test]

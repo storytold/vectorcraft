@@ -618,7 +618,7 @@ pub fn plan<'a>(doc: &'a Document, opts: &PrintOptions) -> Result<PrintPlan<'a>,
     let created = opts.created.or_else(vectorcraft_doc::metadata::output_time);
     let sep = Separator::new(&job.doc, set, opts.postscript);
     let plates: Vec<Document> = (0..job.plates.len()).filter_map(|p| job.ink(Some(p))).map(|i| sep.plate(&i.name)).collect();
-    let marks = set.marks.printer_marks();
+    let marks = crate::printer_marks(&set.marks);
     let sheets = job
         .sheets
         .iter()
@@ -672,7 +672,7 @@ fn upright(mut s: PlannedSheet) -> PlannedSheet {
 
 /// Print `doc` to a PDF as `opts` say.
 pub fn print(doc: &Document, opts: &PrintOptions) -> Result<PrintReport, PdfError> {
-    craft_pdf::write::guard(|| leaving_out_undecodable(doc, |left_out| print_inner(doc, opts, left_out)))
+    craft::pdf::write::guard(|| leaving_out_undecodable(doc, |left_out| print_inner(doc, opts, left_out)))
 }
 
 fn print_inner(doc: &Document, opts: &PrintOptions, left_out: &mut HashSet<String>) -> Result<PrintReport, PdfError> {

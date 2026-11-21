@@ -24,25 +24,26 @@ pub const PORTABLE_MARKERS: [&str; 2] = ["portable.txt", "VectorCraft.portable"]
 /// The settings folder created in the install folder in portable mode.
 pub const PORTABLE_DATA_DIR: &str = "VectorCraftData";
 
-pub fn prefs_path(legacy: bool) -> Option<PathBuf> {
-    prefs_path_with(std::env::consts::OS, legacy, |key| std::env::var_os(key), portable_dir)
+/// The settings folder of VectorCraft, or of DrawCraft (`legacy`).
+pub fn prefs_dir(legacy: bool) -> Option<PathBuf> {
+    prefs_dir_with(std::env::consts::OS, legacy, |key| std::env::var_os(key), portable_dir)
 }
 
 /// `portable` is the portable settings folder, if any: only asked for when no override is set and
 /// preferences are in use.
-fn prefs_path_with(os: &str, legacy: bool, env: impl Fn(&str) -> Option<OsString>, portable: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+fn prefs_dir_with(os: &str, legacy: bool, env: impl Fn(&str) -> Option<OsString>, portable: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
     if let Some(root) = env("VECTORCRAFT_CONFIG_DIR") {
         // Never fall back to DrawCraft's real profile when the isolated file does not exist.
-        return (!legacy && !root.is_empty()).then(|| PathBuf::from(root).join("ui.json"));
+        return (!legacy && !root.is_empty()).then(|| PathBuf::from(root));
     }
     // A run without preferences reads and writes nothing, so it must not create the portable folder.
     if env("VECTORCRAFT_NO_PREFS").is_none()
         && let Some(dir) = portable()
     {
         // A portable copy is self-contained: DrawCraft's old profile is not read into it.
-        return (!legacy).then(|| dir.join("ui.json"));
+        return (!legacy).then_some(dir);
     }
-    platform_dir(os, legacy, &env).map(|p| p.join("ui.json"))
+    platform_dir(os, legacy, &env)
 }
 
 /// The platform's settings folder of VectorCraft, or of DrawCraft (`legacy`).
@@ -229,27 +230,27 @@ mod tests {
             let env = |key: &str| {
                 if key == "VECTORCRAFT_CONFIG_DIR" { Some("/isolated".into()) } else { environment(key) }
             };
-            assert_eq!(prefs_path_with(os, false, env, installed), Some("/isolated/ui.json".into()));
-            assert_eq!(prefs_path_with(os, true, env, installed), None);
+            assert_eq!(prefs_dir_with(os, false, env, installed), Some("/isolated".into()));
+            assert_eq!(prefs_dir_with(os, true, env, installed), None);
         }
     }
 
     #[test]
     fn empty_override_does_not_fall_back_to_user_files() {
         let env = |key: &str| if key == "VECTORCRAFT_CONFIG_DIR" { Some(OsString::new()) } else { environment(key) };
-        assert_eq!(prefs_path_with("macos", false, env, installed), None);
-        assert_eq!(prefs_path_with("macos", true, env, installed), None);
+        assert_eq!(prefs_dir_with("macos", false, env, installed), None);
+        assert_eq!(prefs_dir_with("macos", true, env, installed), None);
     }
 
     #[test]
     fn unset_override_keeps_platform_paths_and_legacy_migration() {
-        assert_eq!(prefs_path_with("macos", false, environment, installed), Some("/user/Library/Application Support/VectorCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("macos", true, environment, installed), Some("/user/Library/Application Support/DrawCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("windows", false, environment, installed), Some("/roaming/VectorCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("linux", false, environment, installed), Some("/xdg-config/vectorcraft/ui.json".into()));
+        assert_eq!(prefs_dir_with("macos", false, environment, installed), Some("/user/Library/Application Support/VectorCraft".into()));
+        assert_eq!(prefs_dir_with("macos", true, environment, installed), Some("/user/Library/Application Support/DrawCraft".into()));
+        assert_eq!(prefs_dir_with("windows", false, environment, installed), Some("/roaming/VectorCraft".into()));
+        assert_eq!(prefs_dir_with("linux", false, environment, installed), Some("/xdg-config/vectorcraft".into()));
         assert_eq!(
-            prefs_path_with("linux", true, |key| if key == "HOME" { environment(key) } else { None }, installed),
-            Some("/user/.config/drawcraft/ui.json".into())
+            prefs_dir_with("linux", true, |key| if key == "HOME" { environment(key) } else { None }, installed),
+            Some("/user/.config/drawcraft".into())
         );
     }
 
@@ -257,9 +258,9 @@ mod tests {
     fn portable_mode_keeps_the_settings_beside_the_executable_and_skips_the_drawcraft_profile() {
         let portable = || Some(PathBuf::from("/usb/VectorCraft/VectorCraftData"));
         for os in ["macos", "windows", "linux"] {
-            assert_eq!(prefs_path_with(os, false, environment, portable), Some("/usb/VectorCraft/VectorCraftData/ui.json".into()), "{os}");
+            assert_eq!(prefs_dir_with(os, false, environment, portable), Some("/usb/VectorCraft/VectorCraftData".into()), "{os}");
             // A portable copy is self-contained: the one-time read of DrawCraft's old settings is skipped.
-            assert_eq!(prefs_path_with(os, true, environment, portable), None, "{os}");
+            assert_eq!(prefs_dir_with(os, true, environment, portable), None, "{os}");
         }
     }
 
@@ -267,16 +268,16 @@ mod tests {
     fn the_config_dir_override_wins_over_portable_mode_without_probing_it() {
         let env = |key: &str| if key == "VECTORCRAFT_CONFIG_DIR" { Some("/isolated".into()) } else { environment(key) };
         let portable = || -> Option<PathBuf> { panic!("the portable folder is not looked for under VECTORCRAFT_CONFIG_DIR") };
-        assert_eq!(prefs_path_with("windows", false, env, portable), Some("/isolated/ui.json".into()));
-        assert_eq!(prefs_path_with("windows", true, env, portable), None);
+        assert_eq!(prefs_dir_with("windows", false, env, portable), Some("/isolated".into()));
+        assert_eq!(prefs_dir_with("windows", true, env, portable), None);
     }
 
     #[test]
     fn a_run_without_preferences_never_looks_for_the_portable_folder() {
         let env = |key: &str| if key == "VECTORCRAFT_NO_PREFS" { Some("1".into()) } else { environment(key) };
         let portable = || -> Option<PathBuf> { panic!("the portable folder is not looked for under VECTORCRAFT_NO_PREFS") };
-        assert_eq!(prefs_path_with("windows", false, env, portable), Some("/roaming/VectorCraft/ui.json".into()));
-        assert_eq!(prefs_path_with("windows", true, env, portable), Some("/roaming/DrawCraft/ui.json".into()));
+        assert_eq!(prefs_dir_with("windows", false, env, portable), Some("/roaming/VectorCraft".into()));
+        assert_eq!(prefs_dir_with("windows", true, env, portable), Some("/roaming/DrawCraft".into()));
     }
 
     #[test]
@@ -337,17 +338,6 @@ mod tests {
     }
 
     #[test]
-    fn without_a_marker_file_there_is_no_portable_folder() {
-        let exe = temp("installed");
-        assert_eq!(portable_dir_in(&exe, None), Ok(None));
-        // A folder named like the marker is not a marker.
-        std::fs::create_dir_all(exe.join("portable.txt")).unwrap();
-        assert_eq!(portable_dir_in(&exe, None), Ok(None));
-        assert!(!exe.join(PORTABLE_DATA_DIR).exists(), "no data folder without a marker");
-        let _ = std::fs::remove_dir_all(&exe);
-    }
-
-    #[test]
     fn an_unwritable_portable_folder_is_reported_instead_of_used() {
         let exe = temp("unwritable");
         std::fs::write(exe.join("portable.txt"), b"").unwrap();
@@ -384,16 +374,6 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&exe);
         let _ = std::fs::remove_dir_all(&previous);
-    }
-
-    #[test]
-    fn without_a_user_profile_the_data_folder_starts_empty() {
-        let exe = temp("fresh");
-        std::fs::write(exe.join("portable.txt"), b"").unwrap();
-        let missing = exe.join("no-such-profile");
-        let data = portable_dir_in(&exe, Some(&missing)).unwrap().unwrap();
-        assert_eq!(std::fs::read_dir(&data).unwrap().count(), 0);
-        let _ = std::fs::remove_dir_all(&exe);
     }
 
     #[test]

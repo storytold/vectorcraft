@@ -1,4 +1,5 @@
-//! Save PDF settings: JSON shape, checks and the warnings for options not applied yet.
+//! Save PDF settings as the writer uses them: the checks run before an export, and the writer adds
+//! its own notes on options. The model, its JSON and its rules are craft-pdf's.
 
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
@@ -21,110 +22,15 @@ fn doc() -> Document {
 }
 
 #[test]
-fn json_is_camel_case_and_partial_objects_keep_defaults() {
-    let d = PdfSettings::default();
-    let v = serde_json::to_value(&d).unwrap();
-    assert_eq!(v["compatibility"], "1.7");
-    assert_eq!(v["standard"], "none");
-    assert_eq!(v["compression"]["compressText"], true);
-    assert_eq!(v["compression"]["color"]["abovePpi"], 450.0);
-    assert_eq!(v["advanced"]["overprint"], "preserve");
-    assert_eq!(serde_json::from_value::<PdfSettings>(v).unwrap(), d, "round-trips");
-    let s = settings(json!({"compatibility": "1.5", "marks": {"trim": true}, "compression": {"gray": {"downsample": "bicubic"}}}));
-    assert_eq!(s.compatibility, Compatibility::Pdf15);
-    assert!(s.marks.trim && s.marks.weight == 0.25);
-    assert_eq!(s.compression.gray.downsample, Downsample::Bicubic);
-    assert_eq!(s.compression.gray.ppi, 300.0);
-    assert!(s.compression.compress_text);
-    for bad in [json!({"compatibility": "1.2"}), json!({"standard": "pdfX9"}), json!({"marks": {"trim": "yes"}})] {
-        assert!(serde_json::from_value::<PdfSettings>(bad.clone()).is_err(), "{bad}");
-    }
-}
-
-/// The Profiles setting is unset when left out, `null` or `"default"` (written as `null`), and set
-/// by a choice's id; another value is refused.
-#[test]
-fn the_profiles_setting_can_be_left_unset() {
-    assert_eq!(serde_json::to_value(PdfSettings::default()).unwrap()["output"]["profiles"], serde_json::Value::Null);
-    for unset in [json!({}), json!({"profiles": null}), json!({"profiles": "default"})] {
-        assert_eq!(settings(json!({"output": unset.clone()})).output.profiles, None, "{unset}");
-    }
-    for (id, want) in [("none", ProfileInclusion::None), ("all", ProfileInclusion::All), ("taggedSource", ProfileInclusion::TaggedSource)] {
-        let s = settings(json!({"output": {"profiles": id}}));
-        assert_eq!(s.output.profiles, Some(want), "{id}");
-        assert_eq!(serde_json::from_value::<PdfSettings>(serde_json::to_value(&s).unwrap()).unwrap(), s, "{id} round-trips");
-    }
-    for bad in [json!("Default"), json!("never"), json!(1)] {
-        assert!(serde_json::from_value::<PdfSettings>(json!({"output": {"profiles": bad.clone()}})).is_err(), "{bad}");
-    }
+fn export_refuses_settings_its_checks_refuse() {
+    // PDF/X-1a is a PDF 1.3 standard: the default 1.7 is refused, 1.4 is accepted.
+    let x1a = |v: serde_json::Value| export(&doc(), &PdfOptions { settings: settings(v), ..Default::default() });
+    assert!(matches!(x1a(json!({"standard": "pdfX1a"})), Err(PdfError::BadSetting(_))));
+    assert!(x1a(json!({"standard": "pdfX1a", "compatibility": "1.4"})).is_ok());
 }
 
 #[test]
-fn passwords_are_never_serialized() {
-    let s = settings(json!({"security": {"openPassword": "secret", "permissionsPassword": "owner"}}));
-    assert_eq!(s.security.open_password, "secret");
-    let text = serde_json::to_string(&s).unwrap();
-    assert!(!text.contains("secret") && !text.contains("owner") && !text.contains("Password"), "{text}");
-}
-
-#[test]
-fn checks_refuse_what_the_writer_cant_honour() {
-    assert_eq!(PdfSettings::default().check(), Ok(()));
-    let refused = |v: serde_json::Value| settings(v).check().unwrap_err();
-    // PDF/X-4 is a PDF 1.6 standard: the default 1.7 is refused.
-    assert!(matches!(refused(json!({"standard": "pdfX4"})), PdfError::BadSetting(m) if m.contains("PDF 1.7")));
-    assert_eq!(settings(json!({"standard": "pdfX4", "compatibility": "1.6"})).check(), Ok(()));
-    // Passwords are written (the file is encrypted); a password with a standard is not.
-    assert_eq!(settings(json!({"security": {"openPassword": "x"}})).check(), Ok(()));
-    assert_eq!(settings(json!({"security": {"permissionsPassword": "x"}})).check(), Ok(()));
-    assert!(matches!(refused(json!({"standard": "pdfA2b", "security": {"openPassword": "x"}})), PdfError::BadSetting(_)));
-    assert!(matches!(refused(json!({"compression": {"color": {"ppi": 5}}})), PdfError::BadSetting(m) if m.contains("compression.color.ppi")));
-    assert!(matches!(refused(json!({"bleed": {"left": 100}})), PdfError::BadSetting(m) if m.contains("bleed.left")));
-    assert!(matches!(refused(json!({"marks": {"weight": 0}})), PdfError::BadSetting(_)));
-    assert!(matches!(refused(json!({"advanced": {"fontSubsetPercent": 120}})), PdfError::BadSetting(_)));
-    // PDF/A-2 is a PDF 1.7 standard: earlier versions are fine, 2.0 is not.
-    assert!(matches!(refused(json!({"standard": "pdfA2b", "compatibility": "2.0"})), PdfError::BadSetting(m) if m.contains("PDF/A-2b")));
-    assert_eq!(settings(json!({"standard": "pdfA2b", "compatibility": "1.4"})).check(), Ok(()));
-    assert!(Compatibility::ALL.iter().all(|c| Standard::None.allows(*c)));
-    assert!(export(&doc(), &PdfOptions { settings: settings(json!({"standard": "pdfX1a"})), ..Default::default() }).is_err());
-    assert!(export(&doc(), &PdfOptions { settings: settings(json!({"standard": "pdfX1a", "compatibility": "1.4"})), ..Default::default() }).is_ok());
-}
-
-#[test]
-fn options_not_applied_yet_come_back_as_setting_notes() {
-    assert!(PdfSettings::default().warnings().is_empty());
-    for (v, word) in [
-        (json!({"createLayers": true, "compatibility": "1.4"}), "PDF 1.5"),
-        (json!({"advanced": {"outlineText": false, "fontSubsetPercent": 35}}), "subset"),
-        (json!({"output": {"outputIntent": "No Such Press"}}), "without embedding"),
-        (json!({"output": {"registry": "http://example.com"}}), "condition identifier"),
-        (json!({"standard": "pdfA2b", "output": {"trapped": true}}), "PDF/A"),
-        (json!({"security": {"printing": "low"}}), "permissions"),
-    ] {
-        let w = settings(v.clone()).warnings();
-        assert!(w.len() == 1 && w[0].contains(word), "{v}: {w:?}");
-    }
-    // Bleed and marks, the default view/overprint choices and applied options (image compression
-    // too: a codec the writer lacks is reported when an image needs it; colour output; real text)
-    // warn about nothing.
-    for v in [
-        json!({"output": {"conversion": "destination", "destination": vectorcraft_color::cms::GENERIC_CMYK, "profiles": "all"}}),
-        json!({"output": {"conversion": "preserveNumbers", "profiles": "taggedSource"}}),
-        json!({"output": {"outputIntent": vectorcraft_color::cms::GENERIC_CMYK, "outputCondition": "Press", "registry": "r", "trapped": true}}),
-        json!({"output": {"outputConditionId": "CGATS TR 001"}}),
-        json!({"advanced": {"outlineText": false}}),
-        json!({"advanced": {"outlineText": true, "fontSubsetPercent": 35}}),
-        json!({"bleed": {"useDocument": true, "top": 9}}),
-        json!({"bleed": {"top": 9}, "marks": {"trim": true, "registration": true, "colorBars": true, "pageInfo": true}}),
-        json!({"includeNonPrinting": true}),
-        json!({"createLayers": true}),
-        json!({"viewAfterSaving": true}),
-        json!({"thumbnails": true, "fastWebView": true}),
-        json!({"compression": {"compressText": false}}),
-        json!({"compression": {"color": {"compression": "jpeg"}, "mono": {"compression": "ccittG4"}}}),
-    ] {
-        assert!(settings(v.clone()).warnings().is_empty(), "{v}");
-    }
+fn the_writer_notes_thumbnails_it_was_not_given() {
     let r =
         export_with_report(&doc(), &PdfOptions { settings: settings(json!({"thumbnails": true, "marks": {"trim": true}})), ..Default::default() })
             .unwrap();

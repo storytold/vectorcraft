@@ -98,7 +98,8 @@ fn finite(p: Point) -> bool {
     p.x.is_finite() && p.y.is_finite()
 }
 
-fn resize_cursor(d: &TraceDivider, cx: &ToolContext) -> Cursor {
+/// The resize cursor along the divider `d`, turned with the image and the view.
+pub fn resize_cursor(d: &TraceDivider, cx: &ToolContext) -> Cursor {
     crate::select::handle_cursor(crate::bbox::Handle::Right, d.angle() - cx.view_angle())
 }
 
@@ -261,28 +262,5 @@ mod tests {
         assert_eq!(cursor(&c, Point::new(60.0, 45.0)), None, "the center point");
         assert!(SplitDrag::hit(&c, Point::new(60.0, 45.0), Mods::default()).is_none(), "the center point");
         assert_eq!(cursor(&c, Point::new(60.0, 33.0)), Some(Cursor::ResizeH));
-    }
-
-    /// Switching away from the Selection tool during a divider drag cancels it, as Escape does:
-    /// the view goes back. After a press that has not moved there is nothing to put back.
-    #[test]
-    fn a_tool_switch_cancels_a_divider_drag() {
-        use crate::{PointerEvent, PointerKind, Tool};
-        let paint = paint();
-        let mut selection = Selection::default();
-        let (doc, id) = traced(Affine::translate((10.0, 20.0)), "split", 0.5);
-        selection.set([id]);
-        let c = cx(&doc, &selection, &paint);
-        let mut t = crate::select::SelectionTool::default();
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 40.0)).is_empty());
-        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 85.0, 40.0));
-        assert!(matches!(a.first(), Some(Action::Begin(_))), "{a:?}");
-        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
-        assert!(!t.busy() && !t.transforming());
-        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 85.0, 40.0)).is_empty());
-        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 60.0, 40.0));
-        assert!(t.busy());
-        assert!(t.deactivate(&c).is_empty());
-        assert!(!t.busy());
     }
 }

@@ -367,17 +367,22 @@ fn a_remote_call_stops_waiting_for_the_app_when_cancelled() {
     use std::io::BufRead;
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
-    // An app that takes the request and never answers.
+    // An app that answers the connection's token, then takes the request and never answers.
     let (done, held) = mpsc::channel::<()>();
     let app = std::thread::spawn(move || {
         let (conn, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(conn.try_clone().unwrap());
         let mut line = String::new();
-        BufReader::new(conn.try_clone().unwrap()).read_line(&mut line).unwrap();
+        reader.read_line(&mut line).unwrap();
+        let auth: Value = serde_json::from_str(&line).unwrap();
+        writeln!(&conn, "{}", json!({"id": auth["id"], "ok": true})).unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
         // Hold the connection open until the test is done with it (or for `WAIT`).
         let _ = held.recv_timeout(WAIT);
         drop(conn);
     });
-    let mut remote = crate::Remote::connect(&addr).unwrap();
+    let mut remote = crate::Remote::connect(&addr, "test").unwrap();
     let token = cancel::CancelToken::new();
     let raise = token.clone();
     std::thread::spawn(move || {

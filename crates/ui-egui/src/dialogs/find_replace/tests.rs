@@ -1,8 +1,11 @@
-use egui::{Event, PointerButton, Pos2, Rect, vec2};
+use craft::text::ui::find::FindReplaceDialog;
+use craft::ui::dialog::DialogHost;
+use craft::ui::dialog::StackDialog;
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 
 use crate::VectorcraftApp;
+use crate::tests::panel_harness::Panel;
 
 /// An app on a document holding point type `texts`, bottom first, with nothing selected → the
 /// app and the type objects' ids.
@@ -14,10 +17,22 @@ fn app_with(texts: &[&str]) -> (VectorcraftApp, Vec<u64>) {
     (VectorcraftApp::new(s, crate::Services::default()), ids)
 }
 
-/// Choose Edit › Find and Replace…, as a click on the menu item does.
-fn choose(app: &mut VectorcraftApp) {
-    let (id, p) = crate::shortcut_editor::menu_target(super::COMMAND).expect("the menu item gives params");
+/// One frame of the window's dialogs and of their pump, as the shell runs them.
+fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|host| host.run(ui));
+    }
+    crate::dialogs::host::pump(app, ui.ctx());
+}
+
+/// Choose the menu item of `command`, as a click on it does.
+fn choose_command(app: &mut VectorcraftApp, command: &str) {
+    let (id, p) = crate::shortcut_editor::menu_target(command).expect("the menu item gives params");
     crate::menus::invoke(app, &id, p);
+}
+
+fn choose(app: &mut VectorcraftApp) {
+    choose_command(app, super::COMMAND);
 }
 
 /// Choose Edit › Find Next, as a click on the menu item does.
@@ -27,17 +42,44 @@ fn choose_find_next(app: &mut VectorcraftApp) {
     crate::menus::invoke(app, super::NEXT, json!({"find": ""}));
 }
 
-fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-    app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+fn with_dialog<R>(app: &VectorcraftApp, f: impl FnOnce(&mut FindReplaceDialog) -> R) -> R {
+    app.dialogs().expect("a window").with(|host| f(host.get_mut::<FindReplaceDialog>().expect("the dialog is open")))
+}
+
+fn is_open(app: &VectorcraftApp) -> bool {
+    app.dialogs().expect("a window").with(|host| host.get::<FindReplaceDialog>().is_some())
+}
+
+/// Set a field of the open dialog, as the user editing it does.
+fn set(app: &VectorcraftApp, k: &str, v: Value) {
+    let ctx = app.ui_ctx.clone().expect("a window");
+    with_dialog(app, |d| d.set_json_field(&ctx, k, v).unwrap());
 }
 
 fn field(app: &VectorcraftApp, k: &str) -> Value {
-    app.ui.dialog.as_ref().expect("the dialog is open").fields.get(k).cloned().unwrap_or(Value::Null)
+    with_dialog(app, |d| d.json_fields().unwrap_or(Value::Null)[k].clone())
+}
+
+fn message(app: &VectorcraftApp) -> String {
+    field(app, "message").as_str().unwrap_or_default().to_string()
+}
+
+/// The place the last search reached.
+fn from(app: &VectorcraftApp) -> Value {
+    app.ui.last_find.as_ref().map(|l| l["from"].clone()).unwrap_or(Value::Null)
+}
+
+/// Run the dialogs' pump once, as the end of a frame does.
+fn pump(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window");
+    crate::dialogs::host::pump(app, &ctx);
 }
 
 /// The match Replace would change, as (object, start, end).
 fn matched(app: &VectorcraftApp) -> Option<(u64, u64, u64)> {
-    let at = super::current_match(app, app.ui.dialog.as_ref()?)?;
+    let query = with_dialog(app, |d| super::form(d).query);
+    let last = app.ui.last_find.as_ref()?;
+    let at = super::current_match(app, last, &query)?;
     Some((at["id"].as_u64()?, at["start"].as_u64()?, at["end"].as_u64()?))
 }
 
@@ -56,291 +98,138 @@ fn selected(app: &VectorcraftApp) -> Vec<u64> {
     app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect()
 }
 
-/// One frame of the dialog on an 800 × 600 window → the text painted, with its rect.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
-    // A window takes a sizing frame and fades in: each frame is a quarter second on.
-    let time = ctx.input(|i| i.time) + 0.25;
-    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
-    let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| crate::dialogs::show(app, ui.ctx()));
-    out.textures_delta.clear();
-    fn walk(s: &egui::Shape, v: &mut Vec<(String, Rect)>) {
-        match s {
-            egui::Shape::Text(t) => v.push((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),
-            egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
-            _ => {}
-        }
-    }
-    let mut v = vec![];
-    out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
-    v
-}
-
-fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx
-}
-
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> Vec<(String, Rect)> {
-    frame(app, ctx, vec![]);
-    let texts = frame(app, ctx, vec![]);
-    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
-    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, vec![Event::PointerMoved(at)]);
-    frame(app, ctx, vec![press(true)]);
-    frame(app, ctx, vec![press(false)]);
-    frame(app, ctx, vec![])
-}
-
-/// Edit › Find and Replace… opens the dialog of its own, with the fields and options of the
-/// public reference's "Find and replace text", instead of the generic parameter dialog.
+/// The Edit menu's rows for Find and Replace, Check Spelling and Edit Custom Dictionary are enabled,
+/// and invoking each puts that dialog on the host.
 #[test]
-fn the_edit_menu_opens_the_find_and_replace_dialog() {
-    let (mut app, _) = app_with(&["cat"]);
-    let e = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Find and Replace…").expect("in the Edit menu");
-    assert_eq!((e.path.as_slice(), e.command.as_deref(), e.enabled), (&["Edit".to_string()][..], Some(super::COMMAND), true));
-    choose(&mut app);
-    let d = app.ui.dialog.as_ref().expect("Find and Replace opens");
-    assert_eq!((d.kind.as_str(), d.fields["__command"].clone()), (super::KIND, json!(super::COMMAND)));
-    for (key, want) in [("find", json!("")), ("replace", json!("")), ("action", json!("find"))] {
-        assert_eq!(d.fields[key], want, "{key}");
+fn the_edit_menu_rows_open_their_dialogs() {
+    type Shown = fn(&DialogHost) -> bool;
+    let rows: [(&str, &str, Shown); 3] = [
+        ("Find and Replace…", super::COMMAND, |h| h.get::<FindReplaceDialog>().is_some()),
+        ("Check Spelling…", crate::dialogs::check_spelling::COMMAND, |h| !h.open_dialogs().is_empty()),
+        ("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND, |h| {
+            h.get::<craft::ui::patterns::form_dialogs::HostedListManager>().is_some()
+        }),
+    ];
+    for (label, command, shown) in rows {
+        let (app, _) = app_with(&["Hello zqvmisspelt world"]);
+        let mut p = Panel::new(app, draw);
+        let e = crate::menus::menu_entries(p.app()).into_iter().find(|e| e.label == label).unwrap_or_else(|| panic!("{label} is in the Edit menu"));
+        assert_eq!((e.path.as_slice(), e.command.as_deref(), e.enabled), (&["Edit".to_string()][..], Some(command), true), "{label}");
+        choose_command(p.app(), command);
+        assert!(p.app().dialogs().expect("a window").with(|host| shown(host)), "{label} opens its dialog");
     }
-    for key in ["matchCase", "wholeWord", "backwards", "hiddenLayers", "lockedLayers"] {
-        assert_eq!(d.fields[key], json!(false), "{key}");
-    }
-    let ctx = context();
-    frame(&mut app, &ctx, vec![]);
-    let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
-    for label in [
-        "Find and Replace",
-        "Find:",
-        "Replace With:",
-        "Match Case",
-        "Find Whole Word",
-        "Search Backwards",
-        "Check Hidden Layers",
-        "Check Locked Layers",
-        "Find",
-        "Replace",
-        "Replace & Find",
-        "Replace All",
-        "Done",
-    ] {
-        assert!(texts.iter().any(|t| t == label), "no `{label}` in {texts:?}");
-    }
-}
-
-/// A field given a value of another type than its own is an error and the dialog does not open; a
-/// null value gives no field. A field set to such a value once the dialog is open runs no action:
-/// the error is the note, shown under the match found, and the text, the match and the last search
-/// stay as they were.
-#[test]
-fn the_dialog_rejects_a_field_of_the_wrong_type() {
-    let (mut app, ids) = app_with(&["cat"]);
-    choose(&mut app);
-    set(&mut app, "find", json!("cat"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let last = app.ui.last_find.clone();
-    for (k, v, want) in [
-        ("replace", json!(5), "`replace` must be a string"),
-        ("replace", Value::Null, "`replace` must be a string"),
-        ("matchCase", json!("yes"), "`matchCase` must be true or false"),
-    ] {
-        set(&mut app, k, v.clone());
-        set(&mut app, "action", json!("replaceAll"));
-        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), want, "{k}: {v}");
-        assert_eq!((plain(&app, ids[0]), field(&app, "__note"), app.ui.last_find.clone()), ("cat".to_string(), json!(want), last.clone()));
-        assert_eq!(matched(&app), Some((ids[0], 0, 3)), "Replace still changes the match found");
-        let ctx = context();
-        frame(&mut app, &ctx, vec![]);
-        let texts: Vec<String> = frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
-        assert!(texts.iter().any(|t| t == want) && texts.iter().any(|t| t == "cat"), "the note shows under the match: {texts:?}");
-        set(&mut app, k, if k == "replace" { json!("dog") } else { json!(false) });
-    }
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let open = |app: &mut VectorcraftApp, params: Value| app.run("ui.paramDialog", json!({"command": super::COMMAND, "params": params}));
-    for (params, want) in [
-        (json!({"find": 17}), "`find` must be a string"),
-        (json!({"replace": true}), "`replace` must be a string"),
-        (json!({"matchCase": "yes"}), "`matchCase` must be true or false"),
-        (json!({"backwards": 1}), "`backwards` must be true or false"),
-    ] {
-        assert_eq!(open(&mut app, params.clone()).unwrap_err(), want, "{params}");
-        assert!(app.ui.dialog.is_none(), "{params}");
-    }
-    open(&mut app, json!({"find": null, "replace": "dog", "wholeWord": true})).unwrap();
-    assert_eq!((field(&app, "find"), field(&app, "replace"), field(&app, "wholeWord")), (json!("cat"), json!("dog"), json!(true)));
-}
-
-/// An `action` that is not a string runs no action, Find included: the error is the note, and the
-/// match found, the selection and the last search stay as they were.
-#[test]
-fn an_action_of_the_wrong_type_runs_no_action() {
-    let (mut app, _) = app_with(&["cat", "cat"]);
-    choose(&mut app);
-    set(&mut app, "find", json!("cat"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let (at, sel, last) = (matched(&app), selected(&app), app.ui.last_find.clone());
-    assert!(at.is_some());
-    for v in [json!(5), Value::Null, json!(["find"])] {
-        set(&mut app, "action", v.clone());
-        assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), "`action` must be a string", "{v}");
-        assert_eq!((matched(&app), selected(&app), app.ui.last_find.clone()), (at, sel.clone(), last.clone()), "{v}");
-        assert_eq!(field(&app, "__note"), json!("`action` must be a string"), "{v}");
-    }
-    set(&mut app, "action", json!("find"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_ne!(matched(&app), at, "a string action still runs");
 }
 
 /// Find with other Find text starts again at the first match, the matches in the type object the
 /// last Find selected included.
 #[test]
 fn find_with_other_text_starts_at_the_first_match() {
-    let (mut app, ids) = app_with(&["dog", "cat dog"]);
+    let (app, ids) = app_with(&["dog", "cat dog"]);
     let (bottom, top) = (ids[0], ids[1]);
-    choose(&mut app);
-    set(&mut app, "find", json!("cat"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((matched(&app), selected(&app)), (Some((top, 0, 3)), vec![top]));
-    set(&mut app, "find", json!("dog"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((matched(&app), selected(&app)), (Some((top, 4, 7)), vec![top]));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((bottom, 0, 3)));
+    let mut p = Panel::new(app, draw);
+    choose(p.app());
+    set(p.app(), "find", json!("cat"));
+    p.click("Find Next");
+    assert_eq!((matched(p.app()), selected(p.app())), (Some((top, 0, 3)), vec![top]));
+    set(p.app(), "find", json!("dog"));
+    p.click("Find Next");
+    assert_eq!((matched(p.app()), selected(p.app())), (Some((top, 4, 7)), vec![top]));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((bottom, 0, 3)));
 }
 
-/// The dialog stays open from match to match: Find goes to the next match and selects its
+/// The dialog stays open from match to match: Find Next goes to the next match and selects its
 /// object, Replace changes that match, Replace & Find changes it and goes on, Replace All changes
-/// the rest, and Done closes. Each Replace is one undo step, and so is Replace All; finding and a
+/// the rest, and Close closes. Each Replace is one undo step, and so is Replace All; finding and a
 /// Replace All with nothing to replace record none.
 #[test]
 fn the_buttons_step_through_the_matches() {
-    let (mut app, ids) = app_with(&["cat cat", "a cat"]);
+    let (app, ids) = app_with(&["cat cat", "a cat"]);
     let (bottom, top) = (ids[0], ids[1]);
-    choose(&mut app);
-    let ctx = context();
-    set(&mut app, "find", json!("cat"));
-    set(&mut app, "replace", json!("dog"));
-    let steps = undo_steps(&app);
-    // Find: the first match, in the top object, shown with its place and its line of text.
-    let texts = click(&mut app, &ctx, "Find");
-    assert_eq!((matched(&app), selected(&app), undo_steps(&app)), (Some((top, 2, 5)), vec![top], steps));
-    assert!(texts.iter().any(|(t, _)| t.starts_with("1 / 3")) && texts.iter().any(|(t, _)| t == "cat"), "{texts:?}");
-    assert!(texts.iter().any(|(t, _)| t == "Find Next"), "Find reads Find Next once a match is found: {texts:?}");
+    let mut p = Panel::new(app, draw);
+    choose(p.app());
+    set(p.app(), "find", json!("cat"));
+    set(p.app(), "replace", json!("dog"));
+    let steps = undo_steps(p.app());
+    // Find Next: the first match, in the top object, shown with its place and its line of text.
+    p.click("Find Next");
+    assert_eq!((matched(p.app()), selected(p.app()), undo_steps(p.app())), (Some((top, 2, 5)), vec![top], steps));
+    let line = message(p.app());
+    assert!(line.starts_with("1 / 3") && line.contains("cat"), "{line}");
     // Replace: that match only, and the search stays where it was.
-    click(&mut app, &ctx, "Replace");
-    assert_eq!((plain(&app, top), plain(&app, bottom), undo_steps(&app)), ("a dog".to_string(), "cat cat".to_string(), steps + 1));
-    assert_eq!((matched(&app), field(&app, "__at")), (None, json!({"id": top, "start": 2, "end": 5})));
-    // Find goes on from there, to the bottom object.
-    click(&mut app, &ctx, "Find");
-    assert_eq!((matched(&app), selected(&app), field(&app, "__found")["count"].clone()), (Some((bottom, 0, 3)), vec![bottom], json!(2)));
+    p.click("Replace");
+    assert_eq!((plain(p.app(), top), plain(p.app(), bottom), undo_steps(p.app())), ("a dog".to_string(), "cat cat".to_string(), steps + 1));
+    assert_eq!((matched(p.app()), from(p.app())), (None, json!({"id": top, "start": 2, "end": 5})));
+    // Find Next goes on from there, to the bottom object.
+    p.click("Find Next");
+    let count = p.app().ui.last_find.as_ref().map(|l| l["found"]["count"].clone());
+    assert_eq!((matched(p.app()), selected(p.app()), count), (Some((bottom, 0, 3)), vec![bottom], Some(json!(2))));
     // Replace & Find: one undo step, and the next match is the one left.
-    click(&mut app, &ctx, "Replace & Find");
-    assert_eq!((plain(&app, bottom), undo_steps(&app), matched(&app)), ("dog cat".to_string(), steps + 2, Some((bottom, 4, 7))));
+    p.click("Replace & Find");
+    assert_eq!((plain(p.app(), bottom), undo_steps(p.app()), matched(p.app())), ("dog cat".to_string(), steps + 2, Some((bottom, 4, 7))));
     // Replace All: the rest as one undo step, with the count under the fields.
-    let texts = click(&mut app, &ctx, "Replace All");
-    assert_eq!((plain(&app, bottom), undo_steps(&app), matched(&app)), ("dog dog".to_string(), steps + 3, None));
-    assert!(texts.iter().any(|(t, _)| t == "Matches replaced: 1"), "{texts:?}");
-    // Nothing left: no undo step, and the dialog says so, for Replace All and for Find.
-    for button in ["Replace All", "Find"] {
-        let texts = click(&mut app, &ctx, button);
-        assert_eq!((undo_steps(&app), matched(&app)), (steps + 3, None), "{button}");
-        assert!(texts.iter().any(|(t, _)| t == "No matches found"), "{button}: {texts:?}");
+    p.click("Replace All");
+    assert_eq!((plain(p.app(), bottom), undo_steps(p.app()), matched(p.app())), ("dog dog".to_string(), steps + 3, None));
+    assert_eq!(message(p.app()), "Matches replaced: 1");
+    // Nothing left: no undo step, and the dialog says so, for Replace All and for Find Next.
+    for button in ["Replace All", "Find Next"] {
+        p.click(button);
+        assert_eq!((undo_steps(p.app()), matched(p.app())), (steps + 3, None), "{button}");
+        assert_eq!(message(p.app()), "No matches found", "{button}");
     }
-    assert!(app.ui.dialog.is_some(), "the dialog stays open until Done");
-    click(&mut app, &ctx, "Done");
-    assert!(app.ui.dialog.is_none(), "Done closes it");
-    assert_eq!(undo_steps(&app), steps + 3);
+    assert!(is_open(p.app()), "the dialog stays open until Close");
+    p.click("Close");
+    assert!(!is_open(p.app()), "Close closes it");
+    assert_eq!(undo_steps(p.app()), steps + 3);
 }
 
 /// Replace and Replace & Find wait for a match found with the Find text and the options as they
-/// are: before the first Find, and after the Find text changes, a click on them changes nothing.
-/// With no Find text, no button but Done acts. Enter runs Find.
+/// are: before the first Find, and after the Find text or an option changes, they change nothing.
+/// With no Find text, nothing is found or replaced.
 #[test]
 fn replace_waits_for_a_match_of_the_text_as_it_is() {
-    let (mut app, ids) = app_with(&["cat cart"]);
-    choose(&mut app);
-    let ctx = context();
-    let steps = undo_steps(&app);
-    set(&mut app, "replace", json!("x"));
-    for button in ["Find", "Replace", "Replace & Find", "Replace All"] {
-        click(&mut app, &ctx, button);
-        assert_eq!((plain(&app, ids[0]), undo_steps(&app), matched(&app)), ("cat cart".to_string(), steps, None), "{button} with no Find text");
+    let (app, ids) = app_with(&["cat cart"]);
+    let mut p = Panel::new(app, draw);
+    choose(p.app());
+    let steps = undo_steps(p.app());
+    set(p.app(), "replace", json!("x"));
+    for button in ["Find Next", "Replace", "Replace & Find", "Replace All"] {
+        p.click(button);
+        assert_eq!(
+            (plain(p.app(), ids[0]), undo_steps(p.app()), matched(p.app())),
+            ("cat cart".to_string(), steps, None),
+            "{button} with no Find text"
+        );
     }
-    set(&mut app, "find", json!("cat"));
+    set(p.app(), "find", json!("cat"));
     for button in ["Replace", "Replace & Find"] {
-        click(&mut app, &ctx, button);
-        assert_eq!((plain(&app, ids[0]), undo_steps(&app), matched(&app)), ("cat cart".to_string(), steps, None), "{button} before Find");
+        p.click(button);
+        assert_eq!((plain(p.app(), ids[0]), undo_steps(p.app()), matched(p.app())), ("cat cart".to_string(), steps, None), "{button} before Find");
     }
-    // Enter finds.
-    frame(&mut app, &ctx, vec![]);
-    let enter = |pressed| Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![enter(true)]);
-    frame(&mut app, &ctx, vec![enter(false)]);
-    assert_eq!(matched(&app), Some((ids[0], 0, 3)));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((ids[0], 0, 3)));
+    assert!(p.enabled("Replace"));
     // The Find text changes: the match found is no longer the one to replace.
-    set(&mut app, "find", json!("ca"));
-    assert_eq!(matched(&app), None);
+    set(p.app(), "find", json!("ca"));
+    pump(p.app());
+    assert_eq!(matched(p.app()), None);
+    assert!(!p.enabled("Replace"));
     for button in ["Replace", "Replace & Find"] {
-        click(&mut app, &ctx, button);
-        assert_eq!((plain(&app, ids[0]), undo_steps(&app)), ("cat cart".to_string(), steps), "{button} after the Find text changed");
+        p.click(button);
+        assert_eq!((plain(p.app(), ids[0]), undo_steps(p.app())), ("cat cart".to_string(), steps), "{button} after the Find text changed");
     }
     // An option changes: the same.
-    set(&mut app, "find", json!("cat"));
-    assert_eq!(matched(&app), Some((ids[0], 0, 3)));
-    set(&mut app, "matchCase", json!(true));
-    assert_eq!(matched(&app), None);
+    set(p.app(), "find", json!("cat"));
+    assert_eq!(matched(p.app()), Some((ids[0], 0, 3)));
+    set(p.app(), "matchCase", json!(true));
+    assert_eq!(matched(p.app()), None);
     // Search Backwards is a direction, not what a match is.
-    set(&mut app, "matchCase", json!(false));
-    set(&mut app, "backwards", json!(true));
-    assert_eq!(matched(&app), Some((ids[0], 0, 3)));
-    click(&mut app, &ctx, "Replace");
-    assert_eq!((plain(&app, ids[0]), undo_steps(&app)), ("x cart".to_string(), steps + 1));
-}
-
-/// `ui.dialog.confirm` runs the dialog's `action`, keeps it open and puts `action` back to find;
-/// done closes it. An action it does not know is refused, and so is an empty Find text.
-#[test]
-fn confirm_runs_the_action() {
-    let (mut app, ids) = app_with(&["cat cat cat"]);
-    choose(&mut app);
-    set(&mut app, "find", json!("cat"));
-    set(&mut app, "replace", json!("dog"));
-    let steps = undo_steps(&app);
-    let r = crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((r["start"].clone(), r["index"].clone(), r["count"].clone(), matched(&app)), (json!(0), json!(1), json!(3), Some((ids[0], 0, 3))));
-    set(&mut app, "action", json!("replaceFind"));
-    let r = crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((plain(&app, ids[0]), r["start"].clone(), field(&app, "action")), ("dog cat cat".to_string(), json!(4), json!("find")));
-    set(&mut app, "action", json!("replace"));
-    let r = crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((plain(&app, ids[0]), r["replaced"].clone(), matched(&app)), ("dog dog cat".to_string(), json!(true), None));
-    // Replace with no match found: it finds one.
-    set(&mut app, "action", json!("replace"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((plain(&app, ids[0]), matched(&app), undo_steps(&app)), ("dog dog cat".to_string(), Some((ids[0], 8, 11)), steps + 2));
-    set(&mut app, "action", json!("replaceAll"));
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap(), json!({"count": 1, "replaced": 1}));
-    assert_eq!((plain(&app, ids[0]), undo_steps(&app)), ("dog dog dog".to_string(), steps + 3));
-    // Matches that already read as the Replace With text are found and not counted as replaced.
-    set(&mut app, "find", json!("DOG"));
-    set(&mut app, "action", json!("replaceAll"));
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap(), json!({"count": 3, "replaced": 0}));
-    assert_eq!((undo_steps(&app), field(&app, "__note")), (steps + 3, json!("Matches replaced: 0")));
-    set(&mut app, "find", json!("dog"));
-    for (action, find) in [("erase", "dog"), ("find", ""), ("replaceAll", "")] {
-        set(&mut app, "action", json!(action));
-        set(&mut app, "find", json!(find));
-        assert!(crate::dialogs::confirm(&mut app).is_err(), "{action} {find:?}");
-        assert_eq!((plain(&app, ids[0]), undo_steps(&app), field(&app, "action")), ("dog dog dog".to_string(), steps + 3, json!("find")));
-        assert!(field(&app, "__note").is_string(), "{action} {find:?}: the dialog shows why");
-    }
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    set(p.app(), "matchCase", json!(false));
+    set(p.app(), "backwards", json!(true));
+    assert_eq!(matched(p.app()), Some((ids[0], 0, 3)));
+    pump(p.app());
+    p.click("Replace");
+    assert_eq!((plain(p.app(), ids[0]), undo_steps(p.app())), ("x cart".to_string(), steps + 1));
 }
 
 /// Edit › Find Next goes on from the dialog's last search while the dialog is closed, with its
@@ -348,33 +237,33 @@ fn confirm_runs_the_action() {
 /// dialog opens again on the last search.
 #[test]
 fn find_next_goes_on_from_the_last_search() {
-    let (mut app, ids) = app_with(&["Cat", "cat", "cat"]);
-    choose_find_next(&mut app);
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(super::KIND), "no search yet: the dialog opens");
-    set(&mut app, "find", json!("cat"));
-    set(&mut app, "replace", json!("dog"));
-    set(&mut app, "matchCase", json!(true));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((ids[2], 0, 3)));
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let steps = undo_steps(&app);
+    let (app, ids) = app_with(&["Cat", "cat", "cat"]);
+    let mut p = Panel::new(app, draw);
+    choose_find_next(p.app());
+    assert!(is_open(p.app()), "no search yet: the dialog opens");
+    set(p.app(), "find", json!("cat"));
+    set(p.app(), "replace", json!("dog"));
+    set(p.app(), "matchCase", json!(true));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((ids[2], 0, 3)));
+    p.click("Close");
+    let steps = undo_steps(p.app());
     // On from the match the dialog found; Match Case still leaves out "Cat".
     for want in [ids[1], ids[2], ids[1]] {
-        choose_find_next(&mut app);
-        assert_eq!((selected(&app), app.ui.dialog.is_none(), undo_steps(&app)), (vec![want], true, steps));
+        choose_find_next(p.app());
+        assert_eq!((selected(p.app()), is_open(p.app()), undo_steps(p.app())), (vec![want], false, steps));
     }
     // The dialog opens on the last search and the place it reached.
-    choose(&mut app);
-    assert_eq!((field(&app, "find"), field(&app, "replace"), field(&app, "matchCase")), (json!("cat"), json!("dog"), json!(true)));
-    assert_eq!(field(&app, "__at"), json!({"id": ids[1], "start": 0, "end": 3}));
-    set(&mut app, "find", json!("zebra"));
-    assert!(crate::dialogs::confirm(&mut app).unwrap()["id"].is_null());
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    app.ui.status.clear();
-    choose_find_next(&mut app);
-    assert_eq!((app.ui.status.as_str(), selected(&app)), ("No matches found", vec![ids[1]]));
+    choose(p.app());
+    assert_eq!((field(p.app(), "find"), field(p.app(), "replace"), field(p.app(), "matchCase")), (json!("cat"), json!("dog"), json!(true)));
+    assert_eq!(from(p.app()), json!({"id": ids[1], "start": 0, "end": 3}));
+    set(p.app(), "find", json!("zebra"));
+    p.click("Find Next");
+    assert_eq!(message(p.app()), "No matches found");
+    p.click("Close");
+    p.app().ui.status.clear();
+    choose_find_next(p.app());
+    assert_eq!((p.app().ui.status.as_str(), selected(p.app())), ("No matches found", vec![ids[1]]));
 }
 
 /// The place a search reached goes with the Find text and the switches it was reached with: a
@@ -382,28 +271,28 @@ fn find_next_goes_on_from_the_last_search() {
 /// and the same search goes on from that place.
 #[test]
 fn a_changed_search_starts_again() {
-    let (mut app, ids) = app_with(&["cat dog cat", "dog"]);
+    let (app, ids) = app_with(&["cat dog cat", "dog"]);
     let (bottom, top) = (ids[0], ids[1]);
-    choose(&mut app);
-    set(&mut app, "find", json!("cat"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((bottom, 0, 3)));
-    set(&mut app, "find", json!("dog"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((top, 0, 3)), "not the dog after the cat found");
-    set(&mut app, "find", json!("cat"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((bottom, 0, 3)));
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    crate::menus::invoke(&mut app, "ui.paramDialog", json!({"command": super::COMMAND, "params": {"find": "dog"}}));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((top, 0, 3)));
-    app.ui.dialog = None;
-    choose(&mut app);
-    assert_eq!(field(&app, "find"), json!("dog"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((bottom, 4, 7)), "the same search goes on");
+    let mut p = Panel::new(app, draw);
+    choose(p.app());
+    set(p.app(), "find", json!("cat"));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((bottom, 0, 3)));
+    set(p.app(), "find", json!("dog"));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((top, 0, 3)), "not the dog after the cat found");
+    set(p.app(), "find", json!("cat"));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((bottom, 0, 3)));
+    p.click("Close");
+    crate::menus::invoke(p.app(), "ui.paramDialog", json!({"command": super::COMMAND, "params": {"find": "dog"}}));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((top, 0, 3)));
+    p.click("Close");
+    choose(p.app());
+    assert_eq!(field(p.app(), "find"), json!("dog"));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((bottom, 4, 7)), "the same search goes on");
 }
 
 /// The place a search reached belongs to its document: in another document, Edit › Find Next and
@@ -412,47 +301,44 @@ fn a_changed_search_starts_again() {
 /// included, while the menu item's own params leave the last search as it was.
 #[test]
 fn a_search_place_stays_in_its_document_and_given_params_win() {
-    let (mut app, ids) = app_with(&["cat cat"]);
-    choose(&mut app);
-    set(&mut app, "find", json!("cat"));
-    set(&mut app, "matchCase", json!(true));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((ids[0], 0, 3)));
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    let (app, ids) = app_with(&["cat cat"]);
+    let mut p = Panel::new(app, draw);
+    choose(p.app());
+    set(p.app(), "find", json!("cat"));
+    set(p.app(), "matchCase", json!(true));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((ids[0], 0, 3)));
+    p.click("Close");
     // A second document, whose type object has the id of the first one's.
-    app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
-    let other = app.run("text.create", json!({"x": 50, "y": 50, "text": "cat cat"})).unwrap()["id"].as_u64().unwrap();
-    app.run("select.none", json!({})).unwrap();
+    p.app().run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    let other = p.app().run("text.create", json!({"x": 50, "y": 50, "text": "cat cat"})).unwrap()["id"].as_u64().unwrap();
+    p.app().run("select.none", json!({})).unwrap();
     assert_eq!(other, ids[0]);
-    choose_find_next(&mut app);
-    assert_eq!(
-        (selected(&app), app.ui.last_find.as_ref().map(|l| l["from"].clone())),
-        (vec![other], Some(json!({"id": other, "start": 0, "end": 3})))
-    );
-    // The dialog opens on the last search; Find goes on in this document.
-    choose(&mut app);
-    assert_eq!(field(&app, "matchCase"), json!(true));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(matched(&app), Some((other, 4, 7)));
-    // Back in the first document, the dialog's place is not used: Replace finds first and changes
-    // nothing.
-    assert!(app.session.set_active(0));
-    assert_eq!(matched(&app), None);
-    set(&mut app, "replace", json!("dog"));
-    set(&mut app, "action", json!("replace"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((plain(&app, ids[0]), matched(&app)), ("cat cat".to_string(), Some((ids[0], 0, 3))));
-    set(&mut app, "action", json!("done"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    choose_find_next(p.app());
+    assert_eq!((selected(p.app()), from(p.app())), (vec![other], json!({"id": other, "start": 0, "end": 3})));
+    // The dialog opens on the last search; Find Next goes on in this document.
+    choose(p.app());
+    assert_eq!(field(p.app(), "matchCase"), json!(true));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((other, 4, 7)));
+    // Back in the first document, the dialog's place is not used: Replace changes nothing, and
+    // Find Next starts at the first match.
+    assert!(p.app().session.set_active(0));
+    assert_eq!(matched(p.app()), None);
+    set(p.app(), "replace", json!("dog"));
+    p.click("Replace");
+    assert_eq!((plain(p.app(), ids[0]), matched(p.app())), ("cat cat".to_string(), None));
+    p.click("Find Next");
+    assert_eq!(matched(p.app()), Some((ids[0], 0, 3)));
+    p.click("Close");
     // Given params win over the last search; the menu item's own do not.
-    crate::menus::invoke(&mut app, "ui.paramDialog", json!({"command": super::COMMAND, "params": {"matchCase": false, "replace": "dog"}}));
-    assert_eq!((field(&app, "find"), field(&app, "matchCase"), field(&app, "replace")), (json!("cat"), json!(false), json!("dog")));
-    app.ui.dialog = None;
+    crate::menus::invoke(p.app(), "ui.paramDialog", json!({"command": super::COMMAND, "params": {"matchCase": false, "replace": "dog"}}));
+    assert_eq!((field(p.app(), "find"), field(p.app(), "matchCase"), field(p.app(), "replace")), (json!("cat"), json!(false), json!("dog")));
+    p.click("Close");
     let empty = json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false});
-    crate::menus::invoke(&mut app, "ui.paramDialog", json!({"command": super::COMMAND, "params": empty}));
-    assert_eq!((field(&app, "find"), field(&app, "matchCase")), (json!(""), json!(false)));
-    app.ui.dialog = None;
-    choose(&mut app);
-    assert_eq!((field(&app, "find"), field(&app, "matchCase")), (json!("cat"), json!(true)));
+    crate::menus::invoke(p.app(), "ui.paramDialog", json!({"command": super::COMMAND, "params": empty}));
+    assert_eq!((field(p.app(), "find"), field(p.app(), "matchCase")), (json!(""), json!(false)));
+    p.click("Close");
+    choose(p.app());
+    assert_eq!((field(p.app(), "find"), field(p.app(), "matchCase")), (json!("cat"), json!(true)));
 }

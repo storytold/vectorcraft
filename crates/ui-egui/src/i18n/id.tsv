@@ -22,6 +22,7 @@
 	Quit VectorCraft	Keluar dari VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Letakkan karya
+@id	language.name	Bahasa Indonesia
 @msg	{key} must be [x, y] with finite coordinates	{key} harus berupa [x, y] dengan koordinat berhingga
 @msg	ids must contain 1–10000 object ids	ids harus berisi 1–10000 ID objek
 
