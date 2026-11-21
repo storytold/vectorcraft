@@ -693,7 +693,7 @@ print. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's 
 color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
 each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
 `highContrast2`). `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds under the wheel
-or the box. Keys left out keep their values. Params that are not an object, another key or a value off
+or the box. Keys left out or `null` keep their values. Params that are not an object, another key or a value off
 the list return an error and change nothing. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, vision, documentColors}`,
 and the settings are kept with the preferences.
 
@@ -702,7 +702,8 @@ the box), and `"none"` hides them in any RGB space. `"oklch"` is an error while 
 not sRGB: the profile assigned to the document when it has one, else the working RGB space of Edit › Color Settings.
 `ui.colorWheel {"sliders": "hsl"}` shows HSL Sliders in their place: H, S and L rows with the hue (0 to 360°),
 saturation and lightness (0 to 100 %) of the color's display sRGB, as CSS Color 4's `hsl()` defines them.
-`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH as `[L %, C, H°]` of its display sRGB.
+`color.convert {"color": "#ff0000", "to": "oklch"}` answers the color's OKLCH of its display sRGB in an object with
+`model: "oklch"` and `values: [L %, C, H°]`, next to the `hex`, `lab`, `outOfGamut` and `deltaE` of every conversion.
 A color outside sRGB (a Lab or CMYK color, an RGB color in a wider RGB space, or RGB numbers past 0 to 1) is clipped
 to sRGB first.
 The answer of `ui.colorWheel` and the settings also carry `sliders`.

@@ -214,9 +214,11 @@ fn the_panel_menu_switches_the_shading() {
         app,
     );
     h.run_steps(3);
+    let commands = h.state().run_count;
     h.get_by_label("   Show Out-of-Gamut Colors").click();
     h.run_steps(2);
     assert!(h.state().ui.color_wheel.gamut);
+    assert_eq!(h.state().run_count, commands.wrapping_add(1), "the item runs one ui.colorWheel command");
     assert!(h.query_by_label("✓ Show Out-of-Gamut Colors").is_some());
     h.get_by_label("✓ Show Out-of-Gamut Colors").click();
     h.run_steps(2);
