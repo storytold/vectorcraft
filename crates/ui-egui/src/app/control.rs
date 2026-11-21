@@ -29,44 +29,17 @@ fn write_automation_file(
 }
 
 impl VectorcraftApp {
-    pub(crate) fn drain_control(&mut self, ctx: &egui::Context) {
-        let Some(rx) = self.control_rx.take() else { return };
-        control::find::keep(ctx);
-        let mut handled = 0;
-        while handled < control::MAX_CONTROL_REQUESTS_PER_FRAME {
-            let Some(req) = self.deferred_control.take().or_else(|| rx.try_recv().ok()) else { break };
-            // Synthetic input sent before this tool action was dropped (see
-            // `discard_stale_injected_batch`): it would reach the tool without that input.
-            let tool_action = matches!(req.method.as_str(), "ui.pointer" | "ui.tool.select");
-            if tool_action && req.made_before(self.synthetic_dropped_before) {
-                // One its caller gave up is skipped without counting toward this frame's limit.
-                if req.claim() {
-                    handled += 1;
-                    let _ = req.reply.send(json!({
-                        "ok": false,
-                        "error": "input sent before this tool action was dropped because the document, dialog or focus changed"
-                    }));
-                }
-                continue;
-            }
-            // `ui.pointer` and `ui.tool.select` act at once, while `ui.key` and other synthetic
-            // input reach the tool in a later UI pass. Wait for that earlier input, so a key
-            // pressed during a drag reaches its tool before a pointer event or tool switch.
-            // One its caller gave up meanwhile is dropped below instead of holding back the rest.
-            // `ui.find` and a `control` target read the screen the earlier input leaves.
-            if (tool_action || control::waits_for_input(&req)) && !req.given_up() && (!self.synthetic.is_empty() || self.synthetic_injected) {
-                self.deferred_control = Some(req);
-                ctx.request_repaint();
-                break;
-            }
-            // Its caller stopped waiting (the app was busy or its window not drawn for too long)
-            // and was told it won't run: an edit applied now would come from nowhere (#1725).
-            if !req.claim() {
-                continue;
-            }
-            handled += 1;
-            let reply = req.reply.clone();
-            // Guarded per request: a panic must not drop the channel (taken out of `self` above).
+    /// Once per host iteration: answers the finished captures, runs the control requests the
+    /// transport queued, each inside the automation roots, and answers the requests that waited for
+    /// injected input.
+    pub(crate) fn run_control(&mut self, ctx: &egui::Context) {
+        let host = WindowHost::of(ctx);
+        let document = self.document_identity();
+        self.channel.captures.note_windows(&host, document);
+        let finished = self.channel.captures.drain(motion::now(), document);
+        self.finish_captures(finished);
+        let settle = settle_ms(ctx.global_style().animation_time);
+        while let Some(req) = self.channel.next_request() {
             let roots = self.automation_roots.clone();
             self.ui.answering_control = true;
             // Guarded per request: a panic must not stop the requests behind it.

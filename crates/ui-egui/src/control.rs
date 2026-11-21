@@ -12,17 +12,9 @@
 //! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick|tripleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
 //!   drive the active tool through the same path as the mouse, after the synthetic input sent
 //!   before it was applied
-//! - `ui.key {key, shift?, alt?, cmd?, hold?}` / `ui.text {text}`: synthetic keyboard input (`hold`
-//!   leaves the key down until `ui.release`)
-//! - `ui.move {x, y, shift?…}` / `ui.click {x, y, button?, count?, hold?, shift?…}` /
-//!   `ui.drag {x, y, toX, toY, steps?}` / `ui.wheel {x, y, dx, dy}`: real egui pointer input in screen
-//!   points (reaches every widget: panels, flyouts, dialogs). `ui.move` leaves its modifiers held and
-//!   drags while a button is held; `hold` leaves the button down
-//! - `ui.release {button?|key?, x?, y?, control?}`: lets go of one held button or key, or of everything
-//!   held and the modifiers
-//! - `ui.find {name, role?, within?, index?}`: where a control of the window is, by its accessibility
-//!   name; `ui.click`, `ui.drag`, `ui.move`, `ui.wheel` and `ui.release` take that as `control`, with
-//!   `x` and `y` as an offset in points from its centre
+//! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
+//! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
+//!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set` / `ui.dialog.confirm` / `ui.dialog.cancel`: answered by
 //!   `craft_automation::dialogs::dialog_method` for the dialog asked for (`dialog`, default `"top"`)
@@ -51,8 +43,6 @@ use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::VectorcraftApp;
 use crate::canvas::Xf;
-
-pub(crate) mod find;
 
 /// Synthetic pointer input advances one event per frame: keep gestures and backlog modest.
 pub(crate) const MAX_DRAG_STEPS: u64 = 256;
@@ -1186,35 +1176,6 @@ fn coord(p: &Value, key: &str, default: f32) -> Result<f32, String> {
     crate::menus::opt_number(p, key).map(|n| n.map_or(default, |n| n as f32))
 }
 
-/// The screen point a request means: `control`'s centre moved by `x` and `y`, else `x` and `y` as they are.
-fn point(ctx: &egui::Context, p: &Value) -> Result<egui::Pos2, String> {
-    let offset = egui::vec2(coord(p, "x", 0.0)?, coord(p, "y", 0.0)?);
-    match p.get("control").filter(|c| !c.is_null()) {
-        None => Ok(offset.to_pos2()),
-        Some(_) if p.get("coordinates").is_some() => Err("`coordinates` and `control` exclude each other".into()),
-        Some(control) => find::centre(ctx, control).map(|centre| centre + offset),
-    }
-}
-
-/// The button a request names: the primary one unless it says right or secondary.
-fn button_from(name: Option<&str>) -> egui::PointerButton {
-    match name {
-        Some("right") | Some("secondary") => egui::PointerButton::Secondary,
-        _ => egui::PointerButton::Primary,
-    }
-}
-
-/// A pointer sequence ended with a release at `pos`: the modifiers it carried go back to the keyboard's.
-fn rest_at(app: &mut VectorcraftApp, pos: egui::Pos2) {
-    app.synthetic_held.pos = Some(pos);
-    app.synthetic_held.mods = egui::Modifiers::NONE;
-}
-
-/// Whether the request reads the screen as earlier synthetic input leaves it, so it runs after that input.
-pub(crate) fn waits_for_input(req: &ControlRequest) -> bool {
-    req.method == "ui.find" || (POINT_METHODS.contains(&req.method.as_str()) && req.params.get("control").is_some())
-}
-
 /// A pointer packet's `mods`: none when omitted or null, else an object of booleans.
 fn packet_mods(value: Option<&Value>) -> Result<Option<Mods>, String> {
     match value {
@@ -1413,10 +1374,7 @@ pub(crate) fn hide_in_deferred_reply(app: &VectorcraftApp, reply: &mut Value, se
 }
 
 /// The control methods that send synthetic input.
-const INPUT_METHODS: [&str; 8] = ["ui.pointer", "ui.click", "ui.drag", "ui.move", "ui.wheel", "ui.release", "ui.key", "ui.text"];
-
-/// The input methods that take a `control` for their point.
-const POINT_METHODS: [&str; 5] = ["ui.click", "ui.drag", "ui.move", "ui.wheel", "ui.release"];
+const INPUT_METHODS: [&str; 7] = ["ui.pointer", "ui.click", "ui.drag", "ui.move", "ui.wheel", "ui.key", "ui.text"];
 
 /// Does a string or a key of `v`, at any depth, hold a `/`, a `\` or a `%`?
 fn holds_a_separator(v: &Value) -> bool {
@@ -1519,11 +1477,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                 Ok(m) => m,
                 Err(e) => return err(e),
             };
-            let hold = match crate::menus::opt_bool(p, "hold") {
-                Ok(hold) => hold.unwrap_or(false),
-                Err(e) => return err(e),
-            };
-            if let Err(e) = reserve_synthetic(app, 1 + usize::from(s("text").is_some()) + usize::from(!hold)) {
+            if let Err(e) = reserve_synthetic(app, 2 + usize::from(s("text").is_some())) {
                 return err(e);
             }
             app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m });
@@ -1531,45 +1485,29 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             if let Some(t) = s("text") {
                 app.synthetic.push(egui::Event::Text(t.to_string()));
             }
-            if hold {
-                app.synthetic_held.keys.retain(|held| *held != k);
-                app.synthetic_held.keys.push(k);
-                app.synthetic_held.mods = m;
-            } else {
-                app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
-                app.synthetic_held.mods = egui::Modifiers::NONE;
-            }
+            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
             ctx.request_repaint();
             ok(Value::Null)
         }
         "ui.move" => {
-            let given = (|| Ok::<_, String>((point(ctx, p)?, modifiers(p)?)))();
-            let (pos, mods) = match given {
-                Ok(given) => given,
+            let pos = match coord(p, "x", 0.0).and_then(|x| Ok(egui::pos2(x, coord(p, "y", 0.0)?))) {
+                Ok(pos) => pos,
                 Err(e) => return err(e),
             };
-            // A change of modifiers goes first and stays held while the pointer moves; a held button drags.
-            let changed = mods != app.synthetic_held.mods;
-            if let Err(e) = reserve_synthetic(app, 1 + usize::from(changed)) {
+            if let Err(e) = reserve_synthetic(app, 1) {
                 return err(e);
             }
-            if changed {
-                app.synthetic.push(egui::Event::ModifiersChanged(mods));
-                app.synthetic_held.mods = mods;
-            }
             app.synthetic.push(egui::Event::PointerMoved(pos));
-            app.synthetic_held.pos = Some(pos);
             ctx.request_repaint();
             ok(Value::Null)
         }
         "ui.click" | "ui.drag" => synthetic_click(app, ctx, req),
-        "ui.release" => release(app, ctx, p),
-        "ui.find" => wrap(find::answer(ctx, p)),
         "ui.wheel" => {
             // Mouse wheel notches over screen point (x, y): `dy` up (+) or down, `dx` sideways
             // (`unit: "point"` for trackpad-like points), with modifiers as `ui.click` takes them.
-            let given = (|| Ok::<_, String>(((coord(p, "dx", 0.0)?, coord(p, "dy", 0.0)?), point(ctx, p)?, modifiers(p)?)))();
-            let ((dx, dy), pos, modifiers) = match given {
+            let given =
+                (|| Ok::<_, String>(([coord(p, "dx", 0.0)?, coord(p, "dy", 0.0)?, coord(p, "x", 0.0)?, coord(p, "y", 0.0)?], modifiers(p)?)))();
+            let ([dx, dy, x, y], modifiers) = match given {
                 Ok(given) => given,
                 Err(e) => return err(e),
             };
@@ -1579,7 +1517,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             let unit = if s("unit") == Some("point") { egui::MouseWheelUnit::Point } else { egui::MouseWheelUnit::Line };
             // Notches, not a flood: a turn stays within what a real wheel sends.
             let delta = egui::vec2(dx, dy).clamp(egui::Vec2::splat(-100.0), egui::Vec2::splat(100.0));
-            app.synthetic.push(egui::Event::PointerMoved(pos));
+            app.synthetic.push(egui::Event::PointerMoved(egui::pos2(x, y)));
             app.synthetic.push(egui::Event::MouseWheel {
                 unit,
                 delta,
@@ -1587,7 +1525,6 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                 modifiers,
                 source: egui::MouseWheelSource::Unknown,
             });
-            rest_at(app, pos);
             ctx.request_repaint();
             ok(Value::Null)
         }
@@ -2023,17 +1960,8 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
     };
     // Screen-space (egui points) pointer input through egui itself: reaches every widget.
     let drag = req.method == "ui.drag";
-    let hold = match crate::menus::opt_bool(p, "hold") {
-        Ok(hold) => hold.unwrap_or(false),
-        Err(e) => return err(e),
-    };
-    if hold && (drag || count > 1) {
-        return err("`hold` takes one press: not with `ui.drag` or a `count` above 1");
-    }
-    // A held press has no release.
-    let events = events.saturating_sub(usize::from(hold));
     let given = (|| {
-        let a = point(ctx, p)?;
+        let a = egui::pos2(coord(p, "x", 0.0)?, coord(p, "y", 0.0)?);
         let end = if drag { egui::pos2(coord(p, "toX", 0.0)?, coord(p, "toY", 0.0)?) } else { a };
         Ok::<_, String>((a, end, modifiers(p)?))
     })();
@@ -2044,19 +1972,13 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
     if let Err(e) = reserve_synthetic(app, events) {
         return err(e);
     }
-    let button = button_from(s("button"));
+    let button = match s("button") {
+        Some("right") | Some("secondary") => egui::PointerButton::Secondary,
+        _ => egui::PointerButton::Primary,
+    };
     app.synthetic.push(egui::Event::PointerMoved(a));
     app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
-    if hold {
-        let held = &mut app.synthetic_held;
-        held.buttons.retain(|b| *b != button);
-        held.buttons.push(button);
-        held.mods = modifiers;
-        held.pos = Some(a);
-        ctx.request_repaint();
-        return ok(Value::Null);
-    }
-    if drag {
+    if req.method == "ui.drag" {
         for i in 1..=steps {
             let t = i as f32 / steps as f32;
             app.synthetic.push(egui::Event::PointerMoved(a + (end - a) * t));
@@ -2067,64 +1989,6 @@ fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlR
         app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
         app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
     }
-    rest_at(app, end);
-    ctx.request_repaint();
-    ok(Value::Null)
-}
-
-/// `ui.release`: lets go of one held button or key, or of everything held and the modifiers.
-fn release(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Outcome {
-    let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
-    if given("button") && given("key") {
-        return err("`button` and `key` exclude each other");
-    }
-    let at = if ["x", "y", "control"].into_iter().any(given) {
-        match point(ctx, p) {
-            Ok(at) => Some(at),
-            Err(e) => return err(e),
-        }
-    } else {
-        None
-    };
-    let held = app.synthetic_held.clone();
-    let mods = held.mods;
-    let button_up = |pos, button| egui::Event::PointerButton { pos, button, pressed: false, modifiers: mods };
-    let key_up = |key| egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: mods };
-    let mut after = held.clone();
-    let mut events = Vec::new();
-    if given("button") {
-        let button = button_from(p.get("button").and_then(Value::as_str));
-        if !held.buttons.contains(&button) {
-            return err("that button is not held");
-        }
-        let Some(pos) = at.or(held.pos) else { return err("no pointer position yet: give `x` and `y`") };
-        events.push(button_up(pos, button));
-        after.buttons.retain(|b| *b != button);
-        after.pos = Some(pos);
-    } else if given("key") {
-        let Some(key) = p.get("key").and_then(Value::as_str).and_then(key_from) else { return err("unknown `key`") };
-        if !held.keys.contains(&key) {
-            return err("that key is not held");
-        }
-        events.push(key_up(key));
-        after.keys.retain(|k| *k != key);
-    } else {
-        let pos = at.or(held.pos);
-        // A held button always has a pointer position: its press set it.
-        if let Some(pos) = pos {
-            events.extend(held.buttons.iter().map(|b| button_up(pos, *b)));
-        }
-        events.extend(held.keys.iter().map(|k| key_up(*k)));
-        if mods != egui::Modifiers::NONE {
-            events.push(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
-        }
-        after = crate::SyntheticHeld { pos, ..Default::default() };
-    }
-    if let Err(e) = reserve_synthetic(app, events.len()) {
-        return err(e);
-    }
-    app.synthetic.extend(events);
-    app.synthetic_held = after;
     ctx.request_repaint();
     ok(Value::Null)
 }

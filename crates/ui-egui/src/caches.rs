@@ -60,15 +60,9 @@ pub struct CanvasCache {
     /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
     /// frame; dropped while it is off.
     pub spelling: canvas::SpellingMarks,
-    /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
-    /// does not draw them drops them ([`canvas::show`]).
-    pub selection_marks: canvas::SelectionMarks,
-    /// The meshes the tools' shared paths (a long Blob Brush or Eraser drag's settled outline) were
-    /// drawn with in the last frame. A frame that does not draw them drops them ([`canvas::show`]).
-    pub shared_paths: canvas::SharedPaths,
-    /// The Variables panel's rows for the inputs they were built from
-    /// ([`crate::panels::variables::RowsKey`]): the panel reads them every frame.
-    pub variable_rows: Option<(crate::panels::variables::RowsKey, std::rc::Rc<crate::panels::variables::Rows>)>,
+    /// The Hand, Zoom and Rotate View tools the Space key and its chords lend the canvas, between
+    /// passes; the tool adapter takes it out for its call and puts it back.
+    pub momentary: Option<craft::ui::canvas::Momentary>,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
     /// Measure Type by Glyph Bounds).
     pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,

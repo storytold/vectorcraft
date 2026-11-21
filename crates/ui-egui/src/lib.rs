@@ -93,24 +93,6 @@ pub mod unsaved;
 pub mod updates_ui;
 pub mod workspaces;
 
-/// What control input holds down between requests, as of the last request made: the modifiers, the
-/// buttons and keys (`ui.click {hold}`, `ui.key {hold}`, `ui.move`), and where the pointer is.
-#[derive(Clone, Debug, Default, PartialEq)]
-struct SyntheticHeld {
-    mods: egui::Modifiers,
-    buttons: Vec<egui::PointerButton>,
-    keys: Vec<egui::Key>,
-    pos: Option<egui::Pos2>,
-}
-
-impl SyntheticHeld {
-    /// Whether no modifier, button or key is held (the pointer's place is not a hold).
-    fn is_empty(&self) -> bool {
-        self.mods == egui::Modifiers::NONE && self.buttons.is_empty() && self.keys.is_empty()
-    }
-}
-
-mod document_drag;
 #[cfg(test)]
 use tests::{
     background as tests_background, folder as tests_folder, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors,
@@ -266,28 +248,74 @@ pub struct VectorcraftApp {
     pub trace_runs: trace_runs::TraceRuns,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
-    /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
-    host_modifiers: egui::Modifiers,
-    /// Key, text and clipboard events a floating panel's own OS window forwarded, for the main
-    /// window's next frame ([`Self::raw_input_hook`]), and the modifiers held in that window.
-    pub(crate) forwarded: Vec<egui::Event>,
-    pub(crate) forwarded_modifiers: Option<egui::Modifiers>,
-    /// The last frame held the forwarded modifiers: this one goes back to the keyboard's.
-    forwarded_modifiers_held: bool,
-    /// This host iteration's input carries forwarded keys: they are the main window's although
-    /// its OS window doesn't have the keyboard (see `shortcuts::handle`).
-    pub(crate) forwarded_frame: bool,
-    /// The forwarded keys of this host iteration hold a Copy or Cut: it copies the art, not text
-    /// selected in this window's labels (see `shortcuts::handle_clipboard`).
-    pub(crate) forwarded_clipboard: bool,
-    /// The key presses among this host iteration's forwarded keys: a Copy or Cut one of them runs
-    /// (F3 and F2 off macOS) copies the art, not text selected in this window's labels (see
-    /// `shortcuts::clipboard_key_to_labels`).
-    pub(crate) forwarded_presses: Vec<egui::Event>,
-    /// Synthetic input set the modifiers egui holds (see [`Self::raw_input_hook`]).
-    synthetic_modifiers: bool,
-    /// What control input holds down between requests; the modifiers are given back only once it is empty.
-    synthetic_held: SyntheticHeld,
+    /// The Close, Close All or Quit in progress, which asks about each unsaved document in turn.
+    pub(crate) closing: Option<unsaved::Closing>,
+    /// The Preferences window, while it is open.
+    pub(crate) prefs: Option<Box<prefs_dialog::PrefsWindow>>,
+    /// The preferences the interface last applied, to apply only what changed.
+    pub(crate) applied_prefs: Option<prefs_dialog::Applied>,
+    /// The menu bar's model and the command states the frame publishes.
+    pub(crate) menus: menus::model::Menus,
+    /// The Keyboard Shortcuts dialog, while it is open.
+    // PLAN: assumed `crate::shortcut_editor::ShortcutsDialogState` (kb.C27 names the type, not its module; shortcuts-w8).
+    pub(crate) shortcuts_dialog: Option<shortcut_editor::ShortcutsDialogState>,
+    /// The bindings the active shortcut set changes, as the key stage takes them: rebuilt from
+    /// [`UiState::shortcut_sets`] when the set changes.
+    pub(crate) shortcut_overrides: Arc<craft::keymap::Overrides>,
+    /// Messages waiting for the dialog that shows them.
+    pub(crate) told: dialogs::Told,
+    /// The hosted dialogs whose OK the app answers, one record each.
+    pub(crate) held: dialogs::host::Held,
+    /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
+    /// step however many values it sets.
+    pub(crate) edit_scopes: HashMap<GestureId, UndoScope>,
+    /// The parameter dialog of a command, while one is open.
+    pub(crate) command_dialog: dialogs::command::CommandDialog,
+    /// The open dialogs of the Effect menu.
+    pub(crate) effect_dialogs: dialogs::effect::EffectDialogs,
+    /// The 3D and Materials dialog, while it is open.
+    pub(crate) three_d_dialog: Option<dialogs::three_d::Session>,
+    /// The 3D and Materials panel's model.
+    pub(crate) three_d: panels::three_d::Model,
+    /// The open export option dialogs and what runs after each.
+    pub(crate) export_dialogs: dialogs::export_host::ExportDialogs,
+    /// Save for Web's renders and colour table.
+    pub(crate) web_export: dialogs::save_for_web::WebExport,
+    /// The Flattener Preview panel's model.
+    pub(crate) flattener_preview: panels::flattener_preview::FlattenerPreviewModel,
+    /// The Flatten Transparency dialog's record.
+    pub(crate) flatten_dialog: dialogs::flatten::FlattenDialog,
+    /// The Print dialogs' records.
+    pub(crate) print_dialog: dialogs::print::PrintDialogs,
+    // PLAN: export-w17 asks for the open Save PDF record's field (ex.A12), but no row in this set's bundle gives its name or type; export-w17 adds it.
+    /// The open dialogs of the Object menu.
+    pub(crate) object_dialogs: dialogs::object_dialogs::ObjectDialogs,
+    /// The open tool option dialogs.
+    // PLAN: assumed `crate::dialogs::tools::ToolDialogs` (sheet note 5 names the field only; object-dialogs-w5 owns dialogs/tools.rs).
+    pub(crate) tool_dialogs: dialogs::tools::ToolDialogs,
+    /// The open dialogs of the colour area.
+    pub(crate) color_dialogs: dialogs::color_picker::ColorDialogs,
+    /// The plug-in dialog, while one is open.
+    pub(crate) plugin_dialog: Option<dialogs::plugin::PluginDialog>,
+    /// The add-on panels' session state.
+    pub(crate) addon_panels: addons::Panels,
+    /// The add-on dialogs' records.
+    pub(crate) addon_dialogs: addons::dialogs::AddonDialogs,
+    /// Check Spelling's walk through the documents' type, while its dialog is open.
+    pub(crate) spelling: Option<dialogs::check_spelling::SpellingWalk>,
+    /// The Character Style Options dialog's live preview.
+    pub(crate) char_style_preview: dialogs::preview::LivePreview,
+    /// The Paragraph Style Options dialog's live preview.
+    pub(crate) para_style_preview: dialogs::preview::LivePreview,
+    /// The Justification dialog, while it is open.
+    pub(crate) justification: Option<dialogs::justification::Open>,
+    /// The Bullets and Numbering dialog's live preview.
+    pub(crate) bullets_preview: dialogs::preview::LivePreview,
+    /// The paste that waits for the answer to its colour profile question.
+    // PLAN: assumed `crate::dialogs::profile_mismatch::PasteAsk` (fl.A16 names the type, not its module; files-w11).
+    pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
+    /// The missing links' questions, while they are asked.
+    pub(crate) link_asks: Option<dialogs::missing_links::LinkAsk>,
     /// The marked text the system IME last sent (`None` once it commits or clears). When the Type
     /// tool stops composing on its own (a click, a tool switch), the IME is told to drop it.
     pub(crate) ime_marked: Option<String>,
