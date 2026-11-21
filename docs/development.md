@@ -330,7 +330,11 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
 
 ## Cursors
 
-`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (see Adding a cursor below). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+
+### Adding a cursor
+
+The app decides which cursors exist; whoever draws them works from the list. For a new tool state with a cursor of its own: add the `Cursor` variant (`crates/tools/src/lib.rs`, with a doc comment), return it from the tool's `cursor()` with a tool test, cover it in `cursor_icon` (`crates/ui-egui/src/canvas.rs`), draw it in `crates/ui-egui/src/cursors.rs` or give it a stand-in in `Cursor::stand_in()` until it is drawn, and add its `[[cursor]]` entry to `crates/tools/src/cursors.toml` (when it shows, in plain behaviour terms, and its hotspot). A missing entry only warns (`cargo xtask cursors`): the cursor still works.
 
 ## Vendor names gate
 
