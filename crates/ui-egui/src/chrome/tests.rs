@@ -2264,6 +2264,87 @@ fn tab_skips_the_isolation_bars_background() {
     assert!(!stops.contains(&bar), "{stops:?}");
 }
 
+/// Screen readers call the isolation bar's back arrow by what it does, each crumb of the levels
+/// above by the name it shows, and the pattern buttons by their labels, in the UI's language. The
+/// current object's name is not a button.
+#[test]
+fn the_isolation_bars_controls_have_screen_reader_names() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    let buttons = |app: &mut crate::VectorcraftApp| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::isolation_bar(app, ui, screen));
+        out.textures_delta.clear();
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let mut names: Vec<String> =
+            nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button).filter_map(|(_, n)| n.label().map(str::to_string)).collect();
+        names.sort();
+        names
+    };
+    let name = |app: &crate::VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().display_name();
+    let st = app.session.active().unwrap();
+    let (layer, group) = (st.doc.layer_of(NodeId(a)).unwrap(), st.doc.parent_of(NodeId(a)).unwrap());
+    let (layer_name, group_name) = (name(&app, layer), name(&app, group));
+
+    // A path in a group: back goes to the group.
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let mut want = vec!["Back One Level".to_string(), layer_name.clone(), group_name.clone()];
+    want.sort();
+    assert_eq!(buttons(&mut app), want, "the current object's name is not a button");
+
+    // The group itself: back leaves isolation mode.
+    app.run("object.isolate", json!({"id": group.0})).unwrap();
+    let mut want = vec!["Exit Isolation Mode".to_string(), layer_name.clone()];
+    want.sort();
+    assert_eq!(buttons(&mut app), want);
+
+    // An isolated sublayer: back goes to its parent layer, and from the top-level layer it leaves.
+    let sub = app.run("layer.newSublayer", json!({"parent": layer.0, "name": "Sublayer B"})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": sub})).unwrap();
+    let mut want = vec!["Back One Level".to_string(), layer_name.clone()];
+    want.sort();
+    assert_eq!(buttons(&mut app), want);
+    app.run("object.isolate", json!({"id": layer.0})).unwrap();
+    assert_eq!(buttons(&mut app), vec!["Exit Isolation Mode".to_string()]);
+    app.run("object.isolate", json!({"id": group.0})).unwrap();
+
+    // In German.
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let german = buttons(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert!(german.contains(&"Isolationsmodus beenden".to_string()), "{german:?}");
+    app.run("object.exitIsolation", json!({"all": true})).unwrap();
+
+    // Pattern editing: back is Done, beside Save a Copy, Done and Cancel.
+    let c = rect(&mut app, 200.0);
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    let names = buttons(&mut app);
+    for label in ["Save a Copy", "Cancel"] {
+        assert!(names.contains(&label.to_string()), "{label} in {names:?}");
+    }
+    assert_eq!(names.iter().filter(|n| *n == "Done").count(), 2, "{names:?}");
+    app.run("object.pattern.cancel", json!({})).unwrap();
+
+    // Symbol editing mode: back leaves it.
+    let d = rect(&mut app, 300.0);
+    app.run("select.set", json!({"ids": [d]})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let names = buttons(&mut app);
+    assert!(names.contains(&"Exit Symbol Editing Mode".to_string()), "{names:?}");
+}
+
 /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
 /// Selection selected, and Exit Isolation Mode leaves with the path selected. Type, symbol
 /// instances, blends, two objects and an envelope's contents get no isolate button, and pattern

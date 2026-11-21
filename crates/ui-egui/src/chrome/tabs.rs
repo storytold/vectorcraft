@@ -432,8 +432,30 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         // the levels above and the pattern buttons leaves isolation mode.
         let background = ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
+        // The back arrow goes up one level: the isolated object's parent group, or `object.exitIsolation`,
+        // which goes from an isolated sublayer to its parent layer, from a group in a symbol's art to
+        // the symbol's layer, and otherwise leaves isolation mode. While a pattern is edited it is Done.
+        // Screen readers call it by what it does.
+        let parent_group = ancestry.iter().rev().nth(1).copied().filter(|p| st.doc.node(*p).is_some_and(|n| !n.is_layer()));
+        let symbol_layer = st.doc.symbol_edit.as_ref().map(|e| e.layer);
+        let up_one = parent_group.is_some()
+            || symbol_layer.is_some_and(|l| l != iso && ancestry.contains(&l))
+            || (st.doc.mask_edit.is_none()
+                && symbol_layer.is_none()
+                && st.doc.node(iso).is_some_and(|n| n.is_layer())
+                && st.doc.parent_of(iso).is_some_and(|p| st.doc.is_editable(p)));
+        let back_name = if pattern_edit.is_some() {
+            tl!("Done")
+        } else if up_one {
+            tl!("Back One Level")
+        } else if symbol_layer == Some(iso) {
+            tl!("Exit Symbol Editing Mode")
+        } else {
+            tl!("Exit Isolation Mode")
+        };
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());
+        bresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), back_name));
         icons::paint(ui, "chevron-left", back, if bresp.hovered() { t.text } else { t.icon });
 
         let mut x = bar.left() + 30.0;
@@ -449,6 +471,7 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
             if !is_leaf {
                 let crumb_rect = egui::Rect::from_min_max(egui::pos2(x - 3.0, bar.top() + 3.0), egui::pos2(x + w + 3.0, bar.bottom() - 3.0));
                 let resp = ui.interact(crumb_rect, ui.scope_id().with(("iso-crumb", i)), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &crumb.name));
                 if resp.hovered() {
                     ui.painter().rect_filled(crumb_rect, 3.0, t.hover);
                 }
@@ -480,6 +503,7 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                 let w = 12.0 + 7.0 * label.len() as f32;
                 let r = egui::Rect::from_min_max(egui::pos2(x - w, bar.top() + 3.0), egui::pos2(x, bar.bottom() - 3.0));
                 let resp = ui.interact(r, ui.scope_id().with(("pat-bar", cmd)), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label));
                 ui.painter().rect_filled(r, 3.0, if resp.hovered() { t.hover } else { t.panel });
                 ui.painter().rect_stroke(r, 3.0, Stroke::new(1.0, t.button_border), egui::StrokeKind::Inside);
                 ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), t.text);
@@ -492,9 +516,7 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         if bresp.clicked() {
             pattern_cmd = pattern_cmd.or(pattern_edit.as_ref().map(|_| "object.pattern.done"));
             if pattern_cmd.is_none() {
-                // Up one level: the isolated object's parent group, or `object.exitIsolation`, which
-                // goes from an isolated sublayer to its parent layer and otherwise leaves isolation mode.
-                nav_cmd = Some(match ancestry.iter().rev().nth(1).filter(|p| st.doc.node(**p).is_some_and(|n| !n.is_layer())) {
+                nav_cmd = Some(match parent_group {
                     Some(parent) => ("object.isolate", json!({ "id": parent.0 })),
                     None => ("object.exitIsolation", json!({})),
                 });
