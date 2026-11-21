@@ -1730,7 +1730,7 @@ fn the_flip_buttons_mirror_about_the_reference_point() {
 
 /// With Use Registration Point for Symbol on, one symbol instance turns about its symbol's
 /// registration point (here the bottom-right one) whatever the locator shows: the locator
-/// follows the registration point.
+/// follows the registration point, and takes no click of its own.
 #[test]
 fn a_symbol_instance_turns_about_its_registration_point() {
     let (mut app, ctx) = reference_setup(&[]);
@@ -1738,6 +1738,11 @@ fn a_symbol_instance_turns_about_its_registration_point() {
     app.run("select.set", json!({"ids": [id]})).unwrap();
     app.session.prefs.use_registration_point_for_symbol = true;
     click_named(&mut app, &ctx, transform_section, "Top Left");
+    assert_eq!(
+        ctx.data(|d| d.get_temp::<usize>(egui::Id::unique("refpt"))),
+        None,
+        "the locator takes no choice while the registration point decides the reference"
+    );
     type_over(&mut app, &ctx, transform_section, "0°", "45");
     let bx = app.selection_box().unwrap();
     assert!((bx.angle - 45.0).abs() < 1e-6, "turned to {}", bx.angle);
