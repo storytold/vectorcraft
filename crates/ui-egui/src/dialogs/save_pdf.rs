@@ -801,8 +801,13 @@ fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
 /// `ui.dialog.set` set `field` of Save PDF or the PDF preset editor: `__bleedLinked` links or
 /// unlinks the bleed as its button does, and must be true or false; every write of `bleed`, the
 /// same values included, drops the link's state, so the link follows the values set. A flattener
-/// preset set there drops the Custom… options, as choosing it in the dropdown does.
-pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
+/// preset set there drops the Custom… options, as choosing it in the dropdown does. A settings
+/// object (`bleed`, `marks`, `compression`…) set there must be an object and sets only the options
+/// it holds: the ones it leaves out keep the values the dialog had (`old`).
+pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>) -> Result<(), String> {
+    if DEFAULTS.get(field).is_some_and(Value::is_object) {
+        keep_unset_options(d, field, old)?;
+    }
     match field {
         BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
             Some(Value::Bool(on)) => {
@@ -820,6 +825,31 @@ pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
             Ok(())
         }
         _ => Ok(()),
+    }
+}
+
+/// The settings object `field` that `ui.dialog.set` set, with the options it leaves out taken from
+/// `old` (the default settings' when the dialog had none). A null is kept as it was set.
+fn keep_unset_options(d: &mut Dialog, field: &str, old: Option<&Value>) -> Result<(), String> {
+    let Some(new) = d.fields.get_mut(field).filter(|v| !v.is_null()) else { return Ok(()) };
+    if !new.is_object() {
+        return Err(format!("{field} must be an object of options, not {new}"));
+    }
+    let mut merged = old.filter(|o| o.is_object()).or_else(|| DEFAULTS.get(field)).cloned().unwrap_or_default();
+    merge_options(&mut merged, new);
+    *new = merged;
+    Ok(())
+}
+
+/// Set the options `over` holds on `base`, object by object.
+fn merge_options(base: &mut Value, over: &Value) {
+    match (base, over) {
+        (Value::Object(b), Value::Object(o)) => {
+            for (k, v) in o {
+                merge_options(b.entry(k.as_str()).or_insert(Value::Null), v);
+            }
+        }
+        (b, o) => *b = o.clone(),
     }
 }
 

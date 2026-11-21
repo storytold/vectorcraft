@@ -1011,6 +1011,86 @@ fn ui_dialog_set_links_the_bleed() {
     assert!(!bleed_linked(d) && bleed_of(d) == [1.0; 4], "a later __bleedLinked unlinks them");
 }
 
+/// `ui.dialog.set` with `fields`, as a control request.
+fn dialog_set(app: &mut VectorcraftApp, fields: Value) -> Value {
+    let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({ "fields": fields }));
+    let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
+    r
+}
+
+/// The open dialog as JSON, to compare it before and after a request.
+fn dialog_json(app: &VectorcraftApp) -> Value {
+    serde_json::to_value(app.ui.dialog.as_ref()).unwrap()
+}
+
+/// A settings object `ui.dialog.set` sets with some of its options changes only those: the
+/// others keep the dialog's values, so the dialog shows what Save PDF writes and the bleed link
+/// gives every side the top value Save PDF writes.
+#[test]
+fn ui_dialog_set_keeps_the_options_a_settings_object_leaves_out() {
+    let (mut app, _, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Uneven", "bleed": {"top": 3, "bottom": 5, "left": 3, "right": 3}})).unwrap();
+    app.run("pdf.preset.save", json!({"name": "Marked", "marks": {"trim": true, "offset": 9}})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Uneven"})).unwrap();
+
+    let r = dialog_set(&mut app, json!([{"field": "bleed", "value": {"useDocument": false}}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(bleed_of(d) == [3.0, 5.0, 3.0, 3.0] && !bleed_linked(d), "the sides left out keep their values");
+    let r = dialog_set(&mut app, json!([{"field": BLEED_LINKED, "value": true}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(bleed_of(d), [3.0; 4], "linking gives every side the top value");
+    assert_eq!(params(d)["bleed"], json!({"useDocument": false, "top": 3.0, "bottom": 3.0, "left": 3.0, "right": 3.0}));
+
+    let r = dialog_set(&mut app, json!([{"field": "bleed", "value": {"bottom": 5}}]));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(bleed_of(app.ui.dialog.as_ref().unwrap()), [3.0, 5.0, 3.0, 3.0], "only the side set changes");
+
+    // A null option is set as it is: a null `output.profiles` still leaves the profiles unset.
+    let r = dialog_set(&mut app, json!([{"field": "output", "value": {"profiles": "all"}}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let r = dialog_set(&mut app, json!([{"field": "output", "value": {"profiles": null}}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(get(d, "output.profiles").is_null() && get(d, "output.conversion") == &json!("none"), "{:?}", d.fields.get("output"));
+
+    // Every settings object, not only the bleed.
+    app.run("ui.savePdfDialog", json!({"preset": "Marked"})).unwrap();
+    let r = dialog_set(&mut app, json!([{"field": "marks", "value": {"weight": 0.5}}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((get(d, "marks.trim"), get(d, "marks.offset"), get(d, "marks.weight")), (&json!(true), &json!(9.0), &json!(0.5)));
+
+    // A value that isn't an object is refused, and the dialog stays as it was.
+    let before = dialog_json(&app);
+    for bad in [json!(5), json!("3 mm"), json!([3, 3, 3, 3])] {
+        let r = dialog_set(&mut app, json!([{"field": "bleed", "value": bad}]));
+        assert_eq!(r["ok"], false, "{bad}: {r}");
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("bleed must be an object of options")), "{bad}: {r}");
+        assert_eq!(dialog_json(&app), before, "{bad}");
+    }
+}
+
+/// A `ui.dialog.set` request whose later field is refused leaves the whole dialog as it was
+/// before the request, the bleed values an earlier field set included.
+#[test]
+fn a_refused_bleed_link_leaves_the_whole_request_unset() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"bleed": {"top": 3, "bottom": 3, "left": 3, "right": 3}})).unwrap();
+    let before = dialog_json(&app);
+    let r = dialog_set(
+        &mut app,
+        json!([
+            {"field": "bleed", "value": {"top": 1, "bottom": 2, "left": 3, "right": 4}},
+            {"field": BLEED_LINKED, "value": "yes"},
+        ]),
+    );
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("__bleedLinked must be true or false")), "{r}");
+    assert_eq!(dialog_json(&app), before, "the dialog is unchanged");
+}
+
 /// An unlinked edit that makes the four sides equal leaves the link off, so the next edit
 /// changes one side only.
 #[test]
