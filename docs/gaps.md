@@ -7,6 +7,8 @@
 > Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
 
 > Blend redraw update (#5179; previously: Keyboard Shortcuts: user-bindable Switch Selection Tools (#7645), with no default key; scores and estimates unchanged): renderer bounds include spine-placed keys and steps; both focused CPU regressions pass. Scores and estimates unchanged.
+> Outline Stroke is available in the canvas context menu when the selection has an outlinable stroke (#5267). Scores and estimates unchanged.
+
 
 ## Feature submission evidence
 
@@ -990,6 +992,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-19 | minor | G12: Brushes panel item right-click context menu offering Brush Options…, Duplicate Brush, and Delete Brush (disabled if the last remaining brush); right-clicking an unselected brush selects it first, and right-clicking within a multi-selection preserves it offering Duplicate Brushes / Delete Brushes; headless tests in `crates/ui-egui/src/panels/brushes/tests.rs`; scores and estimates unchanged. |
 | 2026-11-19 | minor | G12: Links panel row context menu (Relink…, Go To Link, Update Link, Edit Original, Show in Folder, Embed Image / Unembed…); right-clicking an unselected link row selects it first, and right-clicking within a multi-selection preserves it; headless tests in `crates/ui-egui/src/panels/tests_links.rs`; scores and estimates unchanged. |
 | 2026-11-18 | minor | G12: Layers panel context menu on guide rows (Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show); regression tests in `crates/ui-egui/src/panels/layers/tests.rs`; scores and estimates unchanged. |
+| 2026-11-03 | minor | The canvas context menu offers Outline Stroke for a stroked selection (#5267); no entry closed, estimates unchanged. |
 | 2026-11-18 | minor | G4 type: Retype phase 1 (#4934), `type.retype` for outlined text that exactly matches an available font; near matches, the ranked font list and images remain. Scores and estimates unchanged |
 | 2026-11-18 | minor | Production Preflight: output-aware fonts, text overflow, linked files and effective image resolution, clickable findings and automatic rechecking; scores and estimates unchanged. See [production-preflight.md](production-preflight.md) for scope and limits. |
 | 2026-11-16 | minor | Recolor Artwork follow-up (#8031, remaining #4028): native Lab input, picker swatch libraries and Assign-row menus; UI interaction regression coverage; scores and estimates unchanged. |
