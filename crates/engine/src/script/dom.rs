@@ -581,6 +581,11 @@ fn on_doc<T>(
     Ok(v)
 }
 
+/// Marks stale the style objects whose styles a command the run ran removed or renamed.
+pub(super) fn after_command(h: &Host) {
+    text::styles::after_command(h);
+}
+
 /// Runs `id` with `params` on the item's document, its selection kept.
 fn edit_item(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
     on_doc(h, item.doc.uid, true, |h| command(h, id, params))
@@ -1868,6 +1873,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("textFrames", text::doc_text_frames(l)),
         ("selection", property(l, doc_selection, doc_set_selection)),
     ]);
+    document.extend(text::styles::doc_members(l));
     document.extend(
         ["layers", "artboards", "pathItems", "groupItems", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
             .into_iter()

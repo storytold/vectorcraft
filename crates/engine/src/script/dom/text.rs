@@ -44,6 +44,8 @@ use super::{
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
+pub(super) mod styles;
+
 /// The error of a text range, or of a collection of one, whose frame's text changed other than
 /// through the object model.
 pub const STALE_RANGE: &str = "Stale text range";
@@ -188,6 +190,8 @@ pub(in crate::script) struct TextState {
     /// The fonts `app.textFonts` lists, as family and style, read once a run; a font a character
     /// names that is not installed is added at the end.
     fonts: RefCell<Option<Vec<(String, String)>>>,
+    /// The styles the run's style objects name.
+    styles: styles::StyleState,
 }
 
 fn text_of(st: &DocState, id: NodeId) -> Option<&TextObject> {
@@ -1504,6 +1508,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("remove", method(l, range_remove)),
     ]);
     range.extend(attr_members(l));
+    range.extend(styles::range_members(l));
     range.extend(
         [
             "lines",
@@ -1511,8 +1516,6 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "textRanges",
             "story",
             "kerning",
-            "characterStyles",
-            "paragraphStyles",
             "textSelection",
             "changeCaseTo",
             "select",
@@ -1537,7 +1540,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
     chars.extend(attr_members(l));
     let mut paras = named(vec![("typename", get(l, para_attrs_typename))]);
     paras.extend(para_members(l));
-    vec![
+    let mut out = vec![
         class("TextFrame", Some("PageItem"), frame, None),
         class("TextRange", None, range, None),
         part("Characters"),
@@ -1586,7 +1589,9 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             ]),
             None,
         ),
-    ]
+    ];
+    out.extend(styles::classes(l));
+    out
 }
 
 #[cfg(test)]

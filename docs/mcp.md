@@ -2738,6 +2738,31 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `Stale text font`. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.story` and
   `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`, `end`, `length` and
   `orientation` cannot be set yet.
+- `Document.characterStyles` and `Document.paragraphStyles`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CharacterStyles/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ParagraphStyles/) list the document's styles with `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add(name)` (`charStyle.new` or `paraStyle.new` with no attributes) and
+  `removeAll()` (`charStyle.delete` or `paraStyle.delete` of every style but the Normal style). A `CharacterStyle`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CharacterStyle/) has `name` (`charStyle.rename`), `parent`,
+  `characterAttributes`, `applyTo(text, clearingOverrides?)` (`charStyle.apply`) and `remove()` (`charStyle.delete`);
+  a `ParagraphStyle` (https://ai-scripting.docsforadobe.dev/jsobjref/ParagraphStyle/) has the same members with
+  `paragraphAttributes` and the `paraStyle` commands. A style's attributes are those of a text range's
+  `characterAttributes` and `paragraphAttributes`, with the same ranges, and setting one runs `charStyle.setAttrs` or
+  `paraStyle.setAttrs`. `TextRange.characterStyles` and `TextRange.paragraphStyles`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) list the styles the range's text is in, with `length`,
+  `[i]`, `index(key)` and `getByName(name)`. A script loads styles from another document with `vc.run` and
+  `charStyle.load`, `paraStyle.load` or `textStyle.loadAll`, from a file the script may read.
+  VectorCraft's own rules: a document's list starts with `[Normal Character Style]` or `[Normal Paragraph Style]`,
+  followed by the panel's order. A name is trimmed and must then have 1 to 256 characters and no control characters.
+  An attribute a style does not set reads `undefined`, and setting one changes text in the style where it had the
+  style's old value. `applyTo` takes a text range, a text frame or its characters, words or paragraphs, in the
+  style's document; a character style on an empty range changes nothing, and a paragraph style styles every
+  paragraph the text touches. `clearingOverrides` left out is false. A range lists each style once, in the order
+  its text first uses it, the Normal style standing for text in no other style, and its lists cannot add or remove
+  styles. The Normal styles cannot be renamed or removed. A style object keeps naming its style after a rename made
+  through `name`; after the style is removed, renamed another way or its document closed, it throws `Stale style`.
+  One run names at most 4,096 styles. `ParagraphStyle.characterAttributes` throws an error that says it is not
+  available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -13086,7 +13111,7 @@ uses, in panel order and never the Normal style, and the panel highlights them; 
 (Load Character Styles… and Load Paragraph Styles… in the panel menus, where `ui.loadCharStyles` and
 `ui.loadParaStyles` pick the file) copy the styles of that kind from another document VectorCraft opens (`path`, `data`
 or `dataBase64`), and `textStyle.loadAll` (Load All Styles…, `ui.loadAllStyles`) copies both kinds, each in one undo
-step. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
+step. A file larger than 64 MB is refused without being read in full. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
 either kind that type in those patterns and symbols is set in, come along as Paste brings those of pasted type; a global or spot color whose name the document gives another color
 is the document's. A loaded style that is the same as the style of
 its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The

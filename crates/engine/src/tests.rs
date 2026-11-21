@@ -178,6 +178,7 @@ mod script_folder;
 mod script_include;
 mod script_io;
 mod script_run;
+mod script_styles;
 mod script_text;
 mod scripts;
 mod select_effects;
