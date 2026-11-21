@@ -226,6 +226,28 @@ fn dimension_angles_circles_arcs_and_curves() {
 }
 
 #[test]
+fn an_angular_dimension_can_take_its_vertex_from_an_anchor() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let request = json!({
+        "mode": "angular", "a": [172, 100], "b": [100, 172], "options": {"precision": 1},
+        "source": {"kind": "points", "vertex": {"node": line, "subpath": 0, "anchor": 0}}
+    });
+    let id = run(&mut s, "dimension.create", request.clone())["id"].as_u64().unwrap();
+    assert_eq!(text(&s, id), "90.0°");
+    run(&mut s, "select.set", json!({"ids": [line]}));
+    run(&mut s, "object.move", json!({"dx": 18, "dy": 0}));
+    assert!(near(recipe(&s, id).vertex, vectorcraft_geom::Point::new(118.0, 100.0)));
+
+    let mut invalid = request.clone();
+    invalid["vertex"] = json!("bad point");
+    assert!(s.execute("dimension.create", &invalid).is_err());
+    let mut missing = request;
+    missing["source"]["vertex"] = Value::Null;
+    assert!(s.execute("dimension.create", &missing).is_err());
+}
+
+#[test]
 fn dimension_rejects_bad_input_without_mutation() {
     let mut s = session();
     let line = edge(&mut s);
