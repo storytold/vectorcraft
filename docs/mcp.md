@@ -2705,27 +2705,32 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `compoundPathItems` and a layer's or group's `pageItems` list art in paint order from the bottom. The document's
   `groupItems` and `compoundPathItems` hold every group or compound path at any depth, and a layer's or group's hold
   only the ones directly in it. A layer's `pageItems` leave out its sublayers, and a compound path's `pathItems`
-  are its `pageItems`. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
+  list its paths, with the typename `PathItems`. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
   numbers from 0 to 255. A layer's name is from 1 to 512 characters. A layer's `zOrderPosition` counts the layers
   beside it from 1 at the bottom, leaving out art, and `zOrder` with `BRINGFORWARD` or `SENDBACKWARD` moves it past
   the next layer beside it and any art between them.
-  `hasSelectedArtwork = true` adds the layer's shown, unlocked art to the selection, and `false` deselects it.
+  `hasSelectedArtwork = true` adds the layer's shown, unlocked art to the selection (`select.add`), and `false`
+  deselects only the layer's art (`select.toggle`); the rest of the selection, ruler guides included, stays. A layer
+  with nothing to add or deselect runs no command.
   `clipped = true` makes the group's topmost object, which must be a path, a compound path or type, its clipping
   path; `false` releases the mask; the group keeps its id. `groupItems.add()` makes an empty group on top of the
   layer's or group's contents, or of the current layer's for the document's collection.
   `compoundPathItems.add()` throws, since a compound path holds at least one path. `artboards.add` and `insert` stop
   at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
   `[left, top, right, bottom]` in script coordinates, with its right side right of its left side, its bottom below
-  its top and each side from 1 to 3,999,856 points. Artboard names are trimmed, cannot be empty and are unique: a name
+  its top, each side from 1 to 3,999,856 points and every edge at most 4,000,000 points from the document origin.
+  Artboard names are trimmed, cannot be empty and are unique: a name
   another artboard has throws. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one
   past the artboard count that no other artboard's name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
   `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
-  change in `activeArtboards` (`[{document, artboard}]`, both indexes). An index outside the list throws a
+  change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
+  run leaves it). An index outside the list throws a
   `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
   `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
   `GroupItems.createFromFile` throw an error that says they are not available yet.
 - `object.newGroup {parent?, index?}` adds an empty group to a shown, unlocked layer or group (`parent`; default:
-  the current layer), on top of its contents or at `index` (0 is the bottom), as one undo step named Group, and
+  the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group, index 0
+  puts it directly above the clipping path), as one undo step named Group, and
   gives `{id}`. The selection stays as it is.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.

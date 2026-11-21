@@ -1078,6 +1078,31 @@ fn group_items_list_every_depth_and_clipped_toggles_the_mask() {
 }
 
 #[test]
+fn a_compound_paths_path_items_are_path_items() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.compoundPathItems[0].pathItems; vc.log(p.typename); vc.log(p.length);\
+         vc.log(p[0].typename); vc.log(d.layers[0].pageItems.typename);",
+    );
+    assert_eq!(out, [json!("PathItems"), json!(2), json!("PathItem"), json!("PageItems")]);
+}
+
+#[test]
+fn art_collections_follow_edits_between_reads() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.layers[0].pageItems, g = d.groupItems; vc.log(p.length); vc.log(g.length);\
+         d.layers[0].groupItems.add(); vc.log(p.length); vc.log(p[2].typename); vc.log(g.length);\
+         p[0].remove(); vc.log(p.length); vc.log(p[0].typename);",
+    );
+    assert_eq!(out, [json!(2), json!(0), json!(3), json!("GroupItem"), json!(1), json!(2), json!("PathItem")]);
+}
+
+#[test]
 fn group_items_remove_all_refuses_locked_groups() {
     let (mut s, a, b) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
@@ -1194,6 +1219,35 @@ fn set_active_artboard_index_is_reported_without_an_undo_step() {
 }
 
 #[test]
+fn the_report_gives_the_active_artboard_the_run_leaves() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]); A.add([800, 300, 900, 100]);").unwrap();
+    // The chosen artboard is deleted later in the run: the report gives the one active at the end.
+    let r =
+        run(&mut s, "var A = app.activeDocument.artboards; A.setActiveArtboardIndex(2); A.remove(2); vc.log(A.getActiveArtboardIndex());").unwrap();
+    let active = r["log"][0].clone();
+    assert!(active.as_u64().is_some_and(|i| i < 2), "{r}");
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": active}]));
+}
+
+#[test]
+fn an_artboard_rectangle_stays_inside_the_canvas() {
+    let (mut s, _, _) = doc();
+    let before = format!("{:?}", s.active().unwrap().doc.artboards);
+    let steps = undo_steps(&s);
+    // Each number is within the coordinate range, but the right edge is past the canvas.
+    for src in [
+        "app.activeDocument.artboards[0].artboardRect = [3999950, 0, 4000100, -100];",
+        "app.activeDocument.artboards.add([-4000100, 0, -3999950, -100]);",
+        "app.activeDocument.artboards.insert([0, 4000600, 100, 4000500], 0);",
+    ] {
+        assert!(failure(&mut s, src).contains("outside the canvas"), "{src}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.artboards), before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
 fn has_selected_artwork_selects_and_deselects_a_layers_art() {
     let (mut s, a, b) = doc();
     s.execute("select.none", &json!({})).unwrap();
@@ -1208,6 +1262,28 @@ fn has_selected_artwork_selects_and_deselects_a_layers_art() {
     run(&mut s, "app.activeDocument.layers[0].hasSelectedArtwork = false;").unwrap();
     assert!(s.active().unwrap().selection.objects.is_empty());
     assert!(failure(&mut s, "app.activeDocument.layers[0].hasSelectedArtwork = 0;").contains("true or false"));
+}
+
+#[test]
+fn has_selected_artwork_keeps_the_rest_of_the_selection() {
+    let (mut s, a, b) = doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 120})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    // An empty layer has nothing to deselect or add: the selected guide stays.
+    let steps = undo_steps(&s);
+    run(&mut s, "var l = app.activeDocument.layers.add(); l.hasSelectedArtwork = false; l.hasSelectedArtwork = true;").unwrap();
+    assert_eq!(s.active().unwrap().selection.guides.len(), 1);
+    assert_eq!(undo_steps(&s), steps + 1);
+    // Deselecting a layer's art leaves the guide selected, and so does adding it.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    run(&mut s, "app.activeDocument.layers.getByName('Layer 1').hasSelectedArtwork = false;").unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.len(), sel.guides.len()), (0, 1));
+    run(&mut s, "app.activeDocument.layers.getByName('Layer 1').hasSelectedArtwork = true;").unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert!(sel.objects.contains(&a) && sel.objects.contains(&b));
+    assert_eq!(sel.guides.len(), 1);
 }
 
 #[test]

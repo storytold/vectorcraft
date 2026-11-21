@@ -30,13 +30,16 @@
 //! - `setActiveArtboardIndex` changes the view's active artboard: no undo step, and the run's report
 //!   lists it in `activeArtboards` for the app to show.
 
+use std::rc::Rc;
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_parts};
 
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg, boolean, command, doc_of,
     doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later, method, named, num, number, on_doc,
-    page_items, placement_of, property, set_selection, text, typename, whole, with_doc,
+    page_items, placement_of, property, text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -272,36 +275,43 @@ fn layer_has_selected(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(with_doc(h, doc, |_, st| st.selection.objects.iter().any(|o| st.doc.ancestry(*o).is_some_and(|a| a.contains(&id))))))
 }
 
-/// `hasSelectedArtwork = false` deselects the layer's art; `true` adds its visible, unlocked art
-/// to the selection.
+/// `hasSelectedArtwork = false` deselects the layer's art with `select.toggle`; `true` adds its
+/// visible, unlocked art with `select.add`. The rest of the selection, ruler guides included, stays,
+/// and no command runs when there is nothing to deselect or add.
 fn layer_set_has_selected(h: &Host, a: &[Data]) -> Answer {
     let on = boolean(arg(a, 1), "hasSelectedArtwork")?;
     let (doc, id) = this_layer(h, a)?;
-    let ids = with_doc(h, doc, |_, st| {
+    let (ids, total) = with_doc(h, doc, |_, st| {
         let inside = |o: &NodeId| st.doc.ancestry(*o).is_some_and(|a| a.contains(&id));
-        let mut ids: Vec<NodeId> = st.selection.objects.clone();
-        if on {
-            let locks = st.doc.locked_artboards();
-            let art = st.doc.node(id).map(|n| n.layer_art(true)).unwrap_or_default();
-            let mut have: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
-            for o in art {
-                if ids.len() > MAX_LISTED {
-                    break;
-                }
-                if !have.contains(&o) && crate::cmd::select::is_selectable(&st.doc, st.isolation, &locks, o) {
-                    have.insert(o);
-                    ids.push(o);
-                }
-            }
-        } else {
-            ids.retain(|o| !inside(o));
+        let selected = &st.selection.objects;
+        if !on {
+            return (selected.iter().copied().filter(inside).collect::<Vec<_>>(), 0);
         }
-        ids
+        let locks = st.doc.locked_artboards();
+        let art = st.doc.node(id).map(|n| n.layer_art(true)).unwrap_or_default();
+        let mut have: std::collections::HashSet<NodeId> = selected.iter().copied().collect();
+        let mut ids = Vec::new();
+        for o in art {
+            if selected.len() + ids.len() > MAX_LISTED {
+                break;
+            }
+            if !have.contains(&o) && crate::cmd::select::is_selectable(&st.doc, st.isolation, &locks, o) {
+                have.insert(o);
+                ids.push(o);
+            }
+        }
+        let total = selected.len() + ids.len();
+        (ids, total)
     });
-    if ids.len() > MAX_LISTED {
+    if total > MAX_LISTED {
         return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects")));
     }
-    set_selection(h, doc, ids)
+    if ids.is_empty() {
+        return Ok(Data::Undefined);
+    }
+    let command_id = if on { "select.add" } else { "select.toggle" };
+    on_doc(h, doc.uid, false, |h| command(h, command_id, &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
+    Ok(Data::Undefined)
 }
 
 fn layer_is_isolated(h: &Host, a: &[Data]) -> Answer {
@@ -558,17 +568,36 @@ fn art_scope(h: &Host, d: &Data, class: &str) -> Result<(Doc, Option<NodeId>)> {
     }
 }
 
+/// A document's uid, the document as it was, the [`Kind`] and the container of an art collection,
+/// and the ids it listed then.
+pub(super) type ArtList = (u64, Arc<Document>, u8, Option<NodeId>, Rc<Vec<NodeId>>);
+
 /// The objects of `kind` in `container` (directly), or in the whole document at any depth, in
-/// paint order.
-fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Vec<NodeId>> {
+/// paint order. The last list is kept while the document is unchanged, and each new one is charged
+/// by the objects it looks at.
+fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
+    if let Some((uid, doc, k, c, ids)) = &*h.dom.art.borrow()
+        && *uid == st.uid
+        && Arc::ptr_eq(doc, &st.doc)
+        && *k == kind as u8
+        && *c == container
+    {
+        return Ok(ids.clone());
+    }
     let ids: Vec<NodeId> = match container {
         None => {
             let all = page_items(h, st);
             h.charge_call(all.len() as u64)?;
             all.iter().copied().filter(|i| st.doc.node(*i).is_some_and(|n| kind.holds(n))).collect()
         }
-        Some(c) => st.doc.node(c).and_then(|n| n.children()).into_iter().flatten().filter(|n| kind.holds(n)).map(|n| n.id).collect(),
+        Some(c) => {
+            let children: &[Arc<crate::doc::Node>] = st.doc.node(c).and_then(|n| n.children()).map_or(&[], Vec::as_slice);
+            h.charge_call(children.len() as u64)?;
+            children.iter().filter(|n| kind.holds(n)).map(|n| n.id).collect()
+        }
     };
+    let ids = Rc::new(ids);
+    *h.dom.art.borrow_mut() = Some((st.uid, st.doc.clone(), kind as u8, container, ids.clone()));
     Ok(ids)
 }
 
@@ -709,8 +738,10 @@ fn compounds_remove_all(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn art_typename(h: &Host, a: &[Data], kind: Kind) -> Answer {
-    art_scope(h, arg(a, 0), kind.class())?;
-    Ok(text(kind.class()))
+    let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
+    // A compound path's `pathItems` are its `PageItems`: it holds only paths.
+    let compound = c.is_some_and(|c| with_doc(h, doc, |_, st| st.doc.node(c).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. }))));
+    Ok(text(if compound && kind == Kind::Any { "PathItems" } else { kind.class() }))
 }
 
 pub(super) fn scoped_typename(h: &Host, a: &[Data]) -> Answer {
@@ -956,6 +987,9 @@ fn rect_arg(h: &Host, st: &DocState, d: &Data, what: &str) -> Result<vectorcraft
     if rect.width() > super::MAX_SIZE || rect.height() > super::MAX_SIZE {
         return Err(HostError::Range(format!("{what} must be at most 3999856 points wide and tall")));
     }
+    if [rect.x0, rect.y0, rect.x1, rect.y1].iter().any(|v| v.abs() > crate::MAX_COORD) {
+        return Err(HostError::Range(format!("{what} is outside the canvas")));
+    }
     Ok(rect)
 }
 
@@ -1199,26 +1233,24 @@ fn boards_set_active(h: &Host, a: &[Data]) -> Answer {
         let mut s = h.session.borrow_mut();
         let st = s.document_mut(doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         st.active_artboard = st.doc.artboards.get(i).map(|ab| ab.id);
-        let id = st.active_artboard;
         drop(s);
         let mut moved = h.dom.active_artboards.borrow_mut();
-        moved.retain(|(u, _)| *u != doc.uid);
-        if let Some(id) = id {
-            moved.push((doc.uid, id));
+        if !moved.contains(&doc.uid) {
+            moved.push(doc.uid);
         }
     }
     Ok(Data::Undefined)
 }
 
 /// The documents whose active artboard the run changed, as `script.run`'s report gives them:
-/// `[{document, artboard}]`, each an index, or `None` when there are none.
-pub(crate) fn active_artboards(moved: &[(u64, u32)], docs: &[DocState]) -> Option<Value> {
+/// `[{document, artboard}]`, each an index, with the active artboard each document has at the end
+/// of the run, or `None` when there are none.
+pub(crate) fn active_artboards(moved: &[u64], docs: &[DocState]) -> Option<Value> {
     let list: Vec<Value> = moved
         .iter()
-        .filter_map(|(uid, id)| {
+        .filter_map(|uid| {
             let document = docs.iter().position(|d| d.uid == *uid)?;
-            let artboard = board_index(&docs[document], *id)?;
-            Some(json!({"document": document, "artboard": artboard}))
+            Some(json!({"document": document, "artboard": active_artboard(&docs[document])}))
         })
         .collect();
     (!list.is_empty()).then_some(Value::Array(list))
