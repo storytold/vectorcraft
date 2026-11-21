@@ -867,7 +867,8 @@ fn native_float_geometry(app: &VectorcraftApp, command: &mut DockCommand<String>
         return None;
     }
     let window = floating_window(layout, panel)?;
-    let whole = *column || window.panels().count() == 1 || (*group && matches!(window.root, Node::Tabs { .. } | Node::Stack { .. }));
+    // A group of an accordion (`Node::Stack`) is its one entry, which floats into a window of its own.
+    let whole = *column || window.panels().count() == 1 || (*group && matches!(window.root, Node::Tabs { .. }));
     if !whole {
         return None;
     }
@@ -900,6 +901,11 @@ fn native_float_geometry(app: &VectorcraftApp, command: &mut DockCommand<String>
             if let Some(value) = value {
                 fields.insert(name.into(), json!(value));
             }
+        }
+        // A tab group given a rect floats as a new window without its native rect; without one it
+        // keeps the window, and the replay applies the geometry.
+        if *group && !*column {
+            [*x, *y, *width, *height] = [None; 4];
         }
         return Some(NativeFloatGeometry::Deferred { window: window.id, params });
     };
@@ -1229,9 +1235,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             // The original panel may have docked while other panels kept this native window.
             fields.insert("panel".into(), json!(panel));
             fields.insert("column".into(), json!(true));
+            // Only the geometry: panels hidden since the command stay hidden.
+            let (dock, raise) = (app.ui.dock, app.dock_rt.raise.clone());
             if let Err(error) = shared_command(app, "window.panel.float", &params) {
                 app.ui.status = error;
             }
+            (app.ui.dock, app.dock_rt.raise) = (dock, raise);
         }
     }
     crate::tools_float::set_dock_area_left(&ctx, ui.available_rect_before_wrap().left());
