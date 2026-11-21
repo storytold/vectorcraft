@@ -348,7 +348,8 @@ impl ScriptGate {
                 Access::Read => self.read.allows(&real) || self.write.allows(&real),
                 Access::Write => self.write.allows(&real),
             };
-            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || (matches!(access, Access::Read) && self.linked.has(&real))
+            let linked = matches!(access, Access::Read) && self.linked.has(&real) && !self.read.keeps_out(&real);
+            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || linked
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -663,7 +664,13 @@ impl ScriptScope {
     pub(crate) fn allows(&self, real: &Path) -> bool {
         (self.files.iter().any(|f| inside(real, f) && real.components().count() == f.components().count())
             || self.roots.iter().any(|r| inside(real, r)))
-            && !self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
+            && !self.keeps_out(real)
+    }
+
+    /// Is the real path `real` in a folder kept out ([`ScriptScope::fence`]), and not in a place
+    /// left open there?
+    fn keeps_out(&self, real: &Path) -> bool {
+        self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
     }
 
     /// The scope of a script run from a file in the folder whose real path, with its links already
@@ -1035,6 +1042,30 @@ mod tests {
         assert!(!read(&base.join("outside")), "the linked file's folder");
         let g = gate.clone();
         assert!(confine(Some(&roots), || with_script_gate(g, || check_read(&s(secret.clone())).is_err())), "the roots apply first");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A linked file in a folder the script's scope keeps out, such as the settings folder, is not
+    /// read through the gate; one in a place left open there is.
+    #[test]
+    fn a_gate_reads_no_linked_file_in_a_folder_kept_out() {
+        let (base, _) = folders("linked-fenced");
+        let (kept, open) = (base.join("outside/kept.svg"), base.join("outside/open/a.svg"));
+        std::fs::create_dir_all(base.join("outside/open")).unwrap();
+        std::fs::write(&kept, "<svg/>").unwrap();
+        std::fs::write(&open, "<svg/>").unwrap();
+        let real = |p: &Path| resolve(&s(p.to_path_buf())).unwrap();
+        let mut read = ScriptScope::of_folder(&base.join("in"));
+        read.fence(real(&base.join("outside")), &[real(&base.join("outside/open"))]);
+        let gate = ScriptGate {
+            read,
+            write: ScriptScope::default(),
+            documents: vec![],
+            linked: ScriptGate::real_files([s(kept.clone()), s(open.clone())]),
+            also: None,
+        };
+        assert!(gate.check(&s(kept), Access::Read).is_err(), "in the folder kept out");
+        assert!(gate.check(&s(open), Access::Read).is_ok(), "in a place left open");
         let _ = std::fs::remove_dir_all(base);
     }
 

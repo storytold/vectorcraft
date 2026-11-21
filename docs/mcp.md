@@ -3023,7 +3023,8 @@ VectorCraft writes files by these rules of its own:
   Such a command also reads, and does not write, the files that the documents open when the run began link to
   (linked images, placed files, the plate files of a DCS image and the images their data sets name), so an export,
   save, print or package of them includes the linked art. The files are taken as those links led at the run's
-  first `vc.run`, and a path that leads to another file since is refused.
+  first `vc.run`, and a path that leads to another file since is refused. A linked file in the folder that holds
+  the settings is not read this way.
   Both rules count each document as the person last opened or saved it. A document that a script's command opened,
   in this run or an earlier one, gives the commands no access to its file, and its links give them no file to read.
   A document opened from a linked file is therefore not saved over that file unless the script may write there. A
