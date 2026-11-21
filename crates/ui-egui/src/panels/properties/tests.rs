@@ -1548,14 +1548,14 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": star, "anchors": [[0, 2]], "mode": "set"})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(shows(&texts, "Corner:") && shows(&texts, "Corner Radius:"), "{texts:?}");
+    assert!(shows(&texts, "Corner:") && shows(&texts, "Corners"), "{texts:?}");
     let corners = |app: &VectorcraftApp| {
         let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(star)).unwrap().clone();
         let lc = LiveCorners::of(&n).unwrap();
         (lc.radius(0), lc.radius(2), lc.kind(0), lc.kind(2))
     };
-    // The radius: the field right of its label.
-    let label = text_at(&texts, "Corner Radius:");
+    // The radius: the field right of the Corners link.
+    let label = text_at(&texts, "Corners");
     let field = texts.iter().find(|(t, r)| t == "0 pt" && r.left() > label.right() && (r.center().y - label.center().y).abs() < 6.0).unwrap().1;
     press(&mut app, &ctx, field.center());
     let depth = undo_depth(&app);
@@ -1581,6 +1581,157 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     let texts = tall(&mut app, &ctx, vec![]);
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner:").count(), 1, "{texts:?}");
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
+    // And the Corners link, for the pop-up's rounding: Relative on the picked corner's rectangle.
+    let texts = press(&mut app, &ctx, text_at(&texts, "Corners").center());
+    press(&mut app, &ctx, text_at(&texts, "Relative").center());
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(LiveCorners::of(&n).unwrap().radii_relative());
+}
+
+/// With Direct Selection, a live rectangle or live polygon selected whole keeps its own rows and
+/// shows the Corners link, whose pop-up sets every corner of the shape. A path with Live Corners
+/// selected whole shows no corner rows.
+#[test]
+fn a_whole_live_shape_with_direct_selection_shows_the_corners_link() {
+    let mut app = new_app();
+    let ctx = egui::Context::default();
+    app.select_tool("directSelection");
+    let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
+    let polygon = app.run("shape.polygon", json!({"cx": 200, "cy": 150, "radius": 50, "sides": 5})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [polygon]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corners").count(), 1, "polygon: {texts:?}");
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corners").count(), 1, "rectangle: {texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
+    // The pop-up's rounding: Relative on the rectangle.
+    let texts = press(&mut app, &ctx, text_at(&texts, "Corners").center());
+    let depth = undo_depth(&app);
+    press(&mut app, &ctx, text_at(&texts, "Relative").center());
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(r)).unwrap().clone();
+    assert!(LiveCorners::of(&n).unwrap().radii_relative());
+    // A plain path selected whole: no corner selected.
+    let path = square_path(&mut app, 200.0);
+    app.select_tool("directSelection");
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(!shows(&texts, "Corner:") && !shows(&texts, "Corners"), "{texts:?}");
+}
+
+/// A square path, not a live shape, its top-left corner at (`x`, 50) → its id.
+fn square_path(app: &mut VectorcraftApp, x: f64) -> u64 {
+    let id = rect(app, x, 50.0, 100.0, 100.0);
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("object.expandShape", json!({})).unwrap();
+    id.as_u64().unwrap()
+}
+
+/// The radius and kind of each corner of path `id`, from the top-left clockwise.
+fn path_corners(app: &VectorcraftApp, id: u64) -> Vec<(f64, vectorcraft_geom::shapes::CornerKind)> {
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let lc = LiveCorners::of(&n).unwrap();
+    (0..4).map(|k| (lc.radius(k), lc.kind(k))).collect()
+}
+
+/// Types `text` into the field under `at` and presses Enter → the texts of the frame after.
+fn type_into(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, text: &str) -> Vec<(String, Rect)> {
+    let key = |key, modifiers| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    press(app, ctx, at);
+    tall(app, ctx, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+    tall(app, ctx, vec![Event::Text(text.into())]);
+    tall(app, ctx, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    tall(app, ctx, vec![])
+}
+
+/// The Corners link opens a pop-up with the corner kind, the radius and the rounding of the
+/// Direct-Selected corners. A radius typed there, or a kind or rounding picked, sets the three
+/// picked corners and leaves the fourth as it is, each in one undo step.
+#[test]
+fn the_corners_link_opens_the_settings_of_the_picked_corners() {
+    let mut app = new_app();
+    let id = square_path(&mut app, 50.0);
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1], [0, 2]], "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(!shows(&texts, "Relative") && !shows(&texts, "Chamfer"), "closed: {texts:?}");
+    let texts = press(&mut app, &ctx, text_at(&texts, "Corners").center());
+    for t in ["Inverted Round", "Chamfer", "Radius:", "Relative", "Absolute"] {
+        assert!(shows(&texts, t), "{t} in {texts:?}");
+    }
+    // The radius field, right of its label in the pop-up.
+    let label = text_at(&texts, "Radius:");
+    let field = texts.iter().find(|(t, r)| t == "0 pt" && r.left() > label.right() && (r.center().y - label.center().y).abs() < 6.0).unwrap().1;
+    let depth = undo_depth(&app);
+    let texts = type_into(&mut app, &ctx, field.center(), "18");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    let (round, chamfer) = (vectorcraft_geom::shapes::CornerKind::Round, vectorcraft_geom::shapes::CornerKind::Chamfer);
+    assert_eq!(path_corners(&app, id), vec![(18.0, round), (18.0, round), (18.0, round), (0.0, round)]);
+    // A kind, picked in the pop-up.
+    let texts = press(&mut app, &ctx, text_at(&texts, "Chamfer").center());
+    assert_eq!(undo_depth(&app), depth + 2, "one undo step");
+    assert_eq!(path_corners(&app, id), vec![(18.0, chamfer), (18.0, chamfer), (18.0, chamfer), (0.0, round)]);
+    // Relative rounding, for the path the corners are on.
+    press(&mut app, &ctx, text_at(&texts, "Relative").center());
+    assert_eq!(undo_depth(&app), depth + 3, "one undo step");
+    let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    assert!(LiveCorners::of(&n).unwrap().radii_relative());
+}
+
+/// With a corner of each of two paths Direct-Selected and their radii different, the pop-up's
+/// radius is blank; a radius typed there sets both corners, and no other, in one undo step.
+#[test]
+fn the_corners_pop_up_sets_picked_corners_across_paths() {
+    let mut app = new_app();
+    let (a, b) = (square_path(&mut app, 20.0), square_path(&mut app, 200.0));
+    app.run("object.setLiveShape", json!({"ids": [a], "corners": [0], "radius": 5})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": a, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+    app.run("select.anchors", json!({"id": b, "anchors": [[0, 1]], "mode": "add"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    let texts = press(&mut app, &ctx, text_at(&texts, "Corners").center());
+    let label = text_at(&texts, "Radius:");
+    // Blank: no value right of the label.
+    assert!(!texts.iter().any(|(t, r)| t.ends_with("pt") && r.left() > label.right() && (r.center().y - label.center().y).abs() < 6.0), "{texts:?}");
+    let depth = undo_depth(&app);
+    type_into(&mut app, &ctx, egui::pos2(label.right() + 40.0, label.center().y), "7");
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    let round = vectorcraft_geom::shapes::CornerKind::Round;
+    assert_eq!(path_corners(&app, a), vec![(7.0, round), (0.0, round), (0.0, round), (0.0, round)]);
+    assert_eq!(path_corners(&app, b), vec![(0.0, round), (7.0, round), (0.0, round), (0.0, round)]);
+}
+
+/// With a corner of one path Direct-Selected and a second path selected whole, the pop-up picks
+/// that corner and every corner of the second path. While one path is Relative and the other
+/// Absolute, no rounding is chosen; picking Absolute sets both paths in one undo step.
+#[test]
+fn the_corners_pop_up_takes_every_corner_of_a_whole_path_and_mixed_rounding() {
+    let mut app = new_app();
+    let (a, b) = (square_path(&mut app, 20.0), square_path(&mut app, 200.0));
+    app.run("object.setLiveShape", json!({"ids": [a], "corners": [0], "radius": 5})).unwrap();
+    app.run("object.setLiveShape", json!({"ids": [a], "relativeRadii": true})).unwrap();
+    app.select_tool("directSelection");
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("select.anchors", json!({"id": a, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    let picked = crate::panels::picked_corners(&app).unwrap();
+    assert_eq!(picked.relative, None, "no rounding while the paths differ");
+    assert_eq!(picked.items.len(), 2);
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    let texts = press(&mut app, &ctx, text_at(&texts, "Corners").center());
+    let depth = undo_depth(&app);
+    let texts = press(&mut app, &ctx, text_at(&texts, "Absolute").center());
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    assert_eq!(crate::panels::picked_corners(&app).unwrap().relative, Some(false), "both Absolute");
+    let label = text_at(&texts, "Radius:");
+    type_into(&mut app, &ctx, egui::pos2(label.right() + 40.0, label.center().y), "7");
+    assert_eq!(undo_depth(&app), depth + 2, "one undo step");
+    let round = vectorcraft_geom::shapes::CornerKind::Round;
+    assert_eq!(path_corners(&app, a), vec![(7.0, round), (0.0, round), (0.0, round), (0.0, round)]);
+    assert_eq!(path_corners(&app, b), vec![(7.0, round); 4], "every corner of the path selected whole");
 }
 
 /// One effect on the one selected object shows its name and a Delete icon beside the fx button,

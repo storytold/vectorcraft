@@ -78,45 +78,18 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
     }
 }
 
-/// The selected paths' eligible corners, as document lengths, beside the anchor controls.
-/// Explicit partial selections with no corners contribute no target (unlike `picked`'s fallback).
-fn corner_radius(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, reserve: f32) {
-    let Some(st) = app.session.active() else { return };
-    let mut items = Vec::new();
-    let mut radius: Option<f64> = None;
-    let mut mixed = false;
-    for &id in &st.selection.objects {
-        let Some(lc) = st.doc.node(id).and_then(vectorcraft_doc::LiveCorners::of) else { continue };
-        let corners = st.selection.partial(id).map_or_else(|| lc.all(), |anchors| lc.corners_of(anchors));
-        if corners.is_empty() {
-            continue;
-        }
-        for &k in &corners {
-            // Keep absolute requested radii, even when their drawing is fitted smaller. Relative
-            // storage is a fraction, but the field and setLiveShape both consume document lengths.
-            let value = if lc.radii_relative() { lc.radius(k) * lc.corner(k).map_or(0.0, |c| c.max_radius()) } else { lc.radius(k) };
-            if let Some(first) = radius {
-                mixed |= (first - value).abs() >= 1e-9;
-            } else {
-                radius = Some(value);
-            }
-        }
-        items.push(json!({"id": id, "corners": corners}));
-    }
-    if items.is_empty() {
+/// The Corners link and the radius of the selected paths' picked corners
+/// ([`crate::panels::picked_corners`]), beside the anchor controls. The link opens the Corners
+/// pop-up for those corners.
+fn corner_radius(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    let Some(picked) = crate::panels::picked_corners(app) else { return };
+    if ui.available_width() < row_width(ui, &[crate::panels::corners_link_width(ui), INLINE_FIELD_WIDTH]) + reserve {
         return;
     }
-    let label = tl!("Corner Radius:");
-    let text = egui::RichText::new(label).size(12.0).color(t.text);
-    if ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone()), INLINE_FIELD_WIDTH]) + reserve {
-        return;
-    }
-    widgets::field_label(ui, text);
-    let shown = if mixed { None } else { radius };
+    crate::panels::corners_link(app, ui, "cb-corners");
     let unit = app.session.general_unit();
-    if let Some(radius) = widgets::num_field_named(ui, "cb-corner-radius", Some(label), shown, unit, INLINE_FIELD_WIDTH) {
-        // App::run reports any command failure in the status bar, as the other inline fields do.
-        app.run("object.setLiveShape", json!({"items": items, "radius": radius.max(0.0)})).ok();
+    if let Some(radius) = widgets::num_field_named(ui, "cb-corner-radius", Some(tl!("Corner Radius:")), picked.radius, unit, INLINE_FIELD_WIDTH) {
+        crate::panels::set_picked_corners(app, &picked, json!({"radius": radius.max(0.0)}));
     }
 }
 
@@ -1083,7 +1056,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if anchors != AnchorControls::None && group_on(app, "anchors") {
             anchor_buttons(app, ui, anchors);
             let reserve = transform_reserve(app, ui, count > 0);
-            corner_radius(app, ui, t, reserve);
+            corner_radius(app, ui, reserve);
         }
         let object_options = group_on(app, "objectOptions");
         if object_options {

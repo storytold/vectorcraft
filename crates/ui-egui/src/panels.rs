@@ -216,6 +216,118 @@ pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Nod
     }
 }
 
+/// The corners that the Corners link, its pop-up and the Corner Radius field beside it edit:
+/// [`picked_corners`].
+pub(crate) struct PickedCorners {
+    /// `object.setLiveShape`'s `items`: `{id, corners}` for each path.
+    pub items: Vec<Value>,
+    /// The radius the corners share, as a document length; None when they differ.
+    pub radius: Option<f64>,
+    /// The kind the corners share; None when they differ.
+    pub kind: Option<CornerKind>,
+    /// Whether their paths store relative radii; None when the paths differ.
+    pub relative: Option<bool>,
+}
+
+/// The picked corners of the selection: for each selected path with Live Corners, the corners
+/// holding a Direct-Selected anchor, or every corner of a path selected whole. A path whose
+/// selected anchors hold no corner adds none. None when no path adds a corner.
+pub(crate) fn picked_corners(app: &VectorcraftApp) -> Option<PickedCorners> {
+    fn shared<T: Copy>(values: &[T], same: impl Fn(T, T) -> bool) -> Option<T> {
+        let (&first, rest) = values.split_first()?;
+        rest.iter().all(|v| same(*v, first)).then_some(first)
+    }
+    let st = app.session.active()?;
+    let (mut items, mut radii, mut kinds, mut relative) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for &id in &st.selection.objects {
+        let Some(lc) = st.doc.node(id).and_then(LiveCorners::of) else { continue };
+        let corners = st.selection.partial(id).map_or_else(|| lc.all(), |anchors| lc.corners_of(anchors));
+        if corners.is_empty() {
+            continue;
+        }
+        for &k in &corners {
+            // The radius asked for, even where it draws smaller. A relative radius is stored as a
+            // fraction of the corner's largest; the field and `object.setLiveShape` take lengths.
+            radii.push(if lc.radii_relative() { lc.radius(k) * lc.corner(k).map_or(0.0, |c| c.max_radius()) } else { lc.radius(k) });
+            kinds.push(lc.kind(k));
+        }
+        relative.push(lc.radii_relative());
+        items.push(json!({"id": id, "corners": corners}));
+    }
+    if items.is_empty() {
+        return None;
+    }
+    Some(PickedCorners {
+        items,
+        radius: shared(&radii, |a, b| (a - b).abs() < 1e-9),
+        kind: shared(&kinds, |a, b| a == b),
+        relative: shared(&relative, |a, b| a == b),
+    })
+}
+
+/// Run `object.setLiveShape` with `p` (a `kind`, `radius` or `relativeRadii`) on `picked`'s
+/// corners: one undo step, or none when nothing changes. `App::run` reports a failure in the
+/// status bar.
+pub(crate) fn set_picked_corners(app: &mut VectorcraftApp, picked: &PickedCorners, mut p: Value) {
+    p["items"] = json!(picked.items);
+    app.run("object.setLiveShape", p).ok();
+}
+
+/// The Corners link's text, as [`corners_link`] draws it and [`corners_link_width`] measures it.
+fn corners_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Corners")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The width of [`corners_link`] in `ui`, with the point that the underline can add at its end.
+pub(crate) fn corners_link_width(ui: &Ui) -> f32 {
+    crate::widgets::text_width(ui, corners_link_text(ui)) + 1.0
+}
+
+/// The Corners link of the Control bar and the Properties panel: a click on it opens or closes
+/// [`corners_popup`] under it. `id` tells the two places apart.
+pub(crate) fn corners_link(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
+    let resp = ui.link(corners_link_text(ui));
+    crate::widgets::popover(&resp, resp.clicked(), |ui| corners_popup(app, ui, id));
+}
+
+/// The Corners pop-up: the corner kind, the radius (blank while the picked corners differ) and
+/// the rounding, Relative or Absolute (neither while their paths differ), of the picked corners
+/// ([`picked_corners`]). Each change sets them on those corners alone, in one undo step.
+fn corners_popup(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
+    let Some(picked) = picked_corners(app) else { return };
+    let unit = app.session.general_unit();
+    let mut set = None;
+    egui::Grid::new((id, "corners-popup")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        dim_label(ui, tl!("Corner:"));
+        ui.vertical(|ui| {
+            for k in CornerKind::ALL {
+                if crate::widgets::radio(ui, crate::dialogs::corners::kind_label(k), picked.kind == Some(k), true) {
+                    set = Some(json!({"kind": k}));
+                }
+            }
+        });
+        ui.end_row();
+        dim_label(ui, tl!("Radius:"));
+        if let Some(r) = crate::widgets::num_field_named(ui, (id, "radius"), Some(tl!("Radius:")), picked.radius, unit, 100.0) {
+            // A negative radius typed in rounds nothing: the command takes 0 or more.
+            set = Some(json!({"radius": r.max(0.0)}));
+        }
+        ui.end_row();
+        ui.label("");
+        ui.horizontal(|ui| {
+            for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
+                if crate::widgets::radio(ui, label, picked.relative == Some(on), true) {
+                    set = Some(json!({"relativeRadii": on}));
+                }
+            }
+        });
+        ui.end_row();
+    });
+    if let Some(p) = set {
+        set_picked_corners(app, &picked, p);
+    }
+}
+
 /// Number of selected objects.
 pub(crate) fn selection_len(app: &VectorcraftApp) -> usize {
     app.session.active().map(|d| d.selection.len()).unwrap_or(0)

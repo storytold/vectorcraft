@@ -99,6 +99,17 @@ fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
     list.iter().map(|k| k.as_u64().and_then(|k| usize::try_from(k).ok()).ok_or_else(err)).collect::<Result<_>>().map(Some)
 }
 
+/// Whether `relativeRadii` applies to a path drawn as `path` with live shape `live`: a live
+/// rectangle, a live polygon, a path with Live Corners, or a plain path with a corner. A plain
+/// path's rounding is Absolute.
+fn takes_rounding(path: &PathData, live: Option<&LiveShape>) -> bool {
+    match live {
+        Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. } | LiveShape::Path { .. }) => true,
+        Some(LiveShape::Ellipse { .. } | LiveShape::Line { .. }) => false,
+        None => LiveCorners::new(path, None).is_some_and(|c| !c.all().is_empty()),
+    }
+}
+
 /// Live line `l` with Line Length `len` (its first end stays) and then Line Angle `angle` (about
 /// its midpoint; a line whose ends meet has none to turn), or None when neither changes it.
 fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<LiveShape> {
@@ -277,7 +288,7 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             Some(l @ LiveShape::Rectangle { .. }) if rectangle_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => return false,
             _ => {}
         }
-        if relative_radii.is_some_and(|on| live.as_deref().map(|l| l.radii_relative()) != Some(on)) {
+        if relative_radii.is_some_and(|on| takes_rounding(path, live.as_deref()) && live.as_deref().is_some_and(LiveShape::radii_relative) != on) {
             return false;
         }
         if radius.is_none() && kind.is_none() {
@@ -291,10 +302,17 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
                     // A radius stored in document units can be larger than it draws; a relative
-                    // one is a fraction, so it is compared as drawn.
+                    // one is compared as the fraction `set_corners` would store for it, to a
+                    // precision of 1e-9 pt on a corner whose maximum is 1 pt or more.
                     && radius.is_none_or(|r| {
-                        let now = if c.radii_relative() { c.drawn_radius(*k) } else { c.radius(*k) };
-                        (now - r.max(0.0)).abs() < 1e-9
+                        let r = r.max(0.0);
+                        if c.radii_relative() {
+                            let max = c.corner(*k).map_or(0.0, |c| c.max_radius());
+                            let fraction = if max > 1e-12 { (r / max).clamp(0.0, 1.0) } else { 0.0 };
+                            (c.radius(*k) - fraction).abs() * max.max(1.0) < 1e-9
+                        } else {
+                            (c.radius(*k) - r).abs() < 1e-9
+                        }
                     })
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })
@@ -348,11 +366,23 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 *l = new.clone();
                 *path = l.to_path();
             }
+            // A path with corners and no Live Corners yet keeps its outline as their base, so that
+            // Relative rounding has a record to go in.
+            if relative_radii == Some(true) && live.is_none() && takes_rounding(path, None) {
+                *live = Some(Box::new(LiveShape::Path { base: path.clone(), radii: vec![], kinds: vec![], radii_relative: false }));
+            }
             if let Some(on) = relative_radii
                 && let Some(l) = live.as_deref_mut()
             {
                 convert_radii_relative(l, on);
                 *path = l.to_path();
+                // Absolute with no corner cut: a plain path again, as `set_corners` leaves one.
+                if let LiveShape::Path { radii, kinds, radii_relative: false, .. } = l
+                    && radii.is_empty()
+                    && kinds.is_empty()
+                {
+                    *live = None;
+                }
             }
             if radius.is_none() && kind.is_none() {
                 continue;
