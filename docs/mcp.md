@@ -7583,16 +7583,22 @@ or breaks these rules, opens with the image placed by its transform. A drag is o
 the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
-Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Relink (`links.relink`),
-Embed (`links.embed`), Unembed (`links.unembed`), Create Object Mosaic (`object.createObjectMosaic`) and Place with
-Replace (`file.place` with `replace`) of anything but a text file refuse a distorted image with an error that names the
-distortion; Place with Replace does not refuse a clipping group that holds a distorted image of a DCS file's plates. Relink and Unembed refuse a named or selected distorted image before they search a folder or write a file.
-Create Gradient Mesh (`object.mesh.create`) converts the other objects it is given and lists each distorted image it
-leaves as it is in `skipped`, with its `id` and the error as `reason`; with nothing else to convert, it returns that
-error. Update Links (`links.update`) puts a changed file's pixels between a distorted
-image's corners, without applying its Placement Options. Mask (`object.maskImage`) draws its clipping path through the
-image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
-result. These rules are VectorCraft's own.
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
+(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of anything but a text file refuse a
+distorted image with an error that names the distortion; Place with Replace does not refuse a clipping group that holds
+a distorted image of a DCS file's plates. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
+given and lists each distorted image it leaves as it is in `skipped`, with its `id` and the error as `reason`; with
+nothing else to convert, it returns that error. Update Links (`links.update`) and Relink
+(`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
+Relink's `preserve`. When `preserve` is given, Relink adds a `warnings` entry naming those images; without it, Relink
+adds none for them. The clipping path a PSD, PSB or DCS
+file names is drawn through the corners: the clip group of the old file's clipping path gets the new file's clipping
+path, or becomes a plain group when the new file names none. Embed (`links.embed`) and Unembed (`links.unembed`) keep
+the corners, each in one undo step. Unembed of a distorted image from a PSD or PSB file, written as stored (PNG, or
+TIFF for a CMYK file), keeps the clip group of that file's clipping path, and so do Relink and Update Links to the
+file it wrote; a path that converts the image writes no clipping path, and the clip group becomes a plain group. Mask
+(`object.maskImage`) draws its clipping path through the image's corners. Rasterize (`object.rasterize`) draws the
+image between its corners and makes a plain image of the result. These rules are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}
