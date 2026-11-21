@@ -927,7 +927,8 @@ fn bevel_effect(id: &str) -> bool {
 /// Options ([`effects::PathfinderEffectOptions`], so an effect saved without them and given their
 /// defaults is unchanged), each option given equal to the one it stores (a precision that Scale
 /// Strokes & Effects took past its range evaluates at the bound but is still edited), and every
-/// other value given equal to the one it has?
+/// other value given equal to the one it has (a number by its value, so a Soft Mix `mixingRate` of 50
+/// over a stored 50.0 is unchanged)?
 fn pathfinder_edit_changes_nothing(e: &Effect, params: &Value) -> bool {
     if !effects::takes_pathfinder_options(&e.id) {
         return false;
@@ -938,8 +939,12 @@ fn pathfinder_edit_changes_nothing(e: &Effect, params: &Value) -> bool {
     if let Value::Object(m) = &mut after {
         m.extend(given.clone());
     }
-    let others_same = given.iter().filter(|(k, _)| !effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str())).all(|(k, v)| current.get(k) == Some(v));
-    let same_value = |a: &Value, b: &Value| a == b || a.as_f64().is_some_and(|x| b.as_f64() == Some(x));
+    // Two integers compare exactly, and a float compares with any number by value.
+    let same_value = |a: &Value, b: &Value| a == b || ((a.is_f64() || b.is_f64()) && a.as_f64().is_some_and(|x| b.as_f64() == Some(x)));
+    let others_same = given
+        .iter()
+        .filter(|(k, _)| !effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str()))
+        .all(|(k, v)| current.get(k).is_some_and(|c| same_value(c, v)));
     let stored_same = given
         .iter()
         .filter(|(k, _)| effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str()))
