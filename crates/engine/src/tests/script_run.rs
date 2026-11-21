@@ -417,6 +417,68 @@ fn a_scripts_commands_reach_only_its_own_places_and_the_open_documents() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The color at the middle of the PNG at `path`.
+fn middle_color(path: &std::path::Path) -> [u8; 3] {
+    let img = craft_image_codecs::decode(&std::fs::read(path).unwrap()).unwrap();
+    let (w, h) = img.dimensions();
+    let rgba = img.to_rgba8();
+    let i = ((h / 2 * w + w / 2) * 4) as usize;
+    [rgba[i], rgba[i + 1], rgba[i + 2]]
+}
+
+/// A script's export of a document open when the run began draws the file its image links to,
+/// also outside the script's places. A file the script names itself, a link it points at such a
+/// file, writing to the linked file and the links of a document the script opens are refused all
+/// the same.
+#[test]
+fn a_scripts_export_reads_the_files_the_documents_open_before_it_link_to() {
+    use crate::tests_links::{BLUE, RED, near, open, place, png, save, session, write};
+    let dir = fresh_folder("gate-links");
+    let (inside, art) = (dir.join("in"), dir.join("art"));
+    std::fs::create_dir_all(&inside).unwrap();
+    let p = |f: std::path::PathBuf| f.to_string_lossy().into_owned();
+    let (pic, secret, poster, other) =
+        (p(art.join("photo.png")), p(art.join("secret.png")), p(art.join("poster.vectorcraft")), p(inside.join("other.vectorcraft")));
+    write(&pic, &png(600, 300, RED));
+    write(&secret, &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    save(&mut s, &poster);
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    place(&mut s, &secret);
+    save(&mut s, &other);
+    s.execute("file.close", &json!({})).unwrap();
+    // The files change after the saves: each document holds only the red preview of its image.
+    write(&pic, &png(600, 300, BLUE));
+    write(&secret, &png(600, 300, BLUE));
+    open(&mut s, &poster);
+    let (first, second) = (inside.join("first.png"), inside.join("second.png"));
+    let call = |id: &str, params: String| {
+        format!(
+            "try {{ var r = vc.run('{id}', {params}); vc.log(r.warnings ? r.warnings.length : 0); }} \
+             catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let export = |to: &std::path::Path| format!("{{path: {:?}, format: 'png', background: 'white'}}", p(to.to_path_buf()));
+    let source = [
+        call("document.export", export(&first)),
+        call("file.place", format!("{{path: {secret:?}, at: [200, 150]}}")),
+        "vc.run('select.all', {});\n".to_string(),
+        call("links.relink", format!("{{path: {secret:?}}}")),
+        call("document.export", format!("{{path: {pic:?}, format: 'png'}}")),
+        call("document.open", format!("{{path: {other:?}}}")),
+        call("document.export", export(&second)),
+    ]
+    .concat();
+    let r = run_allowed(&mut s, &inside, &source).unwrap();
+    assert_eq!(r["log"], json!([0, "denied", "denied", "denied", 0, 1]), "{r}");
+    assert!(near(middle_color(&first), BLUE), "the linked file, not its preview: {:?}", middle_color(&first));
+    assert!(near(middle_color(&second), RED), "a document the script opened gets no linked file: {:?}", middle_color(&second));
+    assert_eq!(std::fs::read(&pic).unwrap(), png(600, 300, BLUE), "the linked file is not written");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A command a script runs does not save into the app's own libraries; the same command run
 /// outside a script does.
 #[test]
