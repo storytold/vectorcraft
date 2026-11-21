@@ -80,7 +80,7 @@ pub(crate) use task_bar::{bar_action_name, chip_paints, images_with_other_art, t
 pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
-pub use tool_overlays::{HiddenChars, SpellingMarks};
+pub use tool_overlays::{HiddenChars, SpellingMarks, TextNodes};
 use tool_overlays::{
     grid_repeat_overlay, hidden_chars_overlay, live_paint_gap_overlays, mirror_axis_overlay, nine_slice_overlay, original_path_overlay,
     print_tiling_overlay, radial_repeat_overlay, rotate_view_dial, shaper_widget_overlay, slice_overlay, spelling_overlay, thread_overlays,
@@ -249,6 +249,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // that does not draw the overlay drops them, for example with the option off, with the edges
     // hidden, on the Home screen or with no document open.
     let hidden_chars = std::mem::take(&mut app.canvas.hidden_chars);
+    // The text objects those marks and Auto Spell Check's lines are drawn over. Likewise, a frame
+    // that draws neither drops them.
+    let text_nodes = std::mem::take(&mut app.canvas.text_nodes);
     // The selection's kept marks. Likewise, a frame that does not draw them drops them.
     let selection_marks = std::mem::take(&mut app.canvas.selection_marks);
     // The meshes of the tools' shared paths. Likewise, a frame that does not draw the tools'
@@ -431,7 +434,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         original_path_overlay(app, &painter, &xf);
 
-        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
+        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, text_nodes, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
@@ -1652,10 +1655,16 @@ fn selection_visuals(
     app: &mut VectorcraftApp,
     painter: &egui::Painter,
     xf: &Xf,
-    (hidden_chars, mut marks, hover_still): (HiddenChars, SelectionMarks, bool),
+    (hidden_chars, text_nodes, mut marks, hover_still): (HiddenChars, TextNodes, SelectionMarks, bool),
     revolve_edit: bool,
     view_info: vectorcraft_engine::ViewInfo,
 ) -> Vec<Overlay> {
+    // Show Hidden Characters (with the edges shown) and Auto Spell Check draw over the same text
+    // objects: their list is kept while either is drawn.
+    let draws_hidden_chars = app.ui.view.edges && !revolve_edit && app.ui.view.hidden_chars;
+    if draws_hidden_chars || (app.ui.view.auto_spell_check && !revolve_edit) {
+        app.canvas.text_nodes = text_nodes;
+    }
     // View → Hide Gradient Annotator hides the Gradient tool's annotator.
     let mut overlays = if !revolve_edit && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) {
         app.session.overlays(view_info)
@@ -1688,7 +1697,7 @@ fn selection_visuals(
         if app.ui.view.live_paint_gaps {
             overlays.extend(live_paint_gap_overlays(app));
         }
-        if app.ui.view.hidden_chars {
+        if draws_hidden_chars {
             app.canvas.hidden_chars = hidden_chars;
             hidden_chars_overlay(app, painter, xf);
         }
