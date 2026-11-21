@@ -504,6 +504,17 @@ impl Realm {
         }
     }
 
+    /// Adds the host classes `classes` ([`crate::HostClass`]), each a global constructor whose
+    /// prototype holds its members, and the global objects `instances`, each made from the
+    /// [`crate::host_ref`] given. Prototypes and constructors are frozen; the instances cannot be
+    /// replaced. A heap too small for them ends with the error the realm's next run would give.
+    pub fn define_host_classes(&mut self, classes: Vec<crate::HostClass>, instances: Vec<(String, crate::Data)>) -> Result<(), RunError> {
+        match crate::host_classes::install(&mut self.interp, classes, instances) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
     /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
     /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught

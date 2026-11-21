@@ -2620,6 +2620,57 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   throws a `RangeError`.
 - `vc.commands` lists the commands a script may run.
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
+  describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
+  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
+  and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
+  which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
+  columns for the other layouts), and `addDocument(startupPreset, presetSettings?, showOptionsDialog?)`, which runs `file.new`
+  with the New Document profile `startupPreset` names (`Print`, `Web`, `Mobile`, `Video`, another profile of
+  `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
+  `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
+  starts with the defaults that page gives; `documentBleedLink`, `documentBleedOffsetRect` and `transparencyGrid`
+  throw an error that says they are not available yet, and `showOptionsDialog` true throws `Dialog unavailable`
+  with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
+  `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
+  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
+  entry `[i]` gives. Each page item
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected`, `opacity` (0 to
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
+  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
+  `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
+  group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
+  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  `node.move` refuses the place of a copy, `duplicate` deletes the copy and throws that error. The
+  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
+  `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  VectorCraft's own rules: documents are listed in tab order, and page items in paint order from the bottom, with the
+  objects inside groups and compound paths after their group and without layers and ruler guides. Script coordinates
+  are points with Y up from the bottom-left corner of the first artboard, or, with
+  `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
+  is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
+  for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
+  changed document. A value that changes nothing runs no command, and a change to another document leaves the active
+  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
+  kept from an earlier run, throws `Stale page item`; `index` and `getByName` throw `Not found`; and
+  `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
+  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
+  nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  the automation read roots allow its file, and that check can look the document's file up on disk. A path with
+  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
+  those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
+  themselves, such as a path's fill, are not defined yet and read as `undefined`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

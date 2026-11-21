@@ -253,6 +253,14 @@ pub(crate) struct Interp {
     pub(crate) install_error: Option<String>,
     /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
     pub(crate) files: Option<crate::file_classes::Classes>,
+    /// The classes a host added ([`crate::Realm::define_host_classes`]), in the order it added them.
+    pub(crate) host_classes: Vec<crate::host_classes::Entry>,
+    /// Whether [`Self::write_data`] makes objects of host classes from their [`crate::host_ref`].
+    pub(crate) write_hosted: bool,
+    /// The object made for each class and handle ([`crate::host_classes`]), so that two reads of
+    /// the same one give the same object. It is not a root: an entry whose object was collected is
+    /// dropped after each collection.
+    pub(crate) host_objects: crate::host_classes::Made,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
@@ -518,6 +526,9 @@ impl Interp {
             held_bytes: 0,
             install_error: None,
             files: None,
+            host_classes: Vec::new(),
+            write_hosted: false,
+            host_objects: crate::host_classes::Made::default(),
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             flattened: std::cell::Cell::new(0),
@@ -774,8 +785,10 @@ impl Interp {
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
+        roots.objects.extend(self.host_classes.iter().flat_map(crate::host_classes::Entry::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
+        crate::host_classes::forget_collected(&mut self.host_objects, &self.heap);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
         self.flattened.set(0);
@@ -1408,6 +1421,12 @@ impl Interp {
 
     /// [[Get]] starting at `start`, with `receiver` as `this` for a getter.
     pub(crate) fn get_from(&mut self, start: ObjId, k: &[u16], receiver: &Value) -> JsResult<Value> {
+        // An array index of an object of a host class with an indexer is the indexer's answer.
+        if let Some(i) = array_index(k)
+            && let Some(f) = self.host_indexer(start)?
+        {
+            return self.host_index(&f, start, i);
+        }
         match self.find_property(start, k)? {
             None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
             Some(Prop::Data { value, .. }) => Ok(value),
@@ -2262,7 +2281,7 @@ impl Interp {
                 Func::Data { f, name, read } => {
                     // The arguments are read before the function runs, and a result being built
                     // keeps itself reachable.
-                    return Ok(Prepared::Done(self.call_data(&f, &name, &args, &read)?));
+                    return Ok(Prepared::Done(self.call_data(&f, &name, &this, &args, &read)?));
                 }
                 Func::Eval { f, end, strict_writes, name } => {
                     return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args)?));
@@ -2368,6 +2387,22 @@ impl Interp {
                 let r = native(self, Value::Undefined, &args, true);
                 self.held_bytes = held;
                 let v = r?;
+                self.stack.truncate(start);
+                self.push(v)
+            }
+            // A host class's constructor ([`crate::host_classes`]) gives the object it makes. A plain
+            // object it gives inherits from the class's prototype. The class's other functions are
+            // not constructors.
+            Some(Func::Data { f: host, name, read: read @ crate::host::ArgRead::Hosted })
+                if f.as_object().is_some_and(|o| self.is_host_constructor(o)) =>
+            {
+                let v = self.call_data(&host, &name, &Value::Undefined, &args, &read)?;
+                if let (Some(callee), Value::Object(o)) = (f.as_object(), &v)
+                    && matches!(self.object(*o)?.class, Class::Ordinary)
+                    && let Some(Prop::Data { value: Value::Object(proto), .. }) = self.find_property(callee, &key("prototype"))?
+                {
+                    self.object_mut(*o)?.proto = Some(proto);
+                }
                 self.stack.truncate(start);
                 self.push(v)
             }
@@ -2496,7 +2531,7 @@ impl Interp {
         self.temp_roots.extend(keep.iter().cloned());
         let was_waiting = self.waiting;
         let answer = match self.func_of(&host) {
-            Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &args, &read),
+            Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &Value::Undefined, &args, &read),
             _ => self.call(&host, &Value::Undefined, &args),
         };
         self.temp_roots.truncate(mark);
@@ -2933,7 +2968,7 @@ impl Interp {
                 }
                 let Value::Object(o) = b else { return Err(self.type_error("the right side of 'in' is not an object")) };
                 let k = self.to_key(a)?;
-                self.has_property(*o, &k).map(Value::Bool)
+                self.has_property_indexed(*o, &k).map(Value::Bool)
             }
         }
     }
