@@ -12,7 +12,7 @@ workspace = true
 [dependencies]
 # Unicode 17.0 general categories for names (lex.rs). 0.1.5 adds the Unicode-3.0 license, which is
 # not on the license allowlist, so the version is exact.
-unicode-properties = { version = "=0.1.4", default-features = false, features = ["general-category"] }
+unicode-properties = { version = "=0.1.5", default-features = false, features = ["general-category"] }
 
 [dev-dependencies]
 proptest = { workspace = true }
