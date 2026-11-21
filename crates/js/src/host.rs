@@ -190,8 +190,8 @@ struct Reading {
     ancestors: Vec<ObjId>,
     path: Vec<Step>,
     function: Rc<str>,
-    /// Objects of host classes are read as [`crate::host_ref`] gives them, and a plain object
-    /// that has [`crate::HOST_REF_KEY`] is refused.
+    /// Objects of host classes are read as [`crate::host_ref`] gives them, a `File` as its path under
+    /// [`crate::FILE_REF_KEY`], and a plain object that has either key is refused.
     hosted: bool,
 }
 
@@ -261,6 +261,12 @@ impl Interp {
         if r.ancestors.len() >= r.limits.depth {
             return Err(self.data_error(r, ErrorType::Range, "is nested too deep"));
         }
+        if r.hosted
+            && let Some(path) = crate::file_classes::file_path(self, id)?
+        {
+            self.charge_reading(r, path.len().saturating_add(16))?;
+            return Ok(Data::Object(vec![(crate::FILE_REF_KEY.to_string(), Data::String(path))]));
+        }
         let shape = match &self.object(id)?.class {
             Class::Host(_) if r.hosted => {
                 return self.host_ref_of(id)?.ok_or_else(|| Abrupt::Internal("host object without a class".into()));
@@ -313,7 +319,7 @@ impl Interp {
             self.use_fuel()?;
             self.charge_reading(r, k.len().saturating_mul(3).saturating_add(8))?;
             let name = String::from_utf16_lossy(&k);
-            if r.hosted && name == crate::HOST_REF_KEY {
+            if r.hosted && (name == crate::HOST_REF_KEY || name == crate::FILE_REF_KEY) {
                 return Err(self.data_error(r, ErrorType::Type, "is not plain data"));
             }
             r.path.push(Step::Name(k));

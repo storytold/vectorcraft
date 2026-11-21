@@ -1346,6 +1346,7 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    dom::after_command(host, &id);
     crossed.map(|data| (data, value))
 }
 

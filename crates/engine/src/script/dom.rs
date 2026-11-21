@@ -38,6 +38,15 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod variables;
+
+pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
+
+/// After each command a script runs ([`variables::after_command`]).
+pub(super) fn after_command(h: &Host, id: &str) {
+    variables::after_command(h, id);
+}
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -85,13 +94,14 @@ const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, and whether a call's own savepoint
-/// ([`atomically`]) is open.
+/// page items, kept while that document is unchanged, whether a call's own savepoint
+/// ([`atomically`]) is open, and the `Variable` and `Dataset` objects it gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
+    vars: variables::Handles,
 }
 
 impl State {
@@ -1660,6 +1670,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    variables::define_enums(realm)?;
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -1714,6 +1725,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.extend(variables::document_members(l));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -1763,7 +1775,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "tags",
             "uRL",
             "uuid",
-            "visibilityVariable",
             "wrapInside",
             "wrapOffset",
             "wrapped",
@@ -1776,8 +1787,10 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .into_iter()
         .map(|m| later(l, "PageItem", m)),
     );
+    page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(variables::classes(l));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
 }
