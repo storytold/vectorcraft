@@ -115,6 +115,18 @@ fn stop_puts_the_document_back_and_says_so() {
 }
 
 #[test]
+fn set_active_artboard_index_shows_the_artboard_in_the_view() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    app.run("artboard.new", json!({"x": 1000, "y": 0, "width": 100, "height": 100})).unwrap();
+    app.views[0].artboard = 0;
+    let source = "app.activeDocument.artboards.setActiveArtboardIndex(1);";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(app.views[0].artboard, 1);
+}
+
+#[test]
 fn a_script_error_goes_to_the_status_bar() {
     let mut app = app();
     app.session.prefs.show_external_script_warning = false;

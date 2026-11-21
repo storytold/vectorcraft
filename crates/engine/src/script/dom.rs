@@ -38,6 +38,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+pub(super) mod layers;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -92,6 +94,9 @@ pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
+    /// The documents whose active artboard `setActiveArtboardIndex` changed: each one's uid and
+    /// the artboard's id.
+    pub(super) active_artboards: RefCell<Vec<(u64, u32)>>,
 }
 
 impl State {
@@ -151,7 +156,7 @@ fn method(link: &Link, f: Member) -> HostMember {
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there.
+/// the check that a document, layer or page item `this` is still there.
 fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
@@ -162,7 +167,10 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "Layer" => {
+                layers::layer_of(&h, arg(&a, 0))?;
+            }
+            c if c == "PageItem" || ITEM_CLASSES.contains(&c) => {
                 item_of(&h, arg(&a, 0))?;
             }
             _ => {}
@@ -1122,22 +1130,34 @@ fn items_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
 }
 
 fn items_length(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_length(h, a);
+    }
     let doc = items_doc(h, a)?;
     let n = with_doc(h, doc, |_, st| page_items(h, st).len());
     Ok(num(float(n as u64)))
 }
 
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_typename(h, a);
+    }
     items_doc(h, a)?;
     Ok(text("PageItems"))
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_parent(h, a);
+    }
     let doc = items_doc(h, a)?;
     Ok(doc_ref(h, doc.uid))
 }
 
 fn items_at(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_at(h, a);
+    }
     let doc = items_doc(h, a)?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
@@ -1145,6 +1165,9 @@ fn items_at(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_by_name(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_by_name(h, a);
+    }
     let doc = items_doc(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
@@ -1169,6 +1192,9 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 /// `pageItems.removeAll()`: deletes every object of the document in one command. A hidden or
 /// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_remove_all(h, a);
+    }
     let doc = items_doc(h, a)?;
     let (ids, refused) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
@@ -1644,19 +1670,6 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-fn layer_name(h: &Host, a: &[Data]) -> Answer {
-    let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
-    with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
-}
-
-fn layer_typename(h: &Host, a: &[Data]) -> Answer {
-    layer_name(h, a)?;
-    Ok(text("Layer"))
-}
-
 fn typename_of(name: &'static str) -> HostMember {
     HostMember::Get(Rc::new(move |_| Ok(text(name))))
 }
@@ -1752,11 +1765,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("pageItems", get(l, doc_page_items)),
         ("selection", property(l, doc_selection, doc_set_selection)),
     ]);
-    document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
-            .into_iter()
-            .map(|m| later(l, "Document", m)),
-    );
+    document.extend(["pathItems", "textFrames", "swatches", "symbols", "views", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)));
+    document.extend(layers::document_members(l));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -1795,12 +1805,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("remove", method(l, item_remove)),
         ("zOrder", method(l, item_z_order)),
     ]);
+    page_item.extend(layers::page_item_members(l));
     page_item.extend(
         [
             "artworkKnockout",
             "blendingMode",
             "isIsolated",
-            "layer",
             "pixelAligned",
             "sliced",
             "tags",
@@ -1820,8 +1830,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
-    classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
+    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), layers::members(c, l), None)));
+    classes.extend(layers::classes(l));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
 }
 

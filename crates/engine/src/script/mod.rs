@@ -2290,6 +2290,9 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        if let Some(boards) = dom::layers::active_artboards(&host.dom.active_artboards.borrow(), self.documents()) {
+            report["activeArtboards"] = boards;
+        }
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
         self.script_report = Some(report.clone());

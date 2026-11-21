@@ -73,9 +73,10 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPresetType \
-         DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems RulerUnits ZOrderMethod",
+        "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
+         DocumentArtboardLayout DocumentColorSpace DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
+         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits \
+         ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -88,21 +89,54 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
+        "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
+         documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
          rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
-    ("Layer.prototype.", "constructor name typename"),
+    (
+        "Layer.prototype.",
+        "artworkKnockout artworkKnockout= blendingMode blendingMode= color color= compoundPathItems constructor \
+         dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
+         locked= move name name= opacity opacity= pageItems parent pathItems pathItems= placedItems placedItems= preview \
+         preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
+         textFrames= typename visible visible= zOrder zOrderPosition",
+    ),
+    ("Layers.", "prototype"),
+    ("Layers.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("GroupItem.", "prototype"),
+    (
+        "GroupItem.prototype.",
+        "clipped clipped= compoundPathItems constructor groupItems pageItems pathItems pathItems= placedItems placedItems= \
+         rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
+    ),
+    ("GroupItems.", "prototype"),
+    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll typename"),
+    ("CompoundPathItem.", "prototype"),
+    ("CompoundPathItem.prototype.", "constructor pathItems"),
+    ("CompoundPathItems.", "prototype"),
+    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Artboard.", "prototype"),
+    (
+        "Artboard.prototype.",
+        "artboardRect artboardRect= constructor name name= parent remove rulerOrigin rulerOrigin= rulerPAR rulerPAR= \
+         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= typename",
+    ),
+    ("Artboards.", "prototype"),
+    (
+        "Artboards.prototype.",
+        "add constructor getActiveArtboardIndex getByName index insert length parent remove setActiveArtboardIndex \
+         typename",
+    ),
     ("PageItems.", "prototype"),
     ("PageItems.prototype.", "constructor getByName index length parent removeAll typename"),
     ("PageItem.", "prototype"),
     (
         "PageItem.prototype.",
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
-         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
-         left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
+         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer left \
+         left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
          position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
@@ -124,9 +158,9 @@ const INSIDE: &[(&str, &str)] = &[
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`
-/// and the page item types.
-const BARE_CLASSES: &str = "BlendItem CompoundPathItem DocumentPreset EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+/// and the page item types that have no members of their own.
+const BARE_CLASSES: &str = "BlendItem DocumentPreset EnvelopeItem GraphItem IntertwineItem MeshItem PathItem PlacedDocumentItem \
+     PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

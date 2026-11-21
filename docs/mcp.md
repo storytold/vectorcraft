@@ -2672,10 +2672,61 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.views`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- A document also has `layers`, `activeLayer`, `groupItems`, `compoundPathItems` and `artboards`.
+  `layers` (https://ai-scripting.docsforadobe.dev/jsobjref/Layers/) and a layer's own `layers` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. On the document, `add()` runs `layer.new` and makes a
+  layer above every top-level layer; on a layer it runs `layer.newSublayer` and makes a sublayer on top of that
+  layer's contents. The new layer becomes the current one. `removeAll()` runs `layer.delete`; on the document's
+  layers it throws, since a document keeps at least one layer. Assigning a layer to `activeLayer` runs
+  `layer.setCurrent`. A `Layer` (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/) has `typename`, `name`,
+  `visible`, `locked`, `printable`, `preview`, `dimPlacedImages`, `opacity` (0 to 100), `color`, `parent`,
+  `layers`, `pageItems`, `groupItems`, `compoundPathItems`, `zOrderPosition`, `hasSelectedArtwork`, `isIsolated`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`. Its properties run
+  `layer.setProps`, and `opacity` runs `object.setProps`. `move` and `zOrder` run `node.move`; a layer goes into
+  another layer, to the top level of the document, or directly above or below another layer. Every page item has
+  `layer`, the layer it is in. A `GroupItem` (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/) also has
+  `clipped`, `pageItems`, `groupItems` and `compoundPathItems`, and a `CompoundPathItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItem/) has `pathItems`. `groupItems`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/) and `compoundPathItems` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. `groupItems.add()` runs `object.newGroup`.
+  `clipped` runs `layer.clippingMask.toggle`. `artboards` (https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)`, `add(artboardRect)` (runs `artboard.new`),
+  `insert(artboardRect, index)` (runs `artboard.new` and `artboard.reorder`), `remove(index)` (runs
+  `artboard.delete`), `getActiveArtboardIndex()` and `setActiveArtboardIndex(index)`. An `Artboard`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Artboard/) has `typename`, `parent`, `artboardRect`, `name`,
+  `rulerOrigin`, `rulerPAR` (0.1 to 10), `showCenter`, `showCrossHairs`, `showSafeAreas` and `remove()`; its
+  properties run `artboard.setProps`, and `rulerOrigin` runs `document.setRulerOrigin`. One document always keeps
+  one artboard.
+  VectorCraft's own rules: `layers` lists layers top first, as the Layers panel shows them. `groupItems`,
+  `compoundPathItems` and a layer's or group's `pageItems` list art in paint order from the bottom. The document's
+  `groupItems` and `compoundPathItems` hold every group or compound path at any depth, and a layer's or group's hold
+  only the ones directly in it. A layer's `pageItems` leave out its sublayers, and a compound path's `pathItems`
+  are its `pageItems`. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
+  numbers from 0 to 255. A layer's name is from 1 to 512 characters. A layer's `zOrderPosition` counts the layers
+  beside it from 1 at the bottom, leaving out art, and `zOrder` with `BRINGFORWARD` or `SENDBACKWARD` moves it past
+  the next layer beside it and any art between them.
+  `hasSelectedArtwork = true` adds the layer's shown, unlocked art to the selection, and `false` deselects it.
+  `clipped = true` makes the group's topmost object, which must be a path, a compound path or type, its clipping
+  path; `false` releases the mask; the group keeps its id. `groupItems.add()` makes an empty group on top of the
+  layer's or group's contents, or of the current layer's for the document's collection.
+  `compoundPathItems.add()` throws, since a compound path holds at least one path. `artboards.add` and `insert` stop
+  at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
+  `[left, top, right, bottom]` in script coordinates, with its right side right of its left side, its bottom below
+  its top and each side from 1 to 3,999,856 points. Artboard names are trimmed, cannot be empty and are unique: a name
+  another artboard has throws. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one
+  past the artboard count that no other artboard's name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
+  `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
+  change in `activeArtboards` (`[{document, artboard}]`, both indexes). An index outside the list throws a
+  `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
+  `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
+  `GroupItems.createFromFile` throw an error that says they are not available yet.
+- `object.newGroup {parent?, index?}` adds an empty group to a shown, unlocked layer or group (`parent`; default:
+  the current layer), on top of its contents or at `index` (0 is the bottom), as one undo step named Group, and
+  gives `{id}`. The selection stays as it is.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
