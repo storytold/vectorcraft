@@ -616,6 +616,34 @@ fn a_click_puts_a_continuous_arc_end_on_a_tick() {
     }
 }
 
+/// Alt tapped during a press moves the end of the piece for the new action at once, with no
+/// further drag: a continuous arc's end on the 60° tick goes to the pointer once the piece is a
+/// sharp-corner arc, after a drag and after a press that has not dragged, and a line's end at the
+/// pointer goes onto the tick once the piece is a continuous arc.
+#[test]
+fn an_alt_tap_during_a_press_moves_the_end_for_the_new_action() {
+    let at = arc_end_61();
+    let v = ViewInfo::default();
+    // (drag first, Alt taps before the press, the end before Alt, the end after it)
+    for (drag, taps, before, after) in [(true, 0, tick_60(), at), (false, 0, tick_60(), at), (true, 2, at, tick_60())] {
+        let mut s = session();
+        continuous_arc_after_a_line(&mut s, v);
+        for _ in 0..taps {
+            key(&mut s, ToolKey::AltTap);
+        }
+        let first = if drag { (280.0, 140.0) } else { (at.x, at.y) };
+        s.pointer(&PointerEvent::new(PointerKind::Down, first.0, first.1), v).unwrap();
+        if drag {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, at.x, at.y), v).unwrap();
+        }
+        assert!(drawn_end(&s).distance(before) < 1e-6, "{drag} {taps}: {:?}", drawn_end(&s));
+        s.tool_key(ToolKey::AltTap, Mods::default(), v).unwrap();
+        assert!(drawn_end(&s).distance(after) < 1e-6, "{drag} {taps} after Alt: {:?}", drawn_end(&s));
+        s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), v).unwrap();
+        assert!(drawn_end(&s).distance(after) < 1e-6, "{drag} {taps} placed: {:?}", drawn_end(&s));
+    }
+}
+
 /// After a click puts a continuous arc's end on a tick away from the pointer, no preview runs from
 /// the placed end back to where the pointer was; the next move shows the preview again.
 #[test]

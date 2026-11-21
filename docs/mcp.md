@@ -7334,7 +7334,9 @@ arc ends. The piece the next click adds shows its protractor only while Enable R
 that piece. With Smart Guides on, the end of a continuous arc snaps onto the nearest tick of its protractor, on the same
 circle, when that tick lies within the Smart Guides snapping tolerance of the pointer, no other Smart Guide snaps the
 point, and neither Snap to Grid nor Snap to Pixel snaps drawn points. A sharp-corner arc, and a continuous arc that
-starts a path and so has no direction to follow, sweep the arc size, so their ends do not snap to a tick. After a snap
+starts a path and so has no direction to follow, sweep the arc size, so their ends do not snap to a tick. Alt tapped
+during a press moves the piece's end for the new action at once: off the tick when a continuous arc becomes a
+sharp-corner arc, and onto it when the piece becomes a continuous arc. After a snap
 setting (Smart Guides, Snap to Point, Snap to Grid, Snap to Pixel or a snapping tolerance) changes under a still
 pointer, the hover's preview, its protractor, its distance label and its Smart Guides are hidden until the pointer
 moves. When the view, the document or the selection changes, the canvas hovers the still pointer again. Shift does not constrain Quick Pen points, so it

@@ -364,12 +364,14 @@ impl Drawing {
 }
 
 /// The press in progress: where it went down, whether it has dragged, and whether it began an undo
-/// step (a piece it adds).
+/// step (a piece it adds). `end` is the pointer for the end of the piece it adds and where the
+/// snap put that end, before the protractor's tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Press {
     at: Point,
     dragged: bool,
     begun: bool,
+    end: Option<(Point, Point)>,
 }
 
 pub struct QuickPenTool {
@@ -478,12 +480,12 @@ impl QuickPenTool {
         let before = self.before_piece();
         let from = before.as_ref().and_then(|sp| sp.anchors.last()).map(|a| Leave::segment(cx, a.p, false).without_contact());
         let q = self.snap.drag(cx, p, from.as_ref());
-        let q = match (&before, self.drawing.as_ref().and_then(|dr| dr.pieces.last())) {
-            (Some(sp), Some(piece)) => {
-                let landed = piece.stroke == Stroke::ContinuousArc && self.landed(cx, p, q, from.as_ref());
-                self.on_tick(cx, sp, *piece, p, q, landed)
-            }
-            _ => q,
+        if let Some(pr) = self.press.as_mut() {
+            pr.end = Some((p, q));
+        }
+        let q = match self.drawing.as_ref().and_then(|dr| dr.pieces.last()) {
+            Some(piece) => self.press_end(cx, piece, p, q),
+            None => q,
         };
         let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) else { return vec![] };
         if last.to == q {
@@ -491,6 +493,15 @@ impl QuickPenTool {
         }
         last.to = q;
         vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()]
+    }
+
+    /// Where `piece`, which a press draws, ends with the pointer at `p` that the snap put at `q`:
+    /// on the protractor's tick when [`Self::on_tick`] puts it there for the piece's action.
+    fn press_end(&self, cx: &ToolContext, piece: &Piece, p: Point, q: Point) -> Point {
+        let Some(sp) = self.before_piece() else { return q };
+        let from = sp.anchors.last().map(|a| Leave::segment(cx, a.p, false).without_contact());
+        let landed = piece.stroke == Stroke::ContinuousArc && self.landed(cx, p, q, from.as_ref());
+        self.on_tick(cx, &sp, *piece, p, q, landed)
     }
 
     /// `q`, where the last snap put the end of `piece` drawn after `sp` (the pointer being at `p`),
@@ -582,15 +593,15 @@ impl QuickPenTool {
                 return vec![];
             }
             let from = self.leave(cx).map(|l| l.1);
-            let q = self.snap.press(cx, p, &[id], from.as_ref());
-            let landed = self.action == Stroke::ContinuousArc && self.landed(cx, p, q, from.as_ref());
-            let q = self.on_tick(cx, sp, self.piece_to(q), p, q, landed);
+            let snapped = self.snap.press(cx, p, &[id], from.as_ref());
+            let landed = self.action == Stroke::ContinuousArc && self.landed(cx, p, snapped, from.as_ref());
+            let q = self.on_tick(cx, sp, self.piece_to(snapped), p, snapped, landed);
             let (piece, kept) = (self.piece_to(q), sp.anchors.len());
             if let Some(dr) = self.drawing.as_mut() {
                 dr.push(piece, kept);
                 dr.before_press = shared_node(cx.doc, id).cloned();
             }
-            self.press = Some(Press { at: p, dragged: false, begun: true });
+            self.press = Some(Press { at: p, dragged: false, begun: true, end: Some((p, snapped)) });
             return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false)), drawn()];
         }
         if let Some((id, si, at_first)) = open_end_at(cx, p, tol, None)
@@ -800,11 +811,17 @@ impl Tool for QuickPenTool {
             }
             ToolKey::AltTap => {
                 self.action = self.action.next();
-                // A drag under way draws its piece with the new action.
+                // A drag under way draws its piece with the new action. Its end goes through the
+                // protractor's tick again for that action: a continuous arc's end on a tick goes
+                // back to where the snap put the pointer for another action, and the other way.
                 if self.press.is_some_and(|pr| pr.begun) && self.held(cx) {
-                    let (action, turn) = (self.action, self.turn);
-                    if let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
-                        (last.stroke, last.turn, last.flip) = (action, turn, false);
+                    let (action, turn, end) = (self.action, self.turn, self.press.and_then(|pr| pr.end));
+                    let piece = self.drawing.as_ref().and_then(|dr| dr.pieces.last()).map(|&pc| {
+                        let pc = Piece { stroke: action, turn, flip: false, ..pc };
+                        end.map_or(pc, |(p, q)| Piece { to: self.press_end(cx, &pc, p, q), ..pc })
+                    });
+                    if let (Some(piece), Some(last)) = (piece, self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut())) {
+                        *last = piece;
                     }
                     return vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()];
                 }
