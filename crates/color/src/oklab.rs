@@ -69,8 +69,7 @@ fn largest_fitting_chroma(l: f64, h: f64, limit: f64) -> f64 {
     let y = [lin(0.0), lin(s), lin(2.0 * s), lin(3.0 * s)];
     let bounds = [-GAMUT_SLACK / 12.92, ((1.0 + GAMUT_SLACK + 0.055) / 1.055).powf(2.4)];
     let mut ends = vec![0.0];
-    for ch in 0..3 {
-        let [y0, y1, y2, y3] = [y[0][ch], y[1][ch], y[2][ch], y[3][ch]];
+    for (((y0, y1), y2), y3) in y[0].into_iter().zip(y[1]).zip(y[2]).zip(y[3]) {
         let (d1, d2, d3) = (y1 - y0, y2 - 2.0 * y1 + y0, y3 - 3.0 * y2 + 3.0 * y1 - y0);
         let k = [y0, d1 - d2 / 2.0 + d3 / 3.0, d2 / 2.0 - d3 / 2.0, d3 / 6.0];
         let p = |t: f64| ((k[3] * t + k[2]) * t + k[1]) * t + k[0];
