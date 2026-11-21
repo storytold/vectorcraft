@@ -806,9 +806,9 @@ struct Host {
     /// The files of the documents open when the run began
     /// ([`crate::file_access::ScriptGate::keeping_linked_read_only`]).
     opened_before: Vec<String>,
-    /// The real paths of the files the documents open when the run began link to
-    /// ([`crate::file_access::ScriptGate::linked`]).
-    linked: std::cell::OnceCell<Arc<[std::path::PathBuf]>>,
+    /// The files the documents open when the run began link to, and the paths the run's commands
+    /// read through them alone ([`crate::file_access::ScriptGate::linked`]).
+    linked: std::cell::OnceCell<crate::file_access::LinkedFiles>,
 }
 
 /// A document open when a run began, with its own file and the file it was read from.
@@ -817,8 +817,9 @@ type RunDoc = (Arc<crate::Document>, Option<String>, Option<String>);
 impl Host {
     /// The files the commands the run runs may read because the documents open when the run began
     /// link to them, found once, from those documents as they were then: a link the run adds or
-    /// changes, and a document it opens, give it no file to read.
-    fn linked(&self) -> Arc<[std::path::PathBuf]> {
+    /// changes, and a document it opens, give it no file to read. Every command's gate shares the
+    /// record of the paths read through them.
+    fn linked(&self) -> crate::file_access::LinkedFiles {
         self.linked
             .get_or_init(|| {
                 let docs = std::mem::take(&mut *self.run_docs.borrow_mut());

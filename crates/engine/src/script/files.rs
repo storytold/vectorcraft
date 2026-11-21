@@ -73,9 +73,8 @@
 //! - In a wasm build every lookup fails with [`NO_WEB`].
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use vectorcraft_js::{Data, HostError, HostItem, Realm, RunError};
@@ -459,7 +458,7 @@ impl Disk {
     /// The gate for a command the script runs: the places it reads and writes now, the files of the
     /// open documents, `documents`, and the files it may only read because the documents open when
     /// the run began link to them, `linked`.
-    pub(crate) fn gate(&self, documents: Vec<String>, linked: Arc<[PathBuf]>) -> crate::file_access::ScriptGate {
+    pub(crate) fn gate(&self, documents: Vec<String>, linked: crate::file_access::LinkedFiles) -> crate::file_access::ScriptGate {
         crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, linked, also: None }
     }
 
