@@ -1,0 +1,1084 @@
+//! Marks on the art: the hidden characters of Show Hidden Characters, Auto Spell Check's waves, Draw
+//! Inside's corner arms, Simplify's original-path band, the print tiling, the slices and the
+//! artboards' fade, bleed and marks. [`marks_of`] gathers what one pass shows; [`show`] puts it on the
+//! canvas through the framework's controls. Threads and Live Paint gaps stay lists of [`Overlay`]s
+//! for the tool adapter's painter.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use craft::behavior::{CanvasView, Input, Metrics, Sense};
+// PLAN: assumed ui-egui depends on the `craft` facade with the draw, pages and ui features (manifest owned by hub-w1).
+use craft::draw::ui::slice::{SliceItem, SliceOrigin, SliceOverlay, SliceRules};
+use craft::pages::ui::marks::{HiddenMark, MarkAnchor, PlacedMark, TextFrameMarks};
+use craft::theme::variant::Tone;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::canvas_controls::{SelectionOutline, path_runs};
+use craft::ui::contract::{Common, Component, Cx, MeasureCx, PaintUi, Props, Role, Show as _};
+use craft::ui::fonts::FontRef;
+use craft::ui::primitives::{Draw, DocRun, DocText, PaintShape, StrokeWidth};
+use craft::ui::runtime::env::Label;
+use craft::ui::style::{ComponentStyle, DataColor, Srgba, StyleColor, StyleCx};
+use egui::{Color32, Pos2, Response, Vec2};
+use vectorcraft_doc::{Node, NodeId, NodeKind};
+use vectorcraft_engine::DocState;
+use vectorcraft_geom::{BezPath, Point, Rect};
+use vectorcraft_pdf::TilingPage;
+use vectorcraft_tools::Overlay;
+
+use super::BodyKind;
+use super::artboards;
+use super::grid::pref_color;
+use super::outline::OVERLAY_MAX_ANCHORS;
+use crate::VectorcraftApp;
+use crate::doc_windows::Win;
+
+#[cfg(test)]
+mod tests;
+
+/// The one colour of the hidden-character marks, whatever the layer.
+const HIDDEN_BLUE: Color32 = Color32::from_rgb(0x4f, 0x9d, 0xff);
+
+/// The print tiling's lines: a neutral grey that reads on the paper and on the pasteboard.
+const PRINT_TILING: Color32 = Color32::from_gray(96);
+
+/// The share of a tile's strength a tile outside the tile range keeps.
+const UNPRINTED_SHARE: f32 = 0.45;
+
+/// The fade outside the artboards: black at 40% opacity.
+const FADE_OUTSIDE: DataColor = DataColor::new(Color32::from_black_alpha(102));
+
+/// The share of its layer colour Simplify's original-path band is drawn at.
+const BAND_SHARE: f32 = 0.4;
+
+/// The size of a print tile's number: document annotation text, not an interface size.
+const TILE_NUMBER_SIZE: f32 = 10.0;
+
+/// A spelling wave's half-length and height in screen points.
+const WAVE_STEP: f32 = 2.0;
+const WAVE_HIGH: f32 = 1.5;
+
+/// The most waves on one line, however far the view is zoomed in.
+const WAVE_MAX: usize = 4_000;
+
+/// The most words underlined in one text object: past it the rest of the object isn't checked, so a
+/// long story of unknown words costs one check's worth.
+const MAX_UNDERLINED: usize = 1_000;
+
+/// The marks Show Hidden Characters drew on each text object in the last pass
+/// ([`crate::CanvasCache::hidden_chars`]). Each is kept with the node it was laid out from: an edited
+/// object is a new `Arc` and is laid out again, and all type is laid out again when the fonts or the
+/// hyphenation exceptions change.
+#[derive(Default)]
+pub struct HiddenChars {
+    /// The fonts' generation ([`vectorcraft_text::FontDb::generation`]) and the hyphenation
+    /// exceptions the marks were laid out with.
+    pub(super) inputs: (u64, String),
+    /// Each text object shown, by id: the node it was laid out from and its marks in document space.
+    pub(super) marks: HashMap<NodeId, (Arc<Node>, Arc<Vec<PlacedMark>>)>,
+}
+
+/// What Auto Spell Check's kept lines depend on beyond the text object itself: when any of it
+/// changes, all type is checked again.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct SpellingInputs {
+    /// The fonts' generation ([`vectorcraft_text::FontDb::generation`]).
+    fonts: u64,
+    /// The hyphenation exceptions, which move line breaks.
+    hyphenation: String,
+    /// The custom dictionary's generation ([`vectorcraft_engine::cmd::spelling::dictionary_generation`]).
+    dictionary: u64,
+    /// The document the lines are of.
+    doc: u64,
+    /// How many Ignore All words the document has.
+    ignored: usize,
+}
+
+/// One text object's Auto Spell Check lines: the document-space ends of each.
+pub(super) type Underlines = Arc<Vec<(Point, Point)>>;
+
+/// The lines Auto Spell Check drew under each text object in the last pass
+/// ([`crate::CanvasCache::spelling`]). Each is kept with the node it was checked in: an edited object
+/// is a new `Arc` and is checked again.
+#[derive(Default)]
+pub struct SpellingMarks {
+    pub(super) inputs: Option<SpellingInputs>,
+    /// Each text object shown, by id: the node it was checked in and its lines.
+    pub(super) lines: HashMap<NodeId, (Arc<Node>, Underlines)>,
+}
+
+/// One print tile on the screen: its paper edge and its number.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Tile {
+    /// The paper's edge as a closed ring of screen points.
+    edge: Vec<Pos2>,
+    /// Where the number's text starts.
+    at: Pos2,
+    /// The tile's number as drawn.
+    pub(crate) label: String,
+    /// Whether the tile prints (tiles outside the tile range don't).
+    printed: bool,
+}
+
+/// Everything one pass shows on the art, in the order the pass gathers it.
+#[derive(Default)]
+pub(crate) struct Marks {
+    /// The hidden-character marks of the type in view, in document space.
+    pub(crate) hidden: Vec<PlacedMark>,
+    /// The Auto Spell Check segments of the type in view, in document space.
+    pub(crate) spelling: Vec<(Point, Point)>,
+    /// Draw Inside's corner arms in screen points, and the layer colour they take.
+    pub(crate) arms: Vec<[Pos2; 2]>,
+    arm_color: [u8; 3],
+    /// Simplify's original paths with their layer colours.
+    original: Vec<(BezPath, [u8; 3])>,
+    /// The print tiles, and the imageable boxes of the printed and of the other tiles.
+    pub(crate) tiles: Vec<Tile>,
+    tile_boxes: Vec<BezPath>,
+    tile_boxes_dim: Vec<BezPath>,
+    /// The slices as the control takes them, the numbers of the selected ones, their colour and
+    /// whether they are numbered.
+    slices: Vec<SliceItem>,
+    slice_selected: Vec<usize>,
+    slice_color: Option<Srgba>,
+    slice_numbers: bool,
+    /// The fade outside the artboards, the bleed and the artboards' marks.
+    fade: Vec<[Pos2; 4]>,
+    bleed: Vec<BezPath>,
+    artboard_marks: Vec<BezPath>,
+}
+
+/// The marks of one canvas pass over `view`. The memos of [`crate::CanvasCache`] are kept while their
+/// gate is on and dropped, with the text nodes they hold, when it is off.
+pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
+    let mut m = Marks { original: original_band(app), ..Marks::default() };
+    let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    let edges = app.ui.view.edges && !revolve_edit;
+    let hidden_gate = edges && app.ui.view.hidden_chars;
+    let spelling_gate = app.ui.view.auto_spell_check && !revolve_edit;
+    let inside_gate = edges && app.session.draw_mode == vectorcraft_engine::DrawMode::Inside;
+    let tiling_gate = app.session.active().is_some_and(|d| d.print_tiling) || app.session.tool_id() == "printTiling";
+    let slices_gate = !app.session.slices_hidden();
+    if !hidden_gate {
+        app.canvas.hidden_chars.marks.clear();
+    }
+    if !spelling_gate {
+        app.canvas.spelling = SpellingMarks::default();
+    }
+    let fades = artboards::fades_outside_artboards(app);
+    let shows_artboards = artboards::shows_artboards(app);
+    let Some(st) = app.session.active() else {
+        app.canvas.hidden_chars.marks.clear();
+        app.canvas.spelling = SpellingMarks::default();
+        return m;
+    };
+    let key = (st.uid, st.revision);
+    if fades {
+        // PLAN: assumed `artboards::frames(app: &VectorcraftApp) -> Vec<PageFrame>` and `fade_quads(view: &CanvasView, frames: &[PageFrame]) -> Vec<[Pos2; 4]>`.
+        m.fade = artboards::fade_quads(view, &artboards::frames(app));
+    }
+    if shows_artboards {
+        m.bleed = artboards::bleed_paths(st);
+        m.artboard_marks = artboards::mark_paths(st, view.zoom);
+    }
+    if hidden_gate {
+        collect_hidden(st, view, &mut app.canvas.hidden_chars, &mut m.hidden);
+    }
+    if spelling_gate {
+        collect_spelling(st, view, &mut app.canvas.spelling, &mut m.spelling);
+    }
+    if inside_gate
+        && let Some(id) = app.session.draw_inside
+        && let Some(bounds) = st.doc.node(id).and_then(|n| n.visual_bounds())
+    {
+        m.arms = inside_arms(view, bounds);
+        m.arm_color = st.doc.layer_color(id);
+    }
+    if tiling_gate {
+        // Settings that can't print have no pages to show.
+        let pages = cached(&mut app.canvas.print_tiling, key, || vectorcraft_engine::cmd::printtiling::pages(&st.doc).unwrap_or_default());
+        m.tiles = tiles_of(&pages, view);
+        for page in pages.iter() {
+            let boxes = if page.printed { &mut m.tile_boxes } else { &mut m.tile_boxes_dim };
+            boxes.push(rect_path(page.imageable));
+        }
+    }
+    if slices_gate {
+        let layout = cached(&mut app.canvas.slices, key, || st.doc.slice_layout());
+        let prefs = &app.session.prefs;
+        m.slice_color = Some(Srgba::from(pref_color(&prefs.slice_line_color, Color32::from_rgb(0xff, 0x3f, 0x3f))));
+        m.slice_numbers = prefs.show_slice_numbers;
+        for a in layout.iter() {
+            let origin = match a.source {
+                vectorcraft_doc::SliceSource::User => SliceOrigin::User,
+                vectorcraft_doc::SliceSource::Object => SliceOrigin::Layer,
+                vectorcraft_doc::SliceSource::Auto => SliceOrigin::Auto,
+            };
+            // PLAN: `SliceItem::id` is `Option<u32>`; a stored slice's node id is `NodeId(u64)`.
+            m.slices.push(SliceItem::new(a.number, a.id.and_then(|id| u32::try_from(id.0).ok()), a.rect, origin));
+            if a.id.is_some_and(|id| st.selection.slices.contains(&id) || st.selection.objects.contains(&id)) {
+                m.slice_selected.push(a.number);
+            }
+        }
+    }
+    m
+}
+
+/// Puts the marks of one pass on the canvas body of `space`, over the art and under the tool's
+/// widgets. Nothing shows in Presentation Mode. The marks follow the active document in every body.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, _win: Win, _kind: BodyKind) {
+    if app.ui.screen_mode == 3 {
+        return;
+    }
+    let view = space.view;
+    let marks = marks_of(app, &view);
+    let rect = ui.max_rect();
+    ArtMarks::new("Art marks", view, &marks).show_at(ui, rect);
+    for (boxes, share) in [(&marks.tile_boxes, 1.0), (&marks.tile_boxes_dim, UNPRINTED_SHARE)] {
+        if !boxes.is_empty() {
+            SelectionOutline::dashed("Print tiling", boxes).color(DataColor::new(PRINT_TILING.gamma_multiply(share))).show_at(ui, rect);
+        }
+    }
+    if let (false, Some(color)) = (marks.slices.is_empty(), marks.slice_color) {
+        SliceOverlay::new("Slices", &marks.slices)
+            .color(color)
+            .also_selected(&marks.slice_selected)
+            .numbers(marks.slice_numbers)
+            .pick(false)
+            .rules(SliceRules::ILLUSTRATOR)
+            .show_at(ui, rect);
+    }
+    if !marks.hidden.is_empty() {
+        // No frame is drawn, so no port takes the paper colour.
+        let paper = DataColor::new(Color32::TRANSPARENT);
+        TextFrameMarks::new("Hidden characters", view, &[], DataColor::new(HIDDEN_BLUE), paper).hidden_characters(&marks.hidden).show_at(ui, rect);
+    }
+}
+
+/// The cached value of `slot` for `key`, made by `make` when the slot holds another key.
+fn cached<T>(slot: &mut Option<((u64, u64), Arc<T>)>, key: (u64, u64), make: impl FnOnce() -> T) -> Arc<T> {
+    if let Some((k, v)) = slot
+        && *k == key
+    {
+        return v.clone();
+    }
+    let v = Arc::new(make());
+    *slot = Some((key, v.clone()));
+    v
+}
+
+/// Depth first in paint order, leaving out hidden objects and what is inside them.
+fn walk(nodes: &[Arc<Node>], f: &mut impl FnMut(&Arc<Node>)) {
+    for n in nodes.iter().filter(|n| n.visible) {
+        f(n);
+        if let Some(children) = n.children() {
+            walk(children, f);
+        }
+    }
+}
+
+/// Whether `n`'s box meets the part of the document the view shows (the box round the view's
+/// corners, which a turned view makes larger than the canvas).
+fn in_view(n: &Node, view: &CanvasView) -> bool {
+    let v = view.visible();
+    n.geometric_bounds().is_some_and(|b| b.x0 <= v.x1 && v.x0 <= b.x1 && b.y0 <= v.y1 && v.y0 <= b.y1)
+}
+
+/// The marks of the visible text objects in view, laid out again only for the objects the memo
+/// doesn't hold as they are now. The objects not shown this pass are dropped from the memo.
+fn collect_hidden(st: &DocState, view: &CanvasView, kept: &mut HiddenChars, out: &mut Vec<PlacedMark>) {
+    let mut last = std::mem::take(&mut kept.marks);
+    // The inputs are read before any layout: when fonts load during this pass, the next pass lays
+    // all type out again.
+    let inputs = (vectorcraft_text::FontDb::global().generation(), vectorcraft_text::hyphenation_exceptions());
+    if kept.inputs != inputs {
+        last.clear();
+        kept.inputs = inputs;
+    }
+    walk(&st.doc.layers, &mut |n| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if !in_view(n, view) {
+            return;
+        }
+        let marks = match last.remove(&n.id) {
+            Some((was, marks)) if Arc::ptr_eq(&was, n) => marks,
+            _ => Arc::new(HiddenMarks::of(tx)),
+        };
+        out.extend_from_slice(&marks);
+        kept.marks.insert(n.id, (n.clone(), marks));
+    });
+}
+
+/// The Auto Spell Check segments of the visible text objects in view, checked again only for the
+/// objects the memo doesn't hold as they are now.
+fn collect_spelling(st: &DocState, view: &CanvasView, kept: &mut SpellingMarks, out: &mut Vec<(Point, Point)>) {
+    let mut last = std::mem::take(&mut kept.lines);
+    let inputs = SpellingInputs {
+        fonts: vectorcraft_text::FontDb::global().generation(),
+        hyphenation: vectorcraft_text::hyphenation_exceptions(),
+        dictionary: vectorcraft_engine::cmd::spelling::dictionary_generation(),
+        doc: st.uid,
+        // Ignore All only adds words while the document is open.
+        ignored: st.spelling_ignored.len(),
+    };
+    if kept.inputs.as_ref() != Some(&inputs) {
+        last.clear();
+        kept.inputs = Some(inputs);
+    }
+    walk(&st.doc.layers, &mut |n| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if !auto_spell_checks(n) || !in_view(n, view) {
+            return;
+        }
+        let lines = match last.remove(&n.id) {
+            Some((was, lines)) if Arc::ptr_eq(&was, n) => lines,
+            _ => Arc::new(underlines(tx, &st.spelling_ignored)),
+        };
+        out.extend_from_slice(&lines);
+        kept.lines.insert(n.id, (n.clone(), lines));
+    });
+}
+
+/// Draw Inside's arms on the screen: round the corners of `bounds` (a few pixels outside the
+/// object, clear of its stroke), each arm a third of its side at most and 16 points at most, so the
+/// rectangle stays open. The corners follow a turned view.
+pub(crate) fn inside_arms(view: &CanvasView, bounds: Rect) -> Vec<[Pos2; 2]> {
+    let pad = 4.0 / view.zoom.max(1e-9);
+    let [a, b, c, d] = view.quad(bounds.inflate(pad, pad));
+    let mut arms = Vec::with_capacity(8);
+    for (corner, sides) in [(a, [b, d]), (b, [c, a]), (c, [d, b]), (d, [a, c])] {
+        for next in sides {
+            let side = next - corner;
+            let len = side.length();
+            if len.is_finite() && len > 1e-3 {
+                arms.push([corner, corner + side / len * (len / 3.0).min(16.0)]);
+            }
+        }
+    }
+    arms
+}
+
+/// Simplify's Show Original Path: the paths its preview ran on, as they were before it, with their
+/// layers' colours. Nothing when they have more than [`OVERLAY_MAX_ANCHORS`] anchor points.
+fn original_band(app: &VectorcraftApp) -> Vec<(BezPath, [u8; 3])> {
+    let paths = crate::dialogs::path_ops::original_paths(app);
+    let Some(st) = app.session.active().filter(|_| paths.iter().map(|(_, path)| path.anchor_count()).sum::<usize>() <= OVERLAY_MAX_ANCHORS) else {
+        return vec![];
+    };
+    paths.into_iter().map(|(id, path)| (path.to_bezpath(), st.doc.layer_color(id))).collect()
+}
+
+/// The rectangle `[x0, y0, x1, y1]` as a closed path.
+fn rect_path(r: [f64; 4]) -> BezPath {
+    let mut p = BezPath::new();
+    p.move_to((r[0], r[1]));
+    p.line_to((r[2], r[1]));
+    p.line_to((r[2], r[3]));
+    p.line_to((r[0], r[3]));
+    p.close_path();
+    p
+}
+
+/// The print tiles of `pages` on the screen under `view`: the paper edge and the number, which sits
+/// at the top left of the imageable box.
+pub(crate) fn tiles_of(pages: &[TilingPage], view: &CanvasView) -> Vec<Tile> {
+    let quad = |r: [f64; 4]| view.quad(Rect::new(r[0], r[1], r[2], r[3]));
+    pages
+        .iter()
+        .map(|page| {
+            let edge = quad(page.page);
+            let corner = quad(page.imageable).into_iter().reduce(|a, b| Pos2::new(a.x.min(b.x), a.y.min(b.y)));
+            Tile {
+                edge: edge.iter().chain(edge.first()).copied().collect(),
+                at: corner.unwrap_or_default() + Vec2::new(3.0, 2.0),
+                label: page.number.to_string(),
+                printed: page.printed,
+            }
+        })
+        .collect()
+}
+
+/// Type → Show Hidden Characters' placing: the characters that print no ink, and the ends of
+/// paragraphs, lines and stories, as [`PlacedMark`]s in document space.
+pub(crate) struct HiddenMarks;
+
+impl HiddenMarks {
+    /// Lay out `tx` and place its marks: a mark for each space, tab, nonbreaking space, space of a
+    /// set width and discretionary hyphen, one after each line a forced line break ends, and ¶ or #
+    /// after the lines that end a paragraph or the story. Type on a path has the marks over its
+    /// characters, ¶ and the break mark at its breaks, and # after its last character when the path
+    /// holds all of the text.
+    pub(crate) fn of(tx: &vectorcraft_doc::TextObject) -> Vec<PlacedMark> {
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+        let text = tx.plain_text();
+        // The ascent of the line holding `byte`, which sizes the mark.
+        let ascent = |byte: usize| lay.lines.iter().find(|l| (l.start..l.end).contains(&byte)).or(lay.lines.first()).map_or(0.0, |l| l.ascent);
+        let place = |mark: HiddenMark, at: Point, anchor: MarkAnchor, byte: usize| PlacedMark::new(mark, tx.xf * at, anchor, ascent(byte));
+        let along = |angle: f64| vectorcraft_geom::Vec2::new(angle.cos(), angle.sin());
+        let mut out = vec![];
+        // A list marker's glyphs and a hyphen the layout adds at a break (length 0) stand for no
+        // character. Glyphs before the start of an open path draw nothing. A character drawn with
+        // several glyphs gets one mark.
+        let mut marked = None;
+        for g in lay.glyphs.iter().filter(|g| g.len > 0 && !g.off_path) {
+            let Some(c) = text.get(g.byte..).and_then(|s| s.chars().next()) else { continue };
+            if marked == Some(g.byte) {
+                continue;
+            }
+            let d = along(g.angle);
+            let (mark, at, anchor) = match c {
+                // Type on a path is one line: its breaks are marked where their glyphs are.
+                '\n' | '\u{2028}' if lay.on_path => {
+                    (if c == '\n' { HiddenMark::ParagraphEnd } else { HiddenMark::LineBreak }, g.origin, MarkAnchor::Start)
+                }
+                '\n' | '\u{2028}' => continue,
+                _ => match HiddenMark::of(c) {
+                    Some(HiddenMark::Tab) => (HiddenMark::Tab, g.origin, MarkAnchor::Start),
+                    Some(mark) => (mark, g.origin + d * (g.advance / 2.0), MarkAnchor::Centre),
+                    None => continue,
+                },
+            };
+            out.push(place(mark, at, anchor, g.byte));
+            marked = Some(g.byte);
+        }
+        if lay.on_path {
+            // # after the last character, when the path holds all of the text.
+            let last = lay.glyphs.iter().filter(|g| g.len > 0 && !g.off_path).max_by_key(|g| g.byte + g.len);
+            if let Some(g) = last.filter(|g| g.byte + g.len >= text.len() && !lay.overflow) {
+                let d = along(g.angle);
+                let at = if g.rtl { g.origin - d } else { g.origin + d * (g.advance + 1.0) };
+                out.push(place(HiddenMark::StoryEnd, at, MarkAnchor::Start, g.byte));
+            }
+            return out;
+        }
+        // Lines are in line space: `physical_point` turns them into columns in vertical type.
+        let at = |x: f64, y: f64| lay.physical_point(Point::new(x, y));
+        for (i, line) in lay.lines.iter().enumerate() {
+            let last = i + 1 == lay.lines.len();
+            // A right-to-left line ends at its left edge.
+            let (x, anchor) = match (lay.vertical, line.rtl) {
+                (true, true) => (line.x0 - 1.0, MarkAnchor::Top),
+                (true, false) => (line.x1 + 1.0, MarkAnchor::Top),
+                (false, true) => (line.x0 - 1.0, MarkAnchor::End),
+                (false, false) => (line.x1 + 1.0, MarkAnchor::Start),
+            };
+            let soft = text.get(line.start..line.end).is_some_and(|s| s.ends_with('\u{2028}'));
+            let mark = if last && line.end >= text.len() {
+                HiddenMark::StoryEnd
+            } else if soft {
+                HiddenMark::LineBreak
+            } else if text.get(line.end..).is_some_and(|s| s.starts_with('\n')) {
+                HiddenMark::ParagraphEnd
+            } else {
+                continue;
+            };
+            out.push(PlacedMark::new(mark, tx.xf * at(x, line.baseline), anchor, line.ascent));
+        }
+        out
+    }
+}
+
+/// The style of [`ArtMarks`].
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+#[non_exhaustive]
+pub struct ArtMarksStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+    /// The artboards' bleed and marks.
+    line: StyleColor,
+    /// The spelling waves.
+    bad: StyleColor,
+}
+
+/// The marks the art carries, painted over the page after its content and under the tools' widgets:
+/// the fade outside the artboards, the bleed and the artboards' marks, Simplify's original-path
+/// band, Auto Spell Check's waves, Draw Inside's arms and the print tiles' edges and numbers.
+/// Nothing here takes input or focus.
+#[derive(Component, Props)]
+#[component(canvas_control)]
+pub(crate) struct ArtMarks<'a> {
+    #[common]
+    common: Common,
+    /// The view that maps document points to the screen.
+    view: CanvasView,
+    #[prop]
+    fade: &'a [[Pos2; 4]],
+    #[prop]
+    bleed: &'a [BezPath],
+    #[prop]
+    artboard_marks: &'a [BezPath],
+    #[prop]
+    original: &'a [(BezPath, [u8; 3])],
+    #[prop]
+    spelling: &'a [(Point, Point)],
+    #[prop]
+    arms: &'a [[Pos2; 2]],
+    #[prop]
+    arm_color: [u8; 3],
+    #[prop]
+    tiles: &'a [Tile],
+}
+
+impl<'a> ArtMarks<'a> {
+    /// The marks of one pass seen through `view`, named `label`.
+    pub(crate) fn new(label: impl Into<Label>, view: CanvasView, marks: &'a Marks) -> Self {
+        ArtMarks {
+            common: Common::new(),
+            view,
+            fade: &marks.fade,
+            bleed: &marks.bleed,
+            artboard_marks: &marks.artboard_marks,
+            original: &marks.original,
+            spelling: &marks.spelling,
+            arms: &marks.arms,
+            arm_color: marks.arm_color,
+            tiles: &marks.tiles,
+        }
+        .label(label)
+    }
+}
+
+impl Component for ArtMarks<'_> {
+    const ROLE: Role = Role::None;
+    const PARTS: bool = false;
+    const STOPS: bool = false;
+    const INPUT: Input = Input::Display;
+    const SHOWS_LABEL: bool = false;
+    const OVERLAYS: bool = false;
+    type Style = ArtMarksStyle;
+    type Output = Response;
+
+    fn style(cx: &StyleCx<'_>, _: ArtMarksStyleKey) -> ArtMarksStyle {
+        ArtMarksStyle { metrics: Metrics::new(), line: cx.color(cx.tokens.color.overlay.line), bad: cx.tone(Tone::Bad) }
+    }
+
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {
+        Vec2::ZERO
+    }
+
+    fn sense(&self) -> Sense {
+        Sense::empty()
+    }
+
+    fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
+        let style = &cx.style;
+        let draw = ui.draw();
+        for quad in self.fade {
+            draw.data_fill(&PaintShape::Polygon(quad.to_vec()), FADE_OUTSIDE);
+        }
+        for path in self.bleed.iter().chain(self.artboard_marks) {
+            for (points, closed) in path_runs(&self.view, path) {
+                draw.stroke(&PaintShape::Path(ring(points, closed)), StrokeWidth::Thin, style.line);
+            }
+        }
+        draw.faded(BAND_SHARE, |d| {
+            for (path, rgb) in self.original {
+                for (points, closed) in path_runs(&self.view, path) {
+                    d.stroke(&PaintShape::Path(ring(points, closed)), StrokeWidth::Thick, layer(*rgb));
+                }
+            }
+        });
+        for &(a, b) in self.spelling {
+            draw.stroke(&PaintShape::Path(wave(self.view.to_screen(a), self.view.to_screen(b))), StrokeWidth::Thin, style.bad);
+        }
+        for arm in self.arms {
+            draw.dashed(arm, draw.dashes(), StrokeWidth::Thin, layer(self.arm_color));
+        }
+        for tile in self.tiles {
+            paint_tile(&draw, tile);
+        }
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> Response {
+        cx.response.clone()
+    }
+}
+
+/// A layer's colour as data.
+fn layer(rgb: [u8; 3]) -> DataColor {
+    DataColor::new(Color32::from_rgb(rgb[0], rgb[1], rgb[2]))
+}
+
+/// `points`, closed back to the first when the run closes.
+fn ring(mut points: Vec<Pos2>, closed: bool) -> Vec<Pos2> {
+    if let (true, Some(&first)) = (closed, points.first()) {
+        points.push(first);
+    }
+    points
+}
+
+/// One print tile: the paper's edge and the number, dimmer when the tile doesn't print.
+fn paint_tile(draw: &Draw<'_>, tile: &Tile) {
+    let share = if tile.printed { 1.0 } else { UNPRINTED_SHARE };
+    let color = DataColor::new(PRINT_TILING.gamma_multiply(share));
+    draw.stroke(&PaintShape::Path(tile.edge.clone()), StrokeWidth::Hairline, color);
+    let run = [DocRun::new(tile.label.as_str(), FontRef::proportional(), TILE_NUMBER_SIZE, color)];
+    let room = egui::Rect::from_min_size(tile.at, Vec2::new(TILE_NUMBER_SIZE * 0.7 * tile.label.len().max(1) as f32, TILE_NUMBER_SIZE * 1.4));
+    draw.doc(room, &DocText::new(&run));
+}
+
+/// A wavy line from `a` to `b` on screen, waves 4 pixels long and 1.5 high, down the page from the
+/// line whichever way the type runs; empty for a segment under a pixel long or not finite.
+pub(crate) fn wave(a: Pos2, b: Pos2) -> Vec<Pos2> {
+    let d = b - a;
+    let len = d.length();
+    if !len.is_finite() || len < 1.0 {
+        return vec![];
+    }
+    let along = d / len;
+    let across = Vec2::new(-along.y, along.x);
+    let n = ((len / WAVE_STEP) as usize).clamp(1, WAVE_MAX);
+    let step = len / n as f32;
+    (0..=n).map(|i| a + along * (step * i as f32) + across * if i % 2 == 0 { 0.0 } else { WAVE_HIGH }).collect()
+}
+
+/// Whether Auto Spell Check marks `n`'s words: not with an effect shown (the Appearance panel's
+/// eye) on the type or on one of its fills or strokes, as the helpx page says "Auto spell check
+/// isn't available for text with effects applied".
+fn auto_spell_checks(n: &Node) -> bool {
+    let shown = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible);
+    !shown(&n.appearance.effects) && !n.appearance.items.iter().any(|i| shown(i.effects()))
+}
+
+/// The word with Auto Spell Check's red line at `p` (document space): in the topmost visible type
+/// object whose glyphs `p` is on, when that object isn't locked and Auto Spell Check marks it and
+/// its word at `p` is one it underlines, with what its language's dictionary suggests instead. For the context menu's suggestions, Ignore All and Add
+/// to Dictionary ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
+pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<crate::state::ContextSpelling> {
+    let st = app.session.active()?;
+    // The topmost type whose glyphs `p` is on, and whether it or a layer or group holding it is
+    // locked: a word under other type isn't the one right-clicked, whether that type's word there
+    // is right or not.
+    let mut top: Option<(NodeId, bool)> = None;
+    // Back to front as drawn at `p`: an Intertwine group's members by their tier there, those of
+    // one tier in their stacking order ([`vectorcraft_doc::intertwine`]).
+    fn walk_at(nodes: &[Arc<Node>], p: Point, locked: bool, f: &mut impl FnMut(&Node, bool)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            let locked = locked || n.locked;
+            f(n, locked);
+            let Some(children) = n.children() else { continue };
+            if matches!(n.kind, NodeKind::Intertwine { .. }) {
+                let mut drawn = children.to_vec();
+                drawn.sort_by_key(|c| vectorcraft_doc::intertwine::tier_at(c, p));
+                walk_at(&drawn, p, locked, f);
+            } else {
+                walk_at(children, p, locked, f);
+            }
+        }
+    }
+    // A later hit is on top.
+    walk_at(&st.doc.layers, p, false, &mut |n, locked| {
+        let NodeKind::Text(tx) = &n.kind else { return };
+        if n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
+            return;
+        }
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+        let on = vectorcraft_text::selection_quads(&lay, 0, tx.plain_text().len()).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
+        if on {
+            top = Some((n.id, locked));
+        }
+    });
+    let (id, locked) = top?;
+    let n = st.doc.node(id)?;
+    let NodeKind::Text(tx) = &n.kind else { return None };
+    if locked || !auto_spell_checks(n) {
+        return None;
+    }
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, &st.spelling_ignored, MAX_UNDERLINED);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    let w = words
+        .into_iter()
+        .find(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p)))?;
+    let word = tx.plain_text().get(w.range.clone())?.to_string();
+    let uid = st.uid;
+    let suggestions = app
+        .session
+        .execute("text.spelling.suggest", &serde_json::json!({ "word": word, "lang": w.lang.tag() }))
+        .ok()
+        .and_then(|r| r.get("suggestions").and_then(|s| s.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()))
+        .unwrap_or_default();
+    Some(crate::state::ContextSpelling { uid, id, start: w.range.start, end: w.range.end, word, suggestions })
+}
+
+/// Whether `p` is inside the convex quad `q` (its corners in order, either way round) or on its
+/// edge.
+fn in_quad(q: [Point; 4], p: Point) -> bool {
+    let sides = (0..4).map(|i| {
+        let (a, b) = (q[i], q[(i + 1) % 4]);
+        (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+    });
+    let sides: Vec<f64> = sides.collect();
+    sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0)
+}
+
+/// The document-space segments under the unknown words of `tx`: for each word, the bottom edge of
+/// each piece of it on a line, from the start of the line to its end.
+fn underlines(tx: &vectorcraft_doc::TextObject, ignored: &std::collections::BTreeSet<String>) -> Vec<(Point, Point)> {
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, ignored, MAX_UNDERLINED);
+    if words.is_empty() {
+        return vec![];
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    words
+        .iter()
+        .flat_map(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end))
+        // Clockwise from the top left: q[3] and q[2] are the bottom left and right.
+        .map(|q| (tx.xf * q[3], tx.xf * q[2]))
+        .collect()
+}
+
+/// View › Show Text Threads: for each thread with a selected frame, a line in its first frame's
+/// layer colour from each frame's out port to the next frame's in port, both showing the arrow of a
+/// threaded port, where the tools draw the ports of selected type ([`vectorcraft_tools::text`]).
+/// Only frames with ports ([`vectorcraft_tools::text::ported`]) are joined: a link to or from a
+/// frame in perspective, which has none, gets no line. With more than
+/// [`vectorcraft_tools::text::PORTS_MAX`] such frames selected the tools draw no ports, and only
+/// the lines are drawn here. `zoom`: screen pixels to the document unit.
+pub(in crate::canvas) fn thread_overlays(app: &VectorcraftApp, zoom: f64) -> Vec<Overlay> {
+    use std::collections::HashSet;
+    use vectorcraft_tools::text::{Port, PortState, port_centre, ported, ports_shown, push_port};
+    let Some(st) = app.session.active() else { return vec![] };
+    let px = 1.0 / zoom.max(1e-9);
+    let boxes = ports_shown(&st.doc, &st.selection.objects);
+    let selection = &st.selection.objects;
+    let mut selected: Option<HashSet<NodeId>> = None;
+    // The first two full searches need no index.
+    let mut full_searches = 0;
+    let mut is_selected = |id: &NodeId| {
+        if selection.len() <= 1 {
+            return selection.contains(id);
+        }
+        if full_searches == 0 {
+            full_searches = 1;
+            return selection.contains(id);
+        }
+        // Two early selection hits need no index.
+        if selected.is_none() && selection[..2].contains(id) {
+            return true;
+        }
+        if selected.is_none() && full_searches < 2 {
+            full_searches += 1;
+            return selection.contains(id);
+        }
+        selected.get_or_insert_with(|| selection.iter().copied().collect::<HashSet<_>>()).contains(id)
+    };
+    let mut o = vec![];
+    for thread in &st.doc.text_threads {
+        if !thread.iter().any(&mut is_selected) {
+            continue;
+        }
+        let color = st.doc.layer_color(thread[0]);
+        for w in thread.windows(2) {
+            let [a, b] = [w[0], w[1]];
+            let (Some(from), Some(to)) = (ported(&st.doc, a), ported(&st.doc, b)) else { continue };
+            let (Some(out), Some(input)) = (port_centre(from, Port::Out, px), port_centre(to, Port::In, px)) else { continue };
+            o.push(Overlay::Line { a: out, b: input, color, dashed: false });
+            if boxes {
+                push_port(&mut o, out, PortState::Threaded, st.doc.layer_color(a), px);
+                push_port(&mut o, input, PortState::Threaded, st.doc.layer_color(b), px);
+            }
+        }
+    }
+    o
+}
+
+/// View → Show Live Paint Gaps: the gaps of the selected Live Paint groups in each group's Gap
+/// Preview Color ([`crate::dialogs::live_paint_gaps::selected_gaps`]). Cached per revision.
+pub(in crate::canvas) fn live_paint_gap_overlays(app: &mut VectorcraftApp) -> Vec<Overlay> {
+    let Some(st) = app.session.active() else { return vec![] };
+    let key = (st.uid, st.revision);
+    let gaps = match &app.canvas.live_paint_gaps {
+        Some((k, gaps)) if *k == key => gaps.clone(),
+        _ => {
+            let gaps = Arc::new(crate::dialogs::live_paint_gaps::selected_gaps(app));
+            app.canvas.live_paint_gaps = Some((key, gaps.clone()));
+            gaps
+        }
+    };
+    gaps.to_vec()
+}
+@@ END
+
+@@@ NEW crates/ui-egui/src/canvas/marks/tests.rs
+//! The marks on the art: the memos, the gates and the placed marks, read from [`marks_of`].
+
+use super::*;
+use serde_json::json;
+use vectorcraft_engine::Session;
+
+fn app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app
+}
+
+/// An upright view of 800 × 600 points on the document's middle at zoom 1.
+fn view() -> CanvasView {
+    CanvasView::new(egui::Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0)), Point::new(200.0, 150.0), 1.0)
+}
+
+fn text(app: &mut VectorcraftApp, x: i64, y: i64, text: &str) -> NodeId {
+    NodeId(app.session.execute("text.create", &json!({"x": x, "y": y, "text": text})).unwrap()["id"].as_u64().unwrap())
+}
+
+/// The memo's marks of `ids`, in order.
+fn kept_hidden(app: &VectorcraftApp, ids: &[NodeId]) -> Vec<Arc<Vec<PlacedMark>>> {
+    ids.iter().map(|id| app.canvas.hidden_chars.marks[id].1.clone()).collect()
+}
+
+/// Passes until the fonts and the hyphenation exceptions (which other tests change) stay the same
+/// between two of them: the memo then holds what one pass laid out.
+fn settled(app: &mut VectorcraftApp, view: &CanvasView, ids: &[NodeId]) -> Vec<Arc<Vec<PlacedMark>>> {
+    (0..100)
+        .find_map(|_| {
+            marks_of(app, view);
+            let (inputs, before) = (app.canvas.hidden_chars.inputs.clone(), kept_hidden(app, ids));
+            marks_of(app, view);
+            let after = kept_hidden(app, ids);
+            (app.canvas.hidden_chars.inputs == inputs && before.iter().zip(&after).all(|(a, b)| Arc::ptr_eq(a, b))).then_some(after)
+        })
+        .expect("the fonts settle")
+}
+
+/// An unchanged type object keeps its memo entry; an edit lays out only the object edited; a zoom
+/// reuses the entries (the marks are in document points); a new font generation lays everything out.
+#[test]
+fn hidden_characters_lay_out_only_type_that_changed() {
+    let mut app = app();
+    let ids = [text(&mut app, 20, 40, "a b\nc d"), text(&mut app, 20, 160, "e f")];
+    app.ui.view.hidden_chars = true;
+    let before = settled(&mut app, &view(), &ids);
+    app.session.execute("text.setText", &json!({"id": ids[1].0, "text": "e f g"})).unwrap();
+    marks_of(&mut app, &view());
+    let after = kept_hidden(&app, &ids);
+    assert!(Arc::ptr_eq(&before[0], &after[0]), "the object not edited is not laid out again");
+    assert!(!Arc::ptr_eq(&before[1], &after[1]), "the edited object is");
+    let zoomed = CanvasView::new(view().rect, Point::new(100.0, 100.0), 2.0);
+    marks_of(&mut app, &zoomed);
+    assert!(kept_hidden(&app, &ids).iter().zip(&after).all(|(a, b)| Arc::ptr_eq(a, b)), "a zoom lays out no type");
+    app.canvas.hidden_chars.inputs = (u64::MAX, String::new());
+    marks_of(&mut app, &view());
+    assert!(kept_hidden(&app, &ids).iter().zip(&after).all(|(a, b)| !Arc::ptr_eq(a, b)), "other fonts lay all type out again");
+}
+
+/// Type partly or wholly in a turned view is placed; type wholly outside it is neither placed nor kept.
+#[test]
+fn hidden_characters_skip_type_outside_a_rotated_view() {
+    let mut app = app();
+    let ids = [text(&mut app, 20, 60, "a b"), text(&mut app, 3000, 3000, "c d")];
+    app.ui.view.hidden_chars = true;
+    let turned = view().rotation(45.0);
+    let m = marks_of(&mut app, &turned);
+    assert!(!m.hidden.is_empty());
+    assert!(m.hidden.iter().all(|p| p.at.x < 1000.0), "{:?}", m.hidden);
+    assert!(app.canvas.hidden_chars.marks.contains_key(&ids[0]) && !app.canvas.hidden_chars.marks.contains_key(&ids[1]));
+}
+
+/// A text holding each hidden character gets each kind of mark once.
+#[test]
+fn hidden_characters_get_every_kind_of_mark() {
+    let mut app = app();
+    text(&mut app, 20, 60, "a b\tc\u{00A0}d\u{202F}e\u{2003}f\u{00AD}g\u{2028}h\ni");
+    app.ui.view.hidden_chars = true;
+    let m = marks_of(&mut app, &view());
+    use HiddenMark::*;
+    for kind in [Space, Tab, NoBreakSpace, NarrowNoBreakSpace, FixedSpace, DiscretionaryHyphen, LineBreak, ParagraphEnd, StoryEnd] {
+        assert_eq!(m.hidden.iter().filter(|p| p.mark == kind).count(), 1, "{kind:?} in {:?}", m.hidden);
+    }
+}
+
+/// Turning Show Hidden Characters off drops the memo's text nodes, and so does closing the document.
+#[test]
+fn hidden_characters_off_and_a_closed_document_release_the_text_nodes() {
+    let mut app = app();
+    let id = text(&mut app, 20, 60, "one\ttwo\u{00A0}x\nthree\u{2028}four");
+    app.ui.view.hidden_chars = true;
+    let count = |app: &VectorcraftApp| {
+        let children = app.session.active().unwrap().doc.layers[0].children().unwrap();
+        Arc::strong_count(children.iter().find(|n| n.id == id).unwrap())
+    };
+    marks_of(&mut app, &view());
+    let held = count(&app);
+    app.ui.view.hidden_chars = false;
+    marks_of(&mut app, &view());
+    assert!(app.canvas.hidden_chars.marks.is_empty() && count(&app) < held, "off: no node is kept");
+    app.ui.view.hidden_chars = true;
+    marks_of(&mut app, &view());
+    assert_eq!(app.canvas.hidden_chars.marks.len(), 1);
+    app.session.execute("file.close", &json!({})).unwrap();
+    marks_of(&mut app, &view());
+    assert!(app.canvas.hidden_chars.marks.is_empty(), "no node of the closed document is kept");
+}
+
+/// The selected groups' gaps are in their Gap Preview Color, and the list is kept per revision.
+#[test]
+fn live_paint_gaps_follow_the_selected_groups() {
+    let mut app = app();
+    let mut groups = vec![];
+    for (x, color) in [(0, "#123456"), (150, "#654321")] {
+        let anchors = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 2)].map(|(dx, y)| json!({"x": x + dx, "y": y}));
+        let p = app.session.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("select.set", &json!({"ids": [p]})).unwrap();
+        let g = app.session.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("livePaint.gapOptions", &json!({"id": g, "color": color})).unwrap();
+        groups.push(g);
+    }
+    app.session.execute("select.set", &json!({"ids": [groups[0]]})).unwrap();
+    let first = live_paint_gap_overlays(&mut app);
+    assert!(!first.is_empty());
+    let kept = app.canvas.live_paint_gaps.as_ref().unwrap().1.clone();
+    live_paint_gap_overlays(&mut app);
+    assert!(Arc::ptr_eq(&kept, &app.canvas.live_paint_gaps.as_ref().unwrap().1), "one revision, one list");
+    app.session.execute("select.set", &json!({"ids": [groups[1]]})).unwrap();
+    assert_ne!(format!("{first:?}"), format!("{:?}", live_paint_gap_overlays(&mut app)), "the other group's gaps, in its color");
+    app.session.execute("select.set", &json!({"ids": []})).unwrap();
+    assert!(live_paint_gap_overlays(&mut app).is_empty());
+}
+
+/// Draw Inside's arms: an open rectangle round the object, each arm a third of its side or 16
+/// points at most, kept with the object deselected and gone with the mode.
+#[test]
+fn draw_inside_marks_the_corners_of_its_object() {
+    let mut app = app();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 120, "height": 90})).unwrap();
+    assert!(marks_of(&mut app, &view()).arms.is_empty());
+    app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
+    let arms = marks_of(&mut app, &view()).arms;
+    assert_eq!(arms.len(), 8);
+    assert!(arms.iter().all(|[a, b]| (a.distance(*b) - 16.0).abs() < 1e-3), "{arms:?}");
+    assert!(arms.iter().any(|[a, _]| a.distance(view().to_screen(Point::new(96.0, 96.0))) < 1e-3), "padded by 4 points");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert_eq!(marks_of(&mut app, &view()).arms.len(), 8, "deselected, the object is still marked");
+    let small = inside_arms(&view(), Rect::new(0.0, 0.0, 30.0, 30.0));
+    assert!(small.iter().all(|[a, b]| a.distance(*b) < 16.0 && (a.distance(*b) - 38.0 / 3.0).abs() < 1e-3), "a third of a 38-point side");
+    app.run("view.drawMode", json!({"mode": "normal"})).unwrap();
+    assert!(marks_of(&mut app, &view()).arms.is_empty());
+}
+
+/// A document with one point type object of `text` at the top left.
+fn spelling_doc(text_: &str) -> (VectorcraftApp, NodeId) {
+    let mut app = app();
+    let id = text(&mut app, 20, 60, text_);
+    app.ui.view.auto_spell_check = true;
+    (app, id)
+}
+
+fn segments(app: &mut VectorcraftApp) -> usize {
+    marks_of(app, &view()).spelling.len()
+}
+
+/// One segment under each unknown word, within the type's box, and none for known words.
+#[test]
+fn auto_spell_check_underlines_the_unknown_words() {
+    let (mut app, _) = spelling_doc("the cat sat");
+    assert_eq!(segments(&mut app), 0, "every word is known");
+    let (mut app, id) = spelling_doc("the Qzvbtrw sat\nZvqtrbx");
+    let m = marks_of(&mut app, &view());
+    assert_eq!(m.spelling.len(), 2, "{:?}", m.spelling);
+    let b = app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    let (a, z) = m.spelling[0];
+    assert!(a.x > b.x0 + 5.0 && z.x < b.x1 - 5.0 && a.y > b.y0 && a.y <= b.y1, "under the middle word: {a:?}..{z:?} in {b:?}");
+    let w = wave(view().to_screen(a), view().to_screen(z));
+    assert!(w.windows(2).any(|p| p[0].y != p[1].y), "wavy");
+}
+
+/// An edit, Ignore All and Add to Dictionary each change the segments of the next pass.
+#[test]
+fn auto_spell_check_follows_edits_ignore_all_and_the_dictionary() {
+    let (mut app, id) = spelling_doc("Wqzxvtr and Pzxqvrt");
+    assert_eq!(segments(&mut app), 2);
+    app.session.execute("text.setText", &json!({"id": id.0, "text": "Wqzxvtr and Pzxqvrt or Qxzvwtr"})).unwrap();
+    assert_eq!(segments(&mut app), 3, "the edit is checked");
+    app.session.execute("text.spelling.ignoreAll", &json!({"word": "wqzxvtr"})).unwrap();
+    assert_eq!(segments(&mut app), 2, "Ignore All");
+    app.session.execute("text.spelling.addWord", &json!({"word": "Pzxqvrt"})).unwrap();
+    let after_add = segments(&mut app);
+    app.session.execute("text.spelling.removeWord", &json!({"word": "pzxqvrt"})).unwrap();
+    assert_eq!(after_add, 1, "Add to Dictionary");
+    assert_eq!(segments(&mut app), 2, "deleted from the dictionary again");
+}
+
+/// Type with an effect shown, and type inside a hidden object, has no segments.
+#[test]
+fn auto_spell_check_leaves_out_type_with_effects_and_hidden_type() {
+    let (mut app, id) = spelling_doc("Xqzvtrw");
+    assert_eq!(segments(&mut app), 1);
+    app.session.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.roughen", "params": {"size": 1}})).unwrap();
+    assert_eq!(segments(&mut app), 0, "an effect");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(segments(&mut app), 1, "undone");
+    app.session.execute("object.hide", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(segments(&mut app), 0, "hidden");
+}
+
+/// Auto Spell Check is a toggle, off at first: off, there are no segments and no node is kept.
+#[test]
+fn auto_spell_check_is_a_toggle_of_the_canvas_lines() {
+    let (mut app, _) = spelling_doc("Yqzvtrx");
+    app.ui.view.auto_spell_check = false;
+    assert_eq!(segments(&mut app), 0);
+    assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(true));
+    assert_eq!(segments(&mut app), 1, "on");
+    assert_eq!(app.run("edit.autoSpellCheck", json!({})).unwrap(), json!(false));
+    assert_eq!(segments(&mut app), 0, "off");
+    assert!(app.canvas.spelling.lines.is_empty(), "no node is kept");
+}
+@@ END
+
+@@@ NEW crates/ui-egui/src/tests/printtiling.rs
+//! View → Show Print Tiling and the Print Tiling tool on the canvas and in the menus.
+
+use egui::{Pos2, vec2};
+use serde_json::json;
+use vectorcraft_engine::Session;
+
+use crate::VectorcraftApp;
+
+fn app() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app
+}
+
+/// One headless canvas frame on an 800 × 600 window, then the numbers of the tiles the marks control
+/// shows for the view that frame set.
+// PLAN: needs `pub(crate) mod marks` in canvas.rs (canvas-w10); the sheet's `mod marks;` is private to `canvas`.
+fn tile_numbers(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let _ = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
+    let Some(view) = app.canvas_view() else { return vec![] };
+    crate::canvas::marks::marks_of(app, &view).tiles.into_iter().map(|t| t.label).collect()
+}
+
+#[test]
+fn the_canvas_numbers_the_print_tiles_of_print_preview() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    assert!(tile_numbers(&mut app, &ctx).is_empty(), "hidden by default");
+    app.run("view.printTiling", json!({})).unwrap();
+    assert_eq!(tile_numbers(&mut app, &ctx), ["1"], "the page is numbered");
+    // Tiled at 400%: every tile print.preview lays out is drawn and numbered.
+    app.run("print.setup", json!({"settings": {"scaling": "tileImageable", "scale": {"width": 400, "height": 400}}})).unwrap();
+    let numbers = tile_numbers(&mut app, &ctx);
+    let pv = app.session.execute("print.preview", &json!({})).unwrap();
+    let count = pv["tiles"][0]["tiles"].as_array().unwrap().len();
+    assert!(count > 1);
+    assert_eq!(app.canvas.print_tiling.as_ref().map(|(_, p)| p.len()), Some(count));
+    for n in 1..=count {
+        assert!(numbers.contains(&n.to_string()), "tile {n} numbered: {numbers:?}");
+    }
+    // The Print Tiling tool shows the tiling too; double-clicking its button resets it.
+    app.run("view.printTiling", json!({})).unwrap();
+    app.run("print.tiling.set", json!({"origin": [10, 10]})).unwrap();
+    app.select_tool("printTiling");
+    assert!(tile_numbers(&mut app, &ctx).contains(&"1".to_string()));
+    app.run("tool.options", json!({"tool": "printTiling"})).unwrap();
+    assert_eq!(app.session.execute("print.setup", &json!({})).unwrap()["settings"]["tileOrigin"]["placed"], false);
+}
+@@ END
+
+Not compiled or run. The earlier reply had landed whole inside `marks.rs`, so I rewrote that file cleanly and re-emitted the two test files, which had not been applied.
+
+- **Import fix:** framework imports now go through `craft::{behavior, draw, pages, theme, ui}`. I took the facade paths from its `lib.rs`; I did not check the `craft::ui::…` sub-paths such as `canvas_controls` and `primitives`.
+- **Still assumed:** `artboards::frames` and `fade_quads`, `PlacedMark::new`, and `SliceItem::new` with `also_selected`, `SliceOrigin` and `SliceRules::ILLUSTRATOR`. The `ui-egui` manifest needs the `craft` facade with the draw, pages and ui features. Each assumption has a `// PLAN:` line, except the `SliceOverlay` methods and the `craft::ui::…` paths.
+- **Needed from canvas-w10:** `printtiling.rs` uses `crate::canvas::marks::marks_of`, so `mod marks` in `canvas.rs` must be `pub(crate)`.
