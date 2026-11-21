@@ -10,7 +10,7 @@ workspace = true
 
 [dependencies]
 # The shared font catalog from craft-libs main (it has the outline, bidi and caret helpers used here).
-craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "ba25ccd233934d1b2f74e3c0f235168bf5f13ef3", default-features = false }
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e", default-features = false }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 kurbo = { workspace = true }
