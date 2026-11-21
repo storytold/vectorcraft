@@ -122,7 +122,8 @@ fn shown_figure(app: &VectorcraftApp) -> Option<usize> {
 /// Whether `flag` is on for every character a toggle changes (`Some(true)`), for none of them
 /// (`Some(false)`), or only for some (`None`). At a Type tool caret, and after Select All in a
 /// threaded story, the command styles all the text ([`run_features`]), so every character of it
-/// counts, as in [`edit`].
+/// counts, as in [`edit`]. There, and with the Selection tool, a run with no text (an empty
+/// frame's) counts only when no run has text.
 fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
     shown(app, |s| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
 }
@@ -130,7 +131,13 @@ fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
 /// Whether `on` holds for every character a menu item changes (`Some(true)`), for none of them
 /// (`Some(false)`), or only for some (`None`), read as [`shown_flag`] reads a feature.
 fn shown(app: &VectorcraftApp, on: impl Fn(&CharStyle) -> bool) -> Option<bool> {
-    if let Some(mut runs) = whole_text_runs(app) {
+    let runs = match whole_text_runs(app) {
+        Some(runs) => Some(runs),
+        // With the Selection tool: every run of every frame of the selected stories.
+        None if text_editing(app).is_none() => Some(super::character::selected_story_texts(app).into_iter().flat_map(|t| t.runs.iter()).collect()),
+        None => None,
+    };
+    if let Some(mut runs) = runs {
         // A run with no text, such as an empty frame's, counts only when no run has text.
         if runs.iter().any(|r| !r.text.is_empty()) {
             runs.retain(|r| !r.text.is_empty());
@@ -1070,5 +1077,51 @@ mod tests {
         super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
         let runs = metrics_runs(&app, &id);
         assert!(runs.iter().all(|(_, on, _)| *on), "{runs:?}");
+    }
+
+    /// With the Selection tool on a threaded story whose second frame is empty, the East Asian
+    /// items read only the characters: with the text set and the empty frame's run not, each item
+    /// shows checked, and choosing it turns the setting off for the text.
+    #[test]
+    fn east_asian_items_skip_an_empty_frame_of_a_selected_story() {
+        type Set = fn(&mut CharStyle, bool);
+        type Get = fn(&CharStyle) -> bool;
+        let items: [(&str, Set, Get); 3] = [
+            ("Proportional Metrics", |s, on| s.proportional_metrics = on, |s| s.proportional_metrics),
+            ("H or V Style", |s, on| s.features = if on { vec!["hkna".into()] } else { vec![] }, |s| s.features.iter().any(|f| f == "hkna")),
+            ("Roman Italics", |s, on| s.features = if on { vec!["ital".into()] } else { vec![] }, |s| s.features.iter().any(|f| f == "ital")),
+        ];
+        for (label, set, get) in items {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+            let area = json!({"x": 10, "y": 10, "text": "かなAB", "size": 12, "area": {"width": 150, "height": 60}});
+            let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+            let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+            app.run("select.set", json!({"ids": [a, b]})).unwrap();
+            app.run("text.thread.create", json!({})).unwrap();
+            app.run("select.set", json!({"ids": [a]})).unwrap();
+            assert_eq!(super::super::character::selected_story_texts(&app).len(), 2, "{label}");
+            for (id, on) in [(a, true), (b, false)] {
+                let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+                let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("no frame {id}") };
+                for r in &mut t.runs {
+                    set(&mut r.style, on);
+                }
+            }
+            let empty = match &app.session.active().unwrap().doc.node(NodeId(b)).unwrap().kind {
+                NodeKind::Text(t) => t.runs.iter().filter(|r| r.text.is_empty()).count(),
+                _ => panic!("{label}: not text"),
+            };
+            assert!(empty > 0, "{label}: the empty frame has no run");
+            let ctx = egui::Context::default();
+            let (text, at) = menu_row(&ctx, &mut app, label);
+            assert!(text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            match &app.session.active().unwrap().doc.node(NodeId(a)).unwrap().kind {
+                NodeKind::Text(t) => assert!(t.runs.iter().all(|r| !get(&r.style)), "{label}"),
+                _ => panic!("{label}: not text"),
+            }
+        }
     }
 }
