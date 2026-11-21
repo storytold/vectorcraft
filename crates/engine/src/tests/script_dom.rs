@@ -871,6 +871,31 @@ fn remove_all_refuses_locked_art_before_deleting_anything() {
 }
 
 #[test]
+fn remove_refuses_hidden_or_locked_art_as_remove_all_does() {
+    let (mut s, a, b) = doc();
+    for (on, off) in [
+        (json!({"ids": [b.0], "locked": true}), json!({"ids": [b.0], "locked": false})),
+        (json!({"ids": [b.0], "visible": false}), json!({"ids": [b.0], "visible": true})),
+    ] {
+        s.execute("object.setProps", &on).unwrap();
+        let e = failure(&mut s, "app.activeDocument.pageItems[1].remove();");
+        assert!(e.contains(&format!("cannot delete hidden or locked objects: {}", b.0)), "{on}: {e}");
+        assert!(s.active().unwrap().doc.node(b).is_some(), "{on}");
+        s.execute("object.setProps", &off).unwrap();
+    }
+    // A group that holds a locked object is refused too.
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
+    let e = failure(&mut s, "app.activeDocument.pageItems[0].remove();");
+    assert!(e.contains(&g.to_string()), "{e}");
+    assert!(s.active().unwrap().doc.node(b).is_some());
+    s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems[0].remove();");
+    assert!(s.active().unwrap().doc.node(b).is_none());
+}
+
+#[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));

@@ -1437,8 +1437,14 @@ fn item_z_order_position(h: &Host, a: &[Data]) -> Answer {
     at.map(|i| num(float(i as u64 + 1))).ok_or_else(|| HostError::Error(STALE_ITEM.into()))
 }
 
+/// `remove()`: deletes the object. A hidden or locked object, one in a hidden or locked layer or
+/// group, or a group holding one is refused, as [`items_remove_all`] refuses it.
 fn item_remove(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
+    let whole = with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable));
+    if !whole {
+        return Err(HostError::Error(format!("cannot delete hidden or locked objects: {}", item.id.0)));
+    }
     edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0]}))?;
     Ok(Data::Undefined)
 }
