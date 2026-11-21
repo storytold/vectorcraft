@@ -12,7 +12,7 @@ use crate::background::{self, Writer};
 use crate::dialogs::svg_options;
 use crate::{Services, VectorcraftApp, dialogs};
 
-mod export;
+pub(crate) mod export;
 mod open;
 mod read_only_save;
 pub(crate) mod save;

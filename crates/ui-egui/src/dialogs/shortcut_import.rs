@@ -1,6 +1,6 @@
 //! Import Shortcut Set: entry points for a shortcut set another app saved as text (`.kys`, read by
 //! `shortcutSet.read`). The set is handed to Keyboard Shortcuts, whose review matches, decodes and
-//! plans it ([`craft_keymap::import`]); this module maps the read value to a [`ForeignSet`] with the
+//! plans it ([`craft::keymap::import`]); this module maps the read value to a [`ForeignSet`] with the
 //! user's earlier answers (`importMatches`), and keeps the answers the review reports.
 //!
 //! The two codes the format's public description gives (`/Key 48` is the 0 key and `/Modifiers 0` is
@@ -8,8 +8,8 @@
 
 use std::collections::BTreeMap;
 
-use craft_keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS, NotRead};
-use craft_keymap::{CommandRef, ForeignEntry, ForeignKey, ForeignSet, ImportOptions, NoneDefined, Start};
+use craft::keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS, NotRead};
+use craft::keymap::{CommandRef, ForeignEntry, ForeignKey, ForeignSet, ImportOptions, NoneDefined, Start};
 use serde_json::{Value, json};
 
 use crate::{FilePick, VectorcraftApp, shortcut_editor};
@@ -81,7 +81,7 @@ pub fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
 }
 
-/// Text cut to what [`craft_keymap::plan`] reads, so an entry's [`ForeignEntry::remember_key`] is
+/// Text cut to what [`craft::keymap::plan`] reads, so an entry's [`ForeignEntry::remember_key`] is
 /// the one `plan` looks up.
 fn within_cap(s: &str) -> String {
     s.chars().take(MAX_IMPORT_TEXT).collect()

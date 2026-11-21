@@ -25,12 +25,14 @@ use vectorcraft_engine::cmd::colormgmt::doc_profiles;
 use vectorcraft_engine::cmd::fileio::pdf;
 
 // PLAN: the `craft_ui` re-export paths below are assumed; the framework crates are not in this tree.
-use craft_ui::dialog::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, dialog_id};
-use craft_ui::dialog::CustomContext;
-use craft_ui::primitives::{Checker, DataColor};
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
-use craft_ui::theme::{Rgba, Srgba};
-use craft_ui::widgets::{Bind, Button, Entry, HexField, LinkMode, LinkedFields, LinkedLayout, Mixed, Picture, Select, Swatch, ThumbAspect};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow};
+use craft::ui::dialog::dialog_id;
+use craft::ui::patterns::form_dialogs::CustomContext;
+use craft::ui::primitives::Checker;
+use craft::ui::style::DataColor;
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::layout_components::theme::{Rgba, Srgba};
+use craft::ui::runtime::egui::widgets::{Bind, Button, Entry, HexField, LinkMode, LinkedFields, LinkedLayout, Mixed, Picture, Select, Swatch, ThumbAspect};
 
 use crate::VectorcraftApp;
 
@@ -540,8 +542,9 @@ fn color(mode: ColorMode) -> Vec<PropertyRow> {
 
 #[cfg(test)]
 mod tests {
-    use craft_ui::dialog::{DialogFields, DialogId, HeldOk, HostedPropertiesDialog, dialog_id};
-    use craft_ui::theme::Srgba;
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedPropertiesDialog};
+    use craft::ui::dialog::{DialogId, HeldOk, dialog_id};
+    use craft::ui::layout_components::theme::Srgba;
     use egui::{Pos2, Rect, vec2};
     use serde_json::{Value, json};
     use vectorcraft_color::{Color, Paint, cms};

@@ -11,9 +11,9 @@
 //! PLAN: no `pump`: `open_held`'s `ok` closure runs the import, so fl.A9's `text_import::pump`
 //! line has no work to call.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use super::host::open_held;
@@ -135,7 +135,7 @@ fn confirm(app: &mut VectorcraftApp, params: &Value, result: &ParamResult) -> Re
 // PLAN: the shared home of these helpers is `dialogs/host.rs` (hub-w2); they live here until it has one.
 #[cfg(test)]
 pub(super) mod test_support {
-    use craft_ui::dialog::{HeldOk, OpenDialog};
+    use craft::ui::dialog::{HeldOk, OpenDialog};
     use serde_json::Value;
     use vectorcraft_engine::Session;
 

@@ -22,15 +22,15 @@
 use std::time::Duration;
 
 use craft::host::{Host, PickId, PickKind, PickRequest};
-use craft_ui::buttons::Button;
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, clicked};
-use craft_ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
-use craft_ui::display::{Shade, Text};
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::patterns::form_dialogs::FormDialog;
-use craft_ui::runtime::env::Label;
-use craft_ui::sections::{DialogRole, FooterButton};
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{DialogRole, FooterButton};
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 

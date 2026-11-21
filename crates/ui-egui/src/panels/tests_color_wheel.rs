@@ -4,7 +4,8 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 
-use craft_ui::testing::{AccessActionKind, Fixture, Target};
+use craft::ui::testing::focus::AccessActionKind;
+use craft::ui::testing::{Fixture, Target};
 use egui::{Key, Modifiers, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, delta_e2000};

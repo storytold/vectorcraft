@@ -9,9 +9,9 @@
 //! (letters, 1..15), `hyphenLimit` (hyphens, 0..25, 0: no limit), `hyphenationZone` (pt) and
 //! `hyphenateCapitalized`, as `text.setFormat` takes them.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 // PLAN: assumed paths of `UnitKind` and `LengthUnits`
-use craft_ui::runtime::{LengthUnits, UnitKind};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value, json};
 
 use super::warichu::set_shared;

@@ -15,17 +15,17 @@
 //! Behavior reference: the help page
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html>.
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
-use craft_ui::display::Text;
-use craft_ui::form::{Field, FieldGroup};
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::patterns::presets::{NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetState};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::env::Label;
-use craft_ui::sections::{DialogRole, FooterButton};
-use craft_ui::text::TextField;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::display::Text;
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::presets::{NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetState};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::text::TextField;
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Kinsoku, KinsokuSet};

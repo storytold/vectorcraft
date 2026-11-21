@@ -11,24 +11,24 @@
 
 use std::sync::Arc;
 
-// PLAN: assumed import paths of the framework items below: `craft_ui::primitives::IconId`,
-// `craft_ui::runtime::commands::{CommandState, CommandStates}`, `craft_ui::menu::PanelRow`,
-// `craft_ui::patterns::presets::*`, `crate::widgets::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
-use craft_keymap::CommandRef;
-use craft_ui::buttons::{Button, IconButton, SplitButton, ToggleButton};
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::display::{Divider, Shade, Text};
-use craft_ui::form::{Field, SliderField, SliderFieldLayout};
-use craft_ui::layout_components::Row;
-use craft_ui::menu::PanelRow;
-use craft_ui::patterns::presets::{
+// PLAN: assumed import paths of the framework items below: `craft::ui::primitives::IconId`,
+// `craft::ui::runtime::commands::{CommandState, CommandStates}`, `craft::ui::menu::PanelRow`,
+// `craft::ui::patterns::presets::*`, `crate::widgets::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
+use craft::keymap::CommandRef;
+use craft::ui::buttons::{Button, IconButton, SplitButton, ToggleButton};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::form::{Field, SliderField, SliderFieldLayout};
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::presets::{
     NamedPresetEvent, NamedPresetRow, NamedPresetStyle, PickerField, PresetError, PresetPicker, PresetRow, PresetState,
 };
-use craft_ui::pickers::Select;
-use craft_ui::primitives::IconId;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::sections::Section;
+use craft::ui::pickers::Select;
+use craft::behavior::IconId;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
@@ -552,7 +552,7 @@ pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui) {
         .show(ui);
     if let Some(name) = out.chosen {
         trace_with(app, &name);
-    } else if craft_ui::contract::clicked(&out.response) {
+    } else if craft::ui::contract::clicked(&out.response) {
         trace_with(app, "Default");
     }
 }

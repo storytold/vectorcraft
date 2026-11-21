@@ -6,9 +6,11 @@
 //! command's parameters). The live effect's dialog shows the same rows but Keep Original
 //! ([`screen_params`]).
 
-use craft_ui_contract::{Label, UnitKind};
-use craft_ui_panels::dialog::DialogId;
-use craft_ui_patterns::form_dialogs::{Bind, DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult, SliderScale};
+use craft::ui::runtime::env::{Label, UnitKind};
+use craft::ui::dialog::DialogId;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
 
 use super::form::{fields_of, json_of};

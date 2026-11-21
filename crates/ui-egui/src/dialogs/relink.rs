@@ -15,13 +15,15 @@ use std::borrow::Cow;
 
 use craft::behavior::{DisplayOrder, ItemSource};
 use craft::host::{Host, PickId, PickRequest};
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{CloseReason, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
-use craft_ui::form::Field;
-use craft_ui::list::{List, ListRow, SelectMode};
-use craft_ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
+use craft::ui::form::Field;
+use craft::ui::list::{List, ListRow};
+use craft::ui::contract::SelectMode;
+use craft::ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -225,7 +227,7 @@ impl StackDialog for RelinkDialog {
             .ok_enabled(!self.held.is_waiting() && ticket.is_none())
             .show(ui, |ui, cx, scope| {
                 // A measuring run closes nothing: the real run of the pass makes the close.
-                if finish && !craft_ui::runtime::measure::active(ui.ctx()) {
+                if finish && !craft::ui::runtime::measure::active(ui.ctx()) {
                     cx.request_close_as(CloseReason::Activated);
                 }
                 taken = ticket.and_then(|ticket| cx.take_pick_answer(ticket));
@@ -376,7 +378,7 @@ mod tests {
         }
     }
 
-    fn relink_dialog(app: &VectorcraftApp) -> craft_ui::dialog::OpenDialog {
+    fn relink_dialog(app: &VectorcraftApp) -> craft::ui::dialog::OpenDialog {
         open_dialogs(app).into_iter().find(|d| d.key.as_deref() == Some(KEY)).expect("the relink dialog")
     }
 

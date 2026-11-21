@@ -7,14 +7,14 @@
 use std::sync::Arc;
 
 use craft::behavior::Mixed;
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _};
-use craft_ui::dialog::DialogResult;
-use craft_ui::patterns::form_dialogs::{
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _};
+use craft::ui::dialog::DialogResult;
+use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
 };
-use craft_ui::pickers::Select;
-use craft_ui::runtime::env::Label;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::setup::DocSetup;
 
@@ -999,7 +999,7 @@ macro_rules! style_dialog {
     ($dialog:ty, $kind:expr) => {
         impl $dialog {
             /// The hosted dialog, for Reset Panel and the pump's answers.
-            pub(crate) fn hosted_mut(&mut self) -> &mut craft_ui::patterns::form_dialogs::HostedPropertiesDialog {
+            pub(crate) fn hosted_mut(&mut self) -> &mut craft::ui::patterns::form_dialogs::HostedPropertiesDialog {
                 &mut self.inner
             }
 
@@ -1015,19 +1015,19 @@ macro_rules! style_dialog {
             }
         }
 
-        impl craft_ui::dialog::StackDialog for $dialog {
-            type Result = craft_ui::patterns::form_dialogs::DialogFields;
+        impl craft::ui::dialog::StackDialog for $dialog {
+            type Result = craft::ui::patterns::form_dialogs::DialogFields;
 
-            fn id(&self) -> craft_ui::dialog::DialogId {
-                craft_ui::dialog::StackDialog::id(&self.inner)
+            fn id(&self) -> craft::ui::dialog::DialogId {
+                craft::ui::dialog::StackDialog::id(&self.inner)
             }
 
             fn show(
                 &mut self,
                 ui: &mut egui::Ui,
-                stack: &craft_ui::dialog::DialogStack,
-            ) -> Option<craft_ui::dialog::DialogResult<Self::Result>> {
-                craft_ui::dialog::StackDialog::show(&mut self.inner, ui, stack)
+                stack: &craft::ui::dialog::DialogStack,
+            ) -> Option<craft::ui::dialog::DialogResult<Self::Result>> {
+                craft::ui::dialog::StackDialog::show(&mut self.inner, ui, stack)
             }
 
             fn key(&self) -> Option<&str> {
@@ -1035,23 +1035,23 @@ macro_rules! style_dialog {
             }
 
             fn confirm(&mut self, ctx: &egui::Context) -> Option<Self::Result> {
-                craft_ui::dialog::StackDialog::confirm(&mut self.inner, ctx)
+                craft::ui::dialog::StackDialog::confirm(&mut self.inner, ctx)
             }
 
-            fn held_state(&self) -> Option<craft_ui::dialog::HeldOk> {
-                craft_ui::dialog::StackDialog::held_state(&self.inner)
+            fn held_state(&self) -> Option<craft::ui::dialog::HeldOk> {
+                craft::ui::dialog::StackDialog::held_state(&self.inner)
             }
 
             fn json_fields(&self) -> Option<serde_json::Value> {
-                craft_ui::dialog::StackDialog::json_fields(&self.inner)
+                craft::ui::dialog::StackDialog::json_fields(&self.inner)
             }
 
             fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: serde_json::Value) -> Result<(), String> {
-                craft_ui::dialog::StackDialog::set_json_field(&mut self.inner, ctx, field, value)
+                craft::ui::dialog::StackDialog::set_json_field(&mut self.inner, ctx, field, value)
             }
 
             fn cancelled(&mut self, ctx: &egui::Context) {
-                craft_ui::dialog::StackDialog::cancelled(&mut self.inner, ctx);
+                craft::ui::dialog::StackDialog::cancelled(&mut self.inner, ctx);
             }
         }
     };

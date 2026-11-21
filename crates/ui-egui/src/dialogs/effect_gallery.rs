@@ -12,19 +12,19 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use craft::theme::variant::Tone;
-use craft_ui::contract::{Bind, Show as _, ShowContainer as _};
-use craft_ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::list::ThumbAspect;
-use craft_ui::notices::{Notice, NoticeLayout};
-use craft_ui::primitives::textures::{ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
-use craft_ui::runtime::env::{Env, Label};
-use craft_ui::runtime::overlay::CloseReason;
-use craft_ui::runtime::requests::PathRequest;
-use craft_ui::runtime::words::CommonWords;
-use craft_ui::sections::{DialogRole, FooterButton};
-use craft_ui::contract::Revision;
-use craft_ui::patterns::form_dialogs::FieldValue;
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::ThumbAspect;
+use craft::ui::notices::{Notice, NoticeLayout};
+use craft::ui::primitives::textures::{ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::runtime::env::{Env, Label};
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::runtime::requests::PathRequest;
+use craft::ui::runtime::words::CommonWords;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::contract::Revision;
+use craft::ui::patterns::form_dialogs::FieldValue;
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_effects::{EffectInfo, PIXEL_EFFECTS, PixelSpace};
@@ -33,14 +33,14 @@ use vectorcraft_imaging::ui::filter_gallery::{
     EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGalleryWords as _, FilterIndex,
     FilterGallerySession, FilterTree, FilterTreeLayout, GalleryFilter, GalleryThumb, LayerId, SessionField,
 };
-use craft_ui::widgets::Checkbox;
-use craft_ui::widgets::Picture;
+use craft::ui::runtime::egui::widgets::Checkbox;
+use craft::ui::runtime::egui::widgets::Picture;
 
 use super::{EffectCx, effect, effect_params, file_asks, json_of};
 use super::file_asks::Owner;
 use crate::VectorcraftApp;
 
-// PLAN: the crate paths of the framework items (`craft_ui::…`, `vectorcraft_imaging::ui::filter_gallery`), `EffectCx::new(id)`,
+// PLAN: the crate paths of the framework items (`craft::ui::…`, `vectorcraft_imaging::ui::filter_gallery`), `EffectCx::new(id)`,
 // `effect_params(&EffectCx, &Map) -> Vec<Param>` (ef.C3, ef.C4), `json_of(&[Param], &DialogFields) -> Value` (wg.S12),
 // `file_asks::ask(app, &FilePick, Owner::Free, FnOnce(&mut VectorcraftApp, String) + Send)` (fl.A3),
 // `LivePreview::{run, commit}` (wg.A20), `app.dialogs: DialogHost` and `app.effect_dialogs.gallery: Option<Open>` (ef.C1, hub-w2) are
@@ -306,7 +306,7 @@ impl StackDialog for EffectGalleryDialog {
         let words = Env::of(ui).words::<CommonWords>();
         let EffectGalleryDialog { open, index, session, selected, preview_on, held, asked, .. } = self;
         // The app accepted the held OK: this pass closes the dialog with it. A measuring run closes nothing.
-        let finish = held.is_accepted() && !craft_ui::runtime::measure::active(ui.ctx());
+        let finish = held.is_accepted() && !craft::ui::runtime::measure::active(ui.ctx());
         let refusal = held.refusal().map(|(reason, refused)| (reason.clone(), refused.clone()));
         let current = (*selected).min(session.effects.len().saturating_sub(1));
         let visible = entries_of(&session.effects, index, true);
@@ -565,7 +565,7 @@ mod tests {
     use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
-    use craft_ui::dialog::StackDialog as _;
+    use craft::ui::dialog::StackDialog as _;
 
     use super::EffectGalleryDialog;
     use crate::VectorcraftApp;
@@ -580,8 +580,8 @@ mod tests {
         ctx
     }
 
-    fn id() -> craft_ui::dialog::DialogId {
-        craft_ui::dialog::dialog_id(super::KEY)
+    fn id() -> craft::ui::dialog::DialogId {
+        craft::ui::dialog::dialog_id(super::KEY)
     }
 
     fn set(app: &mut VectorcraftApp, field: &str, value: Value) {

@@ -1,6 +1,6 @@
 //! The app's own icon set, registered beside the framework's catalog, and the map from tool names to icons.
 
-use craft_ui::primitives::{AppIcons, icon_names};
+use craft::ui::primitives::{AppIcons, icon_names};
 
 use crate::icon_data::{DC_ARROW_FILL, ICONS};
 
@@ -103,7 +103,7 @@ pub fn tool_icon(name: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use craft_ui::primitives::{has_icon, register_app_icons};
+    use craft::ui::primitives::{has_icon, register_app_icons};
     // PLAN: assumed the `craft` facade is a dependency of vectorcraft-ui-egui (Cargo.toml is not in this set's files; craft-ui does not re-export IconId)
     use craft::behavior::IconId;
 

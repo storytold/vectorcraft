@@ -4,9 +4,9 @@
 //!
 //! Fields: `reduction`, `colors`, `dither`, `ditherAmount` and `preview`.
 
-use craft_ui::dialog::dialog_id;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::UnitKind;
+use craft::ui::dialog::dialog_id;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 use vectorcraft_render::encode::quantize::{Dither, Reduction};
 

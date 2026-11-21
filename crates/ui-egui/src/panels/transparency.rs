@@ -10,12 +10,20 @@ use std::sync::Arc;
 
 use craft::behavior::Mixed;
 use craft::behavior::item_source::keyed;
-use craft_ui::menu::PanelRow;
-use craft_ui::{
-    Bind, Button, Checkbox, CollectionEvent, Column, CommandRef, CommandState, CommandStates, ContentPainterCx, ContentPainterCx as _, Divider,
-    IconId, IconSpec, List, ListRow, LoadFailure, LoadedPicture, NumberField, Priority, Revision, Row, RowEvent, Select, SelectMode, Shade,
-    Text, ThumbJob, ThumbPaint, ThumbRender, ThumbRequest, ThumbSize, ThumbSource, ThumbTarget, Thumbnails, ThumbnailOptions, UnitKind,
-};
+use craft::ui::menu::PanelRow;
+use craft::ui::contract::{Bind, CollectionEvent, SelectMode};
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::behavior::dock::Column;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::primitives::{ContentPainterCx, ContentPainterCx as _, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource, Thumbnails, ThumbnailOptions};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::behavior::IconId;
+use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};
+use craft::ui::text::NumberField;
+use craft::ui::{Revision, Row, ThumbPaint};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::UnitKind;
 use egui::{Color32, Stroke, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask};
@@ -136,7 +144,7 @@ impl ThumbSource<MaskKey> for MaskThumbs<'_> {
 
 /// The command a click on the mask thumbnail runs: Shift disables or enables the mask, Alt views only
 /// the mask, a plain click edits it (none while it is being edited).
-fn mask_click(m: &OpacityMask, id: NodeId, mods: craft_keymap::Mods, editing: bool) -> Option<(&'static str, Value)> {
+fn mask_click(m: &OpacityMask, id: NodeId, mods: craft::keymap::Mods, editing: bool) -> Option<(&'static str, Value)> {
     if mods.shift {
         Some((if m.disabled { "transparency.enableOpacityMask" } else { "transparency.disableOpacityMask" }, json!({})))
     } else if mods.alt {
@@ -169,7 +177,7 @@ fn mask_row(
     let object_state = n.map(|n| state_of(ui, n.id, None, false));
     let mask_state = n.zip(mask).map(|(n, _)| state_of(ui, n.id, bg, true));
     let fill = n.and_then(|_| current_paints(app).0.color()).map(|c| super::c32(&c));
-    let paper = ThumbPaint::default().paper(craft_ui::DataColor::new(if bg == Some([0, 0, 0, 255]) { Color32::BLACK } else { Color32::WHITE }));
+    let paper = ThumbPaint::default().paper(craft::ui::style::DataColor::new(if bg == Some([0, 0, 0, 255]) { Color32::BLACK } else { Color32::WHITE }));
     let plain = ThumbPaint::default();
     let (has_mask, disabled) = (mask.is_some(), mask.is_some_and(|m| m.disabled));
     let (store, object_state, mask_state) = (&store, &object_state, &mask_state);

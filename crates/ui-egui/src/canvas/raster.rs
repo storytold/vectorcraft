@@ -1,6 +1,7 @@
-use craft_ui::canvas::{AppPaint, CanvasSpace, CanvasView, PixelSize, RasterDisplay};
-use craft_ui::contract::{Props as _, Show as _};
-use craft_ui::primitives::ContentPainterCx;
+use craft::ui::canvas::{AppPaint, CanvasSpace, RasterDisplay};
+use craft::behavior::{CanvasView, PixelSize};
+use craft::ui::contract::{Props as _, Show as _};
+use craft::ui::primitives::ContentPainterCx;
 use egui::{Color32, Ui, pos2, vec2};
 use vectorcraft_geom::{Affine, Point, Rect};
 
@@ -13,7 +14,7 @@ use super::{Drag, drag_id};
 use crate::doc_windows::Win;
 use crate::theme::Tokens;
 use crate::{CacheKey, VectorcraftApp, now_ms};
-// PLAN: assumed `craft_ui::canvas` re-exports `CanvasSpace`, `CanvasView`, `PixelSize` and `AppPaint`.
+// PLAN: assumed `craft::ui::canvas` re-exports `CanvasSpace`, `CanvasView`, `PixelSize` and `AppPaint`.
 
 /// Which picture [`picture`] shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

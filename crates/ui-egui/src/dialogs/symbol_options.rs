@@ -12,10 +12,10 @@
 //! Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
-use craft_ui::contract::{Bind, Outcome as _};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
-use craft_ui::runtime::env::{Label, UnitKind};
+use craft::ui::contract::{Bind, Outcome as _};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::runtime::env::{Label, UnitKind};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

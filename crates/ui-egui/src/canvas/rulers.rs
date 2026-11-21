@@ -3,9 +3,9 @@
 
 // PLAN: canvas-w10 registers `mod rulers;` in canvas.rs; `BodyKind` is written by canvas-w10 and is assumed at `super::BodyKind`.
 use craft::behavior::{Axis, EditEvent, GesturePhase, Mixed, RulerUnits, Ticks};
-use craft_ui::canvas::{CanvasRulers, CanvasSpace, GuideDrag, RulerText, Rulers, RulersOutput};
-use craft_ui::contract::Bind;
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::canvas::{CanvasRulers, CanvasSpace, GuideDrag, RulerText, Rulers, RulersOutput};
+use craft::ui::contract::Bind;
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;

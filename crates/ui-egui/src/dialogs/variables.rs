@@ -10,8 +10,8 @@
 //! already says, and its Name field renames the row. The data set dialogs stay open when OK
 //! fails, keeping what was typed.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_doc::{DataValue, VariableKind, Variables};
 
@@ -306,7 +306,7 @@ fn params_of(command: &str, result: &ParamResult, vars: &Variables) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use craft_ui::dialog::StackDialog;
+    use craft::ui::dialog::StackDialog;
     use serde_json::json;
     use vectorcraft_engine::Session;
 

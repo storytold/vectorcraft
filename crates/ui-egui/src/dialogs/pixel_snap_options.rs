@@ -5,8 +5,8 @@
 //! Fields: `drawing`, `moving` and `scaling` (bool). While Snap to Pixel is off at open, the
 //! options stay editable and a note says they take effect once it is on.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::Value;
 
 use super::{form, host};

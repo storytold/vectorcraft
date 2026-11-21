@@ -16,8 +16,8 @@
 //! Each view of a document that Window › New Window opened ([`views`]) is a window of its own
 //! here: it has its own tab, pane or floating window.
 
-use craft_ui::runtime::windows::WindowHost;
-use craft_ui::shell::DocumentWindow;
+use craft::ui::runtime::windows::WindowHost;
+use craft::ui::shell::DocumentWindow;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -149,7 +149,7 @@ fn window_size(area: egui::Rect) -> egui::Vec2 {
 /// down and to the right, starting again at the corner when the next would leave the area.
 fn cascade_windows(area: egui::Rect, n: usize) -> Vec<egui::Rect> {
     // PLAN: needs `craft-behavior` in crates/ui-egui/Cargo.toml (not in this set's files)
-    craft_behavior::placement::cascade_rects(area, window_size(area), n, CASCADE_STEP)
+    craft::behavior::placement::cascade_rects(area, window_size(area), n, CASCADE_STEP)
 }
 
 /// The document area windows open in: the main window's last one, else a 1200 × 800 area.

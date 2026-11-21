@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use craft_ui::patterns::PresetRow;
+use craft::ui::patterns::presets::PresetRow;
 use egui::{Rect, Ui};
-use craft_ui::primitives::ContentPainterCx;
+use craft::ui::primitives::ContentPainterCx;
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES};
 use vectorcraft_color::{Swatch, SwatchLibrary};

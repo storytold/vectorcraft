@@ -13,19 +13,19 @@
 //! in library panels ([`GraphicStyleLibraries`]).
 
 // PLAN: `crates/ui-egui/Cargo.toml` and the workspace manifest have no `craft` facade dependency yet; the integration owner adds it.
-// PLAN: assumed paths of the framework items: `craft_ui::patterns::presets::*`,
-// `craft_ui::primitives::*`, `craft_ui::contract::*`, `craft::behavior::*`.
+// PLAN: assumed paths of the framework items: `craft::ui::patterns::presets::*`,
+// `craft::ui::primitives::*`, `craft::ui::contract::*`, `craft::behavior::*`.
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::Arc;
 
 use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
-use craft_ui::contract::{Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, ReorderMove, SelectMode};
-use craft_ui::patterns::presets::{
+use craft::ui::contract::{Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, ReorderMove, SelectMode};
+use craft::ui::patterns::presets::{
     PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFooterEvent, PresetFooterOptions, PresetPicker, PresetReorder, PresetRow, PresetView,
     ThumbPainter,
 };
-use craft_ui::primitives::{ContentPainterCx, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, Thumbnails};
+use craft::ui::primitives::{ContentPainterCx, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, Thumbnails};
 use egui::{Color32, Rect, Sense, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -911,7 +911,7 @@ pub(crate) fn window_menu() -> Vec<Item> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_keymap::Mods;
+    use craft::keymap::Mods;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {

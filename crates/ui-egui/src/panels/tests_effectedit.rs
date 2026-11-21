@@ -2,7 +2,7 @@
 //! prefilled, rows drag (Alt copies), several fills/strokes select together, stroke notes, the
 //! chip's Shift-click, the thumbnail drag and the Properties fx button.
 
-use craft_ui_panels::dialog::PromptChoice;
+use craft::ui::dialog::PromptChoice;
 use serde_json::{Value, json};
 
 use super::tests_appearance::{

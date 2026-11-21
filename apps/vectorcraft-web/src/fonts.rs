@@ -9,7 +9,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use craft_ui::fonts::{FetchDone, FetchWake, FontFetcher};
+use craft::ui::fonts::{FetchDone, FetchWake, FontFetcher};
 use vectorcraft_text::{FontDb, WEB_FONTS, WebFont};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::closure::Closure;
@@ -37,7 +37,7 @@ impl FontFetcher for BrowserFetcher {
 
     fn now(&self) -> f64 {
         // PLAN: assumed craft-platform is a dependency of vectorcraft-web
-        craft_platform::clock::monotonic_ms() / 1000.0
+        craft::platform::clock::monotonic_ms() / 1000.0
     }
 
     fn after(&self, seconds: f64, wake: FetchWake) {

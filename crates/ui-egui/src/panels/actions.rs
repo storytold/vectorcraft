@@ -14,12 +14,12 @@ use serde_json::{Value, json};
 
 use crate::{UiState, VectorcraftApp};
 
-mod edits;
-mod files;
+pub(crate) mod edits;
+pub(crate) mod files;
 mod keys;
-mod menu;
+pub(crate) mod menu;
 pub(crate) mod model;
-mod playback;
+pub(crate) mod playback;
 pub(crate) use model::prefs;
 mod recording;
 #[cfg(test)]

@@ -6,11 +6,11 @@
 //! the script's `#include` lines name. Without a file it asks for one, and File › Open of a `.jsx`,
 //! `.jsxinc` or `.jsxbin` file opens it too.
 
-use craft_ui::patterns::{HostedReport, ReportGroup, ReportNote};
+use craft::ui::patterns::form_dialogs::{HostedReport, ReportGroup, ReportNote};
 use craft::theme::variant::Tone;
 use serde_json::{Value, json};
 
-// PLAN: assumed `craft_host::PickRequest` and `crate::file_asks::{ask, open_params, Owner}` (fl.A3, fl.A23)
+// PLAN: assumed `craft::host::PickRequest` and `crate::file_asks::{ask, open_params, Owner}` (fl.A3, fl.A23)
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
 use craft::host::PickRequest;

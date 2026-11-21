@@ -1,8 +1,8 @@
 //! Edit → Tracing Presets: New… and Edit… through the preset editor, Delete, and the import with
 //! the question about saved presets of the same names, all through the dialog host.
 
-use craft_ui::panels::dialog::dialog_id;
-use craft_ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
+use craft::ui::patterns::panels::dialog::dialog_id;
+use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
@@ -42,7 +42,7 @@ fn editor_open(app: &VectorcraftApp) -> bool {
 
 /// A value of the open editor.
 fn field(app: &VectorcraftApp, key: &str) -> Value {
-    let read = |h: &mut craft_ui::panels::dialog::DialogHost| {
+    let read = |h: &mut craft::ui::patterns::panels::dialog::DialogHost| {
         h.get_by_id::<HostedParamDialog>(dialog_id(PRESET_KIND)).and_then(|d| match d.fields().get(key) {
             Some(FieldValue::Json(v)) => Some(v.clone()),
             Some(FieldValue::Text(t)) => Some(json!(t)),

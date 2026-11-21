@@ -12,17 +12,17 @@
 
 use std::sync::Arc;
 
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
-use craft_ui::display::{Picture, PictureSize, Text};
-use craft_ui::form::{Field, FieldGroup};
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::list::ThumbSize;
-use craft_ui::pickers::Select;
-use craft_ui::primitives::textures::Revision;
-use craft_ui::runtime::env::Label;
-use craft_ui::runtime::overlay::CloseReason;
-use craft_ui::text::NumberField;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::display::{Picture, PictureSize, Text};
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::ThumbSize;
+use craft::ui::pickers::Select;
+use craft::ui::primitives::textures::Revision;
+use craft::ui::runtime::env::Label;
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::text::NumberField;
 use egui::{Color32, ColorImage, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
@@ -130,7 +130,7 @@ impl StackDialog for DxfImportDialog {
 
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<DxfChoices>> {
         // The app accepted the held OK: this pass closes the dialog with it. A measuring run closes nothing.
-        let finish = self.held.is_accepted() && !craft_ui::runtime::measure::active(ui.ctx());
+        let finish = self.held.is_accepted() && !craft::ui::runtime::measure::active(ui.ctx());
         let refusal = self.held.refusal().map(|(reason, refused)| (reason.clone(), refused.clone()));
         let title = if self.placing { tl!("Place DXF") } else { tl!("DXF Import Options") };
         let layouts: Vec<Entry<String>> = self.layouts.iter().map(|l| Entry::new(l.clone(), l.clone())).collect();
@@ -142,7 +142,7 @@ impl StackDialog for DxfImportDialog {
         let picture = || image.as_ref().map_or_else(|| ColorImage::filled([1, 1], Color32::TRANSPARENT), |i| ColorImage::clone(i));
         let declared = format!("DXF {} · {}", self.version, self.units);
         let (token, scale_range) = (self.file.token, *vectorcraft_cad::SCALE_RANGE.start()..=*vectorcraft_cad::SCALE_RANGE.end());
-        let shown = craft_ui::patterns::form_dialogs::FormDialog::new(title, Bind::bound(&mut self.choices))
+        let shown = craft::ui::patterns::form_dialogs::FormDialog::new(title, Bind::bound(&mut self.choices))
             .opening(self.opening.clone())
             .accept_stays_open(true)
             .ok_enabled(!self.held.is_waiting())
@@ -159,7 +159,7 @@ impl StackDialog for DxfImportDialog {
                             }
                         });
                         FieldGroup::new(tl!("Scaling")).show(ui, |ui, _| {
-                            if let Some(fit) = craft_ui::choice::Checkbox::new(Bind::given(c.fit)).label(tl!("Scale to Fit Artboard")).show(ui).value().copied() {
+                            if let Some(fit) = craft::ui::choice::Checkbox::new(Bind::given(c.fit)).label(tl!("Scale to Fit Artboard")).show(ui).value().copied() {
                                 c.fit = fit;
                             }
                             Field::new(tl!("Scale")).show(ui, |ui, _| {
@@ -183,7 +183,7 @@ impl StackDialog for DxfImportDialog {
                                     Text::new(tl!("Units")).show(ui);
                                 });
                             });
-                            if let Some(on) = craft_ui::choice::Checkbox::new(Bind::given(c.scale_lineweights))
+                            if let Some(on) = craft::ui::choice::Checkbox::new(Bind::given(c.scale_lineweights))
                                 .label(tl!("Scale Lineweights"))
                                 .show(ui)
                                 .value()
@@ -193,11 +193,11 @@ impl StackDialog for DxfImportDialog {
                             }
                         });
                         FieldGroup::new(tl!("Options")).show(ui, |ui, _| {
-                            if let Some(on) = craft_ui::choice::Checkbox::new(Bind::given(c.center)).label(tl!("Center Artwork")).show(ui).value().copied() {
+                            if let Some(on) = craft::ui::choice::Checkbox::new(Bind::given(c.center)).label(tl!("Center Artwork")).show(ui).value().copied() {
                                 c.center = on;
                             }
                             if let Some(on) =
-                                craft_ui::choice::Checkbox::new(Bind::given(c.merge_layers)).label(tl!("Merge Layers")).show(ui).value().copied()
+                                craft::ui::choice::Checkbox::new(Bind::given(c.merge_layers)).label(tl!("Merge Layers")).show(ui).value().copied()
                             {
                                 c.merge_layers = on;
                             }

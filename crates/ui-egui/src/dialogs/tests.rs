@@ -415,8 +415,8 @@ fn the_transform_effect_dialog_has_its_controls_previews_them_and_shows_them_aga
 fn open_each(app: &mut VectorcraftApp, absolute: bool) {
     if absolute {
         let ctx = app.ui_ctx.clone().expect("a window app");
-        // PLAN: assumed `craft_ui::runtime::memory::set_saved_value(&Context, &SaveKey, V)` and `transform_each::EACH_KEY` (od.OS1).
-        craft_ui::runtime::memory::set_saved_value(&ctx, &super::transform_each::EACH_KEY, json!({"relative": false}));
+        // PLAN: assumed `craft::ui::runtime::memory::set_saved_value(&Context, &SaveKey, V)` and `transform_each::EACH_KEY` (od.OS1).
+        craft::ui::runtime::memory::set_saved_value(&ctx, &super::transform_each::EACH_KEY, json!({"relative": false}));
     }
     crate::menus::invoke(app, "object.transformEach", json!({}));
 }

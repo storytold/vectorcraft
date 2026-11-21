@@ -35,9 +35,10 @@ use vectorcraft_eps::{Level, Overprint, Preview};
 
 // PLAN: assumed paths for the framework items below (the app's craft_ui re-exports).
 use craft::theme::variant::Tone;
-use craft_ui::contract::{Bind, CollectionEvent, Label, TooltipSpec};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::widgets::{Button, Notice, ThumbAspect, Tile, TileGrid, TilePartEvent, ToggleState};
+use craft::ui::contract::{Bind, CollectionEvent, TooltipSpec};
+use craft::ui::runtime::env::Label;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::egui::widgets::{Button, Notice, ThumbAspect, Tile, TileGrid, TilePartEvent, ToggleState};
 
 use super::export_host::{self, After, Export, Open};
 use super::{export_for_screens, form};

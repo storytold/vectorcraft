@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use craft_ui::primitives::textures::{CachedTexture, TextureState};
+use craft::ui::primitives::textures::{CachedTexture, TextureState};
 use egui::{Color32, Pos2, Shape};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Rect;

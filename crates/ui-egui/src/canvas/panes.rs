@@ -8,9 +8,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use craft_ui::canvas::{SplitAt, SplitLayout, SplitViews};
-use craft_ui::contract::{Bind, ShowContainer as _};
-use craft_ui::primitives::textures::{LoadedPicture, Priority, Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::canvas::{SplitAt, SplitLayout, SplitViews};
+use craft::ui::contract::{Bind, ShowContainer as _};
+use craft::ui::primitives::textures::{LoadedPicture, Priority, Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 
 use super::{Affine, BodyKind, CacheKey, Point, Tokens, Ui, VectorcraftApp, View, backdrop, cache_key, frame_options, frame_ppp, frame_view, json};
 use super::{pixel_region, placed_key, plugin_key};
@@ -40,8 +40,8 @@ struct PaneFrame {
     size: (u32, u32),
     view: Affine,
     opts: vectorcraft_render::RenderOptions,
-    // PLAN: assumed `craft_color_ui::display::DisplayTransform`, the type canvas-w12's `render_pane` takes.
-    display: Option<Arc<craft_color_ui::display::DisplayTransform>>,
+    // PLAN: assumed `craft::color_ui::display::DisplayTransform`, the type canvas-w12's `render_pane` takes.
+    display: Option<Arc<craft::color_ui::display::DisplayTransform>>,
     cms: Arc<vectorcraft_color::cms::Cms>,
     /// Where the picture lies on the screen: the pane's art area, or the document pixels' rect in Pixel Preview.
     placed: egui::Rect,
@@ -105,7 +105,7 @@ impl Panes {
 fn render_pane(
     r: &mut vectorcraft_render::Renderer,
     (doc, w, h, view, opts): (&vectorcraft_doc::Document, u32, u32, Affine, &vectorcraft_render::RenderOptions),
-    display: Option<&craft_color_ui::display::DisplayTransform>,
+    display: Option<&craft::color_ui::display::DisplayTransform>,
     cms: Arc<vectorcraft_color::cms::Cms>,
     over: Option<(&crate::display_profile::Backdrop, f64)>,
 ) -> vectorcraft_render::Rendered {
@@ -402,11 +402,11 @@ pub(crate) fn refit_resized(app: &mut VectorcraftApp, areas: &[(Win, egui::Rect)
 
 /// Fit `v` to show its artboard (the first if it has gone) in `area`, with the interface zoomed by
 /// `ui_zoom` on a screen of `pixels_per_point`, as Fit Artboard in Window does.
-fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, area: egui::Rect, (ui_zoom, pixels_per_point): (f32, f32), scheme: &craft_behavior::ZoomScheme) {
+fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, area: egui::Rect, (ui_zoom, pixels_per_point): (f32, f32), scheme: &craft::behavior::ZoomScheme) {
     if let Some(target) = doc.artboards.get(v.artboard).or(doc.artboards.first()).map(|a| a.rect) {
         // PLAN: assumed `View::canvas(ui_scaling, rect) -> CanvasView` and `View::set_canvas(&CanvasView, ui_scaling)` (cv.S4).
         let mut view = v.canvas(ui_zoom, area);
-        craft_behavior::canvas::zoom::fit_rect(&mut view, target, target.size(), pixels_per_point, kurbo::Vec2::new(FIT_MARGIN, FIT_MARGIN), scheme);
+        craft::behavior::canvas::zoom::fit_rect(&mut view, target, target.size(), pixels_per_point, kurbo::Vec2::new(FIT_MARGIN, FIT_MARGIN), scheme);
         v.set_canvas(&view, ui_zoom);
         v.fitted = true;
     }
@@ -416,7 +416,7 @@ fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, area: egui::Rect, (ui
 fn fit_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, cell: egui::Rect) {
     let area = art_area(app, w, cell);
     let Some(doc) = app.session.documents().get(w.0).map(|st| st.doc.clone()) else { return };
-    // PLAN: assumed `crate::view::zoom_scheme(&VectorcraftApp) -> craft_behavior::ZoomScheme` (cv.F13).
+    // PLAN: assumed `crate::view::zoom_scheme(&VectorcraftApp) -> craft::behavior::ZoomScheme` (cv.F13).
     let scheme = crate::view::zoom_scheme(app);
     if let Some(v) = crate::doc_windows::view_mut(app, w).filter(|v| !v.fitted) {
         fit_pane(v, &doc, area, (ctx.zoom_factor(), ctx.pixels_per_point()), &scheme);

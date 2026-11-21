@@ -3,10 +3,10 @@
 
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard};
 
-use craft_ui::contract::Label;
-use craft_ui::dialog::DialogId;
+use craft::ui::runtime::env::Label;
+use craft::ui::dialog::DialogId;
 // PLAN: assumed paths of the form-dialog and live-preview items for the app crate.
-use craft_ui_patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamLayout, ParamResult};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamLayout, ParamResult};
 use serde_json::{Map, Value};
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_effects::{MAP_ART, MAP_INVISIBLE, MAP_SHADE, MapSurface, is_classic_three_d};

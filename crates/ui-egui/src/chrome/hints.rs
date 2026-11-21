@@ -1,14 +1,14 @@
 use super::status_bar::ANIMATED_ZOOM_HINT;
 use super::{Cow, Ui, VectorcraftApp, menus};
 use craft::behavior::IconId;
-use craft_ui_widgets::bars::{Bar, BarKind};
-use craft_ui_widgets::contract::{Show as _, ShowContainer as _};
-use craft_ui_widgets::display::{Elide, Icon, Text};
-use craft_ui_widgets::style::Span;
+use craft::ui::bars::{Bar, BarKind};
+use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::display::{Elide, Icon, Text};
+use craft::ui::style::Span;
 
 // PLAN: assumed `SlotKey` is a `&'static str` alias exported by the framework's layout module (hub-w1's slots).
 /// The key of the bottom slot that holds the hint bar.
-pub const HINT_SLOT: craft_ui_widgets::layout::SlotKey = "hints";
+pub const HINT_SLOT: craft::ui::runtime::env::SlotKey = "hints";
 
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
     Some(match tool {

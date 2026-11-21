@@ -5,9 +5,10 @@
 
 use std::hash::{Hash, Hasher};
 
-use craft::color_ui::{self, GradientPreview, ImagePreview};
+use craft::color_ui::self;
+use craft::color_ui::ui::{GradientPreview, ImagePreview};
 use craft::theme::Srgba;
-use craft_ui::primitives::{CachedTexture, ContentPainterCx, FacePaint};
+use craft::ui::primitives::{CachedTexture, ContentPainterCx, FacePaint};
 use egui::emath::GuiRounding;
 use egui::{Color32, Mesh, Rect, Shape, Stroke, pos2};
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
@@ -336,9 +337,9 @@ mod tests {
     /// pixel off its neighbours.
     #[test]
     fn gradient_face_lines_up_with_whole_pixels() {
-        use craft_ui::display::Picture;
-        use craft_ui::list::ThumbAspect;
-        use craft_ui::testing::Fixture;
+        use craft::ui::display::Picture;
+        use craft::ui::list::ThumbAspect;
+        use craft::ui::testing::Fixture;
         let gp = paint(GradientKind::Linear, 0.0);
         let mut fixture = Fixture::new(move |ui| {
             let face = paint_face(&gp);

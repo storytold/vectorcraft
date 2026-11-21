@@ -49,15 +49,17 @@ use std::sync::Arc;
 // PLAN: assumed `craft-color-ui`, `craft-theme`, `craft-behavior` and `craft-keymap` are dependencies of
 // vectorcraft-ui-egui (Cargo.toml is not in this set's table); `craft_ui` does not re-export them at the base.
 use craft::behavior::Selection;
-use craft::color_ui::{AreaMode, ChannelRow, ChannelRule, ChannelUnit, ColorArea, ColorStrip, ColorWheel, WheelInner};
-use craft_keymap::CommandRef;
+use craft::color_ui::AreaMode;
+use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit, ColorArea, ColorStrip, ColorWheel, WheelInner};
+use craft::keymap::CommandRef;
 use craft::theme::{ColorModel, HsbModel, ModelValues, RgbModel, Srgba};
-use craft_ui::choice::{SwatchSpacing, SwatchTable};
-use craft_ui::contract::{ActivateOn, Bind, EditResponse, Mixed, Props as _, Show as _};
-use craft_ui::display::{Shade, Text};
-use craft_ui::menu::PanelRow;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::runtime::env::Label;
+use craft::ui::choice::{SwatchSpacing, SwatchTable};
+use craft::ui::contract::{ActivateOn, Bind, EditResponse, Props as _, Show as _};
+use craft::behavior::Mixed;
+use craft::ui::display::{Shade, Text};
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
 use egui::Ui;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

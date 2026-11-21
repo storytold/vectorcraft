@@ -4,11 +4,11 @@
 
 use std::collections::HashMap;
 
-use craft_ui::contract::{Bind, Show as _};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind, encode};
-use craft_ui::runtime::env::{Label, LengthUnits, UnitKind};
-use craft_ui::text::TextField;
-use craft_ui::value_drag::SliderScale;
+use craft::ui::contract::{Bind, Show as _};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind, encode};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::text::TextField;
+use craft::ui::value_drag::SliderScale;
 use serde_json::{Map, Value, json};
 use vectorcraft_plugins::{Manifest, Param as PluginParam, ParamSpec};
 

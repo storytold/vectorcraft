@@ -14,10 +14,12 @@ use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 use vectorcraft_pdf::Overprint;
 
 // PLAN: assumed the facade `craft_ui` re-exports these framework items at its root.
-use craft_ui::{
-    Bind, DialogFields, DialogId, FieldValue, HostedParamDialog, HostedPdfExport, NamedPresetEvent, Param, ParamDialog, ParamKind, ParamResult,
-    PresetPicker, PresetRow, SliderScale, TooltipSpec, UnitKind,
-};
+use craft::ui::contract::{Bind, TooltipSpec};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, HostedPdfExport, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::presets::{NamedPresetEvent, PresetPicker, PresetRow};
+use craft::ui::value_drag::SliderScale;
+use craft::ui::runtime::env::UnitKind;
 
 use super::form::{self, LivePreview}; // PLAN: assumed `LivePreview` (wg.A20) lives in `form`
 use super::host::{HeldOptions, open_held_with}; // PLAN: assumed wg.A17 lives in `dialogs::host`
@@ -251,7 +253,7 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
 }
 
 /// Gives the dialog `id` the session's flattener presets.
-fn list_presets(app: &VectorcraftApp, host: &mut craft_ui::DialogHost, id: DialogId) {
+fn list_presets(app: &VectorcraftApp, host: &mut craft::ui::dialog::DialogHost, id: DialogId) {
     let (rows, values, built_in) = preset_rows(app);
     if let Some(d) = host.get_mut_by_id::<HostedParamDialog>(id) {
         d.set_presets(rows, values, built_in);

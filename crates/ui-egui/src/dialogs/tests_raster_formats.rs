@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
 
 use super::tests_export::{app, frame, kind, set};
 use super::*;

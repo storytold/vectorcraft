@@ -33,7 +33,7 @@ mod links;
 mod prefs;
 #[cfg(test)]
 mod tests;
-mod view;
+pub(crate) mod view;
 
 pub use fonts::MAX_RECENT_FONTS;
 

@@ -64,7 +64,7 @@ fn frame(app: &mut VectorcraftApp) {
     out.textures_delta.clear();
 }
 
-fn top(app: &mut VectorcraftApp) -> craft_ui::dialog::DialogId {
+fn top(app: &mut VectorcraftApp) -> craft::ui::dialog::DialogId {
     app.dialogs().stack().top().expect("a dialog is open")
 }
 
@@ -493,7 +493,7 @@ fn a_refused_save_says_so_in_an_alert() {
     ok(&mut app);
     // PLAN: assumed the alert is a `StandardPrompt`-style `Message` on the host with `title` and `detail` readers.
     let id = top(&mut app);
-    let message = app.dialogs().get_by_id::<craft_ui::dialog::Message>(id).expect("the alert is on the host");
+    let message = app.dialogs().get_by_id::<craft::ui::runtime::env::Message>(id).expect("the alert is on the host");
     assert_eq!(message.text(), "Can't save “art.vectorcraft”.");
     assert_eq!(message.detail(), "can't save version 55: VectorCraft writes versions 1 to 4");
     assert!(written.borrow().is_empty());

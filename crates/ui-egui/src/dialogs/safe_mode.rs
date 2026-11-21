@@ -4,9 +4,9 @@
 //! itself, the disabled list and the launch marker are `vectorcraft_plugins::safe_mode`'s. Both
 //! dialogs live on the dialog host; [`pump`] reads their answers.
 
-use craft_ui::contract::Bind;
-use craft_ui::dialog::{DialogResult, PromptChoice, StandardPrompt, StartupStage, dialog_id};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::contract::Bind;
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, StartupStage, dialog_id};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::Value;
 use vectorcraft_plugins::safe_mode::{self, Item};
 

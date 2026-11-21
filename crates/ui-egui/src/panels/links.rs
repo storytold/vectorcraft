@@ -24,14 +24,14 @@ use std::sync::Arc;
 
 use craft::behavior::{IconId, Selection, keyed};
 use craft::host::files::{PickKind, PickRequest};
-use craft_keymap::CommandRef;
-use craft_ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
-use craft_ui::display::{Shade, Text};
-use craft_ui::form::Field;
-use craft_ui::list::{List, ListRow, ThumbSize};
-use craft_ui::menu::{Menu, MenuItem, PanelRow};
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::sections::{FooterAction, FooterBar, Panel, Section};
+use craft::keymap::CommandRef;
+use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::list::{List, ListRow, ThumbSize};
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::sections::{FooterAction, FooterBar, Panel, Section};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -760,7 +760,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let node = NodeId(*id);
                 let mut row = ListRow::new(name.to_string()).thumb(o.thumb, move |cx, rect| {
                     // PLAN: assumed `state(..).shown()` gives the texture to paint, if ready.
-                    let request = craft_ui::primitives::ThumbRequest::for_cell(rect.width(), ppp);
+                    let request = craft::ui::primitives::ThumbRequest::for_cell(rect.width(), ppp);
                     let shown = thumbs.state(cx.ctx(), nodes, &super::thumbs::NodeThumb { uid: uid.unwrap_or_default(), node }, &request, craft::host::queue::Priority::VISIBLE).shown();
                     if let Some(texture) = shown {
                         let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));

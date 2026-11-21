@@ -1,7 +1,7 @@
 //! BMP options and the Targa depth's rule for transparency, drawn headlessly. TIFF and Targa's
 //! rows reaching the file are rows of `raster_option_rows_reach_the_export_params`.
 
-use craft_ui::patterns::form_dialogs::DialogFields;
+use craft::ui::patterns::form_dialogs::DialogFields;
 use serde_json::json;
 
 use super::tests_export::{app, frame, kind, set};

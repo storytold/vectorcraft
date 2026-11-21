@@ -12,7 +12,7 @@ pub mod action_stop;
 pub mod artboard_options;
 pub mod attributes_panel_options;
 pub mod blend_options;
-mod brush_art_options;
+pub(crate) mod brush_art_options;
 pub(crate) use brush_art_options::{brush_key_color_canvas, brush_key_color_input, cancel_brush_key_color, refresh_brush_key_color};
 pub mod brush_delete;
 pub mod brush_options;
@@ -25,7 +25,7 @@ pub mod color_balance;
 pub mod color_group_options;
 pub mod color_guide_options;
 pub(crate) mod color_picker;
-mod command;
+pub(crate) mod command;
 pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
@@ -37,7 +37,7 @@ pub mod dxf_import;
 pub mod dxf_options;
 pub mod edit_selection;
 pub mod edit_views;
-mod effect;
+pub(crate) mod effect;
 pub(crate) mod effect_adjust;
 pub mod effect_gallery;
 pub(crate) mod effect_params;
@@ -58,7 +58,7 @@ pub mod flattener_presets;
 pub(crate) mod form;
 pub(crate) mod free_distort;
 pub mod freehand;
-mod gradient_stop;
+pub(crate) mod gradient_stop;
 pub mod graph_data;
 pub mod graph_design;
 pub mod graph_type;
@@ -254,8 +254,6 @@ mod tests_print_presets;
 #[cfg(test)]
 mod tests_print_advanced;
 
-#[cfg(test)]
-mod tests_scale;
 
 #[cfg(test)]
 mod tests_perspective;

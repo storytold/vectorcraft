@@ -6,7 +6,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use craft_ui::menu::bar::{is_focused, is_open};
+use craft::ui::menu::bar::{is_focused, is_open};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -78,7 +78,7 @@ impl Scene {
         };
         let app = &mut self.app;
         // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
-        craft_ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
+        craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| app.ui(ui));
         out.textures_delta.clear();
     }

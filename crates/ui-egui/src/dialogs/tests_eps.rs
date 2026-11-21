@@ -1,6 +1,6 @@
 //! Export As → EPS Options, drawn headlessly.
 
-use craft_ui::patterns::form_dialogs::DialogFields;
+use craft::ui::patterns::form_dialogs::DialogFields;
 use serde_json::json;
 
 // PLAN: assumed `fields(&app)` (values of the top hosted dialog) and `press(&mut app, name)` (the control channel's

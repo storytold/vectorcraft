@@ -19,7 +19,7 @@ use craft::behavior::dock::{
 };
 use craft::behavior::flow::Axis;
 // PLAN: assumed path of the rail's slot memory (ui-panels/src/rails/tool/data.rs).
-use craft_ui_panels::rails::{LastUsed, SlotId};
+use craft::ui::rails::{LastUsed, SlotId};
 use egui::{Rect, pos2, vec2};
 use serde_json::{Map, Value};
 

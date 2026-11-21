@@ -7,9 +7,9 @@
 //! selected images): one undo step.
 
 // PLAN: assumed craft_ui paths for ParamDialog, ParamKind, Param, DialogFields, FieldValue, HostedParamDialog and Label.
-use craft_ui::contract::{Bind, Props as _};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::{Bind, Props as _};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

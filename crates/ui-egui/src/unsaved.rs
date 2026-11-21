@@ -9,7 +9,7 @@
 //! `ui.dialog.cancel`. [`pump`] reads the answer each frame.
 
 use craft::quit::{CloseAnswer, CloseGuard, CloseScope, GuardStep};
-use craft_ui::dialog::UnsavedChangesDialog;
+use craft::ui::dialog::UnsavedChangesDialog;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio::SaveMode;
 

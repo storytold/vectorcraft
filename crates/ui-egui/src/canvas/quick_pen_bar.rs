@@ -12,13 +12,13 @@
 //! place with no path being drawn, and Window › Quick Pen Toolbar to show it again.
 
 use craft::behavior::overlay::{Align, Side};
-use craft_ui::canvas::CanvasSpace;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _};
-use craft_ui::buttons::IconButton;
-use craft_ui::choice::Segmented;
-use craft_ui::primitives::IconSpec;
-use craft_ui::runtime::env::{Direction, Env};
-use craft_ui::canvas_controls::TaskBar;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _};
+use craft::ui::buttons::IconButton;
+use craft::ui::choice::Segmented;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::env::{Direction, Env};
+use craft::ui::canvas_controls::TaskBar;
 use craft::behavior::IconId;
 use vectorcraft_tools::quickpen::{self, Stroke as Action};
 

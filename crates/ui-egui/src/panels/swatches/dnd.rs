@@ -1,7 +1,7 @@
 use super::{Document, Entry, Paint, PanelDrag, REGISTRATION, SwatchRows, Value, VectorcraftApp, json, swatch_params};
 // PLAN: assumed `SwatchKey`, `DropAt`, `DropPayload`, `EditEvent`, `ReorderMove` are re-exported to `super` by color-w10.
 use super::{DropAt, DropPayload, EditEvent, ReorderMove, SwatchKey};
-use craft_keymap::Mods;
+use craft::keymap::Mods;
 
 /// The name a swatch or group row stands for.
 fn name_of(key: &SwatchKey) -> &str {

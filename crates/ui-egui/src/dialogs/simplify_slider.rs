@@ -14,8 +14,16 @@
 // PLAN: the framework paths below (`craft_ui_widgets`, `craft_ui_contract`, `craft_behavior`) and
 // `LivePreview`'s module are assumed; no app file imports them yet.
 use craft::behavior::{CanvasView, IconId};
-use craft_ui_contract::{Align, Anchor, Bind, CloseReason, Dismiss, IconSpec, Outside, Place, Side};
-use craft_ui_widgets::{IconButton, Popover, Row, Slider};
+use craft::behavior::overlay::{Align, Side};
+use craft::ui::value_drag::Anchor;
+use craft::ui::contract::Bind;
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::contract::overlay::{Dismiss, Outside, Place};
+use craft::ui::primitives::IconSpec;
+use craft::ui::buttons::IconButton;
+use craft::ui::popover::Popover;
+use craft::ui::Row;
+use craft::ui::value_drag::Slider;
 use egui::{Pos2, Rect as ScreenRect};
 use serde_json::{Value, json};
 use vectorcraft_engine::{SIMPLIFY_LEVEL, SMOOTH_AUTO_LEVEL, auto_simplify_level, simplify_level_tolerance};

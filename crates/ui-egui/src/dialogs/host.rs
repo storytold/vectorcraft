@@ -1,8 +1,9 @@
 //! The app's access to its window's dialog host, and the once-per-frame pump that serves every dialog
 //! module and every held dialog.
 
-use craft_ui::dialog::{DialogId, DialogResult, HoldsOk};
-use craft_ui::shell::{WindowDialogs, WindowKey};
+use craft::ui::dialog::{DialogId, DialogResult, HoldsOk};
+use craft::ui::shell::WindowDialogs;
+use craft::ui::runtime::env::WindowKey;
 use serde_json::Value;
 
 use crate::VectorcraftApp;

@@ -9,16 +9,16 @@
 //! `retype.preview` and `retype.reset` do the same.
 
 use craft::behavior::{EditEvent, Mixed, keyed};
-use craft_keymap::CommandRef;
-use craft_ui::buttons::{Button, Link};
-use craft_ui::contract::{ActivateOn, Bind, CollectionEvent, Props as _, SelectMode, Show as _, ShowCollection as _};
-use craft_ui::display::{Divider, Shade, Text};
-use craft_ui::list::{List, ListRow, ThumbAspect, ThumbSize};
-use craft_ui::menu::PanelRow;
-use craft_ui::primitives::ContentPainterCx;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::style::Variant;
-use craft_ui::text::TextField;
+use craft::keymap::CommandRef;
+use craft::ui::buttons::{Button, Link};
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Props as _, SelectMode, Show as _, ShowCollection as _};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::list::{List, ListRow, ThumbAspect, ThumbSize};
+use craft::ui::menu::PanelRow;
+use craft::ui::primitives::ContentPainterCx;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::style::Variant;
+use craft::ui::text::TextField;
 use egui::{Rect, Ui};
 use serde_json::{Value, json};
 

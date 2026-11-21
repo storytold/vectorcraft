@@ -6,10 +6,10 @@
 //! The one field is `name`. The style being renamed or the styles to merge are held by the dialog's
 //! OK, not by a field, so a name another style has refuses the OK and keeps the dialog open.
 
-// PLAN: assumed paths `craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param,
-// ParamDialog, ParamKind}` and `craft_ui::contract::Bind`.
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+// PLAN: assumed paths `craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param,
+// ParamDialog, ParamKind}` and `craft::ui::contract::Bind`.
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 
 use super::host;

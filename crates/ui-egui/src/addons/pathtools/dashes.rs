@@ -1,7 +1,7 @@
 //! Divide into Dashes in the interface: its dialog (dash and gap lengths, Fit to Corners and Ends,
 //! Remove Gaps), which previews on the canvas and runs `addon.pathtools.divideDashes` on OK.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

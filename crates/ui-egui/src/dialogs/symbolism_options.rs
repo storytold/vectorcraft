@@ -9,10 +9,10 @@
 //! `sprayStain` and `sprayStyle` (Symbol Sprayer, each `average` or `userDefined`); `proportional`
 //! and `affectsDensity` (Symbol Sizer).
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::{Label, LengthUnits};
-use craft_ui::value_drag::SliderScale;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::{Label, LengthUnits};
+use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
 use vectorcraft_tools::settings::SYMBOLISM;
 

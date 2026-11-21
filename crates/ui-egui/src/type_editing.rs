@@ -10,12 +10,12 @@
 use craft::behavior::{
     EditCommand, EditorInput, Granularity, Metrics, MoveMods, NavMove, PartKey, Sense, SurroundingUnit as ImeUnit, TextPos,
 };
-use craft_ui::contract::{
+use craft::ui::contract::{
     Commands as _, CommandSet, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _, Role, Show as _,
 };
-use craft_ui::primitives::{EditorPurpose, EditorState};
-use craft_ui::runtime::focus::KeyUse;
-use craft_ui::style::{ComponentStyle, StyleCx};
+use craft::ui::primitives::{EditorPurpose, EditorState};
+use craft::ui::runtime::focus::KeyUse;
+use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Rect, Response, Vec2};
 use serde_json::json;
 use vectorcraft_engine::ViewInfo;
@@ -89,7 +89,7 @@ pub(crate) enum TypeEditorCommand {
 // PLAN: `#[command(scope = ..)]` takes a string literal, so the scope is named here once and the set's own constant is
 // the source.
 /// The scope of [`TypeEditorCommand`].
-pub(crate) const TYPE_EDITOR_SCOPE: craft_ui::runtime::commands::CommandScope = <TypeEditorCommand as CommandSet>::SCOPE;
+pub(crate) const TYPE_EDITOR_SCOPE: craft::ui::runtime::commands::CommandScope = <TypeEditorCommand as CommandSet>::SCOPE;
 
 impl TypeEditorCommand {
     /// The character the command types, `None` for the commit and the formatting toggles.
@@ -145,7 +145,7 @@ pub(crate) struct TypeEditorStyle {
 }
 
 /// The editor part over the engine Type tool's caret rectangle (screen space).
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 pub(crate) struct TypeEditor<'a> {
     #[common]
     common: Common,
@@ -258,7 +258,7 @@ fn move_key(step: NavMove, mods: MoveMods) -> Option<(ToolKey, Mods)> {
 
 impl Component for TypeEditor<'_> {
     const ROLE: Role = Role::MULTILINE_TEXT_INPUT;
-    const INPUT: craft_ui::contract::Input = craft_ui::contract::Input::Editor;
+    const INPUT: craft::ui::contract::Input = craft::ui::contract::Input::Editor;
     const KEYS: KeyUse = KeyUse::CODE;
     type Style = TypeEditorStyle;
     type Output = TypeEditorOutput;

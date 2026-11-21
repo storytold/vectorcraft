@@ -15,8 +15,8 @@ use std::hash::Hash;
 
 use craft::color_ui::ui::{ColorPickerDialog, PickedColor, PickerLibrary, PickerSwatches};
 use craft::theme::Srgba;
-use craft_ui::dialog::{DialogId, DialogResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::dialog::{DialogId, DialogResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_color::cms;
 use vectorcraft_color::{Color, Paint};
@@ -208,7 +208,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// One picker's pass; `false` when it has closed and its record can go.
-fn settle(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &craft_ui::shell::WindowDialogs, open: &mut Open, busy: bool) -> bool {
+fn settle(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &craft::ui::shell::WindowDialogs, open: &mut Open, busy: bool) -> bool {
     let live = dialogs.with(|h| {
         h.get_mut_by_id::<ColorPickerDialog>(open.id).map(|d| {
             d.screen_busy(busy);
@@ -237,7 +237,7 @@ fn settle(app: &mut VectorcraftApp, ctx: &egui::Context, dialogs: &craft_ui::she
 }
 
 /// What a closed picker did: OK writes its colour, Cancel puts the art back.
-fn finish(app: &mut VectorcraftApp, dialogs: &craft_ui::shell::WindowDialogs, open: &Open, result: Option<DialogResult<craft::color_ui::ui::ColorPickerResult>>) {
+fn finish(app: &mut VectorcraftApp, dialogs: &craft::ui::shell::WindowDialogs, open: &Open, result: Option<DialogResult<craft::color_ui::ui::ColorPickerResult>>) {
     match (result, &open.target) {
         (Some(DialogResult::Ok(r)), Target::Answer { parent, key }) => dialogs.with(|h| h.answer_color(*parent, key, r.picked.color)),
         (Some(DialogResult::Ok(r)), _) => {

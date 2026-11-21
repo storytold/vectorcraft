@@ -1,11 +1,11 @@
 //! The Anchor Inspector panel's Shared Edges section: the Shared Edge Merge Tool's brush and
 //! coincidence, and Keep Shared Points Together.
 
-use craft_ui::contract::{Bind, Show as _};
-use craft_ui::choice::Checkbox;
-use craft_ui::display::Text;
-use craft_ui::runtime::env::UnitKind;
-use craft_ui::text::NumberField;
+use craft::ui::contract::{Bind, Show as _};
+use craft::ui::choice::Checkbox;
+use craft::ui::display::Text;
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_tools::addons::shared_edge::{COINCIDENCE, DIAMETER, DIAMETER_RANGE, ID, MAX_COINCIDENCE};

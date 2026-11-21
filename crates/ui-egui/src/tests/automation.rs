@@ -9,7 +9,7 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::file_access::AutomationRoots;
 
 use crate::background::SharedWriteFn;
-use craft_automation::{ControlRequest, Reply};
+use craft::automation::{ControlRequest, Reply};
 
 use crate::state::Dialog;
 use crate::{Services, VectorcraftApp};
@@ -1236,7 +1236,7 @@ fn a_library_panel_command_answers_with_a_hidden_librarys_shown_id() {
 }
 
 /// A closed panel's former place, as `ui.docking_hidden` keeps it.
-fn hidden_place() -> craft_ui::docking::Location<String> {
+fn hidden_place() -> craft::ui::docking::Location<String> {
     serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
 }
 

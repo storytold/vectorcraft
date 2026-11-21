@@ -2,13 +2,11 @@
 //! Everything drawn on or over the document is a seam of its own module; this file builds the
 //! canvas, runs the seams in order and copies the view back to the document's `View`.
 
-// PLAN: assumed import paths for the framework types below (`craft_ui::canvas::*`, `craft_ui::Bind`,
-// `craft_ui::runtime::frame`); seam signatures of the children are assumed `(app, ui, &space[, win, kind])`.
-use craft_ui::Bind;
-use craft_ui::canvas::{
-    Canvas, CanvasScrollbars, CanvasSpace, CanvasView, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space,
-    tool_pass,
-};
+// PLAN: assumed import paths for the framework types below (`craft::ui::canvas::*`, `craft::ui::Bind`,
+// `craft::ui::runtime::frame`); seam signatures of the children are assumed `(app, ui, &space[, win, kind])`.
+use craft::ui::contract::Bind;
+use craft::ui::canvas::{Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass};
+use craft::behavior::CanvasView;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_geom::{Rect, Size};
@@ -20,7 +18,7 @@ use crate::{VectorcraftApp, tl};
 
 mod alternates_bar;
 mod artboards;
-mod bar_place;
+pub(crate) mod bar_place;
 mod context_menu;
 mod contour_bar;
 mod cursor;
@@ -29,13 +27,13 @@ mod fill;
 mod grid;
 mod guides;
 mod home;
-mod marks;
+pub(crate) mod marks;
 mod outline;
 mod overlays;
-mod panes;
+pub(crate) mod panes;
 mod quick_pen_bar;
 mod raster;
-mod rulers;
+pub(crate) mod rulers;
 mod selection;
 mod selection_widgets;
 mod task_bar;

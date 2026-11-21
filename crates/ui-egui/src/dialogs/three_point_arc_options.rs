@@ -4,8 +4,8 @@
 //! sets it with `tool.setOption {tool: "threePointArc", values: {direction}}`; it lasts across
 //! tool switches and is saved with the preferences. `]` also switches it while an arc is drawn.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Value, json};
 use vectorcraft_tools::three_point_arc::ID as TOOL;
 

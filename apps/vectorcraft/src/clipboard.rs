@@ -24,7 +24,7 @@ use std::io::{Cursor, Read};
 use std::path::PathBuf;
 
 // PLAN: apps/vectorcraft/Cargo.toml needs craft-platform with its `clipboard` feature (hub-w3).
-use craft_platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
+use craft::platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
 use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
 
 /// This platform's system clipboard. On Linux, `window`'s Wayland connection carries text, SVG and
@@ -1863,8 +1863,8 @@ mod portable {
             // The Paste check's handle is one of these: when the app quits, its unanswered X11 read
             // ends `X11_READ_LIMIT` after it was sent, and an idle worker stops within `LOAD_WAIT`.
             // Quitting waits for that handle until both are over.
-            assert!(craft_platform::clipboard::PROBE_STOP_WAIT >= finish(false) + super::super::loads::LOAD_WAIT);
-            assert!(craft_platform::clipboard::PROBE_STOP_WAIT >= finish(true) + super::super::loads::LOAD_WAIT);
+            assert!(craft::platform::clipboard::PROBE_STOP_WAIT >= finish(false) + super::super::loads::LOAD_WAIT);
+            assert!(craft::platform::clipboard::PROBE_STOP_WAIT >= finish(true) + super::super::loads::LOAD_WAIT);
         }
 
         #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]

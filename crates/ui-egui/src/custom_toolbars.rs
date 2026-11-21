@@ -30,14 +30,15 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::Ordering;
 
-use craft_ui::docking::{Action, DockEdge};
-use craft_ui::keymap::CommandRef;
-use craft_ui::panels::RailFooter;
-use craft_ui::patterns::form_dialogs::{
+use craft::ui::docking::Action;
+use craft::behavior::dock::DockEdge;
+use craft::ui::runtime::commands::keymap::CommandRef;
+use craft::ui::patterns::panels::RailFooter;
+use craft::ui::patterns::form_dialogs::{
     ActionEnabled, DialogFields, FieldValue, HostedListManager, HostedParamDialog, ListManagerAction, ListManagerChoice, ListManagerEntry,
     ListManagerWords, Param, ParamDialog, ParamKind, ParamResult,
 };
-use craft_ui::widgets::{IconButton, IconId, Menu, MenuItem, PopupKind, Trigger};
+use craft::ui::runtime::egui::widgets::{IconButton, IconId, Menu, MenuItem, PopupKind, Trigger};
 use egui::pos2;
 use serde_json::{Value, json};
 use vectorcraft_tools::tool_info;
@@ -339,8 +340,8 @@ fn open_new(app: &mut VectorcraftApp) -> Result<(), String> {
 }
 
 /// The id Manage Toolbars' dialog has on the host.
-fn manage_id() -> craft_ui::panels::DialogId {
-    craft_ui::panels::dialog_id(MANAGE_KEY)
+fn manage_id() -> craft::ui::patterns::panels::DialogId {
+    craft::ui::patterns::panels::dialog_id(MANAGE_KEY)
 }
 
 /// Opens Manage Toolbars; one already open stays.
@@ -625,7 +626,7 @@ mod tests {
         // Without a name: New Toolbar opens on the dialog host, and makes no toolbar by itself.
         window_frame(&mut app, &ctx, 0.0, 800.0);
         assert_eq!(app.run("window.toolbar.new", json!({})).unwrap(), Value::Null);
-        assert!(app.dialogs().get_mut_by_id::<HostedParamDialog>(craft_ui::panels::dialog_id(NEW_KEY)).is_some());
+        assert!(app.dialogs().get_mut_by_id::<HostedParamDialog>(craft::ui::patterns::panels::dialog_id(NEW_KEY)).is_some());
         assert_eq!(app.ui.custom_toolbars.len(), 1);
         app.run("window.toolbar.new", json!({"name": "Toolbar 1"})).unwrap();
         let names: Vec<&str> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();

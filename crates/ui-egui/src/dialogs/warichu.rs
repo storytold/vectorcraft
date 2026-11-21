@@ -11,16 +11,16 @@
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 // PLAN: assumed path of `UnitKind`
-use craft_ui::runtime::UnitKind;
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::WarichuAlign;
 use vectorcraft_doc::text::{MAX_WARICHU_GAP, WARICHU_LINES, WARICHU_SCALE};
 
 use crate::VectorcraftApp;
 // PLAN: assumed `LengthUnits` path
-use craft_ui::runtime::LengthUnits;
+use craft::ui::runtime::env::LengthUnits;
 
 /// The dialog kind of Warichu Settings.
 pub const KIND: &str = "warichuSettings";
@@ -131,9 +131,9 @@ fn params(fields: &DialogFields, initial: &DialogFields) -> Map<String, Value> {
 /// control channel and the user's clicks reach it.
 #[cfg(test)]
 pub(super) mod driver {
-    use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
     // PLAN: assumed paths of `DialogId` and `StackDialog`
-    use craft_ui::dialog::{DialogId, StackDialog};
+    use craft::ui::dialog::{DialogId, StackDialog};
     use serde_json::Value;
 
     use crate::VectorcraftApp;

@@ -8,7 +8,7 @@
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
 
-use craft_ui::testing::{Fixture, Target};
+use craft::ui::testing::{Fixture, Target};
 use egui::{Key, Modifiers, Pos2, Rect, Ui, Vec2, vec2};
 use serde_json::json;
 use vectorcraft_doc::text::TextKind;

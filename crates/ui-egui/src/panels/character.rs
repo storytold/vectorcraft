@@ -8,20 +8,22 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::SystemTime;
 
-// PLAN: assumed the framework paths below (craft_text::ui re-exports, craft_ui widgets and runtime, craft::font_manager).
+// PLAN: assumed the framework paths below (craft::text::ui re-exports, craft_ui widgets and runtime, craft::font_manager).
 use craft::font_manager::axes::{FontAxis, NamedInstance};
 use craft::font_manager::picker::{FilterLayout, FontScript};
 use craft::behavior::EditEvent;
-use craft_keymap::CommandRef;
+use craft::keymap::CommandRef;
 use craft::text::ui::character::{
     AxesLayout, BaselinePosition, Caps, CharacterChange, CharacterControls, CharacterControlsOutput, CharacterRows, CharacterValues, FaceAxes,
     FontHeightReference as HeightReference, FontPickerSource, Kerning, Leading, SIZE_PRESETS, keys,
 };
-use craft::text::ui::{DocUnit, TextAntiAlias};
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::runtime::focus::{self, FocusTarget};
-use craft_ui::widgets::{Checkbox, Divider, Link, NumberField, NumberPick, PanelRow, Popover, Row};
-use craft_ui::{Bind, Entry, Env, Lazy};
+use craft::text::ui::DocUnit;
+use craft::text::ui::type_options::TextAntiAlias;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::focus::{self, FocusTarget};
+use craft::ui::runtime::egui::widgets::{Checkbox, Divider, Link, NumberField, NumberPick, PanelRow, Popover, Row};
+use craft::ui::contract::{Bind, Entry, Lazy};
+use craft::ui::runtime::env::Env;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};

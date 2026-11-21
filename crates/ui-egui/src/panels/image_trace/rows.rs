@@ -8,14 +8,14 @@ use std::ops::RangeInclusive;
 
 use craft::color_ui::ui::{ColorPopover, PickedColor};
 use craft::theme::Srgba;
-use craft_ui::buttons::ToggleButton;
-use craft_ui::choice::{Checkbox, Segmented};
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::form::{Field, SliderField, SliderFieldLayout};
-use craft_ui::layout_components::Row;
-use craft_ui::pickers::Select;
-// PLAN: assumed `IconId` is re-exported from `craft_ui::primitives`.
-use craft_ui::primitives::IconId;
+use craft::ui::buttons::ToggleButton;
+use craft::ui::choice::{Checkbox, Segmented};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::form::{Field, SliderField, SliderFieldLayout};
+use craft::ui::layout_components::Row;
+use craft::ui::pickers::Select;
+// PLAN: assumed `IconId` is re-exported from `craft::ui::primitives`.
+use craft::behavior::IconId;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;

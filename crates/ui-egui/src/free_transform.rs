@@ -5,15 +5,15 @@
 //! do; the modifier keys keep working while dragging.
 
 use craft::behavior::IconId;
-use craft_ui::bars::{Bar, BarKind};
-use craft_ui::buttons::ToggleButton;
-use craft_ui::canvas::CanvasSpace;
-use craft_ui::contract::Bind;
-use craft_ui::contract::overlay::Overlay;
-use craft_ui::display::Divider;
-use craft_ui::popover::Popover;
-use craft_ui::runtime::env::Env;
-use craft_ui::style::SurfaceKind;
+use craft::ui::bars::{Bar, BarKind};
+use craft::ui::buttons::ToggleButton;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::contract::Bind;
+use craft::ui::contract::overlay::Overlay;
+use craft::ui::display::Divider;
+use craft::ui::popover::Popover;
+use craft::ui::runtime::env::Env;
+use craft::ui::style::SurfaceKind;
 use egui::{Ui, Vec2};
 use serde_json::{Value, json};
 use std::num::NonZeroU8;

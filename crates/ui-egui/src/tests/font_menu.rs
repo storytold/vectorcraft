@@ -1,8 +1,9 @@
 //! The font picker's glue: previews, picks, recents and the saved preferences.
 
 use serde_json::json;
-// PLAN: assumed `craft_ui::contract::{EditEvent, GestureId, Mixed, Preview}` re-export craft_behavior's value types
-use craft_ui::contract::{EditEvent, GestureId, Mixed, Preview};
+// PLAN: assumed `craft::ui::contract::{EditEvent, GestureId, Mixed, Preview}` re-export craft_behavior's value types
+use craft::behavior::{EditEvent, GestureId, Mixed};
+use craft::ui::patterns::presets::Preview;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 use vectorcraft_text::FontDb;
@@ -52,12 +53,12 @@ fn recent_fonts_follow_committed_choices_and_the_count_preference() {
 /// Text the face cannot draw is shown as the generic sample, not as glyphs from another font.
 #[test]
 fn samples_show_the_text_in_the_family_or_a_generic_sample() {
-    // PLAN: assumed `craft_ui::testing::Fixture` (`new(|ui| ..)`, `settle()`, `texts() -> Vec<String>`) and
-    // `craft_ui::runtime::Env::of(ui)`; `ContentPainterCx::new(painter, env, ink)` is public (content.rs:43).
-    use craft_ui::primitives::ContentPainterCx;
-    use craft_ui::runtime::Env;
-    use craft_ui::style::SurfaceKind;
-    use craft_ui::testing::Fixture;
+    // PLAN: assumed `craft::ui::testing::Fixture` (`new(|ui| ..)`, `settle()`, `texts() -> Vec<String>`) and
+    // `craft::ui::runtime::Env::of(ui)`; `ContentPainterCx::new(painter, env, ink)` is public (content.rs:43).
+    use craft::ui::primitives::ContentPainterCx;
+    use craft::ui::runtime::env::Env;
+    use craft::ui::style::SurfaceKind;
+    use craft::ui::testing::Fixture;
     let mut fixture = Fixture::new(|ui| {
         let env = Env::of(ui);
         let cx = ContentPainterCx::new(ui.painter().clone(), &env, SurfaceKind::Panel.ink());

@@ -1,12 +1,12 @@
 //! The Transform panel's live-shape rows: the Rectangle, Polygon, Ellipse and Line Properties, also shown by the
 //! Properties panel and the Contextual Task Bar.
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::form::Field;
-use craft_ui::pickers::Select;
-use craft_ui::sections::{HeaderStrength, Section};
-use craft_ui::text::{NumberField, link_toggle};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::form::Field;
+use craft::ui::pickers::Select;
+use craft::ui::sections::{HeaderStrength, Section};
+use craft::ui::text::{NumberField, link_toggle};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, Node, NodeKind};

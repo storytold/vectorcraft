@@ -2,7 +2,7 @@
 //! circle to draw, or all), which previews the circles on the canvas and runs
 //! `addon.pathtools.tangentCircle` on OK.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -76,7 +76,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
     use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 

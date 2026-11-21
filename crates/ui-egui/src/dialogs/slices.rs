@@ -10,7 +10,7 @@
 
 use craft::draw::ui::slice::{DivideBy, DivideSlices, DivideSlicesDialog, SliceBackground, SliceCellAlign, SliceCellVAlign, SliceKind, SliceOptions, SliceOptionsDialog};
 use craft::theme::Srgba;
-use craft_ui::dialog::DialogResult;
+use craft::ui::dialog::DialogResult;
 use serde_json::{Map, Value, json};
 
 use crate::VectorcraftApp;
@@ -134,7 +134,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_ui::dialog::{DialogHost, DialogId};
+    use craft::ui::dialog::{DialogHost, DialogId};
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {

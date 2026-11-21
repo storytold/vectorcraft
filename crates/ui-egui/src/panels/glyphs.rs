@@ -25,11 +25,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use craft::font_manager::glyphs::{AlternatePick, CATEGORIES, CellInfo, GlyphCell, GlyphSource, GlyphsPanel, GlyphsWords};
-use craft_keymap::CommandRef;
-use craft_ui::contract::Bind;
-use craft_ui::menu::PanelRow;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::runtime::env::{Env, Label};
+use craft::keymap::CommandRef;
+use craft::ui::contract::Bind;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::{Env, Label};
 use egui::{Color32, ColorImage, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, GlyphForm, NodeId, NodeKind};

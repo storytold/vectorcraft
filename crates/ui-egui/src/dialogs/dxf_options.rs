@@ -8,10 +8,10 @@
 //! options of `document.exportDxf`. OK remembers the options for next time and writes the file
 //! (asking where when there is no path); bad options keep the dialog open.
 
-use craft_ui::contract::{Bind, Entry, Show as _};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::pickers::Select;
-use craft_ui::text::NumberField;
+use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::pickers::Select;
+use craft::ui::text::NumberField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::{ColorDepth, DxfPreset, DxfVersion, Preserve, RasterFormat};
 use vectorcraft_doc::Unit;

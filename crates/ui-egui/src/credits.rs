@@ -2,7 +2,7 @@
 //! with recorded consent) and the AI models that helped. The tables are baked into the binary by
 //! build.rs from contributors/contributors.json; nothing is read at run time.
 
-use craft_ui::patterns::about::{self, AboutInfo, AboutLink, Credits, HostedAbout, ModelCredit};
+use craft::behavior::canvas::zoom::about::{self, AboutInfo, AboutLink, Credits, HostedAbout, ModelCredit};
 
 use crate::VectorcraftApp;
 

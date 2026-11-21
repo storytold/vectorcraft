@@ -5,14 +5,13 @@
 
 // PLAN: the framework import paths below are assumed from the contract rows (craft-ui-patterns re-exports contract and
 // runtime; the form-dialog items live under `patterns::form_dialogs`; `Field` and `NumberField` under craft-ui-widgets).
-use craft_ui_patterns::contract::{Bind, FieldLabelRole, SideLabel};
-use craft_ui_patterns::patterns::form_dialogs::{
-    BelowRows, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, SliderScale,
-};
-use craft_ui_patterns::runtime::env::{LengthUnits, UnitKind};
-use craft_ui_patterns::runtime::memory::{SaveKey, saved_value, set_saved_value};
-use craft_ui_widgets::form::Field;
-use craft_ui_widgets::text::{NumberField, NumberOutput};
+use craft::ui::contract::{Bind, FieldLabelRole, SideLabel};
+use craft::ui::patterns::form_dialogs::{BelowRows, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::value_drag::SliderScale;
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
+use craft::ui::form::Field;
+use craft::ui::text::{NumberField, NumberOutput};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::PathData;
@@ -347,7 +346,7 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
         }
         if op == PathOp::Simplify { d.below(counts_row()) } else { d }
     });
-    let ok = move |app: &mut VectorcraftApp, result: &craft_ui_patterns::patterns::form_dialogs::ParamResult| {
+    let ok = move |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
         let (cmd, params) = command(op, &result.fields);
         match take_open(app, op) {
             Some(record) => {
@@ -405,7 +404,7 @@ pub(crate) fn open_split(app: &mut VectorcraftApp) {
     let dialog = HostedParamDialog::new(&ctx, SPLIT_COMMAND, split_fields(width, height), move |f| {
         ParamDialog::new(SPLIT_COMMAND, tl!("Split Into Grid"), split_rows(lengths)).values(Bind::bound(f)).previews()
     });
-    let ok = |app: &mut VectorcraftApp, result: &craft_ui_patterns::patterns::form_dialogs::ParamResult| {
+    let ok = |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
         let params = split_params(&result.fields);
         match app.object_dialogs.split.take() {
             Some(record) => {

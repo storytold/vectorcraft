@@ -1,9 +1,9 @@
 //! What the app does with the commands the key stage fires: tool keys and their holds, the Escape chain,
 //! nudges and the window's panel and artboard shortcuts.
 
-use craft_keymap::{CommandRef, Mods};
-use craft_ui_contract::runtime::commands::{CommandGate, FirePhase, Fired};
-use craft_ui_contract::runtime::keys::{self, Intent};
+use craft::keymap::{CommandRef, Mods};
+use craft::ui::runtime::commands::{CommandGate, FirePhase, Fired};
+use craft::ui::runtime::keys::{self, Intent};
 use serde_json::json;
 use vectorcraft_tools::ToolKey;
 

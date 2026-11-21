@@ -18,12 +18,12 @@ use vectorcraft_engine::cmd::webexport::{self, Optimized, WebOutput, WebRender, 
 use vectorcraft_render::encode::quantize::Reduction;
 
 // PLAN: assumed `craft_ui` re-exports the framework items of the sheet under these names.
-use craft_ui::{
-    BrowserPreview, ColorRequest, ColorTable, ColorTableEdit, ColorTableEvent, DialogId, DialogResult, HostedSaveForWeb, OptimizeAnswer,
-    OptimizeRequest, OptimizeScope, OptimizeStart, PathRequest, Revision, SaveForWebOptions, SaveForWebResult, SizedTexture, StackDialog,
-    TextureStore, TextureStoreOptions, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebVariant,
-};
-use craft_ui::host::files::PickRequest;
+use craft::ui::patterns::form_dialogs::{BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart, SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebVariant};
+use craft::ui::runtime::requests::{ColorRequest, PathRequest};
+use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
+use craft::ui::{Revision, SizedTexture};
+use craft::ui::primitives::{TextureStore, TextureStoreOptions};
+use craft::ui::host::files::PickRequest;
 
 use super::preview_folders;
 use crate::dialogs::file_asks::{self, Owner};
@@ -132,12 +132,12 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         Ok((key, r)) => {
             let texture = original_texture(&ctx, &key, &r);
             app.web_export.original = Some(texture.clone());
-            (craft_ui::PixelSize::new(r.width, r.height), texture)
+            (craft::behavior::PixelSize::new(r.width, r.height), texture)
         }
         // The panes show why the rendering failed; the Original pane has nothing to show.
         Err(_) => {
             let blank = egui::ColorImage::from_rgba_unmultiplied([1, 1], &[0; 4]);
-            (craft_ui::PixelSize::new(1, 1), textures(&ctx).put(&ctx, ORIGINAL, Revision::of(&"blank"), blank).sized())
+            (craft::behavior::PixelSize::new(1, 1), textures(&ctx).put(&ctx, ORIGINAL, Revision::of(&"blank"), blank).sized())
         }
     };
     let mut dialog = HostedSaveForWeb::new(name, size, original)
@@ -370,7 +370,7 @@ impl Asked {
 }
 
 /// Runs `f` on the open Save for Web dialog; `None` when none is open.
-fn on_dialog<R>(host: &craft_ui::WindowDialogs, f: impl FnOnce(&mut HostedSaveForWeb) -> R) -> Option<R> {
+fn on_dialog<R>(host: &craft::ui::shell::WindowDialogs, f: impl FnOnce(&mut HostedSaveForWeb) -> R) -> Option<R> {
     host.with(|h| h.get_mut::<HostedSaveForWeb>().map(f))
 }
 
@@ -435,7 +435,7 @@ impl Asked {
 }
 
 /// The encodes the dialog wants, as pictures, and the Original pane's picture when the rendering is new.
-fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft_ui::WindowDialogs, wanted: &[WantedVariant]) {
+fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, wanted: &[WantedVariant]) {
     let table = app.web_export.table.clone();
     let mut answers = Vec::with_capacity(wanted.len());
     for w in wanted {
@@ -461,7 +461,7 @@ fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft_u
 }
 
 /// Applies the colour table edits the dialog filed. A Delete clears the dialog's colour selection.
-fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft_ui::WindowDialogs, asked: &Asked) {
+fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, asked: &Asked) {
     let shown = app
         .session
         .web_settings(&settings_of(&asked.options, &app.web_export.table, None))
@@ -575,7 +575,7 @@ fn run_optimize(app: &mut VectorcraftApp, req: &OptimizeRequest) -> Result<Optim
 
 /// Answers Save…'s request for a path. Bad settings never open a save panel; the web downloads, so
 /// the suggested name stands in for the path.
-fn ask_path(app: &mut VectorcraftApp, host: &craft_ui::WindowDialogs, id: DialogId, req: PathRequest, options: &SaveForWebOptions) {
+fn ask_path(app: &mut VectorcraftApp, host: &craft::ui::shell::WindowDialogs, id: DialogId, req: PathRequest, options: &SaveForWebOptions) {
     let settings = match app.session.web_settings(&settings_of(options, &app.web_export.table, None)) {
         Ok(s) => s,
         Err(e) => {

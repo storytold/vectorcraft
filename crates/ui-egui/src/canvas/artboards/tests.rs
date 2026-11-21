@@ -1,4 +1,4 @@
-use craft_ui_canvas::canvas::{PageBorder, PageFill, PasteboardColor};
+use craft::ui::canvas::{PageBorder, PageFill, PasteboardColor};
 use serde_json::json;
 use vectorcraft_engine::Session;
 

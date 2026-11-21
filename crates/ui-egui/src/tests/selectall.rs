@@ -52,8 +52,8 @@ impl App {
         let app = &mut self.app;
         let mut out = self.ctx.run_ui(raw, |ui| {
             if let Some(id) = menu {
-                // PLAN: assumed `craft_keymap::CommandRef` is the type `commands::fire` takes.
-                craft_ui::runtime::commands::fire(ui.ctx(), craft_keymap::CommandRef::new(id), craft_ui::runtime::commands::FireSource::Menu);
+                // PLAN: assumed `craft::keymap::CommandRef` is the type `commands::fire` takes.
+                craft::ui::runtime::commands::fire(ui.ctx(), craft::keymap::CommandRef::new(id), craft::ui::runtime::commands::FireSource::Menu);
             }
             app.logic(ui.ctx());
             app.ui(ui);

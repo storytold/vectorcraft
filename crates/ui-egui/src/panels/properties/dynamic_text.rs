@@ -3,10 +3,11 @@
 //! rows ([Dynamic Text overview](https://helpx.adobe.com/photoshop/desktop/text-typography/work-with-dynamic-text/dynamic-text-overview.html)
 //! describes Block and its spacing between words and between lines).
 
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Mixed, Props as _, Show as _, ShowContainer as _}; // PLAN: assumed `Mixed` re-export
-use craft_ui::form::Field;
-use craft_ui::text::{NumberField, StepArrows};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::behavior::Mixed; // PLAN: assumed `Mixed` re-export
+use craft::ui::form::Field;
+use craft::ui::text::{NumberField, StepArrows};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{AreaOptions, NodeKind, TextKind};

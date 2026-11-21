@@ -4,7 +4,7 @@ use egui::{Event, PointerButton, Pos2, Rect, ViewportId, pos2, vec2};
 use vectorcraft_engine::Session;
 
 // PLAN: assumed path of the chrome toggle request (ch.K3, ch.K4); the framework's `runtime::frame` module.
-use craft_ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
+use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 
 use super::*;
 
@@ -323,7 +323,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             }
             let width: f32 = end_columns(&layout).iter().map(|c| c.iconic_width.unwrap_or(ICON_WIDTH)).sum();
             if let Some(Node::Split { size, .. }) = layout.root.as_mut() {
-                *size = craft_ui::layout::SplitSize::FixedSecond(width);
+                *size = craft::ui::layout::SplitSize::FixedSecond(width);
             }
             assert!(layout.validate().is_ok());
             h.app.ui.dock_workspace.layout = layout;
@@ -581,8 +581,8 @@ fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
     assert!(peek::edge_panels(&layout, peek::Edge::Left).is_empty());
     let mirrored = Layout::new(
         Some(Node::Split {
-            axis: craft_ui::layout::SplitAxis::Horizontal,
-            size: craft_ui::layout::SplitSize::FixedFirst(310.0),
+            axis: craft::ui::layout::SplitAxis::Horizontal,
+            size: craft::behavior::dock::SplitSize::FixedFirst(310.0),
             first: Box::new(Node::Tabs { panels: vec!["layers".to_string()], active: 0 }),
             second: Box::new(Node::Tabs { panels: vec![CANVAS.to_string()], active: 0 }),
         }),

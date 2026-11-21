@@ -49,7 +49,7 @@ fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
 /// One frame of the whole app on `ctx`, with `events` as the host's input.
 fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
-    craft_ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
+    craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
     let raw = egui::RawInput {
         events,
         screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))),
@@ -581,8 +581,8 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     assert!(ids.iter().all(|id| !enabled(&app, id)), "type on a closed path and on an open one");
     // A palette pick runs the command with no params.
     app.run("select.set", json!({"ids": [closed]})).unwrap();
-    // PLAN: assumed `menus::run_fired(&mut VectorcraftApp, Fired)` and `Fired` at `craft_ui::runtime::commands`
-    use craft_ui::runtime::commands::{FirePhase, FireSource, Fired};
+    // PLAN: assumed `menus::run_fired(&mut VectorcraftApp, Fired)` and `Fired` at `craft::ui::runtime::commands`
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
     crate::menus::run_fired(&mut app, Fired::new(craft::menu::CommandRef::new(ids[0]), FireSource::Palette, FirePhase::Press, 0.0));
     let doc = &app.session.active().unwrap().doc;
     let start = match &doc.node(vectorcraft_doc::NodeId(closed.as_u64().unwrap())).unwrap().kind {
@@ -1110,7 +1110,7 @@ fn precise_cursors_command_is_listed_and_assignable_in_the_shortcut_editor() {
     let e = ed::entry("view.preciseCursors").expect("listed in the editor");
     assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Use Precise Cursors", "View", false));
     assert_eq!(ed::default_of("view.preciseCursors"), None, "no default key");
-    let mut overrides = craft_keymap::Overrides::new();
+    let mut overrides = craft::keymap::Overrides::new();
     assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None);
     assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+Q"), false), Ok(vec![]));
     let chord = ed::effective_in(&overrides, "view.preciseCursors").expect("assigned");

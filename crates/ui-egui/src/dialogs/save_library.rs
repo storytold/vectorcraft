@@ -4,7 +4,7 @@
 //! Fields: `name`, `saveTo` (`user` or `file`), `selectedOnly`, plus `names` (the items selected in the
 //! panel) and `hasNames` (there are some), which have no row.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

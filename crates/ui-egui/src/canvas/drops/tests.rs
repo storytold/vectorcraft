@@ -177,7 +177,7 @@ fn art_moved_off_the_canvas_is_carried_by_every_selection_tool() {
         // The tab strip is off the canvas.
         frame(&mut app, &ctx, vec![Event::PointerMoved(Pos2::new(500.0, 2.0))]);
         frame(&mut app, &ctx, vec![]);
-        let carried = craft_ui::runtime::drag::active::<PanelDrag>(&ctx); // PLAN: assumed `active::<P>(&Context) -> Option<Arc<P>>`
+        let carried = craft::ui::runtime::drag::active::<PanelDrag>(&ctx); // PLAN: assumed `active::<P>(&Context) -> Option<Arc<P>>`
         assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { ids, .. }) if ids == &[id]), "{tool}");
     }
 }
@@ -195,5 +195,5 @@ fn an_anchor_dragged_off_the_canvas_is_not_carried() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(corner + egui::vec2(20.0, 0.0))]);
     frame(&mut app, &ctx, vec![Event::PointerMoved(Pos2::new(500.0, 2.0))]);
     frame(&mut app, &ctx, vec![]);
-    assert!(craft_ui::runtime::drag::active::<PanelDrag>(&ctx).is_none());
+    assert!(craft::ui::runtime::drag::active::<PanelDrag>(&ctx).is_none());
 }

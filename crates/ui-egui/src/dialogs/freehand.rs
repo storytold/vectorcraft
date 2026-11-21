@@ -20,12 +20,12 @@
 // PLAN: the imports below assume `craft_ui` paths as the framework's own code uses them; `ui::brush_settings`
 // of the draw crate is where `TipEllipse` and `TipAngle` live.
 use craft::draw::ui::brush_settings::{TipAngle, TipEllipse};
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::env::UnitKind;
-use craft_ui::text::NumberField;
-use craft_ui::value_drag::{Slider, SliderScale};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::{Slider, SliderScale};
 use egui::{Response, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::Variation;
@@ -286,7 +286,7 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
     };
     let ok = {
         let (tool, present) = (tool.to_owned(), present);
-        move |app: &mut VectorcraftApp, result: &craft_ui::patterns::form_dialogs::ParamResult| {
+        move |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
             let values: Map<String, Value> =
                 form::json_of(&params(&tool, &present), &result.fields).into_iter().filter(|(key, _)| present.contains(&key.as_str())).collect();
             tool_options::set_options(app, &tool, values)

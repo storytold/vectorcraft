@@ -9,12 +9,12 @@
 //! file; on the desktop the lines are read off the UI thread and are empty until they are read,
 //! [`crate::place::fill_lines`]).
 
-use craft_ui::buttons::Checkbox;
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
-use craft_ui::display::{Shade, Text};
-use craft_ui::layout_components::Row;
-use craft_ui::patterns::form_dialogs::FormDialog;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::FormDialog;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;

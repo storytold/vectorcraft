@@ -3,7 +3,7 @@
 
 use craft::behavior::Selection;
 use craft::keymap::CommandRef;
-use craft_ui::runtime::commands::CommandStates;
+use craft::ui::runtime::commands::CommandStates;
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::script::console::{Ending, Entry};

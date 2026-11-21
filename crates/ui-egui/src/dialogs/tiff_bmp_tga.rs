@@ -2,7 +2,7 @@
 //! palette, RLE, row order) and Targa (depth), after the raster export rows they share with PNG
 //! Options ([`super::png_options`]): the `tiffOptions`, `bmpOptions` and `tgaOptions` dialogs.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, Param};
+use craft::ui::patterns::form_dialogs::{DialogFields, Param};
 use serde_json::{Map, Value, json};
 use vectorcraft_render::encode::bmp::{self, BmpOptions};
 use vectorcraft_render::encode::jpeg::ColorModel;

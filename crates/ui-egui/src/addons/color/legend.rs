@@ -3,7 +3,7 @@
 //! labels show, and whether only the swatches selected in the Swatches panel are drawn. It
 //! previews on the canvas and runs `addon.color.swatchLegend` on OK.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

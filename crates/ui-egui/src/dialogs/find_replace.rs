@@ -22,7 +22,7 @@
 // PLAN: assumed paths of the framework crates in this app's dependencies.
 use craft::text::find::FindOptions;
 use craft::text::ui::find::{FindCheck, FindReplaceDialog, FindRequest, FindTab, ReplaceButtons};
-use craft_ui::dialog::StackDialog;
+use craft::ui::dialog::StackDialog;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use craft_ui::dialog::{RecoveryDialog, StackDialog};
+use craft::ui::dialog::{RecoveryDialog, StackDialog};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::recovery::{MemoryStore, RecoveryStore};
 

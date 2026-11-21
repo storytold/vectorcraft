@@ -1,7 +1,7 @@
 //! The app's locate rules: where a tool is found, what the app shows for it, which rail wears the
 //! mark, and when the locate ends. The mark's drawing and the reveal are the rails' own.
 
-use craft_ui::runtime::keys::{self, Intent};
+use craft::ui::runtime::keys::{self, Intent};
 use serde_json::json;
 use vectorcraft_engine::Session;
 

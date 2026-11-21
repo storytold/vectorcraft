@@ -10,7 +10,7 @@ use craft::host::target::ShellInfo;
 use craft::host::{AppInfo, FileError, Files, InlineJobs, PendingPick, PickAnswer, PickId, PickKind, PickRequest, Picked, Wake};
 use craft::ui::InstallSpec;
 use craft::ui::shell::embed;
-use craft::window::SystemWindows;
+use craft::window::system::SystemWindows;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::{FILE_HEAD, Flavour, PASTE_ORDER, file_flavour, is_address};
 use vectorcraft_engine::cmd::fileio;

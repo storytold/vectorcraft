@@ -4,9 +4,9 @@
 //! threaded ([Align text](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/align-text.html)),
 //! so they are turned off when a selected frame has rows or columns or is threaded.
 
-use craft_ui::buttons::ToggleButton;
+use craft::ui::buttons::ToggleButton;
 use craft::behavior::{IconId, Mixed};
-use craft_ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::contract::{Bind, Props as _, Show as _};
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{NodeKind, TextKind, VerticalAlign};

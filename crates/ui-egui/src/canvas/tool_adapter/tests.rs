@@ -1,5 +1,5 @@
 use craft::behavior::{CanvasView, PointerSample};
-use craft_ui::canvas::{CanvasSpace, ToolContext, ToolPointer};
+use craft::ui::canvas::{CanvasSpace, ToolContext, ToolPointer};
 use vectorcraft_engine::Session;
 use vectorcraft_tools::PointerKind;
 
@@ -63,10 +63,10 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     let at = app.canvas_view().unwrap().to_screen(Point::new(200.0, 150.0));
     let shown = |app: &mut VectorcraftApp, mods: egui::Modifiers| {
         frame(app, &ctx, vec![egui::Event::ModifiersChanged(mods)], mods);
-        craft_ui::runtime::cursor::current(&ctx)
+        craft::ui::runtime::cursor::current(&ctx)
     };
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
-    let plain = craft_ui::runtime::cursor::current(&ctx);
+    let plain = craft::ui::runtime::cursor::current(&ctx);
     let alt = shown(&mut app, egui::Modifiers::ALT);
     assert_ne!(alt, plain, "Alt shows the Eyedropper's cursor");
     assert_eq!(shown(&mut app, egui::Modifiers::NONE), plain, "and letting go brings the bucket back");

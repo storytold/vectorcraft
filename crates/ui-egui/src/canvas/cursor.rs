@@ -1,4 +1,4 @@
-use craft_ui::canvas::CanvasView;
+use craft::behavior::CanvasView;
 use vectorcraft_geom::Point;
 
 use crate::CacheKey;

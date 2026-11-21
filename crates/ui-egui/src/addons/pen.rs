@@ -4,11 +4,11 @@
 //! acts through `addon.pen.*` and the `addon.pathtools.*` anchor edits.
 
 use craft::behavior::IconId;
-use craft_ui::buttons::Button;
-use craft_ui::choice::Segmented;
-use craft_ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
-use craft_ui::display::{Shade, Text};
-use craft_ui::sections::Section;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Segmented;
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::display::{Shade, Text};
+use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_tools::addons::smart_pen;

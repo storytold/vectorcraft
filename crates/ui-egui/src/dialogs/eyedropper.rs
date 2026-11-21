@@ -7,13 +7,13 @@
 //! miter, dash}}, character, paragraph}`, each leaf a bool).
 
 use craft::behavior::Mixed;
-use craft_ui::buttons::Button as _;
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Outcome as _, Show as _, clicked};
-use craft_ui::display::Text;
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::buttons::Button as _;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Outcome as _, Show as _, clicked};
+use craft::ui::display::Text;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use super::{form, host};

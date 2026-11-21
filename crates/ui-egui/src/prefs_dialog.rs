@@ -5,11 +5,11 @@
 
 // PLAN: assumed import paths of the framework items below through the `craft_ui` facade (it re-exports the dialog
 // host, the standard prompt, the colour picker dialog, `Bind`, `SaveKey` and the preferences pattern).
-use craft_ui::contract::Bind;
-use craft_ui::dialog::{DialogHost, DialogId, PromptChoice, StandardPrompt};
-use craft_ui::patterns::preferences::{PreferencesModel, PreferencesState, PreferencesWindow, SettingsDraft};
-use craft_ui::pickers::ColorPickerDialog;
-use craft_ui::runtime::memory::SaveKey;
+use craft::ui::contract::Bind;
+use craft::ui::dialog::{DialogHost, DialogId, PromptChoice, StandardPrompt};
+use craft::ui::patterns::preferences::{PreferencesModel, PreferencesState, PreferencesWindow, SettingsDraft};
+use craft::color_ui::ui::ColorPickerDialog;
+use craft::ui::runtime::memory::SaveKey;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, spec};

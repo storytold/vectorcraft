@@ -4,8 +4,8 @@
 
 use std::mem;
 
-use craft_ui::dialog::{DialogResult, StackDialog};
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamResult};
+use craft::ui::dialog::{DialogResult, StackDialog};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamResult};
 use egui::Context;
 use serde_json::{Value, json};
 
@@ -39,7 +39,7 @@ pub(crate) struct Spec {
 /// The `Commit` dialog open now and the live preview it drives; one at a time, since a preview owns the document.
 #[derive(Default)]
 pub(crate) struct AddonDialogs {
-    open: Option<(craft_ui::dialog::DialogId, &'static Spec)>,
+    open: Option<(craft::ui::dialog::DialogId, &'static Spec)>,
     preview: LivePreview,
 }
 

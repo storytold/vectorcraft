@@ -4,7 +4,7 @@
 //! ([`ask_missing_font_edit`]). Both texts are shown as given: callers translate their template
 //! before filling in a name, so the name is never translated.
 
-use craft_ui::panels::dialog::{Alert, DialogId, DialogResult, DialogStack, HeldOk, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage, dialog_id};
+use craft::ui::patterns::panels::dialog::{Alert, DialogId, DialogResult, DialogStack, HeldOk, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage, dialog_id};
 use egui::{Context, Ui};
 use serde_json::{Value, json};
 

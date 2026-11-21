@@ -22,18 +22,18 @@ pub mod progress;
 pub mod samples;
 
 use craft::behavior::{IconId, SelectionChange, keyed};
-use craft_ui::buttons::{Button, IconButton, Link};
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{
+use craft::ui::buttons::{Button, IconButton, Link};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{
     Bind, CollectionEvent, Gap, LabelKind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, Sizing, clicked,
 };
-use craft_ui::display::Text;
-use craft_ui::form::Field;
-use craft_ui::layout_components::Row;
-use craft_ui::list::{List, ListRow};
-use craft_ui::primitives::{Glyph, HAlign, IconSpec};
-use craft_ui::style::{TypeRole, UiTokens, rgba_color};
-use craft_ui::tabs::{Tab as TabItem, TabKind, TabStrip};
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::list::{List, ListRow};
+use craft::ui::primitives::{Glyph, HAlign, IconSpec};
+use craft::ui::style::{TypeRole, UiTokens, rgba_color};
+use craft::ui::tabs::{Tab as TabItem, TabKind, TabStrip};
 use egui::{Color32, Painter, Rect, Shape, Stroke, Ui, vec2};
 use serde_json::{Value, json};
 

@@ -621,7 +621,7 @@ fn new_action_refuses_bad_params_and_adds_nothing() {
     ] {
         assert_eq!(app.run(NEW_ACTION, p.clone()).unwrap_err(), want, "{p}");
     }
-    if crate::keymap::platform() == craft_keymap::Platform::Windows {
+    if crate::keymap::platform() == craft::keymap::Platform::Windows {
         for (key, cmd) in [(1, false), (1, true), (4, true), (6, true)] {
             let want = format!("{} cannot be used on Windows", FunctionKey { key, cmd, shift: false }.text());
             assert_eq!(app.run(NEW_ACTION, json!({"set": 1, "name": "A", "key": key, "cmd": cmd})).unwrap_err(), want);

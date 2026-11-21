@@ -12,15 +12,15 @@
 //! The same dialog edits a preset (from Edit → PDF Presets): a name and description instead of the
 //! preset and artboards, and OK saves the preset.
 
-// PLAN: assumed paths `craft_ui::patterns::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent,
-// PresetDraft}`, `craft_ui::patterns::presets::PresetError`, `craft_ui::dialog::DialogId`,
-// `craft_ui::runtime::env::{Label, UnitKind}`, and `vectorcraft_pdf::{APP, ActiveProfiles, default_preset_name}`.
+// PLAN: assumed paths `craft::ui::patterns::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent,
+// PresetDraft}`, `craft::ui::patterns::presets::PresetError`, `craft::ui::dialog::DialogId`,
+// `craft::ui::runtime::env::{Label, UnitKind}`, and `vectorcraft_pdf::{APP, ActiveProfiles, default_preset_name}`.
 use std::sync::Arc;
 
-use craft_ui::dialog::DialogId;
-use craft_ui::patterns::presets::PresetError;
-use craft_ui::patterns::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent, PresetDraft};
-use craft_ui::runtime::env::{Label, UnitKind};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::presets::PresetError;
+use craft::ui::patterns::form_dialogs::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent, PresetDraft};
+use craft::ui::runtime::env::{Label, UnitKind};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::FlattenOptions;

@@ -3,7 +3,7 @@
 //! while the strokes draw with a brush.
 // PLAN: the name dialog is read through assumed `DialogHost::open_dialogs()` entries with an `id` (hub-w1).
 
-use craft_ui::runtime::commands::CommandStates;
+use craft::ui::runtime::commands::CommandStates;
 use egui::{Key, Modifiers};
 use serde_json::json;
 use vectorcraft_doc::WidthProfile;
@@ -51,7 +51,7 @@ fn menu_row(app: &mut VectorcraftApp, id: &str) {
     let command = rows
         .iter()
         .find_map(|r| match r {
-            craft_ui::menu::PanelRow::Command(c) if c.id == id => Some(c.clone()),
+            craft::ui::menu::PanelRow::Command(c) if c.id == id => Some(c.clone()),
             _ => None,
         })
         .unwrap_or_else(|| panic!("no menu row {id}"));

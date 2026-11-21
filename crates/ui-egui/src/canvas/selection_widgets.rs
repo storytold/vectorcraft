@@ -8,14 +8,14 @@
 //! reports presses; [`show`] runs the modules' drag values with the presses and sends their actions to the session,
 //! where one `Begin`..`Commit` is one undo step.
 //!
-//! PLAN: `mod selection_widgets;` in `canvas.rs` is canvas-w10's. The `craft_ui::{contract, canvas, primitives,
+//! PLAN: `mod selection_widgets;` in `canvas.rs` is canvas-w10's. The `craft::ui::{contract, canvas, primitives,
 //! style}` and `craft::behavior` paths are assumed to be the framework crates' public paths for the items used.
 
 use craft::behavior::{CanvasView, Cursor, HitLevel, HitPriority, HitShape, Metrics, PartKey, PointerButton, PressPhase, PressState, Sense};
-use craft_ui::canvas::{CanvasSpace, canvas_space};
-use craft_ui::contract::{Common, Component, Cx, MeasureCx, Outcome, PaintUi, PartsCx, Props as _, Role};
-use craft_ui::primitives::{PaintShape, StrokeWidth};
-use craft_ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
+use craft::ui::canvas::{CanvasSpace, canvas_space};
+use craft::ui::contract::{Common, Component, Cx, MeasureCx, Outcome, PaintUi, PartsCx, Props as _, Role};
+use craft::ui::primitives::{PaintShape, StrokeWidth};
+use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
 use egui::{Color32, CornerRadius, Pos2, Rect, Response, Vec2};
 use vectorcraft_geom::{Point, Vec2 as DocVec};
 use vectorcraft_tools::{Action, Mods, PointerEvent, PointerKind, ToolContext};
@@ -244,7 +244,7 @@ pub(super) struct WidgetStyle {
 }
 
 /// The selection widgets of a canvas.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(canvas_control)]
 pub(super) struct SelectionWidgets {
     #[common]
@@ -297,7 +297,7 @@ impl Component for SelectionWidgets {
     /// The parts of the widgets. The modules' drags refuse Cmd, Ctrl and Alt, so with one held (and no gesture of
     /// the control running) their parts are not declared and the press reaches the tool.
     fn parts(&mut self, _rect: Rect, cx: &mut PartsCx<'_, Self>) {
-        let mods = craft_ui::runtime::pointer::frame(cx.ui.ctx()).mods;
+        let mods = craft::ui::runtime::pointer::frame(cx.ui.ctx()).mods;
         let modified = (mods.cmd || mods.ctrl || mods.alt) && !cx.gesture_running();
         for item in self.layout.items.iter().filter(|item| item.widget.takes_modified() || !modified) {
             cx.part(item.widget.key().at(item.index), item.hit.clone())
@@ -393,7 +393,7 @@ impl Component for SelectionWidgets {
     }
 }
 
-fn handle(draw: &craft_ui::primitives::Draw<'_>, at: Pos2, radius: f32, style: &WidgetStyle) {
+fn handle(draw: &craft::ui::primitives::Draw<'_>, at: Pos2, radius: f32, style: &WidgetStyle) {
     let disc = PaintShape::Circle(at, radius);
     draw.fill(&disc, style.halo);
     draw.stroke(&disc, StrokeWidth::Medium, style.accent);

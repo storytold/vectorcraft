@@ -1,6 +1,6 @@
 //! The Import PDF dialog: opening and placing multi-page and password-protected PDFs.
 
-use craft_ui::dialog::{HeldOk, StackDialog};
+use craft::ui::dialog::{HeldOk, StackDialog};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
@@ -22,7 +22,7 @@ fn ctx(app: &VectorcraftApp) -> egui::Context {
 }
 
 /// The id of the open Import PDF dialog.
-fn dialog_id(app: &VectorcraftApp) -> Option<craft_ui::dialog::DialogId> {
+fn dialog_id(app: &VectorcraftApp) -> Option<craft::ui::dialog::DialogId> {
     app.dialogs()?.with(|host| host.get::<ImportPdfDialog>().map(|d| d.id()))
 }
 

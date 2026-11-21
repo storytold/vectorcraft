@@ -11,7 +11,7 @@
 
 use std::time::Duration;
 
-use craft_ui_panels::dialog::{JobAnswer, JobProgress};
+use craft::ui::dialog::{JobAnswer, JobProgress};
 use serde_json::json;
 
 use crate::VectorcraftApp;

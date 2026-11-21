@@ -7,11 +7,11 @@ use std::path::PathBuf;
 
 use craft::dialogs::ui::UnavailableWords;
 use craft::host::{Host, PickId, PickKind, PickRequest, Picked};
-use craft_ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
+use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
 // PLAN: assumed re-export paths for `HostedParamDialog`, `PathRequest` and `Env`.
-use craft_ui::HostedParamDialog;
-use craft_ui::runtime::Env;
-use craft_ui::runtime::requests::PathRequest;
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
+use craft::ui::runtime::env::Env;
+use craft::ui::runtime::requests::PathRequest;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::file_access::ScopeHandle;
 

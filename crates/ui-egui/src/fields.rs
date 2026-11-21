@@ -1,10 +1,10 @@
 //! Helpers for the number, blend and kerning fields the panels build from framework components.
 
 use craft::behavior::{Codec, NotAValue, NumberCodec, Reader};
-use craft_ui::contract::Entry;
-use craft_ui::patterns::blend_keys::{BlendKeyEntry, BlendShortcut, blend_entries as framework_blend_entries};
-use craft_ui::runtime::env::{Label, LengthUnits, Units};
-use craft_ui::text::NumberStepper;
+use craft::ui::contract::Entry;
+use craft::ui::patterns::blend_keys::{BlendKeyEntry, BlendShortcut, blend_entries as framework_blend_entries};
+use craft::ui::runtime::env::{Label, LengthUnits, Units};
+use craft::ui::text::NumberStepper;
 use vectorcraft_color::BlendMode;
 
 /// Every blend mode with its Shift+Alt letter, in the order of the menu.
@@ -68,7 +68,7 @@ pub fn blend_of(key: &str, value: &serde_json::Value) -> Option<BlendMode> {
 /// Points) a bare number in a picas field counts as points.
 pub fn length_reader(units: &Units, lengths: LengthUnits, bare_points: bool) -> Reader {
     let reader = units.length_reader(lengths);
-    if bare_points && lengths.shown == craft_ui::runtime::env::UnitKind::Picas { reader.bare(1.0 / 12.0) } else { reader }
+    if bare_points && lengths.shown == craft::ui::runtime::env::UnitKind::Picas { reader.bare(1.0 / 12.0) } else { reader }
 }
 
 /// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any

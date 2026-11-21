@@ -1,5 +1,5 @@
-use craft_ui::dialog::DialogId;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;

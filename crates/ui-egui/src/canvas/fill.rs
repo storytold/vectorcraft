@@ -1,5 +1,5 @@
 use super::cursor::only_view_differs;
-use craft_ui::canvas::CanvasView;
+use craft::behavior::CanvasView;
 
 use super::{Affine, CacheKey, Color32, Point, Pos2, Shape, VectorcraftApp, color_image_owned, pos2, vec2};
 

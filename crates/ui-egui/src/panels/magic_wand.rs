@@ -2,15 +2,15 @@
 //! The settings live in the engine (`magicWand.set` / `magicWand.options`), so they survive tool
 //! switches and agents can set them too.
 
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft_ui::display::Divider;
-use craft_ui::form::Field;
-use craft_ui::layout::RowAlign;
-use craft_ui::layout_components::Row;
-use craft_ui::menu::PanelRow;
-use craft_ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft_ui::text::NumberField;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::Divider;
+use craft::ui::form::Field;
+use craft::ui::layout::RowAlign;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::wand::color_tolerance_max;

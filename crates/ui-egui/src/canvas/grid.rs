@@ -1,7 +1,7 @@
 use super::{Color32, Pos2, Shape, VectorcraftApp, pos2};
-// PLAN: assumed crate paths `craft_ui_canvas::canvas_controls::{CanvasGrid, GridLine}` and `craft_ui_canvas::style::DataColor`
-use craft_ui_canvas::canvas_controls::{CanvasGrid, GridLine};
-use craft_ui_canvas::style::DataColor;
+// PLAN: assumed crate paths `craft::ui::canvas_controls::{CanvasGrid, GridLine}` and `craft::ui::style::DataColor`
+use craft::ui::canvas_controls::{CanvasGrid, GridLine};
+use craft::ui::style::DataColor;
 
 /// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), converted
 /// into the display profile `display` when there is one, cached per look, and its cell size in

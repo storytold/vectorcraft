@@ -1,6 +1,6 @@
 use super::*;
 use crate::dialogs::swatch_options::KIND;
-use craft_keymap::Mods;
+use craft::keymap::Mods;
 use egui::Pos2;
 use vectorcraft_color::Color;
 use vectorcraft_engine::Session;

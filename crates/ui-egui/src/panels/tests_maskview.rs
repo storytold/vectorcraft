@@ -2,7 +2,7 @@
 //! mask (and edits it), Alt-click again shows the artwork. In isolation mode neither a click nor an
 //! Alt-click edits the mask.
 
-use craft_ui::ThumbTarget;
+use craft::ui::list::ThumbTarget;
 use egui::Modifiers;
 use serde_json::json;
 use vectorcraft_engine::Session;

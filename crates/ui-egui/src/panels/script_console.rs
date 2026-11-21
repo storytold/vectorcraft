@@ -17,15 +17,15 @@ use vectorcraft_engine::script::console::{Console, ConsoleLine, Ending, Entry};
 use craft::behavior::{DisplayOrder, IconId, ItemSource};
 use craft::keymap::CommandRef;
 use craft::theme::variant::Tone;
-use craft_ui::buttons::{DialogRole, FooterButton};
-use craft_ui::contract::{Bind, ScrollAnchor, Show, ShowCollection};
-use craft_ui::list::{List, ListRow, RowInk};
-use craft_ui::menu::PanelRow;
-use craft_ui::notices::Notice;
-use craft_ui::primitives::IconSpec;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::sections::FooterBar;
-use craft_ui::style::TypeRole;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::contract::{Bind, ScrollAnchor, Show, ShowCollection};
+use craft::ui::list::{List, ListRow, RowInk};
+use craft::ui::menu::PanelRow;
+use craft::ui::notices::Notice;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::sections::FooterBar;
+use craft::ui::style::TypeRole;
 
 use crate::VectorcraftApp;
 

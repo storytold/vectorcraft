@@ -125,7 +125,7 @@ impl Mac {
         };
         let app = &mut self.app;
         // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
-        craft_ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
+        craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| {
             app.logic(ui.ctx());
             app.ui(ui);

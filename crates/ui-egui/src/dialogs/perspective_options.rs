@@ -5,7 +5,7 @@
 //! Fields: `show` (bool), `position` (`topLeft`, `topRight`, `bottomLeft`, `bottomRight`),
 //! `anchorPoint` (bool) and `gridlineIntersection` (bool).
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 use vectorcraft_tools::distort::perspective::widget::WidgetCorner;
 
@@ -44,7 +44,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let Value::Object(map) = json!(app.session.prefs.perspective_widget) else { return };
     let dialog = HostedParamDialog::new(&ctx, KIND, form::fields_of(&params(), &map), build);
     // A refusal keeps the dialog open with the reason under its rows.
-    let ok = |app: &mut VectorcraftApp, r: &craft_ui::patterns::form_dialogs::ParamResult| {
+    let ok = |app: &mut VectorcraftApp, r: &craft::ui::patterns::form_dialogs::ParamResult| {
         app.run(CMD, Value::Object(form::json_of(&params(), &r.fields))).map(|_| ())
     };
     if open_held(app, dialog, ok).is_none() {

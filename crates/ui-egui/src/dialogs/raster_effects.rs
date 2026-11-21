@@ -5,9 +5,10 @@
 //! a preset (`resolutionPreset`). OK runs the command with them: one undo step. On an error the
 //! dialog stays open. [`params`] lays out the options of Effect › Rasterize… with the same rows.
 
-use craft_ui_contract::UnitKind;
-use craft_ui_panels::dialog::DialogId;
-use craft_ui_patterns::form_dialogs::{Bind, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::dialog::DialogId;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Map, Value, json};
 use vectorcraft_effects::RASTERIZE;
 use vectorcraft_render::AntiAlias;
@@ -125,7 +126,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use craft_ui_patterns::form_dialogs::HostedParamDialog;
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
     use serde_json::json;
     use vectorcraft_engine::Session;
 
@@ -143,7 +144,7 @@ mod tests {
         app.run("ui.dialog.set", params).unwrap();
     }
 
-    fn ok(app: &mut VectorcraftApp, id: craft_ui_panels::dialog::DialogId) {
+    fn ok(app: &mut VectorcraftApp, id: craft::ui::dialog::DialogId) {
         let ctx = egui::Context::default();
         let _ = app.dialogs().confirm_by_id(&ctx, id);
         pump(app);

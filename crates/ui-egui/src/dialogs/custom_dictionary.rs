@@ -9,8 +9,8 @@
 //! open; [`pump`] applies the dialog's choices to it and shows it back.
 
 // PLAN: assumed paths of the framework crates in this app's dependencies.
-use craft_ui::dialog::{DialogId, DialogResult, dialog_id};
-use craft_ui::patterns::form_dialogs::{
+use craft::ui::dialog::{DialogId, DialogResult, dialog_id};
+use craft::ui::patterns::form_dialogs::{
     ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry, ListManagerWords,
 };
 use serde_json::{Value, json};
@@ -154,7 +154,7 @@ mod tests {
     use crate::VectorcraftApp;
     // PLAN: assumed path of the op.A15 `Panel` test harness.
     use crate::testing::Panel;
-    use craft_ui::patterns::form_dialogs::HostedListManager;
+    use craft::ui::patterns::form_dialogs::HostedListManager;
 
     // The custom dictionary is the whole process's: each test here uses words no other test does.
     const A: &str = "zqvdicta";

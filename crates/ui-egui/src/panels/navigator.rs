@@ -9,12 +9,13 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
-use craft_ui::canvas::{AppPaint, CanvasView, NavigatorPreview, ProxyColor};
-use craft_ui::contract::Bind;
-use craft_ui::menu::PanelRow;
-use craft_ui::patterns::canvas::NavigatorPanel;
-use craft_ui::primitives::{LoadedPicture, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
-use craft_ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::canvas::{AppPaint, NavigatorPreview, ProxyColor};
+use craft::behavior::CanvasView;
+use craft::ui::contract::Bind;
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::canvas::NavigatorPanel;
+use craft::ui::primitives::{LoadedPicture, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use egui::{Color32, Rect, Shape, Ui, pos2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -324,7 +325,7 @@ mod tests {
         let options = options_row();
         app.run(&options.id, options.params.clone()).unwrap();
         // PLAN: assumed `app.dialogs().is_open::<T>()` (hub) and `NavigatorOptionsDialog` (document-panels-w11)
-        assert!(app.dialogs().is_open::<craft_ui::patterns::form_dialogs::NavigatorOptionsDialog>(), "Panel Options… opens the dialog");
+        assert!(app.dialogs().is_open::<craft::ui::patterns::form_dialogs::NavigatorOptionsDialog>(), "Panel Options… opens the dialog");
     }
 
     /// `ui.navigatorPanelOptions` sets the view box color and Draw Dashed Lines as Solid Lines: the

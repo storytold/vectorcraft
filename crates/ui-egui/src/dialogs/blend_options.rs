@@ -9,11 +9,11 @@
 //! `object.blend.info`).
 
 use craft::behavior::IconId;
-use craft_ui::choice::Segmented;
-use craft_ui::contract::{Bind, Entry};
-use craft_ui::dialog::dialog_id;
-use craft_ui::patterns::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::LengthUnits;
+use craft::ui::choice::Segmented;
+use craft::ui::contract::{Bind, Entry};
+use craft::ui::dialog::dialog_id;
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Value, json};
 
 use super::form::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
@@ -158,7 +158,7 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_ui::dialog::DialogHost;
+    use craft::ui::dialog::DialogHost;
     use vectorcraft_doc::NodeKind;
     use vectorcraft_doc::live::{BlendOrientation, BlendSpacing};
     use vectorcraft_engine::Session;

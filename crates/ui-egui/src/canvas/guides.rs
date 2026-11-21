@@ -6,14 +6,15 @@ use super::grid::pref_color;
 use super::{Color32, Ui, VectorcraftApp};
 use crate::doc_windows::Win;
 use crate::theme::Tokens;
-// PLAN: assumed crate paths `craft_ui_canvas::{canvas, canvas_controls::Guides}`, `contract::Bind`,
+// PLAN: assumed crate paths `craft::ui::{canvas, canvas_controls::Guides}`, `contract::Bind`,
 // `Show`; `super::{BodyKind, canvas_id}` (canvas-w10).
 use super::BodyKind;
 use craft::behavior::Axis;
 use craft::theme::Rgba;
-use craft_ui_canvas::canvas::{CanvasSpace, Guide, GuideDrag, GuideKey, GuideLine};
-use craft_ui_canvas::canvas_controls::Guides;
-use craft_ui_canvas::contract::{Bind, Show as _};
+use craft::ui::canvas::{CanvasSpace, GuideDrag, GuideKey, GuideLine};
+use craft::color_ui::harmony::Guide;
+use craft::ui::canvas_controls::Guides;
+use craft::ui::contract::{Bind, Show as _};
 
 /// The guides of one document as shown: the guides, the selected keys and the key guide (Align to
 /// Key Object). `None` while guides are hidden (Hide Guides, Trim View) or presenting.

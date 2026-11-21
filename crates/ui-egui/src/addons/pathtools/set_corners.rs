@@ -3,8 +3,8 @@
 //! previews on the canvas and runs `addon.pathtools.cornerSet` on OK, one undo step. It opens on
 //! the Corner Tool's radius and kind, every corner angle (0° to 180°).
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::env::UnitKind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 use vectorcraft_tools::addons::corner_tool::{ID, MAX_RADIUS, RADIUS};
 

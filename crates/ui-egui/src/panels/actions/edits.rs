@@ -4,8 +4,8 @@
 
 use craft::automation::actions::{Action, ActionList, ActionListError, ActionStep};
 use craft::automation::ui::actions::{ActionSelection, ActionsWords, LibraryPrompt};
-use craft_ui::runtime::words::CommonWords;
-use craft_ui_panels::dialog::{DialogResult, PromptChoice, StandardPrompt};
+use craft::ui::runtime::words::CommonWords;
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
 use serde_json::{Value, json};
 
 use super::model;

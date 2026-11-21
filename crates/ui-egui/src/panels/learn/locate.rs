@@ -6,7 +6,7 @@
 //! tool themselves ([`wanted`], [`take_reveal`]); it lasts [`LIFETIME`] seconds after the first
 //! pass that follows, until Escape, or until the next locate replaces it.
 
-use craft_ui::runtime::keys::{self, Intent};
+use craft::ui::runtime::keys::{self, Intent};
 use egui::Context;
 use serde_json::{Value, json};
 

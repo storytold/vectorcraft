@@ -1,8 +1,8 @@
 //! Headless frames of the Appearance panel and the panels that follow its active item.
 
-use craft_ui_panels::dialog::{DialogId, PromptChoice, StandardPrompt};
+use craft::ui::dialog::{DialogId, PromptChoice, StandardPrompt};
 // PLAN: assumed path of the hosted dialog type (`craft-ui-patterns` is not a dependency of this crate in the tree yet)
-use craft_ui_patterns::patterns::form_dialogs::HostedParamDialog;
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::Session;

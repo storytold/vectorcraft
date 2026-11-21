@@ -3,12 +3,12 @@
 //! `addon.pathtools.shape.set`; with no shape selected, the same fields set the Parametric Shape
 //! Tool's next shape (`tool.setOption`). Convert turns selected plain shapes into parametric ones.
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, Sizing, clicked};
-use craft_ui::display::{Divider, Text};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::env::UnitKind;
-use craft_ui::text::NumberField;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, Sizing, clicked};
+use craft::ui::display::{Divider, Text};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;

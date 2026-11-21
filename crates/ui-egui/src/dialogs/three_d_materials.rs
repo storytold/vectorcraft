@@ -9,17 +9,18 @@
 use std::borrow::Cow;
 use std::sync::{Arc, RwLock};
 
-use craft::behavior::{CollectionEvent, keyed};
-use craft_ui::buttons::Button;
-use craft_ui::contract::{ActivateOn, Bind, Show as _, ShowCollection as _, ShowContainer as _, clicked};
-use craft_ui::display::{Shade, Text};
-use craft_ui::layout_components::Stack;
-use craft_ui::sections::DropAction;
-use craft_ui::tile_grid::{Tile, TileGrid};
-// PLAN: assumed `craft_ui::form_dialogs` re-exports these form-dialog items.
-use craft_ui::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamRows};
-use craft_ui::list::ThumbAspect;
-use craft_ui::docking::PanelDrag;
+use craft::ui::contract::CollectionEvent;
+use craft::behavior::keyed;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{ActivateOn, Bind, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Stack;
+use craft::ui::sections::DropAction;
+use craft::ui::tile_grid::{Tile, TileGrid};
+// PLAN: assumed `craft::ui::form_dialogs` re-exports these form-dialog items.
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamRows};
+use craft::ui::list::ThumbAspect;
+use craft::ui::docking::PanelDrag;
 use egui::{Response, Ui};
 use serde_json::{Value, json};
 use vectorcraft_effects::{GRAPHICS, INFLATE, MappedGraphic, PlanarFace, REVOLVE, ROTATE};

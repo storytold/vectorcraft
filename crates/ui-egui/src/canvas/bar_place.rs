@@ -1,6 +1,6 @@
 //! Where a bar the user moved sits, held with the document and the kind of place the move was made in.
 
-use craft_ui::canvas_controls::TaskBarPlace;
+use craft::ui::canvas_controls::TaskBarPlace;
 
 /// A [`TaskBarPlace`] with the key of the place it was made in: the document and, for the Quick Pen bar,
 /// whether a path is being drawn. A drag's offset holds only there, so one made beside the drawing does not

@@ -7,10 +7,10 @@
 //! Objects boxes it was last confirmed with, so Enter, Enter repeats a move or a copy at the same
 //! spacing.
 
-use craft_ui::contract::Bind;
-use craft_ui::dialog::DialogId; // PLAN: assumed path of `DialogId` in the craft_ui facade
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::memory::SaveKey;
+use craft::ui::contract::Bind;
+use craft::ui::dialog::DialogId; // PLAN: assumed path of `DialogId` in the craft_ui facade
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::memory::SaveKey;
 use serde_json::{Map, Value, json};
 
 use super::form::{LivePreview, fields_of, grid_params}; // PLAN: assumed `LivePreview` (wg.A20) lives in `dialogs/form.rs`

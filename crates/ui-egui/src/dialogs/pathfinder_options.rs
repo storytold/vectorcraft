@@ -5,9 +5,9 @@
 //! Fields: `precision` (pt, 0.001–10), `removeRedundantPoints` and `removeUnpainted`.
 
 // PLAN: the framework import paths are assumed as in `path_ops`.
-use craft_ui_patterns::contract::Bind;
-use craft_ui_patterns::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui_patterns::runtime::env::UnitKind;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Map, Value, json};
 
 use super::form;
@@ -41,7 +41,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let dialog = HostedParamDialog::new(&ctx, KEY, form::fields_of(&params(), &current), |f| {
         ParamDialog::new(KEY, tl!("Pathfinder Options"), params()).values(Bind::bound(f))
     });
-    let ok = |app: &mut VectorcraftApp, result: &craft_ui_patterns::patterns::form_dialogs::ParamResult| {
+    let ok = |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
         app.run(KEY, Value::Object(form::json_of(&params(), &result.fields))).map(drop)
     };
     if open_held(app, dialog, ok).is_none() {

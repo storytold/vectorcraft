@@ -1,4 +1,5 @@
-use craft_ui::canvas::{CanvasView, NavigationOptions, ViewRequest, ZoomScheme};
+use craft::behavior::{CanvasView, ZoomScheme};
+use craft::ui::canvas::{NavigationOptions, ViewRequest};
 use vectorcraft_engine::Prefs;
 
 use super::{Value, VectorcraftApp, View, ViewInfo, panels};

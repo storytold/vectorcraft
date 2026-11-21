@@ -11,18 +11,19 @@ use craft::behavior::geometry::BoxState;
 use craft::draw::ui::transform::{
     FieldArrangement, SizeUnit, TransformField, TransformFields, TransformFieldsOutput, TransformGroups, TransformRow, TransformSource,
 };
-use craft_keymap::CommandRef;
-use craft_ui::buttons::{IconButton, Link};
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Entry, Mixed, Props, Show, ShowContainer, SideLabel};
-use craft_ui::display::{Shade, Text};
-use craft_ui::form::Field;
-use craft_ui::layout_components::Row;
-use craft_ui::menu::PanelRow;
-use craft_ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
-use craft_ui::popover::Popover;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::text::{NumberField, NumberOutput, NumberPick, StepArrows};
+use craft::keymap::CommandRef;
+use craft::ui::buttons::{IconButton, Link};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, Props, Show, ShowContainer, SideLabel};
+use craft::behavior::Mixed;
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::popover::Popover;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::text::{NumberField, NumberOutput, NumberPick, StepArrows};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, Node, NodeKind, OrientedBox};
@@ -32,7 +33,7 @@ use super::first_selected;
 use crate::caches::PixelAligned;
 use crate::VectorcraftApp;
 // PLAN: assumed `crate::edits::{EditPath, apply_edits, apply_event}` (wg.A16), `crate::fields::stops_stepper` (wg.S8),
-// `crate::canvas::rulers::general_rulers` / `general_lengths` (cv.B5b/B5c), `craft_ui::display::Shade`,
+// `crate::canvas::rulers::general_rulers` / `general_lengths` (cv.B5b/B5c), `craft::ui::display::Shade`,
 // `craft::behavior::{IconId, geometry::BoxState}` and `craft::draw::ui::transform::FieldArrangement` (op.F12).
 use crate::canvas::rulers::{general_lengths, general_rulers};
 use crate::edits::{EditPath, apply_edits, apply_event};

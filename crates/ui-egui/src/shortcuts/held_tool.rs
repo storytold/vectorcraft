@@ -2,7 +2,7 @@
 //! Temporarily, `holdToolKeys`): the tool it chose stays until the key is let go, and then the tool
 //! active before comes back. A quick press chooses the tool for good.
 
-use craft_ui_contract::runtime::commands::{FirePhase, Fired};
+use craft::ui::runtime::commands::{FirePhase, Fired};
 
 use super::VectorcraftApp;
 

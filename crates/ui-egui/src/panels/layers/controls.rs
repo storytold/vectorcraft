@@ -1,11 +1,12 @@
 use craft::behavior::IconId;
-use craft_keymap::Mods;
-use craft::layers::ui::{LayerRowKey, MenuTarget}; // PLAN: assumed path of craft-layers' panel types
-use craft_ui::contract::{Entry, ListDrag};
-use craft_ui::menu::{MenuRow, PanelRow};
-use craft_ui::primitives::IconSpec;
-use craft_ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft_ui::sections::{FooterAction, FooterBar};
+use craft::keymap::Mods;
+use craft::layers::ui::tree::LayerRowKey;
+use craft::layers::ui::panel::MenuTarget; // PLAN: assumed path of craft-layers' panel types
+use craft::ui::contract::{Entry, ListDrag};
+use craft::ui::menu::{MenuRow, PanelRow};
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::sections::{FooterAction, FooterBar};
 use vectorcraft_engine::LayersReveal;
 
 // PLAN: assumed document-panels-w7's `model` exports `DocLayers` (accessors used here: `doc() -> &Arc<Document>`,

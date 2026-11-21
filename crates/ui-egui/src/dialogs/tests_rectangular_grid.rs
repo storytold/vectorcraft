@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use craft_ui::dialog::{HeldOk, dialog_id};
+use craft::ui::dialog::{HeldOk, dialog_id};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind};
 use vectorcraft_engine::{Session, ViewInfo};

@@ -1,6 +1,6 @@
 //! Export As → DXF Options, and DWG listed as unavailable, drawn headlessly.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use serde_json::json;
 
 // PLAN: assumed `fields(&app)` returns the values of the top hosted dialog (export-w9's helpers).

@@ -6,7 +6,7 @@
 //! The rail places and dismisses the card ([`ToolTips`]); this module only says which tools have
 //! one and draws it.
 
-use craft_ui::rails::ToolTips;
+use craft::ui::rails::ToolTips;
 use egui::{RichText, Sense, Ui, vec2};
 use vectorcraft_tools::ToolInfo;
 use vectorcraft_tools::catalog::tool_description;

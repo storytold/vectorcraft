@@ -895,7 +895,7 @@ fn paint_graphic(cx: &ContentPainterCx<'_>, rect: Rect, key: &(String, String), 
 /// pixel when it does not decode.
 fn thumbnail_image(png: &str, px: u32) -> ColorImage {
     vectorcraft_format::base64_decode(png)
-        .and_then(|png| craft::image_codecs::decode_as(craft::image_codecs::Format::Png, &png).ok())
+        .and_then(|png| craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png).ok())
         .and_then(|img| image::RgbaImage::from_raw(img.width(), img.height(), img.to_rgba8()).map(image::DynamicImage::ImageRgba8))
         .map(|img| {
             let rgba = shrunk_thumbnail(img, px);

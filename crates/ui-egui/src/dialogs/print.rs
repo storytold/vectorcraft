@@ -19,11 +19,11 @@
 use std::sync::{Arc, LazyLock, mpsc};
 
 use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
-use craft_ui::behavior::{Anchor9, EditEvent, EditEvents, Mixed};
-use craft_ui::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
-use craft_ui::presets::{NamedPresetEvent, PresetRow};
-use craft_ui::units::{LengthUnits, UnitKind};
-use craft_ui::widgets::{LinkMode, LinkedFields, ReferencePoint, ReferencePointLook};
+use craft::ui::behavior::{Anchor9, EditEvent, EditEvents, Mixed};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
+use craft::ui::patterns::presets::{NamedPresetEvent, PresetRow};
+use craft::ui::runtime::env::units::{LengthUnits, UnitKind};
+use craft::ui::runtime::egui::widgets::{LinkMode, LinkedFields, ReferencePoint, ReferencePointLook};
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms::Intent;
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
@@ -86,7 +86,7 @@ pub(crate) struct PrintDialogs {
 /// What the pump keeps of the open dialog: what the answer needs after the framework has answered, and the
 /// texture and preview the dialog shows until the document or the settings change.
 struct Open {
-    id: craft_ui::dialogs::DialogId,
+    id: craft::ui::dialogs::DialogId,
     mode: PrintMode,
     /// The preset the settings were loaded from last (the Print Preset row's selection).
     preset: String,
@@ -248,12 +248,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 }
 
 /// Run `f` on the open dialog.
-fn on<R>(dialogs: &craft_ui::dialogs::WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Option<R> {
+fn on<R>(dialogs: &craft::ui::dialogs::WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Option<R> {
     dialogs.with(|h| h.get_mut::<HostedPrint>().map(f))
 }
 
 /// One pass of the pump over the open dialog; false once it has closed.
-fn serve(app: &mut VectorcraftApp, dialogs: &craft_ui::dialogs::WindowDialogs, open: &mut Open) -> bool {
+fn serve(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::WindowDialogs, open: &mut Open) -> bool {
     let Some(mut d) = on(dialogs, |p| Drained {
         refresh: p.take_refresh(),
         setup: p.take_setup(),
@@ -337,7 +337,7 @@ fn serve(app: &mut VectorcraftApp, dialogs: &craft_ui::dialogs::WindowDialogs, o
 }
 
 /// A preset the Print Preset row picked or named.
-fn apply_preset_event(app: &mut VectorcraftApp, dialogs: &craft_ui::dialogs::WindowDialogs, open: &mut Open, settings: &mut Value, event: NamedPresetEvent<String>) {
+fn apply_preset_event(app: &mut VectorcraftApp, dialogs: &craft::ui::dialogs::WindowDialogs, open: &mut Open, settings: &mut Value, event: NamedPresetEvent<String>) {
     match event {
         NamedPresetEvent::Apply(key) => {
             let loaded = app
@@ -739,7 +739,7 @@ fn marks_and_bleed() -> Vec<Param> {
 
 /// The Document Ink table: every ink of the document (the pump writes them into `__inks` from the preview), the spot
 /// inks printing as process included. Nothing but a note unless the output is separations and there are inks.
-fn ink_table(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft_ui::form_dialogs::CustomContext) -> egui::Response {
+fn ink_table(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft::ui::patterns::form_dialogs::CustomContext) -> egui::Response {
     let inks = match fields.get("__inks") {
         Some(FieldValue::Json(v)) => v.as_array().cloned().unwrap_or_default(),
         _ => Vec::new(),

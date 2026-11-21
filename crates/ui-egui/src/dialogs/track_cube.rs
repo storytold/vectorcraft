@@ -3,13 +3,13 @@
 
 // PLAN: assumed the app depends on craft-behavior and craft-ui-patterns (hub-w2 owns Cargo.toml).
 use craft::behavior::{CursorIcon, CursorPriority, Metrics as _, Mixed, PartKey, PointerButton, PressPhase, Sense};
-use craft_ui::contract::{
+use craft::ui::contract::{
     Access, Bind, BindMut, Common, Component, Cx, DisabledLook, Edit as _, EditResponse, Focus as _, Input, MeasureCx, Name, PaintUi, PartsCx,
     Pointer as _, Props as _, Remember as _, Role, Show as _,
 };
-use craft_ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
-use craft_ui::style::StyleCx;
-use craft_ui_patterns::patterns::form_dialogs::Param;
+use craft::ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
+use craft::ui::style::StyleCx;
+use craft::ui::patterns::form_dialogs::Param;
 use egui::{Color32, Pos2, Rect, Stroke, Vec2, vec2};
 use serde_json::json;
 
@@ -243,7 +243,7 @@ fn dragged(drag: &mut CubeDrag, p: Pos2, center: Pos2, shift: bool, near: [f64; 
 /// - Keyboard: one Tab stop; the arrows turn the cube about the screen's axes and Page Up and Page Down in the screen
 ///   plane, 1° a press (15° with Shift), every press of a pass in turn.
 /// - AccessKit: a `Slider` named by the label with the three angles as its value text.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(content_painter)]
 pub(crate) struct TrackCube<'a> {
     #[common]
@@ -255,7 +255,7 @@ pub(crate) struct TrackCube<'a> {
 
 impl<'a> TrackCube<'a> {
     /// A cube named `label` showing `angles`.
-    pub(crate) fn new(label: impl Into<craft_ui::runtime::env::Label>, angles: Bind<'a, [Mixed<f64>; 3]>) -> Self {
+    pub(crate) fn new(label: impl Into<craft::ui::runtime::env::Label>, angles: Bind<'a, [Mixed<f64>; 3]>) -> Self {
         TrackCube { common: Common::new(), angles, active: None }.label(label)
     }
 }

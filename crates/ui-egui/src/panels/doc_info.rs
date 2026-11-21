@@ -3,14 +3,14 @@
 //! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
-use craft_keymap::CommandRef;
-use craft_ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft_ui::display::{Divider, Elide, Shade, Text};
-use craft_ui::layout::RowAlign;
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::menu::PanelRow;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::style::TypeRole;
+use craft::keymap::CommandRef;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Elide, Shade, Text};
+use craft::ui::layout::RowAlign;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::style::TypeRole;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::CATEGORIES;

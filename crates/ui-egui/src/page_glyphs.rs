@@ -1,7 +1,7 @@
 //! Glyphs drawn in code for the page-orientation and artboard-layout toggles.
 
-use craft_ui::primitives::Glyph;
-use craft_ui::style::UiTokens;
+use craft::ui::primitives::Glyph;
+use craft::ui::style::UiTokens;
 use egui::{Painter, Pos2, Rect, Shape, Stroke, vec2};
 
 /// A portrait or landscape sheet with a folded corner. The selected look is the button's own.

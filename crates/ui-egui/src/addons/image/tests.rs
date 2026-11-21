@@ -227,7 +227,7 @@ fn properties_and_the_control_bar_remove_the_background_at_once() {
     let n = steps(&app);
     // PLAN: assumed `Fixture::by_label(&str) -> Option<_>` and `Fixture::click_label(&str)` over the shell frame
     // (`ui_context()`, sh.SH4), as chrome-w19 and files-w15 use them for the Properties panel and the Control bar.
-    let mut fixture = craft_ui::testing::Fixture::shell(&mut app, &crate::ui_context());
+    let mut fixture = craft::ui::testing::Fixture::shell(&mut app, &crate::ui_context());
     assert!(fixture.by_label("Remove Background").is_some(), "Properties offers it");
     fixture.click_label("Remove Background");
     assert!(closed(&app), "it runs at once");

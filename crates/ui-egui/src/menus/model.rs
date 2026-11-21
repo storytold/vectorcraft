@@ -8,7 +8,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
 
 use craft::keymap::{CommandDef, CommandRef, Mods, Scope};
-use craft::menu::{Alternate, Item, Labeled, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, layout};
+use craft::ui::menu::Alternate;
+use craft::menu::{Item, Labeled, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, layout};
 use craft::tracked::Tracked;
 use craft::ui::runtime::commands::{AppCatalog, CommandGate, CommandInput, CommandState, CommandStates};
 use craft::ui::runtime::windows::WindowHost;

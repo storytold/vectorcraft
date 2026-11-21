@@ -1,5 +1,5 @@
-use craft::layers::ui::{LayerThumb, LayerThumbKind}; // PLAN: assumed path of craft-layers' thumbnail key
-use craft_ui::primitives::textures::{LoadFailure, LoadedPicture, Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::layers::ui::thumbs::{LayerThumb, LayerThumbKind}; // PLAN: assumed path of craft-layers' thumbnail key
+use craft::ui::primitives::textures::{LoadFailure, LoadedPicture, Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 use vectorcraft_doc::{NodeKind, TextKind};
 use vectorcraft_geom::PathData;
 

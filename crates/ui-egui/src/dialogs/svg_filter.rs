@@ -17,14 +17,15 @@
 //! `__item` and `missing` (the name of a deleted filter the effect names).
 
 use craft::host::{PickRequest, Picked};
-use craft_ui::buttons::Button;
-use craft_ui::contract::{ActivateOn, Bind, CollectionEvent, DisplayOrder, ItemSource, SelectMode, Selection, Show as _, ShowCollection as _, ShowContainer as _};
-use craft_ui::dialog::dialog_id;
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::list::{List, ListRow, RowInk};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamResult};
-use craft_ui::runtime::env::Label;
-use craft_ui::text::TextField;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, SelectMode, Selection, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::behavior::{DisplayOrder, ItemSource};
+use craft::ui::dialog::dialog_id;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::{List, ListRow, RowInk};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamResult};
+use craft::ui::runtime::env::Label;
+use craft::ui::text::TextField;
 use serde_json::{Value, json};
 use vectorcraft_effects::svg_filter::defaults::{DEFAULT_FILTERS, Listed, default_filter, listed};
 use vectorcraft_engine::doc::SvgFilter;
@@ -32,7 +33,7 @@ use vectorcraft_engine::doc::SvgFilter;
 use crate::file_asks::{self, Owner};
 use crate::menus::Node;
 use crate::VectorcraftApp;
-// PLAN: assumed the framework paths above (`craft_ui::contract` re-exporting the behavior types, `craft_ui::patterns::form_dialogs`) and `crate::menus::Node`.
+// PLAN: assumed the framework paths above (`craft::ui::contract` re-exporting the behavior types, `craft::ui::patterns::form_dialogs`) and `crate::menus::Node`.
 
 /// The dialog kind of Apply SVG Filter.
 pub const KIND: &str = "svgFilter";
@@ -152,7 +153,7 @@ fn pressed(ui: &mut egui::Ui, label: String, enabled: bool) -> bool {
 }
 
 /// The list and its buttons. A button sets `__action` for [`pump`], which has the app.
-fn list_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft_ui::patterns::form_dialogs::CustomContext) -> egui::Response {
+fn list_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::patterns::form_dialogs::CustomContext) -> egui::Response {
     let rows = Rows::of(fields);
     let (entries, _) = listed_entries(fields);
     let selected = text(fields, SELECTED);
@@ -211,7 +212,7 @@ fn list_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft_ui::pa
 }
 
 /// The code box with Save and Cancel, shown while a filter's code is open.
-fn code_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft_ui::patterns::form_dialogs::CustomContext) -> egui::Response {
+fn code_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::patterns::form_dialogs::CustomContext) -> egui::Response {
     if text(fields, EDITING).is_empty() {
         return ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
     }

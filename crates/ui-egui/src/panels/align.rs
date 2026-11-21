@@ -4,14 +4,14 @@
 //! tool has selected.
 
 use craft::behavior::IconId;
-use craft_keymap::CommandRef;
-use craft_ui::bars::{BarItem, BarItems};
-use craft_ui::buttons::{IconButton, PopupMark, ToggleButton};
-use craft_ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
-use craft_ui::menu::{Menu, MenuItem, PanelRow};
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::sections::{HeaderStrength, Section};
-use craft_ui::text::NumberField;
+use craft::keymap::CommandRef;
+use craft::ui::bars::{BarItem, BarItems};
+use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
+use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::sections::{HeaderStrength, Section};
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde::Serialize;
 use serde_json::{Value, json};

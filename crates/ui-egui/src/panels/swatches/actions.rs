@@ -1,7 +1,7 @@
-use craft_keymap::{CommandRef, Mods};
-use craft_ui::commands::{CommandState, CommandStates};
-use craft_ui::menu::PanelRow;
-use craft_ui::panels::prompts::StandardPrompt;
+use craft::keymap::{CommandRef, Mods};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::panels::prompts::StandardPrompt;
 use serde_json::{Value, json};
 
 use super::dnd::group_of;

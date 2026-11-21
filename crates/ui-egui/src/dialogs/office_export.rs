@@ -1,9 +1,9 @@
 //! File → Save for Office Documents…: an artboard as a PNG for office documents and slides, at
 //! 72, 150 or 300 ppi, on white or transparent. Fields are `document.exportForOffice` params.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use super::export_host::{self, After, Export, Open};

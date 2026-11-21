@@ -15,7 +15,7 @@
 //! in a browser the end changes when the pen presses: a press of the eraser end selects the Eraser
 //! before that press, and a press of the tip selects the tool used before.
 
-use craft_ui::runtime::pen::PenSource;
+use craft::ui::runtime::pen::PenSource;
 
 use crate::VectorcraftApp;
 

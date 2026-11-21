@@ -1,6 +1,6 @@
-use craft_automation::screenshot::{DocumentId, Finished, settle_ms};
-use craft_ui::runtime::motion;
-use craft_ui::runtime::windows::WindowHost;
+use craft::automation::screenshot::{DocumentId, Finished, settle_ms};
+use craft::ui::runtime::motion;
+use craft::ui::runtime::windows::WindowHost;
 use serde_json::json;
 use vectorcraft_engine::file_access::AutomationRoots;
 

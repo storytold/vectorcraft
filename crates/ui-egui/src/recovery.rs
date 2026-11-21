@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use craft_ui::dialog::{DialogResult, RecoveredDocument, RecoveryAnswer, RecoveryDialog, StartupStage};
+use craft::ui::dialog::{DialogResult, RecoveredDocument, RecoveryAnswer, RecoveryDialog, StartupStage};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::recovery::{self, RecoveryStore};
 

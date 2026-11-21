@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use craft::behavior::overlay::Side;
 use craft::i18n::Direction;
-use craft_ui_contract::testing::Fixture;
+use craft::ui::testing::Fixture;
 use egui::{Pos2, Rect, pos2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};

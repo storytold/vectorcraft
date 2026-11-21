@@ -8,7 +8,7 @@ use vectorcraft_engine::Session;
 
 use std::{cell::{RefCell, RefMut}, rc::Rc};
 
-use craft_ui::testing::{Fixture, Target};
+use craft::ui::testing::{Fixture, Target};
 
 use super::super::{effect, three_d};
 use crate::VectorcraftApp;
@@ -53,7 +53,7 @@ impl ThreeD {
         self.fixture.settle();
     }
 
-    fn fields(&self) -> craft_ui_patterns::form_dialogs::DialogFields {
+    fn fields(&self) -> craft::ui::patterns::form_dialogs::DialogFields {
         // PLAN: assumed `DialogFields: Clone`
         three_d::with_fields(&mut self.app(), |d| d.fields().clone())
     }
@@ -395,7 +395,7 @@ fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
 #[test]
 fn the_track_cube_is_off_while_a_rotation_is_mixed() {
     use std::{cell::RefCell, rc::Rc};
-    let fields = Rc::new(RefCell::new(craft_ui_patterns::form_dialogs::DialogFields::from_pairs([
+    let fields = Rc::new(RefCell::new(craft::ui::patterns::form_dialogs::DialogFields::from_pairs([
         ("rotationX", 0.0),
         ("rotationY", 10.0),
         ("rotationZ", 0.0),
@@ -404,8 +404,8 @@ fn the_track_cube_is_off_while_a_rotation_is_mixed() {
     let shown = fields.clone();
     let params = [super::super::three_d_classic::track_cube::row()];
     // PLAN: assumed `ParamRows::new(label, &[Param], Bind<DialogFields>)` and `Bind::new(&mut T)`
-    let mut fixture = craft_ui::testing::Fixture::new(move |ui| {
-        craft_ui_patterns::form_dialogs::ParamRows::new("Rotation", &params, craft_ui::Bind::new(&mut shown.borrow_mut())).show(ui);
+    let mut fixture = craft::ui::testing::Fixture::new(move |ui| {
+        craft::ui::patterns::form_dialogs::ParamRows::new("Rotation", &params, craft::ui::contract::Bind::new(&mut shown.borrow_mut())).show(ui);
     });
     fixture.settle();
     let cube = fixture.by_label("Track cube").expect("the cube is shown");

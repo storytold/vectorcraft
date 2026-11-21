@@ -6,11 +6,12 @@ use craft::behavior::geometry::quad::BoxState;
 use craft::behavior::kurbo::{Point, Rect};
 use craft::behavior::{Input, Metrics};
 use craft::draw::ui::corner::{CornerPoint, CornerTarget};
-use craft::draw::ui::{CornerKind, CornerWidgets, TransformBox, TransformReach};
-use craft_ui::canvas::canvas_space;
-use craft_ui::contract::{Access, Bind, Common, Component, Cx, MeasureCx, PaintUi, Props as _, Role, Show as _};
-use craft_ui::primitives::{PaintShape, StrokeColor, StrokeWidth};
-use craft_ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
+use craft::draw::ui::{CornerKind, CornerWidgets, TransformBox};
+use craft::draw::ui::transform::TransformReach;
+use craft::ui::canvas::canvas_space;
+use craft::ui::contract::{Access, Bind, Common, Component, Cx, MeasureCx, PaintUi, Props as _, Role, Show as _};
+use craft::ui::primitives::{PaintShape, StrokeColor, StrokeWidth};
+use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
 use egui::{Color32, Pos2, Response, vec2};
 use vectorcraft_doc::{Document, LiveCorners, LiveShape, NodeId, NodeKind, OrientedBox};
 use vectorcraft_geom::shapes::CornerKind as DocCornerKind;
@@ -209,7 +210,7 @@ impl Mark {
 }
 
 /// The type, side, pie, blend and Objects on Path widgets, drawn as one paint-only canvas control.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(canvas_control)]
 pub struct ShapeWidgets {
     #[common]
@@ -345,7 +346,7 @@ impl Component for ShapeWidgets {
 /// Live Corners, type, side and pie widgets need View › Show Edges; the blend and Objects on Path widgets do not.
 /// Nothing here is shown while a revolve is edited.
 // PLAN: `win` is unused: assumed it names the canvas window of the pass, and only a `Live` body shows these.
-pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft_ui::canvas::CanvasSpace, _win: Win, kind: BodyKind) {
+pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft::ui::canvas::CanvasSpace, _win: Win, kind: BodyKind) {
     if kind != BodyKind::Live || revolve_editing(app) {
         return;
     }

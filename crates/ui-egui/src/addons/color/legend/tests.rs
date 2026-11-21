@@ -1,4 +1,4 @@
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use serde_json::json;
 
 /// The names of the swatches chosen in the Swatches panel are sent only with Selected Swatches Only, and only when

@@ -1,8 +1,8 @@
 //! The rows of an effect's dialog: [`effect_params`] dispatches to the effect's own builder or to
 //! [`generic`], and the tables of the values the rows pick from live here.
 
-use craft_ui_patterns::patterns::form_dialogs::{DialogFields, Param, ParamKind};
-use craft_ui_patterns::runtime::{LengthUnits, UnitKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamKind};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value};
 use vectorcraft_color::Color;
 
@@ -122,7 +122,7 @@ fn generic_row(cx: &EffectCx, key: &str, default: &Value, relative: bool) -> Opt
     let label = label.trim_end_matches(':').to_string();
     let options = || {
         own_choices(id, key, cx.cmyk)
-            .map(|own| own.into_iter().map(|(label, value)| (value.to_string(), label.into())).collect::<Vec<(String, craft_ui_patterns::runtime::words::Label)>>())
+            .map(|own| own.into_iter().map(|(label, value)| (value.to_string(), label.into())).collect::<Vec<(String, craft::ui::runtime::env::Label)>>())
             .or_else(|| {
                 choices(id, key).map(|list| list.iter().map(|(label, value)| (value.to_string(), form::choice_label(label).into())).collect())
             })

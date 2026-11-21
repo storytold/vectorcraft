@@ -5,7 +5,7 @@
 //! for the folder the copies go in ([`export_all`], #4920). Batch Trace Folder asks for the folder of
 //! images and then the folder the results go in ([`batch_trace`], #4921).
 
-// PLAN: assumed `craft_host::files::{PickRequest, Picked}` as the import path of the picker types.
+// PLAN: assumed `craft::host::files::{PickRequest, Picked}` as the import path of the picker types.
 use craft::host::files::{PickRequest, Picked};
 use craft::menu::Node;
 use serde_json::{Value, json};

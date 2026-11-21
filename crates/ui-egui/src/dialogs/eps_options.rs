@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Show as _, TooltipSpec};
-use craft_ui::dialog::DialogId;
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::patterns::presets::PresetRow;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Show as _, TooltipSpec};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::presets::PresetRow;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset, fileio};
 use vectorcraft_eps::{Level, Overprint, Preview};

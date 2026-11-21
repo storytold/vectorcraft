@@ -52,7 +52,7 @@ mod entries;
 mod invoke;
 mod labels;
 pub(crate) mod model;
-mod native;
+pub(crate) mod native;
 mod run;
 pub(crate) use run::TRIM_VIEW_HIDES;
 mod slots;

@@ -6,22 +6,22 @@
 use std::sync::LazyLock;
 
 use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSections};
-use craft_keymap::CommandRef;
-use craft_ui::buttons::IconButton;
-use craft_ui::choice::Segmented;
-use craft_ui::contract::{Bind, Entry, SideLabel, TooltipSpec};
-use craft_ui::form::Field;
-use craft_ui::menu::PanelRow;
-use craft_ui::pickers::Select;
-use craft_ui::popover::Popover;
-use craft_ui::primitives::{
+use craft::keymap::CommandRef;
+use craft::ui::buttons::IconButton;
+use craft::ui::choice::Segmented;
+use craft::ui::contract::{Bind, Entry, SideLabel, TooltipSpec};
+use craft::ui::form::Field;
+use craft::ui::menu::PanelRow;
+use craft::ui::pickers::Select;
+use craft::ui::popover::Popover;
+use craft::ui::primitives::{
     ContentPainterCx, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, Thumbnails, ThumbnailOptions,
 };
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
-use craft_ui::style::DataColor;
-use craft_ui::text::linked::{LinkMode, LinkedFields};
-use craft_ui::text::number::{NumberField, NumberOutput, NumberPick, StepArrows};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::style::DataColor;
+use craft::ui::text::linked::{LinkMode, LinkedFields};
+use craft::ui::text::number::{NumberField, NumberOutput, NumberPick, StepArrows};
 use egui::{Rect, Ui, pos2};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -510,13 +510,13 @@ impl ThumbSource<(String, bool)> for ArrowSource<'_> {
 
 /// Draws an arrowhead preview (the head as the canvas draws it) in `rect`: a line with the head at the left (`start`)
 /// or right end, in the ink of the surface.
-// PLAN: assumed `Priority` in `craft_ui::runtime::jobs`, `ThumbnailOptions: Default`.
+// PLAN: assumed `Priority` in `craft::ui::runtime::jobs`, `ThumbnailOptions: Default`.
 pub(crate) fn arrow_thumb(cx: &ContentPainterCx, rect: Rect, arrow: Option<&Arrowhead>, start: bool) {
     let ctx = cx.painter.ctx().clone();
     let thumbs = Thumbnails::<(String, bool)>::in_context(&ctx, "stroke-arrows", ThumbnailOptions::default());
     let key = (arrow_key(arrow), start);
     let request = ThumbRequest::for_cell(rect.width().max(rect.height()), cx.pixels_per_point());
-    let state = thumbs.state(&ctx, &ArrowSource(arrow), &key, &request, craft_ui::runtime::jobs::Priority::VISIBLE);
+    let state = thumbs.state(&ctx, &ArrowSource(arrow), &key, &request, craft::host::jobs::Priority::VISIBLE);
     thumbs.paint(cx, rect, &state, &ThumbPaint::default().checker(false).tint(DataColor::new(cx.ink())));
 }
 

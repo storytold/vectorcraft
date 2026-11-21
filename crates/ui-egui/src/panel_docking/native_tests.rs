@@ -131,7 +131,7 @@ impl Harness {
         };
         let mut input = egui::RawInput { time: Some(time), events, screen_rect: Some(SCREEN), viewports, focused, ..Default::default() };
         // PLAN: assumed `embed::before_input(ctx, &mut input, &mut app.frame_input)` (hub-w1 M7; shell A1).
-        craft_ui::runtime::embed::before_input(&self.ctx, &mut input, &mut self.app.frame_input);
+        craft::ui::shell::embed::before_input(&self.ctx, &mut input, &mut self.app.frame_input);
         let app = &mut self.app;
         let mut full = self.ctx.run_ui(input, |ui| {
             app.logic(ui.ctx());
@@ -151,7 +151,7 @@ impl Harness {
     fn viewport(&self, panel: &str) -> ViewportId {
         let layout = layout_of(&self.app.ui);
         let window = floating_window(layout, panel).expect("the panel floats");
-        craft_ui::docking::DockArea::<String>::window_viewport(area_id(), window.id)
+        craft::ui::patterns::dock::DockArea::<String>::window_viewport(area_id(), window.id)
     }
 
     /// Float `panel` into a native window and give that window the keyboard.

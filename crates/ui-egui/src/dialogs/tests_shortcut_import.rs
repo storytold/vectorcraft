@@ -25,7 +25,7 @@ fn frame(app: &mut VectorcraftApp) {
 /// The review the dialog shows: its set's name and each entry's item, line and target.
 // PLAN: assumed `DialogSnapshot::review: Option<ReviewSnapshot { name, entries: [{ item, line, target, .. }], .. }>` (kb.C16c request)
 #[allow(clippy::type_complexity)]
-fn review(app: &VectorcraftApp) -> Option<(String, Vec<(String, usize, Option<craft_keymap::CommandRef>)>)> {
+fn review(app: &VectorcraftApp) -> Option<(String, Vec<(String, usize, Option<craft::keymap::CommandRef>)>)> {
     let d = app.shortcuts_dialog.as_ref()?;
     let r = d.state.snapshot(&d.keymap)?.review?;
     Some((r.name, r.entries.into_iter().map(|e| (e.item, e.line, e.target)).collect()))
@@ -203,7 +203,7 @@ fn an_imported_function_key_goes_to_its_target() {
     });
     let (set, options) = foreign_set(&kys);
     let dialog = app.shortcuts_dialog.as_mut().unwrap();
-    let planned = craft_keymap::plan(&set, &dialog.keymap, &options);
+    let planned = craft::keymap::plan(&set, &dialog.keymap, &options);
     planned.apply(&mut dialog.keymap);
     let f2 = crate::keymap::vc_chord("F2").unwrap();
     assert_eq!(dialog.keymap.holder(&f2), Some(crate::keymap::command_of("edit.duplicate")));
@@ -212,7 +212,7 @@ fn an_imported_function_key_goes_to_its_target() {
 /// A name of 1,500 characters and 14 repeats of a label stay within what `plan` reads.
 #[test]
 fn long_names_stay_within_what_plan_reads() {
-    use craft_keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS};
+    use craft::keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS};
     let mut app = app();
     shortcut_editor::open(&mut app);
     let name = "Acme Copy ".repeat(150);
@@ -222,7 +222,7 @@ fn long_names_stay_within_what_plan_reads() {
     let path = &set.entries[0].path;
     assert!(path.len() <= MAX_PATH_SEGMENTS && path.iter().all(|s| s.chars().count() <= MAX_IMPORT_TEXT));
     let dialog = app.shortcuts_dialog.as_ref().unwrap();
-    let _ = craft_keymap::plan(&set, &dialog.keymap, &options);
+    let _ = craft::keymap::plan(&set, &dialog.keymap, &options);
 }
 
 /// A plug-in row picked as a target stores under its `plugin.dialog {id}` key and reads back under
@@ -243,7 +243,7 @@ fn an_imported_shortcut_reaches_a_filter_plugin_picked_as_its_target() {
     });
     let (set, options) = foreign_set(&kys);
     let dialog = app.shortcuts_dialog.as_mut().unwrap();
-    let planned = craft_keymap::plan(&set, &dialog.keymap, &options);
+    let planned = craft::keymap::plan(&set, &dialog.keymap, &options);
     planned.apply(&mut dialog.keymap);
     let saved = crate::keymap::stored::to_value(dialog.keymap.overrides());
     assert_eq!(saved, json!({ key.as_str(): "Cmd+Alt+Shift+F11" }), "not a binding of plugin.dialog without its id");

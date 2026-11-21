@@ -1,8 +1,9 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-// PLAN: assumed `craft_ui::contract::{EditEvent, Mixed, Preview}` re-export craft_behavior's value types
-use craft_ui::contract::{EditEvent, Mixed, Preview};
+// PLAN: assumed `craft::ui::contract::{EditEvent, Mixed, Preview}` re-export craft_behavior's value types
+use craft::behavior::{EditEvent, Mixed};
+use craft::ui::patterns::presets::Preview;
 
 use crate::VectorcraftApp;
 
@@ -233,7 +234,7 @@ fn the_recently_added_filter_finds_its_families_again_when_the_clock_goes_back()
 #[test]
 fn a_preview_size_asked_for_sets_the_preference_and_keeps_the_preview() {
     // PLAN: assumed `craft::font_manager::FontPreviewSize` is the picker's size enum
-    use craft::font_manager::FontPreviewSize;
+    use craft::font_manager::picker::FontPreviewSize;
     let owner = egui::Id::new("font-test");
     let mut app = app_with_type(&[]);
     let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Size", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();

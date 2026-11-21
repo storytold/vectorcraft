@@ -1,8 +1,8 @@
 use super::*;
 use crate::Services;
-// PLAN: assumed paths `craft_ui::patterns::preferences::{PageSpec, PreferencesModel}` and `craft_ui::dialog::PromptChoice`
-use craft_ui::dialog::PromptChoice;
-use craft_ui::patterns::preferences::{PageSpec, PreferencesModel};
+// PLAN: assumed paths `craft::ui::patterns::preferences::{PageSpec, PreferencesModel}` and `craft::ui::dialog::PromptChoice`
+use craft::ui::dialog::PromptChoice;
+use craft::ui::patterns::preferences::{PageSpec, PreferencesModel};
 use vectorcraft_engine::Session;
 
 fn app() -> VectorcraftApp {

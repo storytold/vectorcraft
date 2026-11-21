@@ -9,13 +9,16 @@ use craft::behavior::kurbo::{BezPath, Point, Rect, Size, Vec2};
 use craft::behavior::CanvasView;
 use craft::draw::ui::transform::{RotateZone, TransformBox};
 use craft::theme::Srgba;
-use craft_ui::canvas::Canvas;
-use craft_ui::contract::{Bind, Show as _, ShowContainer as _};
-use craft_ui::runtime::env::UnitKind;
-use craft_ui::style::DataColor;
-use craft_ui_canvas::{CanvasSpace, SelectionOutline};
-use craft_ui_patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
-use craft_ui_widgets::{Button, IconButton, NumberField, SliderScale};
+use craft::ui::canvas::Canvas;
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::style::DataColor;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::canvas_controls::SelectionOutline;
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::SliderScale;
 use egui::{Color32, Response, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
@@ -260,7 +263,7 @@ fn set_map_value(fields: &mut DialogFields, key: &str, value: Value) -> Result<(
 /// A step button of the surface navigator.
 fn step(ui: &mut Ui, icon: &'static str, tip: &'static str, enabled: bool) -> bool {
     // PLAN: assumed `IconId::new(&str)` and `IconButton::new(IconId)`; icons chevrons_left, chevron_left, chevron_right, chevrons_right.
-    IconButton::new(craft_ui::icons::IconId::new(icon)).label(tip).tooltip(tip).enabled(enabled).show(ui).clicked()
+    IconButton::new(craft::ui::icons::IconId::new(icon)).label(tip).tooltip(tip).enabled(enabled).show(ui).clicked()
 }
 
 /// The surface navigator: first, previous, the number, next, last, and "Hidden" for a surface the viewer cannot see.
@@ -368,7 +371,7 @@ fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
             let at = egui::Rect::from_two_pos(view.to_screen(state.quad[0]), view.to_screen(state.quad[2]));
             let art = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(w as f32, h as f32));
             // PLAN: assumed a content painter helper that hands `paint_symbol_art` its `ContentPainterCx`.
-            craft_ui::primitives::content_painter(ui, at, |cx| crate::panels::symbols::paint_symbol_art(cx, at, doc, &keys, &m.symbol, art));
+            craft::ui::primitives::content_painter(ui, at, |cx| crate::panels::symbols::paint_symbol_art(cx, at, doc, &keys, &m.symbol, art));
         }
         let rules = BoxRules::default().with_scale(ScaleRule::Free).with_aspect_linked(false).with_allow(BoxAllow::new(true, false, false));
         TransformBox::new(tl!("Art box"), Bind::bound(&mut state), rect, 0.0)

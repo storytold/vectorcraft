@@ -2,10 +2,10 @@
 //! Icons are Lucide's (ISC); Discord's own logo is a trademark, so the button uses a chat icon
 //! on Discord's colour with the word "Discord".
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Props, Show};
-use craft_ui::primitives::IconSpec;
-use craft_ui::style::{DataColor, Variant};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Props, Show};
+use craft::ui::primitives::IconSpec;
+use craft::ui::style::{DataColor, Variant};
 use craft::behavior::IconId;
 use egui::{Color32, Ui};
 

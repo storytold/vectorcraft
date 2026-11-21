@@ -12,13 +12,13 @@
 //! nothing.
 
 use craft::behavior::IconId;
-use craft_ui::buttons::{Button, IconButton};
-use craft_ui::choice::{Radio, RadioGroup, Swatch};
-use craft_ui::contract::{Bind, Show as _, ShowContainer as _};
-use craft_ui::dialog::DialogId;
-use craft_ui::layout_components::Stack;
-use craft_ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
-use craft_ui::text::HexField;
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::choice::{Radio, RadioGroup, Swatch};
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::dialog::DialogId;
+use craft::ui::layout_components::Stack;
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
+use craft::ui::text::HexField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
 use vectorcraft_cad::hpgl::{Origin, Version};
@@ -159,7 +159,7 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
     let n = pens.len();
     let mut remove = None;
     // PLAN: assumed `Stack::new().scroll(..).room_height(..)` builders and `show(ui, body)`.
-    Stack::new().scroll(craft_ui::contract::Scroll::vertical()).room_height(180.0).show(ui, |ui| {
+    Stack::new().scroll(craft::ui::contract::Scroll::vertical()).room_height(180.0).show(ui, |ui| {
         for (i, pen) in pens.iter_mut().enumerate() {
             ui.horizontal(|ui| {
                 ui.label((i + 1).to_string());

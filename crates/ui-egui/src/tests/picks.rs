@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 // PLAN: assumed ui-egui depends on craft-host, craft-ui-panels and craft-ui (hub-w1/hub-w2 add them).
 use craft::host::{Host, PickKind, Picked, ScriptedFiles};
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::requests::{PathKind, PathRequest};
-use craft_ui_panels::dialog::{DialogId, OpenDialog};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::requests::{PathKind, PathRequest};
+use craft::ui::dialog::{DialogId, OpenDialog};
 use egui::{Pos2, Rect, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;

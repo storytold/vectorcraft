@@ -14,7 +14,7 @@ use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit};
 use craft::theme::Srgba;
 use craft::ui::contract::Bind;
 use craft::ui::dialog::DialogId;
-use craft::ui::patterns::{CustomContext, DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_color::Color;

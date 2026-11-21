@@ -11,14 +11,14 @@
 //! its unit when Copy with Units is on.
 
 use craft::behavior::{IconId, NavShape};
-use craft_ui::buttons::{Button, IconButton};
-use craft_ui::choice::{Checkbox, Radio, RadioGroup};
-use craft_ui::contract::{Bind, Show as _, ShowContainer as _};
-use craft_ui::form::Field;
-use craft_ui::layout_components::Row;
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
-use craft_ui::sections::Section;
-use craft_ui::text::NumberField;
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::choice::{Checkbox, Radio, RadioGroup};
+use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::sections::Section;
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{Unit, finite_in_every_unit};

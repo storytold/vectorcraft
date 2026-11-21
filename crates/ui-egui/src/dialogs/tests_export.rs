@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use craft_ui::dialog::{DialogHost, DialogId};
+use craft::ui::dialog::{DialogHost, DialogId};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 

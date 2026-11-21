@@ -16,10 +16,10 @@
 //! Behaviour reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/adjust-word-and-letterspacing-in-justified-text.html>.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 // PLAN: assumed paths of `UnitKind` and `DialogId`
-use craft_ui::dialog::DialogId;
-use craft_ui::runtime::UnitKind;
+use craft::ui::dialog::DialogId;
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{JustificationOptions, SingleWordJustify};
 

@@ -16,9 +16,9 @@
 //! (`ObjectDialogs::flare`), not fields.
 
 // PLAN: the `craft_ui` paths and `LivePreview`'s home (`form`) are assumed; `general_lengths` is cv.B5b's.
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::extra::{FLARE_OPTIONS, flare_params};
@@ -28,7 +28,7 @@ use super::host::{HeldOptions, open_held_with};
 use super::tool_options;
 use crate::VectorcraftApp;
 use crate::canvas::general_lengths;
-use craft_ui::dialog::DialogId;
+use craft::ui::dialog::DialogId;
 
 /// The dialog kind of the Flare Tool Options.
 pub const KIND: &str = "flareOptions";

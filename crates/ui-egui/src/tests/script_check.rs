@@ -16,8 +16,8 @@ fn app() -> VectorcraftApp {
 
 /// One headless frame of the app's dialog host.
 fn frame(app: &VectorcraftApp) {
-    // PLAN: assumed `craft_ui::testing::ui_context()` gives a context that can run a frame
-    let ctx = craft_ui::testing::ui_context();
+    // PLAN: assumed `craft::ui::testing::ui_context()` gives a context that can run a frame
+    let ctx = craft::ui::testing::ui_context();
     let host = app.dialogs().expect("the app has a dialog host");
     let mut out = ctx.run_ui(Default::default(), |ui| host.with(|h| h.run(ui)));
     out.textures_delta.clear();
@@ -68,10 +68,10 @@ fn check_script_shows_the_report_and_copy_report_copies_it() {
     frame(&app);
     assert_eq!(groups(&app).len(), shown.len());
     // A script that does nothing has the name group only.
-    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&craft_ui::testing::ui_context(), d.id))));
+    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&craft::ui::testing::ui_context(), d.id))));
     menus::run_ui_command(&mut app, "ui.checkScript", &json!({"data": "var a = 1;", "name": "Clean.jsx"})).unwrap().unwrap();
     assert_eq!(groups(&app).len(), 1);
-    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&craft_ui::testing::ui_context(), d.id))));
+    app.dialogs().unwrap().with(|h| h.open_dialogs().iter().for_each(|d| assert!(h.cancel_by_id(&craft::ui::testing::ui_context(), d.id))));
     assert!(app.dialogs().unwrap().with(|h| h.open_dialogs().is_empty()), "Close closes it");
     // The script's text does as well as its bytes.
     let by_text = menus::run_ui_command(&mut app, "ui.checkScript", &json!({"data": SCRIPT, "name": "Tidy.jsx"})).unwrap().unwrap();

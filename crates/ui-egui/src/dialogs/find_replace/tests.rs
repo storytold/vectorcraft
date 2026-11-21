@@ -1,7 +1,7 @@
 // PLAN: assumed paths of the framework crates and of the op.A15 `Panel` test harness.
 use craft::text::ui::find::FindReplaceDialog;
-use craft_ui::dialog::DialogHost;
-use craft_ui::dialog::StackDialog;
+use craft::ui::dialog::DialogHost;
+use craft::ui::dialog::StackDialog;
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 
@@ -110,7 +110,7 @@ fn the_edit_menu_rows_open_their_dialogs() {
         (
             "Edit Custom Dictionary…",
             crate::dialogs::custom_dictionary::COMMAND,
-            |h| h.get::<craft_ui::patterns::form_dialogs::HostedListManager>().is_some(),
+            |h| h.get::<craft::ui::patterns::form_dialogs::HostedListManager>().is_some(),
         ),
     ];
     for (label, command, shown) in rows {

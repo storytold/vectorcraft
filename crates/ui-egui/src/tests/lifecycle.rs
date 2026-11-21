@@ -46,9 +46,9 @@ fn run_frame(
     between: impl FnOnce(&mut VectorcraftApp),
     rerun: bool,
 ) -> (usize, Option<egui::output::IMEOutput>) {
-    // PLAN: assumed `craft_ui_shell::embed::before_input` and `VectorcraftApp::frame_input(FrameOutput) -> FrameInput`
+    // PLAN: assumed `craft::ui::shell::embed::before_input` and `VectorcraftApp::frame_input(FrameOutput) -> FrameInput`
     // (sh.S7, hub-w1); the shell crate's name is not in the bundle.
-    craft_ui_shell::embed::before_input(ctx, |output| app.frame_input(output));
+    craft::ui::shell::embed::before_input(ctx, |output| app.frame_input(output));
     let raw = egui::RawInput { events, screen_rect: Some(screen()), ..Default::default() };
     let mut between = Some(between);
     let mut passes = 0;

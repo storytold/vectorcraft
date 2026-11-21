@@ -3,12 +3,12 @@
 
 use std::cell::{Cell, RefCell, RefMut};
 
-use craft_keymap::{Chord, Key};
+use craft::keymap::{Chord, Key};
 use craft::behavior::{CanvasView, CancelReason, Cursor, PointerKind as Device, PressPhase};
-use craft_ui::canvas::{
+use craft::ui::canvas::{
     Autoscroll, CanvasTool, Momentary, MomentaryShift, ToolAction, ToolClaims, ToolContext, ToolHost, ToolHostResponse, ToolKey, ToolPass, ToolPointer,
 };
-use craft_ui::contract::ToolPath;
+use craft::ui::canvas::ToolPath;
 use serde_json::json;
 use vectorcraft_engine::ViewInfo;
 use vectorcraft_tools::{Mods, PenPose, PointerEvent, PointerKind, ToolKey as EngineKey};
@@ -25,8 +25,8 @@ const BRACKETS_CURLY: &[Chord] = &[
     Chord::plain(Key::CloseBracket),
     Chord::plain(Key::OpenCurlyBracket),
     Chord::plain(Key::CloseCurlyBracket),
-    Chord::new(craft_keymap::Mods::SHIFT, Key::OpenBracket),
-    Chord::new(craft_keymap::Mods::SHIFT, Key::CloseBracket),
+    Chord::new(craft::keymap::Mods::SHIFT, Key::OpenBracket),
+    Chord::new(craft::keymap::Mods::SHIFT, Key::CloseBracket),
 ];
 const BRACKETS_C: &[Chord] = &[Chord::plain(Key::OpenBracket), Chord::plain(Key::CloseBracket), Chord::plain(Key::C)];
 const CLOSE_BRACKET: &[Chord] = &[Chord::plain(Key::CloseBracket)];
@@ -39,7 +39,7 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
-fn tool_mods(m: craft_keymap::Mods, space: bool) -> Mods {
+fn tool_mods(m: craft::keymap::Mods, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.cmd, ctrl: m.ctrl, space }
 }
 
@@ -286,7 +286,7 @@ impl CanvasTool for SessionTool<'_> {
         }
     }
 
-    fn paint(&self, _draw: &craft_ui::canvas::Draw<'_>, _cx: &ToolContext<'_>) {
+    fn paint(&self, _draw: &craft::ui::primitives::Draw<'_>, _cx: &ToolContext<'_>) {
         // The document's overlays are shown by `overlays::show` after the host, in one list.
     }
 

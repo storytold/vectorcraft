@@ -6,9 +6,9 @@
 //! them with `tool.setOption {tool: "circle", values}`; they last across tool switches and are
 //! saved with the preferences.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_tools::circle::{COLORS, ID as TOOL};
 

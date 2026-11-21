@@ -1,6 +1,6 @@
 use super::*;
 use crate::canvas::grid::{document_grid, grid_look, pixel_grid};
-use craft_ui_canvas::canvas_controls::GridLine;
+use craft::ui::canvas_controls::GridLine;
 use serde_json::json;
 use vectorcraft_engine::Session;
 

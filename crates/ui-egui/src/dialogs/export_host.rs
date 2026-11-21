@@ -5,8 +5,8 @@
 //! the dialog gone. The rows' own requests (the SVG browser preview, the EPS `Custom…` and HP-GL pen table
 //! buttons) are answered in [`pump`].
 
-use craft_ui::dialog::DialogId;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamResult};
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamResult};
 use serde_json::Value;
 
 use super::host::{self, HeldOptions};

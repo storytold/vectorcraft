@@ -636,7 +636,7 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
     for paste in [false, true] {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             if paste {
-                craft_ui::runtime::commands::fire(ui.ctx(), "edit.paste", craft_ui::runtime::commands::FireSource::Menu);
+                craft::ui::runtime::commands::fire(ui.ctx(), "edit.paste", craft::ui::runtime::commands::FireSource::Menu);
                 // PLAN: assumed `fn run_fired(&mut self, ctx: &egui::Context)` on VectorcraftApp (hub-w1) runs what was fired.
                 app.run_fired(ui.ctx());
             }

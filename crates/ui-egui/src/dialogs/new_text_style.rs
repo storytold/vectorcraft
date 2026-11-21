@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use craft_ui::patterns::form_dialogs::HostedPropertiesDialog;
+use craft::ui::patterns::form_dialogs::HostedPropertiesDialog;
 use serde_json::{Map, Value, json};
 
 use super::char_style_options::{self, reason, style_dialog};

@@ -14,15 +14,15 @@
 
 use craft::behavior::{EditEvent, IconId, Selection, SelectionChange};
 use craft::pages::ui::list::{PageList, PageListEvent, PageListRow};
-use craft_ui::buttons::IconButton;
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Entry, Outcome as _, Show as _, ShowContainer as _};
-use craft_ui::display::Divider;
-use craft_ui::form::Field;
-use craft_ui::layout_components::Row;
-use craft_ui::menu::{Menu, PanelRow};
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::text::TextField;
+use craft::ui::buttons::IconButton;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, Outcome as _, Show as _, ShowContainer as _};
+use craft::ui::display::Divider;
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::menu::{Menu, PanelRow};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
@@ -31,7 +31,7 @@ use vectorcraft_geom::Rect;
 
 use crate::VectorcraftApp;
 use crate::chrome::rank;
-use craft_keymap::CommandRef;
+use craft::keymap::CommandRef;
 // PLAN: assumed craft-pages, craft-behavior and craft-keymap as direct dependencies of ui-egui (Cargo.toml owner: hub).
 
 /// The panel's view state, kept in `UiState::artboards_ui`.
@@ -585,7 +585,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, events: Vec<PageListEvent>) {
 
 /// A row moved by a drag or by Move Up and Move Down: `artboard.reorder` in one undo step, the moved
 /// artboard active. Only a finished move counts, and one that stays where it was changes nothing.
-fn reorder(app: &mut VectorcraftApp, edit: &EditEvent<craft_ui::contract::ReorderMove<usize>>) {
+fn reorder(app: &mut VectorcraftApp, edit: &EditEvent<craft::ui::contract::ReorderMove<usize>>) {
     let (EditEvent::Commit { after: mv, .. } | EditEvent::Set { after: mv, .. }) = edit else { return };
     if mv.key != mv.to && app.run("artboard.reorder", json!({"index": mv.key, "to": mv.to})).is_ok() {
         select(app, mv.to);

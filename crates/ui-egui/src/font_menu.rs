@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use craft::behavior::{EditEvent, Preview};
-use craft::font_manager::{FamilySet, FilterLayout, FontFilters, FontPicker, FontPickerSettings, FontPreviewSize, FontScript};
+use craft::font_manager::picker::{FamilySet, FilterLayout, FontFilters, FontPicker, FontPickerSettings, FontPreviewSize, FontScript};
 use craft::ui::contract::{Bind, Entry, Show as _};
 use craft::ui::fonts::{FaceBytes, FaceState, FontRef};
 use craft::ui::pickers::Select;
@@ -162,7 +162,7 @@ fn added_clock() -> SystemTime {
 }
 
 /// The families the picker for `family` shows: its field, filters and sets drawn in `ui`.
-fn show_picker(app: &mut VectorcraftApp, ui: &mut Ui, label: impl Into<Label>, family: &str, sample: Option<&str>) -> craft::font_manager::FontPickerOutput {
+fn show_picker(app: &mut VectorcraftApp, ui: &mut Ui, label: impl Into<Label>, family: &str, sample: Option<&str>) -> craft::font_manager::picker::FontPickerOutput {
     let mut hold = hold(app);
     let before = hold.settings.clone();
     let out = {

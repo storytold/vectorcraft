@@ -11,7 +11,7 @@
 
 use std::sync::RwLock;
 
-use craft_keymap::{Binding, Chord, CommandDef, CommandKind, CommandRef, Key, Mods, Overrides, Platform, Scope};
+use craft::keymap::{Binding, Chord, CommandDef, CommandKind, CommandRef, Key, Mods, Overrides, Platform, Scope};
 use serde_json::{Value, json};
 
 use crate::shortcut_editor::{self, EffectItem, Entry, Snapshot};
@@ -228,7 +228,7 @@ pub fn platform() -> Platform {
 /// Records the operating system egui reports, which the web build reads from the browser.
 pub fn note_os(ctx: &egui::Context) {
     if cfg!(target_arch = "wasm32") {
-        let p = craft_keymap::egui::platform(ctx);
+        let p = craft::keymap::egui::platform(ctx);
         if let Ok(mut web) = WEB_PLATFORM.write()
             && *web != Some(p)
         {
@@ -242,7 +242,7 @@ pub fn note_os(ctx: &egui::Context) {
 /// `shortcut_holds`), in VectorCraft's own spelling. Loading never fails: what cannot be used is
 /// dropped or kept for `Keymap::problems`, and only an entry's first text is kept.
 pub(crate) mod stored {
-    use craft_keymap::{Binding, Chord, Key, Mods, Overrides, Platform, Profiles};
+    use craft::keymap::{Binding, Chord, Key, Mods, Overrides, Platform, Profiles};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde_json::{Map, Value};
 
@@ -404,7 +404,7 @@ pub(crate) mod stored {
 mod tests {
     use super::*;
     use crate::state::UiState;
-    use craft_keymap::{Active, Keymap, Lookup, Scopes, Trigger};
+    use craft::keymap::{Active, Keymap, Lookup, Scopes, Trigger};
 
     /// The settings of an earlier version: the three old keys in place of `shortcut_sets`.
     fn old_file(keys: Value, set: Option<&str>) -> UiState {
@@ -495,7 +495,7 @@ mod tests {
         // One snapshot: tests running beside this one install and remove plug-ins.
         let snapshot = shortcut_editor::snapshot();
         for p in [Platform::Windows, Platform::Linux, Platform::Mac] {
-            let km = Keymap::new(catalog_defs(p, &snapshot), Scopes::new(), p).with_reserved(craft_keymap::reserved::system(p));
+            let km = Keymap::new(catalog_defs(p, &snapshot), Scopes::new(), p).with_reserved(craft::keymap::reserved::system(p));
             assert_eq!(km.conflicts(), vec![], "{p:?}");
             assert_eq!(km.problems(), vec![], "{p:?}");
             assert_eq!(km.catalog().len(), snapshot.entries.len(), "{p:?}: every entry is bindable");
@@ -523,7 +523,7 @@ mod tests {
         };
         for p in [Platform::Windows, Platform::Linux, Platform::Mac] {
             for (alias, edit, primary) in [("F2", "edit.cut", "Cmd+X"), ("F3", "edit.copy", "Cmd+C"), ("F4", "edit.paste", "Cmd+V")] {
-                let keymap = |sets: &craft_keymap::Profiles| {
+                let keymap = |sets: &craft::keymap::Profiles| {
                     Keymap::new(catalog_defs(p, &snapshot), Scopes::new(), p).with_overrides(sets.active_overrides(&shortcut_editor::BUILTINS).clone())
                 };
                 let kept = keymap(&stored::legacy_on(&json!({}), None, &Value::Null, p));

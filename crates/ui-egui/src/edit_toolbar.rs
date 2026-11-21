@@ -21,12 +21,12 @@ use std::sync::OnceLock;
 // PLAN: assumed paths of the framework items under `craft_ui` / `craft_behavior`.
 use craft::behavior::IconId;
 use craft::behavior::overlay::Side;
-use craft_ui::buttons::ToggleButton;
-use craft_ui::contract::{Bind, Outcome as _, Show as _};
-use craft_ui::menu::PanelRow;
-use craft_ui::primitives::IconSpec;
-use craft_ui::rails::{DrawerGroup, DropAt, ToolRailOutput, ToolSlot, ToolbarDrawer, ToolbarEdit};
-use craft_ui::runtime::commands::CommandRef;
+use craft::ui::buttons::ToggleButton;
+use craft::ui::contract::{Bind, Outcome as _, Show as _};
+use craft::ui::menu::PanelRow;
+use craft::ui::primitives::IconSpec;
+use craft::ui::rails::{DrawerGroup, DropAt, ToolRailOutput, ToolSlot, ToolbarDrawer, ToolbarEdit};
+use craft::ui::runtime::commands::CommandRef;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_tools::{TOOL_GROUPS, ToolInfo, tool_info};

@@ -15,9 +15,9 @@
 
 use std::sync::Arc;
 
-use craft_ui::dialog::DialogResult;
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesTab, PropertyRow};
-use craft_ui::runtime::env::Label;
+use craft::ui::dialog::DialogResult;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesTab, PropertyRow};
+use craft::ui::runtime::env::Label;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
 use vectorcraft_doc::{HyphenationOptions, JustificationOptions, TabAlign, TabStop, Unit};
@@ -750,8 +750,8 @@ pub(crate) fn hosted(key: &str, title: &'static str, opening: &Arc<Opening>, nam
     let rows_of = Arc::clone(opening);
     HostedPropertiesDialog::new(key, opening.fields(name), move |values| {
         let now = values.get().and_then(|shown| shown.same().cloned()).unwrap_or_else(DialogFields::new);
-        craft_ui::patterns::form_dialogs::PropertiesDialog::new(title, tabs(&now, &rows_of), values)
-            .tab_layout(craft_ui::patterns::form_dialogs::TabLayout::List)
+        craft::ui::patterns::form_dialogs::PropertiesDialog::new(title, tabs(&now, &rows_of), values)
+            .tab_layout(craft::ui::patterns::form_dialogs::TabLayout::List)
     })
     .held_ok()
 }

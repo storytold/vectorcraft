@@ -5,12 +5,12 @@ use std::collections::BTreeSet;
 use std::sync::{Mutex, PoisonError};
 
 // PLAN: assumed import paths through the `craft_ui` facade, as in `prefs_dialog.rs`.
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Entry};
-use craft_ui::form::{SliderField, SliderFieldLayout};
-use craft_ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesModel, RowKind, RowSpec};
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
-use craft_ui::style::Rgba;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry};
+use craft::ui::form::{SliderField, SliderFieldLayout};
+use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesModel, RowKind, RowSpec};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::theme::Rgba;
 use craft_files::PickRequest;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
@@ -19,8 +19,8 @@ use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, 
 use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions};
 use crate::VectorcraftApp;
 use crate::i18n::Lang;
-use craft_ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
-use craft_ui::pickers::ColorPickerDialog;
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
+use craft::color_ui::ui::ColorPickerDialog;
 
 /// The pixel size every point-stored length field of this port uses.
 const PIXELS_PER_INCH: f64 = 72.0;

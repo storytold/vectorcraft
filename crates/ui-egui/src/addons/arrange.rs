@@ -5,9 +5,9 @@
 
 use std::borrow::Cow;
 
-use craft_ui::canvas::{ViewCommands, ViewRequest};
-use craft_ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::canvas::{ViewCommands, ViewRequest};
+use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
 
 use super::dialogs::{Confirm, Spec};

@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use craft_ui::dialog::DialogHost;
+use craft::ui::dialog::DialogHost;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::findfiles::Rules;
 

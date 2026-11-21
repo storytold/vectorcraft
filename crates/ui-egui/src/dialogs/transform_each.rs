@@ -16,18 +16,18 @@
 //! set all follow the same rule.
 
 use craft::behavior::Mixed;
-use craft_ui::choice::{Checkbox, Radio, RadioGroup};
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{DialogId, DialogHost};
-use craft_ui::display::Text;
-use craft_ui::form::Field;
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
-use craft_ui::runtime::env::{Label, LengthUnits, UnitKind};
-use craft_ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
-use craft_ui::text::{NumberField, follow_ratio, link_toggle};
-use craft_ui::value_drag::{AngleDial, Slider};
+use craft::ui::choice::{Checkbox, Radio, RadioGroup};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogHost};
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
+use craft::ui::text::{NumberField, follow_ratio, link_toggle};
+use craft::ui::value_drag::{AngleDial, Slider};
 use egui::{Response, Ui};
 use serde_json::{Value, json};
 use std::ops::RangeInclusive;

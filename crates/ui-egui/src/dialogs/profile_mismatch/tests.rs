@@ -1,4 +1,4 @@
-use craft_ui::dialog::DialogHost;
+use craft::ui::dialog::DialogHost;
 use vectorcraft_engine::Session;
 
 use super::*;

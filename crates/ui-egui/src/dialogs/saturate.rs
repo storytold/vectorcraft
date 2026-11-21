@@ -5,7 +5,7 @@
 //! Fields: `intensity`. The preview check box is the host's.
 
 use craft::theme::Srgba;
-use craft::ui::patterns::{DialogFields, Param};
+use craft::ui::patterns::form_dialogs::{DialogFields, Param};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 

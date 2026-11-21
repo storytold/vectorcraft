@@ -3,9 +3,9 @@
 use std::hash::{Hash, Hasher};
 
 use craft::automation::ui::actions::{ActionSelection, ActionsPanelCommands};
-use craft_keymap::CommandRef;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui_widgets::menu::PanelRow;
+use craft::keymap::CommandRef;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::menu::PanelRow;
 use serde_json::{Value, json};
 
 use super::edits::{self, BUTTON_MODE, INSERT_SELECT_PATH};

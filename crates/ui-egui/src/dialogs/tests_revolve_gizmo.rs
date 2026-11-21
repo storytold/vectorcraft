@@ -5,7 +5,7 @@
 // `.set(key, Value)` (the host's `set_json_field`), `.is_open()`, `.held() -> Option<HeldOk>`, `.cancel()`.
 use super::*;
 use crate::dialogs::three_d::tests_support::ThreeD;
-use craft_ui::dialog::HeldOk;
+use craft::ui::dialog::HeldOk;
 use egui::{Event, Modifiers, PointerButton};
 use serde_json::Value;
 use vectorcraft_effects::EXTRUDE;

@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
-use craft_ui_panels::dialog::DialogId;
+use craft::ui::dialog::DialogId;
 use serde_json::{Value, json};
 use vectorcraft_engine::cancel::{self, CancelToken};
 use vectorcraft_engine::cmd::clipboard::{Clipboard, Flavour, ImageRead, read_image};

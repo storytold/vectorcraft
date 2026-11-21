@@ -6,7 +6,7 @@
 
 use std::cell::RefCell;
 
-use craft::color_ui::{ChosenColor, ColorChoice, NamedColor};
+use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use craft::theme::Srgba;
 use craft::ui::contract::{Bind, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};

@@ -5,8 +5,10 @@ use super::*;
 use crate::i18n::LangExt;
 // PLAN: assumed paths for the framework and keymap types the table tests build events from.
 use craft::keymap::{Chord, Mods};
-use craft::layers::ui::LayerTree;
-use craft::layers::ui::panel::{LayerColumn, LayerRowKey, LayerSelect, LayersEvent, SelectionChange};
+use craft::layers::ui::tree::LayerTree;
+use craft::layers::ui::panel::{LayerColumn, LayerSelect, LayersEvent};
+use craft::layers::ui::tree::LayerRowKey;
+use craft::behavior::SelectionChange;
 
 /// A generated `<Kind>` name is translated where painted; an unnamed text object's text never
 /// is, even when it reads like one.

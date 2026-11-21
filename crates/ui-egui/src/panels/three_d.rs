@@ -12,13 +12,13 @@ use std::borrow::Cow;
 use std::sync::{Arc, RwLock};
 
 use craft::behavior::{CancelReason, EditEvent, GestureId, SelectionChange, keyed};
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, CollectionEvent, Entry, Show as _, ShowCollection as _, Trigger, clicked};
-use craft_ui::display::{Shade, Text};
-use craft_ui::menu::Menu;
-use craft_ui::tabs::{TabKind, TabStrip};
-// PLAN: assumed `craft_ui::form_dialogs` re-exports these form-dialog items.
-use craft_ui::form_dialogs::{DialogFields, EditEvents, FieldValue, Param, ParamRows};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Show as _, ShowCollection as _, Trigger, clicked};
+use craft::ui::display::{Shade, Text};
+use craft::ui::menu::Menu;
+use craft::ui::tabs::{TabKind, TabStrip};
+// PLAN: assumed `craft::ui::form_dialogs` re-exports these form-dialog items.
+use craft::ui::patterns::form_dialogs::{DialogFields, EditEvents, FieldValue, Param, ParamRows};
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
@@ -282,7 +282,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let source = keyed(&tabs[..], |tab: &(&'static str, &'static str)| tab.0).with_text(|tab| Cow::Borrowed(tab.1));
     let out = TabStrip::new(tl!("Object type")).kind(TabKind::Text).shown(current).enabled(selected).show_items(ui, &source, &mut |key, _| {
         // PLAN: assumed `Tab::new(label)` as the About dialog's strip builds its tabs.
-        craft_ui::tabs::Tab::new(tabs.iter().find(|tab| tab.0 == *key).map_or("", |tab| tab.1))
+        craft::ui::tabs::Tab::new(tabs.iter().find(|tab| tab.0 == *key).map_or("", |tab| tab.1))
     });
     for event in out.response.events {
         if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event

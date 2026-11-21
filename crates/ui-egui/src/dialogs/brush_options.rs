@@ -27,15 +27,17 @@
 
 use std::sync::Arc;
 
-use craft_ui::contract::{Bind, ContentPainterCx, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::display::{Picture, PictureSize};
-use craft_ui::form::Field;
-use craft_ui::layout_components::Row;
-use craft_ui::list::{ThumbAspect, ThumbSize};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult, SliderScale};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::env::{Label, UnitKind};
-use craft_ui::text::NumberField;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::primitives::ContentPainterCx;
+use craft::ui::display::{Picture, PictureSize};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::list::{ThumbAspect, ThumbSize};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::value_drag::SliderScale;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::{Label, UnitKind};
+use craft::ui::text::NumberField;
 use egui::{Color32, Rect, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{Bristle, Brush, BrushKind, Calligraphic, Variation};
@@ -44,7 +46,7 @@ use vectorcraft_doc::{AppearanceItem, Document, NodeId, NodeKind};
 use super::{brush_art_options, form, host};
 use crate::VectorcraftApp;
 
-// PLAN: the `craft_ui::…` import paths above follow the framework crates' module layout; the app tree
+// PLAN: the `craft::ui::…` import paths above follow the framework crates' module layout; the app tree
 // has no other user of these components yet. `brush_art_options::{params, edited_def, fields,
 // reconcile_pattern_choices, heading, rows}` are called with `&DialogFields` where they took `&Dialog`,
 // and `app.session.general_unit()` is taken to be the framework's `UnitKind`.

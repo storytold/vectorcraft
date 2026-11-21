@@ -7,8 +7,8 @@ use vectorcraft_engine::Session;
 use super::*;
 use crate::Services;
 // PLAN: assumed paths of the framework items the host helpers name.
-use craft_ui_panels::dialog::{DialogHost, DialogId};
-use craft_ui_patterns::HostedPdfExport;
+use craft::ui::dialog::{DialogHost, DialogId};
+use craft::ui::patterns::form_dialogs::HostedPdfExport;
 
 type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 

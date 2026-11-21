@@ -3,13 +3,13 @@
 //! drag, the Zoom tool's magnification, the Paintbrush's brush) and the selection's fill and
 //! stroke colour values.
 
-use craft_keymap::CommandRef;
-use craft_ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft_ui::display::{Divider, Shade, Text};
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::menu::PanelRow;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::style::TypeRole;
+use craft::keymap::CommandRef;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::style::TypeRole;
 use egui::{Sense, Ui, vec2};
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};

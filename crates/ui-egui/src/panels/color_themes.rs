@@ -14,19 +14,19 @@ use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection, SelectionChan
 use craft::color_ui::ui::{ChannelRow, ChannelRule, HarmonyWheel};
 use craft::theme::Rgba;
 use craft::theme::variant::Tone;
-use craft_ui::buttons::IconButton;
-use craft_ui::choice::{SwatchSpacing, SwatchTable};
-use craft_ui::contract::{Bind, CollectionEvent, Entry, Outcome as _, Props as _, Show as _, ShowCollection as _};
-use craft_ui::list::{List, ListRow, ThumbSize};
-use craft_ui::menu::PanelRow;
-use craft_ui::notices::Notice;
-use craft_ui::pickers::Select;
-use craft_ui::primitives::IconSpec;
-use craft_ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft_ui::runtime::env::Label;
-use craft_ui::sections::{FooterAction, FooterBar};
-use craft_ui::tabs::{Tab, TabKind, TabStrip};
-use craft_ui::text::{HexField, TextField};
+use craft::ui::buttons::IconButton;
+use craft::ui::choice::{SwatchSpacing, SwatchTable};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Outcome as _, Props as _, Show as _, ShowCollection as _};
+use craft::ui::list::{List, ListRow, ThumbSize};
+use craft::ui::menu::PanelRow;
+use craft::ui::notices::Notice;
+use craft::ui::pickers::Select;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{FooterAction, FooterBar};
+use craft::ui::tabs::{Tab, TabKind, TabStrip};
+use craft::ui::text::{HexField, TextField};
 use egui::{Rect, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
@@ -539,7 +539,7 @@ fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
     } else {
         let names: Vec<String> = rows.iter().map(|(n, _)| n.clone()).collect();
         let mut selection = app.ui.color_themes_panel.picked.as_ref().and_then(|p| names.iter().position(|n| n == p)).map_or_else(Selection::default, Selection::single);
-        let out = List::new(tl!("My Themes")).select(craft::behavior::SelectMode::Single).selection(Bind::bound(&mut selection)).show_items(
+        let out = List::new(tl!("My Themes")).select(craft::ui::contract::SelectMode::Single).selection(Bind::bound(&mut selection)).show_items(
             ui,
             &Names(&names),
             &mut |key, _| {
@@ -580,7 +580,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
-    use craft_ui::testing::Fixture;
+    use craft::ui::testing::Fixture;
     use egui::accesskit::Role;
     use vectorcraft_engine::Session;
 
@@ -603,7 +603,7 @@ mod tests {
     }
 
     /// The slider rails, top to bottom (the wheel's Brightness rail first).
-    fn rails(fx: &Fixture) -> Vec<craft_ui::testing::Target> {
+    fn rails(fx: &Fixture) -> Vec<craft::ui::testing::Target> {
         let mut rails = fx.by_role(Role::Slider);
         rails.sort_by(|a, b| a.center().y.total_cmp(&b.center().y));
         rails

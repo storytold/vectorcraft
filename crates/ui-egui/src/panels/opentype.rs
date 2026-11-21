@@ -4,15 +4,15 @@
 //! frame of each selected threaded story) or the Type tool's selected characters.
 
 use craft::behavior::Mixed;
-use craft_keymap::CommandRef;
-use craft_ui::buttons::Button;
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Trigger};
-use craft_ui::display::{Divider, Shade, Text};
-use craft_ui::form::Field;
-use craft_ui::menu::{Menu, MenuItem, PanelRow};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::commands::{CommandState, CommandStates};
+use craft::keymap::CommandRef;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, NodeKind};

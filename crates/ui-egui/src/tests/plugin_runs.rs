@@ -5,8 +5,8 @@
 
 use std::time::{Duration, Instant};
 
-use craft_ui::dialog::DialogId;
-use craft_ui::patterns::HostedParamDialog;
+use craft::ui::dialog::DialogId;
+use craft::ui::patterns::form_dialogs::HostedParamDialog;
 use egui_kittest::Harness;
 use serde_json::json;
 use vectorcraft_engine::Session;

@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
-use craft_automation::{ControlRequest, Reply};
+use craft::automation::{ControlRequest, Reply};
 
 use super::handle;
 use crate::{Services, VectorcraftApp};
@@ -1138,9 +1138,9 @@ fn the_command_list_shows_this_platforms_default_shortcut() {
     let row = r["result"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned();
     let row = row.unwrap_or_else(|| panic!("listed: {r}"));
     assert_eq!(row["shortcut"], if crate::keymap::platform().is_mac() { "" } else { "Cmd+~" }, "{row}");
-    for p in [craft_keymap::Platform::Windows, craft_keymap::Platform::Linux] {
+    for p in [craft::keymap::Platform::Windows, craft::keymap::Platform::Linux] {
         assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", p), "Cmd+~", "{p:?}");
     }
-    assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", craft_keymap::Platform::Mac), "");
-    assert_eq!(crate::shortcut_editor::ui_command_default("view.zoomIn", "Cmd+=", craft_keymap::Platform::Mac), "Cmd+=");
+    assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", craft::keymap::Platform::Mac), "");
+    assert_eq!(crate::shortcut_editor::ui_command_default("view.zoomIn", "Cmd+=", craft::keymap::Platform::Mac), "Cmd+=");
 }

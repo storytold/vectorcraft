@@ -1,7 +1,9 @@
 use craft::behavior::{CanvasView, EditEvent};
-use craft_ui_canvas::canvas::{Checker, DataColor, DocRect, PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
-use craft_ui_contract::contract::Component;
-use craft_ui_contract::contract::collection::Rename;
+use craft::ui::primitives::Checker;
+use craft::ui::style::DataColor;
+use craft::ui::canvas::{DocRect, PageBorder, PageFrame, Pasteboard, PasteboardColor, PasteboardOutput};
+use craft::ui::contract::Component;
+use craft::font_catalog::system::collection::Rename;
 use serde_json::json;
 
 use super::{BezPath, Color32, Point, VectorcraftApp, View};

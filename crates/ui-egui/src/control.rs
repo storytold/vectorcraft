@@ -17,7 +17,7 @@
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set` / `ui.dialog.confirm` / `ui.dialog.cancel`: answered by
-//!   `craft_automation::dialogs::dialog_method` for the dialog asked for (`dialog`, default `"top"`)
+//!   `craft::automation::dialogs::dialog_method` for the dialog asked for (`dialog`, default `"top"`)
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
@@ -1547,8 +1547,8 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             }
             // PLAN: assumed `dialog_method(method, &params, &WindowHost, ViewportId) -> Result<Value, String>`
             // and `WindowHost::of(ctx)` in craft_automation (widgets-02)
-            let host = craft_automation::WindowHost::of(ctx);
-            wrap(craft_automation::dialogs::dialog_method(&req.method, &params, &host, egui::ViewportId::ROOT))
+            let host = craft::ui::runtime::windows::WindowHost::of(ctx);
+            wrap(craft::automation::dialogs::dialog_method(&req.method, &params, &host, egui::ViewportId::ROOT))
         }
         "ui.resize" => {
             let (w, h) = match coord(p, "width", 1440.0).and_then(|w| Ok((w, coord(p, "height", 900.0)?))) {

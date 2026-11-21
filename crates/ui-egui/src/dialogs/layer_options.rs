@@ -11,7 +11,7 @@
 use std::cell::RefCell;
 
 // PLAN: `craft::color_ui` and `craft::theme` need the `craft` facade (feature `color-ui`) in ui-egui's Cargo.toml, which has only `craft-ui`; the owner of the craft-libs pin adds it.
-use craft::color_ui::{ChosenColor, ColorChoice, NamedColor};
+use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::choice::Checkbox;

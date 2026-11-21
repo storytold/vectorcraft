@@ -4,17 +4,17 @@
 //! `effect.expandAppearance`, so everything it does is a command with its own undo step.
 
 use craft::behavior::overlay::{Align, Side};
-use craft_ui::bars::{Bar, BarKind};
-use craft_ui::buttons::Button;
-use craft_ui::canvas::CanvasSpace;
-use craft_ui::choice::Segmented;
-use craft_ui::contract::overlay::{Anchor, Dismiss, Outside, Overlay, Place};
-use craft_ui::contract::{Bind, Entry};
-use craft_ui::display::Text;
-use craft_ui::popover::Popover;
-use craft_ui::runtime::env::Env;
-use craft_ui::style::SurfaceKind;
-use craft_ui::text::NumberField;
+use craft::ui::bars::{Bar, BarKind};
+use craft::ui::buttons::Button;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::choice::Segmented;
+use craft::ui::contract::overlay::{Anchor, Dismiss, Outside, Overlay, Place};
+use craft::ui::contract::{Bind, Entry};
+use craft::ui::display::Text;
+use craft::ui::popover::Popover;
+use craft::ui::runtime::env::Env;
+use craft::ui::style::SurfaceKind;
+use craft::ui::text::NumberField;
 use serde_json::Value;
 use vectorcraft_doc::{Node, NodeKind};
 

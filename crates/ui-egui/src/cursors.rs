@@ -6,7 +6,7 @@
 
 use craft::behavior as cb;
 use craft::behavior::{CountMark, CursorBadge, CursorIcon, CursorPriority, IconId, PaintedCursor, PointerGlyph};
-use craft_ui::primitives::AppIcons;
+use craft::ui::primitives::AppIcons;
 use egui::Vec2;
 use vectorcraft_tools::Cursor;
 
@@ -181,7 +181,7 @@ pub fn tool_cursor(c: Cursor) -> cb::Cursor {
 /// over the whole window, above every component's and the tools' cursors.
 pub(crate) fn request_busy(app: &crate::VectorcraftApp, ctx: &egui::Context) {
     if crate::opening::long_operation_busy(app) {
-        craft_ui::runtime::cursor::request(ctx, system(CursorIcon::Progress), CursorPriority::Drag);
+        craft::ui::runtime::cursor::request(ctx, system(CursorIcon::Progress), CursorPriority::Drag);
     }
 }
 

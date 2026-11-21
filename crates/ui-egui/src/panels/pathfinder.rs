@@ -4,16 +4,16 @@
 
 use craft::behavior::{IconId, Mixed};
 use craft::theme::{ColorToken, Srgba};
-use craft_keymap::CommandRef;
-use craft_ui::buttons::{Button, IconButton, ToggleButton};
-use craft_ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, TooltipSpec};
-use craft_ui::layout_components::Row;
-use craft_ui::menu::PanelRow;
-use craft_ui::primitives::{Glyph, IconSpec, paint_icon};
-use craft_ui::runtime::commands::{CommandState, CommandStates};
-use craft_ui::runtime::env::Direction;
-use craft_ui::sections::{HeaderStrength, Section};
-use craft_ui::style::UiTokens;
+use craft::keymap::CommandRef;
+use craft::ui::buttons::{Button, IconButton, ToggleButton};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, TooltipSpec};
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::primitives::{Glyph, IconSpec, paint_icon};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::Direction;
+use craft::ui::sections::{HeaderStrength, Section};
+use craft::ui::style::UiTokens;
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::doc::ShapeMode;
@@ -200,8 +200,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
-    use craft_ui::patterns::form_dialogs::HostedParamDialog;
-    use craft_ui::runtime::commands::{FirePhase, FireSource, Fired};
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
     use egui::Modifiers;
     use vectorcraft_engine::doc::{NodeId, NodeKind};
 

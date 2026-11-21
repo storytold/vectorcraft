@@ -1,6 +1,6 @@
 //! The Home icon shows the Home screen over open documents; Cmd+N opens the New Document dialog.
 
-use craft_ui::dialog::StandardPrompt;
+use craft::ui::dialog::StandardPrompt;
 use serde_json::json;
 
 use crate::{VectorcraftApp, canvas};

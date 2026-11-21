@@ -5,10 +5,10 @@
 //! draws columns or bars, and Marker… when every one draws lines, scatter points or radar lines;
 //! both run the same route as their Object › Graph items.
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft_ui::layout_components::Row;
-use craft_ui::sections::Section;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::layout_components::Row;
+use craft::ui::sections::Section;
 use egui::Ui;
 use vectorcraft_doc::{Document, GraphKind, MAX_GRAPH_SERIES, NodeId};
 

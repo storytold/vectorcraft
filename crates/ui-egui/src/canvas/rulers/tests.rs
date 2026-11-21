@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use craft::behavior::{Axis, GesturePhase};
-use craft_ui::canvas::GuideDrag;
+use craft::ui::canvas::GuideDrag;
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
@@ -19,7 +19,7 @@ fn app() -> VectorcraftApp {
 }
 
 fn drag(along: Axis, phase: GesturePhase, at: f64, cmd: bool) -> GuideDrag {
-    GuideDrag::new_guide(along, phase, Some(at), craft_keymap::Mods { cmd, ..Default::default() })
+    GuideDrag::new_guide(along, phase, Some(at), craft::keymap::Mods { cmd, ..Default::default() })
 }
 
 /// One pass of the strip's guide.

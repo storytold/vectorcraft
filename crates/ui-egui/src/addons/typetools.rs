@@ -2,8 +2,8 @@
 //! dialog, which picks an attribute, its start and end values and a shape, previews on the canvas
 //! and runs `addon.type.textTweaker` on OK.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::env::UnitKind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

@@ -8,12 +8,15 @@ use std::sync::{Arc, RwLock};
 use craft::behavior::{DisplayOrder, ItemSource, SelectionChange};
 // PLAN: assumed paths of the framework items for the app crate.
 use craft::theme::Srgba;
-use craft_ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, clicked};
-use craft_ui::buttons::Button;
-use craft_ui::pickers::{Entry, Select};
-use craft_ui::runtime::env::UnitKind;
-use craft_ui::tabs::{Tab, TabKind, TabStrip};
-use craft_ui_patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, LengthUnits, Param, ParamKind, ParamRows, SliderScale};
+use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, clicked};
+use craft::ui::buttons::Button;
+use craft::ui::contract::Entry;
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::tabs::{Tab, TabKind, TabStrip};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind, ParamRows};
+use craft::ui::runtime::env::LengthUnits;
+use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
@@ -143,7 +146,7 @@ fn select_row(key: &str, label: &'static str, options: Vec<(Value, String)>, def
 }
 
 /// The built-in choices of `effect`'s `key`, as a choice row's options.
-fn choices(effect: &str, key: &str) -> Vec<(String, craft_ui::contract::Label)> {
+fn choices(effect: &str, key: &str) -> Vec<(String, craft::ui::runtime::env::Label)> {
     super::effect_params::own_choices(effect, key, false)
         .unwrap_or_default()
         .into_iter()

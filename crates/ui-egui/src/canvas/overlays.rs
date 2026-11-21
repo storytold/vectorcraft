@@ -6,12 +6,12 @@
 
 use craft::behavior::{CanvasView, HitLevel, HitPriority, HitShape, PartKey, Sense};
 use craft::draw::ui::{HandleStyle, PathOptionsSettings};
-use craft_ui::canvas::{CanvasSpace, canvas_space, hud};
-use craft_ui::canvas_controls::{Marquee, MarqueeLook, Measure, SelectionOutline, SmartGuides, path_runs};
-use craft_ui::contract::{Common, Component, Cx, Input, MeasureCx, PaintUi, PartsCx, Props as _, Role, Show as _};
-use craft_ui::primitives::{DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
-use craft_ui::runtime::env::Label;
-use craft_ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, TypeRole, UiTokens};
+use craft::ui::canvas::{CanvasSpace, canvas_space, hud};
+use craft::ui::canvas_controls::{Marquee, MarqueeLook, Measure, SelectionOutline, SmartGuides, path_runs};
+use craft::ui::contract::{Common, Component, Cx, Input, MeasureCx, PaintUi, PartsCx, Props as _, Role, Show as _};
+use craft::ui::primitives::{DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
+use craft::ui::runtime::env::Label;
+use craft::ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, TypeRole, UiTokens};
 use egui::{Color32, CornerRadius, Pos2, Rect as ScreenRect, Response, Vec2};
 
 use super::artboards::names_an_artboard;
@@ -128,7 +128,7 @@ pub struct ToolMarksStyle {
 
 /// The marks a tool draws over the document: paths, lines, anchors, handles, labels, highlights, measures and stop
 /// chips ([`paint`]), and the Selection tool's rule badge.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(canvas_control, content_painter)]
 struct ToolMarks<'a> {
     #[common]
@@ -246,7 +246,7 @@ fn paint(draw: &Draw<'_>, view: &CanvasView, overlays: &[Overlay], options: &Pat
 }
 
 /// Strokes `points`, closed back to the first when `closed`, solid or in the theme's dashes.
-fn stroke_run(draw: &Draw<'_>, mut points: Vec<Pos2>, closed: bool, dashed: bool, width: impl Into<craft_ui::primitives::DataStrokeWidth>, color: DataColor) {
+fn stroke_run(draw: &Draw<'_>, mut points: Vec<Pos2>, closed: bool, dashed: bool, width: impl Into<craft::ui::primitives::DataStrokeWidth>, color: DataColor) {
     if closed {
         points.extend(points.first().copied());
     }
@@ -303,7 +303,7 @@ pub struct HoverTipsStyle {
 /// clicks and drags, and the framework shows its text after the usual delay and not during a press. The parts lie
 /// under the artboard names of the pasteboard, which a press takes first, and are not declared while a gesture runs
 /// or Space lends a view tool, where a click does something else.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(canvas_control)]
 struct HoverTips<'a> {
     #[common]

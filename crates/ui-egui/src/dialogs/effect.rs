@@ -11,10 +11,10 @@
 
 // PLAN: assumed the facade re-exports craft_host as `craft::host`
 use craft::host::files::PickRequest;
-use craft_ui_patterns::contract::Bind;
-use craft_ui_patterns::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
-use craft_ui_patterns::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, ParamDialog, ParamResult};
-use craft_ui_patterns::runtime::{Lifetime, SaveKey};
+use craft::ui::contract::Bind;
+use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, ParamDialog, ParamResult};
+use craft::ui::runtime::memory::{Lifetime, SaveKey};
 use serde_json::{Map, Value, json};
 
 use super::effect_params::{EffectCx, effect_params, heading, label};

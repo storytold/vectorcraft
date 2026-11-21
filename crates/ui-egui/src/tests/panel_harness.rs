@@ -8,8 +8,8 @@ use std::{
     rc::Rc,
 };
 
-use craft_ui::runtime::frame::take_output;
-use craft_ui::testing::{Fixture, Target};
+use craft::ui::runtime::frame::take_output;
+use craft::ui::testing::{Fixture, Target};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, Ui, Vec2, vec2};
 
 use crate::{VectorcraftApp, shortcuts};

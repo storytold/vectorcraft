@@ -3,13 +3,13 @@
 //! modes other than Fixed take.
 
 // PLAN: `mod variation;` in `dialogs.rs` belongs to hub-w2 (not in this set's Files table).
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft_ui::form::Field;
-use craft_ui::layout_components::{Row, Stack};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::env::UnitKind;
-use craft_ui::text::NumberField;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::UnitKind;
+use craft::ui::text::NumberField;
 use egui::{Response, Ui};
 use vectorcraft_brush::Variation;
 

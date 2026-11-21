@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use craft::dialogs::{ExtensionPolicy, FilePanels, FileService, ShowHook};
+use craft::dialogs::service::{ExtensionPolicy, FilePanels, FileService};
+use craft::dialogs::ShowHook;
 use craft::host::Wake;
-use craft::ui::runtime::PenSource;
+use craft::ui::runtime::pen::PenSource;
 use vectorcraft_ui_egui::hang_beacon::{Activity, BEACON, Beacon};
 
 use super::{Services, fileio, printing};

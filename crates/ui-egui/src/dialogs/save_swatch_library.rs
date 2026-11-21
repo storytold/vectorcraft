@@ -4,7 +4,7 @@
 //!
 //! Fields: those of [`super::save_library`] and `format` (`vcswatches`, `gpl`, `ase` or `css`).
 
-use craft_ui::patterns::form_dialogs::{DialogFields, Param, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamKind};
 use serde_json::Value;
 use vectorcraft_color::palette_io::PaletteFormat;
 

@@ -8,10 +8,10 @@
 //!
 //! Behavior: <https://helpx.adobe.com/illustrator/using/objects-on-path.html>.
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Outcome as _, Show as _, clicked};
-use craft_ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamResult};
-use craft_ui::runtime::env::UnitKind;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Outcome as _, Show as _, clicked};
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamResult};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 use vectorcraft_doc::objects_on_path::CENTER;
 

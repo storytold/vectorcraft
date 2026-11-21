@@ -1,7 +1,7 @@
 //! Applying the edits a framework component reports to the document, one undo step per gesture.
 
 use craft::behavior::{CancelReason, EditEvent};
-use craft_ui::contract::EditResponse;
+use craft::ui::contract::EditResponse;
 
 use crate::VectorcraftApp;
 use crate::widgets::Live;

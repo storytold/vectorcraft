@@ -17,19 +17,19 @@
 use std::ops::RangeInclusive;
 
 use craft::theme::variant::Tone; // PLAN: vectorcraft-ui-egui's manifest needs the `craft` facade dependency; `craft_ui` does not re-export `Tone`.
-use craft_ui::buttons::Button;
-use craft_ui::choice::{Checkbox, Radio, RadioGroup};
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, StackDialog, dialog_id};
-use craft_ui::display::Text;
-use craft_ui::form::Field;
-use craft_ui::layout_components::Row;
-use craft_ui::notices::Notice;
-use craft_ui::patterns::form_dialogs::FormDialog;
-use craft_ui::runtime::env::{Env, Label, LengthUnits};
-use craft_ui::runtime::overlay::CloseReason;
-use craft_ui::sections::GroupBox;
-use craft_ui::text::{NumberField, StepArrows};
+use craft::ui::buttons::Button;
+use craft::ui::choice::{Checkbox, Radio, RadioGroup};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, StackDialog, dialog_id};
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
+use craft::ui::notices::Notice;
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::runtime::env::{Env, Label, LengthUnits};
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::sections::GroupBox;
+use craft::ui::text::{NumberField, StepArrows};
 use egui::{Context, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -482,7 +482,7 @@ impl StackDialog for ObjectMosaicDialog {
         None
     }
 
-    fn held_state(&self) -> Option<craft_ui::dialog::HeldOk> {
+    fn held_state(&self) -> Option<craft::ui::dialog::HeldOk> {
         self.held.state()
     }
 
@@ -554,7 +554,7 @@ impl StackDialog for ObjectMosaicDialog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_ui::dialog::HeldOk;
+    use craft::ui::dialog::HeldOk;
     use vectorcraft_engine::Session;
 
     /// An app with a 100 × 50 pt embedded image selected.

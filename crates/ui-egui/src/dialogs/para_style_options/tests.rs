@@ -1,7 +1,7 @@
 use super::*;
 // PLAN: assumed paths for the framework items; the hosted dialog comes from type-w21, the pump from hub-w2.
-use craft_ui_panels::dialog::{DialogHost, DialogId, StackDialog};
-use craft_ui_patterns::form_dialogs::DialogFields;
+use craft::ui::dialog::{DialogHost, DialogId, StackDialog};
+use craft::ui::patterns::form_dialogs::DialogFields;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::doc::{Composer, NodeId, NodeKind, ParaStyle};
 

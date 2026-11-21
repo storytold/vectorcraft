@@ -20,7 +20,7 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::layout::{RowAlign, empty_cell};
 use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::menu::Menu;
-use craft::ui::patterns::ParamRows;
+use craft::ui::patterns::form_dialogs::ParamRows;
 use craft::ui::pickers::{ComboBox, Select};
 use craft::ui::runtime::env::Label;
 use craft::ui::text::TextField;

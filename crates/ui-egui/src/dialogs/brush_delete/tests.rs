@@ -1,4 +1,4 @@
-use craft_ui::dialog::StackDialog;
+use craft::ui::dialog::StackDialog;
 use serde_json::json;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;

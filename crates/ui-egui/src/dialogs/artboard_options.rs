@@ -20,18 +20,18 @@
 use std::cell::Cell;
 
 use craft::theme::Srgba;
-use craft_ui::choice::Checkbox;
-use craft_ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft_ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
-use craft_ui::display::Text;
-use craft_ui::form::Field;
-use craft_ui::patterns::form_dialogs::{FormCx, FormDialog, ResetFooter, ResetPick};
-use craft_ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
-use craft_ui::runtime::env::{Label, LengthUnits, UnitKind};
-use craft_ui::runtime::overlay::CloseReason;
-use craft_ui::runtime::requests::ColorRequest;
-use craft_ui::runtime::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
-use craft_ui::text::{NumberField, TextField};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::patterns::form_dialogs::{FormCx, FormDialog, ResetFooter, ResetPick};
+use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::runtime::requests::ColorRequest;
+use craft::ui::patterns::form_dialogs::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
+use craft::ui::text::{NumberField, TextField};
 use craft::theme::variant::Tone;
 use egui::Ui;
 use serde_json::{Value, json};
@@ -189,7 +189,7 @@ impl StackDialog for ArtboardOptionsDialog {
             .ok_enabled(!self.held.is_waiting())
             .show(ui, |ui, cx, v| {
                 // A measuring run closes nothing: the real run of the pass makes the close.
-                if finish && !craft_ui::runtime::measure::active(ui.ctx()) {
+                if finish && !craft::ui::runtime::measure::active(ui.ctx()) {
                     cx.request_close_as(CloseReason::Activated);
                 }
                 body(ui, cx, v, setup);

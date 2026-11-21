@@ -6,9 +6,9 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use craft::behavior::{CanvasView, DropOperation, Input, Metrics, Sense};
-use craft_ui::canvas::{CanvasSpace, ToolContext, ToolPointer}; // PLAN: assumed path of the ui-canvas items
-use craft_ui::contract::{Common, Component, Cx, DragPreview, DropMark, DropTarget, ListDrag, MeasureCx, Pointer as _, Props, Role, Show as _};
-use craft_ui::style::{ComponentStyle, StyleCx};
+use craft::ui::canvas::{CanvasSpace, ToolContext, ToolPointer}; // PLAN: assumed path of the ui-canvas items
+use craft::ui::contract::{Common, Component, Cx, DragPreview, DropMark, DropTarget, ListDrag, MeasureCx, Pointer as _, Props, Role, Show as _};
+use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Pos2, Rect, Response, Ui, Vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;

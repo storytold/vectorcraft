@@ -5,8 +5,8 @@
 //! Fields: `plane` (`left`, `right` or `ground`), `location` (points along the plane's normal; 0
 //! is its place in the grid's definition), `objects` (`none`, `move` or `copy`).
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::LengthUnits;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Value, json};
 use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
 
@@ -75,7 +75,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_ui::dialog::DialogHost;
+    use craft::ui::dialog::DialogHost;
     use vectorcraft_engine::Session;
     use vectorcraft_tools::{PointerEvent, PointerKind};
 
@@ -91,7 +91,7 @@ mod tests {
     }
 
     /// The one open dialog: its id and its fields.
-    fn the_dialog(app: &VectorcraftApp) -> (craft_ui::dialog::DialogId, Value) {
+    fn the_dialog(app: &VectorcraftApp) -> (craft::ui::dialog::DialogId, Value) {
         let d = host(app, |h| h.open_dialogs().into_iter().next()).expect("a dialog is open");
         (d.id, d.fields.unwrap_or(Value::Null))
     }

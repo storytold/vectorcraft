@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use craft::behavior::kurbo::Point as DocPoint;
 use craft::behavior::{CanvasView, HitShape, Metrics, PartKey, PointerButton, PressPhase, Sense};
-use craft_ui::canvas::{CanvasSpace, canvas_space};
-use craft_ui::contract::{Access, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Role, Show as _};
-use craft_ui::primitives::{PaintShape, StrokeWidth};
-use craft_ui::runtime::focus::KeyUse;
-use craft_ui::style::{ComponentStyle, StyleColor, StyleCx};
+use craft::ui::canvas::{CanvasSpace, canvas_space};
+use craft::ui::contract::{Access, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Role, Show as _};
+use craft::ui::primitives::{PaintShape, StrokeWidth};
+use craft::ui::runtime::focus::KeyUse;
+use craft::ui::style::{ComponentStyle, StyleColor, StyleCx};
 use egui::{Pos2, Response, Ui, Vec2};
 use serde_json::{Map, Value};
 use vectorcraft_effects::{GRAPHICS, GraphicFrame, MappedGraphic, PlanarFace};
@@ -160,7 +160,7 @@ impl Outcome for GraphicHandlesOutput {
 
 /// A dot at the center of each seen mapped graphic, larger for the one the page edits; a press on
 /// one grabs it, and its drag reports where the graphic goes.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(canvas_control, content_painter)]
 pub(super) struct GraphicHandles<'a> {
     #[common]
@@ -261,7 +261,7 @@ impl Component for GraphicHandles<'_> {
     fn access(&self, access: &mut Access, _: &Cx<'_, Self>) {
         for (index, _) in self.handles {
             let node = access.node(HANDLE.at(*index as u64), Role::BUTTON);
-            node.name = craft_ui::contract::Name::Text(format!("{} {}", tl!("Graphic"), index + 1).into());
+            node.name = craft::ui::contract::Name::Text(format!("{} {}", tl!("Graphic"), index + 1).into());
         }
     }
 

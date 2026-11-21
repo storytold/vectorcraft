@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
 

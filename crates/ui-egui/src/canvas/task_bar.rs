@@ -1,14 +1,15 @@
 use craft::behavior::{IconId, Mixed};
-use craft_ui::buttons::{Button, IconButton};
-use craft_ui::canvas::{CanvasSpace, CanvasView};
-use craft_ui::canvas_controls::TaskBar;
-use craft_ui::contract::{Bind, Props as _, Show as _};
-use craft_ui::menu::PanelRow;
-use craft_ui::popover::Popover;
-use craft_ui::primitives::IconSpec;
-use craft_ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft_ui::runtime::env::Label;
-use craft_ui::style::Variant;
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::canvas::CanvasSpace;
+use craft::behavior::CanvasView;
+use craft::ui::canvas_controls::TaskBar;
+use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::menu::PanelRow;
+use craft::ui::popover::Popover;
+use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Label;
+use craft::ui::style::Variant;
 use vectorcraft_geom::Point;
 
 use super::{NodeKind, Rect, TextKind, Ui, VectorcraftApp, json};

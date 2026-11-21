@@ -1,13 +1,13 @@
 //! The Properties panel: sections that change with the selection.
 
-use craft_ui::buttons::{Button, IconButton};
-use craft_ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
 use craft::behavior::{ColumnWidth, IconId};
-use craft_ui::layout_components::{Grid, Row};
-use craft_ui::patterns::Inspector;
+use craft::ui::layout_components::{Grid, Row};
+use craft::ui::patterns::panels::Inspector;
 
-use craft_ui::runtime::commands::CommandRef;
-use craft_ui::sections::Section;
+use craft::ui::runtime::commands::CommandRef;
+use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveShape, Node, NodeKind};

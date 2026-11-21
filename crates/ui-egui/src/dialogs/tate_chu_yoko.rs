@@ -10,9 +10,9 @@
 //! Behavior reference (public documentation):
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/format-east-asian-characters-in-vertical-text.html>.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
 // PLAN: assumed path of `LengthUnits`
-use craft_ui::runtime::LengthUnits;
+use craft::ui::runtime::env::LengthUnits;
 use serde_json::{Map, Value, json};
 
 use super::warichu::set_shared;

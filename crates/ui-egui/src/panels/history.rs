@@ -1,10 +1,10 @@
 //! History panel: the document's states; click one to go back (or forward) to it.
 
-use craft_keymap::CommandRef;
-use craft_ui::contract::Props as _;
-use craft_ui::menu::PanelRow;
-use craft_ui::patterns::{HistoryEvent, HistoryFooter, HistoryKey, HistoryPanel, HistoryRow};
-use craft_ui::runtime::commands::{CommandState, CommandStates};
+use craft::keymap::CommandRef;
+use craft::ui::contract::Props as _;
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::panels::{HistoryEvent, HistoryFooter, HistoryKey, HistoryPanel, HistoryRow};
+use craft::ui::runtime::commands::{CommandState, CommandStates};
 use egui::Ui;
 use serde_json::{Value, json};
 
@@ -63,8 +63,8 @@ fn rows(app: &VectorcraftApp) -> Vec<HistoryRow> {
         .into_iter()
         .enumerate()
         .map(|(i, name)| {
-            // PLAN: assumed `craft_ui::primitives::IconId`; the app has no direct craft-behavior dependency.
-            let icon = craft_ui::primitives::IconId::new(if i == 0 { "new_file" } else { "history" });
+            // PLAN: assumed `craft::ui::primitives::IconId`; the app has no direct craft-behavior dependency.
+            let icon = craft::behavior::IconId::new(if i == 0 { "new_file" } else { "history" });
             HistoryRow::state(i as u64, name).icon(icon).redo(i > undone)
         })
         .collect()

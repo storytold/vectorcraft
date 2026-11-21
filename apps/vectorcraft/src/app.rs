@@ -8,7 +8,7 @@ use super::windows_stylus;
 use super::{App, VectorcraftApp, file_access};
 #[cfg(target_os = "macos")]
 use super::{mac_window, open_documents};
-// PLAN: assumed `craft::ui::shell::embed` path (`craft_ui_shell::shell::embed`)
+// PLAN: assumed `craft::ui::shell::embed` path (`craft::ui::shell::embed`)
 use craft::ui::shell::embed;
 use vectorcraft_ui_egui::dialogs::safe_mode;
 use vectorcraft_ui_egui::hang_beacon::{self, BEACON, FrameTime, Stage};

@@ -11,14 +11,15 @@
 use std::ops::RangeInclusive;
 
 use craft::behavior::IconId;
-use craft_ui::buttons::Button;
-use craft_ui::choice::Segmented;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
-use craft_ui::display::Divider;
-use craft_ui::form::{Field, FieldGroup};
-use craft_ui::layout_components::Row;
-use craft_ui::pickers::Select;
-use craft_ui::text::{NumberField, SliderField, SliderFieldLayout};
+use craft::ui::buttons::Button;
+use craft::ui::choice::Segmented;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::display::Divider;
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::Row;
+use craft::ui::pickers::Select;
+use craft::ui::text::NumberField;
+use craft::ui::form::{SliderField, SliderFieldLayout};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;

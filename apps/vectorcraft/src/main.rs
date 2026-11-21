@@ -69,17 +69,18 @@ use std::sync::{Arc, Mutex};
 
 // PLAN: assumed paths: `craft::ui::shell::embed`, `craft::ui::{InstallSpec, register_app_icons}`, `craft::ui::runtime::PenSource`, `craft::window::{Prefix, SystemWindows}`, `craft::host::{AppInfo, Backend::X11}`, `craft::dialogs::{FilePanels, FileService}`
 use craft::automation::server::{self, Listening};
-use craft::automation::{ControlOptions, EnvNames};
-use craft::dialogs::{FilePanels, FileService};
+use craft::automation::args::{ControlOptions, EnvNames};
+use craft::dialogs::service::{FilePanels, FileService};
 use craft::host::target::{Backend, ShellInfo};
 use craft::host::{AppInfo, Wake};
 use craft::settings::SharedSettings;
 use craft::ui::InstallSpec;
-use craft::ui::runtime::PenSource;
+use craft::ui::runtime::pen::PenSource;
 use craft::ui::shell::embed;
 use craft::window::policy::{TitleBarPref, decide_for};
 use craft::window::restore::Store;
-use craft::window::{Prefix, SystemWindows};
+use craft::window::Prefix;
+use craft::window::system::SystemWindows;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::file_access::{self, AutomationRoots};
@@ -614,8 +615,8 @@ fn main() -> std::process::ExitCode {
                 embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts()).map_err(|e| e.to_string())?;
                 egui_extras::install_image_loaders(ctx);
                 // PLAN: assumed `craft::ui::register_app_icons(&[..])` and `cursors::CURSOR_ICONS` (cv.S13)
-                craft::ui::register_app_icons(&vectorcraft_ui_egui::icons::APP_ICONS);
-                craft::ui::register_app_icons(&vectorcraft_ui_egui::cursors::CURSOR_ICONS);
+                craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::icons::APP_ICONS);
+                craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::cursors::CURSOR_ICONS);
                 start_pen(&winit_window, &pen);
                 // PLAN: assumed `UiState::last_folders: HashMap<String, PathBuf>`, the folders the picks chose
                 let folders = settings.lock().get().ui.last_folders.clone();

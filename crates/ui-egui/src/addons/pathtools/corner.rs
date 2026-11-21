@@ -2,11 +2,11 @@
 //! the selection holds, Apply (`addon.pathtools.cornerSet`) and Set Corners… (its dialog, which
 //! can also take every other anchor, or only the corners in an angle range).
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Entry, Props as _, Show as _, Sizing, clicked};
-use craft_ui::display::Text;
-use craft_ui::pickers::Select;
-use craft_ui::text::NumberField;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, Sizing, clicked};
+use craft::ui::display::Text;
+use craft::ui::pickers::Select;
+use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::LiveCorners;

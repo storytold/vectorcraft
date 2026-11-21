@@ -14,12 +14,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
 
 use craft::behavior::dock::{NamedWorkspace, Workspace as DockWorkspace, WorkspaceChrome, WorkspaceError, WorkspaceKeeps, WorkspaceSet};
-use craft_keymap::CommandRef;
-use craft_ui::patterns::dock::{HostedNewWorkspace, NewWorkspace, WorkspaceSwitcher};
+use craft::keymap::CommandRef;
+use craft::ui::patterns::dock::{HostedNewWorkspace, NewWorkspace, WorkspaceSwitcher};
 // PLAN: assumed `HostedListManager` (chrome-w6, q345) in `form_dialogs`:
 // `new(title, name_label, entries, actions)`, `renames(kind)`, `set_entries(Vec<ListManagerEntry>)`,
 // `take_choice() -> Option<ListManagerChoice>`.
-use craft_ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerEntry};
+use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

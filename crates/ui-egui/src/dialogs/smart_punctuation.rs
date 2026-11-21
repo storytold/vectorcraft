@@ -6,9 +6,9 @@
 //! Fields: the switches `fiLigatures`, `flLigatures`, `quotes`, `spaces`, `dashes`, `ellipsis` and
 //! `fractions`, `scope` (`selection` or `document`) and `report`.
 
-use craft_ui::contract::{Bind, SaveKey};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::{Bind, SaveKey};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -105,7 +105,7 @@ mod tests {
     }
 
     /// The open host entry with `key`.
-    fn entry(app: &VectorcraftApp, key: &str) -> Option<craft_ui::dialog::OpenDialog> {
+    fn entry(app: &VectorcraftApp, key: &str) -> Option<craft::ui::dialog::OpenDialog> {
         app.dialogs().unwrap().with(|h| h.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(key)))
     }
 

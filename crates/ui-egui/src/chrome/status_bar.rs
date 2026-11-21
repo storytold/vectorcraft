@@ -1,15 +1,15 @@
 use super::{ROTATE_VIEW_ANGLES, Ui, VectorcraftApp, json};
 use craft::behavior::IconId;
 use craft::behavior::kurbo::Size;
-use craft_ui_widgets::bars::{Bar, BarKind, StatusMessage, StatusProgress};
-use craft_ui_widgets::buttons::{Button, IconButton};
-use craft_ui_widgets::contract::{Bind, Entry, LabelKind, Outcome as _, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
-use craft_ui_widgets::display::{Divider, Elide, Shade, Text};
-use craft_ui_widgets::form::Field;
-use craft_ui_widgets::menu::Menu;
-use craft_ui_widgets::pickers::Select;
-use craft_ui_widgets::style::TypeRole;
-use craft_ui_widgets::text::ZoomField;
+use craft::ui::bars::{Bar, BarKind, StatusMessage, StatusProgress};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::{Bind, Entry, LabelKind, Outcome as _, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
+use craft::ui::display::{Divider, Elide, Shade, Text};
+use craft::ui::form::Field;
+use craft::ui::menu::Menu;
+use craft::ui::pickers::Select;
+use craft::ui::style::TypeRole;
+use craft::ui::text::ZoomField;
 
 /// Shows the status bar: zoom, rotation, artboard navigator, the info field with its Show menu, the readouts, Stop,
 /// the background-work progress and last the message, so a narrow bar elides the message before anything else.

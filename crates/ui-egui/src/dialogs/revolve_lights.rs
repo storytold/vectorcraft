@@ -11,14 +11,14 @@
 
 // PLAN: assumed the app depends on craft-behavior, craft-ui-widgets and craft-ui-patterns (hub-w2 owns Cargo.toml).
 use craft::behavior::{CursorIcon, HitLevel, HitPriority, HitShape, Metrics, NavMove, PartKey, PointerButton, PressPhase, Sense};
-use craft_ui::contract::{
+use craft::ui::contract::{
     Access, Bind, BindMut, Common, Component, Cx, DisabledLook, Edit as _, EditResponse, Focus as _, Input, MeasureCx, Name, Outcome, PaintUi,
     PartsCx, Pointer as _, Props as _, Remember as _, Role, Show as _,
 };
-use craft_ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
-use craft_ui::style::{ComponentStyle, FocusLook, StyleCx};
-use craft_ui_patterns::patterns::form_dialogs::{CustomContext, DialogFields};
-use craft_ui_widgets::buttons::Button;
+use craft::ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
+use craft::ui::style::{ComponentStyle, FocusLook, StyleCx};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields};
+use craft::ui::buttons::Button;
 use egui::{Pos2, Rect, Response, Stroke, Vec2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -199,7 +199,7 @@ struct Hold {
 /// - Keyboard: each light is a Tab stop; Left and Right turn the light, Up and Down raise and lower it, 1° a press and 15°
 ///   with Shift, each press one step.
 /// - AccessKit: a `Slider` per light named by its number, Rotation, Height and side.
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(content_painter)]
 pub(crate) struct LightSphere<'a> {
     #[common]
@@ -216,7 +216,7 @@ pub(crate) struct LightSphere<'a> {
 
 impl<'a> LightSphere<'a> {
     /// A sphere named `label` showing `lights`.
-    pub(crate) fn new(label: impl Into<craft_ui::runtime::env::Label>, lights: Bind<'a, Lights>) -> Self {
+    pub(crate) fn new(label: impl Into<craft::ui::runtime::env::Label>, lights: Bind<'a, Lights>) -> Self {
         LightSphere { common: Common::new(), lights, selected: 0, picked: None, hot: None }.label(label)
     }
 }

@@ -1,10 +1,10 @@
 use super::{Ui, VectorcraftApp, json, zoom_label};
 use crate::doc_windows::{self, GRAB, Win};
-use craft_ui::bars::{Bar, BarKind, BreadcrumbBar};
-use craft_ui::buttons::{Button, IconButton};
-use craft_ui::contract::Entry;
-use craft_ui::layout_components::Row;
-use craft_ui::tabs::{DocumentTab, DocumentTabs, DocumentTabsEvent};
+use craft::ui::bars::{Bar, BarKind, BreadcrumbBar};
+use craft::ui::buttons::{Button, IconButton};
+use craft::ui::contract::Entry;
+use craft::ui::layout_components::Row;
+use craft::ui::tabs::{DocumentTab, DocumentTabs, DocumentTabsEvent};
 
 /// [`view_tab_title`] for a document with one view.
 #[cfg(test)]

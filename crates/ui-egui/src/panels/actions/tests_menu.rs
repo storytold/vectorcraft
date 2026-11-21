@@ -2,8 +2,8 @@
 
 use craft::automation::actions::Action;
 use craft::automation::ui::actions::{ActionSelection, ActionsPanelCommands as C};
-use craft_keymap::CommandRef;
-use craft_ui::runtime::commands::CommandStates;
+use craft::keymap::CommandRef;
+use craft::ui::runtime::commands::CommandStates;
 use serde_json::json;
 use vectorcraft_engine::Session;
 

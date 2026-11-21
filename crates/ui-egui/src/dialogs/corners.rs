@@ -9,8 +9,8 @@
 
 use std::collections::BTreeSet;
 
-use craft_ui::patterns::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
 use vectorcraft_engine::doc::{LiveCorners, NodeId};
 use vectorcraft_geom::shapes::CornerKind;
@@ -140,7 +140,7 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use craft_ui::dialog::{DialogHost, dialog_id};
+    use craft::ui::dialog::{DialogHost, dialog_id};
     use vectorcraft_engine::Session;
     use vectorcraft_engine::doc::{LiveShape, NodeKind};
     use vectorcraft_tools::corners::CornerWidgets;

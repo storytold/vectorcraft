@@ -6,14 +6,14 @@
 use std::ops::RangeInclusive;
 
 use craft::behavior::Mixed;
-use craft_ui::contract::{Bind, Entry};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
-use craft_ui::pickers::Select;
-use craft_ui::primitives::ContentPainterCx;
-use craft_ui::runtime::env::{Label, LengthUnits, UnitKind};
-use craft_ui::runtime::requests::PathKind;
-use craft_ui::text::{NumberField, StepArrows};
-use craft_ui::value_drag::{PointPicker, SliderScale};
+use craft::ui::contract::{Bind, Entry};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::ContentPainterCx;
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::requests::PathKind;
+use craft::ui::text::{NumberField, StepArrows};
+use craft::ui::value_drag::{PointPicker, SliderScale};
 use egui::{Rect, Stroke, pos2};
 use serde_json::{Map, Value};
 

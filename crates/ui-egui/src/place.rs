@@ -5,15 +5,15 @@
 use std::sync::{Arc, Mutex};
 
 use craft::host::PickRequest;
-use craft_ui::behavior::{CanvasView, DropOperation};
-use craft_ui::buttons::{Button, Link};
-use craft_ui::contract::{Props as _, Show as _, ShowContainer as _, Trigger, clicked};
-use craft_ui::display::{Badge, Picture, PictureSize, Shade, Text};
-use craft_ui::layout_components::Row;
-use craft_ui::list::{ThumbAspect, ThumbSize};
-use craft_ui::menu::{Menu, MenuItem};
-use craft_ui::primitives::textures::Revision;
-use craft_ui::runtime::drag::{DropMark, DropTarget as FilesTarget, OsFile, OsFiles};
+use craft::ui::behavior::{CanvasView, DropOperation};
+use craft::ui::buttons::{Button, Link};
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, Trigger, clicked};
+use craft::ui::display::{Badge, Picture, PictureSize, Shade, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::list::{ThumbAspect, ThumbSize};
+use craft::ui::menu::{Menu, MenuItem};
+use craft::ui::primitives::textures::Revision;
+use craft::ui::runtime::drag::{DropMark, DropTarget as FilesTarget, OsFile, OsFiles};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::cmd::fileio;
@@ -358,7 +358,7 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>, show: Option<bool>) 
 // PLAN: the sheet puts `fill_lines` in the dialog's own show; the dialog has no `app`, so the pump fills it.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     use crate::dialogs::place::PlaceDialog;
-    use craft_ui::dialog::DialogResult;
+    use craft::ui::dialog::DialogResult;
     let Some(dialogs) = app.dialogs() else { return };
     let (reading, answer) = dialogs.with(|host| {
         let reading = host.get_mut::<PlaceDialog>().is_some_and(|d| fill_lines(app, &d.files, &mut d.info));

@@ -6,11 +6,11 @@ use serde_json::Value;
 use crate::VectorcraftApp;
 
 #[cfg(target_arch = "wasm32")]
-use craft_ui::dialog::{Alert, HostedAlert};
+use craft::ui::dialog::{Alert, HostedAlert};
 #[cfg(not(target_arch = "wasm32"))]
-use craft_update::stack_dialogs::{CheckChoice, UpdateCheckDialog, UpdatePromptDialog};
+use craft::update::stack_dialogs::{CheckChoice, UpdateCheckDialog, UpdatePromptDialog};
 #[cfg(not(target_arch = "wasm32"))]
-use craft_update::updater::{Action, Status, Updater};
+use craft::update::updater::{Action, Status, Updater};
 
 #[cfg_attr(target_arch = "wasm32", derive(Default))]
 pub(crate) struct Runtime {
@@ -204,7 +204,7 @@ mod tests {
         let root = update_root(name);
         Updater::new(&crate::UPDATE_APP, version)
             .with_source(std::sync::Arc::new(|| Ok(None)))
-            .with_paths(craft_update::Paths::under(&root))
+            .with_paths(craft::update::Paths::under(&root))
             .with_pins_path(root.join("pins.json"))
     }
 
@@ -216,10 +216,10 @@ mod tests {
 
     /// The release the tests offer.
     #[cfg(not(target_arch = "wasm32"))]
-    fn release_99() -> craft_update::Release {
-        craft_update::Release {
+    fn release_99() -> craft::update::Release {
+        craft::update::Release {
             tag: "v99.0.0".into(),
-            version: craft_update::parse_version("99.0.0"),
+            version: craft::update::parse_version("99.0.0"),
             name: "VectorCraft 99.0.0".into(),
             html_url: "https://github.com/storytold/vectorcraft/releases/tag/v99.0.0".into(),
             ..Default::default()
@@ -233,7 +233,7 @@ mod tests {
     /// must not have kept another context, which its thread would ask instead. A copy the
     /// launcher manages ignores the offer and fails the test.
     #[cfg(not(target_arch = "wasm32"))]
-    fn offer_and_wait(updater: &mut Updater, release: craft_update::Release) {
+    fn offer_and_wait(updater: &mut Updater, release: craft::update::Release) {
         let ctx = egui::Context::default();
         let (answered, wait) = std::sync::mpsc::channel();
         ctx.set_repaint_observer(move |info| {
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn unsaved_changes_dialogs_and_running_work_hold_an_update_back() {
-        use craft_ui::dialog::{Alert, HostedAlert};
+        use craft::ui::dialog::{Alert, HostedAlert};
 
         let mut app = app_with_saved_object();
         let ctx = crate::unsaved::ready_for_test(&mut app);

@@ -1,10 +1,10 @@
 //! The Properties panel's Character and Paragraph sections for the selected text.
 
 use craft::text::ui::character::CharacterRows;
-use craft_ui::contract::{Props as _, Show as _, ShowContainer as _};
-use craft_ui::display::{Shade, Text};
-use craft_ui::layout_components::Row;
-use craft_ui::sections::Section;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::sections::Section;
 use egui::Ui;
 use vectorcraft_doc::NodeKind;
 

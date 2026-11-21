@@ -12,14 +12,14 @@ use craft::behavior::{
     CancelReason, CanvasView, CursorIcon, CursorPriority, HitLevel, HitPriority, HitShape, Metrics, PartKey, PartRef, PointerButton, PressPhase, Sense,
 };
 // PLAN: the `craft` facade crate needs to be a dependency in crates/ui-egui/Cargo.toml (owner: hub-w1/hub-w2).
-use craft_ui::canvas::{CanvasSpace, canvas_space};
-use craft_ui::contract::{
+use craft::ui::canvas::{CanvasSpace, canvas_space};
+use craft::ui::contract::{
     Access, Bind, BindMut, Common, Component, Cx, Edit as _, EditResponse, MeasureCx, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Remember as _,
     Role, Show as _,
 };
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog};
-use craft_ui::runtime::focus::KeyUse;
-use craft_ui::style::{ComponentStyle, StyleColor, StyleCx};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog};
+use craft::ui::runtime::focus::KeyUse;
+use craft::ui::style::{ComponentStyle, StyleColor, StyleCx};
 use egui::{Align2, FontId, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, vec2};
 use serde_json::json;
 use vectorcraft_effects::{CLASSIC_REVOLVE, REVOLVE};
@@ -415,7 +415,7 @@ struct Report {
 /// - Pointer: the grab hand over the rings, the centre and the light, closed during a drag. The parts are pointer
 ///   only: the dialog's fields are the keyboard path.
 /// - A press that is not on a ring turns X and Y together (the rotation page) or moves the light (the lighting page).
-#[derive(craft_ui::contract::Component, craft_ui::contract::Props)]
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
 #[component(canvas_control, content_painter)]
 pub(crate) struct RevolveGizmo<'a> {
     #[common]

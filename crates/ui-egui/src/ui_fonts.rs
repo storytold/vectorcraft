@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use craft_ui::fonts::{Family, I18nScripts, SEMIBOLD, UiFonts};
+use craft::ui::fonts::{Family, I18nScripts, SEMIBOLD, UiFonts};
 
 /// The interface fonts configuration. Characters no face covers are looked up in the installed
 /// system fonts on native; the web build has the faces its server offers instead.
@@ -14,19 +14,19 @@ pub fn ui_fonts() -> UiFonts<'static> {
         UiFonts::new(&I18nScripts).craft_faces(vectorcraft_text::CRAFT_FONTS).family(Family::monospace()).family(Family::named(SEMIBOLD).weight(600));
     #[cfg(not(target_arch = "wasm32"))]
     {
-        fonts.on_demand(Arc::new(craft_ui::fonts::SystemCandidates))
+        fonts.on_demand(Arc::new(craft::ui::fonts::SystemCandidates))
     }
     #[cfg(target_arch = "wasm32")]
     {
         // PLAN: assumed vectorcraft_text::SERVED_FONTS: &[craft_fonts_build::ServedFace] (q175-A); the
         // fetcher (`BrowserFetcher`) lives in the web app and is added by the web shell's install.
-        fonts.on_demand(Arc::new(craft_ui::fonts::NoCandidates)).served_faces(vectorcraft_text::SERVED_FONTS)
+        fonts.on_demand(Arc::new(craft::ui::fonts::NoCandidates)).served_faces(vectorcraft_text::SERVED_FONTS)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use craft_ui::fonts::{FontRef, Sample, UiFonts, assert_covers, missing_glyphs};
+    use craft::ui::fonts::{FontRef, Sample, UiFonts, assert_covers, missing_glyphs};
 
     use super::*;
 

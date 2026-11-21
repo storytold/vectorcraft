@@ -1,6 +1,6 @@
 //! PSD Options' rule for transparency, and its starting colour model.
 
-use craft_ui::patterns::form_dialogs::DialogFields;
+use craft::ui::patterns::form_dialogs::DialogFields;
 use serde_json::{Map, json};
 
 use super::*;

@@ -64,8 +64,8 @@ use vectorcraft_engine::inspect::StrokeMixed;
 use vectorcraft_geom::shapes::CornerKind;
 
 use crate::theme::Tokens;
-use craft_ui::menu::PanelRow;
-use craft_ui::runtime::commands::CommandStates;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::CommandStates;
 
 use crate::widgets::dim_label;
 use crate::{VectorcraftApp, icons};

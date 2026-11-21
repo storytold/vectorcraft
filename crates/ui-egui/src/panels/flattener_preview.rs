@@ -10,15 +10,15 @@
 
 use std::sync::Arc;
 
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Entry};
-use craft_ui::display::{Divider, Shade, Text};
-use craft_ui::layout_components::Row;
-use craft_ui::menu::PanelRow;
-use craft_ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView};
-use craft_ui::pickers::Select;
-use craft_ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft_ui::style::TypeRole;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry};
+use craft::ui::display::{Divider, Shade, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::form_dialogs::{DialogFields, ParamRows, PreviewPane, PreviewView};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::style::TypeRole;
 use egui::load::SizedTexture;
 use egui::{Ui, vec2};
 use serde::{Deserialize, Serialize};

@@ -30,12 +30,12 @@ use std::path::Path;
 
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Outcome as _, Props as _, Show as _};
-use craft_ui::display::Text;
-use craft_ui::panels::dialog::{DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id};
-use craft_ui::panels::sections::{DialogRole, FooterButton};
-use craft_ui::text::TextField;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Show as _};
+use craft::ui::display::Text;
+use craft::ui::patterns::panels::dialog::{DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id};
+use craft::ui::patterns::panels::sections::{DialogRole, FooterButton};
+use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};

@@ -2,7 +2,7 @@
 //! curve tolerance, origin, pens, path order), remembered for the next export, and one plot per
 //! artboard with Use Artboards.
 
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use serde_json::json;
 use vectorcraft_engine::cmd::fileio;
 

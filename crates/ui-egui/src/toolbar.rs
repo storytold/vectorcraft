@@ -11,10 +11,10 @@
 use craft::behavior::dock::DockEdge;
 use craft::behavior::overlay::Side;
 use craft::theme::Size; // PLAN: assumed path of the theme's `Size` through the facade
-use craft_ui::contract::{BodyCx, ThemeScope};
-use craft_ui::docking::GroupAt;
-use craft_ui::rails::{RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
-use craft_ui::runtime::commands::CommandRef;
+use craft::ui::contract::{BodyCx, ThemeScope};
+use craft::ui::docking::GroupAt;
+use craft::ui::rails::{RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
+use craft::ui::runtime::commands::CommandRef;
 use egui::{Pos2, Sense, Ui, Vec2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;

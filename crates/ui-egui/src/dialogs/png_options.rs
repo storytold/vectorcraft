@@ -6,10 +6,10 @@
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::text::NumberField;
-use craft_ui::value_drag::SliderScale;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::text::NumberField;
+use craft::ui::value_drag::SliderScale;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio::{self, ArtboardPick, Format};
@@ -215,7 +215,7 @@ fn resolution_row() -> Param {
         let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| fields.bool("__otherPpi") != Some(true));
         let shown = preset.unwrap_or(RESOLUTION_LABELS.len() - 1);
         ui.horizontal(|ui| {
-            craft_ui::ComboBox::from_id_salt("ro-ppi").selected_text(tl!(RESOLUTION_LABELS.get(shown).copied().unwrap_or_default())).show_ui(
+            craft::ui::pickers::ComboBox::from_id_salt("ro-ppi").selected_text(tl!(RESOLUTION_LABELS.get(shown).copied().unwrap_or_default())).show_ui(
                 ui,
                 |ui| {
                     for (i, label) in RESOLUTION_LABELS.iter().enumerate() {
@@ -265,7 +265,7 @@ fn color_choice(
         let start = first(fields);
         let shown = at.max(start);
         ui.horizontal(|ui| {
-            craft_ui::ComboBox::from_id_salt(("ro", key)).selected_text(tl!(labels.get(shown).copied().unwrap_or_default())).show_ui(ui, |ui| {
+            craft::ui::pickers::ComboBox::from_id_salt(("ro", key)).selected_text(tl!(labels.get(shown).copied().unwrap_or_default())).show_ui(ui, |ui| {
                 for (i, l) in labels.iter().enumerate().skip(start) {
                     if ui.selectable_label(i == shown, tl!(*l)).clicked() {
                         fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));

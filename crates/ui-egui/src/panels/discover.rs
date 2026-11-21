@@ -2,16 +2,16 @@
 
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::i18n::Folder;
-use craft_keymap::{Chord, CommandRef};
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
-use craft_ui::display::{Kbd, Shade, Text};
-use craft_ui::layout_components::Row;
-use craft_ui::list::{List, ListRow};
-use craft_ui::menu::search::{HelpEntry, SearchIndex, Synonyms, rank};
-use craft_ui::runtime::focus::{self, FocusTarget};
-use craft_ui::style::TypeRole;
-use craft_ui::text::TextField;
+use craft::keymap::{Chord, CommandRef};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::display::{Kbd, Shade, Text};
+use craft::ui::layout_components::Row;
+use craft::ui::list::{List, ListRow};
+use craft::ui::menu::search::{HelpEntry, SearchIndex, Synonyms, rank};
+use craft::ui::runtime::focus::{self, FocusTarget};
+use craft::ui::style::TypeRole;
+use craft::ui::text::TextField;
 use egui::Ui;
 use serde::Serialize;
 use serde_json::{Value, json};

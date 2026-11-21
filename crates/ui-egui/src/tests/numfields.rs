@@ -5,10 +5,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use craft::behavior::NumberCodec;
-use craft_ui::contract::{Bind, Props as _, Show as _};
-use craft_ui::runtime::env::{Env, LengthUnits, UnitKind, Units};
-use craft_ui::testing::Fixture;
-use craft_ui::text::NumberField;
+use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::runtime::env::{Env, LengthUnits, UnitKind, Units};
+use craft::ui::testing::Fixture;
+use craft::ui::text::NumberField;
 use egui::{Key, Modifiers};
 use serde_json::json;
 use vectorcraft_engine::Session;

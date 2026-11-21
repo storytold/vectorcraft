@@ -1,5 +1,5 @@
 use super::*;
-use craft_ui::dialog::DialogId;
+use craft::ui::dialog::DialogId;
 use vectorcraft_engine::Session;
 
 fn app() -> VectorcraftApp {

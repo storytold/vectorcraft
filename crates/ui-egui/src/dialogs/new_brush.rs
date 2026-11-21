@@ -7,9 +7,9 @@
 //! selected or was dropped). The ids of the dropped art (without them, the selection's) stay with
 //! the dialog's OK.
 
-use craft_ui::contract::Bind;
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::runtime::env::Label;
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
 use super::{brush_options, host};
@@ -79,7 +79,7 @@ fn confirm(app: &mut VectorcraftApp, d: &DialogFields, ids: Option<Value>) -> Re
 
 #[cfg(test)]
 mod tests {
-    use craft_ui::dialog::StackDialog;
+    use craft::ui::dialog::StackDialog;
     use vectorcraft_engine::Session;
 
     use super::*;

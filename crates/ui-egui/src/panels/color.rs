@@ -20,8 +20,8 @@ use craft::color_ui::ui::{
 };
 use craft::color_ui::web_safe;
 use craft::theme::{ModelValues, Srgba};
-use craft_ui::contract::Bind;
-use craft_ui::menu::PanelMenu;
+use craft::ui::contract::Bind;
+use craft::ui::menu::PanelMenu;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms;
@@ -573,13 +573,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let color = tgt.color();
     let rows = shown(app, &tgt);
     let has_color = color.is_some() || mixed_now(app);
-    // PLAN: assumed craft_ui::runtime::commands::{publish(ui, command, state), take_fired::<C>(ui) -> Vec<C>} (the menu host's command mechanism)
+    // PLAN: assumed craft::ui::runtime::commands::{publish(ui, command, state), take_fired::<C>(ui) -> Vec<C>} (the menu host's command mechanism)
     for (command, state) in ColorPanelMenu::states(LAYOUT, &app.ui.color_panel, &rows, has_color) {
-        craft_ui::runtime::commands::publish(ui, command, state);
+        craft::ui::runtime::commands::publish(ui, command, state);
     }
     PanelMenu::new(ColorPanelMenu::rows(LAYOUT), Vec::new()).show(ui);
     let edited = srgba(&color.unwrap_or(Color::BLACK));
-    for command in craft_ui::runtime::commands::take_fired::<ColorPanelCommand>(ui) {
+    for command in craft::ui::runtime::commands::take_fired::<ColorPanelCommand>(ui) {
         if let Some(action) = ColorPanelMenu::run_command(&mut app.ui.color_panel, command, edited) {
             carry_out(app, ui.ctx(), &tgt, action);
         }

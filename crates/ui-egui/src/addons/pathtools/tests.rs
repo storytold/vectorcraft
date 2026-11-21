@@ -1,4 +1,4 @@
-use craft_ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
+use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_tools::addons::parametric_shape::ShapeKind;

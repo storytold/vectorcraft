@@ -6,10 +6,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// PLAN: assumed `craft_ui::contract` re-exports the behavior crate's edit-stream types.
-use craft_ui::contract::{CancelReason, EditEvent, GestureId, Mixed};
-use craft_ui::patterns::form_dialogs::DialogFields;
-use craft_ui::testing::Fixture;
+// PLAN: assumed `craft::ui::contract` re-exports the behavior crate's edit-stream types.
+use craft::behavior::{CancelReason, EditEvent, GestureId, Mixed};
+use craft::ui::patterns::form_dialogs::DialogFields;
+use craft::ui::testing::Fixture;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 
@@ -949,7 +949,7 @@ fn lighting(params: Value) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
 }
 
 /// The lighting widget's part for light `n` (from 1): its screen-reader name and the control to press.
-fn light(fixture: &Fixture, n: usize) -> (String, craft_ui::testing::Target) {
+fn light(fixture: &Fixture, n: usize) -> (String, craft::ui::testing::Target) {
     let tree = fixture.tree();
     let prefix = format!("Light {n}:");
     let key = tree

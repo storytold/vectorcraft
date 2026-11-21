@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use craft_keymap::{AssignError, Binding, ConflictKind, Keymap, Overrides, Policy, Trigger};
+use craft::keymap::{AssignError, Binding, ConflictKind, Keymap, Overrides, Policy, Trigger};
 use egui::{Key, KeyboardShortcut, Modifiers};
 use serde_json::{Value, json};
 
@@ -158,7 +158,7 @@ pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
 }
 
 /// Registry default shortcut of a command on platform `p`.
-fn default_command_shortcut_on(id: &str, p: craft_keymap::Platform) -> Option<&'static str> {
+fn default_command_shortcut_on(id: &str, p: craft::keymap::Platform) -> Option<&'static str> {
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return c.shortcut;
     }
@@ -167,7 +167,7 @@ fn default_command_shortcut_on(id: &str, p: craft_keymap::Platform) -> Option<&'
 
 /// The default shortcut `sc` of UI command `id` on platform `p` (empty for none). Select Last
 /// Selection Tool has none on macOS, which takes Cmd+` to switch between an app's windows.
-pub(crate) fn ui_command_default(id: &str, sc: &'static str, p: craft_keymap::Platform) -> &'static str {
+pub(crate) fn ui_command_default(id: &str, sc: &'static str, p: craft::keymap::Platform) -> &'static str {
     if id == "tool.selectLastSelection" && p.is_mac() { "" } else { sc }
 }
 
@@ -202,7 +202,7 @@ pub fn default_of(key: &str) -> Option<&'static str> {
 }
 
 /// Default shortcut of an entry key on platform `p`.
-pub(crate) fn default_on(key: &str, p: craft_keymap::Platform) -> Option<&'static str> {
+pub(crate) fn default_on(key: &str, p: craft::keymap::Platform) -> Option<&'static str> {
     if let Some(t) = key.strip_prefix("tool:") {
         return vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut);
     }
@@ -351,7 +351,7 @@ pub(crate) fn backtick_text() -> Option<String> {
 fn on_layout(text: String, typed: Option<&str>) -> String {
     let Some(typed) = typed else { return text };
     match vc_chord(&text) {
-        Some(c) if c.key == craft_keymap::Key::Backtick && !c.mods.shift => match text.strip_suffix('~') {
+        Some(c) if c.key == craft::keymap::Key::Backtick && !c.mods.shift => match text.strip_suffix('~') {
             Some(mods) => format!("{mods}{typed}"),
             None => text,
         },
@@ -1211,13 +1211,13 @@ pub type Holds = BTreeMap<String, String>;
 /// The chord of hold shortcut text `text`, or why it can't be one. A hold shortcut is a key that
 /// types a character, alone or with Shift. Space and the backtick key are refused: the canvas reads
 /// them while they are held.
-pub fn hold_chord(text: &str) -> Result<craft_keymap::Chord, String> {
+pub fn hold_chord(text: &str) -> Result<craft::keymap::Chord, String> {
     let chord = vc_chord(text).ok_or_else(|| format!("can't parse shortcut `{text}`"))?;
     let shown = menus::pretty_shortcut(&vc_format(&chord));
     if chord.mods.cmd || chord.mods.ctrl || chord.mods.alt {
         return Err(format!("a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)"));
     }
-    if chord.key == craft_keymap::Key::Backtick || !crate::shortcuts::types_text(chord.key) {
+    if chord.key == craft::keymap::Key::Backtick || !crate::shortcuts::types_text(chord.key) {
         return Err(format!("{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key"));
     }
     Ok(chord)
@@ -1231,7 +1231,7 @@ pub fn hold_of(holds: &Holds, key: &str) -> Option<String> {
 /// The entry whose usable hold shortcut is `chord`: the first in `holds`' order when several are.
 /// An entry no longer listed (a removed plug-in's, or one that [`needs_a_value`] whose shortcut
 /// was taken away) keeps its text but does not hold.
-pub(crate) fn hold_for<'a>(holds: &'a Holds, chord: &craft_keymap::Chord) -> Option<&'a str> {
+pub(crate) fn hold_for<'a>(holds: &'a Holds, chord: &craft::keymap::Chord) -> Option<&'a str> {
     let mirror = current();
     holds
         .iter()

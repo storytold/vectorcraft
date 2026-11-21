@@ -7,7 +7,7 @@
 //! the active one and still has the symbol; an unused symbol that has gained instances since asks
 //! the in-use question instead.
 
-use craft_ui::dialog::{PromptChoice, StandardPrompt};
+use craft::ui::dialog::{PromptChoice, StandardPrompt};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;

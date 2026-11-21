@@ -2,7 +2,7 @@
 //! a run advanced frame by frame, Stop, and the questions a run and quitting ask.
 
 use craft::host::{PickKind, Picked};
-use craft_ui::panels::dialog::DialogResult;
+use craft::ui::patterns::panels::dialog::DialogResult;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;

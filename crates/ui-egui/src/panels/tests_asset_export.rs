@@ -5,10 +5,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 // PLAN: assumed crate paths for the framework items below; none is used elsewhere in this crate yet.
-use craft_keymap::CommandRef;
-use craft_ui_contract::runtime::CommandStates;
-use craft_ui_panels::dialog::StackDialog;
-use craft_ui_widgets::menu::PanelRow;
+use craft::keymap::CommandRef;
+use craft::ui::runtime::commands::CommandStates;
+use craft::ui::dialog::StackDialog;
+use craft::ui::menu::PanelRow;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 

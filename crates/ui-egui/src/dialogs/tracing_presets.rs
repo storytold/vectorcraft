@@ -17,16 +17,17 @@ use std::sync::Arc;
 
 use craft::behavior::{DisplayOrder, ItemSource, Selection, SelectionChange};
 use craft::host::{PickRequest, Picked};
-use craft_ui::buttons::Button;
-use craft_ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
-use craft_ui::display::Text;
-use craft_ui::layout_components::Row;
-use craft_ui::list::{List, ListRow, SelectMode};
-// PLAN: assumed `craft_ui::patterns::form_dialogs::FieldValue` and `craft_ui::runtime::env::Label` paths.
-use craft_ui::panels::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
-use craft_ui::panels::sections::{DialogRole, FooterButton};
-use craft_ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
-use craft_ui::runtime::env::Label;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::display::Text;
+use craft::ui::layout_components::Row;
+use craft::ui::list::{List, ListRow};
+use craft::ui::contract::SelectMode;
+// PLAN: assumed `craft::ui::patterns::form_dialogs::FieldValue` and `craft::ui::runtime::env::Label` paths.
+use craft::ui::patterns::panels::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
+use craft::ui::patterns::panels::sections::{DialogRole, FooterButton};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
 

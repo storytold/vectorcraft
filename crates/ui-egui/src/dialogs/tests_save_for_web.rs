@@ -9,7 +9,9 @@ use vectorcraft_engine::Session;
 use super::*;
 use crate::Services;
 // PLAN: assumed `craft_ui` names (see `save_for_web.rs`).
-use craft_ui::{DialogId, HostedSaveForWeb, StackDialog, WindowDialogs};
+use craft::ui::dialog::{DialogId, StackDialog};
+use craft::ui::patterns::form_dialogs::HostedSaveForWeb;
+use craft::ui::shell::WindowDialogs;
 
 type Log = Rc<RefCell<Vec<String>>>;
 

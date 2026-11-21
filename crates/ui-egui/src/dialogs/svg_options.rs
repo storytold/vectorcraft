@@ -7,9 +7,9 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use craft_ui::contract::{Bind, TooltipSpec};
-use craft_ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft_ui::sections::{DialogRole, FooterButton};
+use craft::ui::contract::{Bind, TooltipSpec};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::sections::{DialogRole, FooterButton};
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::fileio;
 
