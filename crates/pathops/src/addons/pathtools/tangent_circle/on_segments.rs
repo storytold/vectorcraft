@@ -265,7 +265,9 @@ pub fn circles_of_radius(first: CubicBez, second: &[CubicBez], radius: f64) -> V
                 roots(&samples, dist, CONTACT * radius)
             })
             .collect();
+        // A segment repeated in `second` gives the same places again; each is checked once.
         ts.sort_by(f64::total_cmp);
+        ts.dedup();
         for t in ts {
             if let Some(c) = center(t)
                 && let Some(touch) = touching(c, radius, second, own)
