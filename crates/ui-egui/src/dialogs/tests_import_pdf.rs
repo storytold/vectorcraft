@@ -491,3 +491,37 @@ fn the_text_choice_applies_to_embedded_places_only() {
     assert!(!matches!(placed.kind, NodeKind::PlacedDocument(_)), "embedded: {:?}", placed.kind);
     assert_eq!(type_objects(&app), before, "placed as outlines");
 }
+
+/// `file.place` run as a command (MCP, scripts) without the dialog takes the PDF Text preference for
+/// an embedded PDF with no `textAs`, as a place by the user does; a `textAs` given and a linked
+/// place keep their own text.
+#[test]
+fn file_place_without_the_dialog_takes_the_pdf_text_preference() {
+    let mut app = app();
+    set_pdf_text(&mut app, "outlines");
+    let dir = vectorcraft_testkit::TempDir::new("import-pdf-text-at-once");
+    let path = dir.join("two.pdf").to_string_lossy().into_owned();
+    std::fs::write(&path, text_pages(2)).unwrap();
+    let embedded = json!({"path": path, "link": false, "showImportOptions": false});
+    crate::place::run(&mut app, &embedded).unwrap();
+    assert!(app.ui.dialog.is_none(), "no dialog");
+    assert_eq!(type_objects(&app), 0, "the preference: outlines");
+
+    let one = json!({"name": "one.pdf", "dataBase64": vectorcraft_format::base64_encode(&text_pages(1))});
+    crate::place::run(&mut app, &one).unwrap();
+    assert_eq!(type_objects(&app), 0, "one page from bytes: outlines");
+
+    let mut given = embedded.clone();
+    given["textAs"] = json!("text");
+    crate::place::run(&mut app, &given).unwrap();
+    assert_eq!(type_objects(&app), 1, "a textAs given is kept");
+
+    crate::place::run(&mut app, &json!({"path": path, "showImportOptions": false})).unwrap();
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "linked: {:?}", placed.kind);
+
+    set_pdf_text(&mut app, "text");
+    crate::place::run(&mut app, &embedded).unwrap();
+    assert_eq!(type_objects(&app), 2, "Editable: page 1's type object");
+}

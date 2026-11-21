@@ -264,8 +264,8 @@ pub(crate) fn with_preferred_text_as(app: &VectorcraftApp, name: &str, bytes: &[
     p
 }
 
-/// The `file.place` params `p` of a PDF the user places embedded (Link off, from bytes or with a
-/// password) get the `pdfTextAs` preference as their `textAs` when it is Outlines and they have no
+/// The `file.place` params `p` of a PDF placed embedded (Link off, from bytes or with a password),
+/// by the user or as a command, get the `pdfTextAs` preference as their `textAs` when it is Outlines and they have no
 /// `textAs`. A linked page shows the file's own text, and a `.ai` or `.ait` file is placed as it
 /// says.
 pub(crate) fn place_with_preferred_text_as(app: &VectorcraftApp, p: &mut Value) {
