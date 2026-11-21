@@ -265,6 +265,30 @@ fn frame_around(shown: &Shown, inner: Rect) -> Option<Rect> {
     out.into_iter().max_by(|a, b| a.width().total_cmp(&b.width()))
 }
 
+/// The frames of the buttons labeled `label` and the clip rectangles they were drawn in: the
+/// rectangle shapes centered on the label's text.
+fn button_frames(shown: &Shown, label: &str) -> Vec<(Rect, Rect)> {
+    fn labels(s: &Shape, label: &str, out: &mut Vec<Pos2>) {
+        match s {
+            Shape::Text(t) if t.galley.text() == label => out.push(t.galley.rect.translate(t.pos.to_vec2()).center()),
+            Shape::Vec(v) => v.iter().for_each(|s| labels(s, label, out)),
+            _ => {}
+        }
+    }
+    fn frames(s: &Shape, clip: Rect, centers: &[Pos2], out: &mut Vec<(Rect, Rect)>) {
+        match s {
+            Shape::Rect(r) if centers.iter().any(|c| (r.rect.center() - *c).abs().max_elem() < 0.5) => out.push((r.rect, clip)),
+            Shape::Vec(v) => v.iter().for_each(|s| frames(s, clip, centers, out)),
+            _ => {}
+        }
+    }
+    let mut centers = vec![];
+    shown.shapes.iter().for_each(|c| labels(&c.shape, label, &mut centers));
+    let mut out = vec![];
+    shown.shapes.iter().for_each(|c| frames(&c.shape, c.clip_rect, &centers, &mut out));
+    out
+}
+
 /// The rectangles of the texts `label` the dialog drew.
 fn text_rects(shown: &Shown, label: &str) -> Vec<Rect> {
     fn walk(s: &Shape, label: &str, out: &mut Vec<Rect>) {
@@ -476,8 +500,13 @@ fn a_dialog_with_buttons_in_its_body_scrolls_them_with_the_body() {
         if !seen(&shown, heading) || !seen(&scrolled, heading) {
             wrong.push(format!("{heading}: the heading leaves the view"));
         }
-        if seen(&shown, button) || !seen(&scrolled, button) {
-            wrong.push(format!("{heading}: {button} is not out of view until the body is scrolled down"));
+        // The button's frame, not only its label, is wholly out of view and then wholly in view.
+        let frame = |shown: &Shown| button_frames(shown, button).first().map(|&(frame, clip)| (frame, clip.intersect(screen)));
+        let hidden = matches!(frame(&shown), Some((f, view)) if !view.intersect(f).is_positive());
+        let in_view = matches!(frame(&scrolled), Some((f, view)) if view.contains_rect(f));
+        if !hidden || !in_view {
+            let (before, after) = (frame(&shown), frame(&scrolled));
+            wrong.push(format!("{heading}: {button} ({before:?}, {after:?}) is not out of view until the body is scrolled down"));
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
