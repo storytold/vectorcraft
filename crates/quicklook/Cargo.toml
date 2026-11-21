@@ -1,0 +1,29 @@
+[package]
+name = "vectorcraft-quicklook"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The read path of VectorCraft's macOS Quick Look extensions (apps/vectorcraft-ql): Finder thumbnails and Space-bar previews of .vectorcraft files"
+
+[lints]
+workspace = true
+
+[features]
+default = ["bundled-fonts"]
+# Type in previews is set in the fonts VectorCraft bundles where the Mac doesn't have the document's.
+bundled-fonts = ["vectorcraft-text/bundled-fonts"]
+
+[dependencies]
+vectorcraft-doc = { workspace = true }
+vectorcraft-format = { workspace = true }
+vectorcraft-render = { workspace = true }
+vectorcraft-text = { workspace = true }
+image = { workspace = true }
+# The preview's PNG with its resolution (pHYs), so Quick Look shows the artboard at its size in
+# points. MIT OR Apache-2.0, already in the build through the renderer and the image crate.
+png = "0.18"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+vectorcraft-geom = { workspace = true }
