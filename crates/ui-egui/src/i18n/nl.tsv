@@ -319,6 +319,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	the HEIC or HEIF file can't be read	het HEIC- of HEIF-bestand kan niet worden gelezen
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	het HEIC- of HEIF-bestand bevat een soort afbeelding die niet kan worden gelezen
 @msg	HEIC and HEIF images can't be opened in this build	HEIC- en HEIF-afbeeldingen kunnen in deze build niet worden geopend
+@msg	the AVIF file can't be read	het AVIF-bestand kan niet worden gelezen
+@msg	the AVIF file holds a kind of image that can't be read	het AVIF-bestand bevat een soort afbeelding die niet kan worden gelezen
+@msg	AVIF images can't be opened in this build	AVIF-afbeeldingen kunnen in deze build niet worden geopend
 @msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	tekeningen uit CDR {version} kunnen niet worden geopend: VectorCraft leest versies 1 tot en met 27
 @msg	this CDR drawing can't be read ({why})	deze CDR-tekening kan niet worden gelezen ({why})
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-tekst, bitmaps, vermengingen, omtrekken, penseelstreken en andere objecten die VectorCraft nog niet leest, zijn weggelaten

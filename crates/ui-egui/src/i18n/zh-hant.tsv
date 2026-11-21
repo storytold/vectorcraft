@@ -3127,6 +3127,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the HEIC or HEIF file can't be read	無法讀取 HEIC 或 HEIF 檔案
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
 @msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
+@msg	the AVIF file can't be read	無法讀取 AVIF 檔案
+@msg	the AVIF file holds a kind of image that can't be read	AVIF 檔案包含無法讀取的影像類型
+@msg	AVIF images can't be opened in this build	此版本無法開啟 AVIF 影像
 @msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	無法開啟 CDR {version} 繪圖：VectorCraft 讀取的版本為 1 到 27
 @msg	this CDR drawing can't be read ({why})	無法讀取此 CDR 繪圖 ({why})
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	已略過 VectorCraft 尚無法讀取的 CDR 文字、點陣圖、漸變、輪廓圖、筆刷筆觸和其他物件

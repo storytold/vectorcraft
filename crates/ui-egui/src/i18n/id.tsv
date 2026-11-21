@@ -288,6 +288,9 @@
 @msg	the HEIC or HEIF file can't be read	berkas HEIC atau HEIF tidak dapat dibaca
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	berkas HEIC atau HEIF berisi jenis gambar yang tidak dapat dibaca
 @msg	HEIC and HEIF images can't be opened in this build	gambar HEIC dan HEIF tidak dapat dibuka di build ini
+@msg	the AVIF file can't be read	berkas AVIF tidak dapat dibaca
+@msg	the AVIF file holds a kind of image that can't be read	berkas AVIF berisi jenis gambar yang tidak dapat dibaca
+@msg	AVIF images can't be opened in this build	gambar AVIF tidak dapat dibuka di build ini
 @msg	the JPEG XL file is cut short	berkas JPEG XL terpotong
 @msg	the JPEG XL container is too large to read	kontainer JPEG XL terlalu besar untuk dibaca
 @msg	CMYK JPEG XL images can't be read	gambar JPEG XL CMYK tidak dapat dibaca

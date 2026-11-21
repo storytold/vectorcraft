@@ -137,6 +137,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if super::heifread::is_heif(bytes) {
         return format("heif");
     }
+    if super::avifread::is_avif(bytes) {
+        return format("avif");
+    }
     if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
@@ -1105,6 +1108,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// [`super::pxrread::decode`], which does the same.
 /// A HEIC or HEIF file is recognized by its `ftyp` brands ([`super::heifread::is_heif`]) and read
 /// by [`super::heifread::decode`], which does the same.
+/// An AVIF file is recognized by its `ftyp` brands ([`super::avifread::is_avif`]) and read by
+/// [`super::avifread::decode`], which does the same; its EXIF resolution sizes it.
 /// A Targa file, which starts with no signature, is recognized by its header
 /// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
@@ -1154,6 +1159,11 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
         let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
         return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
+    }
+    if super::avifread::is_avif(bytes) {
+        // The resolution is read from the EXIF item the decoder finds, with the container's turn.
+        let (img, avif_ppi) = super::avifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
+        return as_png(img, None, avif_ppi);
     }
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);

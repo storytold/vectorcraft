@@ -6063,6 +6063,9 @@ variable-list-end	{0}, {1}	{0} і {1}
 @msg	the HEIC or HEIF file can't be read	не вдається прочитати файл HEIC або HEIF
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
 @msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
+@msg	the AVIF file can't be read	не вдається прочитати файл AVIF
+@msg	the AVIF file holds a kind of image that can't be read	файл AVIF містить зображення такого типу, яке не вдається прочитати
+@msg	AVIF images can't be opened in this build	зображення AVIF не можна відкрити в цій збірці
 @msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	не вдається відкрити малюнки CDR {version}: VectorCraft читає версії з 1 по 27
 @msg	this CDR drawing can't be read ({why})	не вдається прочитати цей малюнок CDR ({why})
 @msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	текст, растрові зображення, перетікання, контури, мазки пензля та інші об’єкти CDR, які VectorCraft поки не читає, було пропущено
