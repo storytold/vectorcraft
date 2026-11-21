@@ -666,7 +666,7 @@ fn run_annex_b(dir: &Path) {
         let mut counts = RunCounts::default();
         counts.add(es5);
         counts.add(later);
-        assert!(counts.tests + counts.skipped > 0, "no Annex B tests to run under {}", root.display());
+        assert!(counts.tests > 0, "no Annex B tests ran under {}", root.display());
         panicked += counts.panicked;
         println!("test262 {folder} through the interpreter: {}.", counts.summary());
         if *folder == ANNEX_B_LANGUAGE {
@@ -862,6 +862,19 @@ fn an_unreadable_annex_b_folder_fails_and_only_an_absent_one_skips() {
     // A NUL byte in the path makes its metadata unreadable on every platform.
     assert!(present(Path::new("suite\0dir"), "test/annexB").is_err(), "a path whose metadata cannot be read is skipped as absent");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn an_annex_b_folder_whose_tests_are_all_skipped_fails() {
+    let dir = scratch("all-skipped");
+    std::fs::create_dir_all(dir.join("harness")).unwrap();
+    std::fs::create_dir_all(dir.join("test/annexB/language")).unwrap();
+    std::fs::write(dir.join("harness/assert.js"), "").unwrap();
+    std::fs::write(dir.join("harness/sta.js"), "").unwrap();
+    std::fs::write(dir.join("test/annexB/language/a.js"), "/*---\nesid: sec-x\nflags: [async]\n---*/\n").unwrap();
+    let outcome = std::panic::catch_unwind(|| run_annex_b(&dir));
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(outcome.is_err(), "a folder where every test is skipped passes");
 }
 
 #[test]
