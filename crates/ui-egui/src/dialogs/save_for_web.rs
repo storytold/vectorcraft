@@ -154,6 +154,8 @@ fn settings_of(app: &VectorcraftApp, d: &Dialog) -> Result<WebSettings, String> 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     apply_preset(app, &mut d)?;
+    // A Color Picker OK the dialog has not drawn since still shifts its color.
+    take_shift(&mut d)?;
     let p = params(&d);
     // Done remembers the settings; Save… remembers them and writes the files.
     app.run("webExport.settings", p.clone())?;
@@ -568,7 +570,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     {
         app.status(e);
     }
-    take_shift(d);
+    if let Err(e) = take_shift(d) {
+        app.status(e);
+    }
     let settings = settings_of(app, d);
     let mut browser = false;
     // In a window too narrow for both, the panes are narrower, so the settings beside them and the
@@ -1447,22 +1451,29 @@ pub(super) fn edit_color(d: &mut Dialog, source: &str, start: &str) {
     *d = super::color_picker::over_effect(d, SHIFT_TO, c);
 }
 
-/// Back from the Color Picker: its OK's color shifts the color it was opened for.
-fn take_shift(d: &mut Dialog) {
+/// Back from the Color Picker: its OK's color shifts the color it was opened for. An error is the
+/// one [`shift_color`] gives.
+fn take_shift(d: &mut Dialog) -> Result<(), String> {
     let source = d.fields.remove("__shiftSource");
     if let (Some(to), Some(source)) = (d.fields.remove(SHIFT_TO), source)
         && let (Some(to), Some(source)) = (to.as_str(), source.as_str())
     {
-        shift_color(d, source, to);
+        return shift_color(d, source, to);
     }
+    Ok(())
 }
 
 /// Shift the source color `source` to `to` (`colorTable.shifted`), wherever it is in the image; it
 /// is no longer web-shifted. Picking the source color itself takes the shift away. The color
-/// becomes the selection. Nothing changes when either is not a color.
-pub(super) fn shift_color(d: &mut Dialog, source: &str, to: &str) {
+/// becomes the selection. Nothing changes when either is not a color, and a new source when 256
+/// colors are already shifted is an error that changes nothing.
+pub(super) fn shift_color(d: &mut Dialog, source: &str, to: &str) -> Result<(), String> {
     let hex = |h: &str| vectorcraft_color::Color::from_hex(h).map(|c| c.to_hex());
-    let (Some(source), Some(to)) = (hex(source), hex(to)) else { return };
+    let (Some(source), Some(to)) = (hex(source), hex(to)) else { return Ok(()) };
+    let map = shifts(d);
+    if to != source && map.len() >= webexport::MAX_TABLE && !map.keys().any(|k| same_color(k, &source)) {
+        return Err(webexport::too_many("shifted"));
+    }
     unshift(d, &source);
     if to != source {
         let mut map = shifts(d);
@@ -1472,6 +1483,7 @@ pub(super) fn shift_color(d: &mut Dialog, source: &str, to: &str) {
     toggle(d, "webShift", &source, false);
     d.fields.insert("__colors".into(), json!([source]));
     d.fields.insert("__color".into(), json!(source));
+    Ok(())
 }
 
 /// The `colorTable.shifted` field.
@@ -1479,11 +1491,21 @@ fn shifts(d: &Dialog) -> Map<String, Value> {
     d.fields.get("colorTable").and_then(|t| t.get("shifted")).and_then(Value::as_object).cloned().unwrap_or_default()
 }
 
-/// Take the shift by hand of the source color `source` away.
+/// Whether `a` and `b` name one color, however each is written; text that is not a color matches
+/// the same text in any case.
+fn same_color(a: &str, b: &str) -> bool {
+    let rgb = |h: &str| vectorcraft_color::Color::from_hex(h).map(|c| c.to_hex());
+    match (rgb(a), rgb(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => a.eq_ignore_ascii_case(b),
+    }
+}
+
+/// Take the shift by hand of the source color `source` away: every key that names that color.
 pub(super) fn unshift(d: &mut Dialog, source: &str) {
     let mut map = shifts(d);
     let before = map.len();
-    map.retain(|k, _| !k.eq_ignore_ascii_case(source));
+    map.retain(|k, _| !same_color(k, source));
     if map.len() != before {
         set_table(d, "shifted", Value::Object(map));
     }
@@ -1495,10 +1517,10 @@ pub(super) fn unshift_all_colors(d: &mut Dialog) {
     set_table(d, "webShift", json!([]));
 }
 
-/// Add `color` to the colour table's `list`, or take it out.
+/// Add `color` to the colour table's `list`, or take it out (every entry that names that color).
 pub(super) fn toggle(d: &mut Dialog, list: &str, color: &str, add: bool) {
     let mut v: Vec<Value> = d.fields.get("colorTable").and_then(|t| t.get(list)).and_then(Value::as_array).cloned().unwrap_or_default();
-    v.retain(|c| !c.as_str().is_some_and(|c| c.eq_ignore_ascii_case(color)));
+    v.retain(|c| !c.as_str().is_some_and(|c| same_color(c, color)));
     if add {
         v.push(json!(color.to_ascii_lowercase()));
     }
