@@ -34,7 +34,8 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   line shows the "path" label. These rules apply to the Linear points. A first point picked on
   an anchor, on a segment or on a corner of preview bounds moves with that art when the art moves
   before the second click: the rubber band, Shift and the dimension start from where the art puts
-  the point then.
+  the point then. When that art is deleted before the second click, the point goes back to where
+  it was picked.
   With Use Preview Bounds on (Preferences › General), a Linear point can land on a corner of the
   preview bounds of a path or compound path whose strokes or effects reach past its anchors. The
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)

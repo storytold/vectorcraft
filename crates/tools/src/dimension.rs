@@ -81,6 +81,9 @@ pub struct DimensionTool {
     /// against the path whose preview-bounds corner it was picked on, or on the segment under it.
     /// When the art moves before the second click, the first point moves with it.
     first_link: Option<FreePoint>,
+    /// Where the first Linear point was picked. The point goes back there when its anchor or
+    /// [`Self::first_link`] no longer resolves.
+    first_pick: Option<Point>,
     /// Whether the press under way began on an anchor a Linear click picks.
     press_on_anchor: bool,
     /// The second point clicked for the Linear dimension being placed, and where the pointer was
@@ -676,12 +679,16 @@ impl DimensionTool {
     }
     /// Moves the first Linear point to where its link puts it in the document as it is now: on
     /// its anchor, or where [`Self::first_link`] holds it. A point whose link no longer resolves,
-    /// or that has none, stays where it was picked.
+    /// or that has none, stays where it was picked, and an anchor that no longer resolves is
+    /// dropped from it.
     fn follow_first(&mut self, cx: &ToolContext) {
         if let Some(now) = self.first_now(cx)
-            && let [(at, _)] = self.points.as_mut_slice()
+            && let [(at, reference)] = self.points.as_mut_slice()
         {
             *at = now;
+            if reference.as_ref().is_some_and(|r| r.position(cx.doc).is_none()) {
+                *reference = None;
+            }
         }
     }
     /// Where the first Linear point is in the document as it is now ([`Self::follow_first`]),
@@ -692,7 +699,7 @@ impl DimensionTool {
             Some(r) => r.position(cx.doc),
             None => self.first_link.as_ref().and_then(|link| link.position(cx.doc)),
         };
-        Some(now.unwrap_or(*at))
+        Some(now.or(self.first_pick).unwrap_or(*at))
     }
     fn target(&self, cx: &ToolContext, p: Point) -> Option<Target> {
         let edge = pick(cx, p)?;
@@ -843,6 +850,7 @@ impl DimensionTool {
         self.corner = None;
         self.first_corner = None;
         self.first_link = None;
+        self.first_pick = None;
         self.points.clear();
         self.lines.clear();
         self.dragging = false;
@@ -870,11 +878,13 @@ impl DimensionTool {
                 if self.points.is_empty() {
                     self.first_corner = corner;
                     self.first_link = reference.is_none().then(|| own_link(cx, at, corner)).flatten();
+                    self.first_pick = Some(at);
                 }
                 self.points.push((at, reference));
                 if let [(a, ra), (b, rb)] = self.points.as_slice() {
                     let source = points_source(cx, (*a, ra, self.first_corner), (*b, rb, corner), self.first_link.take());
                     self.first_corner = None;
+                    self.first_pick = None;
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
                         self.second = Some((*b, p));
@@ -1907,10 +1917,36 @@ mod tests {
         assert!((pending.length - 101.0).abs() < 1e-9, "{}", pending.length);
         let Some(DimensionSource::Points { free_a: Some(free), .. }) = &pending.source else { panic!("{:?}", pending.source) };
         assert!(free.position(&right).is_some_and(|q| near(q, Point::new(119.5, 99.5))), "{free:?}");
+        // The same corner, the rectangle moved 20 points right with the pointer moving, then
+        // deleted: the first point goes back to where it was picked.
+        let mut gone = right.clone();
+        gone.remove(id).expect("the rectangle");
+        let (l, line) = (gone.layers[0].id, gone.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 300.0), Point::new(400.0, 300.0)], false));
+        gone.insert(Some(l), 0, Node::path(line, path, Default::default())).expect("the line");
+        let mut t = DimensionTool::default();
+        click(&mut t, &base(&d), (101.0, 101.0), false);
+        let c = ToolContext { revision: (0, 1), ..base(&right) };
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 219.0, 101.0));
+        let c = ToolContext { revision: (0, 2), ..base(&gone) };
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 300.0, 300.0));
+        let shown = t.overlays(&c).into_iter().any(|o| matches!(o, Overlay::Anchor { p, filled: true, .. } if near(p, Point::new(99.5, 99.5))));
+        assert!(shown, "the first point shows where it was picked once its rectangle is deleted");
+        click(&mut t, &c, (300.0, 300.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(99.5, 99.5)), "{:?}", pending.a);
+        // An anchor, then its rectangle deleted: the dimension starts where the anchor was picked.
+        let mut t = DimensionTool::default();
+        let unbounded = |doc| ToolContext { preview_bounds: false, ..base(doc) };
+        click(&mut t, &unbounded(&d), (100.0, 100.0), false);
+        click(&mut t, &ToolContext { revision: (0, 2), ..unbounded(&gone) }, (300.0, 300.0), false);
+        let pending = t.pending.take().expect("both points were picked");
+        assert!(near(pending.a, Point::new(100.0, 100.0)), "{:?}", pending.a);
+        let Some(DimensionSource::Points { a: None, .. }) = &pending.source else { panic!("{:?}", pending.source) };
         // A point on the top segment, then the rectangle moved 20 points down.
         let down = moved((0.0, 20.0));
         let mut t = DimensionTool::default();
-        let unbounded = |doc| ToolContext { preview_bounds: false, ..base(doc) };
         click(&mut t, &unbounded(&d), (150.0, 100.0), false);
         click(&mut t, &ToolContext { revision: (0, 1), ..unbounded(&down) }, (300.0, 300.0), false);
         let pending = t.pending.take().expect("both points were picked");
