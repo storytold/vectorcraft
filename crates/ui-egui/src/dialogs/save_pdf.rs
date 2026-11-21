@@ -22,8 +22,8 @@ use vectorcraft_doc::Unit;
 use vectorcraft_engine::cmd::fileio::{SaveMode, pdf};
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 use vectorcraft_pdf::{
-    Changes, Choice, ColorConversion, Compatibility, Downsample, Encryption, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfSettings,
-    Printing, ProfileInclusion, Standard,
+    Changes, Choice, ColorConversion, Compatibility, Downsample, Encryption, ImageCodec, JpegQuality, MarkKind, MonoCodec, Overprint, PdfPreset,
+    PdfSettings, Printing, ProfileInclusion, Standard,
 };
 
 use super::{DialogSpec, form};
@@ -803,10 +803,11 @@ fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
 /// same values included, drops the link's state, so the link follows the values set. A flattener
 /// preset set there drops the Custom… options, as choosing it in the dropdown does. A settings
 /// object (`bleed`, `marks`, `compression`…) set there must be an object and sets only the options
-/// it holds: the ones it leaves out keep the values the dialog had (`old`).
-pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>) -> Result<(), String> {
+/// it holds: the ones it leaves out keep the values the dialog had (`old`), or the values of the
+/// Save PDF preset (built-in or `saved`) when the dialog had none.
+pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>, saved: &[PdfPreset]) -> Result<(), String> {
     if DEFAULTS.get(field).is_some_and(Value::is_object) {
-        keep_unset_options(d, field, old)?;
+        keep_unset_options(d, field, old, saved)?;
     }
     match field {
         BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
@@ -829,16 +830,31 @@ pub(super) fn field_set(d: &mut Dialog, field: &str, old: Option<&Value>) -> Res
 }
 
 /// The settings object `field` that `ui.dialog.set` set, with the options it leaves out taken from
-/// `old` (the default settings' when the dialog had none). A null is kept as it was set.
-fn keep_unset_options(d: &mut Dialog, field: &str, old: Option<&Value>) -> Result<(), String> {
+/// `old`. When the dialog had none (never set, or set to null), they come from Save PDF's preset,
+/// as the save takes them, and from the default settings in the preset editor. A null is kept as
+/// it was set.
+fn keep_unset_options(d: &mut Dialog, field: &str, old: Option<&Value>, saved: &[PdfPreset]) -> Result<(), String> {
+    let preset = if d.kind == KIND { d.str("preset") } else { String::new() };
     let Some(new) = d.fields.get_mut(field).filter(|v| !v.is_null()) else { return Ok(()) };
     if !new.is_object() {
         return Err(format!("{field} must be an object of options, not {new}"));
     }
-    let mut merged = old.filter(|o| o.is_object()).or_else(|| DEFAULTS.get(field)).cloned().unwrap_or_default();
+    let mut merged = match old.filter(|o| o.is_object()) {
+        Some(o) => o.clone(),
+        None => preset_section(&preset, field, saved).or_else(|| DEFAULTS.get(field).cloned()).unwrap_or_default(),
+    };
     merge_options(&mut merged, new);
     *new = merged;
     Ok(())
+}
+
+/// The settings object `field` of the preset `name` (built-in or `saved`); None for no preset.
+fn preset_section(name: &str, field: &str, saved: &[PdfPreset]) -> Option<Value> {
+    if name.is_empty() {
+        return None;
+    }
+    let settings = pdf::resolve("ui.savePdfDialog", &json!({ "preset": name }), saved).ok()?;
+    serde_json::to_value(settings).ok()?.get_mut(field).map(Value::take)
 }
 
 /// Set the options `over` holds on `base`, object by object.

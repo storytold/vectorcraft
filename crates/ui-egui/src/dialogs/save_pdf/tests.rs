@@ -1070,6 +1070,17 @@ fn ui_dialog_set_keeps_the_options_a_settings_object_leaves_out() {
         assert!(r["error"].as_str().is_some_and(|e| e.contains("bleed must be an object of options")), "{bad}: {r}");
         assert_eq!(dialog_json(&app), before, "{bad}");
     }
+
+    // A null settings object is set as it is: the save takes that section from the preset.
+    let r = dialog_set(&mut app, json!([{"field": "marks", "value": null}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(d.fields.get("marks").is_some_and(Value::is_null) && params(d)["marks"].is_null(), "{:?}", d.fields.get("marks"));
+    // A settings object set after that takes the options it leaves out from the preset, as the save would.
+    let r = dialog_set(&mut app, json!([{"field": "marks", "value": {"weight": 0.25}}]));
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((get(d, "marks.trim"), get(d, "marks.offset"), get(d, "marks.weight")), (&json!(true), &json!(9.0), &json!(0.25)));
 }
 
 /// A `ui.dialog.set` request whose later field is refused leaves the whole dialog as it was

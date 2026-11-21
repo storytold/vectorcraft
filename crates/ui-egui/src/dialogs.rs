@@ -749,7 +749,7 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
         return composite_fonts::field_set(d, field);
     }
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == save_pdf::KIND || d.kind == save_pdf::PRESET_KIND) {
-        return save_pdf::field_set(d, field, old);
+        return save_pdf::field_set(d, field, old, &app.session.prefs.pdf_presets);
     }
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
         eps_options::field_set(d, field);
