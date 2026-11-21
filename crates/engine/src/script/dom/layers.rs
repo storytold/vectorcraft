@@ -1166,7 +1166,7 @@ fn boards_index(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// A new artboard at `rect` with `artboard.new`, moved to `at` (`None`: it stays last) with
-/// `artboard.reorder`. → the artboard.
+/// `artboard.reorder`; when either fails, the document is as it was. → the artboard.
 fn add_board(h: &Host, a: &[Data], at: Option<&Data>) -> Answer {
     let doc = boards_doc(h, a)?;
     let (r, len, name) = with_doc(h, doc, |_, st| {
@@ -1181,18 +1181,21 @@ fn add_board(h: &Host, a: &[Data], at: Option<&Data>) -> Answer {
     if len >= max {
         return Err(HostError::Range(format!("a document has at most {max} artboards")));
     }
-    let id = on_doc(h, doc.uid, true, |h| {
-        let made = command(h, "artboard.new", &json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "name": name}))?;
-        let index =
-            result_id(&made, "index").and_then(|i| usize::try_from(i).ok()).ok_or_else(|| HostError::Error("the artboard was not made".into()))?;
-        if let Some(to) = to
-            && to != index
-        {
-            command(h, "artboard.reorder", &json!({"index": index, "to": to}))?;
-        }
-        let s = h.session.borrow();
-        let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-        st.doc.artboards.get(to.unwrap_or(index)).map(|ab| ab.id).ok_or_else(|| HostError::Error("the artboard was not made".into()))
+    let id = super::atomically(h, |h| {
+        on_doc(h, doc.uid, true, |h| {
+            let made = command(h, "artboard.new", &json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "name": name}))?;
+            let index = result_id(&made, "index")
+                .and_then(|i| usize::try_from(i).ok())
+                .ok_or_else(|| HostError::Error("the artboard was not made".into()))?;
+            if let Some(to) = to
+                && to != index
+            {
+                command(h, "artboard.reorder", &json!({"index": index, "to": to}))?;
+            }
+            let s = h.session.borrow();
+            let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+            st.doc.artboards.get(to.unwrap_or(index)).map(|ab| ab.id).ok_or_else(|| HostError::Error("the artboard was not made".into()))
+        })
     })?;
     Ok(board_ref(h, doc.uid, id))
 }
