@@ -174,10 +174,11 @@ fn earliest_nearest<T>(candidates: impl IntoIterator<Item = (f64, Point, T)>, or
     best.map(|(.., x)| x)
 }
 
-/// The closed `sp` started at the point on it nearest `start`: at the anchor there, or at a new
-/// anchor split into the segment there, which leaves the outline as it is. Of points equally near
-/// `start`, the one earliest along `orig` (the path before it was refitted) from its first anchor is
-/// used, then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest
+/// The closed `sp` started at the point on it nearest `start`: at an anchor within [`START_SNAP`] of
+/// `start` when it has one, even where a segment crosses the path there, otherwise at the anchor at
+/// that point or at a new anchor split into the segment there, which leaves the outline as it is. Of
+/// points equally near `start`, the one earliest along `orig` (the path before it was refitted) from
+/// its first anchor is used, then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest
 /// point, is returned as it is.
 pub fn start_nearest(sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
     let n = sp.anchors.len();
@@ -194,6 +195,14 @@ fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool, within
         return (sp, None, 0);
     }
     let within = within.start.min(n)..within.end.min(n);
+    // The anchors of the segments `within`: each one's first, and the last one's end.
+    let anchors = || (within.start..=within.end).map(|j| j % n).map(|j| (sp.anchors[j].p.distance(start), sp.anchors[j].p, j));
+    // An anchor within [`START_SNAP`] of `start` starts the path, before any segment through there.
+    let snapped = if within.is_empty() { None } else { earliest_nearest(anchors().filter(|(d, ..)| *d <= START_SNAP), orig) };
+    if let Some(first) = snapped {
+        sp.anchors.rotate_left(first);
+        return (sp, None, first);
+    }
     let hits = within.clone().map(|i| {
         let c = sp.segment(i);
         let hit = c.nearest(start, 1e-9);
@@ -219,9 +228,7 @@ fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool, within
         sp.anchors.insert(i + 1, mid);
         (i + 1, Some(i))
     } else {
-        // The anchors of the segments `within`: each one's first, and the last one's end.
-        let near = (within.start..=within.end).map(|j| j % n).map(|j| (sp.anchors[j].p.distance(start), sp.anchors[j].p, j));
-        (earliest_nearest(near, orig).unwrap_or(0), None)
+        (earliest_nearest(anchors(), orig).unwrap_or(0), None)
     };
     sp.anchors.rotate_left(first);
     (sp, cut, first)
@@ -1598,6 +1605,42 @@ mod tests {
             got.anchors.iter().map(|a| a.p).collect::<Vec<_>>()
         );
         assert!(got.anchors[0].p.x.abs() < 40.0 && got.anchors[0].p.y.abs() <= 1.0, "start {:?}", got.anchors[0].p);
+    }
+
+    /// A closed polyline from its start at (0, 0) up to (0, 10) whose diagonal from (-20, -20) to
+    /// (20, 20) crosses it at that start, with two anchors on the diagonal that a refit drops.
+    fn crossing_at_start() -> SubPath {
+        let pts = [(0, 0), (0, 10), (40, 10), (40, -20), (-20, -20), (-10, -10), (10, 10), (20, 20), (20, 30), (-10, 30), (-10, 0)];
+        SubPath::polyline(&pts.map(|(x, y)| Point::new(f64::from(x), f64::from(y))), true)
+    }
+
+    /// A refitted run that keeps an anchor at the old start of a closed path starts the path at that
+    /// anchor, though a segment of the run that crosses the path there comes first in the run.
+    #[test]
+    fn a_run_that_keeps_the_start_anchor_starts_there() {
+        let path = PathData::new(vec![crossing_at_start()]);
+        let picked: BTreeSet<(usize, usize)> = [0, 4, 5, 6, 7, 8, 9, 10].into_iter().map(|s| (0, s)).collect();
+        let opts = SimplifyOptions { tolerance: 0.01, corner_angle_deg: 1.0, straight_lines: true, ..SimplifyOptions::default() };
+        let got = &simplify_part(&path, &picked, &opts).path.subpaths[0];
+        let ps: Vec<Point> = got.anchors.iter().map(|a| a.p).collect();
+        assert_eq!(ps.len(), 9, "{ps:?}");
+        assert_eq!((ps[0], ps[1]), (Point::new(0.0, 0.0), Point::new(0.0, 10.0)), "{ps:?}");
+        assert_eq!(ps.iter().filter(|&&p| p == Point::ZERO).count(), 1, "{ps:?}");
+    }
+
+    /// The whole closed path refitted keeps its start anchor first when a segment of the refit
+    /// crosses the path there.
+    #[test]
+    fn a_refit_that_keeps_the_start_anchor_starts_there() {
+        let sp = crossing_at_start();
+        let mut fit = sp.clone();
+        fit.anchors.retain(|a| ![Point::new(-10.0, -10.0), Point::new(10.0, 10.0)].contains(&a.p));
+        fit.anchors.rotate_left(4);
+        let n = fit.anchors.len();
+        let (got, cut, _) = keep_start(fit, &sp, 0..n);
+        let ps: Vec<Point> = got.anchors.iter().map(|a| a.p).collect();
+        assert_eq!(cut, None, "{ps:?}");
+        assert_eq!((ps[0], ps[1]), (Point::new(0.0, 0.0), Point::new(0.0, 10.0)), "{ps:?}");
     }
 
     /// Candidates tied at one point are placed along the old path once, not once each, and the first
