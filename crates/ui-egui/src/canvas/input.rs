@@ -709,8 +709,10 @@ fn double_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         // the type was clicked, so typing edits it at once.
         if before != "type" && app.session.tool_id() == "type" {
             app.session.set_tool_option("prevTool", &json!(before));
+            // Without Cmd, so the Type tool takes the click instead of lending a selection tool.
+            let mods = Mods { cmd: false, ..ev.mods };
             for kind in [PointerKind::Down, PointerKind::Up] {
-                dispatch(app, &PointerEvent { kind, ..ev }, view);
+                dispatch(app, &PointerEvent { kind, mods, ..ev }, view);
             }
         }
     }

@@ -518,6 +518,10 @@ struct Measured {
     bounds: Option<Option<Rect>>,
     oriented: Option<Option<OrientedBox>>,
     by_object: HashMap<NodeId, Option<Option<Rect>>>,
+    /// [`painted_bounds`].
+    painted: Option<Option<Rect>>,
+    /// [`selected_part_boxes`].
+    part_boxes: Option<std::sync::Arc<[(NodeId, Rect)]>>,
 }
 
 impl Measured {
@@ -549,6 +553,8 @@ impl PreviewMemo {
             bounds: None,
             oriented: None,
             by_object: HashMap::new(),
+            painted: None,
+            part_boxes: None,
         };
         if !st.entry.as_ref().is_some_and(|m| m.is_for(cx)) {
             st.entry = Some(fresh());
@@ -592,6 +598,19 @@ pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
 /// shows and drags (rotated after a rotation).
 pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
     remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds_with(cx.doc, &cx.selection.objects, cx.bounds_measure()))
+}
+
+/// The selection's visual bounds as drawn, its strokes and effects included, whatever Use Preview
+/// Bounds says: every point where a hit test finds a selected object is inside them.
+fn painted_bounds(cx: &ToolContext) -> Option<Rect> {
+    remembered(cx, |m| &mut m.painted, || vectorcraft_effects::preview::bounds_of(cx.doc, &cx.selection.objects, true))
+}
+
+/// `measure`'s list of the selected objects' editable paths with their control bounds, kept in the
+/// session's [`PreviewMemo`] while the document and the selection stay as they are
+/// ([`crate::direct::over_selected_part`]).
+pub(crate) fn selected_part_boxes(cx: &ToolContext, measure: impl FnOnce() -> std::sync::Arc<[(NodeId, Rect)]>) -> std::sync::Arc<[(NodeId, Rect)]> {
+    remembered(cx, |m| &mut m.part_boxes, measure)
 }
 
 /// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
@@ -1497,6 +1516,21 @@ impl Tool for SelectionTool {
         }
         Cursor::Arrow
     }
+}
+
+/// Does a Cmd/Ctrl press at `p` with the Selection tool select behind: is Select Behind on and a
+/// selected object under the pointer, away from the anchors, handles and segments Direct
+/// Selection edits ([`crate::direct::over_selected_part`])? Elsewhere Cmd lends the press to
+/// Direct Selection or Group Selection.
+pub fn selects_behind_at(cx: &ToolContext, p: Point) -> bool {
+    let tol = cx.pick_tol();
+    // The selection's painted bounds come first: away from them, no document walk is needed. They
+    // take in a wide stroke's outer half, which the bounding box leaves out without Use Preview
+    // Bounds.
+    cx.select_behind
+        && painted_bounds(cx).is_some_and(|b| b.inflate(tol, tol).contains(p))
+        && objects_at(cx.doc, p, cx.selection_hit_options(), cx.isolation).iter().any(|id| cx.selection.contains(*id))
+        && !crate::direct::over_selected_part(cx, p)
 }
 
 /// Select Behind: of the objects under `p` (topmost first), the one below the lowest selected

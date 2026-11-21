@@ -27,6 +27,14 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
             ("Shift+Click", true),
             (" to add", false),
         ],
+        "groupSelection" => &[
+            ("Click", true),
+            (" an object in a group to select it  |  ", false),
+            ("Click again", true),
+            (" to add the group it is in  |  ", false),
+            ("Shift+Click", true),
+            (" to add", false),
+        ],
         "pen" => &[
             ("Click", true),
             (" to add a corner point  |  ", false),
@@ -252,7 +260,9 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let segments = if let Some(d) = app.ui.dialog.as_ref().filter(|d| crate::dialogs::revolve_gizmo::active(d)) {
                     vec![(crate::dialogs::revolve_gizmo::hint(d).into(), false)]
                 } else {
-                    let tool = app.session.tool_id();
+                    // While Cmd is held, the hints of the selection tool it lends.
+                    let held = crate::canvas::held_mods(app, ui.ctx());
+                    let tool = app.session.shown_tool_id(&held);
                     let hint = if tool == "zoom" && crate::canvas::animated_zoom(&app.session.prefs) { ANIMATED_ZOOM_HINT } else { tool };
                     hint_segments(hint)
                 };

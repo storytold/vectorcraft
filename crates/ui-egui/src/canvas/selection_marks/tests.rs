@@ -42,7 +42,7 @@ const VIEW: (f64, f64) = (200.0, 150.0);
 /// The marks drawn one shape at a time, as a frame draws them with nothing kept.
 fn plain(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     let st = app.session.active().unwrap();
-    let MarkOptions { direct, curvature, look, all_handles, .. } = mark_options(app, curve_points_from_tool);
+    let MarkOptions { direct, curvature, look, all_handles, .. } = mark_options(app, app.session.tool_id(), curve_points_from_tool);
     let symbols = st.doc.symbol_boxes();
     let anchor = |direct: bool| look.grow + if direct { 5.0 } else { 4.0 };
     let (mut handles, mut with_handles) = (vec![], 0);
@@ -264,7 +264,7 @@ fn assert_same(a: &Picture, b: &Picture, what: &str, allowed_per_mille: usize) {
 fn paint(marks: &mut SelectionMarks, app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
     let st = app.session.active().unwrap();
     let key = st.selection.key;
-    marks.paint(st, p, xf, &mark_options(app, curve_points_from_tool), key, &st.selection.objects);
+    marks.paint(st, p, xf, &mark_options(app, app.session.tool_id(), curve_points_from_tool), key, &st.selection.objects);
 }
 
 /// Kept marks, marks built from nothing and plain shapes all draw the same pixels. Kept marks may

@@ -43,7 +43,7 @@ pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
 pub use drag::{apply_requests, dispatch, mods};
-pub(crate) use drag::{art_out, end_art_move, end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
+pub(crate) use drag::{art_out, end_art_move, end_document_drag, held_mods, pose_on_page, release_art_in_window, release_over_panel};
 #[cfg(test)]
 use drag::{frame_moves, tool_drag_doc_id, tool_drag_moved, tool_frame_moves, tool_press_doc_id};
 pub use fill::Fill;
@@ -413,6 +413,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // 600% zoom, a line at every document pixel over the art, so the pixels it rasterizes to show.
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
     let view_info = app.view_info();
+    let shown_tool = marks_tool(app, ui.ctx(), hover_still, view_info);
     if !presenting {
         if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
             grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
@@ -431,7 +432,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         original_path_overlay(app, &painter, &xf);
 
-        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
+        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, (view_info, shown_tool));
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
@@ -441,7 +442,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let quiet = space || ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some();
         overlay_hover_text(ui, &xf, &overlays, quiet, |p| artboards::artboard_name_at(app, ui, &xf, p).is_some());
         if !revolve_edit {
-            shaper_widget_overlay(app, &painter, &xf);
+            shaper_widget_overlay(app, &painter, &xf, shown_tool);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
         }
     }
@@ -1647,14 +1648,23 @@ pub(super) fn guide_labels(doc: &vectorcraft_doc::Document) -> std::collections:
         .collect()
 }
 
-/// The selection's visuals and the tools' overlays, to be drawn.
+/// The tool whose marks and widgets the canvas draws this frame: while Cmd is held, the selection
+/// tool a press at the pointer borrows. While the view moves (`hover_still` false), the art under
+/// the pointer is not hit-tested again (#2452), and the last answer stays.
+fn marks_tool(app: &mut VectorcraftApp, ctx: &egui::Context, hover_still: bool, view: vectorcraft_engine::ViewInfo) -> &'static str {
+    let held = held_mods(app, ctx);
+    if hover_still { app.session.hover_tool_at(app.hover_doc, &held, view) } else { app.session.hover_tool_id(&held) }
+}
+
+/// The selection's visuals and the tools' overlays, to be drawn. `tool` is the tool whose marks
+/// and widgets show ([`vectorcraft_engine::Session::hover_tool_at`]).
 fn selection_visuals(
     app: &mut VectorcraftApp,
     painter: &egui::Painter,
     xf: &Xf,
     (hidden_chars, mut marks, hover_still): (HiddenChars, SelectionMarks, bool),
     revolve_edit: bool,
-    view_info: vectorcraft_engine::ViewInfo,
+    (view_info, tool): (vectorcraft_engine::ViewInfo, &str),
 ) -> Vec<Overlay> {
     // View → Hide Gradient Annotator hides the Gradient tool's annotator.
     let mut overlays = if !revolve_edit && (app.session.tool_id() != "gradient" || app.ui.view.gradient_annotator) {
@@ -1670,15 +1680,15 @@ fn selection_visuals(
     overlays.extend(crate::dialogs::live_paint_gaps::overlays(app));
     if app.ui.view.edges && !revolve_edit {
         if hover_still {
-            hover_highlight(app, painter, xf);
+            hover_highlight(app, painter, xf, tool);
         }
-        selection_overlay(app, painter, xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })), &mut marks);
+        selection_overlay(app, painter, xf, (tool, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. }))), &mut marks);
         app.canvas.selection_marks = marks;
         draw_inside_overlay(app, painter, xf);
-        mirror_axis_overlay(app, painter, xf);
-        grid_repeat_overlay(app, painter, xf);
-        radial_repeat_overlay(app, painter, xf);
-        trace_split_overlay(app, painter, xf);
+        mirror_axis_overlay(app, painter, xf, tool);
+        grid_repeat_overlay(app, painter, xf, tool);
+        radial_repeat_overlay(app, painter, xf, tool);
+        trace_split_overlay(app, painter, xf, tool);
         if app.ui.view.text_threads {
             // Under the tools' overlays: a selected frame's own ports are drawn over its thread's.
             let mut threads = thread_overlays(app, xf.zoom);
@@ -1694,7 +1704,7 @@ fn selection_visuals(
         }
     }
     if !revolve_edit {
-        blend_widgets_overlay(app, painter, xf);
+        blend_widgets_overlay(app, painter, xf, tool);
     }
     // Edit › Spelling › Auto Spell Check: shown with the edges hidden too, as it marks the type
     // rather than the selection.

@@ -619,10 +619,11 @@ pub(super) fn print_tiling_overlay(app: &mut VectorcraftApp, p: &egui::Painter, 
 const PRINT_TILING: Color32 = Color32::from_gray(96);
 
 /// A Shaper Group's mode widget (Shaper and Selection tools), drawn with selection edges shown or
-/// hidden: an arrow pointing right in Face Selection mode and left in Construction mode.
-pub(super) fn shaper_widget_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+/// hidden: an arrow pointing right in Face Selection mode and left in Construction mode. `tool` is
+/// the tool whose widgets the canvas shows.
+pub(super) fn shaper_widget_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
     let Some(st) = app.session.active() else { return };
-    if matches!(app.session.tool_id(), "shaper" | "selection")
+    if matches!(tool, "shaper" | "selection")
         && let Some(w) = vectorcraft_tools::shaperwidget::ShaperWidget::of(&st.doc, &st.selection, st.isolation, xf.zoom)
     {
         let (c, r) = (xf.to_screen(w.at), vectorcraft_tools::shaperwidget::RADIUS_PX);
@@ -635,9 +636,10 @@ pub(super) fn shaper_widget_overlay(app: &VectorcraftApp, p: &egui::Painter, xf:
     }
 }
 
-/// High-contrast live controls, using the same geometry as the Selection tool's hit testing.
-pub(super) fn mirror_axis_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
+/// High-contrast live controls, using the same geometry as the Selection tool's hit testing, while
+/// `tool`, the tool whose widgets the canvas shows, is the Selection tool.
+pub(super) fn mirror_axis_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
+    if tool != "selection" || !app.ui.view.bounding_box {
         return;
     }
     let Some(st) = app.session.active() else { return };
@@ -664,9 +666,9 @@ pub(super) fn mirror_axis_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &
 /// The Split view's divider of the selected Image Trace object, where the Selection tool's hit
 /// testing finds it: a line across the source image with a grip in its middle, at its place in the
 /// zoomed, scrolled or turned view. Hidden with the bounding box and in Outline mode, as the hit
-/// testing is.
-pub(super) fn trace_split_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
-    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box || app.outline_view() {
+/// testing is. Drawn while `tool`, the tool whose widgets the canvas shows, is the Selection tool.
+pub(super) fn trace_split_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
+    if tool != "selection" || !app.ui.view.bounding_box || app.outline_view() {
         return;
     }
     let Some(st) = app.session.active() else { return };
@@ -691,10 +693,11 @@ pub(super) fn trace_split_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &
 }
 
 /// A selected grid repeat's row, column and corner handles and its spacing sliders (#2691), at
-/// the places the Selection tool's hit testing finds them.
-pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+/// the places the Selection tool's hit testing finds them, while `tool`, the tool whose widgets the
+/// canvas shows, is the Selection tool.
+pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
     use vectorcraft_tools::repeat_grid::{GridHandles, GridPart, HANDLE_RADIUS, SLIDER_HALF};
-    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
+    if tool != "selection" || !app.ui.view.bounding_box {
         return;
     }
     let frame = app.selection_box();
@@ -722,10 +725,11 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
 
 /// A selected radial repeat's circle with its radius handle and its splitter on it, and its
 /// instances handle below it, at the places the Selection tool's hit testing finds them. The
-/// splitter also has a short line across the circle.
-pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+/// splitter also has a short line across the circle. Drawn while `tool`, the tool whose widgets
+/// the canvas shows, is the Selection tool.
+pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
     use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles, RadialPart};
-    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
+    if tool != "selection" || !app.ui.view.bounding_box {
         return;
     }
     let frame = app.selection_box();

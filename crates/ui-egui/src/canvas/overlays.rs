@@ -10,18 +10,19 @@ use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_pa
 use super::selection_marks::{MarkOptions, SelectionMarks};
 use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
-pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+/// Object Highlighting for `tool`, the tool whose marks the canvas shows.
+pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
     let Some(h) = app.hover_doc else { return };
     // Smart Guides › Object Highlighting: a Smart Guides display option, so it needs them on and Snap to Grid and Pixel Preview off.
     if !app.ui.view.smart_guides || !app.session.prefs.object_highlighting || app.ui.view.snap_to_grid || app.ui.view.pixel_preview {
         return;
     }
-    if app.session.tool_busy() || !matches!(app.session.tool_id(), "selection" | "directSelection" | "groupSelection") {
+    if app.session.tool_busy() || !matches!(tool, "selection" | "directSelection" | "groupSelection") {
         return;
     }
     let Some(st) = app.session.active() else { return };
     let Some(hit) = selection_hit_at(app, h, xf.zoom) else { return };
-    let id = if app.session.tool_id() == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
+    let id = if tool == "selection" { hit.top_object(st.isolation) } else { hit.leaf };
     if st.selection.contains(id) {
         return;
     }
@@ -105,9 +106,8 @@ pub(super) fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bo
     p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
 }
 
-/// How the current tool and preferences draw the selection's marks.
-pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -> MarkOptions<'_> {
-    let tool = app.session.tool_id();
+/// How `tool` and the preferences draw the selection's marks.
+pub(super) fn mark_options<'a>(app: &'a VectorcraftApp, tool: &str, curve_points_from_tool: bool) -> MarkOptions<'a> {
     MarkOptions {
         direct: vectorcraft_tools::catalog::edits_anchors(tool),
         curvature: tool == "curvature",
@@ -118,7 +118,15 @@ pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -
 }
 
 /// Draw selection marks and widgets, keeping the box but hiding dot marks during Halftone Preview.
-pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool, marks: &mut SelectionMarks) {
+/// `shown` is the tool whose marks show: while Cmd is held, the selection tool a press at the
+/// pointer borrows ([`vectorcraft_engine::Session::hover_tool_at`]).
+pub(super) fn selection_overlay(
+    app: &mut VectorcraftApp,
+    p: &egui::Painter,
+    xf: &Xf,
+    (shown, curve_points_from_tool): (&str, bool),
+    marks: &mut SelectionMarks,
+) {
     // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
     // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
     // hides while a drag moves, rotates or resizes the selection, so only the art is seen going with
@@ -134,11 +142,11 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
     // A shape tool drawing a shape shows none of its widgets; adjusting a widget, it shows the widgets.
     let drawing = shape_tool && app.session.tool_busy() && !app.session.tool_transforming();
-    // Cmd held lends the Selection tool to a press (Direct Selection's included, #3901): its box
-    // shows while the key is down, where its handles take that press.
-    let held = super::drag::mods(p.ctx().input(|i| i.modifiers), false);
-    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
-    let show_box = (app.session.tool_id() == "selection" || lends_selection || (shape_tool && (!app.session.tool_busy() || follows)))
+    // Cmd held lends a selection tool to a press (Direct Selection's included, #3901): while the
+    // key is down, the marks are the lent tool's, so the Selection tool's box shows only when it is
+    // the Selection tool whose handles take that press.
+    let own = shown == app.session.tool_id();
+    let show_box = (shown == "selection" || (shape_tool && own && (!app.session.tool_busy() || follows)))
         && (follows || !app.session.tool_transforming())
         && app.ui.view.bounding_box;
     let selected_whole = app.session.active().is_some_and(|st| !st.selection.is_empty() && st.selection.anchors.is_empty());
@@ -166,11 +174,11 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let app = &*app;
     let Some(st) = app.session.active() else { return };
     let symbols = st.doc.symbol_boxes();
-    let tool = app.session.tool_id();
+    let tool = shown;
     let direct = vectorcraft_tools::catalog::edits_anchors(tool);
     // Selection & Anchor Display › Size (1–7, 3 the default): anchors, handles and the bounding
     // box's handles a point bigger or smaller per step.
-    let options = mark_options(app, curve_points_from_tool);
+    let options = mark_options(app, tool, curve_points_from_tool);
     let grow = options.look.grow;
     let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
     // The temporary halftone selects its dots; their marks obscure the art (#6369).
@@ -286,10 +294,10 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
 /// by a line to the spine's halfway point: the Appearance widget hollow above it, the Easing widget
 /// filled below it. For a blend without a spine the line goes to the halfway point of the straight
 /// lines between its key centers, which are not drawn. Drawn with the edges hidden too, as they are
-/// controls.
-pub(super) fn blend_widgets_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+/// controls. `tool` is the tool whose widgets the canvas shows.
+pub(super) fn blend_widgets_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, tool: &str) {
     use vectorcraft_tools::blendwidget::{BlendControl, BlendWidget, RADIUS_PX};
-    if !matches!(app.session.tool_id(), "selection" | "blend") {
+    if !matches!(tool, "selection" | "blend") {
         return;
     }
     let Some(st) = app.session.active() else { return };
