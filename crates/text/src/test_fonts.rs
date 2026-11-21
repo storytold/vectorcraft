@@ -705,6 +705,51 @@ fn repeat_font(family: &str, chars: &[(char, char)]) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The families [`thai_font`] can be named, two fonts that set Thai.
+pub const THAI_FAMILY: &str = "Thaitest Sans";
+pub const THAI_OTHER_FAMILY: &str = "Thaiothertest Sans";
+
+/// Bundled Source Sans 3 Regular as `family`, with a cmap that maps ก and า to the glyphs of A and
+/// B beside the Latin letters and the space. With `claimed`, its OS/2 table has the Thai Unicode
+/// range (bit 24) set; without, neither that range nor the Thai code page (bit 16). `None` when it
+/// can't be built.
+pub fn thai_font(family: &str, claimed: bool) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let glyph = |c| Some(write_fonts::types::GlyphId::new(charmap.map(c)?.to_u32()));
+    let mut mappings: Vec<(char, write_fonts::types::GlyphId)> = vec![('\u{0E01}', glyph('A')?), ('\u{0E32}', glyph('B')?)];
+    for c in ('A'..='Z').chain('a'..='z').chain([' ']) {
+        mappings.push((c, glyph(c)?));
+    }
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag == Tag::new(b"GSUB") || builder.contains(tag) {
+            continue;
+        }
+        let mut data = font.table_data(r.tag())?.as_bytes().to_vec();
+        if tag == Tag::new(b"OS/2") {
+            // ulUnicodeRange1 at bytes 42 to 46, ulCodePageRange1 at bytes 78 to 82.
+            let ranges = u32::from_be_bytes(data.get(42..46)?.try_into().ok()?);
+            let ranges = if claimed { ranges | 1 << 24 } else { ranges & !(1 << 24) };
+            data.get_mut(42..46)?.copy_from_slice(&ranges.to_be_bytes());
+            let pages = u32::from_be_bytes(data.get(78..82)?.try_into().ok()?) & !(1 << 16);
+            data.get_mut(78..82)?.copy_from_slice(&pages.to_be_bytes());
+        }
+        builder.add_raw(tag, data);
+    }
+    Some(builder.build())
+}
+
 /// The family of [`half_form_font`].
 pub const HALF_FORM_FAMILY: &str = "Halftest Sans";
 

@@ -34,7 +34,7 @@ impl TypeWidget {
     /// path, nor type in perspective, which transforms whole).
     pub fn of(doc: &Document, selection: &Selection, bx: &OrientedBox, zoom: f64) -> Option<Self> {
         let [id] = selection.objects[..] else { return None };
-        if !doc.is_editable(id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(id).filter(|n| n.extras().perspective.is_none())?;
@@ -44,6 +44,10 @@ impl TypeWidget {
             TextKind::Area { .. } => true,
             _ => return None,
         };
+        // Last: on a locked artboard it measures the art of the layer object that holds `id`.
+        if !doc.is_editable(id) {
+            return None;
+        }
         let r = bx.rect;
         Some(Self { id, at: bx.to_doc() * Point::new(r.x1 + OFFSET_PX / zoom, r.center().y), area })
     }
