@@ -15,7 +15,8 @@
 //!   and throws an error that names the step and the action, while the steps before it stay done.
 //! - A step a script may not run ([`super::refused_to_scripts`]), a step whose command the engine
 //!   does not have (a View menu step, or one that plays an action), and a stop throw before any step
-//!   runs. An action cannot play another action, so it cannot play itself.
+//!   runs, as does such a command among those an `action.batch` step plays. An action cannot play
+//!   another action, so it cannot play itself.
 //! - `dialogs` is `true` or `false` (default `false`); VectorCraft's steps open no dialogs, so it
 //!   changes nothing.
 
@@ -229,13 +230,12 @@ fn do_script(h: &Host, a: &[Data]) -> std::result::Result<Data, HostError> {
     // Every step is checked before the first runs, so a step that cannot run leaves the documents as
     // they were.
     for s in &p.steps {
-        let refused = s.id == STOP_STEP || refused_to_scripts(&s.id) || crate::find_command(&s.id).is_none();
-        if refused {
-            let (place, name, id) = (&s.place, shown(&p.name), shown(&s.id));
-            return Err(HostError::Error(if s.id == STOP_STEP {
+        if let Some((place, id)) = refused_step(s) {
+            let name = shown(&p.name);
+            return Err(HostError::Error(if id == STOP_STEP {
                 format!("step {place} of “{name}” is a stop, which a script cannot wait at")
             } else {
-                format!("step {place} of “{name}” runs `{id}`, which a script cannot run")
+                format!("step {place} of “{name}” runs `{}`, which a script cannot run", shown(&id))
             }));
         }
     }
@@ -261,6 +261,25 @@ fn do_script(h: &Host, a: &[Data]) -> std::result::Result<Data, HostError> {
         }
     }
     Ok(Data::Undefined)
+}
+
+/// The place and command of the first command step `s` would run that a script may not run: the
+/// step itself, or one of the `commands` an `action.batch` step plays on each file (placed as the
+/// batch's place and its own, as in `3.2`). A stop, a command a script may not run and a command the
+/// engine does not have are refused.
+fn refused_step(s: &Step) -> Option<(String, String)> {
+    let refused = |id: &str| id == STOP_STEP || refused_to_scripts(id) || crate::find_command(id).is_none();
+    if refused(&s.id) {
+        return Some((s.place.clone(), s.id.clone()));
+    }
+    if s.id != "action.batch" {
+        return None;
+    }
+    let commands = s.params.get("commands").and_then(Value::as_array)?;
+    commands.iter().enumerate().find_map(|(k, c)| {
+        let id = c.get("command").and_then(Value::as_str).unwrap_or("");
+        refused(id).then(|| (format!("{}.{}", s.place, k + 1), id.to_owned()))
+    })
 }
 
 /// `params` of step `id`, with the active artboard of the active document added as a

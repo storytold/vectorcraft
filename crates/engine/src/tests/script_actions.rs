@@ -146,6 +146,12 @@ fn steps_a_script_may_not_run_stop_the_action_before_any_step() {
     let m = caught(&mut s, "app.doScript('B', 'Set')", &batch);
     assert!(m.starts_with("Error: step 1.2 of “B” runs `script.run`"), "{m}");
     assert_eq!(objects(&s), 0);
+    // So is one among the commands a Batch step plays on each file, before the steps ahead of it run.
+    let files = json!({"command": "action.batch", "params": {"commands": [{"command": "select.all"}, {"command": "prefs.set", "params": {}}]}});
+    let batch = set(&[("F", vec![rect(0), files])]);
+    let m = caught(&mut s, "app.doScript('F', 'Set')", &batch);
+    assert!(m.starts_with("Error: step 2.2 of “F” runs `prefs.set`, which a script cannot run"), "{m}");
+    assert_eq!(objects(&s), 0);
 }
 
 #[test]

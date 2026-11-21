@@ -2694,7 +2694,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   their exact names, and a name that matches no action or more than one throws an error before any step runs, as does
   an action with no included step. A stop, and a step whose command a script may not run or the engine does not have
   (a View menu step, or a step that plays an action or runs a script), throw an error that names the step before any
-  step runs, so an action cannot play itself.
+  step runs, as does such a command among the commands a Batch step (`action.batch`) plays on each file, so an
+  action cannot play itself.
   Each step then runs as `vc.run` runs a command: it joins the run's one undo step for each changed document, counts
   as a host call, and reads and writes files only where the script may. A step that fails is put back and throws an
   error that gives the step's place, the action's name and the step's command, and the steps before it stay done; an
