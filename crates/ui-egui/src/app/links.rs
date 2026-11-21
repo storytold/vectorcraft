@@ -5,10 +5,7 @@ use super::{VectorcraftApp, browsable_url};
 impl VectorcraftApp {
     /// Open a link in the browser (Help → Discord, website, GitHub…).
     pub fn open_url(&mut self, url: &str) {
-        match self.services.open_url.as_mut() {
-            Some(open) => open(url),
-            None => self.pending_url = Some(url.to_string()),
-        }
+        self.pending_url = Some(url.to_string());
         self.ui.status = format!("Opened {url}");
     }
 
@@ -37,10 +34,10 @@ impl VectorcraftApp {
     }
 
     /// Did automation ask for what is being handled now: [`Self::automation_is_acting`], or the
-    /// answer of a file dialog that automation opened ([`crate::picks::as_automated`]), even when a
+    /// answer of a file dialog that automation opened ([`crate::file_asks::as_automated`]), even when a
     /// person picked the file in it?
     pub(crate) fn automation_asked(&self) -> bool {
-        self.automation_is_acting() || self.picks.automated()
+        self.automation_is_acting() || self.file_asks.automated()
     }
 
     /// Run a Help link command and open the URL it returns.
