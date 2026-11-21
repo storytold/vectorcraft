@@ -7335,7 +7335,8 @@ that piece. With Smart Guides on, the end of a continuous arc snaps onto the nea
 circle, when that tick lies within the Smart Guides snapping tolerance of the pointer, no other Smart Guide snaps the
 point, and neither Snap to Grid nor Snap to Pixel snaps drawn points. A sharp-corner arc sweeps the arc size, so its end
 does not snap to a tick. Shift does not constrain Quick Pen points, so it does not change the tick snapping. The
-protractor, its 15° step and the tick snapping are VectorCraft's own behavior.
+protractor, its 15° step and the tick snapping are VectorCraft's own behavior. A small cross marks the arc's center
+wherever the protractor shows; the cross is VectorCraft's own behavior too.
 
 Selecting the tool shows its toolbar on the canvas: Straight Line, Continuous Arc and Sharp Corner Arc set `action`,
 Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which first finishes any pending tool edit,
