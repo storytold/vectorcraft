@@ -146,6 +146,23 @@ fn item_rows_follow_remove_and_move() {
 }
 
 #[test]
+fn moving_a_single_row_keeps_the_active_objects_landing() {
+    let mut s = session();
+    let short = rect(&mut s, 50.0);
+    let long = rect(&mut s, 200.0);
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "select.set", json!({"ids": [short.0, long.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+
+    let moved = run(&mut s, "appearance.moveItem", json!({"ids": [short.0, long.0], "from": 0, "to": 2}));
+
+    assert_eq!(moved["index"], 2, "the command still reports the last target's landing");
+    assert!(matches!(node(&s, short).appearance.items[1], AppearanceItem::Fill(_)));
+    assert!(matches!(node(&s, long).appearance.items[0], AppearanceItem::Stroke(_)));
+    assert_eq!(s.appearance_item(), Some(1), "the active row follows its own object's landing");
+}
+
+#[test]
 fn transparency_goes_to_the_targeted_item() {
     let mut s = session();
     let id = rect(&mut s, 100.0);
