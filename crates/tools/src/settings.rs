@@ -63,7 +63,7 @@ const ROWS: &[Row] = &[
     // Pencil Tool Options' Alt key toggles to Smooth Tool, Live preview and Live curve fitting (the
     // Paintbrush has none of them).
     (&["pencil"], None, &["altSmooth", "livePreview", "liveFit"]),
-    (&["smooth"], None, &["fidelity"]),
+    (&["smooth"], None, &["fidelity", "smoothness"]),
     (&["blobBrush", "eraser"], None, &["size", "sizeMode", "sizeVariation"]),
     (&["blobBrush"], None, &["fidelity", "keepSelected", "mergeOnlySelection"]),
     // Eraser Tool Options' tip shape.

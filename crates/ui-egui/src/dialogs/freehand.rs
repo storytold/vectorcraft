@@ -4,7 +4,7 @@
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
 //! Fields: `tool`; `fidelity` (screen pixels for the Pencil, Paintbrush and Smooth, points for the
-//! Blob Brush), `fill` (Pencil and
+//! Blob Brush), `smoothness` (percent, 0 to 100; Smooth), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
@@ -35,8 +35,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_wid
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 18] = [
+const KEYS: [&str; 19] = [
     "fidelity",
+    "smoothness",
     "angle",
     "angleMode",
     "angleVariation",
@@ -259,9 +260,35 @@ fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// The Smooth tool's Smoothness rows: the label on a line of its own, then a slider from 0% to 100%
+/// across the row with the field at its end, both in whole percent.
+fn smoothness(ui: &mut egui::Ui, d: &mut Dialog) {
+    let t = Tokens::get(ui.ctx());
+    let v = d.f64("smoothness", 50.0);
+    let rail_w = label_w(ui);
+    let mut new = None;
+    ui.label(egui::RichText::new(tl!("Smoothness:")).size(12.5).color(t.text));
+    ui.horizontal(|ui| {
+        let (shown, at) = (widgets::SliderValue::field(v, 0.0..=100.0, "%", 0), (v / 100.0) as f32);
+        let (x, _, keyed) =
+            widgets::color_slider_stepped(ui, "freehand-smoothness", tl!("Smoothness:"), Some(shown), at, rail_w, &|_| t.input_border);
+        new = x.map(|x| (f64::from(x.clamp(0.0, 1.0)) * 100.0).round()).or(keyed);
+        if let Some(x) = widgets::range_field(ui, "freehand-smoothness-field", v, 0.0..=100.0, "%", 0, FIELD_W) {
+            new = Some(x);
+        }
+    });
+    if let Some(n) = new.filter(|n| *n != v) {
+        d.fields.insert("smoothness".into(), json!(n));
+    }
+}
+
 fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if d.fields.contains_key("fidelity") {
         fidelity(ui, d);
+        ui.add_space(10.0);
+    }
+    if d.fields.contains_key("smoothness") {
+        smoothness(ui, d);
         ui.add_space(10.0);
     }
     let eraser = d.fields.contains_key("angleMode");
