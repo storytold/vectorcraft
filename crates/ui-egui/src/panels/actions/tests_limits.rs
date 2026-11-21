@@ -1,5 +1,11 @@
+use std::collections::BTreeSet;
+
+use craft::automation::actions::{ActionColor, ActionStep};
+
+use super::recording::recording_start;
 use super::tests_support::*;
 use super::*;
+use crate::dialogs::action_set_options::SetOptionsDialog;
 
 /// An action stays one that Load Actions… reads back: a stop or a menu item that would give it
 /// more than 10,000 steps, or its set's file more than 8 MiB, is refused, and the action keeps its
@@ -7,28 +13,32 @@ use super::*;
 #[test]
 fn inserted_steps_keep_an_action_set_that_load_actions_reads() {
     let (mut app, _) = app_with_three_moves();
-    let full = vec![("object.group".to_string(), json!({})); files::MAX_ACTION_STEPS];
-    app.ui.action_sets[0].actions[0].steps = full;
+    let full = vec![ActionStep::new("object.group", json!({})); files::MAX_ACTION_STEPS];
+    edit_set(&mut app, 0, |actions| actions[0].steps = full);
     let steps = "the action already has 10,000 steps";
     assert_eq!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.group"})).unwrap_err(), steps);
     assert_eq!(app.run(INSERT_STOP, json!({"set": 0, "action": 0, "step": 0})).unwrap_err(), steps);
-    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), files::MAX_ACTION_STEPS);
-    app.ui.action_sets[0].actions[0].steps.pop();
+    assert_eq!(set_actions(&app, 0)[0].steps.len(), files::MAX_ACTION_STEPS);
+    edit_set(&mut app, 0, |actions| {
+        actions[0].steps.pop();
+    });
     assert!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.group"})).is_ok(), "the 10,000th step goes in");
-    let saved = files::write_set(&app.ui.action_sets[0]);
-    assert_eq!(files::read_set(&saved, "Test").unwrap().actions[0].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+    let saved = set_file(&app, 0);
+    assert_eq!(files::read_set(&saved, "Test").unwrap().1[0].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
 
-    let pad = |n: usize| vec![("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}))];
-    app.ui.action_sets[0].actions[0].steps = pad(0);
-    app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([0, 7]);
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
-    app.ui.action_sets[0].actions[0].steps = pad(room - 8);
+    let pad = |n: usize| vec![ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}))];
+    edit_set(&mut app, 0, |actions| {
+        actions[0].steps = pad(0);
+        actions[0].disabled = BTreeSet::from([0, 7]);
+    });
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
+    edit_set(&mut app, 0, |actions| actions[0].steps = pad(room - 8));
     let size = "the action set would be larger than 8 MiB";
     assert_eq!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "step": 0, "command": "object.group"})).unwrap_err(), size);
     assert_eq!(app.run(INSERT_STOP, json!({"set": 0, "action": 0})).unwrap_err(), size);
-    let action = &app.ui.action_sets[0].actions[0];
-    assert_eq!((action.steps.len(), &action.excluded_steps), (1, &BTreeSet::from([0, 7])), "nothing changed");
-    assert!(files::write_set(&app.ui.action_sets[0]).len() <= files::MAX_SET_FILE);
+    let action = set_actions(&app, 0).remove(0);
+    assert_eq!((action.steps.len(), &action.disabled), (1, &BTreeSet::from([0, 7])), "nothing changed");
+    assert!(set_file(&app, 0).len() <= files::MAX_SET_FILE);
 }
 
 /// The limits hold for a step inserted into the recording in progress too: they count the steps
@@ -46,23 +56,22 @@ fn steps_inserted_into_a_recording_keep_an_action_set_that_load_actions_reads() 
     assert_eq!(app.run(INSERT_MENU_ITEM, json!({"command": "object.group"})).unwrap_err(), steps);
     assert_eq!(app.run(INSERT_STOP, json!({})).unwrap_err(), steps);
     app.run(STOP_RECORDING, json!({})).unwrap();
-    let saved = files::write_set(&app.ui.action_sets[0]);
-    assert_eq!(files::read_set(&saved, "Test").unwrap().actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+    let saved = set_file(&app, 0);
+    assert_eq!(files::read_set(&saved, "Test").unwrap().1.last().unwrap().steps.len(), files::MAX_ACTION_STEPS, "and loads again");
 
     let (mut app, _) = app_with_three_moves();
     app.run(START_RECORDING, json!({})).unwrap();
-    let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
-    app.ui.action_sets[0].actions[0].steps = vec![pad(room - 8)];
-    let into = app.ui.action_sets[0].actions[0].id;
-    app.ui.recording_into = Some(into);
+    let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room - 8)]);
+    app.ui.recording_into = Some(set_actions(&app, 0)[0].name.clone());
     let size = "the action set would be larger than 8 MiB";
     assert_eq!(app.run(INSERT_MENU_ITEM, json!({"command": "object.group"})).unwrap_err(), size);
     assert_eq!(app.run(INSERT_STOP, json!({})).unwrap_err(), size);
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "nothing was recorded into the action");
-    assert!(files::write_set(&app.ui.action_sets[0]).len() <= files::MAX_SET_FILE);
+    assert_eq!(set_actions(&app, 0)[0].steps.len(), 1, "nothing was recorded into the action");
+    assert!(set_file(&app, 0).len() <= files::MAX_SET_FILE);
 }
 
 /// A step put by its set and action into the action that the recording in progress records into
@@ -70,9 +79,9 @@ fn steps_inserted_into_a_recording_keep_an_action_set_that_load_actions_reads() 
 #[test]
 fn steps_inserted_into_the_action_being_recorded_into_count_the_recorded_steps() {
     let (mut app, _) = app_with_three_moves();
-    app.ui.action_sets[0].actions.push(Action::new("Other", vec![]));
-    let into = app.ui.action_sets[0].actions[0].id;
-    let stored = app.ui.action_sets[0].actions[0].steps.len();
+    edit_set(&mut app, 0, |actions| actions.push(Action::new("Other", vec![])));
+    let into = set_actions(&app, 0)[0].name.clone();
+    let stored = set_actions(&app, 0)[0].steps.len();
     app.run(START_RECORDING, json!({})).unwrap();
     app.ui.recording_into = Some(into);
     for _ in stored..files::MAX_ACTION_STEPS {
@@ -81,16 +90,16 @@ fn steps_inserted_into_the_action_being_recorded_into_count_the_recorded_steps()
     let steps = "the action already has 10,000 steps";
     assert_eq!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": "object.group"})).unwrap_err(), steps);
     assert_eq!(app.run(INSERT_STOP, json!({"set": 0, "action": 0})).unwrap_err(), steps);
-    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), stored, "nothing was inserted");
+    assert_eq!(set_actions(&app, 0)[0].steps.len(), stored, "nothing was inserted");
     assert!(app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 1, "command": "object.group"})).is_ok(), "another action takes the step");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    let saved = files::write_set(&app.ui.action_sets[0]);
-    assert_eq!(files::read_set(&saved, "Test").unwrap().actions[0].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+    let saved = set_file(&app, 0);
+    assert_eq!(files::read_set(&saved, "Test").unwrap().1[0].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
 
     let (mut app, _) = app_with_three_moves();
     let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    let into = app.ui.action_sets[0].actions[0].id;
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+    let into = set_actions(&app, 0)[0].name.clone();
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
     app.run(START_RECORDING, json!({})).unwrap();
     app.ui.recording_into = Some(into);
     app.session.journal.push(pad(room - 8));
@@ -101,14 +110,14 @@ fn steps_inserted_into_the_action_being_recorded_into_count_the_recorded_steps()
     // recording that adds a new action.
     for into_first in [true, false] {
         let (mut app, _) = app_with_three_moves();
-        app.ui.action_sets[0].actions.push(Action::new("Other", vec![]));
-        let first = app.ui.action_sets[0].actions[0].id;
+        edit_set(&mut app, 0, |actions| actions.push(Action::new("Other", vec![])));
+        let first = set_actions(&app, 0)[0].name.clone();
         app.run(START_RECORDING, json!({})).unwrap();
         app.ui.recording_into = into_first.then_some(first);
         app.session.journal.push(pad(room - 8));
         let r = app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 1, "command": "object.group"}));
         assert_eq!(r.unwrap_err(), size, "recording into the first action: {into_first}");
-        assert!(app.ui.action_sets[0].actions[1].steps.is_empty(), "recording into the first action: {into_first}");
+        assert!(set_actions(&app, 0)[1].steps.is_empty(), "recording into the first action: {into_first}");
     }
 }
 
@@ -132,7 +141,8 @@ fn recorded_commands_keep_an_action_at_10_000_steps() {
         let filler = ("object.group".to_string(), json!({}));
         if new_action {
             app.run(NEW_ACTION, json!({"set": 0, "name": "Long"})).unwrap();
-            app.ui.action_sets[0].actions[1].steps = vec![filler; files::MAX_ACTION_STEPS - 1];
+            let steps = vec![ActionStep::new(filler.0.clone(), filler.1.clone()); files::MAX_ACTION_STEPS - 1];
+            edit_set(&mut app, 0, |actions| actions[1].steps = steps);
         } else {
             app.run(START_RECORDING, json!({})).unwrap();
             for _ in 1..files::MAX_ACTION_STEPS {
@@ -156,10 +166,10 @@ fn recorded_commands_keep_an_action_at_10_000_steps() {
         assert_eq!(x(&app), 1.0);
         assert_eq!(app.session.journal.len(), journal);
         app.run(STOP_RECORDING, json!({})).unwrap();
-        assert_eq!(app.ui.action_sets[0].actions[1].steps.len(), files::MAX_ACTION_STEPS);
-        assert_eq!(app.ui.action_sets[0].actions[1].steps.last(), Some(&("object.move".to_string(), moved)));
-        let saved = files::write_set(&app.ui.action_sets[0]);
-        assert_eq!(files::read_set(&saved, "Test").unwrap().actions[1].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+        assert_eq!(set_actions(&app, 0)[1].steps.len(), files::MAX_ACTION_STEPS);
+        assert_eq!(set_actions(&app, 0)[1].steps.last(), Some(&ActionStep::new("object.move", moved)));
+        let saved = set_file(&app, 0);
+        assert_eq!(files::read_set(&saved, "Test").unwrap().1[1].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
     }
 }
 
@@ -169,12 +179,12 @@ fn recorded_commands_keep_an_action_at_10_000_steps() {
 fn recorded_commands_keep_an_action_set_file_within_8_mib() {
     let (mut app, x) = app_with_three_moves();
     let moved = recorded_move(&mut app);
-    let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+    let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
     let added = files::step_bytes("object.move", &moved);
-    app.ui.action_sets[0].actions[0].steps = vec![pad(room - added)];
-    let into = app.ui.action_sets[0].actions[0].id;
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room - added)]);
+    let into = set_actions(&app, 0)[0].name.clone();
     app.run(START_RECORDING, json!({})).unwrap();
     app.ui.recording_into = Some(into);
     app.run("object.move", moved.clone()).unwrap();
@@ -187,9 +197,9 @@ fn recorded_commands_keep_an_action_set_file_within_8_mib() {
     app.ui.status.clear();
     app.run(STOP_RECORDING, json!({})).unwrap();
     assert_eq!(app.ui.status, "", "Stop keeps every recorded step");
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    let saved = set_file(&app, 0);
     assert_eq!(saved.len(), files::MAX_SET_FILE);
-    assert_eq!(files::read_set(&saved, "Test").unwrap().actions[0].steps.len(), 2, "and loads again");
+    assert_eq!(files::read_set(&saved, "Test").unwrap().1[0].steps.len(), 2, "and loads again");
 }
 
 /// A command whose step fits by its params but not with the values it adds to its step as it
@@ -204,12 +214,12 @@ fn a_recorded_command_whose_noted_values_do_not_fit_is_left_out() {
     let noted = app.session.journal.last().unwrap().1.clone();
     app.run("edit.undo", json!({})).unwrap();
     assert!(files::step_bytes("object.scale", &noted) > files::step_bytes("object.scale", &scaled), "Scale notes values: {noted}");
-    let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+    let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
     // Room for the step as given, not for the step as recorded.
-    app.ui.action_sets[0].actions[0].steps = vec![pad(room - files::step_bytes("object.scale", &scaled))];
-    let into = app.ui.action_sets[0].actions[0].id;
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room - files::step_bytes("object.scale", &scaled))]);
+    let into = set_actions(&app, 0)[0].name.clone();
     app.run(START_RECORDING, json!({})).unwrap();
     app.ui.recording_into = Some(into);
     let size = "the action set would be larger than 8 MiB";
@@ -221,8 +231,8 @@ fn a_recorded_command_whose_noted_values_do_not_fit_is_left_out() {
     assert_eq!(x(&app), scaled_x);
     assert!(app.ui.recording.is_some(), "the recording goes on");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the scale's step is left out");
-    assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    assert_eq!(set_actions(&app, 0)[0].steps.len(), 1, "the scale's step is left out");
+    assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
 }
 
 /// A script that moves the selection twice.
@@ -270,11 +280,11 @@ fn script_run_checks_recording_step_limit_on_completion() {
         assert_eq!(app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap_err(), steps, "no later command runs");
         assert_eq!(x(&app), 2.0);
         app.run(STOP_RECORDING, json!({})).unwrap();
-        let recorded = app.ui.action_sets[0].actions.last().unwrap();
+        let recorded = set_actions(&app, 0).pop().unwrap();
         assert_eq!(recorded.steps.len(), files::MAX_ACTION_STEPS);
-        assert_eq!(recorded.steps.last().map(|(c, _)| c.as_str()), Some("object.move"), "the first move fits");
-        let saved = files::write_set(&app.ui.action_sets[0]);
-        assert_eq!(files::read_set(&saved, "Test").unwrap().actions[1].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
+        assert_eq!(recorded.steps.last().map(|s| s.command.as_str()), Some("object.move"), "the first move fits");
+        let saved = set_file(&app, 0);
+        assert_eq!(files::read_set(&saved, "Test").unwrap().1[1].steps.len(), files::MAX_ACTION_STEPS, "and loads again");
 
         let (mut app, _) = app_with_three_moves();
         recording_with(&mut app, files::MAX_ACTION_STEPS - 2);
@@ -300,12 +310,12 @@ fn script_run_checks_recording_byte_limit_on_completion() {
             let both: usize = app.session.journal_for_action(before).iter().map(|(c, p)| files::step_bytes(c, p)).sum();
             app.run("edit.undo", json!({})).unwrap();
             assert_eq!(x(&app), 0.0);
-            let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-            app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-            let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+            let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+            edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+            let room = files::MAX_SET_FILE - set_file(&app, 0).len();
             // Room for both moves, or for one move and all but a byte of the other.
-            app.ui.action_sets[0].actions[0].steps = vec![pad(room - both + 1 - spare)];
-            let into = app.ui.action_sets[0].actions[0].id;
+            edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room - both + 1 - spare)]);
+            let into = set_actions(&app, 0)[0].name.clone();
             app.run(START_RECORDING, json!({})).unwrap();
             app.ui.recording_into = Some(into);
             app.ui.status.clear();
@@ -320,8 +330,8 @@ fn script_run_checks_recording_byte_limit_on_completion() {
             assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), 2, "the journal keeps both moves");
             assert_eq!(app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap_err(), size, "no later command runs");
             app.run(STOP_RECORDING, json!({})).unwrap();
-            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 2, "{what}: the first move fits");
-            let saved = files::write_set(&app.ui.action_sets[0]);
+            assert_eq!(set_actions(&app, 0)[0].steps.len(), 2, "{what}: the first move fits");
+            let saved = set_file(&app, 0);
             assert!(saved.len() <= files::MAX_SET_FILE);
             assert!(files::read_set(&saved, "Test").is_ok());
         }
@@ -363,7 +373,7 @@ fn tool_commit_checks_recording_step_limit() {
             assert_eq!(app.ui.status, steps, "{tool}: the status bar names the limit now");
             assert!(app.ui.recording.is_some(), "the recording goes on");
             app.run(STOP_RECORDING, json!({})).unwrap();
-            assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
+            assert_eq!(set_actions(&app, 0).last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
         }
     }
 }
@@ -378,11 +388,11 @@ fn tool_commit_checks_recording_byte_limit() {
         let (mut app, _) = app_with_three_moves();
         app.select_tool(tool);
         app.run(START_RECORDING, json!({})).unwrap();
-        let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-        app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-        let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
-        app.ui.action_sets[0].actions[0].steps = vec![pad(room)];
-        app.ui.recording_into = Some(app.ui.action_sets[0].actions[0].id);
+        let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+        edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+        let room = files::MAX_SET_FILE - set_file(&app, 0).len();
+        edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room)]);
+        app.ui.recording_into = Some(set_actions(&app, 0)[0].name.clone());
         app.ui.status.clear();
         let art = app.session.active().unwrap().doc.art_bounds();
         tool_drag(&mut app, (20.0, 20.0), (60.0, 50.0));
@@ -390,8 +400,8 @@ fn tool_commit_checks_recording_byte_limit() {
         assert_eq!(app.ui.status, size, "{tool}: the status bar names the limit now");
         assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), 1, "{tool}: the journal keeps the step");
         app.run(STOP_RECORDING, json!({})).unwrap();
-        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "{tool}: the step is left out");
-        assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+        assert_eq!(set_actions(&app, 0)[0].steps.len(), 1, "{tool}: the step is left out");
+        assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
     }
 }
 
@@ -433,7 +443,7 @@ fn tool_exec_checks_recording_step_limit() {
         assert_eq!(app.session.active().unwrap().doc.art_bounds(), art, "no rectangle is drawn");
         assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), files::MAX_ACTION_STEPS + 1, "the journal keeps the step");
         app.run(STOP_RECORDING, json!({})).unwrap();
-        assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
+        assert_eq!(set_actions(&app, 0).last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
     }
 }
 
@@ -445,18 +455,18 @@ fn tool_exec_checks_recording_byte_limit() {
     let size = "the action set would be larger than 8 MiB";
     let (mut app, _) = app_with_three_moves();
     app.run(START_RECORDING, json!({})).unwrap();
-    let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
-    app.ui.action_sets[0].actions[0].steps = vec![pad(room)];
-    app.ui.recording_into = Some(app.ui.action_sets[0].actions[0].id);
+    let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room)]);
+    app.ui.recording_into = Some(set_actions(&app, 0)[0].name.clone());
     app.ui.status.clear();
     lasso_nothing(&mut app);
     assert_eq!(app.ui.status, size, "the status bar names the limit now");
     assert_eq!(app.session.journal.since(recording_start(&app).unwrap()).len(), 1, "the journal keeps the step");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the step is left out");
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    assert_eq!(set_actions(&app, 0)[0].steps.len(), 1, "the step is left out");
+    let saved = set_file(&app, 0);
     assert!(saved.len() <= files::MAX_SET_FILE);
     assert!(files::read_set(&saved, "Test").is_ok());
 }
@@ -491,7 +501,7 @@ fn place_cursor_exec_checks_recording_step_limit_on_completion() {
             assert_ne!(app.ui.status, steps, "nothing is checked before the file is placed");
             app.placing.wait_for_reads();
             let ctx = egui::Context::default();
-            app.begin_host_iteration();
+            craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
             out.textures_delta.clear();
             assert!(app.placing.pending.is_empty(), "the frame after the read places the file");
@@ -502,7 +512,7 @@ fn place_cursor_exec_checks_recording_step_limit_on_completion() {
         assert_eq!(app.ui.status, steps, "background {background}: the status bar names the limit once the file is placed");
         assert!(app.ui.recording.is_some(), "the recording goes on");
         app.run(STOP_RECORDING, json!({})).unwrap();
-        assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS, "background {background}");
+        assert_eq!(set_actions(&app, 0).last().unwrap().steps.len(), files::MAX_ACTION_STEPS, "background {background}");
     }
 }
 
@@ -515,15 +525,16 @@ fn a_journal_rewrite_or_a_direct_commit_is_checked_on_the_next_frame() {
     let (mut app, _) = app_with_three_moves();
     let small = ("object.move".to_string(), json!({"dx": 1, "dy": 0}));
     let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
-    app.ui.action_sets[0].actions[0].steps = vec![pad(room - files::step_bytes(&small.0, &small.1))];
-    let into = app.ui.action_sets[0].actions[0].id;
+    let step = |(command, params): (String, Value)| ActionStep::new(command, params);
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![step(pad(0))]);
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![step(pad(room - files::step_bytes(&small.0, &small.1)))]);
+    let into = set_actions(&app, 0)[0].name.clone();
     app.run(START_RECORDING, json!({})).unwrap();
     app.ui.recording_into = Some(into);
     let ctx = egui::Context::default();
     let frame = |app: &mut VectorcraftApp| {
-        app.begin_host_iteration();
+        craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
     };
@@ -539,7 +550,7 @@ fn a_journal_rewrite_or_a_direct_commit_is_checked_on_the_next_frame() {
     frame(&mut app);
     assert_eq!(app.ui.status, "", "named once");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 1, "the step is left out");
+    assert_eq!(set_actions(&app, 0)[0].steps.len(), 1, "the step is left out");
 }
 
 /// When the action New Action made for the recording in progress is deleted, Stop
@@ -548,22 +559,20 @@ fn a_journal_rewrite_or_a_direct_commit_is_checked_on_the_next_frame() {
 #[test]
 fn a_deleted_recording_action_does_not_limit_recorded_commands() {
     let (mut app, x) = app_with_three_moves();
-    let gone = Action::new("Gone", vec![]);
-    let id = gone.id;
-    app.ui.action_sets[0].actions.push(gone);
+    edit_set(&mut app, 0, |actions| actions.push(Action::new("Gone", vec![])));
     app.run(START_RECORDING, json!({})).unwrap();
-    app.ui.recording_into = Some(id);
-    app.ui.action_sets[0].actions.retain(|a| a.id != id);
-    let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions[0].steps = vec![pad(0)];
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
-    app.ui.action_sets[0].actions[0].steps = vec![pad(room)];
+    app.ui.recording_into = Some("Gone".into());
+    edit_set(&mut app, 0, |actions| actions.retain(|a| a.name != "Gone"));
+    let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(0)]);
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
+    edit_set(&mut app, 0, |actions| actions[0].steps = vec![pad(room)]);
     let before = x(&app);
     app.run("object.move", json!({"dx": 1, "dy": 0})).unwrap();
     assert_ne!(x(&app), before, "the move ran");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[0].actions.len(), 1, "no action is added");
-    assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    assert_eq!(set_actions(&app, 0).len(), 1, "no action is added");
+    assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
 }
 
 /// A stop that playback reaches while a full action records is not recorded: the status bar shows
@@ -579,9 +588,9 @@ fn a_stop_reached_while_recording_a_full_action_is_left_out() {
     assert!(waiting_at_stop(&app));
     assert_eq!(app.ui.status, "the action already has 10,000 steps");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    let recorded = app.ui.action_sets[0].actions.last().unwrap();
+    let recorded = set_actions(&app, 0).pop().unwrap();
     assert_eq!(recorded.steps.len(), files::MAX_ACTION_STEPS);
-    assert_eq!(recorded.steps.last().map(|(c, _)| c.as_str()), Some("command.batch"));
+    assert_eq!(recorded.steps.last().map(|s| s.command.as_str()), Some("command.batch"));
 }
 
 /// Steps that reach the journal without a command's check are left out by Stop Playing/Recording
@@ -595,7 +604,7 @@ fn stop_leaves_out_recorded_steps_past_the_limits() {
     }
     app.run(STOP_RECORDING, json!({})).unwrap();
     assert_eq!(app.ui.status, "the action already has 10,000 steps");
-    assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
+    assert_eq!(set_actions(&app, 0).last().unwrap().steps.len(), files::MAX_ACTION_STEPS);
 
     let (mut app, _) = app_with_three_moves();
     let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
@@ -605,8 +614,8 @@ fn stop_leaves_out_recorded_steps_past_the_limits() {
     app.session.journal.push(pad(0));
     app.run(STOP_RECORDING, json!({})).unwrap();
     assert_eq!(app.ui.status, "the action set would be larger than 8 MiB");
-    assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), 1);
-    assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    assert_eq!(set_actions(&app, 0).last().unwrap().steps.len(), 1);
+    assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
 }
 
 /// An exclusion that would give a set a file larger than 8 MiB is refused for a set, an action,
@@ -616,14 +625,14 @@ fn stop_leaves_out_recorded_steps_past_the_limits() {
 #[test]
 fn excluding_steps_keeps_an_action_set_file_within_8_mib() {
     let (mut app, _) = app_with_three_moves();
-    let pad = |n: usize| ("object.move".to_string(), json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
-    app.ui.action_sets[0].actions.push(Action::new("Pad", vec![pad(0)]));
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+    let pad = |n: usize| ActionStep::new("object.move", json!({"dx": 1, "dy": 0, "pad": "x".repeat(n)}));
+    edit_set(&mut app, 0, |actions| actions.push(Action::new("Pad", vec![pad(0)])));
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
     // Room for two more excluded steps.
-    app.ui.action_sets[0].actions[1].steps = vec![pad(room - 2 * files::EXCLUDED_BYTES)];
+    edit_set(&mut app, 0, |actions| actions[1].steps = vec![pad(room - 2 * files::EXCLUDED_BYTES)]);
     let size = "the action set would be larger than 8 MiB";
     let include = |app: &mut VectorcraftApp, p: Value| app.run(INCLUDE_STEPS, p);
-    let excluded = |app: &VectorcraftApp| app.ui.action_sets[0].actions.iter().map(|a| a.excluded_steps.clone()).collect::<Vec<_>>();
+    let excluded = |app: &VectorcraftApp| set_actions(app, 0).into_iter().map(|a| a.disabled).collect::<Vec<_>>();
     let none = vec![BTreeSet::new(), BTreeSet::new()];
     assert_eq!(include(&mut app, json!({"set": 0, "included": false})).unwrap_err(), size);
     assert_eq!(include(&mut app, json!({"set": 0, "action": 0, "included": false})).unwrap_err(), size);
@@ -631,38 +640,38 @@ fn excluding_steps_keeps_an_action_set_file_within_8_mib() {
     // Two steps fill the file to 8 MiB.
     include(&mut app, json!({"set": 0, "action": 0, "step": 0, "included": false, "others": true})).unwrap();
     assert_eq!(excluded(&app), [BTreeSet::from([1, 2]), BTreeSet::new()]);
-    assert_eq!(files::write_set(&app.ui.action_sets[0]).len(), files::MAX_SET_FILE);
+    assert_eq!(set_file(&app, 0).len(), files::MAX_SET_FILE);
     assert_eq!(include(&mut app, json!({"set": 0, "action": 0, "step": 0, "included": false})).unwrap_err(), size);
     assert_eq!(include(&mut app, json!({"set": 0, "action": 1, "step": 0, "included": false})).unwrap_err(), size);
     assert!(include(&mut app, json!({"set": 0, "action": 0, "step": 1, "included": false})).is_ok(), "no change");
     include(&mut app, json!({"set": 0, "action": 0, "step": 1, "included": true})).unwrap();
     include(&mut app, json!({"set": 0, "action": 0, "step": 0, "included": false})).unwrap();
     assert_eq!(excluded(&app), [BTreeSet::from([0, 2]), BTreeSet::new()]);
-    assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
 
     // A set already larger than 8 MiB can still include its steps.
-    app.ui.action_sets[0].actions[1].steps[0] = pad(room);
+    edit_set(&mut app, 0, |actions| actions[1].steps[0] = pad(room));
     assert_eq!(include(&mut app, json!({"set": 0, "action": 0, "step": 1, "included": false})).unwrap_err(), size);
     include(&mut app, json!({"set": 0, "included": true})).unwrap();
     assert_eq!(excluded(&app), none);
 
     // The steps a recording adds to the set count too.
     let (mut app, _) = app_with_three_moves();
-    let room = files::MAX_SET_FILE - files::write_set(&app.ui.action_sets[0]).len();
+    let room = files::MAX_SET_FILE - set_file(&app, 0).len();
     app.run(START_RECORDING, json!({})).unwrap();
-    app.session.journal.push(pad(room - files::step_bytes("object.move", &pad(0).1)));
+    let padded = pad(room - files::step_bytes("object.move", &pad(0).params));
+    app.session.journal.push((padded.command, padded.params));
     assert_eq!(include(&mut app, json!({"set": 0, "included": false})).unwrap_err(), size);
-    assert!(app.ui.action_sets[0].actions[0].excluded_steps.is_empty());
+    assert!(set_actions(&app, 0)[0].disabled.is_empty());
 }
 
 /// Adds an action to set `set` whose step makes the set's file `short` bytes short of 8 MiB.
 fn pad_set_to(app: &mut VectorcraftApp, set: usize, short: usize) {
-    let pad = |n: usize| ("object.move".to_string(), json!({"pad": "x".repeat(n)}));
-    let s = &mut app.ui.action_sets[set];
-    s.actions.push(Action::new("Pad", vec![pad(0)]));
-    let room = files::MAX_SET_FILE - files::write_set(s).len();
-    s.actions.last_mut().unwrap().steps[0] = pad(room - short);
-    assert_eq!(files::write_set(s).len(), files::MAX_SET_FILE - short);
+    let pad = |n: usize| ActionStep::new("object.move", json!({"pad": "x".repeat(n)}));
+    edit_set(app, set, |actions| actions.push(Action::new("Pad", vec![pad(0)])));
+    let room = files::MAX_SET_FILE - set_file(app, set).len();
+    edit_set(app, set, |actions| actions.last_mut().unwrap().steps[0] = pad(room - short));
+    assert_eq!(set_file(app, set).len(), files::MAX_SET_FILE - short);
 }
 
 /// A recorded batch that edits another document, and whose values make its step too large only
@@ -692,7 +701,7 @@ fn a_recorded_batch_that_edits_another_document_is_left_out_when_it_grows() {
 
     let (mut app, x, moved) = two_documents();
     pad_set_to(&mut app, 0, given);
-    let into = app.ui.action_sets[0].actions.last().unwrap().id;
+    let into = set_actions(&app, 0).pop().unwrap().name;
     app.run(START_RECORDING, json!({"set": 0})).unwrap();
     app.ui.recording_into = Some(into);
     app.run("command.batch", batch).unwrap();
@@ -702,10 +711,10 @@ fn a_recorded_batch_that_edits_another_document_is_left_out_when_it_grows() {
     assert_ne!(scaled, 0.0, "the scale stayed");
     assert_eq!(app.run("object.move", moved).unwrap_err(), size, "no later command runs");
     assert_eq!(x(&app), scaled);
-    let pad = app.ui.action_sets[0].actions.last().unwrap().steps.len();
+    let pad = set_actions(&app, 0).last().unwrap().steps.len();
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[0].actions.last().unwrap().steps.len(), pad, "the batch's step is left out");
-    assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    assert_eq!(set_actions(&app, 0).last().unwrap().steps.len(), pad, "the batch's step is left out");
+    assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
 }
 
 /// Set Options… renaming the set that an action records into has the next recorded command
@@ -716,19 +725,19 @@ fn a_set_renamed_while_it_records_is_measured_again() {
     let moved = recorded_move(&mut app);
     let added = files::step_bytes("object.move", &moved);
     pad_set_to(&mut app, 0, 2 * added + 3);
-    let into = app.ui.action_sets[0].actions.last().unwrap().id;
+    let into = set_actions(&app, 0).pop().unwrap().name;
     app.run(START_RECORDING, json!({"set": 0})).unwrap();
     app.ui.recording_into = Some(into);
     app.run("object.move", moved.clone()).unwrap();
     crate::dialogs::action_set_options::open(&mut app, 0);
-    let longer = format!("{} 1234", app.ui.action_sets[0].name);
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!(longer));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(app.ui.action_sets[0].name, longer);
+    let longer = format!("{} 1234", set_names(&app)[0]);
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!(longer));
+    confirm_dialog::<SetOptionsDialog>(&mut app).unwrap();
+    assert_eq!(set_names(&app)[0], longer);
     assert_eq!(app.run("object.move", moved).unwrap_err(), "the action set would be larger than 8 MiB");
     assert_eq!(x(&app), 1.0, "only the first move ran");
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert!(files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").is_ok());
+    assert!(files::read_set(&set_file(&app, 0), "Test").is_ok());
 }
 
 /// Steps recorded into an action are included in playback, also when the action holds an
@@ -739,16 +748,17 @@ fn steps_recorded_after_an_exclusion_past_the_last_step_are_included() {
     let moved = recorded_move(&mut app);
     let added = files::step_bytes("object.move", &moved);
     pad_set_to(&mut app, 0, added);
-    let pad = app.ui.action_sets[0].actions.last_mut().unwrap();
-    pad.excluded_steps.insert(1);
-    let into = pad.id;
+    edit_set(&mut app, 0, |actions| {
+        actions.last_mut().unwrap().disabled.insert(1);
+    });
+    let into = set_actions(&app, 0).pop().unwrap().name;
     app.run(START_RECORDING, json!({"set": 0})).unwrap();
     app.ui.recording_into = Some(into);
     app.run("object.move", moved).unwrap();
     app.run(STOP_RECORDING, json!({})).unwrap();
-    let pad = app.ui.action_sets[0].actions.last().unwrap();
-    assert_eq!((pad.steps.len(), pad.excluded_steps.len()), (2, 0), "the recorded step is included");
-    assert_eq!(files::write_set(&app.ui.action_sets[0]).len(), files::MAX_SET_FILE);
+    let pad = set_actions(&app, 0).pop().unwrap();
+    assert_eq!((pad.steps.len(), pad.disabled.len()), (2, 0), "the recorded step is included");
+    assert_eq!(set_file(&app, 0).len(), files::MAX_SET_FILE);
 }
 
 /// Duplicate copies no action or set when the copy would give a file larger than 8 MiB or a set
@@ -761,15 +771,17 @@ fn duplicate_keeps_action_set_files_within_their_limits() {
     let names = set_names(&app);
     assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 0})).unwrap_err(), size);
     assert_eq!(app.run(DUPLICATE, json!({"set": 1})).unwrap_err(), size, "the copy's name is longer");
-    assert_eq!((set_names(&app), app.ui.action_sets[1].actions.len()), (names, 3), "nothing was copied");
-    app.ui.action_sets[2].actions = empty_actions(1000);
+    assert_eq!((set_names(&app), counts(&app)[1]), (names, 3), "nothing was copied");
+    edit_set(&mut app, 2, |actions| *actions = empty_actions(1000));
     let many = "the action set file holds more than 1,000 actions";
     assert_eq!(app.run(DUPLICATE, json!({"set": 2, "action": 0})).unwrap_err(), many);
-    assert_eq!(app.ui.action_sets[2].actions.len(), 1000);
-    app.ui.action_sets[2].actions.pop();
+    assert_eq!(counts(&app)[2], 1000);
+    edit_set(&mut app, 2, |actions| {
+        actions.pop();
+    });
     app.run(DUPLICATE, json!({"set": 2, "action": 0})).unwrap();
     app.run(DUPLICATE, json!({"set": 2})).unwrap();
-    assert_eq!((app.ui.action_sets[2].actions.len(), app.ui.action_sets[3].actions.len()), (1000, 1000));
+    assert_eq!((counts(&app)[2], counts(&app)[3]), (1000, 1000));
 }
 
 /// New Action and Begin Recording add no action and start no recording when the action would
@@ -778,7 +790,7 @@ fn duplicate_keeps_action_set_files_within_their_limits() {
 #[test]
 fn new_action_keeps_an_action_set_file_within_its_limits() {
     let mut app = app_with_sets();
-    app.ui.action_sets[2].actions = empty_actions(1000);
+    edit_set(&mut app, 2, |actions| *actions = empty_actions(1000));
     let many = "the action set file holds more than 1,000 actions";
     assert_eq!(app.run(NEW_ACTION, json!({"set": 2, "name": "More"})).unwrap_err(), many);
     assert_eq!(app.run(START_RECORDING, json!({"set": 2})).unwrap_err(), many, "Begin Recording too");
@@ -786,17 +798,18 @@ fn new_action_keeps_an_action_set_file_within_its_limits() {
     let size = "the action set would be larger than 8 MiB";
     assert_eq!(app.run(NEW_ACTION, json!({"set": 1, "name": "x".repeat(300)})).unwrap_err(), size);
     assert!(app.ui.recording.is_none(), "no recording started");
-    assert_eq!((app.ui.action_sets[1].actions.len(), app.ui.action_sets[2].actions.len()), (3, 1000));
+    assert_eq!((counts(&app)[1], counts(&app)[2]), (3, 1000));
     app.run(NEW_ACTION, json!({"set": 1, "name": "More"})).unwrap();
     app.run(STOP_RECORDING, json!({})).unwrap();
-    assert_eq!(app.ui.action_sets[1].actions.len(), 4);
-    assert!(files::write_set(&app.ui.action_sets[1]).len() <= files::MAX_SET_FILE);
+    assert_eq!(counts(&app)[1], 4);
+    assert!(set_file(&app, 1).len() <= files::MAX_SET_FILE);
 }
 
 /// Renaming an action, Action Options and Set Options change nothing when the change would give
 /// the set a file larger than 8 MiB, with the steps a recording adds to the set; a change that
 /// fills the file exactly, or that makes a set already past 8 MiB smaller, is made. New Set adds
-/// no set whose file would be larger than 8 MiB.
+/// no set whose file would be larger than 8 MiB. A dialog whose OK is refused stays open with the
+/// reason.
 #[test]
 fn renaming_keeps_an_action_set_file_within_8_mib() {
     let mut app = app_with_sets();
@@ -805,25 +818,27 @@ fn renaming_keeps_an_action_set_file_within_8_mib() {
     assert_eq!(app.run(RENAME_ACTION, json!({"set": 1, "action": 0, "name": "Nudge Far"})).unwrap_err(), size);
     assert_eq!(app.run(ACTION_OPTIONS, json!({"set": 1, "action": 0, "color": "red"})).unwrap_err(), size);
     assert_eq!(app.run(ACTION_OPTIONS, json!({"set": 1, "action": 0, "key": 2})).unwrap_err(), size);
-    let nudge = &app.ui.action_sets[1].actions[0];
-    assert_eq!((nudge.name.as_str(), nudge.key, nudge.color.as_deref()), ("Nudge", None, None), "nothing changed");
+    let nudge = set_actions(&app, 1).remove(0);
+    let unchanged = (nudge.name.as_str(), model::function_key(&nudge).is_none(), nudge.color);
+    assert_eq!(unchanged, ("Nudge", true, ActionColor::None), "nothing changed");
     crate::dialogs::action_set_options::open(&mut app, 1);
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Mine and More"));
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), size);
-    assert!(app.ui.dialog.is_some(), "Set Options stays open");
-    assert_eq!(app.ui.action_sets[1].name, "Mine");
-    app.ui.dialog = None;
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("Mine and More"));
+    assert_eq!(confirm_dialog::<SetOptionsDialog>(&mut app).unwrap_err(), size);
+    assert!(is_open::<SetOptionsDialog>(&app), "Set Options stays open");
+    assert_eq!(set_names(&app)[1], "Mine");
+    cancel_dialog::<SetOptionsDialog>(&mut app);
     app.run(RENAME_ACTION, json!({"set": 1, "action": 0, "name": "Nudge++"})).unwrap();
-    assert_eq!(files::write_set(&app.ui.action_sets[1]).len(), files::MAX_SET_FILE, "the file is exactly 8 MiB");
-    app.ui.action_sets[1].actions[1].name = "x".repeat(100);
+    assert_eq!(set_file(&app, 1).len(), files::MAX_SET_FILE, "the file is exactly 8 MiB");
+    edit_set(&mut app, 1, |actions| actions[1].name = "x".repeat(100));
     app.run(RENAME_ACTION, json!({"set": 1, "action": 1, "name": "Nudge Again"})).unwrap();
-    assert_eq!(app.ui.action_sets[1].actions[1].name, "Nudge Again", "a set past 8 MiB gets smaller");
+    assert_eq!(set_actions(&app, 1)[1].name, "Nudge Again", "a set past 8 MiB gets smaller");
 
     crate::dialogs::action_set_options::open_new(&mut app);
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("x".repeat(files::MAX_SET_FILE)));
-    assert_eq!(crate::dialogs::confirm(&mut app).unwrap_err(), size);
-    assert_eq!(app.ui.action_sets.len(), 3, "no set was added");
-    app.ui.dialog = None;
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("x".repeat(files::MAX_SET_FILE)));
+    assert_eq!(confirm_dialog::<SetOptionsDialog>(&mut app).unwrap_err(), size);
+    assert!(is_open::<SetOptionsDialog>(&app), "New Set stays open");
+    assert_eq!(set_names(&app).len(), 3, "no set was added");
+    cancel_dialog::<SetOptionsDialog>(&mut app);
 
     // The steps a recording adds to the set count too.
     let mut app = app_with_sets();
@@ -841,16 +856,16 @@ fn renaming_keeps_an_action_set_file_within_8_mib() {
 fn load_actions_refuses_a_set_that_would_save_larger_than_8_mib() {
     let mut app = app_with_sets();
     let size = "the action set would be larger than 8 MiB";
-    let wide = ActionSet::new("Wide", vec![Action::new("Zeros", vec![("object.move".into(), json!({"p": vec![0; 600_000]}))])]);
-    let saved = files::write_set(&wide);
+    let wide = [action("Zeros", &[("object.move", json!({"p": vec![0; 600_000]}))])];
+    let saved = files::write_set("Wide", &wide);
     let packed = serde_json::to_string(&serde_json::from_str::<Value>(&saved).unwrap()).unwrap();
     assert!(packed.len() <= files::MAX_SET_FILE && saved.len() > files::MAX_SET_FILE);
     assert_eq!(app.run(LOAD_SET, json!({ "data": packed })).unwrap_err(), size);
 
     let mut full = app_with_sets();
-    full.ui.action_sets[1].actions.clear();
+    edit_set(&mut full, 1, Vec::clear);
     pad_set_to(&mut full, 1, 0);
-    let mine = files::write_set(&full.ui.action_sets[1]);
+    let mine = set_file(&full, 1);
     assert_eq!(app.run(LOAD_SET, json!({ "data": mine })).unwrap_err(), size, "Mine 2 is longer");
     let yours = mine.replacen("\"Mine\"", "\"Your\"", 1);
     assert_eq!(app.run(LOAD_SET, json!({ "data": yours })).unwrap()["name"], "Your");

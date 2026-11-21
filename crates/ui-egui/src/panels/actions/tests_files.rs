@@ -1,14 +1,17 @@
+use std::collections::BTreeSet;
+
+use craft::automation::actions::{ActionList, ActionStep};
+use craft::automation::ui::actions::ActionSelection;
+
 use super::tests_support::*;
 use super::*;
-use vectorcraft_engine::Session;
+use crate::dialogs::action_batch::BatchDialog;
 
 #[test]
 fn defaults_are_valid_commands() {
-    for set in default_sets() {
-        for a in set.actions {
-            for (c, _) in a.steps {
-                assert!(vectorcraft_engine::find_command(&c).is_some(), "{c}");
-            }
+    for a in default_sets().actions {
+        for step in a.steps {
+            assert!(vectorcraft_engine::find_command(&step.command).is_some(), "{}", step.command);
         }
     }
 }
@@ -18,139 +21,70 @@ fn defaults_are_valid_commands() {
 /// before Reflect followed the box, still reflects across the page's axis.
 #[test]
 fn the_built_in_reflect_follows_the_turned_box() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     let id =
         vectorcraft_doc::NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap());
     app.run("select.set", json!({"ids": [id.0]})).unwrap();
     app.run("object.rotate", json!({"angle": 30})).unwrap();
     let angle = |app: &VectorcraftApp| app.session.active().unwrap().doc.bbox_angle(&[id]);
-    let reflect = default_sets()[0].actions.iter().position(|a| a.name == "Reflect Horizontal").unwrap();
-    app.ui.action_sets = default_sets();
+    let reflect = default_sets().actions.iter().position(|a| a.name == "Reflect Horizontal").unwrap();
+    app.ui.actions = default_list();
     play(&mut app, 0, reflect).unwrap();
     assert!((angle(&app) - 30.0).abs() < 1e-6, "{}", angle(&app));
-    app.ui.action_sets = vec![ActionSet::new("Old", vec![Action::new("Reflect", vec![("object.reflect".into(), json!({"axis": "vertical"}))])])];
+    app.ui.actions = ActionList::new();
+    push_set(&mut app, "Old", vec![action("Reflect", &[("object.reflect", json!({"axis": "vertical"}))])]);
     play(&mut app, 0, 0).unwrap();
     assert!((angle(&app) + 30.0).abs() < 1e-6, "{}", angle(&app));
 }
 
 #[test]
 fn excluded_steps_do_not_play_and_survive_saved_sets() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     let id =
         vectorcraft_doc::NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
     app.run("select.set", json!({"ids": [id.0]})).unwrap();
-    let mut action =
-        Action::new("Move twice", vec![("object.move".into(), json!({"dx": 5, "dy": 0})), ("object.move".into(), json!({"dx": 20, "dy": 0}))]);
-    action.excluded_steps.insert(1);
+    let mut action = action("Move twice", &[("object.move", json!({"dx": 5, "dy": 0})), ("object.move", json!({"dx": 20, "dy": 0}))]);
+    action.disabled.insert(1);
     assert_eq!(
-        action.included_commands(),
+        super::playback::included_commands(&action),
         [json!({"command": "object.move", "params": {"dx": 5, "dy": 0}})],
         "normal and Batch playback use the same included commands"
     );
-    app.ui.action_sets = vec![ActionSet::new("Test", vec![action])];
+    app.ui.actions = ActionList::new();
+    push_set(&mut app, "Test", vec![action]);
     let x = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
     let before = x(&app);
     play(&mut app, 0, 0).unwrap();
     assert!((x(&app) - before - 5.0).abs() < 1e-9, "the excluded second move did not run");
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    let saved = set_file(&app, 0);
     assert!(saved.contains("\"excluded\": true"), "the set file keeps the exclusion");
     assert_eq!(serde_json::from_str::<Value>(&saved).unwrap()["version"], json!(2), "older builds must refuse excluded steps");
-    let loaded = files::read_set(&saved, "Test").unwrap();
-    assert_eq!(loaded.actions[0].excluded_steps, BTreeSet::from([1]));
-    assert_eq!(loaded.actions[0].copy().excluded_steps, BTreeSet::from([1]));
-    assert_eq!(serde_json::from_value::<Action>(serde_json::to_value(&loaded.actions[0]).unwrap()).unwrap().excluded_steps, BTreeSet::from([1]));
+    let (_, loaded) = files::read_set(&saved, "Test").unwrap();
+    assert_eq!(loaded[0].disabled, BTreeSet::from([1]));
+    let kept = model::prefs::deserialize(saved_sets(&app)).unwrap();
+    assert_eq!(kept.actions()[0].disabled, BTreeSet::from([1]), "the preferences keep the exclusion");
     app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "included": false})).unwrap();
     assert_eq!(play(&mut app, 0, 0).unwrap_err(), "the action has no included steps");
     assert_eq!(crate::dialogs::action_batch::open(&mut app, 0, 0).unwrap_err(), "the action has no included steps");
 }
 
-/// Two sets with the same name: when the asked one is deleted elsewhere while the question is
-/// open, OK does not delete the other one, which now has the asked index and name; when the
-/// two trade places, OK deletes the asked one at its new index.
-#[test]
-fn ok_deletes_only_the_asked_one_of_two_sets_with_the_same_name() {
-    use super::super::tests_appearance::click;
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let x = |n: &str| ActionSet::new("X", vec![Action::new(n, vec![])]);
-    app.ui.action_sets = vec![x("first"), x("second")];
-    let ctx = egui::Context::default();
-    click_set(&ctx, &mut app, "X", egui::Modifiers::NONE);
-    assert_eq!(app.ui.action_set, Some(0));
-    let delete = trash(&ctx, &mut app);
-    click(&ctx, &mut app, delete, show);
-    assert_eq!(asked(&app).map(|(_, sets)| sets), Some(json!([0])));
-    app.run(DELETE_SETS, json!({"sets": [0]})).unwrap();
-    assert!(crate::dialogs::confirm(&mut app).is_err());
-    assert_eq!(app.ui.action_sets.iter().map(|s| s.actions[0].name.as_str()).collect::<Vec<_>>(), ["second"], "OK deletes nothing");
-    app.ui.action_sets = vec![x("first"), x("second")];
-    app.ui.action_set = Some(0);
-    app.ui.action_sets_selected = vec![0];
-    let delete = trash(&ctx, &mut app);
-    click(&ctx, &mut app, delete, show);
-    assert_eq!(asked(&app).map(|(_, sets)| sets), Some(json!([0])));
-    app.ui.action_sets.swap(0, 1);
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(app.ui.action_sets.iter().map(|s| s.actions[0].name.as_str()).collect::<Vec<_>>(), ["second"], "the asked set goes");
-}
-
-/// When the asked set is deleted while the question is open and a new set with the same name
-/// takes its place, OK does not delete the new set.
-#[test]
-fn ok_does_not_delete_a_new_set_made_in_the_asked_sets_place() {
-    use super::super::tests_appearance::click;
-    let mut app = app_with_sets();
-    let ctx = egui::Context::default();
-    click_set(&ctx, &mut app, "Other", egui::Modifiers::NONE);
-    let delete = trash(&ctx, &mut app);
-    click(&ctx, &mut app, delete, show);
-    assert_eq!(asked(&app).map(|(_, sets)| sets), Some(json!([2])));
-    app.run(DELETE_SETS, json!({"sets": [2]})).unwrap();
-    app.ui.action_sets.push(ActionSet::new("Other", vec![]));
-    assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"]);
-    assert!(crate::dialogs::confirm(&mut app).is_err());
-    assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"], "the new Other stays");
-}
-
-/// Every set has its own id, and sets read back from the saved preferences get new ids that
-/// no other set has.
-#[test]
-fn action_sets_get_ids_of_their_own_when_made_and_loaded() {
-    let app = app_with_sets();
-    let saved = serde_json::to_value(&app.ui).unwrap();
-    assert!(saved["action_sets"][0].get("id").is_none(), "ids are not saved");
-    let restored = serde_json::from_value::<crate::state::UiState>(saved).unwrap();
-    let mut ids: Vec<u64> = app.ui.action_sets.iter().chain(&restored.action_sets).map(|s| s.id).collect();
-    assert_eq!(restored.action_sets.len(), 3);
-    ids.sort_unstable();
-    ids.dedup();
-    assert_eq!(ids.len(), 6, "six sets, six ids");
-}
-
 /// The current set is saved with the UI preferences: after a restart a recording goes into the
-/// set clicked before it, not into Default Actions.
+/// set current before it, not into Default Actions.
 #[test]
 fn a_recording_after_a_restart_goes_into_the_set_current_before_it() {
-    use super::super::tests_appearance::{click, frame_events};
     let mut app = app_with_sets();
-    let ctx = egui::Context::default();
-    click_set(&ctx, &mut app, "Other", egui::Modifiers::NONE);
+    app.ui.action_set = Some(2);
     let saved = serde_json::to_value(&app.ui).unwrap();
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     app.ui = serde_json::from_value(saved).unwrap();
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     assert_eq!(app.ui.action_set, Some(2), "Other is current after the restart");
-    let ctx = egui::Context::default();
-    frame_events(&ctx, &mut app, vec![], show);
-    let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
-    bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
-    let [stop, record, _, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
-    click(&ctx, &mut app, record.center(), show);
+    app.run(START_RECORDING, json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    click(&ctx, &mut app, stop.center(), show);
-    let counts = app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>();
-    assert_eq!(counts, [6, 2, 1], "recorded into Other");
+    app.run(STOP_RECORDING, json!({})).unwrap();
+    assert_eq!(counts(&app), [6, 2, 1], "recorded into Other");
 }
 
 /// A saved current set that is not a set index, or is past the last set, leaves no set current;
@@ -158,34 +92,28 @@ fn a_recording_after_a_restart_goes_into_the_set_current_before_it() {
 /// makes it current.
 #[test]
 fn a_saved_current_set_that_is_gone_falls_back_to_the_first_set() {
-    use super::super::tests_appearance::{click, frame_events};
     let app = app_with_sets();
     let mut saved = serde_json::to_value(&app.ui).unwrap();
     saved["action_set"] = json!("Other");
     let restored = serde_json::from_value::<crate::state::UiState>(saved.clone()).unwrap();
-    assert_eq!((restored.action_set, restored.action_sets.len()), (None, 3), "not an index: no set current, the sets load");
+    assert_eq!((restored.action_set, restored.actions.sets().len()), (None, 3), "not an index: no set current, the sets load");
     saved["action_set"] = json!(9);
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = new_app();
     app.ui = serde_json::from_value(saved).unwrap();
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-    let ctx = egui::Context::default();
-    frame_events(&ctx, &mut app, vec![], show);
-    let mut bar = crate::toolbar::tests::widget_rects(&ctx, egui::vec2(24.0, 24.0));
-    bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
-    let [stop, record, _, _, _, _] = bar[..] else { panic!("the bottom bar: {bar:?}") };
-    click(&ctx, &mut app, record.center(), show);
-    assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(0), vec![0]), "the set recorded into is current");
+    app.run(START_RECORDING, json!({})).unwrap();
+    // PLAN: `actions_panel.selected_sets` holds only a Shift-click range of sets (mn.M41), so the base's "and the only selected set" has no field left to assert.
+    assert_eq!(app.ui.action_set, Some(0), "the set recorded into is current");
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    click(&ctx, &mut app, stop.center(), show);
-    let counts = app.ui.action_sets.iter().map(|s| s.actions.len()).collect::<Vec<_>>();
-    assert_eq!(counts, [7, 2, 0], "recorded into Default Actions");
+    app.run(STOP_RECORDING, json!({})).unwrap();
+    assert_eq!(counts(&app), [7, 2, 0], "recorded into Default Actions");
 }
 
 /// `ui.actionSet.replace` makes the file's set current and selected, clears the panel's selected
-/// action and step, expanded actions and a dragged step, closes a dialog that holds a set index
-/// and records no undo step. The same file again changes nothing and keeps the ids. A set with
-/// no actions replaces the sets too, an `.aia` file reports its left-out steps, and a file with
-/// an unknown command reports it, as Load Actions… does; a set with no name takes the file's.
+/// action and step, its range of sets and expanded actions, closes a dialog that holds a set and
+/// records no undo step. The same file again changes nothing. A set with no actions replaces the
+/// sets too, an `.aia` file reports its left-out steps, and a file with an unknown command reports
+/// it, as Load Actions… does; a set with no name takes the file's.
 #[test]
 fn replace_actions_clears_what_named_the_old_sets_and_reads_aia_files() {
     let mut app = app_with_sets();
@@ -193,32 +121,26 @@ fn replace_actions_clears_what_named_the_old_sets_and_reads_aia_files() {
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     let undo = undo_steps(&app);
     app.ui.action_set = Some(2);
-    app.ui.action_sets_selected = vec![1, 2];
-    let ctx = egui::Context::default();
-    app.ui_ctx = Some(ctx.clone());
-    let nudge = app.ui.action_sets[1].actions[1].id;
-    set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((1, 1)));
-    set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((nudge, 0)));
-    set_pstate(&ctx, "actions-expanded", BTreeSet::from([nudge]));
-    let dragged: DraggedStep = (nudge, 0, std::sync::Arc::new((vec![], BTreeSet::new())));
-    set_pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP, Some(dragged));
+    let nudge = model::flat(&app.ui.actions, 1, 1).unwrap();
+    let panel = &mut app.ui.actions_panel;
+    panel.selected_sets = vec!["Mine".into(), "Other".into()];
+    panel.selected = Some(ActionSelection::Step(nudge, 0));
+    panel.expanded = BTreeSet::from(["Nudge Again".to_string()]);
     crate::dialogs::action_batch::open(&mut app, 1, 1).unwrap();
 
-    let text = files::write_set(&app.ui.action_sets[1]);
+    let text = set_file(&app, 1);
     let r = app.run(REPLACE_SET, json!({ "data": text })).unwrap();
     assert_eq!(r, json!({"changed": true, "set": 0, "name": "Mine", "actions": 2}));
     assert_eq!(set_names(&app), ["Mine"]);
-    assert_eq!((app.ui.action_set, app.ui.action_sets_selected.clone()), (Some(0), vec![0]));
-    assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), None);
-    assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), None);
-    assert!(pstate::<BTreeSet<u64>>(&ctx, "actions-expanded").is_empty());
-    assert!(pstate::<Option<DraggedStep>>(&ctx, DRAGGED_STEP).is_none());
-    assert!(app.ui.dialog.is_none(), "the Batch dialog of a replaced set closes");
+    assert_eq!((app.ui.action_set, &app.ui.actions_panel.selected), (Some(0), &Some(ActionSelection::Set("Mine".into()))));
+    assert!(app.ui.actions_panel.selected_sets.is_empty());
+    assert!(app.ui.actions_panel.expanded.is_empty());
+    assert!(!is_open::<BatchDialog>(&app), "the Batch dialog of a replaced set closes");
     assert_eq!(undo_steps(&app), undo, "no undo step");
 
-    let ids = (app.ui.action_sets[0].id, app.ui.action_sets[0].actions.iter().map(|a| a.id).collect::<Vec<_>>());
+    let before = saved_sets(&app);
     assert_eq!(app.run(REPLACE_SET, json!({ "data": text })).unwrap()["changed"], false, "the same set, shown that way");
-    assert_eq!((app.ui.action_sets[0].id, app.ui.action_sets[0].actions.iter().map(|a| a.id).collect()), ids, "the ids stay");
+    assert_eq!(saved_sets(&app), before, "the set stays");
 
     let empty = json!({"format": "vcactions", "version": 1, "name": "Empty", "actions": []}).to_string();
     assert_eq!(app.run(REPLACE_SET, json!({ "data": empty })).unwrap(), json!({"changed": true, "set": 0, "name": "Empty", "actions": 0}));
@@ -229,7 +151,7 @@ fn replace_actions_clears_what_named_the_old_sets_and_reads_aia_files() {
     let skipped = json!([{"action": "Group Them", "step": "Move"}]);
     assert_eq!(r, json!({"changed": true, "set": 0, "name": "Tidy Up", "actions": 1, "skipped": skipped, "leftOut": 1}));
     assert_eq!(set_names(&app), ["Tidy Up"]);
-    assert_eq!(app.ui.action_sets[0].actions[0].steps, [("object.group".to_string(), json!({}))]);
+    assert_eq!(set_actions(&app, 0)[0].steps, [ActionStep::new("object.group", json!({}))]);
     assert_eq!(app.ui.status, "Loaded “Tidy Up”: 1 step was left out");
 
     let files = with_files(&mut app, "/sets/unused.vcactions");
@@ -243,14 +165,15 @@ fn replace_actions_clears_what_named_the_old_sets_and_reads_aia_files() {
 /// `ui.actionSet.replace` refuses params that are not an object, another key, a `path` or `data`
 /// that is not text, a file that can't be read or that Load Actions… refuses (an empty one too),
 /// a canceled pick, and a replace while an action records or plays, waiting at a stop included,
-/// and then changes no set and keeps the current set.
+/// and then changes no set and keeps the current set. A picked file that can't be read says so
+/// once its file dialog answers.
 #[test]
 fn replace_actions_refuses_bad_params_bad_files_and_a_running_action() {
     let mut app = app_with_sets();
     let files = with_files(&mut app, "/sets/missing.vcactions");
     files.borrow_mut().insert("/sets/empty.vcactions".into(), vec![]);
     app.ui.action_set = Some(1);
-    let before = saved_sets(&app.ui.action_sets);
+    let before = saved_sets(&app);
     let many = json!({"format": "vcactions", "version": 1, "name": "Many", "actions": vec![json!({"name": "A", "steps": []}); 1001]});
     let eof = "not an action set file (EOF while parsing a value at line 1 column 0)";
     for (p, error) in [
@@ -267,64 +190,63 @@ fn replace_actions_refuses_bad_params_bad_files_and_a_running_action() {
         (json!({"data": "/version\n"}), "not an action set file"),
         (json!({"path": "/sets/empty.vcactions"}), eof),
         (json!({"path": "/sets/nowhere.vcactions"}), "no such file"),
-        (json!({}), "no such file"),
     ] {
         assert_eq!(app.run(REPLACE_SET, p.clone()).unwrap_err(), error, "{p}");
-        assert_eq!(saved_sets(&app.ui.action_sets), before, "{p} changes nothing");
+        assert_eq!(saved_sets(&app), before, "{p} changes nothing");
         assert_eq!(app.ui.action_set, Some(1));
     }
-    app.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
-    assert_eq!(app.run(REPLACE_SET, Value::Null).unwrap_err(), "cancelled");
-    assert_eq!(saved_sets(&app.ui.action_sets), before, "a canceled pick changes nothing");
+    assert_eq!(app.run(REPLACE_SET, json!({})).unwrap()["pending"], "fileDialog");
+    poll_picks(&mut app);
+    assert_eq!(app.ui.status, "no such file");
+    assert_eq!((saved_sets(&app), app.ui.action_set), (before.clone(), Some(1)), "a picked file that can't be read changes nothing");
+    cancel_picks(&mut app);
+    app.ui.status.clear();
+    app.run(REPLACE_SET, Value::Null).unwrap();
+    poll_picks(&mut app);
+    assert_eq!(app.ui.status, "", "a canceled pick says nothing");
+    assert_eq!(saved_sets(&app), before, "a canceled pick changes nothing");
 
-    let text = files::write_set(&app.ui.action_sets[1]);
+    let text = set_file(&app, 1);
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run(START_RECORDING, json!({})).unwrap();
     assert_eq!(app.run(REPLACE_SET, json!({ "data": text })).unwrap_err(), "an action is already recording");
-    assert_eq!(saved_sets(&app.ui.action_sets), before, "a recording keeps its set");
+    assert_eq!(saved_sets(&app), before, "a recording keeps its set");
     app.run(STOP_RECORDING, json!({})).unwrap();
 
     let (mut app, _) = app_with_a_stop(true);
-    let before = saved_sets(&app.ui.action_sets);
+    let before = saved_sets(&app);
     play(&mut app, 0, 0).unwrap();
     assert!(waiting_at_stop(&app));
     assert_eq!(app.run(REPLACE_SET, json!({ "data": text })).unwrap_err(), "an action is already playing");
-    assert_eq!(saved_sets(&app.ui.action_sets), before, "the playing set stays");
+    assert_eq!(saved_sets(&app), before, "the playing set stays");
 }
 
-/// The panel menu's Save Actions… writes the current set with its actions to a file named
-/// after it, and Load Actions… adds the set it reads after the others, with the same actions
-/// and steps; a set named like one in the panel gets the next free number, and the other sets
-/// and the current set stay as they are.
+/// The panel menu's Save Actions… writes the current set with its actions to the file its dialog
+/// picks, and Load Actions… adds the set it reads after the others, with the same steps; a set
+/// named like one in the panel gets the next free number, and the other sets and the current set
+/// stay as they are.
 #[test]
 fn save_actions_and_load_actions_round_trip_a_set() {
-    use super::super::tests_appearance::{click, frame_events};
     let mut app = app_with_sets();
     let files = with_files(&mut app, "/sets/Mine.vcactions");
-    let ctx = egui::Context::default();
-    let item = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
-        let texts = frame_events(ctx, app, vec![], menu);
-        texts.iter().find(|(s, _)| s.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"))
-    };
-    let save = item(&ctx, &mut app, "Save Actions…");
-    click(&ctx, &mut app, save, menu);
+    assert_eq!(app.run(SAVE_SET, json!({})).unwrap_err(), "no action set to save");
     assert!(files.borrow().is_empty(), "no set is current: nothing to save");
-    click_set(&ctx, &mut app, "Mine", egui::Modifiers::NONE);
-    let save = item(&ctx, &mut app, "Save Actions…");
-    click(&ctx, &mut app, save, menu);
+    app.ui.action_set = Some(1);
+    app.run(SAVE_SET, json!({})).unwrap();
+    poll_picks(&mut app);
     let text = String::from_utf8(files.borrow()["/sets/Mine.vcactions"].clone()).unwrap();
     let v: Value = serde_json::from_str(&text).unwrap();
     assert_eq!((v["format"].clone(), v["version"].clone(), v["name"].clone()), (json!("vcactions"), json!(1), json!("Mine")));
     assert_eq!(v["actions"][1], json!({"name": "Nudge Again", "steps": [{"command": "object.move", "params": {"dx": 1, "dy": 0}}]}));
-    let load = item(&ctx, &mut app, "Load Actions…");
-    click(&ctx, &mut app, load, menu);
+    app.run(LOAD_SET, json!({})).unwrap();
+    poll_picks(&mut app);
     assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other", "Mine 2"], "added after the others, numbered");
     assert_eq!(app.ui.action_set, Some(1), "the current set stays");
-    let steps = |s: &ActionSet| s.actions.iter().map(|a| (a.name.clone(), a.steps.clone())).collect::<Vec<_>>();
-    assert_eq!(steps(&app.ui.action_sets[3]), steps(&app.ui.action_sets[1]), "the same actions and steps");
+    // Action names are unique in the list, so the loaded actions take free names; the steps are the same.
+    let steps = |set: usize| set_actions(&app, set).into_iter().map(|a| a.steps).collect::<Vec<_>>();
+    assert_eq!(steps(3), steps(1), "the same actions and steps");
     let r = app.run(LOAD_SET, json!({"data": text})).unwrap();
     assert_eq!(r, json!({"set": 4, "name": "Mine 3", "actions": 2}));
-    assert_ne!(app.ui.action_sets[3].id, app.ui.action_sets[4].id, "each loaded set has an id of its own");
 }
 
 /// `ui.actionSet.save` saves the set at `set`, else the current one, and `ui.actionSet.load` of
@@ -337,7 +259,7 @@ fn load_actions_adds_a_set_and_keeps_the_others() {
     assert_eq!(app.run(SAVE_SET, json!({"set": 3})).unwrap_err(), "no such action set");
     assert_eq!(app.run(SAVE_SET, json!({"set": 1, "path": "/sets/kept.vcactions"})).unwrap(), json!({"path": "/sets/kept.vcactions"}));
     let text = String::from_utf8(files.borrow()["/sets/kept.vcactions"].clone()).unwrap();
-    app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
+    app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
     assert_eq!(app.run(LOAD_SET, json!({"path": "/sets/kept.vcactions"})).unwrap(), json!({"set": 2, "name": "Mine", "actions": 2}));
     assert_eq!(set_names(&app), ["Default Actions", "Other", "Mine"]);
     let unnamed = text.replacen("\"name\": \"Mine\"", "\"name\": \"\"", 1);
@@ -360,7 +282,7 @@ fn load_actions_adds_a_set_and_keeps_the_others() {
 fn save_actions_refuses_a_step_that_sets_a_folder_preference() {
     let mut app = app_with_sets();
     let files = with_files(&mut app, "/sets/x.vcactions");
-    let step = |command: &str, params: Value| (command.to_string(), params);
+    let step = |command: &str, params: Value| ActionStep::new(command, params);
     let nested = json!({"commands": [{"command": "command.batch", "params": {"commands": [
         {"command": "prefs.set", "params": {"values": {"fontsFolder": "fonts"}}},
     ]}}]});
@@ -379,8 +301,8 @@ fn save_actions_refuses_a_step_that_sets_a_folder_preference() {
         ),
         (vec![step("command.batch", nested)], "fontsFolder"),
     ] {
-        app.ui.action_sets[1] = ActionSet::new("Other", vec![Action::new("Scratch", steps)]);
-        let e = app.run(SAVE_SET, json!({"set": 1, "path": "/sets/x.vcactions"})).unwrap_err();
+        edit_set(&mut app, 2, |actions| *actions = vec![Action::new("Scratch", steps)]);
+        let e = app.run(SAVE_SET, json!({"set": 2, "path": "/sets/x.vcactions"})).unwrap_err();
         assert_eq!(e, format!("the action “Scratch” sets the folder preference {key}; delete that step to save the set"));
         assert!(files.borrow().is_empty(), "no file is written for {key}");
     }
@@ -389,8 +311,8 @@ fn save_actions_refuses_a_step_that_sets_a_folder_preference() {
         step("prefs.set", json!({"key": "pluginsFolder", "value": ""})),
         step("x.y", json!({"key": "fontsFolder", "value": "fonts"})),
     ];
-    app.ui.action_sets[1] = ActionSet::new("Other", vec![Action::new("Scratch", kept)]);
-    assert_eq!(app.run(SAVE_SET, json!({"set": 1, "path": "/sets/x.vcactions"})).unwrap(), json!({"path": "/sets/x.vcactions"}));
+    edit_set(&mut app, 2, |actions| *actions = vec![Action::new("Scratch", kept)]);
+    assert_eq!(app.run(SAVE_SET, json!({"set": 2, "path": "/sets/x.vcactions"})).unwrap(), json!({"path": "/sets/x.vcactions"}));
     assert!(files.borrow().contains_key("/sets/x.vcactions"));
 }
 
@@ -418,7 +340,9 @@ fn load_actions_refuses_a_file_that_is_not_an_action_set() {
         assert_eq!(app.run(LOAD_SET, json!({ "data": data })).unwrap_err(), want);
     }
     with_files(&mut app, "/sets/missing.vcactions");
-    assert_eq!(app.run(LOAD_SET, json!({})).unwrap_err(), "no such file");
+    app.run(LOAD_SET, json!({})).unwrap();
+    poll_picks(&mut app);
+    assert_eq!(app.ui.status, "no such file");
     assert_eq!(set_names(&app), before, "no set added");
 }
 
@@ -448,17 +372,17 @@ fn load_actions_reports_steps_with_unknown_commands() {
     let r = app.run(LOAD_SET, json!({"data": file})).unwrap();
     assert_eq!(r, json!({"set": 3, "name": "Print", "actions": 2, "unknownCommands": want, "unknownCount": 3}));
     assert_eq!(app.ui.status, "Loaded “Print”: 3 steps have unknown commands and were kept; the first: “Export”, step 4, `example.unknown.finish`");
-    let loaded = &app.ui.action_sets[3].actions[1];
+    let loaded = set_actions(&app, 3).remove(1);
     assert_eq!(loaded.steps.len(), 6, "every step is kept");
-    assert_eq!(loaded.steps[3], ("example.unknown.finish".to_string(), json!({"x": [1, 2]})), "with its params");
-    assert_eq!(loaded.excluded_steps, BTreeSet::from([5]));
+    assert_eq!(loaded.steps[3], ActionStep::new("example.unknown.finish", json!({"x": [1, 2]})), "with its params");
+    assert_eq!(loaded.disabled, BTreeSet::from([5]));
     files.borrow_mut().insert("/sets/Print.vcactions".into(), file.into_bytes());
     let r = app.run(LOAD_SET, json!({"path": "/sets/Print.vcactions"})).unwrap();
     assert_eq!((r["name"].clone(), r["unknownCommands"].clone(), r["unknownCount"].clone()), (json!("Print 2"), want, json!(3)));
-    let saved = files::write_set(&app.ui.action_sets[4]);
+    let saved = set_file(&app, 4);
     assert!(saved.contains("example.unknown.finish") && saved.contains("example.unknown.inner"), "Save Actions… writes them back");
     app.ui.status.clear();
-    let known = files::write_set(&app.ui.action_sets[1]);
+    let known = set_file(&app, 1);
     assert_eq!(app.run(LOAD_SET, json!({"data": known})).unwrap(), json!({"set": 5, "name": "Mine 2", "actions": 2}));
     assert_eq!(app.ui.status, "", "no message for a set whose commands are all known");
     let empty = json!({"format": "vcactions", "version": 1, "name": "Empty", "actions": []}).to_string();
@@ -482,7 +406,7 @@ fn load_actions_bounds_what_it_reports_of_unknown_commands() {
     let odd = json!({"format": "vcactions", "version": 1, "name": "Odd", "actions": [{"name": name, "steps": [{"command": id}]}]});
     let r = app.run(LOAD_SET, json!({"data": odd.to_string()})).unwrap();
     assert_eq!((r["unknownCommands"][0]["action"].clone(), r["unknownCommands"][0]["command"].clone()), (json!(name), json!(id)));
-    assert_eq!(app.ui.action_sets.last().unwrap().actions[0].steps[0].0, id, "the set keeps the id");
+    assert_eq!(set_actions(&app, set_names(&app).len() - 1)[0].steps[0].command, id, "the set keeps the id");
     let shown_id = format!("example.\u{fffd}\u{fffd}{}…", "x".repeat(70));
     assert_eq!(
         app.ui.status,
@@ -525,12 +449,12 @@ fn load_actions_reads_another_apps_action_set() {
     let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
     let skipped = json!([{"action": "Group Them", "step": "Move"}]);
     assert_eq!(r, json!({"set": 3, "name": "Tidy Up", "actions": 3, "skipped": skipped, "leftOut": 1}));
-    let set = &app.ui.action_sets[3];
-    assert_eq!(set.actions[0].name, "Group Them");
-    assert_eq!(set.actions[0].steps, [("object.group".to_string(), json!({})), ("object.ungroup".to_string(), json!({}))]);
-    assert_eq!(set.actions[0].excluded_steps, [1].into());
-    assert!(set.actions[1].steps.is_empty());
-    assert_eq!(set.actions[2].name, "Action 3", "an action with no name");
+    let set = set_actions(&app, 3);
+    assert_eq!(set[0].name, "Group Them");
+    assert_eq!(set[0].steps, [ActionStep::new("object.group", json!({})), ActionStep::new("object.ungroup", json!({}))]);
+    assert_eq!(set[0].disabled, [1].into());
+    assert!(set[1].steps.is_empty());
+    assert_eq!(set[2].name, "Action 3", "an action with no name");
     assert_eq!(app.ui.status, "Loaded “Tidy Up”: 1 step was left out");
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     for x in [0, 50] {
@@ -571,7 +495,7 @@ fn recorded_values_keep_a_step_out() {
     let set = format!("/version 3 /name {} /action-1 {{ /name {} {events} }}", hex("Values"), hex("A"));
     let mut app = app_with_sets();
     let r = app.run(LOAD_SET, json!({ "data": set })).unwrap();
-    assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
+    assert_eq!(set_actions(&app, 3)[0].steps, [ActionStep::new("object.group", json!({}))]);
     assert_eq!(r["leftOut"], 6);
     let left_out: Vec<&str> = r["skipped"].as_array().unwrap().iter().map(|s| s["step"].as_str().unwrap()).collect();
     assert_eq!(left_out, ["Opacity", "Stroke Weight", "A Menu Step", "A Menu Step", "Rename", "Group"]);
@@ -588,7 +512,7 @@ fn a_step_with_no_label_is_left_out() {
                    /event-3 { /internalName (x) /localizedName [ 5 47726f7570 ] /parameterCount 0 } }";
     let mut app = app_with_sets();
     let r = app.run(LOAD_SET, json!({ "data": set })).unwrap();
-    assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
+    assert_eq!(set_actions(&app, 3)[0].steps, [ActionStep::new("object.group", json!({}))]);
     assert_eq!(r["skipped"], json!([{"action": "A", "step": "group"}, {"action": "A", "step": "Ungroup"}]));
     assert_eq!(r["leftOut"], 2);
 }
@@ -636,17 +560,17 @@ fn load_actions_reads_set_selection_steps_as_select_object() {
     let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
     assert_eq!((r["leftOut"].clone(), r["skipped"].clone()), (json!(0), json!([])));
     let step = |note: &str, case_sensitive: bool, whole_word: bool| {
-        (SELECT_OBJECT_STEP.to_string(), json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word}))
+        ActionStep::new(SELECT_OBJECT_STEP, json!({"note": note, "caseSensitive": case_sensitive, "wholeWord": whole_word}))
     };
     let expected = [step("Badge front", true, false), step("Größe ✓", false, true), step("Off", true, true)];
-    assert_eq!(app.ui.action_sets[3].actions[0].steps, expected);
-    assert_eq!(app.ui.action_sets[3].actions[0].excluded_steps, [2].into());
+    assert_eq!(set_actions(&app, 3)[0].steps, expected);
+    assert_eq!(set_actions(&app, 3)[0].disabled, [2].into());
 
-    let saved = files::write_set(&app.ui.action_sets[3]);
+    let saved = set_file(&app, 3);
     assert!(saved.contains("\"version\": 4"), "{saved}");
     app.run(LOAD_SET, json!({ "data": saved })).unwrap();
-    assert_eq!(app.ui.action_sets[4].actions[0].steps, expected);
-    assert_eq!(app.ui.action_sets[4].actions[0].excluded_steps, [2].into());
+    assert_eq!(set_actions(&app, 4)[0].steps, expected);
+    assert_eq!(set_actions(&app, 4)[0].disabled, [2].into());
 
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     let mut ids = vec![];
@@ -655,7 +579,7 @@ fn load_actions_reads_set_selection_steps_as_select_object() {
     }
     app.run("attributes.set", json!({"ids": [ids[1]], "note": "Badge front"})).unwrap();
     app.run("select.all", json!({})).unwrap();
-    app.ui.action_sets[3].actions[0].excluded_steps = [1, 2].into();
+    edit_set(&mut app, 3, |actions| actions[0].disabled = [1, 2].into());
     play(&mut app, 3, 0).unwrap();
     let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     assert_eq!(selected, [ids[1]], "the step selected the object with the note");
@@ -698,7 +622,7 @@ fn set_selection_steps_with_bad_values_are_left_out() {
     let text = format!("/version 3 /name [ 3 426164 ] /action-1 {{ /name [ 1 41 ] {events}}}");
     let mut app = app_with_sets();
     let r = app.run(LOAD_SET, json!({ "data": text })).unwrap();
-    assert!(app.ui.action_sets[3].actions[0].steps.is_empty(), "{:?}", app.ui.action_sets[3].actions[0].steps);
+    assert!(set_actions(&app, 3)[0].steps.is_empty(), "{:?}", set_actions(&app, 3)[0].steps);
     assert_eq!(r["leftOut"], bad.len() + 1);
     let names: Vec<&str> = r["skipped"].as_array().unwrap().iter().map(|s| s["step"].as_str().unwrap()).collect();
     let mut expected = vec!["Set Selection"; bad.len()];
@@ -709,7 +633,7 @@ fn set_selection_steps_with_bad_values_are_left_out() {
     let wrong_count = set_selection_event(1, "Set Selection", true, &with(0, "/key 1952807028 /type (ustring) /value [ 6 4261646765 ]"));
     let text = format!("/version 3 /action-1 {{ {wrong_count}}}");
     assert_eq!(app.run(LOAD_SET, json!({ "data": text })).unwrap_err(), "the action set file can't be read in full");
-    assert_eq!(app.ui.action_sets.len(), 4, "no set added");
+    assert_eq!(set_names(&app).len(), 4, "no set added");
 }
 
 /// Load Actions… picks action set files of both kinds, and a set another app saved without a
@@ -724,9 +648,10 @@ fn load_actions_names_another_apps_set_after_its_file() {
     let mut bytes = aia_text("", &[("One", &[("Ungroup", true)])]).into_bytes();
     bytes.extend(b"/note (\xFF)\n");
     files.borrow_mut().insert("/sets/Mine.aia".into(), bytes);
-    let r = app.run(LOAD_SET, json!({})).unwrap();
-    assert_eq!((r["name"].clone(), r["leftOut"].clone()), (json!("Mine 2"), json!(0)));
-    assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.ungroup".to_string(), json!({}))]);
+    app.run(LOAD_SET, json!({})).unwrap();
+    poll_picks(&mut app);
+    assert_eq!((set_names(&app)[3].as_str(), app.ui.status.as_str()), ("Mine 2", ""), "nothing was left out");
+    assert_eq!(set_actions(&app, 3)[0].steps, [ActionStep::new("object.ungroup", json!({}))]);
     let actions = vec![("A", [("Group", true)].as_slice()); 1001];
     let r = app.run(LOAD_SET, json!({ "data": aia_text("Big", &actions) }));
     assert_eq!(r.unwrap_err(), "the action set file can't be read in full");
@@ -741,7 +666,7 @@ fn load_actions_names_another_apps_set_after_its_file() {
     for not_a_set in ["/version three", "/versionX 3"] {
         assert_eq!(app.run(LOAD_SET, json!({ "data": not_a_set })).unwrap_err(), "not an action set file");
     }
-    assert_eq!(app.ui.action_sets.len(), 4, "no set added");
+    assert_eq!(set_names(&app).len(), 4, "no set added");
     let r = app.run(LOAD_SET, json!({ "data": aia_text("", &[]) })).unwrap();
     assert_eq!(r["name"], "Actions");
 }
@@ -776,7 +701,7 @@ fn steps_do_not_stand_for_file_commands_paste_undo_or_add_ons() {
     let mut app = app_with_sets();
     let r = app.run(LOAD_SET, json!({ "data": aia_text("Closes", &[("A", &[("Close", true), ("Group", true)])]) })).unwrap();
     assert_eq!(r["leftOut"], 1);
-    assert_eq!(app.ui.action_sets[3].actions[0].steps, [("object.group".to_string(), json!({}))]);
+    assert_eq!(set_actions(&app, 3)[0].steps, [ActionStep::new("object.group", json!({}))]);
 }
 
 /// A set loaded from another app's file saves to VectorCraft's own file with its excluded steps,
@@ -786,10 +711,10 @@ fn another_apps_set_saves_and_loads_back_with_its_excluded_steps() {
     let mut app = app_with_sets();
     let text = aia_text("Tidy", &[("A", &[("Group", true), ("Ungroup", false)])]);
     app.run(LOAD_SET, json!({ "data": text })).unwrap();
-    let saved = files::write_set(&app.ui.action_sets[3]);
+    let saved = set_file(&app, 3);
     let r = app.run(LOAD_SET, json!({ "data": saved })).unwrap();
     assert_eq!(r, json!({"set": 4, "name": "Tidy 2", "actions": 1}));
-    assert_eq!(app.ui.action_sets[4].actions[0].excluded_steps, [1].into());
+    assert_eq!(set_actions(&app, 4)[0].disabled, [1].into());
 }
 
 /// Save Actions… does not write a set that Load Actions… would refuse: more than 1,000 actions.
@@ -797,27 +722,27 @@ fn another_apps_set_saves_and_loads_back_with_its_excluded_steps() {
 fn save_actions_does_not_write_a_set_load_actions_refuses() {
     let mut app = app_with_sets();
     let files = with_files(&mut app, "/sets/none.vcactions");
-    app.ui.action_sets[2].actions = vec![Action::new("A", vec![]); 1001];
+    edit_set(&mut app, 2, |actions| *actions = empty_actions(1001));
     let r = app.run(SAVE_SET, json!({"set": 2, "path": "/sets/big.vcactions"}));
     assert_eq!(r.unwrap_err(), "the action set file holds more than 1,000 actions");
     assert!(files.borrow().is_empty(), "nothing written");
 }
 
-/// `ui.actionSet.save` with the set id the panel menu passes saves that set after another set
-/// took its index and the current set changed, as when its file dialog answers later; an id
-/// that no set has saves nothing, and `set` is not read.
+/// `ui.actionSet.save` with the set name the panel menu passes saves that set after another set
+/// took its index and the current set changed, as when its file dialog answers later, through the
+/// file dialog's answer; a name that no set has saves nothing, and `set` is not read.
 #[test]
 fn save_actions_saves_the_set_it_was_chosen_for() {
     let mut app = app_with_sets();
-    let files = with_files(&mut app, "/sets/none.vcactions");
-    let id = app.ui.action_sets[2].id;
-    app.run(DELETE_SETS, json!({"sets": [1]})).unwrap();
-    app.ui.action_sets.push(ActionSet::new("Third", vec![]));
+    let files = with_files(&mut app, "/sets/x.vcactions");
+    app.run(SAVE_SET, json!({"name": "Other"})).unwrap();
+    app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
+    push_set(&mut app, "Third", vec![]);
     app.ui.action_set = Some(2);
-    app.run(SAVE_SET, json!({"id": id, "path": "/sets/x.vcactions"})).unwrap();
+    poll_picks(&mut app);
     let v: Value = serde_json::from_slice(&files.borrow()["/sets/x.vcactions"]).unwrap();
     assert_eq!(v["name"], json!("Other"), "the set chosen, not the current one");
-    assert_eq!(app.run(SAVE_SET, json!({"id": 0, "set": 0, "path": "/sets/y.vcactions"})).unwrap_err(), "no such action set");
+    assert_eq!(app.run(SAVE_SET, json!({"name": "Mine", "set": 0, "path": "/sets/y.vcactions"})).unwrap_err(), "no such action set");
 }
 
 /// A saved `automaticAlignTo` that is not true or false loads as false, and the rest of the
@@ -830,9 +755,10 @@ fn loaded_preferences_read_a_damaged_automatic_align_to_as_off() {
     saved["action_sets"][0]["actions"][1]["automaticAlignTo"] = Value::Null;
     saved["action_sets"][0]["actions"][2]["automaticAlignTo"] = json!("yes");
     let ui = serde_json::from_value::<crate::UiState>(saved).unwrap();
-    let on = ui.action_sets[0].actions.iter().map(|a| a.automatic_align_to).collect::<Vec<_>>();
+    let list = &ui.actions;
+    let on = model::members(list, "Default Actions").into_iter().filter_map(|i| list.action(i)).map(model::automatic_align_to).collect::<Vec<_>>();
     assert_eq!(on[..3], [true, false, false]);
-    assert_eq!(ui.action_sets.len(), app.ui.action_sets.len());
+    assert_eq!(ui.actions.sets().len(), app.ui.actions.sets().len());
 }
 
 /// An action set with a View menu step saves as version 6 and loads back with the step; one whose
@@ -841,11 +767,11 @@ fn loaded_preferences_read_a_damaged_automatic_align_to_as_off() {
 #[test]
 fn a_saved_view_step_survives_as_version_6() {
     let (app, _) = app_with_a_view_step();
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    let saved = set_file(&app, 0);
     let file: Value = serde_json::from_str(&saved).unwrap();
     assert_eq!(file["version"], json!(6), "older builds must refuse a View menu step");
-    let loaded = files::read_set(&saved, "Test").unwrap();
-    assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
+    let (_, loaded) = files::read_set(&saved, "Test").unwrap();
+    assert_eq!(loaded[0].steps, set_actions(&app, 0)[0].steps);
     for params in [json!(5), json!([1]), json!(null)] {
         let step = json!({"command": "view.zoomIn", "params": params});
         for step in [step.clone(), json!({"command": "command.batch", "params": {"commands": [step]}})] {
@@ -854,26 +780,26 @@ fn a_saved_view_step_survives_as_version_6() {
         }
     }
     let nested = json!({"commands": [{"command": "view.outline", "params": {}}]});
-    let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
-    assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(6), "a step in a recorded batch counts");
+    let set = [action("A", &[("command.batch", nested)])];
+    assert_eq!(serde_json::from_str::<Value>(&files::write_set("Nested", &set)).unwrap()["version"], json!(6), "a step in a recorded batch counts");
 }
 
 #[test]
 fn a_saved_select_path_step_survives_and_a_damaged_one_is_refused() {
     let (mut app, _, _) = app_with_two_rectangles();
     app.run(INSERT_SELECT_PATH, json!({"set": 0, "action": 0, "step": 0})).unwrap();
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    let saved = set_file(&app, 0);
     assert_eq!(serde_json::from_str::<Value>(&saved).unwrap()["version"], json!(5), "older builds must refuse a Select Path step");
-    let loaded = files::read_set(&saved, "Test").unwrap();
-    assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
-    let step = app.ui.action_sets[0].actions[0].steps[1].clone();
-    let nested = json!({"commands": [{"command": SELECT_PATH_STEP, "params": step.1}]});
-    let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
-    assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(5), "a step in a recorded batch counts");
-    let mut both = app.ui.action_sets[0].clone();
-    both.actions[0].steps.push((SELECT_OBJECT_STEP.into(), json!({"note": "a", "caseSensitive": false, "wholeWord": false})));
-    assert_eq!(serde_json::from_str::<Value>(&files::write_set(&both)).unwrap()["version"], json!(5), "with a Select Object step too");
-    for params in [json!({"id": 3}), json!({"id": -1, "fingerprint": step.1["fingerprint"]}), json!({"id": 3, "fingerprint": "v1:xyz"}), json!(42)] {
+    let (_, loaded) = files::read_set(&saved, "Test").unwrap();
+    assert_eq!(loaded[0].steps, set_actions(&app, 0)[0].steps);
+    let step = set_actions(&app, 0)[0].steps[1].clone();
+    let nested = json!({"commands": [{"command": SELECT_PATH_STEP, "params": step.params}]});
+    let set = [action("A", &[("command.batch", nested)])];
+    assert_eq!(serde_json::from_str::<Value>(&files::write_set("Nested", &set)).unwrap()["version"], json!(5), "a step in a recorded batch counts");
+    let mut both = set_actions(&app, 0);
+    both[0].steps.push(ActionStep::new(SELECT_OBJECT_STEP, json!({"note": "a", "caseSensitive": false, "wholeWord": false})));
+    assert_eq!(serde_json::from_str::<Value>(&files::write_set("Moves", &both)).unwrap()["version"], json!(5), "with a Select Object step too");
+    for params in [json!({"id": 3}), json!({"id": -1, "fingerprint": step.params["fingerprint"]}), json!({"id": 3, "fingerprint": "v1:xyz"}), json!(42)] {
         let bad = json!({"command": SELECT_PATH_STEP, "params": params});
         for s in [bad.clone(), json!({"command": "command.batch", "params": {"commands": [bad]}})] {
             let file = json!({"format": "vcactions", "version": 5, "name": "Bad", "actions": [{"name": "A", "steps": [s]}]});
@@ -899,20 +825,21 @@ fn step_bytes_count_what_a_step_adds_to_an_action_set_file() {
     ];
     for (command, params) in steps {
         for first in [true, false] {
-            let before = if first { vec![] } else { vec![("object.group".to_string(), json!({}))] };
-            let mut set = ActionSet::new("Set", vec![Action::new("A", before), Action::new("B", vec![("object.group".into(), json!({}))])]);
-            let len = files::write_set(&set).len();
-            set.actions[0].steps.push((command.to_string(), params.clone()));
-            let added = files::write_set(&set).len() - len;
+            let group = ActionStep::new("object.group", json!({}));
+            let before = if first { vec![] } else { vec![group.clone()] };
+            let mut set = vec![Action::new("A", before), Action::new("B", vec![group])];
+            let len = files::write_set("Set", &set).len();
+            set[0].steps.push(ActionStep::new(command, params.clone()));
+            let added = files::write_set("Set", &set).len() - len;
             let counted = files::step_bytes(command, &params);
             let first_bytes = if first { files::FIRST_STEP_BYTES } else { 0 };
             assert_eq!(counted + first_bytes, added, "{command} {params}, first: {first}");
         }
     }
-    let mut set = ActionSet::new("Set", vec![Action::new("A", vec![("object.group".into(), json!({"n": "日本"})); 3])]);
-    let len = files::write_set(&set).len();
-    set.actions[0].excluded_steps = BTreeSet::from([0, 2]);
-    assert_eq!(files::write_set(&set).len(), len + 2 * files::EXCLUDED_BYTES);
+    let mut set = vec![Action::new("A", vec![ActionStep::new("object.group", json!({"n": "日本"})); 3])];
+    let len = files::write_set("Set", &set).len();
+    set[0].disabled = BTreeSet::from([0, 2]);
+    assert_eq!(files::write_set("Set", &set).len(), len + 2 * files::EXCLUDED_BYTES);
 }
 
 /// A step inserted from the menu saves and loads as the command and params it holds, with its
@@ -921,33 +848,38 @@ fn step_bytes_count_what_a_step_adds_to_an_action_set_file() {
 fn an_inserted_menu_item_saves_and_loads() {
     let (mut app, _) = app_with_three_moves();
     app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "step": 1, "command": "type.changeCase", "params": {"case": "title"}})).unwrap();
-    app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([2]);
-    let loaded = files::read_set(&files::write_set(&app.ui.action_sets[0]), "Test").unwrap();
-    let action = &loaded.actions[0];
-    assert_eq!(action.steps, app.ui.action_sets[0].actions[0].steps);
-    assert_eq!(action.steps[2], ("type.changeCase".to_string(), json!({"case": "title"})));
-    assert_eq!(action.excluded_steps, BTreeSet::from([2]));
+    edit_set(&mut app, 0, |actions| actions[0].disabled = BTreeSet::from([2]));
+    let (_, loaded) = files::read_set(&set_file(&app, 0), "Test").unwrap();
+    let action = &loaded[0];
+    assert_eq!(action.steps, set_actions(&app, 0)[0].steps);
+    assert_eq!(action.steps[2], ActionStep::new("type.changeCase", json!({"case": "title"})));
+    assert_eq!(action.disabled, BTreeSet::from([2]));
 }
 
 #[test]
 fn a_saved_stop_survives_and_older_files_still_load() {
     let (mut app, _) = app_with_a_stop(true);
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    let saved = set_file(&app, 0);
     let file: Value = serde_json::from_str(&saved).unwrap();
     assert_eq!(file["version"], json!(3), "older builds must refuse a stop");
     let steps = file["actions"][0]["steps"].clone();
     assert_eq!(steps[1], json!({"command": "action.stop", "params": {"message": "Paint it", "allowContinue": true}}));
-    let loaded = files::read_set(&saved, "Test").unwrap();
-    assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
-    let kept: Action = serde_json::from_value(serde_json::to_value(&loaded.actions[0]).unwrap()).unwrap();
-    assert_eq!(kept.steps[1].1, json!({"message": "Paint it", "allowContinue": true}), "the preferences keep it too");
-    app.ui.action_sets[0].actions[0].steps.remove(1);
-    let without = files::write_set(&app.ui.action_sets[0]);
+    let (_, loaded) = files::read_set(&saved, "Test").unwrap();
+    assert_eq!(loaded[0].steps, set_actions(&app, 0)[0].steps);
+    let mut kept = new_app();
+    push_set(&mut kept, "Kept", loaded);
+    let kept = model::prefs::deserialize(saved_sets(&kept)).unwrap();
+    let kept = kept.actions().iter().find(|a| a.name == "Three Moves").unwrap();
+    assert_eq!(kept.steps[1].params, json!({"message": "Paint it", "allowContinue": true}), "the preferences keep it too");
+    edit_set(&mut app, 0, |actions| {
+        actions[0].steps.remove(1);
+    });
+    let without = set_file(&app, 0);
     assert_eq!(serde_json::from_str::<Value>(&without).unwrap()["version"], json!(1), "a set with no stop stays version 1");
     for version in [1, 2] {
         let old =
             json!({"format": "vcactions", "version": version, "name": "Old", "actions": [{"name": "A", "steps": [{"command": "object.move"}]}]});
-        assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().actions[0].steps.len(), 1, "version {version}");
+        assert_eq!(files::read_set(&old.to_string(), "Test").unwrap().1[0].steps.len(), 1, "version {version}");
     }
     let later = json!({"format": "vcactions", "version": 8, "name": "New", "actions": []});
     assert_eq!(files::read_set(&later.to_string(), "Test").unwrap_err(), "the action set file needs a later version of VectorCraft");
@@ -961,8 +893,8 @@ fn a_saved_stop_survives_and_older_files_still_load() {
     let bare = json!({"format": "vcactions", "version": 3, "name": "Bare", "actions": [{"name": "A", "steps": [{"command": "action.stop"}]}]});
     assert!(files::read_set(&bare.to_string(), "Test").is_ok(), "a stop may leave its params out");
     let nested = json!({"commands": [{"command": "action.stop", "params": {"message": "Inner"}}]});
-    let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
-    assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(3), "a stop in a recorded batch counts");
+    let set = [action("A", &[("command.batch", nested)])];
+    assert_eq!(serde_json::from_str::<Value>(&files::write_set("Nested", &set)).unwrap()["version"], json!(3), "a stop in a recorded batch counts");
 }
 
 /// A saved Select Object step loads back as it was, in a version 4 file that older builds refuse;
@@ -971,17 +903,17 @@ fn a_saved_stop_survives_and_older_files_still_load() {
 fn a_saved_select_object_step_survives_and_bad_ones_are_refused() {
     let (mut app, _, _) = app_with_a_noted_rect();
     app.run(INSERT_SELECT_OBJECT, json!({"set": 0, "action": 0, "note": "Badge", "wholeWord": true})).unwrap();
-    let saved = files::write_set(&app.ui.action_sets[0]);
+    let saved = set_file(&app, 0);
     let file: Value = serde_json::from_str(&saved).unwrap();
     assert_eq!(file["version"], json!(4), "older builds must refuse a Select Object step");
     assert_eq!(
         file["actions"][0]["steps"][3],
         json!({"command": "select.byNote", "params": {"note": "Badge", "caseSensitive": false, "wholeWord": true}})
     );
-    let loaded = files::read_set(&saved, "Test").unwrap();
-    assert_eq!(loaded.actions[0].steps, app.ui.action_sets[0].actions[0].steps);
-    app.ui.action_sets[0].actions[0].steps.push(("action.stop".into(), json!({"message": ""})));
-    let file: Value = serde_json::from_str(&files::write_set(&app.ui.action_sets[0])).unwrap();
+    let (_, loaded) = files::read_set(&saved, "Test").unwrap();
+    assert_eq!(loaded[0].steps, set_actions(&app, 0)[0].steps);
+    edit_set(&mut app, 0, |actions| actions[0].steps.push(ActionStep::new("action.stop", json!({"message": ""}))));
+    let file: Value = serde_json::from_str(&set_file(&app, 0)).unwrap();
     assert_eq!(file["version"], json!(4), "with a stop too");
     for params in [json!({}), json!({"note": "  "}), json!({"note": 5}), json!({"note": "a", "caseSensitive": 1}), json!(null), json!(42)] {
         let step = json!({"command": "select.byNote", "params": params});
@@ -991,6 +923,6 @@ fn a_saved_select_object_step_survives_and_bad_ones_are_refused() {
         }
     }
     let nested = json!({"commands": [{"command": "select.byNote", "params": {"note": "Inner"}}]});
-    let set = ActionSet::new("Nested", vec![Action::new("A", vec![("command.batch".into(), nested)])]);
-    assert_eq!(serde_json::from_str::<Value>(&files::write_set(&set)).unwrap()["version"], json!(4), "a step in a recorded batch counts");
+    let set = [action("A", &[("command.batch", nested)])];
+    assert_eq!(serde_json::from_str::<Value>(&files::write_set("Nested", &set)).unwrap()["version"], json!(4), "a step in a recorded batch counts");
 }
