@@ -5958,7 +5958,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-biblioteksfärger som teckningen bara lagrar som nummer öppnades som svarta dekorfärger
 @msg	CDR outline arrowheads were left out	pilspetsar på CDR-linjer utelämnades
 @msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-omslag tillämpades inte, och formerna under dem behåller sina konturer
-@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-linser och objekttransparens tillämpades inte, och objekten de ligger på visas ogenomskinliga
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-objektiv och objekttransparens tillämpades inte, och objekten de ligger på visas ogenomskinliga
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	delar av teckningen som är för djupt nästlade eller ligger utanför importgränserna utelämnades
 @msg	damaged parts of the drawing were left out	skadade delar av teckningen utelämnades
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-sidor längre än 163 830 pt öppnades med den längden, och grafik nära deras kanter ligger utanför ritytan
@@ -5968,7 +5968,7 @@ variable-list-end	{0}, {1}	{0} och {1}
 @msg	colors in CMX color models VectorCraft doesn't read were opened as black	färger i CMX-färgmodeller som VectorCraft inte läser öppnades som svarta
 @msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-biblioteksfärger som filen bara lagrar som nummer öppnades som svarta dekorfärger
 @msg	CMX outline arrowheads were left out	pilspetsar på CMX-linjer utelämnades
-@msg	CMX lenses were not applied	CMX-linser tillämpades inte
+@msg	CMX lenses were not applied	CMX-objektiv tillämpades inte
 @msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CMX-sidor längre än 163 830 pt öppnades med den längden, och grafik nära deras kanter ligger utanför ritytan
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
 @msg	zipped 1-bit PSD image data with prediction can't be read	zippad 1-bitars PSD-bilddata med prediktion kan inte läsas
@@ -7932,7 +7932,7 @@ axis	Y Axis	Y-axel
 	Warped Checks	Förvrängda rutor
 	Pinched Stripes	Klämda ränder
 	Chevron Pulse	Chevronpuls
-	Radiating Lenses	Strålande linser
+	Radiating Lenses	Strålande objektiv
 	Soft Shadow	Mjuk skugga
 	Hard Shadow	Hård skugga
 	Lifted Card	Upplyft kort
@@ -11252,3 +11252,23 @@ file-filter	Applications	Program
 @msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: ange {path} eller {name, dataBase64} för en bildfil, eller en textur så som effect.list anger den
 @msg	unknown parameter `{within}settings.{format}`; {why}	okänd parameter `{within}settings.{format}`; {why}
 arrowhead	Target	Måltavla
+	Delete Effect	Ta bort effekt
+	Delete Effects	Ta bort effekter
+	Delete Fill	Ta bort fyllning
+	Delete Items	Ta bort objekt
+	Delete Stroke	Ta bort kontur
+	Duplicate Fill	Duplicera fyllning
+	Duplicate Items	Duplicera objekt
+	Duplicate Set	Duplicera uppsättning
+	Duplicate Stroke	Duplicera kontur
+	Edit Effect…	Redigera effekt…
+	Export Asset…	Exportera resurs…
+	Export {count} Assets…	Exportera {count} resurser…
+	Hide Effect	Dölj effekt
+	Hide Fill	Dölj fyllning
+	Hide Stroke	Dölj kontur
+	Remove {count} Assets	Ta bort {count} resurser
+	Select Artwork on Canvas	Markera bildmaterial på arbetsytan
+	Show Effect	Visa effekt
+	Show Fill	Visa fyllning
+	Show Stroke	Visa kontur
