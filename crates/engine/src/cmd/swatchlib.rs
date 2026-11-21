@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"). A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document, the colors patterns brought included], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -1030,34 +1030,69 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // The document's swatches by name (the first of a name wins, as in `Document::swatch`), looked
     // up once so that a large palette takes linear time.
     let mut by_name: std::collections::HashMap<&str, &Swatch> = std::collections::HashMap::new();
+    // The document's numbered copies ("Ink 2") by the name they are numbered after, in order.
+    let mut copies: std::collections::HashMap<&str, Vec<&Swatch>> = std::collections::HashMap::new();
     for w in d.swatches_iter() {
-        by_name.entry(w.name.as_str()).or_insert(w);
+        let std::collections::hash_map::Entry::Vacant(e) = by_name.entry(w.name.as_str()) else { continue };
+        e.insert(w);
+        if let Some((base, n)) = w.name.rsplit_once(' ')
+            && !n.is_empty()
+            && n.bytes().all(|b| b.is_ascii_digit())
+        {
+            copies.entry(base).or_default().push(w);
+        }
     }
-    let there = |w: &Swatch| match (&w.paint, &patterns) {
+    // A numbered copy whose name a picked library swatch has stands for that swatch alone.
+    let picked_names: HashSet<&str> = picked.iter().map(|(_, w)| w.name.as_str()).collect();
+    // `paint` is `w`'s paint with a tint's base color under the name the base has in the document.
+    let there = |w: &Swatch, paint: &Paint| match (&w.paint, &patterns) {
         (Paint::Pattern { pattern, .. }, Some(src)) => {
             patternlib::present_pattern(d, src, pattern).and_then(|target| library_pattern_swatch(d, w, &target))
         }
         _ => match by_name.get(w.name.as_str()) {
-            Some(x) => x.paint == w.paint,
-            None => w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == w.paint),
-        }
-        .then(|| w.name.clone()),
+            Some(x) if x.paint == *paint => Some(w.name.clone()),
+            // A color whose name the document gives another color is the numbered copy of it that
+            // an earlier add or a pattern's art brought in, when that copy is the same color.
+            Some(_) => copies
+                .get(w.name.as_str())
+                .and_then(|c| {
+                    c.iter().find(|x| !picked_names.contains(x.name.as_str()) && x.paint == *paint && x.global == w.global && x.spot == w.spot)
+                })
+                .map(|x| x.name.clone()),
+            None => (w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == *paint)).then(|| w.name.clone()),
+        },
     };
     // Library name → the name of the document's swatch.
     let mut existing: Vec<(String, String)> = vec![];
     let mut fresh = vec![];
     for &(group, w) in &picked {
-        match there(w) {
+        // A tint of a color the document has under a numbered name is compared linked to that name.
+        let relinked = match &w.paint {
+            Paint::Solid { swatch: Some(base), .. } => existing.iter().find(|(l, n)| l == base && n != base).map(|(_, n)| {
+                let mut paint = w.paint.clone();
+                if let Paint::Solid { swatch: Some(b), .. } = &mut paint {
+                    *b = n.clone();
+                }
+                paint
+            }),
+            _ => None,
+        };
+        match there(w, relinked.as_ref().unwrap_or(&w.paint)) {
             Some(name) => existing.push((w.name.clone(), name)),
             None => fresh.push((group, w)),
         }
     }
     let undo_before = s.doc()?.history.undo.len();
-    // Library name → the name it got in the document.
+    // Library name → the name it got in the document. The colors the patterns brought that no
+    // library swatch of this call stands for are added too; they are listed after the others and
+    // are never the one `apply` paints with.
+    let mut brought_alone: Vec<(String, String)> = vec![];
+    // Library name → the name of the document's swatch for it, for the tints added here.
+    let mut links: std::collections::HashMap<String, String> = existing.iter().cloned().collect();
     let added: Vec<(String, String)> = if fresh.is_empty() {
         vec![]
     } else {
-        let (added, reused) = s.edit("Add to Swatches", |d, _| {
+        let (added, reused, brought) = s.edit("Add to Swatches", |d, _| {
             let mut out = vec![];
             // Library pattern swatches that stand for a swatch added earlier in this call.
             let mut reused = vec![];
@@ -1101,8 +1136,11 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     (name.clone(), Swatch { name, paint, global: false, spot: false })
                 } else {
                     // A color a pattern added earlier in this call brought with its art is that
-                    // swatch: it moves to the library swatch's place.
-                    let at = brought.iter().position(|(from, _)| *from == w.name);
+                    // swatch when it shows the library swatch's color: it moves to the library
+                    // swatch's place.
+                    let same =
+                        |to: &str| d.swatch(to).is_some_and(|x| x.paint.color() == w.paint.color() && x.global == w.global && x.spot == w.spot);
+                    let at = brought.iter().position(|(from, to)| *from == w.name && same(to));
                     let moved = at.map(|i| brought.swap_remove(i).1).and_then(|n| {
                         let i = d.swatches.iter().position(|x| x.name == n)?;
                         Some(d.swatches.remove(i))
@@ -1111,10 +1149,19 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                         Some(sw) => (sw.name.clone(), sw),
                         None => {
                             let name = free_in(&mut taken, &w.name);
-                            (name.clone(), Swatch { name, ..(*w).clone() })
+                            let mut sw = Swatch { name: name.clone(), ..(*w).clone() };
+                            // A tint links to its base color under the name the base has in the
+                            // document.
+                            if let Paint::Solid { swatch: Some(base), .. } = &mut sw.paint
+                                && let Some(to) = links.get(base.as_str())
+                            {
+                                *base = to.clone();
+                            }
+                            (name, sw)
                         }
                     }
                 };
+                links.insert(w.name.clone(), name.clone());
                 match group {
                     Some(g) => {
                         let found = placed.iter().find(|(n, _)| *n == g).map(|&(_, i)| i);
@@ -1135,13 +1182,16 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 out.push((w.name.clone(), name));
             }
-            Ok((out, reused))
+            Ok((out, reused, brought))
         })?;
         existing.extend(reused);
+        brought_alone = brought;
         added
     };
     let names = |list: &[(String, String)]| list.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>();
-    let mut out = json!({"library": shown_library_id(s, &info.id), "added": names(&added), "existing": names(&existing)});
+    let mut added_names = names(&added);
+    added_names.extend(names(&brought_alone));
+    let mut out = json!({"library": shown_library_id(s, &info.id), "added": added_names, "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
         let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
         s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;

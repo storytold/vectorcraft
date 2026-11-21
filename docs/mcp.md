@@ -5802,7 +5802,10 @@ From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, 
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
 art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
-in under a numbered name ("Ink 2") and the pattern links to that. A document with
+in under a numbered name ("Ink 2") and the pattern links to that. A library color whose name the document gives
+another color is the document's numbered copy of the same color when it has one, so adding the pattern and its color
+again adds nothing. A pattern the document already holds with its art linked to the document's own color of that name
+is used as it is. `added` lists the colors the pattern's art brings too. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
 "`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
 Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
@@ -6015,7 +6018,11 @@ swatch, else `Gradient`; `library.use` paints the selection's fill or stroke wit
 (else the default one, or the pattern swatch `swatch`) with the images, symbols, patterns, swatches, styles and brushes
 its art uses, and a thumbnail of one swatch's worth of it; `library.use` adds the pattern and its swatch to the document (the
 same pattern there is reused, and a name the document gives another pattern gets a number) and paints the selection's
-fill or stroke with it, as one undo step, and returns the pattern's name in the document as `pattern`. `library.get`
+fill or stroke with it, as one undo step, and returns the pattern's name in the document as `pattern`. A global or spot
+color the pattern's art links to keeps the item's color, as with `swatch.library.add`: when the document gives its name
+another color, it comes in under a numbered name ("Ink 2"), or as the document's numbered copy of the same color, and
+the pattern links to it. A pattern the document holds with its art linked to the document's own color of that name is
+reused. `library.get`
 lists them as `gradients: [{name, gradient}]` and `patterns: [{name, pattern, thumbnail}]`.
 
 Items can be put in user-named groups, which the panel shows as collapsible sections after the ungrouped items (its

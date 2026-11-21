@@ -90,10 +90,17 @@ pub fn swatch_source(w: &Swatch) -> Option<Arc<Document>> {
 /// swatch has gets a number → the pattern's name in `d`, and the swatches the import added for
 /// the pattern's art: (the swatch's name in `lib`, its name in `d`), pattern swatches left out.
 /// A global or spot color whose name `d` gives another color comes in under a free name, as Add
-/// to Swatches adds such a color, so that the pattern keeps the library's colors.
+/// to Swatches adds such a color, so that the pattern keeps the library's colors. Those colors
+/// merge instead when that reuses a pattern of `d` that keeping them would add again
+/// ([`merge_reuses`]).
 pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> Result<(String, Vec<(String, String)>)> {
+    let gathered = gather(lib, name);
+    let merge = !gathered.swatches.is_empty()
+        && has_candidate(d, lib, name)
+        && probe(d, &gathered, &SwatchChoices::add_all()).and_then(|with_add| merge_reuses(d, &gathered, name, &with_add)).is_some();
+    let choices = if merge { SwatchChoices::default() } else { SwatchChoices::add_all() };
     let had: std::collections::HashSet<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
-    let imported = gather(lib, name).import_into(d, &SwatchChoices::add_all(), false)?;
+    let imported = gathered.import_into(d, &choices, false)?;
     let from = |to: &str| {
         let renamed = imported.renamed.iter().find(|r| r["kind"] == "swatch" && r["to"] == to).and_then(|r| r["from"].as_str());
         renamed.unwrap_or(to).to_string()
@@ -121,7 +128,8 @@ fn imported_name(imported: &Imported, name: &str) -> String {
 /// The pattern of `d` that [`import`] of pattern `name` of library `lib` would use without adding
 /// anything to `d` → its name in `d`. A pattern whose art uses no other resource is compared as
 /// [`existing_pattern`] does. One whose art uses other resources, such as a pattern it is painted
-/// with, is imported into a copy of `d`, so that those resources are compared too.
+/// with, is imported into a copy of `d`, so that those resources are compared too, with the colors
+/// of its art merged when [`merge_reuses`] says so.
 pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Option<String> {
     let gathered = gather(lib, name);
     let only_pattern = gathered.patterns.len() == 1
@@ -131,23 +139,49 @@ pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Optio
         && gathered.char_styles.is_empty()
         && gathered.para_styles.is_empty()
         && gathered.brushes.is_empty()
-        && gathered.images.is_empty();
+        && gathered.images.is_empty()
+        && gathered.graph_designs.is_empty();
     if only_pattern {
         return existing_pattern(d, lib, name);
     }
-    // Importing reuses only a pattern under that name or a numbered copy of it with the same tile
-    // options and as many art objects; without one, the document is not copied.
-    let def = lib.pattern(name)?;
+    // Without a pattern to reuse, the document is not copied.
+    if !has_candidate(d, lib, name) {
+        return None;
+    }
+    let with_add = probe(d, &gathered, &SwatchChoices::add_all())?;
+    if with_add.added == 0 {
+        return Some(imported_name(&with_add, name));
+    }
+    merge_reuses(d, &gathered, name, &with_add).filter(|m| m.added == 0).map(|m| imported_name(&m, name))
+}
+
+/// Whether `d` has a pattern that importing pattern `name` of `lib` can reuse: one under that name
+/// or a numbered copy of it with the same tile options and as many art objects.
+pub(crate) fn has_candidate(d: &Document, lib: &Document, name: &str) -> bool {
+    let Some(def) = lib.pattern(name) else { return false };
     let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
     let copy = |n: &str| {
         n == name || n.strip_prefix(name).and_then(|r| r.strip_prefix(' ')).is_some_and(|r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
     };
-    if !d.patterns.iter().any(|p| copy(&p.name) && p.art.len() == def.art.len() && bare(p) == bare(def)) {
+    d.patterns.iter().any(|p| copy(&p.name) && p.art.len() == def.art.len() && bare(p) == bare(def))
+}
+
+/// What importing `gathered` into a copy of `d` with `choices` does.
+fn probe(d: &Document, gathered: &Clipboard, choices: &SwatchChoices) -> Option<Imported> {
+    let mut probe = d.clone();
+    gathered.import_into(&mut probe, choices, false).ok()
+}
+
+/// When importing `gathered` (pattern `name`) into `d` with Add (`with_add`) adds the pattern again
+/// because a global or spot color of its art comes in numbered, while merging those colors reuses a
+/// pattern of `d`, what merging does. Such a pattern has its art linked to the document's own colors
+/// of those names, as pasting with Merge, or adding it from a library before, leaves it.
+fn merge_reuses(d: &Document, gathered: &Clipboard, name: &str, with_add: &Imported) -> Option<Imported> {
+    let reused = |i: &Imported| d.pattern(&imported_name(i, name)).is_some();
+    if reused(with_add) || !with_add.renamed.iter().any(|r| r["kind"] == "swatch") {
         return None;
     }
-    let mut probe = d.clone();
-    let imported = gathered.import_into(&mut probe, &SwatchChoices::add_all(), false).ok()?;
-    (imported.added == 0).then(|| imported_name(&imported, name))
+    probe(d, gathered, &SwatchChoices::default()).filter(reused)
 }
 
 /// The pattern of `d` that is pattern `name` of library `lib`: the same tile options and art under
