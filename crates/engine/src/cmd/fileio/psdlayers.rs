@@ -978,6 +978,8 @@ struct Builder<'a, F> {
     adjusting: Option<usize>,
     /// Whether each record's stored transparency is 0 everywhere, once [`Self::clear`] has read it.
     clear: Vec<Cell<Option<bool>>>,
+    /// Whether each record's layer mask hides all of it, once [`Self::masked_out`] has read it.
+    masked_out: Vec<Cell<Option<bool>>>,
 }
 
 impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
@@ -1157,6 +1159,47 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             c.set(Some(clear));
         }
         Ok(clear)
+    }
+
+    /// Does record `i` have a layer mask, switched on, that hides all of it? For a layer with stored
+    /// pixels, other than an adjustment layer, the mask is 0 over all of them; for a group, an
+    /// adjustment layer and a layer that stores no pixels, which can change pixels anywhere below
+    /// them, it is 0 everywhere, the value outside it included. A mask is read only when it can hide
+    /// all of it, once. `false` when it has none, or it can't be read within the memory allowed or
+    /// is damaged (drawing it says so). `group` says the record opens a group.
+    fn masked_out(&self, i: usize, group: bool) -> Result<bool, String> {
+        if let Some(out) = self.masked_out.get(i).and_then(Cell::get) {
+            return Ok(out);
+        }
+        let rec = self.record(i)?;
+        // Where it draws: a layer's stored pixels.
+        let area = (!group && !rec.stores_nothing() && !matches!(rec.content, Content::Adjustment(_))).then_some(rec.bounds);
+        let inside =
+            |b: Bounds, x: i64, y: i64| (i64::from(b.left)..i64::from(b.right)).contains(&x) && (i64::from(b.top)..i64::from(b.bottom)).contains(&y);
+        // With a value outside it other than 0, it hides all of it only when it covers all of `area`.
+        let can_hide = rec.mask.is_some_and(|m| {
+            let outside = if m.inverted { 255 - m.default } else { m.default };
+            outside == 0
+                || area.is_some_and(|a| m.bounds.left <= a.left && m.bounds.top <= a.top && a.right <= m.bounds.right && a.bottom <= m.bounds.bottom)
+        });
+        let out = can_hide && self.has_mask(Some(i))? && self.mask_fits(i, 0)? && {
+            // This read isn't counted against the import's allowance: the mask is read again, and
+            // counted, where the layer is drawn or its opacity mask is made.
+            let spent = self.spent.get();
+            let read = self.mask(i, false);
+            self.spent.set(spent);
+            match read {
+                // Its values outside `area` hide nothing of it.
+                Ok(Some((left, top, m, _))) => {
+                    m.enumerate_pixels().all(|(x, y, p)| p.0[0] == 0 || area.is_some_and(|a| !inside(a, left + i64::from(x), top + i64::from(y))))
+                }
+                _ => false,
+            }
+        };
+        if let Some(c) = self.masked_out.get(i) {
+            c.set(Some(out));
+        }
+        Ok(out)
     }
 
     /// Multiply `c`'s transparency by record `i`'s layer mask.
@@ -1627,11 +1670,15 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     /// For item `k` of `items`, visible and not clipped: whether visible layers are clipped to it,
     /// and whether it draws, above 0 opacity: by its own pixels (a group's, those of its layers)
     /// above 0 fill, or by those of the layers clipped to it that draw, which show in its pixels at
-    /// any fill, or over the canvas when it is a layer that covers it without drawing.
+    /// any fill, or over the canvas when it is a layer that covers it without drawing and that its
+    /// layer mask doesn't hide all of.
     fn base_draws(&self, items: &[Item], k: usize) -> Result<(bool, bool), String> {
         let Some(item) = items.get(k) else { return Ok((false, false)) };
         let (r, own) = self.pixels(item)?;
-        let covers = matches!(item, Item::Layer(_)) && r.covers_without_drawing();
+        let covers = match item {
+            Item::Layer(i) => r.covers_without_drawing() && !self.masked_out(*i, false)?,
+            Item::Group(..) => false,
+        };
         let (mut clips, mut clips_draw) = (false, false);
         for above in items.get(k + 1..).unwrap_or_default() {
             let c = match above {
@@ -1654,14 +1701,14 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     }
 
     /// `item`'s record, and whether it has pixels of its own: a layer that draws, or a group with
-    /// something in it that draws (see [`Self::draws`]).
+    /// something in it that draws (see [`Self::draws`]), that its layer mask doesn't hide all of.
     fn pixels(&self, item: &Item) -> Result<(&Record<'_>, bool), String> {
         Ok(match item {
             Item::Layer(i) => {
                 let r = self.record(*i)?;
-                (r, !r.draws_nothing() && !self.clear(*i)?)
+                (r, !r.draws_nothing() && !self.clear(*i)? && !self.masked_out(*i, false)?)
             }
-            Item::Group(g, children) => (self.record(*g)?, self.draws(children)?),
+            Item::Group(g, children) => (self.record(*g)?, self.draws(children)? && !self.masked_out(*g, true)?),
         })
     }
 
@@ -1823,7 +1870,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
         let mut below = false;
         for b in out.iter().filter(|b| b.visible && b.opacity > 0.0) {
-            below |= match &b.body {
+            let draws = match &b.body {
                 // An adjustment layer, a layer that draws nothing or whose pixels are all
                 // transparent, or a group of such layers, has nothing to change.
                 Body::Layer(i) => !self.record(*i)?.draws_nothing() && !self.clear(*i)?,
@@ -1831,6 +1878,14 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 // Clipped layers merged with a base that has no pixels have none either.
                 Body::Merged(c) => c.px.iter().any(|p| p[3] > 0.0),
             };
+            // One whose layer mask hides all of it has nothing to change either. A base merged with
+            // the layers clipped to it isn't checked: its canvas may reach past the base's own pixels.
+            let hidden = |m: usize| match &b.body {
+                Body::Layer(_) => self.masked_out(m, false),
+                Body::Group(..) => self.masked_out(m, true),
+                Body::Merged(_) => Ok(false),
+            };
+            below = below || (draws && !b.mask_of.map(hidden).transpose()?.unwrap_or(false));
         }
         // Kept below it in the group, or in a pass-through group below it there.
         let pending = !self.pending(out, level)?.is_empty();
@@ -2560,6 +2615,7 @@ pub(super) fn import(
         squeezed: 0,
         adjusting: None,
         clear: vec![Cell::new(None); records.len()],
+        masked_out: vec![Cell::new(None); records.len()],
     };
     let layers = b.list(&items, Level::Top)?;
     // A drawing for a knockout or a clip leaves hidden layers out; those that came in anyway aren't.

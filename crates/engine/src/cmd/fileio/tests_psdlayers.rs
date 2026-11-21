@@ -1808,6 +1808,58 @@ fn an_adjustment_layer_over_transparent_pixels_changes_what_is_below_the_group()
     assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[255, 255, 255, 255]], "{r}");
 }
 
+/// A layer or group whose layer mask hides all of it draws nothing: an adjustment layer above it in
+/// a pass-through group still changes what is below the group, and a shallow knockout hidden that
+/// way merges nothing, so the adjustment layers below it stay kept.
+#[test]
+fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_group() {
+    let black = |l: L| L { mask: Some(([0, 0, 1, 2], 0, 0, vec![0, 0])), ..l };
+    let under = || layer("Under", [0, 0, 1, 2], [10, 20, 30, 255]);
+    let dodge = || L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 2], [0, 0, 0, 255]) };
+    let photo = || layer("Photo", [0, 0, 1, 2], [100, 100, 100, 255]);
+    let inverted = [[245, 235, 225, 255], [245, 235, 225, 255]];
+    let masked_layer = [under(), group_end(), black(photo()), adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), dodge()];
+    // A mask over all of the layer's pixels hides it whatever its value outside them.
+    let white_outside = L { mask: Some(([0, 0, 1, 2], 255, 0, vec![0, 0])), ..photo() };
+    let covered_layer = [under(), group_end(), white_outside, adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), dodge()];
+    let masked_group = [
+        under(),
+        group_end(),
+        group_end(),
+        photo(),
+        black(group("Inner", b"norm")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let knockout_cut = knockout(black(layer("Cut", [0, 0, 1, 1], [0, 0, 255, 255])), 1, 255);
+    let masked_knockout = [
+        under(),
+        group_end(),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        layer("Photo", [0, 0, 1, 1], [100, 100, 100, 255]),
+        knockout_cut,
+        group("Inner", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let cases = [
+        ("layer", &masked_layer[..], inverted),
+        ("covered layer", &covered_layer[..], inverted),
+        ("group", &masked_group[..], inverted),
+        ("knockout", &masked_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
+    ];
+    let rows = |layers: &[L]| {
+        let (s, _) = open(&file(2, 1, layers, 8, false, false), json!({}));
+        row_of(&s, &s.doc().unwrap().doc.layers[0])
+    };
+    let got: Vec<_> = cases.iter().map(|(what, layers, _)| (*what, rows(layers))).collect();
+    let want: Vec<_> = cases.iter().map(|(what, _, want)| (*what, want.to_vec())).collect();
+    assert_eq!(got, want);
+}
+
 /// Damaged Invert, Threshold and Posterize layers, masked and clipped, open without a panic.
 #[test]
 fn damaged_adjustment_layers_never_panic() {
