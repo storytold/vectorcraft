@@ -3,7 +3,8 @@
 //! its image, Ctrl/Cmd-click adds or removes it, and Shift-click selects the images of the rows
 //! from the last row clicked without Shift to it (with Ctrl/Cmd, adds them); the buttons Relink,
 //! Go To, Update and Edit Original act on the selected rows (Relink through its dialog, with the
-//! Replace choice: `ui.relinkDialog`); Link Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
+//! Replace choice: `ui.relinkDialog`); Link Info shows the details of the first, with a Show in
+//! Folder button on its Location row. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
 //! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing /
 //! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, Copy Info (the selected
 //! rows' file names to the clipboard: `links.copyInfo`), thumbnail size, Show in Folder and Show DCS Transparency Interactions (a warning on the rows of images placed
@@ -721,7 +722,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if o.info {
         let units = app.session.general_unit();
-        link_info(ui, cache.info.as_ref().map(|(_, i)| i), units);
+        link_info(app, ui, cache.info.as_ref().map(|(id, i)| (*id, i)), units);
     }
     let sel = selected_rows(&cache.list, &selected);
     let modified = ids(&sel, |r| status_is(r, "modified") || r["preview"] == true && !status_is(r, "missing"));
@@ -876,10 +877,10 @@ pub(crate) fn date_label(ms: u64) -> String {
     format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02} UTC")
 }
 
-/// The Link Info section: the details of `info` (`links.info`), or a hint.
-fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
+/// The Link Info section: the details of `info` (`links.info` of image `id`), or a hint.
+fn link_info(app: &mut VectorcraftApp, ui: &mut Ui, info: Option<(u64, &Value)>, units: vectorcraft_doc::Unit) {
     widgets::divider(ui);
-    let Some(i) = info else {
+    let Some((id, i)) = info else {
         widgets::dim_label(ui, tl!("Select an image to see its Link Info."));
         return;
     };
@@ -896,7 +897,14 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
     row(ui, tl!("Format"), i["format"].as_str().unwrap_or_default().into());
     row(ui, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into());
     if let Some(l) = i["location"].as_str() {
-        row(ui, tl!("Location"), l.into());
+        // Show in Folder for the image shown here: off while its file is missing and without a
+        // file manager (the web).
+        let can_reveal = i["path"].is_string() && i["status"] != "missing" && app.services.reveal.is_some();
+        super::doc_info::row_with(ui, tl!("Location"), l.into(), |ui| {
+            if widgets::icon_button_enabled(ui, "folder-open", tl!("Show in Folder"), false, can_reveal, 18.0).clicked() {
+                crate::menus::invoke(app, "links.reveal", json!({ "id": id }));
+            }
+        });
     }
     // A placed document has no resolution: its rows are left out.
     for (label, k) in [(tl!("PPI"), "ppi"), (tl!("Effective PPI"), "effectivePpi")] {

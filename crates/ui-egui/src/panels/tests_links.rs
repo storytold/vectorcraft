@@ -558,6 +558,76 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
 }
 
+/// Frames of the panel in a fresh context (Link Info read anew), the pointer clicking the middle of
+/// the button that screen readers name `name` → whether that button was on, or `None` when it was
+/// not drawn.
+fn click_panel_button(app: &mut VectorcraftApp, name: &str) -> Option<bool> {
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.1;
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), ..Default::default() }, |ui| super::links::show(app, ui));
+        out.textures_delta.clear();
+        out
+    };
+    frame(app, vec![]);
+    let out = frame(app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let node = &nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Button && n.label() == Some(name))?.1;
+    let on = !node.is_disabled();
+    let b = node.bounds().expect("bounds");
+    let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    frame(app, vec![egui::Event::PointerMoved(at)]);
+    frame(app, vec![button(true)]);
+    frame(app, vec![button(false)]);
+    Some(on)
+}
+
+/// The Location row of Link Info has a Show in Folder button that shows the file of the image Link
+/// Info shows. An embedded image has no Location row; the button is off while the file is missing
+/// and without a file manager (the web).
+#[test]
+fn link_infos_location_row_shows_the_file_in_its_folder() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let dir = Folder::new("location-reveal");
+    let (mut app, linked, embedded) = app(&dir);
+    let other = dir.file("other.png", &png(30, 20));
+    let other = app.run("file.place", json!({"path": other, "at": [50, 50]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [embedded]})).unwrap();
+    let revealed: Rc<RefCell<Vec<String>>> = Rc::default();
+    let r = revealed.clone();
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        r.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+    let path = |app: &mut VectorcraftApp, id: u64| app.run("links.info", json!({"id": id})).unwrap()["path"].as_str().unwrap().to_string();
+    let (linked_path, other_path) = (path(&mut app, linked), path(&mut app, other));
+    // An embedded image has no file to show.
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), None);
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(true));
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(true));
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone()]);
+    // Both images selected: Link Info shows the first selected, `linked`, while the list has `other`
+    // (on top) first. Only the file of the image Link Info shows is handed over.
+    app.run("select.set", json!({"ids": [linked, other]})).unwrap();
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(true));
+    assert_eq!(*revealed.borrow(), [linked_path.clone(), other_path.clone(), linked_path]);
+    // A missing file: the row stays, the button is off.
+    app.run("select.set", json!({"ids": [other]})).unwrap();
+    std::fs::remove_file(&other_path).unwrap();
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(false));
+    // Without a file manager (the web): off.
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    app.services.reveal = None;
+    assert_eq!(click_panel_button(&mut app, "Show in Folder"), Some(false));
+    assert_eq!(revealed.borrow().len(), 3, "nothing more was shown");
+}
+
 /// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
 /// Original opens a raster image in the app that made it, PhotoCraft, and falls back to the
 /// system's default app when PhotoCraft isn't installed or the file isn't a raster image.
