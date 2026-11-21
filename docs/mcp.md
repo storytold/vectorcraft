@@ -4857,7 +4857,9 @@ already walks Image Trace. Short agent entry points:
   `tool.setOption {tool: "eyedropper", values: {stop: "livePaintBucket"}}`): the stop
   stays selected, and the click's `paint.sampleColor {color, stop}` recolors that stop of the bucket's gradient and
   leaves the selection's paint as it is. Once that stop is no longer selected (a Cmd/Ctrl-click selected another
-  object), the next click ends the pick without sampling and switches back to the bucket.
+  object), the next click ends the pick without sampling and switches back to the bucket. The bucket's colors have no
+  freeform points: `paint.freeform.get`, and `paint.freeform.selectPoint` with an `index`, report an error, and so do
+  the other `paint.freeform` commands without `ids`, `id` or `item`, which then leave the selection's gradient as it is.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
   keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
   `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
