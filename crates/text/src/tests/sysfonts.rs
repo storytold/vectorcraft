@@ -590,6 +590,39 @@ fn the_scan_reads_a_familys_likeness_without_loading_it() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Font menus' Thai filter and Show Similar Fonts: the scan tells whether a family sets Thai as
+/// loading it does. A face whose OS/2 table names neither the Thai range nor the Thai code page does
+/// not set Thai, loaded or scanned, whatever its character map holds.
+#[test]
+fn the_scan_tells_whether_a_family_sets_thai_without_loading_it() {
+    use crate::test_fonts::{THAI_FAMILY, THAI_OTHER_FAMILY, thai_font};
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-thai", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for claimed in [true, false] {
+        std::fs::write(dir.join("Thaitest-Regular.ttf"), thai_font(THAI_FAMILY, claimed).unwrap()).unwrap();
+        let scanned = FontDb::with_font_dirs(vec![dir.clone()]);
+        let thai = scanned.family_traits(THAI_FAMILY).thai;
+        assert!(!scanned.is_loaded(THAI_FAMILY), "the scan's traits, nothing loaded");
+        let loaded = FontDb::with_font_dirs(vec![]);
+        assert_eq!(loaded.add_font(thai_font(THAI_FAMILY, claimed).unwrap()), 1);
+        assert_eq!(thai, loaded.family_traits(THAI_FAMILY).thai, "claimed: {claimed}");
+        assert_eq!(thai, claimed);
+    }
+    // A loaded Thai family lists a scanned Thai family before a Latin family that looks the same,
+    // and the order stays when the scanned family is loaded.
+    std::fs::write(dir.join("Thaitest-Regular.ttf"), thai_font(THAI_FAMILY, true).unwrap()).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert_eq!(db.add_font(thai_font(THAI_OTHER_FAMILY, true).unwrap()), 1);
+    let families: Vec<String> = ["Source Sans 3", THAI_FAMILY, THAI_OTHER_FAMILY].map(String::from).to_vec();
+    let expected: Vec<String> = [THAI_OTHER_FAMILY, THAI_FAMILY, "Source Sans 3"].map(String::from).to_vec();
+    assert_eq!(db.similar_families(THAI_OTHER_FAMILY, &families), expected);
+    assert!(!db.is_loaded(THAI_FAMILY));
+    assert_eq!(db.add_font(thai_font(THAI_FAMILY, true).unwrap()), 1);
+    assert_eq!(db.similar_families(THAI_OTHER_FAMILY, &families), expected);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn registered_fonts_outside_the_font_folders_are_their_full_paths() {
     let dir = std::env::temp_dir().join("Fonts");
