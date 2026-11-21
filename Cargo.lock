@@ -1012,7 +1012,7 @@ dependencies = [
 [[package]]
 name = "craft-cdr"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=75d179f8df1507e2a0a7b382f5d74c40cbb7f7bf#75d179f8df1507e2a0a7b382f5d74c40cbb7f7bf"
+source = "git+https://github.com/storytold/craft-libs?rev=9b28b56bc7207ef7ce806f37df72cb94c0ad5c37#9b28b56bc7207ef7ce806f37df72cb94c0ad5c37"
 dependencies = [
  "crc32fast",
  "flate2",
