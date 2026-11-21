@@ -143,7 +143,10 @@ thread_local! {
 fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
     let atoms = atoms.into_atoms();
     if let Some(rows) = ROWS.get() {
-        ROWS.set(Some(rows.with((atoms.text().as_deref(), egui::TextStyle::Button.resolve(ui.style())))));
+        // The font a button draws a plain name in: the style's font override, else its text style
+        // override, else the button text style.
+        let font = egui::FontSelection::Default.resolve_with_fallback(ui.style(), egui::TextStyle::Button.into());
+        ROWS.set(Some(rows.with((atoms.text().as_deref(), font))));
     }
     let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
     if let Some(opening) = OPENING.get() {
@@ -387,7 +390,10 @@ fn combo_list<R>(ui: &Ui, button: &Response, list: impl FnOnce(&mut Ui) -> R) ->
     let remeasure_key = id.with("remeasure");
     let remeasure = ctx.data_mut(|d| d.remove_temp::<bool>(remeasure_key)).unwrap_or(false);
     let open_last_pass = ctx.read_response(id).is_some();
-    if popup.get_expected_size().is_some_and(|size| open_last_pass && size.x > screen.width()) {
+    // The pass that measures again lays the list out with its names in full. The size from the last
+    // pass is of the list narrowed to the window, so it does not count, even when the window has
+    // narrowed since.
+    if !remeasure && popup.get_expected_size().is_some_and(|size| open_last_pass && size.x > screen.width()) {
         // The first measurement is kept: later ones are of the list already narrowed.
         ctx.data_mut(|d| {
             if d.get_temp::<f32>(too_wide_key).is_none() {
