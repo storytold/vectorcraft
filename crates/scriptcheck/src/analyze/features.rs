@@ -287,6 +287,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `(` after a name: a call.
     fn call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
+        // `doc['exportVariables'](f)`: a document method named by a string literal in brackets.
+        if is(h0, "]")
+            && is(h2, "[")
+            && let Some(name) = h1.filter(|s| s.kind == T::Str)
+            && catalog::DOM_FILE_WRITES.contains(&unquote(name.text, 32).as_str())
+        {
+            self.acc.feature(FeatureId::FileWrite, line);
+            self.acc.outside(OutsideId::FilesWritten, line, None);
+            return;
+        }
         let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
         let n = callee.text;
         if is(h1, ".") {

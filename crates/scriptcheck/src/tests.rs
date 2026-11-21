@@ -538,6 +538,21 @@ fn export_variables_writes_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3][..])]);
 }
 
+/// `exportVariables` called with its name as a string literal in brackets writes the file too;
+/// reading the method without calling it does not.
+#[test]
+fn export_variables_in_brackets_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['importVariables'](f);\n",
+        "app.activeDocument[\"exportVariables\"](f);\n",
+        "var d = app.activeDocument; d['exportVariables'] (f);\n",
+        "var n = d['exportVariables'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]
