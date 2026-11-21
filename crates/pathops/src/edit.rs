@@ -1,7 +1,7 @@
 //! Object → Path commands: Simplify, Smooth, Remove redundant points, Add Anchor Points, Average,
 //! Join, Split Into Grid.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use kurbo::{CubicBez, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Rect, Vec2};
 use vectorcraft_geom::path::measured_arclen;
@@ -128,6 +128,8 @@ const START_TIE: f64 = 1e-6;
 /// the point of `orig` nearest `p`, the first such point in its order. Sorts after every finite place
 /// when there is none.
 fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
+    #[cfg(test)]
+    tests::count_places();
     let mut best: Option<(f64, usize, f64)> = None;
     for j in 0..orig.anchors.len() {
         let hit = orig.segment(j).nearest(p, 1e-9);
@@ -140,11 +142,14 @@ fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
 
 /// Of the candidates (distance, point, value), the value of the nearest, with a finite distance:
 /// of those within [`START_TIE`] of each other, the one whose point is earliest along `orig` from
-/// its first anchor, then the first given.
+/// its first anchor, then the first given. Each distinct point is placed along `orig` once.
 fn earliest_nearest<T>(candidates: impl IntoIterator<Item = (f64, Point, T)>, orig: &SubPath) -> Option<T> {
     // (distance, place along `orig` once a tie needs it, point, value)
     type Best<T> = (f64, Option<(usize, f64)>, Point, T);
     let mut best: Option<Best<T>> = None;
+    // Places along `orig` by the bits of the point, so many ties at one point search `orig` once.
+    let mut placed: HashMap<[u64; 2], (usize, f64)> = HashMap::new();
+    let mut place = |p: Point| *placed.entry([p.x.to_bits(), p.y.to_bits()]).or_insert_with(|| place_along(orig, p));
     for (d, p, x) in candidates {
         if !d.is_finite() {
             continue;
@@ -152,10 +157,10 @@ fn earliest_nearest<T>(candidates: impl IntoIterator<Item = (f64, Point, T)>, or
         match &mut best {
             None => best = Some((d, None, p, x)),
             Some((bd, bplace, bp, _)) if (d - *bd).abs() <= START_TIE => {
-                let held = *bplace.get_or_insert_with(|| place_along(orig, *bp));
-                let place = place_along(orig, p);
-                if place.0 < held.0 || (place.0 == held.0 && place.1 < held.1) {
-                    best = Some((d, Some(place), p, x));
+                let held = *bplace.get_or_insert_with(|| place(*bp));
+                let at = place(p);
+                if at.0 < held.0 || (at.0 == held.0 && at.1 < held.1) {
+                    best = Some((d, Some(at), p, x));
                 }
             }
             Some((bd, ..)) if d < *bd => best = Some((d, None, p, x)),
@@ -1531,6 +1536,31 @@ mod tests {
 
     pub(super) fn count_moves(n: usize) {
         MOVES.set(MOVES.get() + n);
+    }
+
+    std::thread_local! {
+        /// Calls of [`place_along`], each a search of every segment of the path before the refit.
+        static PLACES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    pub(super) fn count_places() {
+        PLACES.set(PLACES.get() + 1);
+    }
+
+    /// Candidates tied at one point are placed along the old path once, not once each, and the first
+    /// given still wins the tie.
+    #[test]
+    fn tied_candidates_at_one_point_are_placed_once() {
+        let orig = SubPath::new(
+            vec![Anchor::corner(Point::new(0.0, 0.0)), Anchor::corner(Point::new(100.0, 0.0)), Anchor::corner(Point::new(100.0, 100.0))],
+            true,
+        );
+        let candidates = (0..1000).map(|i| (0.0, Point::new(0.0, 0.0), i));
+        PLACES.set(0);
+        let got = earliest_nearest(candidates, &orig);
+        let places = PLACES.get();
+        assert_eq!(got, Some(0));
+        assert_eq!(places, 1, "searches of the old path for 1000 candidates at one point");
     }
 
     /// A subpath of `n` anchors from `seed`: corners, smooth points and points with one handle.

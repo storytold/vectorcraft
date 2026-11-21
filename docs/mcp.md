@@ -7116,7 +7116,7 @@ than 65,536 samples at that tolerance stays as it is, and so does a segment afte
 limits the lines can be farther than `tolerance` from the segment. A closed path keeps its start, where its dashes
 begin: it starts at its old first anchor when the refit keeps an anchor there, otherwise at a new anchor where the refit
 passes nearest that point when the result with that anchor still has fewer anchors than the path had, and otherwise at
-the refit's anchor nearest that point. It runs the same way round as before. With `level` or `auto`, the reply also has the `level` used:
+the refit's anchor nearest that point. It runs the same way around as before. With `level` or `auto`, the reply also has the `level` used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.simplify","params":{"auto":true}}}
