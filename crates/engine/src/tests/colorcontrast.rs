@@ -899,6 +899,9 @@ fn a_fix_passes_as_the_canvas_paints_it() {
     let painted = fix.to_rgb_uncalibrated().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() / 255.0);
     let got = vectorcraft_color::wcag::contrast_ratio(painted, [1.0; 3]);
     assert!(got >= 4.5, "{fix:?} paints as {painted:?}: {got}");
+    // The fix is the closest one: the gray one 8-bit step lighter fails.
+    let lighter = painted.map(|v| (v + 1.0 / 255.0).min(1.0));
+    assert!(vectorcraft_color::wcag::contrast_ratio(lighter, [1.0; 3]) < 4.5, "{fix:?} paints as {painted:?}");
     let back = s.execute("color.contrast", &json!({"color": r["fix"]["aa"], "against": "#ffffff"})).unwrap();
     assert!((4.5..4.57).contains(&ratio(&back)), "{back}");
 }

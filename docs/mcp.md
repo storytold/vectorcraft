@@ -698,7 +698,7 @@ box, `contrastFor` (`normalText`, `largeText` or `graphics`, which has AA only) 
 `contrastBackground` (a color, or `null` for the color behind the selection) pins the background it measures against,
 as `color.contrast` below answers it. With the row shown, the wheel's square and the box's field draw lines where the
 color picked there meets AA (solid) and AAA (dashed) for the category, and when the color fails a level, a chip at the
-end of the row shows `color.contrast`'s `fix` for the first level it fails; a click applies it.
+end of the row shows `color.contrast`'s `fix` for the first level it fails; a click, or Enter while the chip has the focus, applies it.
 `{"documentColors": true}` shows the row the panel menu's Show Document Colors adds
 under the wheel or the box. The command returns `{view, channel, sliders, gamut, harmony, harmonyRule, contrast, contrastFor,
 contrastBackground, vision, documentColors}`, and the settings are kept with the preferences.

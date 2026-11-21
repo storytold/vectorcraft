@@ -816,7 +816,7 @@ type Bands = Vec<(f32, FieldPoint, FieldPoint)>;
 /// field coordinates. The field is sampled on a grid of `n` + 1 columns and rows, and each cell
 /// whose corners fall on both sides gets a segment between the crossings on its edges, placed by
 /// bisection (marching squares; a cell with two opposite corners passing is split by its center).
-/// With `bands`, around a failing sample higher than its neighbors in a column or a row, the highest
+/// With `narrow`, around a failing sample higher than its neighbors in a column or a row, the highest
 /// ratio is looked for, so a passing band narrower than the samples gets its two edges too, joined
 /// from column to column or from row to row. Segments that share an end are joined into one
 /// polyline.
