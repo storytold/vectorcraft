@@ -32,6 +32,33 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     });
 }
 
+/// Panel memory for Selection Only. `docinfo-sel` is the earlier key; a value stored under
+/// `docinfo-selection-only` wins, and the menu writes both.
+const SELECTION_ONLY_KEY: &str = "docinfo-selection-only";
+const SELECTION_ONLY_LEGACY: &str = "docinfo-sel";
+
+fn selection_only(ctx: &egui::Context) -> bool {
+    ctx.data(|d| {
+        let current = egui::Id::unique(("panel-state", SELECTION_ONLY_KEY));
+        if let Some(on) = d.get_temp::<bool>(current) {
+            return on;
+        }
+        d.get_temp::<bool>(egui::Id::unique(("panel-state", SELECTION_ONLY_LEGACY))).unwrap_or(false)
+    })
+}
+
+fn set_selection_only(ctx: &egui::Context, on: bool) {
+    set_pstate(ctx, SELECTION_ONLY_KEY, on);
+    set_pstate(ctx, SELECTION_ONLY_LEGACY, on);
+}
+
+fn no_selection(app: &VectorcraftApp) -> bool {
+    match app.session.active() {
+        Some(st) => st.selection.objects.is_empty(),
+        None => true,
+    }
+}
+
 /// `document.info` with its categories, fetched again only when the document, the scope or the
 /// artboards the Artboard tool has selected change.
 fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
@@ -48,13 +75,16 @@ fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel_only: bool = pstate(ui.ctx(), "docinfo-sel");
+    let sel_only = selection_only(ui.ctx());
     let category: String = pstate(ui.ctx(), "docinfo-category");
     let Some(i) = info(app, ui.ctx(), sel_only) else {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
     egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
+        if sel_only && no_selection(app) {
+            widgets::dim_label(ui, tl!("(No selection)"));
+        }
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
         for (n, s) in shown.enumerate() {
@@ -310,9 +340,9 @@ pub(crate) fn save_report(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel: bool = pstate(ui.ctx(), "docinfo-sel");
+    let sel = selection_only(ui.ctx());
     if menu_item(ui, tl!("Selection Only"), true, sel) {
-        set_pstate(ui.ctx(), "docinfo-sel", !sel);
+        set_selection_only(ui.ctx(), !sel);
     }
     ui.separator();
     let category: String = pstate(ui.ctx(), "docinfo-category");
@@ -731,5 +761,81 @@ mod tests {
         // A full grid shows its rows and columns alone; an unknown kind is shown as `document.info` gives it.
         assert_eq!(in_lang("de", &json!({"type": "grid", "rows": 1, "cols": 3, "instances": 3})), "Rasterwiederholung, 1 Zeile × 3 Spalten");
         assert_eq!(repeat_value(&json!({"type": "spiral", "instances": 2})), None);
+    }
+
+    /// Objects rows the panel paints with Selection Only `on`, the Objects category shown.
+    fn objects_panel(app: &mut VectorcraftApp, on: bool) -> String {
+        crate::tests_labels::painted_text(app, |app, ui| {
+            set_selection_only(ui.ctx(), on);
+            set_pstate(ui.ctx(), "docinfo-category", "objects".to_string());
+            show(app, ui);
+        })
+    }
+
+    /// With Selection Only off, Objects counts every object in the document.
+    #[test]
+    fn test_doc_info_counts_entire_document() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 80, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Hi"})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        let text = objects_panel(&mut app, false);
+        assert!(text.contains("Paths\n2\n") && text.contains("Text Objects\n1\n"), "{text}");
+        assert!(!text.contains("(No selection)"), "{text}");
+    }
+
+    /// Selection Only counts the selected object and what it holds, and an empty selection says so.
+    #[test]
+    fn test_doc_info_selection_only_toggles_and_filters_counts() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let path = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap()["id"].clone();
+        let text_id = app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Hi"})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [text_id]})).unwrap();
+        let text = objects_panel(&mut app, true);
+        assert!(text.contains("Text Objects\n1\n") && !text.contains("Paths\n"), "the selected type only: {text}");
+        app.session.execute("select.set", &json!({"ids": [path]})).unwrap();
+        let path_only = objects_panel(&mut app, true);
+        assert!(path_only.contains("Paths\n1\n") && !path_only.contains("Text Objects\n"), "the selected path only: {path_only}");
+        app.session.execute("select.none", &json!({})).unwrap();
+        let empty = objects_panel(&mut app, true);
+        assert!(empty.contains("(No selection)") && !empty.contains("Paths\n") && !empty.contains("Text Objects\n"), "{empty}");
+    }
+
+    /// The panel menu's Selection Only item stores `docinfo-selection-only` and checks itself.
+    #[test]
+    fn test_doc_info_panel_menu_toggles_state() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let click = |app: &mut VectorcraftApp| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(280.0, 800.0));
+            let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| menu(app, ui));
+                out.textures_delta.clear();
+                crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+            };
+            let labels = frame(app, vec![]);
+            let at = labels
+                .iter()
+                .find(|(t, _)| t.trim().trim_start_matches('✓').trim() == "Selection Only")
+                .map(|(_, r)| r.center())
+                .unwrap_or_else(|| panic!("no Selection Only in {labels:?}"));
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+            frame(app, vec![egui::Event::PointerMoved(at), button(true)]);
+            frame(app, vec![button(false)]);
+        };
+        set_selection_only(&ctx, false);
+        assert!(!selection_only(&ctx));
+        click(&mut app);
+        assert!(selection_only(&ctx));
+        assert!(pstate::<bool>(&ctx, SELECTION_ONLY_KEY));
+        click(&mut app);
+        assert!(!selection_only(&ctx));
+        assert!(!pstate::<bool>(&ctx, SELECTION_ONLY_KEY));
     }
 }
