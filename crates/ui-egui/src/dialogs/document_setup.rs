@@ -322,9 +322,9 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
             }
             if let Some(c) = colour {
-                ui.painter().rect_filled(chip, 2.0, crate::panels::c32(&c));
+                ui.painter().rect_filled(chip, t.cr_small(), crate::panels::c32(&c));
             }
-            ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+            ui.painter().rect_stroke(chip, t.cr_small(), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
             if resp.has_focus() {
                 ui.painter().rect_stroke(chip.expand(2.0), 3.0, ui.visuals().selection.stroke, egui::StrokeKind::Outside);
             }
