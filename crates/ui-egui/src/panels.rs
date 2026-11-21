@@ -1,7 +1,7 @@
 //! Panels. Each panel reads engine state and acts only through `app.run(...)` (slider drags
 //! preview through the session's interaction so one drag is one undo step).
 //!
-//! Every icon panel has a body (`show_icon_panel`) and a panel (≡) menu (`panel_menu`).
+//! Every icon panel has a body (`show_icon_panel`); its panel (≡) menu rows come from `panel_rows`.
 
 pub mod actions;
 pub mod align;
@@ -64,7 +64,10 @@ use vectorcraft_engine::inspect::StrokeMixed;
 use vectorcraft_geom::shapes::CornerKind;
 
 use crate::theme::Tokens;
-use crate::widgets::{Live, dim_label};
+use craft_ui::menu::PanelRow;
+use craft_ui::runtime::commands::CommandStates;
+
+use crate::widgets::dim_label;
 use crate::{VectorcraftApp, icons};
 
 /// The first selected node, as the `Arc` the document holds, if any. It does not change with later
@@ -221,6 +224,21 @@ pub(crate) fn selection_len(app: &VectorcraftApp) -> usize {
     app.session.active().map(|d| d.selection.len()).unwrap_or(0)
 }
 
+/// Whether the panel part `key` is hidden by its panel's menu.
+// PLAN: assumed `UiState::hidden_parts` is a set of part keys (op.A3)
+pub(crate) fn part_hidden(app: &VectorcraftApp, key: &str) -> bool {
+    app.ui.hidden_parts.contains(key)
+}
+
+/// Hides or shows the panel part `key`.
+pub(crate) fn set_part_hidden(app: &mut VectorcraftApp, key: &'static str, on: bool) {
+    if on {
+        app.ui.hidden_parts.insert(key.to_string());
+    } else {
+        app.ui.hidden_parts.remove(key);
+    }
+}
+
 pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     match id {
         "swatches" => swatches::show(app, ui),
@@ -284,58 +302,88 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     }
 }
 
-/// Items of a panel's (≡) menu. Unimplemented Illustrator items are listed disabled. False for a
-/// panel without items of its own.
-pub fn panel_menu_items(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) -> bool {
-    match id {
-        "swatches" => swatches::menu(app, ui),
-        "color" => color::menu(app, ui),
-        "colorGuide" => color_guide::menu(app, ui),
-        "stroke" => stroke::menu(app, ui),
-        "transparency" => transparency::menu(app, ui),
-        "appearance" => appearance::menu(app, ui),
-        "graphicStyles" => graphic_styles::menu(app, ui),
-        "align" => align::menu(app, ui),
-        "pathfinder" => pathfinder::menu(app, ui),
-        "transform" => transform::menu(app, ui),
-        "history" => history::menu(app, ui),
-        "info" => info::menu(app, ui),
-        "separations" => separations::menu(app, ui),
-        "artboards" => artboards::menu(app, ui),
-        "gradient" => gradient::menu(app, ui),
-        "character" => character::menu(app, ui),
-        "paragraph" => paragraph::menu(app, ui),
-        "glyphs" => glyphs::menu(app, ui),
-        "navigator" => navigator::menu(app, ui),
-        "brushes" => brushes::menu(app, ui),
-        "symbols" => symbols::menu(app, ui),
-        "patternOptions" => pattern_options::menu(app, ui),
-        "imageTrace" => image_trace::menu(app, ui),
-        "openType" => opentype::menu(app, ui),
-        "docInfo" => doc_info::menu(app, ui),
-        "charStyles" => text_styles::menu(app, ui, text_styles::Kind::Char),
-        "paraStyles" => text_styles::menu(app, ui, text_styles::Kind::Para),
-        "magicWand" => magic_wand::menu(app, ui),
-        "tabs" => tabs::menu(app, ui),
-        "libraries" => libraries::menu(app, ui),
-        flattener_preview::ID => flattener_preview::menu(app, ui),
-        "attributes" => attributes::menu(app, ui),
-        svg_interactivity::ID => svg_interactivity::menu(app, ui),
-        "colorThemes" => color_themes::menu(app, ui),
-        color_wheel::ID => color_wheel::menu(app, ui),
-        "layers" => layers::menu(app, ui),
-        links::ID => links::menu(app, ui),
-        asset_export::ID => asset_export::menu(app, ui),
-        css_properties::ID => css_properties::menu(app, ui),
-        variables::ID => variables::menu(app, ui),
-        script_console::ID => script_console::menu(app, ui),
-        retype::ID => retype::menu(app, ui),
-        "actions" => actions::menu(app, ui),
-        crate::addons::packaging::ID => crate::addons::packaging::panel_menu(app, ui),
-        id if library_panel::parse(id).is_some() => library_panel::menu(app, ui, id),
-        _ => return false,
+/// A panel's menu: its rows and the states of its commands, both from the panel's module.
+struct PanelMenu {
+    id: &'static str,
+    rows: fn(&VectorcraftApp) -> Vec<PanelRow>,
+    states: fn(&VectorcraftApp, &mut CommandStates),
+}
+
+/// Lists a panel's menu from its module's `menu_rows` and `menu_states`.
+// PLAN: `text_styles` is assumed to take its `Kind`; the two style panels go through closures.
+macro_rules! menu {
+    ($id:expr, $module:ident) => {
+        PanelMenu { id: $id, rows: $module::menu_rows, states: $module::menu_states }
+    };
+    ($id:expr, $module:ident, $kind:expr) => {
+        PanelMenu { id: $id, rows: |app| $module::menu_rows(app, $kind), states: |app, states| $module::menu_states(app, states, $kind) }
+    };
+}
+
+/// Every panel with a menu of its own.
+static PANEL_MENUS: &[PanelMenu] = &[
+    menu!("swatches", swatches),
+    menu!("color", color),
+    menu!("colorGuide", color_guide),
+    menu!("stroke", stroke),
+    menu!("transparency", transparency),
+    menu!("appearance", appearance),
+    menu!("graphicStyles", graphic_styles),
+    menu!("align", align),
+    menu!("pathfinder", pathfinder),
+    menu!("transform", transform),
+    menu!("history", history),
+    menu!("info", info),
+    menu!("separations", separations),
+    menu!("artboards", artboards),
+    menu!("gradient", gradient),
+    menu!("character", character),
+    menu!("paragraph", paragraph),
+    menu!("glyphs", glyphs),
+    menu!("navigator", navigator),
+    menu!("brushes", brushes),
+    menu!("symbols", symbols),
+    menu!("patternOptions", pattern_options),
+    menu!("imageTrace", image_trace),
+    menu!("openType", opentype),
+    menu!("docInfo", doc_info),
+    menu!("charStyles", text_styles, text_styles::Kind::Char),
+    menu!("paraStyles", text_styles, text_styles::Kind::Para),
+    menu!("magicWand", magic_wand),
+    menu!("tabs", tabs),
+    menu!("libraries", libraries),
+    menu!(flattener_preview::ID, flattener_preview),
+    menu!("attributes", attributes),
+    menu!(svg_interactivity::ID, svg_interactivity),
+    menu!("colorThemes", color_themes),
+    menu!(color_wheel::ID, color_wheel),
+    menu!("layers", layers),
+    menu!(links::ID, links),
+    menu!(asset_export::ID, asset_export),
+    menu!(css_properties::ID, css_properties),
+    menu!(variables::ID, variables),
+    menu!(script_console::ID, script_console),
+    menu!(retype::ID, retype),
+    menu!("actions", actions),
+    menu!(crate::addons::packaging::ID, packaging_menu),
+];
+
+use crate::addons::packaging as packaging_menu;
+
+/// The rows of panel `id`'s (≡) menu; none for a panel without a menu of its own.
+pub(crate) fn panel_rows(app: &VectorcraftApp, id: &str) -> Vec<PanelRow> {
+    if library_panel::parse(id).is_some() {
+        return library_panel::menu_rows(app, id);
     }
-    true
+    PANEL_MENUS.iter().find(|m| m.id == id).map_or_else(Vec::new, |m| (m.rows)(app))
+}
+
+/// Sets the states of every panel menu's commands, and of the Contextual Task Bar's.
+pub(crate) fn panel_menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    for menu in PANEL_MENUS {
+        (menu.states)(app, states);
+    }
+    crate::canvas::task_bar::menu_states(app, states);
 }
 
 /// The ≡ button drawn into `rect` that opens a panel menu.
@@ -347,29 +395,6 @@ pub(crate) fn menu_button(ui: &mut Ui, id: &str, rect: Rect) -> egui::Response {
     resp.on_hover_text(tl!("Panel menu"))
 }
 
-/// The ≡ panel-menu button drawn into `rect` (the right end of a panel's title/tab strip).
-pub fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, rect: Rect) {
-    let resp = menu_button(ui, id, rect);
-    egui::Popup::menu(&resp).show(|ui| {
-        crate::widgets::menu_scroll(ui, |ui| {
-            crate::widgets::menu_min_width(ui, 220.0);
-            if panel_menu_items(app, ui, id) {
-                ui.separator();
-            }
-            // The panel floats out of the dock or goes back in, as dragging its tab does.
-            let (label, cmd) = if crate::panel_docking::floats(&app.ui, id) {
-                (tl!("Dock Panel"), "window.panel.dock")
-            } else {
-                (tl!("Float Panel"), "window.panel.float")
-            };
-            if crate::widgets::menu_item(ui, label, true, false)
-                && let Err(e) = app.run(cmd, json!({ "panel": id }))
-            {
-                app.ui.status = e;
-            }
-        });
-    });
-}
 
 pub fn libraries(app: &mut VectorcraftApp, ui: &mut Ui) {
     libraries::show(app, ui);
@@ -577,6 +602,17 @@ fn paint_popover(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Where a live control's gesture stands this pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Live {
+    /// No gesture this pass.
+    Idle,
+    /// The value is being dragged.
+    Dragging,
+    /// The drag ended this pass.
+    Released,
+}
+
 /// Run `cmd` live: while dragging, preview on top of an interaction snapshot; on release, commit
 /// it as one undo step. Falls back to a plain run when no document is open.
 pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params: Value, phase: Live) {
@@ -645,25 +681,6 @@ pub(crate) fn set_view(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Str
     Ok(json!({ "panel": panel, "view": view }))
 }
 
-/// Whether the panel whose state is `key` has the keyboard for its rows (Delete and Backspace
-/// remove its highlighted rows): it took it with a click on a row ([`set_row_keys`]) and kept it in
-/// every frame since, so it lapses when the panel isn't drawn.
-pub(crate) fn has_row_keys(ctx: &egui::Context, key: &str) -> bool {
-    pstate::<Option<u64>>(ctx, key).is_some_and(|pass| pass + 1 >= ctx.cumulative_pass_nr())
-}
-
-/// Take (`on`) or give up the keyboard for the rows of the panel whose state is `key`, for this
-/// frame and the next ([`has_row_keys`]).
-pub(crate) fn set_row_keys(ctx: &egui::Context, key: &str, on: bool) {
-    set_pstate(ctx, key, on.then(|| ctx.cumulative_pass_nr()));
-}
-
-/// Whether a plain Delete or Backspace belongs to a panel's rows this frame, the Layers or the
-/// Appearance panel's after a click on one of them, so [`crate::shortcuts::handle`] leaves it to the
-/// panel instead of running Edit › Clear on the selected art.
-pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
-    has_row_keys(ctx, layers::ROW_KEYS) || has_row_keys(ctx, appearance::ROW_KEYS)
-}
 
 /// How near a scrolled list's top or bottom edge a drag scrolls it ([`scroll_at_edges`]).
 const DRAG_SCROLL_EDGE: f32 = 28.0;

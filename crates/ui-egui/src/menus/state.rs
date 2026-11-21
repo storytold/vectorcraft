@@ -90,7 +90,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
             let toolbar = p.get("toolbar").and_then(Value::as_str);
-            crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
+            crate::toolbar::strips(app, toolbar).iter().any(|strip| strip.contains(&tool))
         }
         "window.taskBar" => app.ui.task_bar,
         "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
@@ -308,12 +308,9 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
             app.session.active().is_some()
         }
-        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::pdf_summary_open(app),
-        "ui.importSvgFilter" => {
-            app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
-        }
+        "ui.importSvgFilter" => app.session.active().is_some(),
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
-        "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
+        "ui.findFontsInFolder" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" | "ui.colorGroupOptions" => app.session.active().is_some(),
         "ui.graphicStyleOptions" | "ui.charStyleOptions" | "ui.paraStyleOptions" | "ui.newCharStyle" | "ui.newParaStyle" => {
             app.session.active().is_some()
@@ -355,13 +352,13 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.smoothAuto" => crate::dialogs::smooth_slider::showing(app),
         "ui.recolorUndo" => crate::dialogs::recolor::can_step(app, true),
         "ui.recolorRedo" => crate::dialogs::recolor::can_step(app, false),
-        "ui.dialogReset" => crate::dialogs::can_reset(app),
+        "ui.dialogReset" => crate::dialogs::host::can_reset_top(app),
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "links.copyInfo" => !crate::panels::links::selected_rows_of_app(app).is_empty(),
         "ui.relinkDialog" => app.services.pick_open.is_some() && (selected_image(app, |_| true) || selected_placed(app)),
-        "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
+        "ui.findLinksInFolder" => app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
         "ui.epsOptionsDialog" | "ui.hpglOptionsDialog" => app.session.active().is_some(),

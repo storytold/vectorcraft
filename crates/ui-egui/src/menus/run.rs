@@ -1,5 +1,5 @@
 use super::bar::home_key;
-use super::invoke::menu_dialog;
+use super::invoke::open_menu_dialog;
 use super::slots::{recent_readable, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::state::{checked, selected_image};
 use super::ui_commands::UI_COMMANDS;
@@ -1057,7 +1057,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
         "ui.recolorUndo" => crate::dialogs::recolor::step(app, true),
         "ui.recolorRedo" => crate::dialogs::recolor::step(app, false),
-        "ui.dialogReset" => crate::dialogs::reset(app),
+        "ui.dialogReset" => crate::dialogs::host::reset_top(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
         "ui.svgFilterDialog" => crate::dialogs::svg_filter::open(app, p),
@@ -1069,13 +1069,9 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
             crate::canvas::apply_requests(app, r);
             match s("command").as_deref() {
                 Some(c) if crate::dialogs::envelope::opens(c) => crate::dialogs::envelope::open(app, c),
-                c => match c.and_then(|c| menu_dialog(app, c)) {
-                    Some((kind, fields)) => {
-                        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
-                        Ok(Value::Null)
-                    }
-                    None => Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into()),
-                },
+                c => c
+                    .and_then(|c| open_menu_dialog(app, c))
+                    .unwrap_or_else(|| Err("`command` must be a command whose menu item opens a dialog (see ui.menuDialog)".into())),
             }
         }
         "ui.widthPointEdit" => crate::dialogs::width_point::open(app, p),
@@ -1089,7 +1085,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
-        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::save_pdf_summary(app, p),
+
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
             Ok(Value::Null)

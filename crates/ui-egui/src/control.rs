@@ -16,12 +16,8 @@
 //! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
 //!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
-//! - `ui.dialog.set {field, value}` or `{fields: [{field, value}…]}` (all or none; setting a field
-//!   the dialog does not read is an error that lists its fields: [`crate::dialogs::accepts_field`];
-//!   a `__` field other than the controls of the dialog's kind is an error too, so a request cannot
-//!   change the command, targets or file the dialog's OK acts on: [`crate::dialogs::protected_field`];
-//!   `action: confirm | cancel` then confirms or cancels that dialog in the same request and replies
-//!   `{dialog, result}`) / `ui.dialog.confirm` / `ui.dialog.cancel`
+//! - `ui.dialog.set` / `ui.dialog.confirm` / `ui.dialog.cancel`: answered by
+//!   `craft_automation::dialogs::dialog_method` for the dialog asked for (`dialog`, default `"top"`)
 //! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
 //!   comes back as `pngBase64` as well)
 //! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
@@ -66,45 +62,6 @@ fn input_count(p: &Value, key: &str, default: u64, max: u64) -> Result<usize, St
     }
     // Preserve legacy zero behaviour: both a zero count and zero steps still perform once.
     usize::try_from(n.max(1)).map_err(|_| format!("`{key}` is out of range"))
-}
-
-/// The fields one `ui.dialog.set` stores, in order: `{field, value?}`, or `{fields: [{field, value?}…]}`.
-/// Every item is checked before any is stored, so a refused item leaves the dialog as it was.
-fn dialog_fields(p: &Value) -> Result<Vec<(String, Value)>, String> {
-    let Some(list) = p.get("fields") else {
-        let f = p.get("field").and_then(Value::as_str).ok_or("missing `field`")?;
-        return Ok(vec![(f.to_string(), p.get("value").cloned().unwrap_or(Value::Null))]);
-    };
-    if p.get("field").is_some() {
-        return Err("give `field` or `fields`, not both".into());
-    }
-    let list = list.as_array().ok_or("`fields` must be a list of {field, value?}")?;
-    if list.len() > MAX_DIALOG_FIELDS {
-        return Err(format!("`fields` holds {} items; at most {MAX_DIALOG_FIELDS}", list.len()));
-    }
-    list.iter()
-        .enumerate()
-        .map(|(i, item)| {
-            let f = item.get("field").and_then(Value::as_str).ok_or_else(|| format!("fields {i}: missing string `field`"))?;
-            Ok((f.to_string(), item.get("value").cloned().unwrap_or(Value::Null)))
-        })
-        .collect()
-}
-
-/// What `ui.dialog.set {action}` does with the dialog once its fields are set.
-enum DialogAnswer {
-    Confirm,
-    Cancel,
-}
-
-/// The `action` of a `ui.dialog.set`: none, `confirm` or `cancel`. It is checked before any field is set.
-fn dialog_action(p: &Value) -> Result<Option<DialogAnswer>, String> {
-    match p.get("action") {
-        None => Ok(None),
-        Some(v) if v == "confirm" => Ok(Some(DialogAnswer::Confirm)),
-        Some(v) if v == "cancel" => Ok(Some(DialogAnswer::Cancel)),
-        Some(_) => Err("`action` must be confirm or cancel".into()),
-    }
 }
 
 fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), String> {
@@ -253,7 +210,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     // the layout.
     if let Some(fields) = ui.as_object_mut() {
         fields.remove("floating_panels");
-        leave_out_unreadable_paths(app, fields);
+        leave_out_unreadable_paths(fields);
     }
     json!({
         "scriptRunning": app.session.script_running(),
@@ -263,20 +220,13 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "ui": ui,
         // Not saved with the UI state, so not in `ui`: 0 normal … 3 Presentation Mode.
         "screenMode": app.ui.screen_mode,
-        // The Contextual Task Bar: pinned (not saved either) and where it shows.
-        "taskBar": {
-            "pinned": app.ui.task_bar_place.pinned,
-            "rect": crate::canvas::task_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
-        },
-        // The Quick Pen toolbar: pinned (not saved either) and where it shows.
-        "quickPenToolbar": {
-            "pinned": app.ui.quick_pen_bar_place.pinned,
-            "rect": crate::canvas::quick_pen_bar_rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
-        },
-        // The Free Transform tool's widget, where it shows.
-        "freeTransformWidget": crate::free_transform::rect(ctx).map(|r| json!([r.left(), r.top(), r.width(), r.height()])),
+        // The Contextual Task Bar: pinned (not saved either); `ui.locate` finds where it shows.
+        "taskBar": {"pinned": app.ui.task_bar_place.pinned},
+        // The Quick Pen toolbar: pinned (not saved either); `ui.locate` finds where it shows.
+        "quickPenToolbar": {"pinned": app.ui.quick_pen_bar_place.pinned},
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
-        "canvasRect": app.canvas_rect.map(|c| json!([c.left(), c.top(), c.width(), c.height()])),
+        // PLAN: assumed `CanvasView::rect: egui::Rect` from `app.canvas_view()` (canvas A1)
+        "canvasRect": app.canvas_view().map(|v| json!([v.rect.left(), v.rect.top(), v.rect.width(), v.rect.height()])),
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
@@ -316,10 +266,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "placing": app.placing.pending.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
         // The screen color sampler is shown, waiting for the person at the computer
         // (`ui.sampleScreenColor`).
-        "screenSampler": app.screen_sampler.is_some(),
+        // PLAN: assumed `ScreenPick::busy(&self) -> bool` on `app.screen_pick` (shell C2)
+        "screenSampler": app.screen_pick.busy(),
         // A native file dialog open off the UI thread (`open`, `place`, `save`, `folder`), waiting
         // for the person at the computer: what asked for it runs again when it answers.
-        "fileDialog": app.picks.waiting_kind(),
+        // PLAN: assumed `file_dialog_kind() -> Option<&'static str>` (files-01:77)
+        "fileDialog": app.file_dialog_kind(),
     })
 }
 
@@ -1072,7 +1024,7 @@ fn steps_mut(set: &mut Value) -> impl Iterator<Item = (String, &mut serde_json::
 /// Takes out of the params of a recorded step running `command` the paths the request may not read:
 /// the folder preferences' values [`leave_out_unreadable_pref_steps`] takes out, and what
 /// [`leave_out_unreadable_params`] takes out, each in one pass over the params.
-fn leave_out_unreadable_step(command: &str, params: &mut serde_json::Map<String, Value>) {
+pub(crate) fn leave_out_unreadable_step(command: &str, params: &mut serde_json::Map<String, Value>) {
     leave_out_unreadable_pref_steps(command, params);
     leave_out_unreadable_params(params, ParamsPlace::of(command));
 }
@@ -1151,10 +1103,8 @@ fn leave_out_unreadable_values(v: &mut Value, place: ParamsPlace) {
 
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
 /// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
-/// in recorded actions' steps and in the item an open Insert Menu Item dialog picked, outside the
-/// read root. The file selected in an open JavaScript Files dialog is named as `svgInteractivity.info`
-/// names the active document's linked files. The UI state itself is not changed.
-fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<String, Value>) {
+/// in recorded actions' steps, outside the read root. The UI state itself is not changed.
+fn leave_out_unreadable_paths(ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
         files.retain(|f| f.as_str().is_some_and(readable));
     }
@@ -1176,24 +1126,6 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
         && let Some(Value::Object(fields)) = dialog.get_mut("fields")
     {
         leave_out_unreadable_folders(fields);
-    }
-    // The menu item picked in an open Insert Menu Item dialog, such as a saved proof setup's file.
-    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
-        && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::action_insert_menu_item::KIND)
-        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
-    {
-        let command = fields.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
-        if let Some(Value::Object(params)) = fields.get_mut("params") {
-            leave_out_unreadable_step(&command, params);
-        }
-    }
-    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
-        && dialog.get("kind").and_then(Value::as_str) == Some(crate::dialogs::javascript_files::KIND)
-        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
-        && let Some(Value::String(selected)) = fields.get_mut("selected")
-        && let Some(st) = app.session.active()
-    {
-        *selected = vectorcraft_engine::cmd::links::shown_script(st, selected).into_owned();
     }
 }
 
@@ -1296,7 +1228,6 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
     let outcome = match ran {
         Ok(outcome) => outcome,
         Err(msg) => {
-            app.picks.recover();
             app.session.set_replaying(false);
             err(format!("internal error: {msg} (please report this bug)"))
         }
@@ -1606,59 +1537,18 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             ok(Value::Null)
         }
         "ui.set" => set_ui(app, req),
-        "ui.dialog.set" => match app.ui.dialog.as_mut() {
-            Some(d) => {
-                let fields = match dialog_fields(p) {
-                    Ok(fields) => fields,
-                    Err(e) => return err(e),
-                };
-                let action = match dialog_action(p) {
-                    Ok(action) => action,
-                    Err(e) => return err(e),
-                };
-                // Every field is checked before any is set, so a request sets all of them or none.
-                if let Some((f, _)) = fields.iter().find(|(f, _)| !crate::dialogs::accepts_field(d, f)) {
-                    if crate::dialogs::protected_field(d, f) {
-                        return err(format!("the `{}` dialog cannot set protected field `{f}`", d.kind));
-                    }
-                    let names = crate::dialogs::field_names(d).join(", ");
-                    return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
-                }
-                // Create Object Mosaic converts New Size against the selected image's size as it is now.
-                crate::dialogs::object_mosaic::refresh(app);
-                // In order: a field that sets others (an export preset) goes before the fields after it.
-                // A field that fails leaves the dialog as it was before the request.
-                let before = app.ui.dialog.clone();
-                for (f, value) in fields {
-                    let old = app.ui.dialog.as_ref().and_then(|d| d.fields.get(&f).cloned());
-                    if let Some(d) = app.ui.dialog.as_mut() {
-                        crate::dialogs::set_field(d, f.clone(), value);
-                    }
-                    if let Err(e) = crate::dialogs::field_set(app, &f, old.as_ref()) {
-                        app.ui.dialog = before;
-                        return err(e);
-                    }
-                }
-                let dialog = app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default();
-                // `action` answers the dialog the fields were just set in, within this request.
-                match action {
-                    None => ok(dialog),
-                    Some(DialogAnswer::Confirm) => match crate::dialogs::confirm(app) {
-                        Ok(result) => ok(json!({"dialog": dialog, "result": result})),
-                        Err(e) => err(e),
-                    },
-                    Some(DialogAnswer::Cancel) => {
-                        crate::dialogs::cancel(app);
-                        ok(json!({"dialog": dialog, "result": null}))
-                    }
-                }
+        "ui.dialog.set" | "ui.dialog.confirm" | "ui.dialog.cancel" => {
+            // Create Object Mosaic and Width Point convert against the selection as it is now.
+            crate::dialogs::host::sync(app);
+            // The dialog asked for is `dialog`, the top one when it is missing.
+            let mut params = if p.is_object() { p.clone() } else { json!({}) };
+            if params.get("dialog").is_none_or(Value::is_null) {
+                params["dialog"] = json!("top");
             }
-            None => err("no dialog open"),
-        },
-        "ui.dialog.confirm" => wrap(crate::dialogs::confirm(app)),
-        "ui.dialog.cancel" => {
-            crate::dialogs::cancel(app);
-            ok(Value::Null)
+            // PLAN: assumed `dialog_method(method, &params, &WindowHost, ViewportId) -> Result<Value, String>`
+            // and `WindowHost::of(ctx)` in craft_automation (widgets-02)
+            let host = craft_automation::WindowHost::of(ctx);
+            wrap(craft_automation::dialogs::dialog_method(&req.method, &params, &host, egui::ViewportId::ROOT))
         }
         "ui.resize" => {
             let (w, h) = match coord(p, "width", 1440.0).and_then(|w| Ok((w, coord(p, "height", 900.0)?))) {

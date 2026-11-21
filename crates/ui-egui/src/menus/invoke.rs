@@ -52,55 +52,24 @@ fn queried_dialog(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     })
 }
 
-/// The dialog (kind, fields) the menu item of command `id` opens, as the reference app's does.
-pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Value)> {
-    if let Some(found) = crate::addons::arrange::dialog(app, id) {
-        return Some(found);
+/// Opens the dialog the menu item of command `id` opens, as the reference app's does; `None` when `id`'s
+/// item opens none.
+// PLAN: assumed `object_dialogs::open_from_menu` and `addons::dialogs::open_from_menu` return whether they
+// opened a dialog, and `halftone`, `rearrange_artboards`, `rename_artboards` and `smart_punctuation` each have
+// `CMD` and `open(app) -> Result<Value, String>`.
+pub(super) fn open_menu_dialog(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, String>> {
+    if crate::dialogs::object_dialogs::open_from_menu(app, id) || crate::addons::dialogs::open_from_menu(app, id) {
+        return Some(Ok(Value::Null));
+    }
+    if crate::dialogs::variables::opens(id) {
+        crate::dialogs::variables::open(app, id, None);
+        return Some(Ok(Value::Null));
     }
     Some(match id {
-        // Move opens on the offset moved last and the checkboxes it was last confirmed with.
-        "object.move" => ("move", crate::dialogs::transform::move_fields(app)),
-        "object.rotate" => ("rotate", json!({"angle": 0})),
-        "object.scale" => ("scale", json!({"sx": 100, "sy": 100, "uniform": true})),
-        // Transform Each opens on the values it was last confirmed with (#1732).
-        "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
-        "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
-        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal", "axisAngle": 0})),
-        "path.average" => ("average", json!({"axis": "both"})),
-        // Average & Join opens on the joined anchor chosen last (Corner the first time).
-        "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
-        "path.averageJoin" => ("averageJoin", json!({"to": "corner"})),
-        // Offset Path opens on the values it was last confirmed with.
-        "object.path.offsetPath" if app.ui.offset_path.is_object() => ("offsetPath", app.ui.offset_path.clone()),
-        "object.path.offsetPath" => ("offsetPath", json!({"offset": "10 pt", "joins": "miter", "miterLimit": 4})),
-        // Simplify opens its slider, or the dialog on the fields it was last confirmed with when
-        // "Open this dialog with these settings next time" was ticked.
-        "object.path.simplify" if app.ui.simplify.is_object() => ("simplify", app.ui.simplify.clone()),
-        "object.path.simplify" => (crate::dialogs::simplify_slider::KIND, crate::dialogs::simplify_slider::fields(app)),
-        "object.path.smooth" => (crate::dialogs::smooth_slider::KIND, crate::dialogs::smooth_slider::fields()),
-        "object.path.splitIntoGrid" => {
-            // The grid starts at the size of the selection.
-            let size =
-                app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false)).map_or((0.0, 0.0), |b| (b.width(), b.height()));
-            ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
-        }
-        "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
-        crate::addons::pathtools::set_corners::COMMAND => {
-            (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
-        }
-        crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
-        crate::addons::pathtools::bridge::COMMAND => (crate::addons::pathtools::bridge::KIND, crate::addons::pathtools::bridge::fields()),
-        crate::addons::pathtools::tangent_circle::COMMAND => {
-            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
-        }
-        crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
-        crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
-        crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
-        crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
-        "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
-        "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
-        // Smart Punctuation opens on the fields it was last confirmed with.
-        "type.smartPunctuation" => (crate::dialogs::smart_punctuation::KIND, crate::dialogs::smart_punctuation::fields(app)),
+        crate::dialogs::halftone::CMD => crate::dialogs::halftone::open(app),
+        crate::dialogs::rearrange_artboards::CMD => crate::dialogs::rearrange_artboards::open(app),
+        crate::dialogs::rename_artboards::CMD => crate::dialogs::rename_artboards::open(app),
+        crate::dialogs::smart_punctuation::CMD => crate::dialogs::smart_punctuation::open(app),
         _ => return None,
     })
 }
@@ -139,7 +108,7 @@ pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id
             // in a frame whose keys are not this window's.
             app.drop_unwritten_formats();
         }
-        None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
+        None if id == "select.all" && crate::panels::artboards::selects_all(app) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
 }
@@ -188,9 +157,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     }
     // Params first: some dialogs' fields take a look through the session (Move's last move).
     if p.as_object().is_none_or(|o| o.is_empty())
-        && let Some((kind, fields)) = menu_dialog(app, id)
+        && let Some(opened) = open_menu_dialog(app, id)
     {
-        app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
+        if let Err(e) = opened {
+            app.status(e);
+        }
         return;
     }
     // A plug-in command with parameters asks for them, from its menu item or its shortcut.
@@ -371,7 +342,7 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     if id == "view.rotate" && p.as_object().is_none_or(|o| o.is_empty()) {
         match app.view_mut().map(|v| v.rotation) {
             Some(angle) => {
-                app.ui.dialog = Some(crate::state::Dialog::new("command", json!({"__command": id, "__label": "Rotate View", "angle": angle})));
+                let _ = app.run("ui.paramDialog", json!({"command": id, "label": "Rotate View", "params": {"angle": angle}}));
             }
             None => app.status("no document"),
         }
