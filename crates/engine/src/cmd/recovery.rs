@@ -1038,10 +1038,13 @@ impl RecoveryJob {
         let meta_name = format!("{}{META_EXT}", self.file);
         // The details name the images, so a crash between writing the document and its details
         // would pair the new document with the old copy's images: when the new document has
-        // images the old details don't name, they name both until the new document is in.
-        let old = read_meta(store, &self.file).images;
-        if meta.images.iter().any(|(k, r)| old.get(k).is_none_or(|o| o.blob != r.blob)) {
+        // images the old details don't name, they name both until the new document is in. Likewise
+        // when a script's command changed the document since the old details: they say so first.
+        let old_meta = read_meta(store, &self.file);
+        let old = old_meta.images;
+        if (meta.by_script && !old_meta.by_script) || meta.images.iter().any(|(k, r)| old.get(k).is_none_or(|o| o.blob != r.blob)) {
             let mut both = meta.clone();
+            both.by_script |= old_meta.by_script;
             for (k, r) in old {
                 both.images.entry(k).or_insert(r);
             }
@@ -1503,8 +1506,10 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
         for (blob, data) in &blobs {
             store.write(&format!("{area}/{blob}"), data).map_err(EngineError::Other)?;
         }
-        store.write(&format!("{mine}{DOC_EXT}"), &bytes).map_err(EngineError::Other)?;
+        // The details go first: a crash in between leaves no copy without them (a copy is its
+        // document entry), and the copy in the old area stays whole.
         store.write(&format!("{mine}{META_EXT}"), &meta_bytes).map_err(EngineError::Other)?;
+        store.write(&format!("{mine}{DOC_EXT}"), &bytes).map_err(EngineError::Other)?;
     }
     // The copy's images in its old area go with the area, once no copy is left there.
     store.remove(&format!("{file}{DOC_EXT}")).map_err(EngineError::Other)?;

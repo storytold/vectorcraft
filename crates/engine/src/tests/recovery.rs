@@ -1714,3 +1714,45 @@ fn a_crash_between_a_copys_document_and_its_details_keeps_every_image() {
         assert_eq!(images_of(&s), images, "first copy: {first}");
     }
 }
+
+/// A crash between writing a copy's document and its details, after a script's command changed
+/// the document since the last copy, restores the document as one a script opened.
+#[test]
+fn a_crash_between_a_copys_document_and_its_details_keeps_a_scripts_change() {
+    let store = Arc::new(MemoryStore::default());
+    let mut s = session_in(&store);
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    let source = "vc.run('shape.ellipse', {x: 80, y: 20, width: 20, height: 20});";
+    s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    assert!(s.doc().unwrap().by_script.is_some(), "the script's command changed the document");
+    let doc = vectorcraft_doc::Document::clone(&s.doc().unwrap().doc);
+    s.recovery.set_store(Arc::new(DiesAfterDocument { inner: store.clone(), dead: Default::default() }));
+    assert!(s.execute("file.recovery.save", &json!({})).is_err(), "the details weren't written");
+    drop(s);
+    let mut s = relaunch(&store);
+    assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    let count = |d: &vectorcraft_doc::Document| d.layers.iter().map(|l| l.count()).sum::<usize>();
+    assert_eq!(count(&s.doc().unwrap().doc), count(&doc), "the new document is in");
+    assert!(s.doc().unwrap().by_script.is_some(), "restored as a document a script opened");
+}
+
+/// A crash while a restore moves a copy into the app's own area leaves no copy that a later
+/// restore opens without its details: a script's change is kept.
+#[test]
+fn a_crash_while_a_copy_is_restored_keeps_a_scripts_change() {
+    let store = Arc::new(MemoryStore::default());
+    let mut s = session_in(&store);
+    let source = "vc.run('shape.ellipse', {x: 80, y: 20, width: 20, height: 20});";
+    s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(Arc::new(DiesAfterDocument { inner: store.clone(), dead: Default::default() }));
+    let _ = s.execute("file.recovery.restore", &json!({}));
+    drop(s);
+    let mut s = relaunch(&store);
+    assert!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()) >= 1);
+    for st in s.documents().iter().filter(|st| st.recovered) {
+        assert!(st.by_script.is_some(), "every restored copy keeps the script's change: {}", st.title());
+    }
+}
