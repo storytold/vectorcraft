@@ -7766,6 +7766,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	स्क्रिप्ट के फ़ाइल डायलॉग के लिए `answer` इनमें से एक होना चाहिए: once, always, deny, stop
 @msg	choose a file or folder first, or deny	पहले कोई फ़ाइल या फ़ोल्डर चुनें, या अस्वीकार करें
 @msg	the script file permissions could not be saved: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ सेव नहीं की जा सकीं: {e}
+@msg	the script file permissions could not be read: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ पढ़ी नहीं जा सकीं: {e}
 @msg	this script's file access can be allowed only once	इस स्क्रिप्ट की फ़ाइल पहुँच केवल एक बार दी जा सकती है
 @msg	Only the person at the keyboard can allow a script's file access	किसी स्क्रिप्ट को फ़ाइल पहुँच केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
 @msg	A script is given at most 2,048 files: the files picked after them were left out	किसी स्क्रिप्ट को अधिकतम 2,048 फ़ाइलें दी जाती हैं: उनके बाद चुनी गई फ़ाइलें छोड़ दी गईं

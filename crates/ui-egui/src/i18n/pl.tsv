@@ -5223,6 +5223,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` dla okna dialogowego plików skryptu musi być jedną z wartości: once, always, deny, stop
 @msg	choose a file or folder first, or deny	najpierw wybierz plik lub folder albo odmów
 @msg	the script file permissions could not be saved: {e}	nie można zapisać uprawnień skryptów do plików: {e}
+@msg	the script file permissions could not be read: {e}	nie można odczytać uprawnień skryptów do plików: {e}
 @msg	this script's file access can be allowed only once	na dostęp tego skryptu do plików można zezwolić tylko raz
 @msg	Only the person at the keyboard can allow a script's file access	Na dostęp skryptu do plików może zezwolić tylko osoba przy klawiaturze
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skrypt otrzymuje najwyżej 2 048 plików: pliki wybrane po nich zostały pominięte

@@ -5882,6 +5882,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
 @msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
 @msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	the script file permissions could not be read: {e}	스크립트 파일 권한을 읽을 수 없습니다: {e}
 @msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
 @msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
 @msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다

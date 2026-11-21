@@ -4989,6 +4989,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` för ett skripts fildialog måste vara ett av: once, always, deny, stop
 @msg	choose a file or folder first, or deny	välj först en fil eller mapp, eller neka
 @msg	the script file permissions could not be saved: {e}	skriptens filbehörigheter kunde inte sparas: {e}
+@msg	the script file permissions could not be read: {e}	skriptens filbehörigheter kunde inte läsas: {e}
 @msg	this script's file access can be allowed only once	det här skriptets filåtkomst kan bara tillåtas en gång
 @msg	Only the person at the keyboard can allow a script's file access	Bara personen vid tangentbordet kan tillåta ett skripts filåtkomst
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ett skript får högst 2 048 filer: filerna som valdes efter dem utelämnades

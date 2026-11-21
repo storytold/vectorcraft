@@ -5609,6 +5609,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
 @msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
+@msg	the script file permissions could not be read: {e}	无法读取脚本的文件权限：{e}
 @msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
 @msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
 @msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
