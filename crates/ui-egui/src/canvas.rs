@@ -29,6 +29,7 @@ mod outline;
 mod overlays;
 mod panes;
 mod quick_pen_bar;
+mod quick_pen_wheel;
 mod raster;
 mod selection_marks;
 mod task_bar;

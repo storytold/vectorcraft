@@ -31,6 +31,7 @@ mod printps;
 mod printtiling;
 mod puppetwarp;
 mod quickpenbar;
+mod quickpenwheel;
 mod recolor;
 mod recovery;
 pub(super) mod removeanchors;
