@@ -4799,6 +4799,7 @@ axis	Both	Ambos
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` deve ser uma lista de no máximo 10000 trechos
 @msg	give either `start` for a new path or `id`, not both	informe `start` para um novo caminho ou `id`, mas não ambos
 @msg	`subpath` and `keep` need `id`	`subpath` e `keep` exigem `id`
+@msg	the end is not a straight line or a circular arc	a extremidade não é uma linha reta nem um arco circular
 @msg	no such user library	biblioteca do usuário inexistente
 @msg	no such view	vista inexistente
 @msg	no such width point	ponto de largura inexistente

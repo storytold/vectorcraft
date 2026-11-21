@@ -5480,7 +5480,13 @@ mod tests {
         window.frame(vec![]);
         window.frame(vec![]);
         assert_eq!(window.highlighted(), "tool:pen");
+        // The button goes 2 points below the popup, so one more row covers it.
         let (outlined, ..) = window.callout().expect("a callout below the popup");
+        window.app.ui.custom_toolbars[0].pos[1] += small.bottom() + 2.0 - outlined.top();
+        window.frame(vec![]);
+        window.frame(vec![]);
+        let (outlined, ..) = window.callout().expect("a callout below the popup");
+        assert!(!window.popup().intersects(outlined), "{:?} {outlined:?}", window.popup());
         window.app.ui.palette_query = "pen".into();
         window.frame(vec![]);
         assert_eq!(window.highlighted(), "tool:pen");

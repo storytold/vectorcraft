@@ -8555,6 +8555,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` में अधिकतम 10000 टुकड़ों की लिस्ट होनी चाहिए
 @msg	give either `start` for a new path or `id`, not both	नए पाथ के लिए `start` या `id` में से एक दें, दोनों नहीं
 @msg	`subpath` and `keep` need `id`	`subpath` और `keep` के लिए `id` चाहिए
+@msg	the end is not a straight line or a circular arc	सिरा न तो सीधी रेखा है और न ही वृत्ताकार चाप
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं

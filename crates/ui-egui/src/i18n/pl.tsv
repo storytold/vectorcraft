@@ -5663,6 +5663,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` musi być listą co najwyżej 10000 fragmentów
 @msg	give either `start` for a new path or `id`, not both	podaj `start` dla nowej ścieżki albo `id`, ale nie oba
 @msg	`subpath` and `keep` need `id`	`subpath` i `keep` wymagają `id`
+@msg	the end is not a straight line or a circular arc	koniec nie jest ani linią prostą, ani łukiem okręgu
 @msg	no such user library	brak takiej biblioteki użytkownika
 @msg	no such view	brak takiego widoku
 @msg	no such width point	brak takiego punktu szerokości

@@ -5096,6 +5096,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` には最大 10000 個のピースのリストを指定してください
 @msg	give either `start` for a new path or `id`, not both	新しいパスの `start` か `id` のどちらか一方だけを指定してください
 @msg	`subpath` and `keep` need `id`	`subpath` と `keep` には `id` が必要です
+@msg	the end is not a straight line or a circular arc	端は直線でも円弧でもありません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
 @msg	object {id} is not a selected top-level object	オブジェクト {id} は選択されている最上位のオブジェクトではありません
 @msg	nothing to redo	やり直す操作がありません

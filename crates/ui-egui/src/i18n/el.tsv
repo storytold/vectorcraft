@@ -5479,6 +5479,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`pieces` must be a list of at most 10000 pieces	το `pieces` πρέπει να είναι λίστα με έως 10000 τμήματα
 @msg	give either `start` for a new path or `id`, not both	δώστε είτε `start` για νέα διαδρομή είτε `id`, όχι και τα δύο
 @msg	`subpath` and `keep` need `id`	τα `subpath` και `keep` απαιτούν `id`
+@msg	the end is not a straight line or a circular arc	το άκρο δεν είναι ούτε ευθεία γραμμή ούτε κυκλικό τόξο
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
 @msg	no such view	δεν υπάρχει τέτοια προβολή
 @msg	no such width point	δεν υπάρχει τέτοιο σημείο πλάτους

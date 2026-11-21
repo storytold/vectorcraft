@@ -8030,6 +8030,7 @@ imageTrace	Outline	Kontur
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` skal være en liste med højst 10000 stykker
 @msg	give either `start` for a new path or `id`, not both	angiv enten `start` til en ny sti eller `id`, ikke begge
 @msg	`subpath` and `keep` need `id`	`subpath` og `keep` kræver `id`
+@msg	the end is not a straight line or a circular arc	enden er hverken en ret linje eller en cirkelbue
 @msg	no such user library	intet sådant brugerbibliotek
 @msg	no such view	ingen sådan visning
 @msg	no such width point	intet sådant breddepunkt

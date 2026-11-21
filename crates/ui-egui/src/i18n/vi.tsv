@@ -5924,6 +5924,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` phải là danh sách tối đa 10000 đoạn
 @msg	give either `start` for a new path or `id`, not both	hãy đưa `start` cho đường dẫn mới hoặc `id`, không đưa cả hai
 @msg	`subpath` and `keep` need `id`	`subpath` và `keep` cần có `id`
+@msg	the end is not a straight line or a circular arc	đầu mút không phải là đường thẳng hay cung tròn
 @msg	no such user library	không có thư viện người dùng như vậy
 @msg	no such view	không có chế độ xem như vậy
 @msg	no such width point	không có điểm chiều rộng như vậy

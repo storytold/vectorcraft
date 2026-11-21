@@ -4784,6 +4784,7 @@ imageTrace	Outline	轮廓
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` 必须是最多 10000 个片段的列表
 @msg	give either `start` for a new path or `id`, not both	请为新路径指定 `start`，或指定 `id`，不能同时指定
 @msg	`subpath` and `keep` need `id`	`subpath` 和 `keep` 需要 `id`
+@msg	the end is not a straight line or a circular arc	端点既不是直线也不是圆弧
 @msg	object {id} is not a path	对象 {id} 不是路径
 @msg	object {id} is not a selected top-level object	对象 {id} 不是选中的顶层对象
 @msg	nothing to redo	没有可重做的操作

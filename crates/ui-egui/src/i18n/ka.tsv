@@ -7290,6 +7290,7 @@ font-technology	Variable	ცვლადი
 @msg	`pieces` must be a list of at most 10000 pieces	`pieces` უნდა იყოს არაუმეტეს 10000 ნაწილის სია
 @msg	give either `start` for a new path or `id`, not both	მიუთითეთ ან `start` ახალი ტრაექტორიისთვის, ან `id`, მაგრამ არა ორივე
 @msg	`subpath` and `keep` need `id`	`subpath`-სა და `keep`-ს სჭირდება `id`
+@msg	the end is not a straight line or a circular arc	ბოლო არც სწორი ხაზია და არც წრიული რკალი
 @msg	no such user library	მომხმარებლის ასეთი ბიბლიოთეკა არ არის
 @msg	no such view	ასეთი ხედი არ არის
 @msg	no such width point	ასეთი სიგანის წერტილი არ არის
