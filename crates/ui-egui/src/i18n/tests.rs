@@ -4931,8 +4931,9 @@ fn unreadable(e: impl std::fmt::Display) -> String {
 }
 
 /// The scan reads the values of a local that a `.status(name)` shows, from the nearest `let` of
-/// that name in the same function: a `format!` string and each arm of a `match`. It skips a local
-/// that no status shows, a `let` of the name in another function, and a status given a value.
+/// that name in the same function whose block is still open at the call: a `format!` string and
+/// each arm of a `match`. It skips a local that no status shows, a `let` of the name in another
+/// function or in a block that ended before the call, and a status given a value.
 #[test]
 fn message_scan_reads_locals_given_to_a_status() {
     let code = r#"
@@ -4953,8 +4954,24 @@ fn saved(app: &mut App, saving: &str, e: &str, place: Option<&str>) {
     app.status(line);
     app.status(true);
 }
+
+fn scoped(app: &mut App) {
+    let note = "Outer message";
+    {
+        let note = "Inner message";
+        log(note);
+    }
+    app.status(note);
+}
+
+fn braced(app: &mut App) {
+    let tip = "Kept open";
+    log("}", '}', '\'', '\\');
+    // }
+    app.status(tip);
+}
 "#;
-    let want = ["{saving} failed: {e}", "Couldn't save to {folder}: {e}", "Couldn't save"];
+    let want = ["{saving} failed: {e}", "Couldn't save to {folder}: {e}", "Couldn't save", "Outer message", "Kept open"];
     assert_eq!(source_messages(code, &[], &std::collections::BTreeMap::new()), want);
     let ui = message_literals_in(&["ui-egui"]);
     for m in [
@@ -7230,9 +7247,12 @@ fn handler_returns<'a>(code: &'a str, name: &str) -> Vec<&'a str> {
 }
 
 /// Where each value of a local that a `.status(name)` in `code` shows can start: the statement of
-/// the nearest `let name = ` before that call in the same function (`let line = format!("…");`,
-/// `let line = match place { … };`, up to its `;`), read as [`closure_returns`] reads a closure. A
-/// local that no `.status(name)` shows is not read.
+/// the nearest `let name = ` before that call in the same function whose block is still open at
+/// the call (`let line = format!("…");`, `let line = match place { … };`, up to its `;`), read as
+/// [`closure_returns`] reads a closure. A `let` in a block that a `}` closes before the call is
+/// skipped; a brace inside a string or character literal ([`quoted_end`]) does not open or close a
+/// block. `code` comes from [`source_messages`] with its comments removed ([`without_comments`]), so
+/// a brace in a comment is not seen. A local that no `.status(name)` shows is not read.
 fn status_locals(code: &str) -> Vec<&str> {
     let mut out = vec![];
     for (at, m) in code.match_indices(".status(") {
@@ -7242,7 +7262,28 @@ fn status_locals(code: &str) -> Vec<&str> {
             continue;
         }
         let bound = format!("let {name} = ");
-        let nearest = code[..at].rmatch_indices(bound.as_str()).find(|&(b, _)| !code[..b].ends_with(|c: char| c.is_alphanumeric() || c == '_'));
+        let open_at_call = |b: usize| {
+            let (mut depth, mut i) = (0usize, b);
+            while let Some(c) = code.get(i..at).and_then(|s| s.chars().next()) {
+                if let Some(end) = (c == '"' || c == '\'').then(|| quoted_end(code, i)).flatten() {
+                    i = end;
+                    continue;
+                }
+                match c {
+                    '{' => depth += 1,
+                    '}' => match depth.checked_sub(1) {
+                        Some(d) => depth = d,
+                        None => return false,
+                    },
+                    _ => {}
+                }
+                i += c.len_utf8();
+            }
+            true
+        };
+        let nearest = code[..at]
+            .rmatch_indices(bound.as_str())
+            .find(|&(b, _)| !code[..b].ends_with(|c: char| c.is_alphanumeric() || c == '_') && open_at_call(b));
         if let Some((b, _)) = nearest
             && !code[b..at].contains("fn ")
         {
