@@ -456,7 +456,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
         ui.add_space(14.0);
         ui.vertical(|ui| {
-            widgets::label_row(ui, tl!("Crop To"), LABEL_WIDTH, |ui| {
+            let label_width = LABEL_WIDTH.max(widgets::dim_label_width(ui, "Crop To")).max(widgets::dim_label_width(ui, "Text"));
+            widgets::label_row(ui, tl!("Crop To"), label_width, |ui| {
                 if let Some(i) = widgets::dropdown(ui, "pdf-crop", crop(d).label(), CropTo::LABELS, 130.0)
                     && let Some(id) = CropTo::IDS.get(i)
                 {
@@ -465,7 +466,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             });
             ui.add_space(4.0);
             let linked = places_linked(d);
-            widgets::label_row(ui, tl!("Text"), LABEL_WIDTH, |ui| {
+            widgets::label_row(ui, tl!("Text"), label_width, |ui| {
                 let current = TextAs::ALL.iter().position(|t| *t == text_as(d)).and_then(|i| TEXT_AS_LABELS.get(i)).copied().unwrap_or_default();
                 let picked = ui.add_enabled_ui(!linked, |ui| widgets::dropdown(ui, "pdf-text-as", current, &TEXT_AS_LABELS, 130.0)).inner;
                 if let Some(t) = picked.and_then(|i| TextAs::ALL.get(i)) {
