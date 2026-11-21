@@ -323,6 +323,53 @@ fn art_options_width_follows_tilt_bearing_and_rotation() {
     }
 }
 
+/// Pattern Brush Options' Scale menu: Pressure, Tilt, Bearing, Rotation and Stylus Wheel each take
+/// a second scale, a stroke drawn without the pen's input is half way between the two, and the
+/// dialog shows the mode set when it opens again; Fixed drops the second scale.
+#[test]
+fn pattern_options_scale_follows_the_pen() {
+    let mut app = app();
+    let (id, before) = brushed(&mut app, "Diamonds");
+    app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("scaleMode"), d.f64("scaleMax", 0.0)), ("fixed".into(), 100.0));
+    assert!(shown(&mut app).contains("Fixed"));
+    // Screen readers name the second scale and the menu after the Scale row.
+    let nodes = crate::widgets::accessibility_tests::tree(|ui| super::super::show(&mut app, ui.ctx()));
+    assert!(nodes.iter().any(|n| n.label() == Some("Scale: Mode") && n.role() == egui::accesskit::Role::ComboBox), "a menu named Scale: Mode");
+    assert!(nodes.iter().any(|n| n.label() == Some("Scale: Maximum")), "a field named Scale: Maximum");
+    super::super::cancel(&mut app);
+    for (mode, label) in
+        [("pressure", "Pressure"), ("tilt", "Tilt"), ("bearing", "Bearing"), ("rotation", "Rotation"), ("stylusWheel", "Stylus Wheel")]
+    {
+        app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+        set(&mut app, json!({"scaleMode": mode, "scaleMax": 300}));
+        assert!(shown(&mut app).contains(label), "{mode}");
+        super::super::confirm(&mut app).unwrap();
+        let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+        assert_eq!((&def["scale"], &def["scale_mode"], &def["scale_max"]), (&json!(100.0), &json!(mode), &json!(300.0)), "{mode}");
+        // A stroke drawn without the pen's input is half way: 200 %.
+        let after = drawn_height(&app, id);
+        assert!((after - 2.0 * before).abs() < 0.01 * before, "{mode}: {before} then {after}");
+        app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("scaleMode"), d.f64("scaleMax", 0.0)), (mode.into(), 300.0), "{mode}");
+        super::super::cancel(&mut app);
+    }
+    // A second scale past the range is kept within it.
+    app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+    set(&mut app, json!({"scaleMode": "pressure", "scaleMax": 1e9}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.run("brush.get", json!({"name": "Diamonds"})).unwrap()["scale_max"], json!(10000.0));
+    // Fixed drops the second scale, and the stroke draws as it did.
+    app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
+    set(&mut app, json!({"scaleMode": "fixed"}));
+    super::super::confirm(&mut app).unwrap();
+    let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+    assert!(def.get("scale_mode").is_none() && def.get("scale_max").is_none(), "{def}");
+    assert!((drawn_height(&app, id) - before).abs() < 1e-6);
+}
+
 /// A context with the app's fonts and theme, for [`frame`].
 fn ctx() -> egui::Context {
     let ctx = egui::Context::default();
@@ -931,6 +978,47 @@ fn options_of_selected_object_set_one_paths_art_brush_settings() {
     assert_eq!(app.ui.dialog.as_ref().unwrap().f64("width", 0.0), 50.0);
     super::super::confirm(&mut app).unwrap();
     assert_eq!(own_options(&app, a), json!({"width": 50.0}));
+}
+
+/// Options of Selected Object for a pattern brush sets one path's Scale mode and second scale; the
+/// brush and the other path keep theirs.
+#[test]
+fn options_of_selected_object_set_one_paths_pattern_scale_mode() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Diamonds");
+    let b = brushed_line(&mut app, 100.0, "Diamonds");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert!(shown(&mut app).contains("Scale:"));
+    set(&mut app, json!({"scaleMode": "tilt", "scaleMax": 250}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"scale_mode": "tilt", "scale_max": 250.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    let def = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+    assert!(def.get("scale_mode").is_none(), "{def}");
+    // Opened again, it shows the path's own mode and second scale.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("scaleMode"), d.f64("scaleMax", 0.0)), ("tilt".into(), 250.0));
+    super::super::cancel(&mut app);
+    // With paths of different scales selected, choosing a mode alone leaves each path's scale and
+    // second scale its own: the first path's scale is not given to the second path as its second
+    // scale.
+    app.run("brush.objectOptions", json!({"ids": [a], "params": {"scale": 50, "scale_mode": null, "scale_max": null}})).unwrap();
+    app.run("brush.objectOptions", json!({"ids": [b], "params": {"scale": 80}})).unwrap();
+    select(&mut app, &[a, b]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"scaleMode": "pressure"}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"scale": 50.0, "scale_mode": "pressure"}));
+    assert_eq!(own_options(&app, b), json!({"scale": 80.0, "scale_mode": "pressure"}));
+    // A changed Scale alone keeps each path's own second scale: its old scale.
+    select(&mut app, &[a, b]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"scale": 60}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"scale": 60.0, "scale_mode": "pressure", "scale_max": 50.0}));
+    assert_eq!(own_options(&app, b), json!({"scale": 60.0, "scale_mode": "pressure", "scale_max": 80.0}));
 }
 
 #[test]

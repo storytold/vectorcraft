@@ -242,6 +242,70 @@ fn options_of_selected_object_keep_each_paths_largest_width_when_the_width_chang
     assert_eq!((arrow_width_range(&s, a), arrow_width_range(&s, b)), ((40.0, 120.0), (40.0, 120.0)));
 }
 
+/// The scales (%) the first stroke of `id`, painted with Stitches, draws with where the pen reads 0
+/// and 1.
+fn stitches_scale_range(s: &Session, id: NodeId) -> (f64, f64) {
+    let lib = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == "Stitches").unwrap();
+    match b.with_stroke_options(own_options(s, id).as_object().unwrap()).unwrap().kind {
+        vectorcraft_brush::BrushKind::Pattern(p) => p.scale_range(),
+        k => panic!("not a pattern brush: {k:?}"),
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_each_paths_second_scale_when_the_scale_changes() {
+    let mut s = session();
+    let a = line(&mut s);
+    let b = line(&mut s);
+    s.execute("brush.apply", &json!({"name": "Stitches", "ids": [a.0, b.0]})).unwrap();
+    // Both scales follow the pressure; the first path's second scale is its scale, the second
+    // path's is its own.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"scale": 100, "scale_mode": "pressure"}})).unwrap();
+    s.execute("brush.objectOptions", &json!({"ids": [b.0], "params": {"scale": 100, "scale_mode": "pressure", "scale_max": 150}})).unwrap();
+    assert_eq!((stitches_scale_range(&s, a), stitches_scale_range(&s, b)), ((100.0, 100.0), (100.0, 150.0)));
+    // The scale the path has already changes nothing.
+    let steps = undo_steps(&s);
+    assert_eq!(s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"scale": 100}})).unwrap()["changed"], json!([]));
+    assert_eq!(own_options(&s, a), json!({"scale_mode": "pressure"}));
+    assert_eq!(undo_steps(&s), steps);
+    // A new first scale leaves each path's second scale as it was.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"scale": 50}})).unwrap();
+    assert_eq!((stitches_scale_range(&s, a), stitches_scale_range(&s, b)), ((50.0, 100.0), (50.0, 150.0)));
+    // A second scale the params give is set on each path, and the brush keeps its own.
+    s.execute("brush.objectOptions", &json!({"ids": [a.0, b.0], "params": {"scale": 40, "scale_max": 120}})).unwrap();
+    assert_eq!((stitches_scale_range(&s, a), stitches_scale_range(&s, b)), ((40.0, 120.0), (40.0, 120.0)));
+    let def = s.execute("brush.get", &json!({"name": "Stitches"})).unwrap();
+    assert!(def.get("scale_mode").is_none() && def.get("scale_max").is_none(), "{def}");
+    // A mode that is not one is refused, and nothing changes.
+    let steps = undo_steps(&s);
+    assert!(s.execute("brush.objectOptions", &json!({"ids": [a.0], "params": {"scale_mode": "sideways"}})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+}
+
+/// Pattern Brush Options' Scale mode and second scale go through `brush.new`, `brush.options`
+/// and `brush.get`; a partial edit keeps the other fields, and Fixed leaves both out.
+#[test]
+fn pattern_brush_scale_mode_goes_through_the_brush_commands() {
+    let mut s = session();
+    let side = rect(&mut s, 0.0, 0.0, 40.0, 8.0);
+    let params = json!({"scale": 50, "scale_mode": "tilt", "scale_max": 300});
+    s.execute("brush.new", &json!({"type": "pattern", "name": "Rail", "params": params, "ids": [side.0]})).unwrap();
+    let get = |s: &mut Session| s.execute("brush.get", &json!({"name": "Rail"})).unwrap();
+    let def = get(&mut s);
+    assert_eq!((&def["scale"], &def["scale_mode"], &def["scale_max"]), (&json!(50.0), &json!("tilt"), &json!(300.0)));
+    s.execute("brush.options", &json!({"name": "Rail", "params": {"scale_max": 200, "spacing": 10}})).unwrap();
+    let def = get(&mut s);
+    assert_eq!((&def["scale"], &def["scale_mode"], &def["scale_max"]), (&json!(50.0), &json!("tilt"), &json!(200.0)));
+    s.execute("brush.options", &json!({"name": "Rail", "params": {"scale_mode": "stylusWheel", "scale_max": 1e9}})).unwrap();
+    let def = get(&mut s);
+    assert_eq!((&def["scale_mode"], &def["scale_max"]), (&json!("stylusWheel"), &json!(10000.0)));
+    s.execute("brush.options", &json!({"name": "Rail", "params": {"scale_mode": null, "scale_max": null}})).unwrap();
+    let def = get(&mut s);
+    assert!(def.get("scale_mode").is_none() && def.get("scale_max").is_none(), "{def}");
+    assert!(s.execute("brush.options", &json!({"name": "Rail", "params": {"scale_mode": "sideways"}})).is_err());
+}
+
 #[test]
 fn options_of_selected_object_go_when_a_freehand_stroke_changes_the_brush() {
     let mut s = session();
