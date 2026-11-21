@@ -1641,15 +1641,21 @@ fn has_own_plugin_effect(n: &Node) -> bool {
 
 /// Does a group or layer in `n` with a raster effect make an image of a visible plug-in effect
 /// ([`draws_plugin_effect`])? Expansion makes the image of such a group or layer even when it, or
-/// a group around it, is hidden.
+/// a group around it, is hidden. A group or layer that paints something and whose raster effects
+/// are not all shadows and outer glows becomes one image of what it draws, so the groups and layers
+/// in it make no images of their own; one that paints nothing makes no image, and its members
+/// expand on their own.
 fn rasterizes_plugin_effect(d: &Document, n: &Node, seen: &mut std::collections::HashSet<String>) -> bool {
-    let mut drawn = vec![];
-    n.walk(&mut |c| {
-        if is_container(c) && !rasterfx::raster_fx(c).is_empty() {
-            drawn.push(c);
+    let fx = if is_container(n) { rasterfx::raster_fx(n) } else { vec![] };
+    if !fx.is_empty() {
+        if draws_plugin_effect(d, n, seen) {
+            return true;
         }
-    });
-    drawn.into_iter().any(|g| draws_plugin_effect(d, g, seen))
+        if !fx.iter().all(effects::RasterFx::is_below) && vectorcraft_render::painted_bounds(d, n).is_some() {
+            return false;
+        }
+    }
+    n.children().into_iter().flatten().any(|c| rasterizes_plugin_effect(d, c, seen))
 }
 
 /// Does `n`, an object the image of `n` draws in it, or the art of a symbol such an instance places,
