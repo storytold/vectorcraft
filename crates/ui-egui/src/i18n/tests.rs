@@ -4932,8 +4932,9 @@ fn unreadable(e: impl std::fmt::Display) -> String {
 
 /// The scan reads the values of a local that a `.status(name)` shows, from the nearest `let` of
 /// that name in the same function whose block is still open at the call: a `format!` string and
-/// each arm of a `match`. It skips a local that no status shows, a `let` of the name in another
-/// function or in a block that ended before the call, and a status given a value.
+/// each arm of a `match`, a `'"'` arm included. It reads a local whose string holds `fn `. It
+/// skips a local that no status shows, a `let` of the name in another function or in a block that
+/// ended before the call, and a status given a value.
 #[test]
 fn message_scan_reads_locals_given_to_a_status() {
     let code = r#"
@@ -4970,8 +4971,30 @@ fn braced(app: &mut App) {
     // }
     app.status(tip);
 }
+
+fn named(app: &mut App) {
+    let line = "Invalid fn declaration";
+    app.status(line);
+}
+
+fn quoted(app: &mut App, quote: char) {
+    let line = match quote {
+        '"' => "Double quote",
+        _ => "Other quote",
+    };
+    app.status(line);
+}
 "#;
-    let want = ["{saving} failed: {e}", "Couldn't save to {folder}: {e}", "Couldn't save", "Outer message", "Kept open"];
+    let want = [
+        "{saving} failed: {e}",
+        "Couldn't save to {folder}: {e}",
+        "Couldn't save",
+        "Outer message",
+        "Kept open",
+        "Invalid fn declaration",
+        "Double quote",
+        "Other quote",
+    ];
     assert_eq!(source_messages(code, &[], &std::collections::BTreeMap::new()), want);
     let ui = message_literals_in(&["ui-egui"]);
     for m in [
@@ -7201,6 +7224,7 @@ fn skip_args(args: &str, n: usize) -> Option<&str> {
         match c {
             '(' | '[' | '{' => depth += 1,
             ')' | ']' | '}' => depth = depth.checked_sub(1)?,
+            '\'' => skip_char_literal(args, at, &mut chars),
             '"' => loop {
                 match chars.next()?.1 {
                     '\\' => {
@@ -7285,7 +7309,7 @@ fn status_locals(code: &str) -> Vec<&str> {
             .rmatch_indices(bound.as_str())
             .find(|&(b, _)| !code[..b].ends_with(|c: char| c.is_alphanumeric() || c == '_') && open_at_call(b));
         if let Some((b, _)) = nearest
-            && !code[b..at].contains("fn ")
+            && !declares_fn(&code[b..at])
         {
             out.extend(closure_returns(statement(&code[b + bound.len()..])));
         }
@@ -7293,7 +7317,35 @@ fn status_locals(code: &str) -> Vec<&str> {
     out
 }
 
+/// Whether `code` holds the keyword `fn ` outside its string and character literals
+/// ([`quoted_end`]).
+fn declares_fn(code: &str) -> bool {
+    let mut i = 0;
+    while let Some(c) = code[i..].chars().next() {
+        if let Some(end) = (c == '"' || c == '\'').then(|| quoted_end(code, i)).flatten() {
+            i = end;
+            continue;
+        }
+        if code[i..].starts_with("fn ") && !code[..i].ends_with(|c: char| c.is_alphanumeric() || c == '_') {
+            return true;
+        }
+        i += c.len_utf8();
+    }
+    false
+}
+
+/// Moves `chars`, just past the `'` at `text[at]`, to the end of the character literal it opens
+/// ([`quoted_end`]); a lifetime's `'` leaves it where it is.
+fn skip_char_literal(text: &str, at: usize, chars: &mut std::str::CharIndices) {
+    if let Some(end) = quoted_end(text, at) {
+        for _ in text[at + 1..end].chars() {
+            chars.next();
+        }
+    }
+}
+
 /// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in.
+/// A bracket, `;` or `"` inside a character literal (`'"'`) is skipped.
 fn statement(code: &str) -> &str {
     let (mut depth, mut chars) = (0usize, code.char_indices());
     while let Some((at, c)) = chars.next() {
@@ -7304,6 +7356,7 @@ fn statement(code: &str) -> &str {
                 None => return &code[..at],
             },
             ';' if depth == 0 => return &code[..at],
+            '\'' => skip_char_literal(code, at, &mut chars),
             '"' => loop {
                 match chars.next() {
                     Some((_, '\\')) => {
@@ -7328,7 +7381,8 @@ fn statement(code: &str) -> &str {
 /// only when the local's name is used, outside a string literal and a `format!`, in a value the closure returns
 /// (`let why = if … { format!("…") } else { … }; Error(why)`), and not when the local only goes
 /// elsewhere (`let level = if … { "warning" } else { "error" }; log(level);`). A `return` counts
-/// wherever it is, except inside a closure the body holds (`unwrap_or_else(|| return …)`).
+/// wherever it is, except inside a closure the body holds (`unwrap_or_else(|| return …)`). A
+/// character literal (`'"'`, `'{'`) is skipped, so it does not open a string or a block.
 fn closure_returns(body: &str) -> Vec<&str> {
     let ident = |c: char| c.is_alphanumeric() || c == '_';
     // The name a `let` statement starting at `at` binds (empty for a pattern), if it is one.
@@ -7387,6 +7441,7 @@ fn closure_returns(body: &str) -> Vec<&str> {
             {
                 found.push((&body[at + "return".len()..], None, true));
             }
+            '\'' => skip_char_literal(body, at, &mut chars),
             '"' => loop {
                 match chars.next() {
                     Some((_, '\\')) => {
@@ -7441,14 +7496,20 @@ fn without_format_args(code: &str) -> String {
     out
 }
 
-/// `code` with the text of its string literals removed, the quotes kept.
+/// `code` with the text of its string literals removed, the quotes kept. A character literal
+/// (`'"'`) stays as it is.
 fn without_strings(code: &str) -> String {
-    let (mut out, mut chars) = (String::new(), code.chars());
-    while let Some(c) = chars.next() {
+    let (mut out, mut chars) = (String::new(), code.char_indices());
+    while let Some((at, c)) = chars.next() {
         out.push(c);
-        if c == '"' {
+        if c == '\''
+            && let Some(end) = quoted_end(code, at)
+        {
+            out.push_str(&code[at + 1..end]);
+            skip_char_literal(code, at, &mut chars);
+        } else if c == '"' {
             loop {
-                match chars.next() {
+                match chars.next().map(|(_, c)| c) {
                     Some('\\') => {
                         chars.next();
                     }
