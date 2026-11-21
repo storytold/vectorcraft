@@ -2631,9 +2631,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
   `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
-  starts with the defaults that page gives; `documentBleedLink`, `documentBleedOffsetRect` and `transparencyGrid`
-  throw an error that says they are not available yet, and `showOptionsDialog` true throws `Dialog unavailable`
-  with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
+  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  the preset it is given holds one of them with a value other than `null`, and makes no document.
+  `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
   destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
@@ -2648,7 +2649,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
   directly below it. An object of another document throws `Cross-document placement is not available`, and when
-  `node.move` refuses the place of a copy, `duplicate` deletes the copy and throws that error. The
+  `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
+  the undo history as they were before the call. `duplicate` on a path inside a compound path throws
+  `Duplicating a path inside a compound path is not available yet`. A script that holds a placed image keeps the
+  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
   enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
@@ -8847,7 +8851,10 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
+rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+an error with another layout; a preset keeps the rows until `columns` without `rows`, or another layout, is given,
+and New Document drops them when Columns or the layout changes),
+`bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
 value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
 [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,

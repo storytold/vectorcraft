@@ -255,6 +255,8 @@ impl Realm {
         interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.waiting = false;
+        interp.waiting_hosted = false;
+        interp.constructing = false;
         interp.resuming = None;
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
@@ -291,6 +293,8 @@ impl Realm {
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.waiting_hosted = false;
+        interp.constructing = false;
         interp.resuming = None;
         interp.passing = Value::Undefined;
         match result {
@@ -406,8 +410,11 @@ impl Realm {
             });
         }
         interp.waiting = false;
+        // A member of a host class gets its answer as it gets an immediate result.
+        let hosted = std::mem::take(&mut interp.waiting_hosted);
         // The value on top of the stack stood in for the result.
-        let r = interp.write_data(d, 0, false).and_then(|v| {
+        let written = if hosted { interp.write_hosted(d) } else { interp.write_data(d, 0, false) };
+        let r = written.and_then(|v| {
             interp.stack.pop();
             interp.push(v)
         });

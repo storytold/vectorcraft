@@ -1237,7 +1237,8 @@ fn note_ids(s: &mut Session) {
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
     let mutating = waits_for_tool_edit(id);
-    let save = mutating.then(|| Savepoint::take(s, id));
+    // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
+    let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
@@ -1303,6 +1304,11 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
 /// transaction, its growth is counted, and a command that fails, or whose result cannot cross to
 /// the script, is put back. → its result.
 fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
+    command_value(host, id, params).map(|(data, _)| data)
+}
+
+/// [`command`], with the command's result as it gave it as well as the script's copy of it.
+fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
     let id = id.to_string();
     let params = params.clone();
     let session = host.session.clone();
@@ -1340,7 +1346,7 @@ fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, H
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
-    crossed
+    crossed.map(|data| (data, value))
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits

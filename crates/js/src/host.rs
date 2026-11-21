@@ -407,8 +407,9 @@ impl Interp {
             }
             _ => self.read_args(name, args, how)?,
         };
-        // Only the script's own code, in a run that can pause, can wait for a result.
-        let can_wait = self.in_slice && self.reentry == 0;
+        // Only the script's own code, in a run that can pause, can wait for a result, and a host
+        // class's constructor called with `new` cannot.
+        let can_wait = self.in_slice && self.reentry == 0 && !self.constructing;
         self.can_wait.set(can_wait);
         let result = f(data);
         self.can_wait.set(false);
@@ -417,6 +418,7 @@ impl Interp {
             Ok(d) => self.write_data(d, 0, matches!(how, ArgRead::Frozen)),
             Err(HostError::Wait) if can_wait => {
                 self.waiting = true;
+                self.waiting_hosted = matches!(how, ArgRead::Hosted);
                 self.pause.set(true);
                 Ok(Value::Undefined)
             }

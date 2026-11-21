@@ -8,7 +8,9 @@
 //! object a script made that carries [`HOST_REF_KEY`] is refused, so a script cannot make an object
 //! of a host class from its own data. A class's prototype and constructor are frozen. While a
 //! script holds the object for a class and handle, each read of that class and handle gives the
-//! same object.
+//! same object. Classes that descend from the same class without a parent share their objects: a
+//! read of another of them with the same handle gives the object the script holds, now of the
+//! class that read names.
 //!
 //! Every member function gets the object it is called on (`this`) as its first argument, or
 //! `undefined` when `this` is not an object of a host class, followed by the call's arguments; a
@@ -67,6 +69,9 @@ pub(crate) struct Entry {
     proto: ObjId,
     ctor: ObjId,
     index: Option<HostFunction>,
+    /// The class without a parent this class descends from (itself for such a class), as an index
+    /// into the realm's classes.
+    family: u32,
 }
 
 impl Entry {
@@ -75,24 +80,26 @@ impl Entry {
     }
 }
 
-/// A class, as an index into the realm's classes, and the bits of a handle.
+/// A family of classes ([`Entry::family`]) and the bits of a handle.
 type MadeKey = (u32, Box<[u64]>);
 
-/// The object made for each class and handle ([`Interp::host_objects`]).
+/// The object made for each family of classes and handle ([`Interp::host_objects`]).
 pub(crate) type Made = std::collections::HashMap<MadeKey, ObjId>;
 
 /// Whether `id` is still the object made for `key`, and not a freed cell or another object that
 /// was given its cell.
-fn is_made(heap: &crate::heap::Heap, id: ObjId, key: &MadeKey) -> bool {
+fn is_made(heap: &crate::heap::Heap, classes: &[Entry], id: ObjId, key: &MadeKey) -> bool {
     heap.object(id).is_some_and(|o| match &o.class {
-        Class::Host(h) => h.class == key.0 && h.handle.iter().map(|n| n.to_bits()).eq(key.1.iter().copied()),
+        Class::Host(h) => {
+            classes.get(h.class as usize).is_some_and(|e| e.family == key.0) && h.handle.iter().map(|n| n.to_bits()).eq(key.1.iter().copied())
+        }
         _ => false,
     })
 }
 
 /// Drops the entries of `made` whose objects the last collection freed.
-pub(crate) fn forget_collected(made: &mut Made, heap: &crate::heap::Heap) {
-    made.retain(|key, id| is_made(heap, *id, key));
+pub(crate) fn forget_collected(made: &mut Made, heap: &crate::heap::Heap, classes: &[Entry]) {
+    made.retain(|key, id| is_made(heap, classes, *id, key));
 }
 
 /// The [`Data`] that stands for the object of host class `class` with `handle`.
@@ -132,12 +139,20 @@ impl Interp {
         let Some((class, entry)) = self.host_classes.iter().enumerate().find(|(_, e)| &*e.name == name) else {
             return Err(self.throw(ErrorType::Type, &format!("a host value names the unknown class {name}")));
         };
-        let proto = entry.proto;
+        let (proto, family) = (entry.proto, entry.family);
         let class = u32::try_from(class).unwrap_or(u32::MAX);
-        let made = (class, handle.iter().map(|n| n.to_bits()).collect::<Box<[u64]>>());
+        let made = (family, handle.iter().map(|n| n.to_bits()).collect::<Box<[u64]>>());
         if let Some(&id) = self.host_objects.get(&made)
-            && is_made(&self.heap, id, &made)
+            && is_made(&self.heap, &self.host_classes, id, &made)
         {
+            // An object of another class of the family becomes one of `class`.
+            let o = self.object_mut(id)?;
+            if let Class::Host(h) = &mut o.class
+                && h.class != class
+            {
+                h.class = class;
+                o.proto = Some(proto);
+            }
             return Ok(Value::Object(id));
         }
         self.reserve_heap(crate::heap::OBJECT_BYTES)?;
@@ -207,10 +222,11 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     if i.host_classes.iter().any(|e| *e.name == *class.name) {
         return Err(i.throw(ErrorType::Type, &format!("the host class {} is defined twice", class.name)));
     }
-    let parent = match &class.parent {
-        None => i.intrinsics.object_proto,
+    let own = u32::try_from(i.host_classes.len()).unwrap_or(u32::MAX);
+    let (parent, family) = match &class.parent {
+        None => (i.intrinsics.object_proto, own),
         Some(p) => match i.host_classes.iter().find(|e| *e.name == **p) {
-            Some(e) => e.proto,
+            Some(e) => (e.proto, e.family),
             None => return Err(i.throw(ErrorType::Type, &format!("the host class {p} is not defined"))),
         },
     };
@@ -220,7 +236,7 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let r = fill_class(i, proto, &class);
     i.temp_roots.truncate(mark);
     let ctor = r?;
-    i.host_classes.push(Entry { name: class.name.as_str().into(), proto, ctor, index: class.index });
+    i.host_classes.push(Entry { name: class.name.as_str().into(), proto, ctor, index: class.index, family });
     let global = i.global;
     i.define(global, key(&class.name), Prop::Data { value: Value::Object(ctor), flags: crate::heap::HIDDEN })
 }

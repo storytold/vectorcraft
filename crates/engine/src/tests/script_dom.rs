@@ -327,6 +327,7 @@ fn a_copy_that_cannot_be_placed_is_deleted() {
     s.execute("text.create", &json!({"x": 200, "y": 200, "text": "Hi"})).unwrap();
     s.execute("select.none", &json!({})).unwrap();
     let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let (steps, step) = (undo_steps(&s), s.active().unwrap().history.step());
     // A Live Paint group takes no type, so the copy is refused after it was made.
     let out = log(
         &mut s,
@@ -337,13 +338,50 @@ fn a_copy_that_cannot_be_placed_is_deleted() {
     assert!(out[0].as_str().is_some_and(|m| m.contains("Live Paint takes paths")), "{out:?}");
     assert_eq!(out[1], json!(true));
     assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    // The refused copy leaves no undo step and does not change the document's step.
+    assert_eq!((undo_steps(&s), s.active().unwrap().history.step()), (steps, step));
+}
+
+#[test]
+fn a_path_inside_a_compound_path_is_not_duplicated() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; vc.log(p[0].typename); p[1].duplicate();");
+    assert!(e.contains("Duplicating a path inside a compound path is not available yet"), "{e}");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    // The compound path itself is copied whole.
+    let out = log(&mut s, "var p = app.activeDocument.pageItems, c = p[0].duplicate(); vc.log([c.typename, p.length]);");
+    assert_eq!(out, vec![json!(["CompoundPathItem", 6])]);
+}
+
+#[test]
+fn a_copy_of_an_object_with_a_large_id_is_the_copy() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    // The copy's id, 2^53 + 1, is not exact as a number.
+    let big = 1u64 << 53;
+    s.active_mut().unwrap().change_unsaved(|d| std::sync::Arc::make_mut(d).raise_next_id(big));
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    assert_eq!(a.0, big);
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0], c = i.duplicate(); c.name = 'copy'; vc.log(c === i); vc.log(i.name);");
+    assert_eq!(out, vec![json!(false), json!("")]);
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.node(NodeId(big + 1)).and_then(|n| n.name.clone()).as_deref(), Some("copy"));
+    assert_eq!(d.node(a).unwrap().name, None);
 }
 
 #[test]
 fn a_grid_by_column_takes_the_number_of_rows() {
     let mut s = Session::new();
-    for (layout, rows, cols) in [("GridByCol", 2, 3), ("RLGridByCol", 2, 3), ("GridByRow", 3, 2)] {
-        run(&mut s, &format!("app.documents.add(DocumentColorSpace.RGB, 100, 100, 6, DocumentArtboardLayout.{layout}, 10, 2);")).unwrap();
+    // With five artboards in four rows, the columns hold four and one.
+    for (layout, count, given, rows, cols) in
+        [("GridByCol", 6, 2, 2, 3), ("RLGridByCol", 6, 2, 2, 3), ("GridByRow", 6, 2, 3, 2), ("GridByCol", 5, 4, 4, 2), ("RLGridByCol", 5, 4, 4, 2)]
+    {
+        run(&mut s, &format!("app.documents.add(DocumentColorSpace.RGB, 100, 100, {count}, DocumentArtboardLayout.{layout}, 10, {given});")).unwrap();
         let boards = &s.active().unwrap().doc.artboards;
         let distinct = |mut v: Vec<i64>| {
             v.sort_unstable();
@@ -352,7 +390,43 @@ fn a_grid_by_column_takes_the_number_of_rows() {
         };
         let tops = distinct(boards.iter().map(|b| b.rect.y0.round() as i64).collect());
         let lefts = distinct(boards.iter().map(|b| b.rect.x0.round() as i64).collect());
-        assert_eq!((tops, lefts), (rows, cols), "{layout}");
+        assert_eq!((tops, lefts), (rows, cols), "{layout} {count}");
+    }
+}
+
+#[test]
+fn file_new_takes_the_rows_of_a_grid_by_column() {
+    let mut s = Session::new();
+    let first_column = |s: &mut Session, layout: Value| {
+        s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 5, "artboardLayout": layout})).unwrap();
+        let boards = &s.active().unwrap().doc.artboards;
+        boards.iter().filter(|b| b.rect.x0.round() as i64 == boards[0].rect.x0.round() as i64).count()
+    };
+    assert_eq!(first_column(&mut s, json!({"layout": "gridByColumn", "rows": 4})), 4);
+    // Rows take the place of columns given beside them.
+    assert_eq!(first_column(&mut s, json!({"layout": "gridByColumn", "rows": 4, "columns": 1})), 4);
+    // A preset keeps and lists the rows, with the columns they give.
+    use crate::cmd::newdoc::{ArtboardLayout, DocSettings};
+    let settings = DocSettings { artboards: 5, layout: ArtboardLayout::GridByColumn, ..DocSettings::default() };
+    let settings = settings.with_params(&json!({"artboardLayout": {"rows": 4}}), "file.new").unwrap();
+    let listed = settings.to_json();
+    assert_eq!((&listed["artboardLayout"]["columns"], &listed["artboardLayout"]["rows"]), (&json!(2), &json!(4)), "{listed}");
+    let stored: DocSettings = serde_json::from_value(serde_json::to_value(&settings).unwrap()).unwrap();
+    assert_eq!(stored.rows, 4);
+    // More artboards keep the rows; columns alone, or another layout, replace them.
+    let more = stored.clone().with_params(&json!({"artboards": 9, "artboardLayout": listed["artboardLayout"]}), "file.new").unwrap();
+    assert_eq!(more.boards().iter().filter(|b| b.x0 == more.boards()[0].x0).count(), 4);
+    let by_columns = stored.clone().with_params(&json!({"artboardLayout": {"columns": 1}}), "file.new").unwrap();
+    assert_eq!((by_columns.rows, by_columns.boards().iter().filter(|b| b.x0 == by_columns.boards()[0].x0).count()), (0, 5));
+    for layout in [json!({"layout": "gridByRow"}), json!("gridByRow")] {
+        let by_row = stored.clone().with_params(&json!({"artboardLayout": layout}), "file.new").unwrap();
+        assert_eq!((by_row.rows, by_row.to_json()["artboardLayout"].get("rows")), (0, None), "{layout}");
+    }
+    let e = s.execute("file.new", &json!({"artboardLayout": {"layout": "gridByColumn", "rows": 0}})).unwrap_err().to_string();
+    assert!(e.contains("rows must be 1 or more"), "{e}");
+    for layout in ["gridByRow", "row", "column"] {
+        let e = s.execute("file.new", &json!({"artboardLayout": {"layout": layout, "rows": 2}})).unwrap_err().to_string();
+        assert!(e.contains("rows needs the gridByColumn layout"), "{layout}: {e}");
     }
 }
 
@@ -388,6 +462,47 @@ fn an_edit_keeps_direct_selected_anchors() {
     assert_eq!(s.active().unwrap().selection.anchors, before.anchors);
     assert_eq!(s.active().unwrap().selection.objects, before.objects);
     assert!(s.journal.iter().any(|(id, _)| id == "select.anchorsMany"), "the journal holds the restore");
+}
+
+#[test]
+fn an_edit_keeps_the_order_of_a_mixed_selection() {
+    let (mut s, a, b) = doc();
+    rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let before = s.active().unwrap().selection.clone();
+    assert_eq!(before.objects, vec![a, b]);
+    log(&mut s, "app.activeDocument.pageItems[2].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.anchors.clone()), (before.objects, before.anchors));
+}
+
+#[test]
+fn assigning_the_selection_clears_a_layers_panel_target() {
+    let (mut s, a, _) = doc();
+    s.execute("layer.target", &json!({"id": a.0})).unwrap();
+    assert_eq!(s.active().unwrap().selection.target, Some(a));
+    log(&mut s, "var d = app.activeDocument; d.selection = d.pageItems[0];");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.target), (vec![a], None));
+}
+
+#[test]
+fn a_held_image_stays_the_same_object_when_it_is_embedded() {
+    let dir = super::links::Folder::new("dom-embed");
+    let photo = dir.file("photo.png");
+    super::links::write(&photo, &super::links::png(20, 10, [255, 0, 0]));
+    let mut s = super::links::session();
+    let id = super::links::place(&mut s, &photo);
+    let out = log(
+        &mut s,
+        &format!(
+            "var i = app.activeDocument.pageItems[0]; vc.log(i.typename); vc.run('links.embed', {{ids: [{}]}});\
+             var j = app.activeDocument.pageItems[0]; vc.log([i === j, i.typename, i instanceof RasterItem, i instanceof PlacedItem]);",
+            id.0
+        ),
+    );
+    assert_eq!(out, vec![json!("PlacedItem"), json!([true, "RasterItem", true, false])]);
 }
 
 #[test]
@@ -630,8 +745,16 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
     let p = path.to_string_lossy().replace('\\', "\\\\");
-    let out = log(&mut s, &format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));"));
+    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
+    // Read roots that leave out the document's file: the same path does not count.
+    let elsewhere = std::env::temp_dir().join(format!("vc-dom-roots-{}", std::process::id()));
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let roots = crate::file_access::AutomationRoots::new(&[&elsewhere], &[]).unwrap().unwrap();
+    let out = crate::file_access::confine(Some(&roots), || log(&mut s, &query));
+    assert_eq!(out, vec![json!(false), json!(false)]);
+    let _ = std::fs::remove_dir_all(&elsewhere);
     for bad in ["../x.svg", "a/../b.svg", "\\\\\\\\host\\\\share\\\\x.svg", "//host/share/x.svg", "a\\u0000b", ""] {
         assert!(failure(&mut s, &format!("app.getIsFileOpen('{bad}');")).contains("cannot check"), "{bad}");
     }
@@ -647,12 +770,13 @@ fn hostile_dom_values_do_not_reenter_or_exceed_limits() {
     let e = failure(&mut s, "var f = {}; f['\\u0000hostRef'] = ['PathItem', 0, 1, 1]; app.activeDocument.selection = f;");
     assert!(e.contains("not plain data"), "{e}");
     // A getter in a value is refused before it runs.
-    let e = failure(
+    let out = log(
         &mut s,
         "var hit = 0, v = {}; Object.defineProperty(v, 0, {get: function () { hit++; return 1; }, enumerable: true});\
-        try { app.activeDocument.rulerOrigin = v; } catch (e) { vc.log(hit); throw e; }",
+        try { app.activeDocument.rulerOrigin = v; } catch (e) { vc.log(e.message); } vc.log(hit);",
     );
-    assert!(e.contains("rulerOrigin"), "{e}");
+    assert!(out[0].as_str().is_some_and(|m| m.contains("rulerOrigin")), "{out:?}");
+    assert_eq!(out[1], json!(0));
     let e = failure(&mut s, "var a = []; for (var i = 0; i < 10001; i++) a.push(app.activeDocument.pageItems[0]); app.activeDocument.selection = a;");
     assert!(e.contains("at most 10000"), "{e}");
     assert_eq!(s.active().unwrap().selection.objects, before);

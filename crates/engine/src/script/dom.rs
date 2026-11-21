@@ -35,7 +35,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref, host_ref_parts};
 
-use super::{Host, Link, command, current, data_size};
+use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 /// The error for a member read or called with no document open.
@@ -84,12 +84,41 @@ pub(super) enum Coords {
 const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
-/// What the object model keeps for one run: its coordinate system and the last list of a
-/// document's page items, kept while that document is unchanged.
+/// What the object model keeps for one run: its coordinate system, the last list of a document's
+/// page items, kept while that document is unchanged, and whether a call's own savepoint
+/// ([`atomically`]) is open.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
+    saving: Cell<bool>,
+}
+
+impl State {
+    /// Whether a call's own savepoint is open: its commands take none of their own.
+    pub(super) fn saving(&self) -> bool {
+        self.saving.get()
+    }
+}
+
+/// Runs `f`, whose commands are kept together or put back together: when `f` fails, every
+/// document, the selection and the undo histories are as they were before it, with no undo step
+/// and no change to the document's saved state.
+fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostError>) -> std::result::Result<T, HostError> {
+    if h.dom.saving.get() {
+        return f(h);
+    }
+    let save = Savepoint::take(&mut h.session.borrow_mut(), "edit.duplicate");
+    h.dom.saving.set(true);
+    let r = f(h);
+    h.dom.saving.set(false);
+    let mut s = h.session.borrow_mut();
+    if r.is_ok() {
+        save.keep(&mut s);
+    } else if !save.restore(&mut s) {
+        return Err(HostError::Abort(HISTORY_LOST.to_string()));
+    }
+    r
 }
 
 /// A document's uid, the document as it was, and the ids of its page items then.
@@ -414,9 +443,9 @@ fn coords_of(d: &Data) -> std::result::Result<Coords, HostError> {
 }
 
 /// Selects `before` again in the active document `doc` with the selection commands, so that the
-/// journal holds the change: the whole objects, then the direct-selected anchors and segments, the
-/// ruler guides and the key object, guide or anchor. Objects that are now deleted, hidden or
-/// locked are left out.
+/// journal holds the change: the objects in their order with their direct-selected anchors, then
+/// the segments, the ruler guides and the key object, guide or anchor. Objects that are now
+/// deleted, hidden or locked are left out.
 fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -> std::result::Result<(), HostError> {
     // Slices selected with the Slice Selection tool are the whole selection when there are any.
     let slices: Vec<u64> = before.slices.iter().filter(|i| doc.is_slice(**i)).map(|i| i.0).collect();
@@ -426,20 +455,25 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
     }
     let keep = |id: &NodeId| editable(doc, *id);
     let partial = |id: &NodeId| before.anchors.contains_key(id) || before.segments.contains_key(id);
-    let whole: Vec<u64> = before.objects.iter().filter(|i| keep(i) && !partial(i)).map(|i| i.0).collect();
-    if whole.is_empty() {
+    let kept: Vec<NodeId> = before.objects.iter().copied().filter(keep).collect();
+    if kept.is_empty() {
         command(h, "select.none", &json!({}))?;
+    } else if !kept.iter().any(partial) {
+        command(h, "select.set", &json!({"ids": kept.iter().map(|i| i.0).collect::<Vec<_>>()}))?;
     } else {
-        command(h, "select.set", &json!({"ids": whole}))?;
-    }
-    let items: Vec<Value> = before
-        .anchors
-        .iter()
-        .filter(|(i, _)| keep(i))
-        .map(|(i, a)| json!({"id": i.0, "anchors": a.iter().map(|(p, k)| [p, k]).collect::<Vec<_>>()}))
-        .collect();
-    if !items.is_empty() {
-        command(h, "select.anchorsMany", &json!({"items": items, "mode": "add"}))?;
+        // One `select.anchorsMany` selects every object in its order: a partly selected path with
+        // its anchors, a whole path with all of them and any other object with none.
+        let items: Vec<Value> = kept
+            .iter()
+            .map(|i| {
+                let anchors: Vec<[usize; 2]> = match before.anchors.get(i) {
+                    Some(a) => a.iter().map(|(p, k)| [*p, *k]).collect(),
+                    None => doc.node(*i).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, k, _)| [s, k]).collect()).unwrap_or_default(),
+                };
+                json!({"id": i.0, "anchors": anchors})
+            })
+            .collect();
+        command(h, "select.anchorsMany", &json!({"items": items, "mode": "set"}))?;
     }
     for (i, segments) in before.segments.iter().filter(|(i, _)| keep(i)) {
         let segments: Vec<[usize; 2]> = segments.iter().map(|(p, k)| [*p, *k]).collect();
@@ -487,25 +521,26 @@ fn on_doc<T>(
         command(h, "document.activate", &json!({"index": index}))?;
     }
     let r = f(h);
+    let mut restored = Ok(());
     if keep_selection {
         let doc = {
             let s = h.session.borrow();
             s.active().filter(|st| st.uid == uid && st.selection != before).map(|st| st.doc.clone())
         };
         if let Some(doc) = doc {
-            let back = restore_selection(h, &doc, &before);
-            if r.is_ok() {
-                back?;
-            }
+            restored = restore_selection(h, &doc, &before);
         }
     }
-    if switch && let Some(a) = active {
-        let back = command(h, "document.activate", &json!({"index": a}));
-        if r.is_ok() {
-            back?;
-        }
-    }
-    r
+    // The document that was active is active again before any error is given: `f`'s error first,
+    // then the selection's, then the switch back's.
+    let back = match active {
+        Some(a) if switch => command(h, "document.activate", &json!({"index": a})).map(drop),
+        _ => Ok(()),
+    };
+    let v = r?;
+    restored?;
+    back?;
+    Ok(v)
 }
 
 /// Runs `id` with `params` on the item's document, its selection kept.
@@ -707,10 +742,9 @@ impl NewDoc<'_> {
             if n.fract() != 0.0 || n < 1.0 || n > count {
                 return Err(HostError::Range("artboardRowsOrCols must be a whole number from 1 to numArtBoards".into()));
             }
-            // A grid filled by column takes the number of rows; `file.new` takes columns.
+            // A grid filled by column takes the number of rows.
             let by_column = layout.get("layout").is_some_and(|l| l == "gridByColumn");
-            let columns = if by_column { (count / n).ceil() } else { n };
-            layout.insert("columns".into(), json!(columns));
+            layout.insert((if by_column { "rows" } else { "columns" }).into(), json!(n));
         }
         if !layout.is_empty() {
             p.insert("artboardLayout".into(), Value::Object(layout));
@@ -1020,11 +1054,12 @@ fn doc_set_selection(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// Makes `ids` the selection of `doc`, with no command when it already is: the same objects, each
-/// selected as a whole, and no ruler guide, slice or key.
+/// selected as a whole, and no ruler guide, slice, key or Layers panel target.
 fn set_selection(h: &Host, doc: Doc, ids: Vec<NodeId>) -> Answer {
     let same = with_doc(h, doc, |_, st| {
         let sel = &st.selection;
         sel.objects == ids
+            && sel.target.is_none()
             && sel.anchors.is_empty()
             && sel.segments.is_empty()
             && sel.guides.is_empty()
@@ -1502,11 +1537,21 @@ fn item_move(h: &Host, a: &[Data]) -> Answer {
     Ok(arg(a, 0).clone())
 }
 
+/// The error of `duplicate` on a path inside a compound path.
+pub const COMPOUND_MEMBER: &str = "Duplicating a path inside a compound path is not available yet";
+
 /// `duplicate(relativeObject?, insertionLocation?)`: a copy of the item, directly above it as
 /// Edit › Duplicate makes one, or into or beside `relativeObject` as `move` puts it. → the copy.
-/// When `node.move` refuses the place, the copy is deleted and the error is thrown.
+/// When `node.move` refuses the place, the copy and every change it made are put back, and the
+/// error is thrown.
 fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
+    let in_compound = with_doc(h, item.doc, |_, st| {
+        st.doc.parent_of(item.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }))
+    });
+    if in_compound {
+        return Err(HostError::Error(COMPOUND_MEMBER.into()));
+    }
     let to = match arg(a, 1) {
         Data::Undefined => {
             if !matches!(arg(a, 2), Data::Undefined) {
@@ -1516,21 +1561,14 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
         }
         target => Some(destination(h, item, target, arg(a, 2), true)?),
     };
-    let r = edit_item(h, item, "edit.duplicate", &json!({"ids": [item.id.0]}))?;
-    let id = match &r {
-        Data::Object(o) => o.iter().find(|(k, _)| k == "ids").and_then(|(_, v)| match v {
-            Data::Array(ids) => ids.first().and_then(|d| if let Data::Number(n) = d { whole(*n) } else { None }),
-            _ => None,
-        }),
-        _ => None,
-    };
-    let id = id.ok_or_else(|| HostError::Error("the copy was not made".into()))?;
-    if let Some(to) = to
-        && let Err(e) = place(h, item.doc, NodeId(id), &to)
-    {
-        edit_item(h, item, "edit.clear", &json!({"ids": [id]}))?;
-        return Err(e);
-    }
+    let id = atomically(h, |h| {
+        let (_, made) = on_doc(h, item.doc.uid, true, |h| command_value(h, "edit.duplicate", &json!({"ids": [item.id.0]})))?;
+        let id = made["ids"].get(0).and_then(Value::as_u64).ok_or_else(|| HostError::Error("the copy was not made".into()))?;
+        if let Some(to) = to {
+            place(h, item.doc, NodeId(id), &to)?;
+        }
+        Ok(id)
+    })?;
     let s = h.session.borrow();
     let st = s.documents().iter().find(|d| d.uid == item.doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
     Ok(item_ref(h, st, NodeId(id)))

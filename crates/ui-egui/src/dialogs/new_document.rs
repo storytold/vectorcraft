@@ -245,8 +245,13 @@ fn layout(d: &Dialog) -> (ArtboardLayout, u64, f64, bool) {
     )
 }
 
+/// Sets one artboard layout field. A new layout or column count replaces the rows of a preset
+/// made with `file.new`'s `rows`.
 fn set_layout(d: &mut Dialog, key: &str, v: Value) {
     let mut l = d.fields.get("artboardLayout").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    if let ("layout" | "columns", Some(o)) = (key, l.as_object_mut()) {
+        o.remove("rows");
+    }
     l[key] = v;
     d.fields.insert("artboardLayout".into(), l);
 }
@@ -888,6 +893,21 @@ mod tests {
 
     fn field(app: &VectorcraftApp, k: &str) -> serde_json::Value {
         app.ui.dialog.as_ref().unwrap().fields.get(k).cloned().unwrap_or_default()
+    }
+
+    /// A preset's rows stay until Columns or the layout changes.
+    #[test]
+    fn a_new_column_count_replaces_a_presets_rows() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": 4}));
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "spacing", json!(5.0));
+        assert_eq!(field(&app, "artboardLayout")["rows"], json!(4));
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "columns", json!(3));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByColumn", "columns": 3, "spacing": 5.0}));
+        set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 4}));
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByRow"));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByRow"}));
     }
 
     /// Recent shows each entry as it was made: a portrait and a landscape A3 are two cards of

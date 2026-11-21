@@ -257,7 +257,7 @@ pub(crate) struct Interp {
     pub(crate) host_classes: Vec<crate::host_classes::Entry>,
     /// Whether [`Self::write_data`] makes objects of host classes from their [`crate::host_ref`].
     pub(crate) write_hosted: bool,
-    /// The object made for each class and handle ([`crate::host_classes`]), so that two reads of
+    /// The object made for each family of classes and handle ([`crate::host_classes`]), so that two reads of
     /// the same one give the same object. It is not a root: an entry whose object was collected is
     /// dropped after each collection.
     pub(crate) host_objects: crate::host_classes::Made,
@@ -281,6 +281,11 @@ pub(crate) struct Interp {
     pub(crate) can_wait: Rc<std::cell::Cell<bool>>,
     /// A host function's call waits for its result: the value on top of the stack stands in for it.
     pub(crate) waiting: bool,
+    /// The call that waits is a member of a host class ([`crate::host::ArgRead::Hosted`]): its
+    /// answer is read as such a member's result is ([`Interp::write_hosted`]).
+    pub(crate) waiting_hosted: bool,
+    /// A host class's constructor runs with `new`: it may not wait for its result.
+    pub(crate) constructing: bool,
     /// The built-in that waits with the host's call ([`Pause::Ask`]): it takes the answer before
     /// the next instruction runs.
     pub(crate) resuming: Option<Resumption>,
@@ -538,6 +543,8 @@ impl Interp {
             in_slice: false,
             can_wait: Rc::default(),
             waiting: false,
+            waiting_hosted: false,
+            constructing: false,
             resuming: None,
             host_abort: None,
             data_limits: crate::DataLimits::default(),
@@ -788,7 +795,7 @@ impl Interp {
         roots.objects.extend(self.host_classes.iter().flat_map(crate::host_classes::Entry::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
-        crate::host_classes::forget_collected(&mut self.host_objects, &self.heap);
+        crate::host_classes::forget_collected(&mut self.host_objects, &self.heap, &self.host_classes);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
         self.flattened.set(0);
@@ -2392,11 +2399,14 @@ impl Interp {
             }
             // A host class's constructor ([`crate::host_classes`]) gives the object it makes. A plain
             // object it gives inherits from the class's prototype. The class's other functions are
-            // not constructors.
+            // not constructors. A constructor called with `new` cannot wait for its result.
             Some(Func::Data { f: host, name, read: read @ crate::host::ArgRead::Hosted })
                 if f.as_object().is_some_and(|o| self.is_host_constructor(o)) =>
             {
-                let v = self.call_data(&host, &name, &Value::Undefined, &args, &read)?;
+                let was = std::mem::replace(&mut self.constructing, true);
+                let v = self.call_data(&host, &name, &Value::Undefined, &args, &read);
+                self.constructing = was;
+                let v = v?;
                 if let (Some(callee), Value::Object(o)) = (f.as_object(), &v)
                     && matches!(self.object(*o)?.class, Class::Ordinary)
                     && let Some(Prop::Data { value: Value::Object(proto), .. }) = self.find_property(callee, &key("prototype"))?
