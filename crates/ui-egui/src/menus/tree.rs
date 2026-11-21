@@ -659,6 +659,18 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Snap to Pixel", "view.snapToPixel"),
                 c("Snap to Point", "view.snapToPoint"),
                 c("Snap to Glyph", "view.snapToGlyph"),
+                sub(
+                    "Snapping",
+                    vec![
+                        c("Smart Guides", "view.smartGuides"),
+                        c("Snap to Point", "view.snapToPoint"),
+                        c("Snap to Grid", "view.snapToGrid"),
+                        c("Snap to Pixel", "view.snapToPixel"),
+                        c("Snap to Glyph", "view.snapToGlyph"),
+                        Sep,
+                        c("Pixel Snapping Options…", "view.snapToPixel.options"),
+                    ],
+                ),
                 Sep,
                 c("New View…", "view.saved.new"),
                 c("Edit Views…", "view.saved.edit"),
