@@ -159,6 +159,7 @@ pub mod trace_presets;
 pub mod tracing_presets;
 pub(crate) mod transform;
 pub mod transform_each;
+pub mod typst;
 pub mod variables;
 pub mod warichu;
 mod warp_effect;
@@ -488,6 +489,7 @@ registry! {
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     LivePaintGaps: [live_paint_gaps::KIND] => live_paint_gaps::SPEC,
+    Typst: [typst::KIND] => typst::SPEC,
     LivePaintSelectionOptions: [live_paint_selection::KIND] => live_paint_selection::SPEC,
     LivePaintBucketOptions: [live_paint_bucket::KIND] => live_paint_bucket::SPEC,
     BrushOptions: [brush_options::KIND] => brush_options::SPEC,

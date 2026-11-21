@@ -111,6 +111,7 @@ pub(crate) mod threads;
 pub mod toast;
 pub(crate) mod typecmd;
 mod typemenu;
+pub mod typst;
 mod variablecmds;
 pub(crate) mod views;
 pub mod wand;
@@ -408,6 +409,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(shortcutset::specs());
         v.extend(actionset::specs());
         v.extend(importmatches::specs());
+        v.extend(typst::specs());
         v.extend(addons::specs());
         // Last, so the reference it writes ends with its own section.
         v.extend(apiref::specs());
