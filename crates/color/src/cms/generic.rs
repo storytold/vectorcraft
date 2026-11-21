@@ -30,6 +30,7 @@ use std::sync::OnceLock;
 
 use super::Intent;
 use super::lab::{D50, Lab, delta_e2000, lab_to_xyz, srgb_to_lab, xyz_to_lab, xyz_to_srgb};
+use super::measured::Lattice;
 
 /// Black generation.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -129,6 +130,9 @@ pub struct GenericCmyk {
     paper_xyz: [f32; 3],
     /// Media-relative XYZ of the black point (for black-point compensation).
     black_rel: [f32; 3],
+    /// A media-relative Lab correction added to the model, fitted to measured data
+    /// ([`super::measured`]).
+    correction: Option<Lattice>,
     gbd: OnceLock<Gbd>,
 }
 
@@ -139,6 +143,15 @@ impl GenericCmyk {
     }
 
     pub fn new(params: GenericCmykParams) -> Self {
+        Self::build(params, None)
+    }
+
+    /// The model of `params` with `correction` added to its media-relative Lab.
+    pub fn with_correction(params: GenericCmykParams, correction: Lattice) -> Self {
+        Self::build(params, Some(correction))
+    }
+
+    fn build(params: GenericCmykParams, correction: Option<Lattice>) -> Self {
         let paper_xyz = lab_to_xyz(params.paper);
         let mut prim = [D50; 16];
         for (p, lab) in prim[1..].iter_mut().zip(params.primaries.iter()) {
@@ -149,7 +162,7 @@ impl GenericCmyk {
             let g = params.tvi50[i];
             if g > 1e-6 { (1.0 - params.tvi40[i] / (0.96 * g)) / 0.2 } else { 0.0 }
         });
-        let mut g = Self { params, prim, skew, paper_xyz, black_rel: [0.0; 3], gbd: OnceLock::new() };
+        let mut g = Self { params, prim, skew, paper_xyz, black_rel: [0.0; 3], correction, gbd: OnceLock::new() };
         g.black_rel = g.to_xyz_rel(g.black_point_build());
         g
     }
@@ -218,6 +231,14 @@ impl GenericCmyk {
 
     /// Media-relative XYZ (paper = D50 white).
     pub fn to_xyz_rel(&self, cmyk: [f32; 4]) -> [f32; 3] {
+        match &self.correction {
+            Some(_) => lab_to_xyz(self.to_lab_rel(cmyk)),
+            None => self.neugebauer(cmyk),
+        }
+    }
+
+    /// Media-relative XYZ of the Neugebauer model alone.
+    fn neugebauer(&self, cmyk: [f32; 4]) -> [f32; 3] {
         let e = [0, 1, 2, 3].map(|i| self.gain(i, cmyk[i]));
         let mut out = [0.0f32; 3];
         for (i, p) in self.prim.iter().enumerate() {
@@ -236,7 +257,14 @@ impl GenericCmyk {
     }
 
     pub fn to_lab_rel(&self, cmyk: [f32; 4]) -> Lab {
-        xyz_to_lab(self.to_xyz_rel(cmyk))
+        let lab = xyz_to_lab(self.neugebauer(cmyk));
+        match &self.correction {
+            Some(c) => {
+                let d = c.at(cmyk);
+                Lab::new((lab.l + d[0]).max(0.0), lab.a + d[1], lab.b + d[2])
+            }
+            None => lab,
+        }
     }
     pub fn to_lab_abs(&self, cmyk: [f32; 4]) -> Lab {
         xyz_to_lab(self.to_xyz(cmyk))
