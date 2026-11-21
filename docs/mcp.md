@@ -5802,7 +5802,8 @@ From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, 
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
 art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
-in under a numbered name ("Ink 2") and the pattern links to that. A library color whose name the document gives
+in under a numbered name ("Ink 2") and the pattern links to that. That numbered name skips the names the library
+gives its other swatches. A library color whose name the document gives
 another color is the document's numbered copy of the same color when it has one, so adding the pattern and its color
 again adds nothing. A pattern the document already holds with its art linked to the document's own color of that name
 is used as it is. A library tint or gradient whose global or spot color comes in under a numbered name, or is in the
