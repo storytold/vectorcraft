@@ -4,16 +4,17 @@
 //! acts through `object.compoundShape.*` and `window.pathfinder.compoundShapes`; nothing else
 //! about the Pathfinder panel changes.
 
-use serde_json::{Value, json};
+use craft::menu::Node;
+use serde_json::json;
 
-use crate::menus::Item;
+use crate::menus::{Sep, c, cp};
 
-pub fn menu() -> Vec<Item> {
+pub fn menu() -> Vec<Node> {
     vec![
-        Item::Cmd("Make Compound Shape", "object.compoundShape.make", json!({})),
-        Item::Cmd("Release Compound Shape", "object.compoundShape.release", json!({})),
-        Item::Cmd("Expand Compound Shape", "object.compoundShape.expand", json!({})),
-        Item::Sep,
-        Item::Cmd("Shape Mode Buttons Make Compound Shapes", "window.pathfinder.compoundShapes", Value::Null),
+        cp("Make Compound Shape", "object.compoundShape.make", json!({})),
+        cp("Release Compound Shape", "object.compoundShape.release", json!({})),
+        cp("Expand Compound Shape", "object.compoundShape.expand", json!({})),
+        Sep,
+        c("Shape Mode Buttons Make Compound Shapes", "window.pathfinder.compoundShapes"),
     ]
 }

@@ -5,9 +5,10 @@
 //! Banner Hems and Grommets… opens it on the options of `addon.cutting.banner`, with a Preview.
 //! Nest Shapes… opens it on the options of `addon.cutting.nest`, with a Preview.
 
+use craft::menu::Node;
 use serde_json::json;
 
-use crate::menus::Item;
+use crate::menus::cp;
 
 /// Stencil Bridges' command.
 pub const BRIDGES: &str = "addon.cutting.bridges";
@@ -23,15 +24,15 @@ pub const BANNER: &str = "addon.cutting.banner";
 pub const NEST: &str = "addon.cutting.nest";
 
 /// Object › Plug-ins › Cutting Tools.
-pub fn menu() -> Vec<Item> {
+pub fn menu() -> Vec<Node> {
     vec![
-        Item::Cmd("Stencil Bridges…", BRIDGES, json!({"width": 2, "count": 1, "direction": "vertical", "keepOriginal": true})),
-        Item::Cmd(
+        cp("Stencil Bridges…", BRIDGES, json!({"width": 2, "count": 1, "direction": "vertical", "keepOriginal": true})),
+        cp(
             "Weed Box and Lines…",
             WEED,
             json!({"margin": 9, "box": true, "direction": "both", "count": 1, "spacing": 0, "gap": 0, "weight": 0.3, "swatch": "[Registration]"}),
         ),
-        Item::Cmd(
+        cp(
             "Banner Hems and Grommets…",
             BANNER,
             json!({
@@ -39,7 +40,7 @@ pub fn menu() -> Vec<Item> {
                 "diameter": 27, "weight": 0.3, "swatch": "[Registration]"
             }),
         ),
-        Item::Cmd(
+        cp(
             "Nest Shapes…",
             NEST,
             json!({"roll": false, "width": 0, "height": 0, "margin": 18, "spacing": 9, "rotate": false, "usePreviewBounds": true}),

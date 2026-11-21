@@ -2,11 +2,12 @@
 //! Contour tool. The Contour bar (`canvas/contour_bar.rs`) shows over the selection while the tool is
 //! active. Everything acts through `addon.contour.set` and Expand Appearance.
 
+use craft::menu::Node;
 use serde_json::json;
 use vectorcraft_tools::addons::contour;
 
-use crate::menus::Item;
+use crate::menus::cp;
 
-pub fn menu() -> Vec<Item> {
-    vec![Item::Cmd("Contour Tool", "tool.select", json!({"tool": contour::ID}))]
+pub fn menu() -> Vec<Node> {
+    vec![cp("Contour Tool", "tool.select", json!({"tool": contour::ID}))]
 }
