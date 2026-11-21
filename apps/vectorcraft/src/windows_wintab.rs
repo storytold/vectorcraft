@@ -30,11 +30,15 @@
 //!   macOS, 0 counts as no wheel until the pen has reported another value since it came near: the
 //!   readings start afresh when a cursor
 //!   comes near or leaves (`WT_PROXIMITY`), another cursor comes (`WT_CSRCHANGE`), the pen turns
-//!   to its other end, a press is canceled, the pen leaves the window or detection range, or the
-//!   context closes. These rules are VectorCraft's own.
+//!   to its other end, a press of the pen is canceled, the pen leaves the window or detection
+//!   range, or the context closes. These rules are VectorCraft's own.
 //!
-//! The context closes when the driver closes it or its information changes (`WT_INFOCHANGE`), and
-//! is dropped when its window no longer exists; a later pen message opens it again.
+//! The context is dropped when the driver closes it (`WT_CTXCLOSE`), closed when the driver's
+//! information changes (`WT_INFOCHANGE`), and dropped when its window no longer exists; a later pen
+//! message opens it again. The driver sends those two notices to the window procedure, where a
+//! sent message does not pass winit's message hook, so the context's window gets a window procedure
+//! in front of its own that notes them ([`Notices`]). A packet that `WTPacket` cannot read also
+//! starts the readings afresh ([`Readings::read`]).
 #![cfg_attr(not(windows), allow(dead_code))]
 
 /// Wintab's default message base (`WT_DEFBASE`, `wintab.h`), which [`configure`] sets.
@@ -279,8 +283,18 @@ impl Readings {
         }
     }
 
-    /// Start afresh: the pen came near or left, another cursor came, a press was canceled, or the
-    /// context closed.
+    /// A `WT_PACKET` read at the message time `time`: the packet with its cursor's wheel range, or
+    /// `None` when `WTPacket` failed or the packet could not be decoded. Then no reading is known to
+    /// be current, and the readings start afresh until the next packet.
+    fn read(&mut self, read: Option<(Packet, Option<Axis>)>, time: u32) {
+        match read {
+            Some((p, axis)) => self.packet(p, axis, time),
+            None => self.forget(),
+        }
+    }
+
+    /// Start afresh: the pen came near or left, another cursor came, a press was canceled, a packet
+    /// could not be read, or the context closed.
     fn forget(&mut self) {
         self.list.clear();
         self.eraser = None;
@@ -341,6 +355,67 @@ fn next_context(current: Option<(usize, bool)>, tried: Option<usize>, owner: usi
     (step, tried != Some(owner) || step != Current::Keep)
 }
 
+/// At most this many contexts' closing notices wait for [`Notices::take`].
+const MAX_NOTICES: usize = 8;
+
+/// The driver's notices about contexts (`WT_CTXCLOSE`, `WT_INFOCHANGE`) since they were last
+/// taken. The driver sends them to the window procedure, at times while the reader is in a driver
+/// call of its own, so they are noted here and acted on at the next Wintab or pen message.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Notices {
+    /// The contexts the driver closed or is about to close.
+    closed: Vec<usize>,
+    /// The driver's information changed.
+    info_changed: bool,
+}
+
+/// What the driver's notices do to the open context.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Notice {
+    /// Nothing changed for it.
+    Keep,
+    /// The driver closed it: drop the handle without `WTClose`, and open a context again at the
+    /// next pen message.
+    Closed,
+    /// The driver's information changed: close it, forget each cursor's wheel range, and open a
+    /// context again at the next pen message.
+    Reopen,
+}
+
+impl Notices {
+    /// Notes `message` if it is a closing or information-change notice.
+    fn note(&mut self, message: Message) {
+        match message {
+            Message::Closed { ctx } if !self.closed.contains(&ctx) => {
+                if self.closed.len() >= MAX_NOTICES {
+                    self.closed.remove(0);
+                }
+                self.closed.push(ctx);
+            }
+            Message::InfoChange => self.info_changed = true,
+            _ => {}
+        }
+    }
+
+    /// The reader closed `ctx` itself: its closing notice is not the driver's, and a context opened
+    /// later with the same handle value stays open.
+    fn closed_by_reader(&mut self, ctx: usize) {
+        self.closed.retain(|&c| c != ctx);
+    }
+
+    /// Takes the notices: what they do to the open context `current`.
+    fn take(&mut self, current: Option<usize>) -> Notice {
+        let notices = std::mem::take(self);
+        if notices.info_changed {
+            Notice::Reopen
+        } else if current.is_some_and(|c| notices.closed.contains(&c)) {
+            Notice::Closed
+        } else {
+            Notice::Keep
+        }
+    }
+}
+
 /// What a message does to the readings and the context.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Message {
@@ -385,15 +460,18 @@ mod win {
     use std::ffi::c_void;
     use std::sync::OnceLock;
 
-    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::System::LibraryLoader::{GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW};
-    use windows::Win32::UI::WindowsAndMessaging::{GA_ROOTOWNER, GetAncestor, IsWindow, MSG};
-    use windows::core::{s, w};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CallWindowProcW, DefWindowProcW, GA_ROOTOWNER, GWLP_WNDPROC, GetAncestor, GetPropW, GetWindowLongPtrW, IsWindow, MSG, RemovePropW, SetPropW,
+        SetWindowLongPtrW, WM_NCDESTROY, WNDPROC,
+    };
+    use windows::core::{PCWSTR, s, w};
 
     use super::{
         Axis, CSR_PKTDATA, CSR_TYPE, Current, DVC_FIRSTCSR, DVC_NCSRTYPES, DVC_TPRESSURE, IFC_NDEVICES, LOGCONTEXT_WORDS, MAX_DEVICES, MAX_INDEX,
-        MAX_READINGS, Message, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE, configure, decode,
-        device_of, message, next_context, wheel_axis,
+        MAX_READINGS, Message, Notice, Notices, PACKET_BUFFER, PACKET_DATA, Readings, WTI_CURSORS, WTI_DEFCONTEXT, WTI_DEVICES, WTI_INTERFACE,
+        configure, decode, device_of, message, next_context, wheel_axis,
     };
 
     /// `WTInfoW`, `WTOpenW`, `WTClose` and `WTPacket` (`wintab.h`).
@@ -432,6 +510,73 @@ mod win {
 
     thread_local! {
         static STATE: RefCell<State> = RefCell::new(State::default());
+        /// Kept apart from [`STATE`], so the window procedure can note a notice the driver sends
+        /// while [`STATE`] is borrowed for a driver call.
+        static NOTICES: RefCell<Notices> = RefCell::new(Notices::default());
+    }
+
+    /// The window property that holds the window procedure [`wnd_proc`] passes messages on to.
+    const PREV_PROC: PCWSTR = w!("VectorCraft.Wintab.PrevProc");
+
+    /// Notes `what` for the next [`State::take_notices`] when it is a notice about contexts.
+    fn note(what: Message) {
+        if !matches!(what, Message::Closed { .. } | Message::InfoChange) {
+            return;
+        }
+        NOTICES.with(|n| {
+            if let Ok(mut n) = n.try_borrow_mut() {
+                n.note(what);
+            }
+        });
+    }
+
+    /// The window procedure put in front of the context window's own: the driver sends
+    /// `WT_CTXCLOSE` and `WT_INFOCHANGE` (<https://developer-docs.wacom.com/docs/icbt/windows/wintab/wintab-reference/>),
+    /// and a sent message reaches the window procedure without passing winit's message hook. It
+    /// notes them and passes every message on.
+    unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        note(message(msg, wparam.0, lparam.0));
+        // SAFETY: `GetPropW` takes any handle value and a NUL-terminated name.
+        let prev = unsafe { GetPropW(hwnd, PREV_PROC) }.0;
+        if msg == WM_NCDESTROY {
+            // SAFETY: as above; the window is being destroyed.
+            let _ = unsafe { RemovePropW(hwnd, PREV_PROC) };
+        }
+        if prev.is_null() {
+            // SAFETY: the default procedure takes any message of a window of this thread.
+            return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
+        }
+        // SAFETY: the property holds the window procedure `subclass` replaced, which stays valid
+        // while the window exists.
+        let prev = unsafe { std::mem::transmute::<*mut c_void, WNDPROC>(prev) };
+        // SAFETY: `prev` is the window's own procedure, called with the message it was sent.
+        unsafe { CallWindowProcW(prev, hwnd, msg, wparam, lparam) }
+    }
+
+    /// Puts [`wnd_proc`] in front of the window procedure of `hwnd`, once per window. The window's
+    /// property holds the procedure it replaced, and goes with the window.
+    fn subclass(hwnd: *mut c_void) {
+        let hwnd = HWND(hwnd);
+        // SAFETY: `GetPropW` and `GetWindowLongPtrW` take any handle value and read no caller memory.
+        if !unsafe { GetPropW(hwnd, PREV_PROC) }.0.is_null() {
+            return;
+        }
+        // SAFETY: as above.
+        let prev = unsafe { GetWindowLongPtrW(hwnd, GWLP_WNDPROC) } as isize;
+        if prev == 0 {
+            return;
+        }
+        // SAFETY: the window is this thread's (winit's), and the property's value is a procedure
+        // address, not memory the system frees.
+        if unsafe { SetPropW(hwnd, PREV_PROC, Some(HANDLE(prev as *mut c_void))) }.is_err() {
+            return;
+        }
+        type Proc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT;
+        // SAFETY: `wnd_proc` is a window procedure, and the window is this thread's.
+        if unsafe { SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wnd_proc as Proc as usize as _) } as isize == 0 {
+            // SAFETY: as for `SetPropW`.
+            let _ = unsafe { RemovePropW(hwnd, PREV_PROC) };
+        }
     }
 
     /// The Wintab exports, or `None` without the driver's `Wintab32.dll` in the system directory.
@@ -506,8 +651,32 @@ mod win {
             if let Some(c) = self.context.take() {
                 // SAFETY: the handle came from `WTOpenW` and has not been closed.
                 unsafe { (api.close)(c.handle) };
+                NOTICES.with(|n| {
+                    if let Ok(mut n) = n.try_borrow_mut() {
+                        n.closed_by_reader(c.handle as usize);
+                    }
+                });
             }
             self.readings.forget();
+        }
+
+        /// Acts on the driver's notices since the last look ([`Notices::take`]).
+        fn take_notices(&mut self, api: Api) {
+            let current = self.context.as_ref().map(|c| c.handle as usize);
+            let notice = NOTICES.with(|n| n.try_borrow_mut().map_or(Notice::Keep, |mut n| n.take(current)));
+            match notice {
+                Notice::Keep => {}
+                Notice::Closed => {
+                    self.context = None;
+                    self.tried = None;
+                    self.readings.forget();
+                }
+                Notice::Reopen => {
+                    self.close(api);
+                    self.tried = None;
+                    self.cursors.clear();
+                }
+            }
         }
 
         /// Moves the context to the window that owns `hwnd` ([`next_context`]).
@@ -535,6 +704,7 @@ mod win {
             let handle = unsafe { (api.open)(owner, words.as_mut_ptr().cast(), 1) };
             if !handle.is_null() {
                 self.context = Some(Context { handle, hwnd: owner });
+                subclass(owner);
             }
         }
 
@@ -556,46 +726,35 @@ mod win {
     }
 
     /// winit's message hook for the Wintab messages: reads each packet of the context and starts
-    /// the readings afresh on a cursor's change or proximity. It never consumes the message.
+    /// the readings afresh on a cursor's change or proximity. A closing or information-change
+    /// notice that comes through the queue is noted as [`wnd_proc`] notes a sent one. It never
+    /// consumes the message.
     pub fn msg_hook(msg: &MSG) {
         let what = message(msg.message, msg.wParam.0, msg.lParam.0);
         if what == Message::Other {
             return;
         }
         let Some(api) = api() else { return };
+        note(what);
         STATE.with(|s| {
             let Ok(mut s) = s.try_borrow_mut() else { return };
+            s.take_notices(api);
             match what {
                 Message::Packet { serial, ctx } => {
                     let Some(handle) = s.ours(msg.hwnd.0, ctx) else { return };
                     let mut buf = PacketBuffer([0; PACKET_BUFFER]);
                     // SAFETY: the handle is the open context's, and `buf` holds more bytes than a
                     // packet of every field.
-                    if unsafe { (api.packet)(handle, serial, buf.0.as_mut_ptr().cast()) } == 0 {
-                        return;
-                    }
-                    let Some(p) = decode(&buf.0, PACKET_DATA) else { return };
-                    let axis = s.axis(api, p.cursor);
-                    s.readings.packet(p, axis, msg.time);
+                    let read = unsafe { (api.packet)(handle, serial, buf.0.as_mut_ptr().cast()) } != 0;
+                    let read = read.then(|| decode(&buf.0, PACKET_DATA)).flatten().map(|p| (p, s.axis(api, p.cursor)));
+                    s.readings.read(read, msg.time);
                 }
                 Message::Forget { ctx } => {
                     if s.ours(msg.hwnd.0, ctx).is_some() {
                         s.readings.forget();
                     }
                 }
-                Message::Closed { ctx } => {
-                    if s.context.as_ref().is_some_and(|c| c.handle as usize == ctx) {
-                        s.context = None;
-                        s.tried = None;
-                        s.readings.forget();
-                    }
-                }
-                Message::InfoChange => {
-                    s.close(api);
-                    s.tried = None;
-                    s.cursors.clear();
-                }
-                Message::Other => {}
+                Message::Closed { .. } | Message::InfoChange | Message::Other => {}
             }
         });
     }
@@ -606,6 +765,7 @@ mod win {
         let api = api()?;
         STATE.with(|s| {
             let mut s = s.try_borrow_mut().ok()?;
+            s.take_notices(api);
             s.open_for(api, hwnd.0);
             s.readings.wheel_at(time, eraser)
         })
@@ -800,6 +960,51 @@ mod tests {
         assert_eq!(next_context(Some((main, false)), Some(main), main), (Current::Drop, true), "its handle reused");
         assert_eq!(next_context(None, Some(main), main), (Current::Keep, false), "an open that failed is not tried again");
         assert_eq!(next_context(None, Some(main), doc), (Current::Keep, true), "but is for another window");
+    }
+
+    #[test]
+    fn a_packet_that_cannot_be_read_starts_the_readings_afresh() {
+        let mut r = Readings::default();
+        r.read(Some((packet(1, 750), AXIS)), 100);
+        assert_eq!(r.wheel_at(100, false), Some(0.75));
+        r.read(None, 110);
+        assert_eq!(r.wheel_at(110, false), None, "the last reading is not kept after a failed read");
+        r.read(Some((packet(1, 500), AXIS)), 120);
+        assert_eq!(r.wheel_at(120, false), Some(0.5), "the next packet reads again");
+    }
+
+    #[test]
+    fn the_drivers_notices_drop_or_reopen_the_context() {
+        let (ours, other) = (0x5000, 0x6000);
+        let mut n = Notices::default();
+        assert_eq!(n.take(Some(ours)), Notice::Keep, "no notice");
+        n.note(Message::Closed { ctx: other });
+        assert_eq!(n.take(Some(ours)), Notice::Keep, "another context closed");
+        n.note(Message::Closed { ctx: ours });
+        assert_eq!(n.take(Some(ours)), Notice::Closed, "the driver closed it");
+        assert_eq!(n.take(Some(ours)), Notice::Keep, "taken once");
+        n.note(Message::Closed { ctx: ours });
+        assert_eq!(n.take(None), Notice::Keep, "nothing open");
+        assert_eq!(n, Notices::default(), "and the notice is gone");
+        n.note(Message::InfoChange);
+        assert_eq!(n.take(Some(ours)), Notice::Reopen);
+        n.note(Message::InfoChange);
+        assert_eq!(n.take(None), Notice::Reopen, "cursor ranges are read again even with nothing open");
+        // The reader closes its context, and the driver's notice of that arrives during the call;
+        // a context opened next under the same handle value stays open.
+        n.note(Message::Closed { ctx: ours });
+        n.closed_by_reader(ours);
+        assert_eq!(n.take(Some(ours)), Notice::Keep);
+        for ctx in 0..20 {
+            n.note(Message::Closed { ctx });
+            n.note(Message::Closed { ctx });
+        }
+        assert_eq!(n.closed.len(), MAX_NOTICES, "bounded, each context once");
+        assert_eq!(n.take(Some(19)), Notice::Closed, "the latest kept");
+        n.note(Message::Packet { serial: 1, ctx: ours });
+        n.note(Message::Forget { ctx: ours });
+        n.note(Message::Other);
+        assert_eq!(n, Notices::default(), "other messages are not notices");
     }
 
     #[test]

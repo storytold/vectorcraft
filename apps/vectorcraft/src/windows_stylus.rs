@@ -70,6 +70,8 @@ const WM_POINTERLEAVE: u32 = 0x024A;
 
 thread_local! {
     static STROKES: RefCell<BarrelStrokes> = RefCell::new(BarrelStrokes::default());
+    /// The pointer id of the pen whose message last read the Wintab wheel.
+    static WHEEL_PEN: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
 }
 
 /// The pen feed [`msg_hook`] writes, once [`start`] has made it.
@@ -106,14 +108,16 @@ pub fn msg_hook(msg: *const std::ffi::c_void) -> bool {
         return false;
     };
     crate::windows_wintab::msg_hook(msg);
-    if forgets_wheel(msg.message, msg.wParam.0) {
+    if forgets_wheel(msg.message, msg.wParam.0, WHEEL_PEN.get()) {
         crate::windows_wintab::forget();
     }
     let read_pen = || {
         let mut info = POINTER_PEN_INFO::default();
+        let id = (msg.wParam.0 & 0xffff) as u32;
         // SAFETY: `info` is a `POINTER_PEN_INFO` that lives for the call. The call fails for a
         // pointer that is not a pen.
-        unsafe { GetPointerPenInfo((msg.wParam.0 & 0xffff) as u32, &mut info) }.ok()?;
+        unsafe { GetPointerPenInfo(id, &mut info) }.ok()?;
+        WHEEL_PEN.set(Some(id));
         let in_contact = info.pointerInfo.pointerFlags.0 & POINTER_FLAG_INCONTACT.0 != 0;
         let eraser = info.penFlags & (PEN_FLAG_INVERTED | PEN_FLAG_ERASER) != 0;
         let wheel = crate::windows_wintab::pen_wheel(msg.hwnd, msg.time, eraser);
@@ -155,8 +159,12 @@ fn pen_pose(pen_mask: u32, tilt_x: i32, tilt_y: i32, rotation: u32, wheel: Optio
 
 /// Whether a message with this `wParam` starts the Wintab wheel readings afresh: a pointer message
 /// of a pointer that has left detection range or whose press was canceled, or a pointer leaving the
-/// window.
-fn forgets_wheel(message: u32, wparam: usize) -> bool {
+/// window, when the pointer is `pen`, the pen whose message last read the wheel. A touch or another
+/// pen leaving keeps the readings.
+fn forgets_wheel(message: u32, wparam: usize, pen: Option<u32>) -> bool {
+    if pen != Some((wparam & 0xffff) as u32) {
+        return false;
+    }
     let flags = wparam >> 16;
     match message {
         WM_POINTERENTER | WM_POINTERUPDATE | WM_POINTERDOWN | WM_POINTERUP => {
@@ -477,15 +485,28 @@ mod tests {
     fn leaving_range_or_the_window_and_a_cancel_forget_the_wheel() {
         let in_range = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7;
         let canceled = ((POINTER_MESSAGE_FLAG_INRANGE | POINTER_MESSAGE_FLAG_CANCELED) << 16) | 7;
+        let pen = Some(7);
         for m in [WM_POINTERENTER, WM_POINTERUPDATE, WM_POINTERDOWN, WM_POINTERUP] {
-            assert!(!forgets_wheel(m, in_range), "{m:#x}");
-            assert!(forgets_wheel(m, 7), "out of range: {m:#x}");
-            assert!(forgets_wheel(m, canceled), "canceled: {m:#x}");
+            assert!(!forgets_wheel(m, in_range, pen), "{m:#x}");
+            assert!(forgets_wheel(m, 7, pen), "out of range: {m:#x}");
+            assert!(forgets_wheel(m, canceled, pen), "canceled: {m:#x}");
         }
-        assert!(forgets_wheel(WM_POINTERLEAVE, in_range));
+        assert!(forgets_wheel(WM_POINTERLEAVE, in_range, pen));
         // WM_MOUSEMOVE and WT_PACKET.
-        assert!(!forgets_wheel(0x0200, 0));
-        assert!(!forgets_wheel(0x7FF0, 7));
+        assert!(!forgets_wheel(0x0200, 0, Some(0)));
+        assert!(!forgets_wheel(0x7FF0, 7, pen));
+    }
+
+    #[test]
+    fn another_pointer_leaving_keeps_the_wheel() {
+        // A touch, pointer 9, leaves the window and detection range while pen 7 hovers.
+        let touch_leaves = (POINTER_MESSAGE_FLAG_INRANGE << 16) | 9;
+        assert!(!forgets_wheel(WM_POINTERLEAVE, touch_leaves, Some(7)));
+        assert!(!forgets_wheel(WM_POINTERUPDATE, 9, Some(7)), "out of range");
+        let canceled = (POINTER_MESSAGE_FLAG_CANCELED << 16) | 9;
+        assert!(!forgets_wheel(WM_POINTERUP, canceled, Some(7)), "canceled");
+        assert!(!forgets_wheel(WM_POINTERLEAVE, touch_leaves, None), "no pen has read the wheel");
+        assert!(forgets_wheel(WM_POINTERLEAVE, (POINTER_MESSAGE_FLAG_INRANGE << 16) | 7, Some(7)), "the pen itself");
     }
 
     #[test]
