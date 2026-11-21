@@ -193,13 +193,14 @@ pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
 /// The positions this frame's pointer moves passed through before its last one, each with the
 /// pen force a touch event gave just before it, or the pressure the host's feed kept for that move
 /// ([`StylusFeed::take_moves`], macOS), if any, and the tilt and rotation the feed kept for that
-/// move (empty when the pen read neither), if any. The last move is the pointer's position; the
-/// tilt and rotation the feed kept for it come second, if any. A mouse's moves count too, with no
-/// pressure: a fast mouse stroke otherwise keeps one position a frame, a sample every few pixels,
-/// too few for a low Fidelity to follow the hand (#3328). With `release`, the moves stop at that
-/// button's button-up in this frame, if it came: the moves after it are hover, and the button-up's
-/// position is the pointer's. The last move before it is left out only when it is at that
-/// position; its tilt and rotation come second either way.
+/// move (empty when the pen read neither), if any, with touch events too (the web build's pen).
+/// The last move is the pointer's position; the tilt and rotation the feed kept for it come
+/// second, if any. A mouse's moves count too, with no pressure: a fast mouse stroke otherwise keeps
+/// one position a frame, a sample every few pixels, too few for a low Fidelity to follow the hand
+/// (#3328). With `release`, the moves stop at that button's button-up in this frame, if it came:
+/// the moves after it are hover, and the button-up's position is the pointer's. The last move
+/// before it is left out only when it is at that position; its tilt and rotation come second
+/// either way.
 pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<egui::PointerButton>) -> (Vec<FrameMove>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
@@ -221,6 +222,11 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
                     egui::Event::PointerMoved(p) => moves.push((*p, force, None)),
                     _ => {}
                 }
+            }
+            // A web pen's feed kept a pose (its wheel) for each of its moves: paired from the end,
+            // as below, with the touch's force kept as the pressure.
+            for (m, &(_, q)) in moves.iter_mut().rev().zip(samples.iter().rev()) {
+                m.2 = Some(q);
             }
         } else if !samples.is_empty() {
             // The feed's last sample is the last move's: pair them from the end. A lift's 0 is

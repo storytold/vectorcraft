@@ -12,8 +12,9 @@
 //! each pointer message of a pen before winit handles it. The canvas uses the pressure when a
 //! frame's events carry no touch force, and the tilt and rotation for each press, drag and release.
 //! An airbrush pen's finger wheel comes with the tilt and rotation ([`PenPose::wheel`]) where the
-//! host reads it: from XInput2 on X11 and from AppKit on macOS. The app does not read it on
-//! Windows, whose pointer messages have no field for it, or in the web build.
+//! host reads it: from XInput2 on X11, from AppKit on macOS and from Pointer Events'
+//! `tangentialPressure` in the web build. The app does not read it on Windows, whose pointer
+//! messages have no field for it.
 //!
 //! The feed also says which end of the pen moved. Turning the pen to its eraser end selects the
 //! Eraser tool, and turning it back to the tip selects the tool used before
@@ -157,8 +158,8 @@ impl StylusFeed {
     }
 
     /// Like [`Self::set_sample`], for a pen sample that comes with one pointer move of the window,
-    /// read before the window handles the move (macOS): its pressure, tilt and rotation are also
-    /// kept for that move ([`Self::take_moves`]).
+    /// read before the window handles the move (macOS and the web build): its pressure, tilt,
+    /// rotation and wheel are also kept for that move ([`Self::take_moves`]).
     pub fn set_move(&self, sample: PenSample) {
         self.set_sample(Some(sample));
         let mut pen = self.lock();
