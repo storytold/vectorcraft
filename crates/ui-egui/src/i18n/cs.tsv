@@ -5230,6 +5230,14 @@ imageTrace	Outline	Obrys
 	The script asks to read and write a folder you choose, with everything in it.	Skript žádá o čtení a zápis složky, kterou vyberete, se vším, co obsahuje.
 	Allow Once	Povolit jednou
 	Always Allow This Script	Vždy povolit tento skript
+	No script has kept file access.	Žádný skript nemá uložený přístup k souborům.
+	Read file	Čtení souboru
+	Read and write file	Čtení a zápis souboru
+	Read and write folder	Čtení a zápis složky
+	Revoke	Odvolat
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Odvolat odebere přístup uložený pro každou verzi skriptu. Přístup ke složce zahrnuje vše, co obsahuje.
+@msg	Script file access revoked	Přístup skriptu k souborům byl odvolán
+@msg	The script file access was already revoked	Přístup skriptu k souborům už byl odvolán
 	Deny	Zamítnout
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat

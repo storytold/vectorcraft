@@ -6422,6 +6422,14 @@ digits	Malayalam	Malaiàlam
 	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
 	Allow Once	Permet un cop
 	Always Allow This Script	Permet sempre aquest script
+	No script has kept file access.	Cap script no ha conservat accés als fitxers.
+	Read file	Lectura del fitxer
+	Read and write file	Lectura i escriptura del fitxer
+	Read and write folder	Lectura i escriptura de la carpeta
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca elimina l’accés conservat per a cada versió de l’script. L’accés a una carpeta inclou tot el que conté.
+@msg	Script file access revoked	S’ha revocat l’accés de l’script als fitxers
+@msg	The script file access was already revoked	L’accés de l’script als fitxers ja s’havia revocat
 	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís

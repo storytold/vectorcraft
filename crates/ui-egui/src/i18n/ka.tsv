@@ -8448,6 +8448,14 @@ imageTrace	Outline	კონტური
 	The script asks to read and write a folder you choose, with everything in it.	სკრიპტი ითხოვს თქვენ მიერ არჩეული საქაღალდისა და მთელი მისი შიგთავსის წაკითხვასა და ჩაწერას.
 	Allow Once	ერთხელ დაშვება
 	Always Allow This Script	ამ სკრიპტის ყოველთვის დაშვება
+	No script has kept file access.	არცერთ სკრიპტს არ აქვს შენახული წვდომა ფაილებზე.
+	Read file	ფაილის წაკითხვა
+	Read and write file	ფაილის წაკითხვა და ჩაწერა
+	Read and write folder	საქაღალდის წაკითხვა და ჩაწერა
+	Revoke	ნებართვის გაუქმება
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	ნებართვის გაუქმება შლის სკრიპტის ყველა ვერსიისთვის შენახულ წვდომას. საქაღალდეზე წვდომა მოიცავს მასში არსებულ ყველაფერს.
+@msg	Script file access revoked	სკრიპტის წვდომა ფაილებზე გაუქმდა
+@msg	The script file access was already revoked	სკრიპტის წვდომა ფაილებზე უკვე გაუქმებული იყო
 	Deny	უარყოფა
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება

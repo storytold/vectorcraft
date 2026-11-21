@@ -3024,6 +3024,41 @@ fn script_file_messages_translate_in_every_complete_message_language() {
     assert_eq!(message(de, "Script file access denied: C:/x/a.txt"), "Dateizugriff des Skripts verweigert: C:/x/a.txt");
 }
 
+/// Preferences › General › Script File Access: its labels have a row in every catalog with menus,
+/// and the status messages of its Revoke button a translated row in every complete-message
+/// language.
+#[test]
+fn script_file_access_list_strings_are_in_complete_catalogs() {
+    let labels = [
+        "Script File Access",
+        "No script has kept file access.",
+        "Read file",
+        "Read and write file",
+        "Read and write folder",
+        "Revoke",
+        "Revoke removes the access kept for every version of the script. A folder's access covers everything in it.",
+    ];
+    let literals = tl_literals();
+    let mut missing = vec![];
+    for label in labels {
+        assert!(literals.contains(label), "{label:?} is no longer a tl! literal");
+        for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+            if lang.catalog().plain(label).is_none_or(|row| row == label) {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+    let messages = message_literals();
+    for m in ["Script file access revoked", "The script file access was already revoked"] {
+        assert!(messages.contains(m), "{m:?} is no longer a message");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert_ne!(message(lang, m), m, "{code}: {m}");
+        }
+    }
+}
+
 /// The error that `text.setFormat` and the paragraph style commands give when a justification
 /// setting's Minimum, Desired and Maximum are out of order is translated in every
 /// complete-message language, with the setting's name kept.

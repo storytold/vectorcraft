@@ -5058,6 +5058,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie folderu wraz z całą jego zawartością.
 	Allow Once	Zezwól raz
 	Always Allow This Script	Zawsze zezwalaj temu skryptowi
+	No script has kept file access.	Żaden skrypt nie ma zachowanego dostępu do plików.
+	Read file	Odczyt pliku
+	Read and write file	Odczyt i zapis pliku
+	Read and write folder	Odczyt i zapis folderu
+	Revoke	Odwołaj
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Odwołaj usuwa dostęp zachowany dla każdej wersji skryptu. Dostęp do folderu obejmuje całą jego zawartość.
+@msg	Script file access revoked	Odwołano dostęp skryptu do plików
+@msg	The script file access was already revoked	Dostęp skryptu do plików został już odwołany
 	Deny	Odmów
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia

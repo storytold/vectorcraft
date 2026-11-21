@@ -13,6 +13,7 @@ use crate::theme::{self, Accent, Brightness, Scheme, Tokens};
 use crate::{VectorcraftApp, widgets};
 
 mod descriptions;
+mod script_access;
 
 /// UI-only fields shown in the dialog (backed by `UiState`, not engine prefs).
 pub const UI_FIELDS: &[(&str, &str, &str)] = &[
@@ -55,6 +56,8 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__desktopKeepsFrame".into(), json!(app.desktop_keeps_frame));
     fields.insert("__search".into(), json!(""));
     fields.insert("__focusSearch".into(), json!(true));
+    // Read-only: the script file access kept with Always (General › Script File Access).
+    script_access::load(app, &mut fields);
     app.ui.dialog = Some(Dialog { kind: "preferences".into(), fields });
 }
 
@@ -780,6 +783,9 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         }
         found_paint(ui, d, mark);
         described.row(ui, sp.key, top);
+        if sp.key == "showExternalScriptWarning" {
+            script_access::show(ui, app, d);
+        }
     }
     described
 }

@@ -5779,6 +5779,14 @@ variable-list-end	{0}, {1}	{0}、{1}
 	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
 	Allow Once	今回のみ許可
 	Always Allow This Script	このスクリプトを常に許可
+	No script has kept file access.	ファイルアクセスを保持しているスクリプトはありません。
+	Read file	ファイルの読み取り
+	Read and write file	ファイルの読み取りと書き込み
+	Read and write folder	フォルダーの読み取りと書き込み
+	Revoke	許可を取り消す
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「許可を取り消す」は、スクリプトのすべてのバージョンに保持されたアクセスを削除します。フォルダーへのアクセスには、その中のすべてが含まれます。
+@msg	Script file access revoked	スクリプトのファイルアクセスを取り消しました
+@msg	The script file access was already revoked	スクリプトのファイルアクセスはすでに取り消されています
 	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない

@@ -4815,6 +4815,14 @@ theme	Appearance	Erscheinungsbild
 	The script asks to read and write a folder you choose, with everything in it.	Das Skript möchte einen Ordner, den Sie auswählen, mit seinem gesamten Inhalt lesen und schreiben.
 	Allow Once	Einmal erlauben
 	Always Allow This Script	Dieses Skript immer erlauben
+	No script has kept file access.	Kein Skript hat einen gespeicherten Dateizugriff.
+	Read file	Datei lesen
+	Read and write file	Datei lesen und schreiben
+	Read and write folder	Ordner lesen und schreiben
+	Revoke	Widerrufen
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	„Widerrufen“ entfernt den Zugriff, der für jede Version des Skripts gespeichert ist. Der Zugriff auf einen Ordner umfasst seinen gesamten Inhalt.
+@msg	Script file access revoked	Dateizugriff des Skripts widerrufen
+@msg	The script file access was already revoked	Der Dateizugriff des Skripts wurde bereits widerrufen
 	Deny	Ablehnen
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ein Skript kann die geöffneten Dokumente ändern und über die ausgeführten Befehle Dateien schreiben. Führen Sie nur Skripte aus, denen Sie vertrauen.
 	Do not show this warning again	Diese Warnung nicht mehr anzeigen

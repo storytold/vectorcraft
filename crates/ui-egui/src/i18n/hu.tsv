@@ -5747,6 +5747,14 @@ imageTrace	Outline	Körvonal
 	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
 	Allow Once	Engedélyezés egyszer
 	Always Allow This Script	A parancsfájl engedélyezése mindig
+	No script has kept file access.	Egy parancsfájlnak sincs megőrzött fájlhozzáférése.
+	Read file	Fájl olvasása
+	Read and write file	Fájl olvasása és írása
+	Read and write folder	Mappa olvasása és írása
+	Revoke	Engedély visszavonása
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Az Engedély visszavonása a parancsfájl minden verziójához megőrzött hozzáférést eltávolítja. Egy mappához való hozzáférés a teljes tartalmára kiterjed.
+@msg	Script file access revoked	A parancsfájl fájlhozzáférése visszavonva
+@msg	The script file access was already revoked	A parancsfájl fájlhozzáférése már vissza volt vonva
 	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
