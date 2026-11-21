@@ -5332,6 +5332,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	komentosarjan tiedostovalintaikkunan `answer`-arvon on oltava jokin seuraavista: once, always, deny, stop
 @msg	choose a file or folder first, or deny	valitse ensin tiedosto tai kansio tai estä
 @msg	the script file permissions could not be saved: {e}	komentosarjojen tiedostolupia ei voitu tallentaa: {e}
+@msg	the script file permissions could not be read: {e}	komentosarjojen tiedostolupia ei voitu lukea: {e}
 @msg	this script's file access can be allowed only once	tämän komentosarjan tiedostojen käytön voi sallia vain kerran
 @msg	Only the person at the keyboard can allow a script's file access	Vain näppäimistön ääressä oleva ihminen voi sallia komentosarjan tiedostojen käytön
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Komentosarja saa enintään 2 048 tiedostoa: niiden jälkeen valitut tiedostot jätettiin pois

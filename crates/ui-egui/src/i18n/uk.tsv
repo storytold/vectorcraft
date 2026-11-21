@@ -5102,6 +5102,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового діалогу скрипту має бути одним із: once, always, deny, stop
 @msg	choose a file or folder first, or deny	спершу виберіть файл або папку чи відмовте
 @msg	the script file permissions could not be saved: {e}	не вдалося зберегти дозволи скриптів на файли: {e}
+@msg	the script file permissions could not be read: {e}	не вдалося прочитати дозволи скриптів на файли: {e}
 @msg	this script's file access can be allowed only once	доступ цього скрипту до файлів можна дозволити лише один раз
 @msg	Only the person at the keyboard can allow a script's file access	Дозволити скрипту доступ до файлів може лише людина за клавіатурою
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт отримує щонайбільше 2 048 файлів: файли, вибрані після них, пропущено
