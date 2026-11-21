@@ -33,7 +33,8 @@ craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668
 # WMF, EMF and EMF+ reader (craft-libs#778).
 craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
-craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
+# Production pins craft-image-codecs ahead of the framework branch (craft-libs main, not yet on next); one pin again after the next sync.
+craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "ba25ccd233934d1b2f74e3c0f235168bf5f13ef3" }
 craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f", default-features = false, features = ["read", "write"] }
