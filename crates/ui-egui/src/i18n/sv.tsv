@@ -496,6 +496,7 @@ font-technology	Variable	Variabla
 	Cusp	Spets
 	Straight segment	Rakt segment
 	Circle too large	Cirkeln är för stor
+	From Center	Från mitten
 	Show Radii	Visa radier
 	Show Diameter	Visa diameter
 	Anchors at Standard Positions	Ankarpunkter på standardpositioner
@@ -5104,6 +5105,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` måste vara en färg i formatet #rrggbb eller namnet på en lagerfärg
 @msg	unknown Live Paint option `{key}`	okänt alternativ för direktmålning `{key}`
 @msg	unknown Shape Builder option `{key}`	okänt alternativ för formbyggaren `{key}`
+@msg	unknown Circle tool option `{key}`	okänt alternativ för cirkelverktyget `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` måste vara en färg i formatet #rrggbb
 @msg	`{key}` must be a number	`{key}` måste vara ett tal
 @msg	`{key}` must be a number, not {v}	`{key}` måste vara ett tal, inte {v}
@@ -5302,6 +5304,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	give `at` or `clear`, not both	ange `at` eller `clear`, inte båda
 @msg	no anchor points selected	inga ankarpunkter är markerade
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` måste vara två eller tre talpar [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` måste vara ett talpar [x, y], med ett talpar [x, y] i `points`
+@msg	the point in `points` is on `center`	punkten i `points` ligger på `center`
+@msg	the circle is too small to draw at these coordinates	cirkeln är för liten för att ritas vid dessa koordinater
 @msg	direct-select two or three anchor points, or give `points`	direktmarkera två eller tre ankarpunkter eller ange `points`
 @msg	the path is straight there, so no circle matches its curvature	banan är rak där, så ingen cirkel matchar dess krökning
 @msg	the path has a cusp there, so it has no single curvature	banan har en spets där, så den har ingen entydig krökning

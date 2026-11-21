@@ -179,6 +179,10 @@
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` harus berupa warna #rrggbb atau nama warna lapisan
 @msg	unknown Live Paint option `{key}`	opsi Live Paint tidak dikenal `{key}`
 @msg	unknown Shape Builder option `{key}`	opsi Pembangun bentuk tidak dikenal `{key}`
+@msg	unknown Circle tool option `{key}`	opsi alat Lingkaran tidak dikenal `{key}`
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` harus berupa pasangan angka [x, y], dengan satu pasangan [x, y] di `points`
+@msg	the point in `points` is on `center`	titik di `points` berada di `center`
+@msg	the circle is too small to draw at these coordinates	lingkaran terlalu kecil untuk digambar pada koordinat ini
 @msg	`{key}` must be a profile name or null	`{key}` harus berupa nama profil atau null
 @msg	`top` and `below` can't both be true	`top` dan `below` tidak boleh keduanya true
 @msg	`select` must be true or false	`select` harus true atau false
@@ -5300,6 +5304,7 @@ font-technology	Variable	Variabel
 	Circle	Lingkaran
 	Circle Tool	Alat lingkaran
 	Circle too large	Lingkaran terlalu besar
+	From Center	Dari tengah
 	Show Radii	Tampilkan jari-jari
 	Show Diameter	Tampilkan diameter
 	Anchors at Standard Positions	Titik jangkar di posisi standar

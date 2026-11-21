@@ -4986,6 +4986,7 @@ font-technology	Variable	Variabilní
 	Cusp	Hrot
 	Straight segment	Přímý segment
 	Circle too large	Kruh je příliš velký
+	From Center	Ze středu
 	Show Radii	Zobrazit poloměry
 	Show Diameter	Zobrazit průměr
 	Anchors at Standard Positions	Kotevní body ve standardních polohách
@@ -5519,6 +5520,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musí být barva #rrggbb nebo název barvy vrstvy
 @msg	unknown Live Paint option `{key}`	neznámá možnost živé malby `{key}`
 @msg	unknown Shape Builder option `{key}`	neznámá možnost tvorby tvarů `{key}`
+@msg	unknown Circle tool option `{key}`	neznámá možnost nástroje Kruh `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musí být barva #rrggbb
 @msg	`{key}` must be a number	`{key}` musí být číslo
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
@@ -5729,6 +5731,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	give `at` or `clear`, not both	zadejte `at` nebo `clear`, ne obojí
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musí být dvě nebo tři dvojice čísel [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` musí být dvojice čísel [x, y] a `points` musí obsahovat jednu dvojici [x, y]
+@msg	the point in `points` is on `center`	bod v `points` leží na `center`
+@msg	the circle is too small to draw at these coordinates	kruh je na těchto souřadnicích příliš malý na vykreslení
 @msg	direct-select two or three anchor points, or give `points`	vyberte přímým výběrem dva nebo tři kotevní body, nebo zadejte `points`
 @msg	the path is straight there, so no circle matches its curvature	cesta je v tomto místě rovná, takže jejímu zakřivení neodpovídá žádná kružnice
 @msg	the path has a cusp there, so it has no single curvature	cesta má v tomto místě hrot, takže nemá jediné zakřivení

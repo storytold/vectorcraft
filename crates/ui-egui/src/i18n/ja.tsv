@@ -1423,6 +1423,7 @@ antiAlias	Sharp	シャープ
 	Cusp	尖点
 	Straight segment	直線セグメント
 	Circle too large	円が大きすぎます
+	From Center	中心から
 	Show Radii	半径を表示
 	Show Diameter	直径を表示
 	Anchors at Standard Positions	アンカーポイントを標準位置に配置
@@ -5207,6 +5208,9 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` は 2 組または 3 組の数値 [x, y] にしてください
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` は数値の組 [x, y] にし、`points` には [x, y] を 1 組指定してください
+@msg	the point in `points` is on `center`	`points` の点が `center` と同じ位置にあります
+@msg	the circle is too small to draw at these coordinates	円が小さすぎるため、この座標には描画できません
 @msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	the path is straight there, so no circle matches its curvature	パスはその位置で直線のため、曲率に合う円はありません
 @msg	the path has a cusp there, so it has no single curvature	パスはその位置に尖点があるため、曲率が 1 つに定まりません
@@ -5285,6 +5289,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` は #rrggbb 形式のカラーかレイヤーカラー名にしてください
 @msg	unknown Live Paint option `{key}`	不明なライブペイントオプション `{key}`
 @msg	unknown Shape Builder option `{key}`	不明なシェイプ形成ツールオプション `{key}`
+@msg	unknown Circle tool option `{key}`	不明な円ツールオプション `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
 @msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください

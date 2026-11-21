@@ -734,6 +734,7 @@ arrowhead	Target	Diana
 	Cusp	Punta
 	Straight segment	Segment recte
 	Circle too large	El cercle és massa gran
+	From Center	Des del centre
 	Show Radii	Mostra els radis
 	Show Diameter	Mostra el diàmetre
 	Anchors at Standard Positions	Punts d’ancoratge en posicions estàndard
@@ -6217,6 +6218,7 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ha de ser un color #rrggbb o el nom d’un color de capa
 @msg	unknown Live Paint option `{key}`	opció de pintura interactiva desconeguda `{key}`
 @msg	unknown Shape Builder option `{key}`	opció del constructor de formes desconeguda `{key}`
+@msg	unknown Circle tool option `{key}`	opció de l’eina Cercle desconeguda `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
@@ -6842,6 +6844,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	give `at` or `clear`, not both	indiqueu `at` o `clear`, no tots dos
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` han de ser dos o tres parells de nombres [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` ha de ser un parell de nombres [x, y], amb un parell [x, y] a `points`
+@msg	the point in `points` is on `center`	el punt de `points` és a `center`
+@msg	the circle is too small to draw at these coordinates	el cercle és massa petit per dibuixar-lo en aquestes coordenades
 @msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	the path is straight there, so no circle matches its curvature	el traçat és recte en aquest punt, així que cap cercle no coincideix amb la seva curvatura
 @msg	the path has a cusp there, so it has no single curvature	el traçat té una punta en aquest punt, així que no té una curvatura única

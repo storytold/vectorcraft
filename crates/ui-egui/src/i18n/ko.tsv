@@ -1413,6 +1413,7 @@ antiAlias	Sharp	날카롭게
 	Cusp	뾰족점
 	Straight segment	직선 세그먼트
 	Circle too large	원이 너무 큽니다
+	From Center	중심에서
 	Show Radii	반지름 표시
 	Show Diameter	지름 표시
 	Anchors at Standard Positions	표준 위치에 앵커 포인트
@@ -5136,6 +5137,9 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
 @msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center`는 숫자 쌍 [x, y]이고 `points`에는 [x, y] 쌍이 하나 있어야 합니다
+@msg	the point in `points` is on `center`	`points`의 점이 `center`에 있습니다
+@msg	the circle is too small to draw at these coordinates	원이 너무 작아 이 좌표에서 그릴 수 없습니다
 @msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	the path is straight there, so no circle matches its curvature	패스가 그 위치에서 직선이므로 곡률에 맞는 원이 없습니다
 @msg	the path has a cusp there, so it has no single curvature	패스가 그 위치에서 뾰족하므로 곡률이 하나로 정해지지 않습니다
@@ -5214,6 +5218,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`은(는) #rrggbb 색상이나 레이어 색상 이름이어야 합니다
 @msg	unknown Live Paint option `{key}`	알 수 없는 라이브 페인트 옵션 `{key}`
 @msg	unknown Shape Builder option `{key}`	알 수 없는 모양 빌더 옵션 `{key}`
+@msg	unknown Circle tool option `{key}`	알 수 없는 점 기준 원 도구 옵션 `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
 @msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다

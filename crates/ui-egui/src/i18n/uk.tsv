@@ -503,6 +503,7 @@ font-technology	Variable	Варіативні
 	Cusp	Точка звороту
 	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
+	From Center	Від центру
 	Show Radii	Показати радіуси
 	Show Diameter	Показати діаметр
 	Anchors at Standard Positions	Опорні точки в стандартних позиціях
@@ -5218,6 +5219,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` має бути кольором #rrggbb або назвою кольору шару
 @msg	unknown Live Paint option `{key}`	невідомий параметр швидкої заливки `{key}`
 @msg	unknown Shape Builder option `{key}`	невідомий параметр створення фігур `{key}`
+@msg	unknown Circle tool option `{key}`	невідомий параметр інструмента «Коло» `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` має бути кольором #rrggbb
 @msg	`{key}` must be a number	`{key}` має бути числом
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
@@ -5428,6 +5430,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	give `at` or `clear`, not both	укажіть `at` або `clear`, але не обидва
 @msg	no anchor points selected	опорні точки не виділені
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` має бути парою чисел [x, y], а `points` має містити одну пару [x, y]
+@msg	the point in `points` is on `center`	точка в `points` збігається з `center`
+@msg	the circle is too small to draw at these coordinates	коло занадто мале, щоб намалювати його в цих координатах
 @msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
 @msg	the path is straight there, so no circle matches its curvature	контур у цьому місці прямий, тож його кривині не відповідає жодне коло
 @msg	the path has a cusp there, so it has no single curvature	контур у цьому місці має точку звороту, тож не має єдиної кривини

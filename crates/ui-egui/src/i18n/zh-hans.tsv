@@ -456,6 +456,7 @@ antiAlias	Sharp	锐利
 	Cusp	尖点
 	Straight segment	直线段
 	Circle too large	圆形过大
+	From Center	从中心
 	Show Radii	显示半径
 	Show Diameter	显示直径
 	Anchors at Standard Positions	锚点位于标准位置
@@ -4892,6 +4893,9 @@ imageTrace	Outline	轮廓
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` 必须是两对或三对数字 [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` 必须是一对数字 [x, y]，且 `points` 中须有一对 [x, y]
+@msg	the point in `points` is on `center`	`points` 中的点与 `center` 重合
+@msg	the circle is too small to draw at these coordinates	圆太小，无法在这些坐标处绘制
 @msg	direct-select two or three anchor points, or give `points`	请直接选择两个或三个锚点，或提供 `points`
 @msg	the path is straight there, so no circle matches its curvature	路径在该处是直的，因此没有圆与其曲率相符
 @msg	the path has a cusp there, so it has no single curvature	路径在该处有尖点，因此没有唯一的曲率
@@ -6977,6 +6981,7 @@ lighting	Light	光源
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必须是 #rrggbb 格式的颜色或图层颜色名称
 @msg	unknown Live Paint option `{key}`	未知的实时上色选项 `{key}`
 @msg	unknown Shape Builder option `{key}`	未知的形状生成器选项 `{key}`
+@msg	unknown Circle tool option `{key}`	未知的圆形工具选项 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	链接的图像无法转换为渐变网格：请先嵌入它
 @msg	the image has no usable size or position	图像没有可用的尺寸或位置
 @msg	the image's pixels can't be read	无法读取图像的像素

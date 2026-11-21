@@ -507,6 +507,7 @@ font-technology	Variable	Variables
 	Cusp	Cúspide
 	Straight segment	Segmento recto
 	Circle too large	Círculo demasiado grande
+	From Center	Desde el centro
 	Show Radii	Mostrar radios
 	Show Diameter	Mostrar diámetro
 	Anchors at Standard Positions	Puntos de ancla en posiciones estándar
@@ -5207,6 +5208,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` debe ser un color #rrggbb o el nombre de un color de capa
 @msg	unknown Live Paint option `{key}`	opción de pintura interactiva desconocida `{key}`
 @msg	unknown Shape Builder option `{key}`	opción del generador de formas desconocida `{key}`
+@msg	unknown Circle tool option `{key}`	opción de la herramienta Círculo desconocida `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` debe ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` debe ser un número
 @msg	`{key}` must be a number, not {v}	`{key}` debe ser un número, no {v}
@@ -5417,6 +5419,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	give `at` or `clear`, not both	indica `at` o `clear`, no ambos
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` debe ser dos o tres pares de números [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` debe ser un par de números [x, y], con un par [x, y] en `points`
+@msg	the point in `points` is on `center`	el punto de `points` está en `center`
+@msg	the circle is too small to draw at these coordinates	el círculo es demasiado pequeño para dibujarlo en estas coordenadas
 @msg	direct-select two or three anchor points, or give `points`	seleccione directamente dos o tres puntos de ancla o indique `points`
 @msg	the path is straight there, so no circle matches its curvature	el trazado es recto en ese punto, así que ningún círculo coincide con su curvatura
 @msg	the path has a cusp there, so it has no single curvature	el trazado tiene una cúspide en ese punto, así que no tiene una curvatura única

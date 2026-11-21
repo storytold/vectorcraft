@@ -477,6 +477,7 @@ font-technology	Variable	Μεταβλητές
 	Cusp	Ακίδα
 	Straight segment	Ευθύ τμήμα
 	Circle too large	Ο κύκλος είναι πολύ μεγάλος
+	From Center	Από το κέντρο
 	Show Radii	Εμφάνιση ακτίνων
 	Show Diameter	Εμφάνιση διαμέτρου
 	Anchors at Standard Positions	Σημεία αγκύρωσης σε τυπικές θέσεις
@@ -2933,6 +2934,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	Το `{key}` πρέπει να είναι χρώμα #rrggbb ή όνομα χρώματος επιπέδου
 @msg	unknown Live Paint option `{key}`	άγνωστη επιλογή δυναμικής βαφής `{key}`
 @msg	unknown Shape Builder option `{key}`	άγνωστη επιλογή δημιουργίας σχημάτων `{key}`
+@msg	unknown Circle tool option `{key}`	άγνωστη επιλογή εργαλείου κύκλου `{key}`
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
@@ -5364,6 +5366,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	give `at` or `clear`, not both	δώστε `at` ή `clear`, όχι και τα δύο
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
 @msg	`points` must be two or three [x, y] pairs of numbers	το `points` πρέπει να είναι δύο ή τρία ζεύγη αριθμών [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	το `center` πρέπει να είναι ένα ζεύγος αριθμών [x, y], με ένα ζεύγος [x, y] στο `points`
+@msg	the point in `points` is on `center`	το σημείο στο `points` βρίσκεται πάνω στο `center`
+@msg	the circle is too small to draw at these coordinates	ο κύκλος είναι πολύ μικρός για να σχεδιαστεί σε αυτές τις συντεταγμένες
 @msg	direct-select two or three anchor points, or give `points`	επιλέξτε άμεσα δύο ή τρία σημεία αγκύρωσης ή δώστε `points`
 @msg	the path is straight there, so no circle matches its curvature	η διαδρομή είναι ευθεία εκεί, οπότε κανένας κύκλος δεν ταιριάζει με την καμπυλότητά της
 @msg	the path has a cusp there, so it has no single curvature	η διαδρομή έχει ακίδα εκεί, οπότε δεν έχει μία μόνο καμπυλότητα

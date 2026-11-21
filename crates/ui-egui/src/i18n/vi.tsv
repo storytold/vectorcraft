@@ -587,6 +587,7 @@ font-technology	Variable	Biến thiên
 	Cusp	Điểm lùi
 	Straight segment	Đoạn thẳng
 	Circle too large	Hình tròn quá lớn
+	From Center	Từ tâm
 	Show Radii	Hiện bán kính
 	Show Diameter	Hiện đường kính
 	Anchors at Standard Positions	Điểm neo ở vị trí chuẩn
@@ -5215,6 +5216,7 @@ theme	Appearance	Giao diện
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` phải là màu #rrggbb hoặc tên màu lớp
 @msg	unknown Live Paint option `{key}`	tùy chọn Tô trực tiếp không xác định `{key}`
 @msg	unknown Shape Builder option `{key}`	tùy chọn Tạo hình dạng không xác định `{key}`
+@msg	unknown Circle tool option `{key}`	tùy chọn Công cụ Hình tròn không xác định `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` phải là màu #rrggbb
 @msg	`{key}` must be a number	`{key}` phải là một số
 @msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
@@ -5797,6 +5799,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	give `at` or `clear`, not both	hãy cung cấp `at` hoặc `clear`, không phải cả hai
 @msg	no anchor points selected	chưa chọn điểm neo
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` phải là hai hoặc ba cặp số [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` phải là một cặp số [x, y], với một cặp [x, y] trong `points`
+@msg	the point in `points` is on `center`	điểm trong `points` nằm tại `center`
+@msg	the circle is too small to draw at these coordinates	hình tròn quá nhỏ để vẽ tại các tọa độ này
 @msg	direct-select two or three anchor points, or give `points`	hãy chọn trực tiếp hai hoặc ba điểm neo hoặc cung cấp `points`
 @msg	the path is straight there, so no circle matches its curvature	đường dẫn thẳng tại đó, nên không có đường tròn nào khớp với độ cong của nó
 @msg	the path has a cusp there, so it has no single curvature	đường dẫn có điểm lùi tại đó, nên không có một độ cong duy nhất

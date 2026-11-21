@@ -508,6 +508,7 @@ font-technology	Variable	Variables
 	Cusp	Point de rebroussement
 	Straight segment	Segment droit
 	Circle too large	Cercle trop grand
+	From Center	Depuis le centre
 	Show Radii	Afficher les rayons
 	Show Diameter	Afficher le diamètre
 	Anchors at Standard Positions	Points d’ancrage aux positions standard
@@ -5166,6 +5167,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` doit être une couleur #rrggbb ou le nom d’une couleur de calque
 @msg	unknown Live Paint option `{key}`	option de peinture dynamique inconnue `{key}`
 @msg	unknown Shape Builder option `{key}`	option du concepteur de forme inconnue `{key}`
+@msg	unknown Circle tool option `{key}`	option de l’outil Cercle inconnue `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` doit être une couleur #rrggbb
 @msg	`{key}` must be a number	`{key}` doit être un nombre
 @msg	`{key}` must be a number, not {v}	`{key}` doit être un nombre, pas {v}
@@ -5376,6 +5378,9 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	give `at` or `clear`, not both	indiquez `at` ou `clear`, pas les deux
 @msg	no anchor points selected	aucun point d’ancrage sélectionné
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` doit contenir deux ou trois paires de nombres [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` doit être une paire de nombres [x, y], avec une paire [x, y] dans `points`
+@msg	the point in `points` is on `center`	le point de `points` est sur `center`
+@msg	the circle is too small to draw at these coordinates	le cercle est trop petit pour être dessiné à ces coordonnées
 @msg	direct-select two or three anchor points, or give `points`	sélectionnez deux ou trois points d’ancrage avec l’outil Sélection directe, ou indiquez `points`
 @msg	the path is straight there, so no circle matches its curvature	le tracé est droit à cet endroit, donc aucun cercle ne correspond à sa courbure
 @msg	the path has a cusp there, so it has no single curvature	le tracé a un point de rebroussement à cet endroit, donc il n’a pas de courbure unique

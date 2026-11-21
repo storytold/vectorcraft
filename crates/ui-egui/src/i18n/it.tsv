@@ -509,6 +509,7 @@ font-technology	Variable	Variabili
 	Cusp	Cuspide
 	Straight segment	Segmento diritto
 	Circle too large	Cerchio troppo grande
+	From Center	Dal centro
 	Show Radii	Mostra raggi
 	Show Diameter	Mostra diametro
 	Anchors at Standard Positions	Punti di ancoraggio in posizioni standard
@@ -5234,6 +5235,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve essere un colore #rrggbb o il nome di un colore del livello
 @msg	unknown Live Paint option `{key}`	opzione di pittura dinamica sconosciuta `{key}`
 @msg	unknown Shape Builder option `{key}`	opzione del generatore forme sconosciuta `{key}`
+@msg	unknown Circle tool option `{key}`	opzione dello strumento Cerchio sconosciuta `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve essere un colore #rrggbb
 @msg	`{key}` must be a number	`{key}` deve essere un numero
 @msg	`{key}` must be a number, not {v}	`{key}` deve essere un numero, non {v}
@@ -5444,6 +5446,9 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	give `at` or `clear`, not both	indica `at` o `clear`, non entrambi
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve essere composto da due o tre coppie di numeri [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` deve essere una coppia di numeri [x, y], con una coppia [x, y] in `points`
+@msg	the point in `points` is on `center`	il punto in `points` si trova su `center`
+@msg	the circle is too small to draw at these coordinates	il cerchio è troppo piccolo per essere disegnato a queste coordinate
 @msg	direct-select two or three anchor points, or give `points`	seleziona con Selezione diretta due o tre punti di ancoraggio oppure indica `points`
 @msg	the path is straight there, so no circle matches its curvature	il tracciato è diritto in quel punto, quindi nessun cerchio corrisponde alla sua curvatura
 @msg	the path has a cusp there, so it has no single curvature	il tracciato ha una cuspide in quel punto, quindi non ha un'unica curvatura

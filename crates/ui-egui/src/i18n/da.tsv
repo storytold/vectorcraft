@@ -256,6 +256,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` skal være en #rrggbb-farve eller navnet på en lagfarve
 @msg	unknown Live Paint option `{key}`	ukendt Live Paint-indstilling `{key}`
 @msg	unknown Shape Builder option `{key}`	ukendt Formbygger-indstilling `{key}`
+@msg	unknown Circle tool option `{key}`	ukendt Cirkelværktøj-indstilling `{key}`
 @msg	`{key}` must be a profile name or null	`{key}` skal være et profilnavn eller null
 @msg	`top` and `below` can't both be true	`top` og `below` kan ikke begge være true
 @msg	`select` must be true or false	`select` skal være true eller false
@@ -7434,6 +7435,7 @@ font-technology	Variable	Variable
 	Cusp	Spids
 	Straight segment	Lige segment
 	Circle too large	Cirklen er for stor
+	From Center	Fra midten
 	Show Radii	Vis radier
 	Show Diameter	Vis diameter
 	Anchors at Standard Positions	Ankerpunkter i standardpositioner
@@ -7928,6 +7930,9 @@ imageTrace	Outline	Kontur
 @msg	no active perspective plane	intet aktivt perspektivplan
 @msg	no anchor points selected	ingen ankerpunkter er markeret
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` skal være to eller tre talpar [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` skal være et talpar [x, y], med ét talpar [x, y] i `points`
+@msg	the point in `points` is on `center`	punktet i `points` ligger på `center`
+@msg	the circle is too small to draw at these coordinates	cirklen er for lille til at tegne ved disse koordinater
 @msg	direct-select two or three anchor points, or give `points`	direkte markér to eller tre ankerpunkter, eller angiv `points`
 @msg	the path is straight there, so no circle matches its curvature	kurven er lige der, så ingen cirkel passer til dens krumning
 @msg	the path has a cusp there, so it has no single curvature	kurven har en spids der, så den har ingen entydig krumning

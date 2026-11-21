@@ -474,6 +474,7 @@ antiAlias	Sharp	Nítido
 	Cusp	Cúspide
 	Straight segment	Segmento reto
 	Circle too large	Círculo grande demais
+	From Center	Do centro
 	Show Radii	Mostrar Raios
 	Show Diameter	Mostrar Diâmetro
 	Anchors at Standard Positions	Pontos de Ancoragem em Posições Padrão
@@ -4488,6 +4489,7 @@ axis	Both	Ambos
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve ser uma cor #rrggbb ou o nome de uma cor de camada
 @msg	unknown Live Paint option `{key}`	opção de Pintura ao Vivo desconhecida `{key}`
 @msg	unknown Shape Builder option `{key}`	opção do Construtor de Formas desconhecida `{key}`
+@msg	unknown Circle tool option `{key}`	opção da Ferramenta Círculo desconhecida `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve ser uma cor #rrggbb
 @msg	`{key}` must be a number	`{key}` deve ser um número
 @msg	`{key}` must be a number, not {v}	`{key}` deve ser um número, não {v}
@@ -4684,6 +4686,9 @@ axis	Both	Ambos
 @msg	give `at` or `clear`, not both	informe `at` ou `clear`, não ambos
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` deve ser um par de números [x, y], com um par [x, y] em `points`
+@msg	the point in `points` is on `center`	o ponto em `points` está em `center`
+@msg	the circle is too small to draw at these coordinates	o círculo é pequeno demais para ser desenhado nessas coordenadas
 @msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
 @msg	the path is straight there, so no circle matches its curvature	o caminho é reto nesse ponto, então nenhum círculo corresponde à sua curvatura
 @msg	the path has a cusp there, so it has no single curvature	o caminho tem uma cúspide nesse ponto, então não tem uma curvatura única

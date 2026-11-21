@@ -4830,6 +4830,7 @@ font-technology	Variable	Zmienne
 	Cusp	Ostrze
 	Straight segment	Prosty segment
 	Circle too large	Okrąg jest za duży
+	From Center	Od środka
 	Show Radii	Pokaż promienie
 	Show Diameter	Pokaż średnicę
 	Anchors at Standard Positions	Punkty kontrolne w standardowych położeniach
@@ -5338,6 +5339,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musi być kolorem #rrggbb lub nazwą koloru warstwy
 @msg	unknown Live Paint option `{key}`	nieznana opcja aktywnego malowania `{key}`
 @msg	unknown Shape Builder option `{key}`	nieznana opcja kreatora kształtów `{key}`
+@msg	unknown Circle tool option `{key}`	nieznana opcja narzędzia Okrąg `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musi być kolorem #rrggbb
 @msg	`{key}` must be a number	`{key}` musi być liczbą
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}
@@ -5548,6 +5550,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	give `at` or `clear`, not both	podaj `at` albo `clear`, nie oba naraz
 @msg	no anchor points selected	nie zaznaczono punktów kontrolnych
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musi zawierać dwie lub trzy pary liczb [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` musi być parą liczb [x, y], a `points` musi zawierać jedną parę [x, y]
+@msg	the point in `points` is on `center`	punkt w `points` leży w `center`
+@msg	the circle is too small to draw at these coordinates	okrąg jest zbyt mały, aby go narysować w tych współrzędnych
 @msg	direct-select two or three anchor points, or give `points`	zaznacz bezpośrednio dwa lub trzy punkty kontrolne lub podaj `points`
 @msg	the path is straight there, so no circle matches its curvature	ścieżka jest w tym miejscu prosta, więc żaden okrąg nie pasuje do jej krzywizny
 @msg	the path has a cusp there, so it has no single curvature	ścieżka ma w tym miejscu ostrze, więc nie ma jednej krzywizny
