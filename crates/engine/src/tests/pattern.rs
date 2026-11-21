@@ -391,6 +391,19 @@ fn only_an_unpainted_rectangle_at_the_back_is_the_tile() {
     // A rectangle alone is a tile with no art.
     let err = s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [back.0]})).unwrap_err();
     assert!(err.to_string().contains("select the art for the pattern tile"), "{err}");
+    // An unpainted path through the four corners of its bounds in a crossing order is not a
+    // rectangle: art.
+    let corners = [(200, 200), (240, 240), (240, 200), (200, 240)];
+    let anchors: Vec<_> = corners.iter().map(|(x, y)| json!({"x": x, "y": y})).collect();
+    let bowtie = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [bowtie.0], "none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [bowtie.0], "none": true})).unwrap();
+    sel(&mut s, &[bowtie]);
+    s.execute("object.arrange.sendToBack", &json!({})).unwrap();
+    s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [bowtie.0, front.0]})).unwrap();
+    let def = doc(&s).pattern("Dots").unwrap();
+    assert_eq!(def.art.len(), 2, "the crossing path is art: {:?}", def.art);
+    assert_ne!(def.tile, Rect::new(200.0, 200.0, 240.0, 240.0), "the crossing path is not the tile");
 }
 
 /// Place Pattern Art is refused, changing nothing, for a missing or unknown name, a position that

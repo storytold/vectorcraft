@@ -9840,6 +9840,19 @@ fn a_brush_with_art_dropped_off_the_art_places_a_copy_of_its_art_there() {
             assert_eq!(n.children().unwrap()[0].name.as_deref(), Some("Side Tile"));
         }
     }
+    // With Object Selection by Path Only, inside a filled rectangle and away from its outline is
+    // still on art: nothing is placed. (The placed copies are undone first.)
+    for _ in 0..3 {
+        app.session.execute("edit.undo", &json!({})).unwrap();
+    }
+    app.session.execute("shape.rectangle", &json!({"x": 250, "y": 200, "width": 100, "height": 80})).unwrap();
+    app.session.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let before = app.session.active().unwrap().history.undo.len();
+    drop(&mut app, "Arrow", Point::new(300.0, 240.0));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before, "{}", app.ui.status);
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
 }
 
 #[test]
@@ -9880,6 +9893,14 @@ fn a_pattern_swatch_dropped_off_the_art_places_a_copy_of_its_tile_art_there() {
     let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
     let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
     assert!((b.center() - Point::new(250.0, 220.0)).hypot() < 0.1, "{b:?}");
+    // With Object Selection by Path Only, inside the filled rectangle and away from its outline is
+    // still on art: nothing is placed.
+    app.session.execute("paint.setFill", &json!({"ids": [id], "color": "#ffffff"})).unwrap();
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let before = undo_len(&app);
+    drop(&mut app, pattern.clone(), Point::new(100.0, 100.0));
+    assert_eq!(undo_len(&app), before, "{}", app.ui.status);
+    app.session.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
     // On art, the swatch fills it as before.
     drop(&mut app, pattern, Point::new(100.0, 100.0));
     let n = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();

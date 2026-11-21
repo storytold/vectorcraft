@@ -113,6 +113,7 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     // of its art, centered where it is dropped, to edit and Alt-drag back onto the brush.
     if let (None, widgets::PanelDrag::Brush { name, def }) = (&hit, &*d)
         && matches!(def["type"].as_str(), Some("scatter" | "art" | "pattern"))
+        && no_art_at(app, xf.to_doc(pos), xf.zoom)
     {
         let at = xf.to_doc(pos);
         if let Err(e) = app.run("brush.placeArt", json!({"name": name, "x": at.x, "y": at.y})) {
@@ -122,7 +123,9 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     }
     // A pattern swatch from the Swatches panel dropped where there is no art: a copy of its tile
     // art with its tile, centered where it is dropped, to edit and Alt-drag back onto the swatch.
-    if let (None, widgets::PanelDrag::Paint { paint: vectorcraft_color::Paint::Pattern { pattern, .. }, rows: Some(_), .. }) = (&hit, &*d) {
+    if let (None, widgets::PanelDrag::Paint { paint: vectorcraft_color::Paint::Pattern { pattern, .. }, rows: Some(_), .. }) = (&hit, &*d)
+        && no_art_at(app, xf.to_doc(pos), xf.zoom)
+    {
         let at = xf.to_doc(pos);
         if let Err(e) = app.run("pattern.placeArt", json!({"name": pattern, "x": at.x, "y": at.y})) {
             app.status(e);
@@ -175,6 +178,16 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
     if let Err(e) = app.run(cmd, params) {
         app.status(e);
     }
+}
+
+/// Whether no art is under document point `p` at `zoom`, with fills counted even with Object
+/// Selection by Path Only and type objects by their area even with Type Object Selection by Path
+/// Only: a brush's or a pattern swatch's art is placed only there.
+fn no_art_at(app: &VectorcraftApp, p: vectorcraft_geom::Point, zoom: f64) -> bool {
+    hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..opt })
+    })
+    .is_none()
 }
 
 /// The selected, editable gradient mesh and its points that a solid color dropped at document
