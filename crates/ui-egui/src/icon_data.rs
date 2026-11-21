@@ -1,6 +1,9 @@
 //! Generated icon table (`assets/icons`). Lucide icons are ISC-licensed; `dc-*` icons are VectorCraft's own.
 //! Regenerate when icons are added: see crates/ui-egui/README.md.
 
+/// The Selection and Direct Selection arrows' fill, painted black or white under their outline.
+pub const DC_ARROW_FILL: &[u8] = include_bytes!("../../../assets/icons/dc-arrow-fill.svg");
+
 pub static ICONS: &[(&str, &[u8])] = &[
     ("align-center-horizontal", include_bytes!("../../../assets/icons/align-center-horizontal.svg")),
     ("align-center-vertical", include_bytes!("../../../assets/icons/align-center-vertical.svg")),
@@ -25,6 +28,8 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("chevrons-left", include_bytes!("../../../assets/icons/chevrons-left.svg")),
     ("chevrons-right", include_bytes!("../../../assets/icons/chevrons-right.svg")),
     ("circle", include_bytes!("../../../assets/icons/circle.svg")),
+    // PLAN: circle-off.svg is plugins-w11's file; the row waits for it.
+    ("circle-off", include_bytes!("../../../assets/icons/circle-off.svg")),
     ("clipboard-paste", include_bytes!("../../../assets/icons/clipboard-paste.svg")),
     ("cloud", include_bytes!("../../../assets/icons/cloud.svg")),
     ("combine", include_bytes!("../../../assets/icons/combine.svg")),
@@ -53,6 +58,9 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-artboard-options", include_bytes!("../../../assets/icons/dc-artboard-options.svg")),
     ("dc-artboards", include_bytes!("../../../assets/icons/dc-artboards.svg")),
     ("dc-blend", include_bytes!("../../../assets/icons/dc-blend.svg")),
+    // PLAN: the two blend-align files are object-panels-w4's; the rows wait for them.
+    ("dc-blend-align-page", include_bytes!("../../../assets/icons/dc-blend-align-page.svg")),
+    ("dc-blend-align-path", include_bytes!("../../../assets/icons/dc-blend-align-path.svg")),
     ("dc-bloat", include_bytes!("../../../assets/icons/dc-bloat.svg")),
     ("dc-cap-butt", include_bytes!("../../../assets/icons/dc-cap-butt.svg")),
     ("dc-cap-round", include_bytes!("../../../assets/icons/dc-cap-round.svg")),
@@ -72,7 +80,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-dir-off", include_bytes!("../../../assets/icons/dc-dir-off.svg")),
     ("dc-dir-on", include_bytes!("../../../assets/icons/dc-dir-on.svg")),
     ("dc-direct", include_bytes!("../../../assets/icons/dc-direct.svg")),
-    ("dc-arrow-fill", include_bytes!("../../../assets/icons/dc-arrow-fill.svg")),
+
     ("dc-dist-bottom", include_bytes!("../../../assets/icons/dc-dist-bottom.svg")),
     ("dc-dist-hcenter", include_bytes!("../../../assets/icons/dc-dist-hcenter.svg")),
     ("dc-dist-hspace", include_bytes!("../../../assets/icons/dc-dist-hspace.svg")),
@@ -90,6 +98,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-filter", include_bytes!("../../../assets/icons/dc-filter.svg")),
     ("dc-flare", include_bytes!("../../../assets/icons/dc-flare.svg")),
     ("dc-folder", include_bytes!("../../../assets/icons/dc-folder.svg")),
+    ("dc-free-distort", include_bytes!("../../../assets/icons/dc-free-distort.svg")),
     ("dc-free-transform", include_bytes!("../../../assets/icons/dc-free-transform.svg")),
     ("dc-fx", include_bytes!("../../../assets/icons/dc-fx.svg")),
     ("dc-gamut", include_bytes!("../../../assets/icons/dc-gamut.svg")),
