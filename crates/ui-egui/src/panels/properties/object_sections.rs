@@ -29,8 +29,8 @@ pub(super) fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (name, details) = crate::place::image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return };
     Section::fixed(if linked { tl!("Linked File") } else { tl!("Embedded Image") }).show(ui, |ui, _| {
-        Text::new(name.as_str()).elide(Elide::Middle).role(TypeRole::BodyStrong).show(ui);
-        Text::new(details.as_str()).shade(Shade::Muted).show(ui);
+        Text::new(name.clone()).elide(Elide::Middle).role(TypeRole::BodyStrong).show(ui);
+        Text::new(details.clone()).shade(Shade::Muted).show(ui);
         Grid::new(&HALVES).show(ui, |ui, _| {
             // PLAN: assumed `crate::place::LinkAction::{shown(linked) -> &'static [LinkAction], label(self), run(self, app, id, &name)}` (files-w14, fl.A18)
             for action in crate::place::LinkAction::shown(linked) {
@@ -121,9 +121,9 @@ pub(super) fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop
     Section::fixed(tl!("Objects on Path Options")).show(ui, |ui, _| {
         Field::new(tl!("Pivot:")).show(ui, |ui, _| {
             // Mixed while the groups' pivots differ: no square is chosen.
-            let shown = oop.pivot.and_then(|p| Anchor9::ALL.get(usize::from(p)).copied()).map_or(Mixed::Mixed, Mixed::Same);
+            let shown = oop.pivot.map_or(Mixed::Mixed, |p| Mixed::Same(Anchor9::ALL.get(usize::from(p)).copied()));
             let out = ReferencePoint::new(tl!("Pivot"), Bind::given(shown)).look(ReferencePointLook::Squares).show(ui);
-            if let Some(i) = out.value().and_then(|p| Anchor9::ALL.iter().position(|a| a == p))
+            if let Some(i) = out.value().copied().flatten().and_then(|p| Anchor9::ALL.iter().position(|a| *a == p))
                 && oop.pivot.is_none_or(|p| usize::from(p) != i)
             {
                 set(app, json!({ "pivot": i }));

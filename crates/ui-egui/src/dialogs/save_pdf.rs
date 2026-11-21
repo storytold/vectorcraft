@@ -12,13 +12,10 @@
 //! The same dialog edits a preset (from Edit → PDF Presets): a name and description instead of the
 //! preset and artboards, and OK saves the preset.
 
-// PLAN: assumed paths `craft::ui::patterns::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent,
-// PresetDraft}`, `craft::ui::patterns::presets::PresetError`, `craft::ui::dialog::DialogId`,
-// `craft::ui::runtime::env::{Label, UnitKind}`, and `vectorcraft_pdf::{APP, ActiveProfiles, default_preset_name}`.
 use std::sync::Arc;
 
 use craft::ui::dialog::DialogId;
-use craft::ui::patterns::form_dialogs::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfPresetEvent, PresetDraft};
+use craft::ui::patterns::form_dialogs::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfExportWords, PdfPresetEvent, PresetDraft};
 use craft::ui::patterns::presets::PresetError;
 use craft::ui::runtime::env::{Label, UnitKind};
 use serde_json::{Map, Value, json};
@@ -130,7 +127,7 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
     };
     let settings = pdf::resolve("ui.savePdfDialog", &json!({ "preset": base }), &app.session.prefs.pdf_presets).map_err(|e| e.to_string())?;
     // A name may not be taken by a built-in preset or by another saved one (case and spaces ignored).
-    let taken: Vec<String> = vectorcraft_pdf::builtin_presets()
+    let taken: Vec<String> = vectorcraft_pdf::builtin_presets(APP)
         .into_iter()
         .map(|p| p.name)
         .chain(app.session.prefs.pdf_presets.iter().map(|p| p.name.clone()))
@@ -216,9 +213,9 @@ fn flattener_name(name: &str) -> String {
 }
 
 /// Carry out what the open Save PDF dialog asked for this frame.
-pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut open) = app.save_pdf.take() else { return };
-    let closed = drive(app, &mut open);
+    let closed = drive(app, ctx, &mut open);
     if !closed && app.save_pdf.is_none() {
         app.save_pdf = Some(open);
     }
@@ -235,7 +232,7 @@ struct Filed {
 }
 
 /// One frame of [`pump`] for `open`. True once the dialog has closed.
-fn drive(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> bool {
+fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) -> bool {
     let Some(dialogs) = app.dialogs() else { return false };
     let id = open.id;
     let filed = dialogs.with(|host| {
@@ -265,7 +262,7 @@ fn drive(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> bool {
         let saved = super::flatten::preset_rows(app).1;
         dialogs.with(|host| {
             if let Some(parent) = host.get_mut_by_id::<HostedPdfExport>(id) {
-                let child = super::flatten::custom_dialog(parent, job, &saved);
+                let child = super::flatten::custom_dialog(ctx, parent, job, &saved);
                 host.open_child(child, id);
             }
         });
@@ -318,7 +315,7 @@ fn preset_event(app: &mut VectorcraftApp, event: PdfPresetEvent) -> Result<(), S
             p.insert("description".into(), json!(preset.description));
             ("pdf.preset.save", Value::Object(p))
         }
-        PdfPresetEvent::Renamed { from, to } => ("pdf.preset.rename", json!({ "name": from, "newName": to })),
+        PdfPresetEvent::Renamed { from, to, .. } => ("pdf.preset.rename", json!({ "name": from, "newName": to })),
         PdfPresetEvent::Deleted(name) => ("pdf.preset.delete", json!({ "name": name })),
         _ => return Ok(()),
     };
@@ -457,7 +454,7 @@ pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
 
 /// The Summary text of the open dialog `open`, after the document check.
 fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String, String> {
-    let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return Err(NOT_OPEN.into()) };
+    let Some(dialogs) = app.dialogs() else { return Err(NOT_OPEN.into()) };
     let id = open.id;
     let not_open = || NOT_OPEN.to_string();
     let settings =
@@ -467,11 +464,12 @@ fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String
         return Err(e.clone());
     }
     let warnings = worded(checked);
+    let words = app.host.words().set::<PdfExportWords>();
     dialogs
         .with(|host| {
             host.get_mut_by_id::<HostedPdfExport>(id).map(|d| {
                 d.set_host_warnings(warnings);
-                d.summary_text(&ctx)
+                d.summary_text(&words)
             })
         })
         .ok_or_else(not_open)
@@ -482,9 +480,11 @@ fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String
 fn write_summary(app: &mut VectorcraftApp, path: Option<String>, text: &str) -> Result<Value, String> {
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
-    let path = io::write_named(app, path, &format!("{stem} PDF Summary.txt"), text.as_bytes())?;
-    app.status(format!("Saved {path}"));
-    Ok(json!({ "path": path, "bytes": text.len() }))
+    let bytes = text.len();
+    io::write_named(app, path, &format!("{stem} PDF Summary.txt"), text.as_bytes().to_vec(), move |app, path| {
+        app.status(format!("Saved {path}"));
+        Ok(json!({ "path": path, "bytes": bytes }))
+    })
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ use craft::font_manager::glyphs::{GlyphCell, glyph_painter};
 use craft::ui::bars::{Bar, BarKind};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::overlay::{Anchor, Dismiss, Outside, Overlay, Place};
-use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Outcome as _, Show as _};
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Outcome as _, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Direction, Env, Label};

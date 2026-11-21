@@ -16,10 +16,10 @@ use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::display::Divider;
 use craft::ui::form::{Field, FieldGroup};
+use craft::ui::form::{SliderField, SliderFieldLayout};
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::Select;
 use craft::ui::text::NumberField;
-use craft::ui::form::{SliderField, SliderFieldLayout};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -29,20 +29,20 @@ use super::selection_len;
 use crate::VectorcraftApp;
 use crate::dialogs::blend_options::SPACING;
 // PLAN: assumed `edits` module path for wg.A16 and `widgets::general_lengths` for cv.B5b
-use crate::edits::{EditPath, apply_edits};
 use crate::canvas::general_lengths;
+use crate::edits::{EditPath, apply_edits};
 
 pub const ID: &str = "blend";
 
 /// A button running `cmd`, dimmed while `cmd` is unavailable on the selection.
-fn action(app: &mut VectorcraftApp, ui: &mut Ui, label: &str, cmd: &str) {
+fn action(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, cmd: &str) {
     if clicked(&Button::new(label).enabled(available(app, cmd)).show(ui)) {
         app.run(cmd, json!({})).ok();
     }
 }
 
 /// Buttons side by side, each (label, command).
-fn actions(app: &mut VectorcraftApp, ui: &mut Ui, row: &[(&str, &str)]) {
+fn actions(app: &mut VectorcraftApp, ui: &mut Ui, row: &[(&'static str, &str)]) {
     Row::new().fill_width().show(ui, |ui, _| {
         for &(label, cmd) in row {
             action(app, ui, label, cmd);
@@ -83,10 +83,19 @@ fn spacing_params(mode: &str, steps: f64, distance: f64) -> Value {
 /// The Ramp or Shift slider: `key` of `object.blend.options` as a percentage over `range`. A drag
 /// previews the selected blends and its release records one undo step; a change without a drag,
 /// from the keyboard, records one at once.
-fn percent_slider(app: &mut VectorcraftApp, ui: &mut Ui, label: &str, key: &'static str, value: Option<f64>, range: RangeInclusive<f64>, on: bool) {
+fn percent_slider(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    label: &'static str,
+    key: &'static str,
+    value: Option<f64>,
+    range: RangeInclusive<f64>,
+    on: bool,
+) {
     Field::new(label).enabled(on).show(ui, |ui, _| {
         let shown = value.unwrap_or(0.0).clamp(*range.start(), *range.end());
-        let out = SliderField::new(label, Bind::given(shown), range).layout(SliderFieldLayout::Inline).unit("%").step(1.0).enabled(on).show(ui);
+        let out =
+            SliderField::new(label, Bind::given(shown), range.clone()).layout(SliderFieldLayout::Inline).unit("%").step(1.0).enabled(on).show(ui);
         apply_edits(app, &out.edit, EditPath::Preview, |app, v, phase| {
             crate::panels::live_run(app, "Blend Options", "object.blend.options", json!({ key: *v }), phase);
         });

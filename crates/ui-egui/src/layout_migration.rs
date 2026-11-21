@@ -18,6 +18,7 @@ use craft::behavior::dock::{
     Workspace,
 };
 use craft::behavior::flow::Axis;
+use std::sync::Arc;
 // PLAN: assumed path of the rail's slot memory (ui-panels/src/rails/tool/data.rs).
 use craft::ui::rails::{LastUsed, SlotId};
 use egui::{Rect, pos2, vec2};
@@ -197,7 +198,7 @@ pub(crate) fn migrate_ui(ui: &mut UiState) -> Outcome {
     }
     let (workspace, outcome) = migrate(&legacy, &mut ui.custom_toolbars);
     if let Some(workspace) = workspace {
-        ui.dock_workspace.replace(workspace);
+        Arc::make_mut(&mut ui.dock_workspace).replace(workspace);
         panel_docking::reconcile(&mut ui.dock_workspace);
     }
     outcome
@@ -217,7 +218,7 @@ pub(crate) fn legacy_layout(record: &Value, order: &[DockTab]) -> (Workspace<Str
     let (workspace, outcome) = migrate(&legacy, &mut toolbars);
     // Workspaces::from_legacy (chrome-w14) stores the record's toolbars; it assigns the same ids and,
     // for each toolbar it converts, the memory `slot_memory` reads from `slot_tool`.
-    (workspace.unwrap_or_else(|| panel_docking::default_workspace(None)), Outcome { intact: outcome.intact && readable, ..outcome })
+    (workspace.unwrap_or_else(|| panel_docking::default_workspace(&[])), Outcome { intact: outcome.intact && readable, ..outcome })
 }
 
 /// Give each toolbar without an id, or repeating an earlier one, the next number above the
@@ -268,7 +269,7 @@ pub(crate) fn migrate(legacy: &LegacyDock, toolbars: &mut [CustomToolbar]) -> (O
     let placing: &[CustomToolbar] = if fresh { toolbars } else { &[] };
     let built = from_legacy(legacy, placing);
     let outcome = Outcome { intact: built.is_some(), converted: true };
-    (Some(built.unwrap_or_else(|| panel_docking::default_workspace(None))), outcome)
+    (Some(built.unwrap_or_else(|| panel_docking::default_workspace(&[]))), outcome)
 }
 
 /// The workspace older versions described with `f` and `toolbars`. The dock, from the window
@@ -281,20 +282,20 @@ pub(crate) fn from_legacy(f: &LegacyDock, toolbars: &[CustomToolbar]) -> Option<
         Some(current) => (current.clone(), f.docking_hidden.clone()),
         None => pre_canvas(f),
     };
-    let hidden_toolbars = add_tools(&mut layout, f, toolbars);
-    let mut workspace = Workspace::new(layout);
+    let mut closed = add_tools(&mut layout, f, toolbars);
+    let mut floated = Vec::new();
     // A hidden place applies to a closed panel, and to a floating one Dock Panel sends back
     // there; a floating panel whose way back was the icon column finds its icon group again.
     for (id, location) in hidden.into_iter().take(MAX_PANELS) {
-        if workspace.layout.floating.iter().any(|w| w.contains(&id)) {
+        if layout.floating.iter().any(|w| w.contains(&id)) {
             if !f.docking_icons.contains(&id) {
-                workspace.floated.push((id, location));
+                floated.push((id, location));
             }
-        } else if !workspace.layout.contains(&id) {
-            workspace.hidden.push((id, location));
+        } else if !layout.contains(&id) {
+            closed.push((id, location));
         }
     }
-    workspace.hidden.extend(hidden_toolbars);
+    let workspace = Workspace::from_parts(layout, closed, floated);
     workspace.validate().ok()?;
     Some(workspace)
 }
@@ -358,7 +359,7 @@ fn pre_canvas(f: &LegacyDock) -> (Layout<String>, Hidden) {
                     })
                     .collect();
                 let rect = Rect::from_min_size(pos2(at[0], at[1]), vec2(width, height));
-                if let Some(mut window) = Floating::stack(groups, rect) {
+                if let Some(mut window) = Floating::stack(floating.len() as u64, groups, rect) {
                     window.column.iconic = all_minimized;
                     floating.push(window);
                 }
@@ -378,7 +379,7 @@ fn pre_canvas(f: &LegacyDock) -> (Layout<String>, Hidden) {
                 Some(kept)
             })
             .collect();
-        if let Some(mut converted) = Floating::stack(groups, usable_rect(window.rect)) {
+        if let Some(mut converted) = Floating::stack(floating.len() as u64, groups, usable_rect(window.rect)) {
             converted.column.iconic = window.column.iconic;
             floating.push(converted);
         }
@@ -448,7 +449,7 @@ fn add_tools(layout: &mut Layout<String>, f: &LegacyDock, toolbars: &[CustomTool
     let mut docked = Vec::new();
     for toolbar in toolbars.iter().take(MAX_LEGACY_GROUPS) {
         let owner = Owner::Toolbar(toolbar.id);
-        let Some(key) = placed.claim(owner.key()) else { continue };
+        let Some(key) = placed.claim(owner.panel()) else { continue };
         let steps = steps(toolbar.double);
         if !toolbar.shown {
             hidden.push((key, hidden_place(toolbar, steps)));
@@ -456,7 +457,7 @@ fn add_tools(layout: &mut Layout<String>, f: &LegacyDock, toolbars: &[CustomTool
         }
         match toolbar.dock {
             Some(order) => docked.push((order, toolbar.dock_right, steps_column(key, steps))),
-            None => layout.floating.push(steps_window(key, toolbar.pos, steps)),
+            None => float_steps(layout, key, toolbar.pos, steps),
         }
         for strip in &toolbar.floating {
             torn_off(layout, &mut placed, &owner, strip);
@@ -471,7 +472,7 @@ fn add_tools(layout: &mut Layout<String>, f: &LegacyDock, toolbars: &[CustomTool
     if let Some(key) = placed.claim(toolbar::TOOLS.to_string()) {
         let steps = steps(f.toolbar_double);
         match f.toolbar_pos.filter(|p| p.iter().all(|v| v.is_finite())) {
-            Some(pos) => layout.floating.push(steps_window(key, pos, steps)),
+            Some(pos) => float_steps(layout, key, pos, steps),
             None => {
                 let (side, inner) = if f.toolbar_right { (DockEdge::End, true) } else { (DockEdge::Start, f.tools_beside_canvas) };
                 dock_column(layout, side, inner, steps_column(key, steps));
@@ -490,7 +491,7 @@ fn torn_off(layout: &mut Layout<String>, placed: &mut Placed, owner: &Owner, str
     // PLAN: assumed `toolbar::strip_id(&Owner, &str) -> String`.
     let Some(first) = strip.tools.first() else { return };
     if let Some(key) = placed.claim(toolbar::strip_id(owner, first)) {
-        layout.floating.push(steps_window(key, strip.pos, 1));
+        float_steps(layout, key, strip.pos, 1);
     }
 }
 
@@ -500,18 +501,20 @@ fn steps_column(panel: String, steps: u16) -> Column<String> {
     Column::new(vec![Group::new(vec![panel], 0)]).with_steps(steps)
 }
 
-/// The floating window of a [`steps_column`]; the renderer sizes it from its panel.
-fn steps_window(panel: String, pos: [f32; 2], steps: u16) -> Floating<String> {
+/// Floats a [`steps_column`] of `panel` at `pos` in a window of its own; the renderer sizes it
+/// from its panel.
+fn float_steps(layout: &mut Layout<String>, panel: String, pos: [f32; 2], steps: u16) {
     let at = finite_pos(pos);
-    Floating::new(steps_column(panel, steps), Rect::from_min_size(pos2(at[0], at[1]), vec2(ICON_WIDTH, ICON_WIDTH)))
+    let id = layout.fresh_window_id();
+    layout.floating.push(Floating::new(id, steps_column(panel, steps), Rect::from_min_size(pos2(at[0], at[1]), vec2(ICON_WIDTH, ICON_WIDTH))));
 }
 
 /// Where a toolbar that is not shown goes back to: its dock edge, else where it floated.
 fn hidden_place(toolbar: &CustomToolbar, steps: u16) -> Location<String> {
     if toolbar.dock.is_some() {
         let edge = if toolbar.dock_right { DockEdge::End } else { DockEdge::Start };
-        // PLAN: assumed `DockPlacement::Edge(DockEdge)`.
-        let mut location = Location::new(None, DockPlacement::Edge(edge));
+        // With no anchor, the column's edge is where the toolbar goes back: the outermost column there.
+        let mut location = Location::new(None, DockPlacement::column(false));
         location.group = Some(GroupLocation::new(false, None, Some(ColumnLocation::new(Some(edge), None, false, None).with_steps(Some(steps)))));
         location
     } else {
@@ -542,12 +545,7 @@ fn slot_of(first: &str) -> Option<SlotId> {
 /// The canvas beside a dock of `columns` (from the window edge inwards) at the end edge.
 fn with_canvas(columns: Vec<Column<String>>, floating: Vec<Floating<String>>) -> Layout<String> {
     let width: f32 = columns.iter().map(extent).sum();
-    let root = Node::split(
-        Axis::X,
-        SplitSize::FixedSecond(width),
-        Node::tabs(vec![CANVAS.to_string()], 0),
-        Node::dock(DockEdge::End, columns),
-    );
+    let root = Node::split(Axis::X, SplitSize::FixedSecond(width), Node::tabs(vec![CANVAS.to_string()], 0), Node::dock(DockEdge::End, columns));
     Layout::new(Some(root), floating)
 }
 

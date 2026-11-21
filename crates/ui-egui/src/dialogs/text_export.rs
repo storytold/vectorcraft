@@ -59,6 +59,6 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     } else {
         "document.export"
     };
-    io::save_command_output(app, id, "txt", params)?;
+    io::save_command_output(app, id, "txt", params, |_, _| Ok(Value::Null))?;
     Ok(None)
 }

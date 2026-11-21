@@ -109,16 +109,14 @@ impl StackDialog for PlaceDialog {
 
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Self::Result>> {
         let (files, info, replace_enabled, documents, others) = (&self.files, &self.info, self.replace_enabled, self.documents, self.others);
-        let shown = FormDialog::new(tl!("Place").to_string(), Bind::bound(&mut self.options))
-            .ok_label(tl!("Place").to_string())
-            .show(ui, |ui, _, options| {
+        let shown = FormDialog::new(tl!("Place").to_string(), Bind::bound(&mut self.options)).ok_label(tl!("Place").to_string()).show(
+            ui,
+            |ui, _, options| {
                 Text::new(if files.len() == 1 { tl!("File") } else { tl!("Files") }.to_string()).show(ui);
                 for (i, file) in files.iter().enumerate() {
                     let path = file.get("path").and_then(Value::as_str);
-                    let name = path
-                        .map(fileio::file_name)
-                        .or_else(|| file.get("name").and_then(Value::as_str).map(str::to_string))
-                        .unwrap_or_default();
+                    let name =
+                        path.map(fileio::file_name).or_else(|| file.get("name").and_then(Value::as_str).map(str::to_string)).unwrap_or_default();
                     let mut label = Text::new(name);
                     if let Some(path) = path {
                         label = label.tooltip(path.to_string());
@@ -135,12 +133,17 @@ impl StackDialog for PlaceDialog {
                     for (key, label, tip) in OPTIONS {
                         let tip = if key == "link" { link_tip(documents, others) } else { tl!(tip).to_string() };
                         if let Some(flag) = options.flag(key) {
-                            Checkbox::new(Bind::bound(flag)).label(tl!(label).to_string()).tooltip(tip).enabled(key != "replace" || replace_enabled).show(ui);
+                            Checkbox::new(Bind::bound(flag))
+                                .label(tl!(label).to_string())
+                                .tooltip(tip)
+                                .enabled(key != "replace" || replace_enabled)
+                                .show(ui);
                         }
                     }
                 });
                 true
-            });
+            },
+        );
         match (shown.accepted, shown.closed) {
             (Some(_), _) => Some(DialogResult::Ok(self.answer())),
             (None, Some(_)) => Some(DialogResult::Cancel),

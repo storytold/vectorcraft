@@ -8,7 +8,7 @@ use std::cell::RefCell;
 
 use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use craft::theme::Srgba;
-use craft::ui::contract::{Bind, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::patterns::form_dialogs::FormDialog;
@@ -83,9 +83,8 @@ impl StackDialog for NavigatorOptionsDialog {
 
     fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<NavigatorOptionsValue>> {
         let requested = RefCell::new(None);
-        let shown = FormDialog::new(tl!("Navigator Panel Options"), Bind::bound(&mut self.value)).opened(Bind::bound(&mut self.open)).show(
-            ui,
-            |ui, _, v| {
+        let shown =
+            FormDialog::new(tl!("Navigator Panel Options"), Bind::bound(&mut self.value)).opened(Bind::bound(&mut self.open)).show(ui, |ui, _, v| {
                 Field::new(tl!("Color:")).id_salt("color").show(ui, |ui, _| {
                     let presets: Vec<(&str, [u8; 3])> = view_box_colors().collect();
                     let preset = presets.iter().find(|(_, c)| *c == v.rgb);
@@ -107,8 +106,7 @@ impl StackDialog for NavigatorOptionsDialog {
                     v.solid_dashes = on;
                 }
                 true
-            },
-        );
+            });
         if let Some(request) = requested.into_inner() {
             self.color_request = Some(request);
         }

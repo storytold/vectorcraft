@@ -116,10 +116,8 @@ impl VectorcraftApp {
             // an explicit teardown guarantees it cannot look continuous with the old context's
             // last observed pass and reuse its owner/baseline generation.
             self.ime_context.end_viewport(ctx.viewport_id());
-            self.styled = false;
             self.canvas.texture = None;
             self.canvas.key = None;
-            self.place.forget_textures();
         }
         self.context = tag;
     }
@@ -162,7 +160,7 @@ mod tests {
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();

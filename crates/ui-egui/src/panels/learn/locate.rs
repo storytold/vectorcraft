@@ -204,7 +204,7 @@ pub(crate) fn find(app: &VectorcraftApp, tool: &'static str, shown_first: bool) 
     }
     let active = app.session.tool_id();
     let custom =
-        app.ui.custom_toolbars.iter().filter(|b| crate::panel_docking::visible(&app.ui, &crate::custom_toolbars::panel_id(b.id))).find_map(|bar| {
+        app.ui.custom_toolbars.iter().filter(|b| crate::panel_docking::visible(app, &crate::custom_toolbars::panel_id(b.id))).find_map(|bar| {
             let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
             let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
             let first = *tools.first()?;

@@ -19,7 +19,6 @@ use vectorcraft_tools::{blendwidget, objects_on_path, pie, sidewidget, typewidge
 
 use super::BodyKind;
 use crate::VectorcraftApp;
-use crate::dialogs::three_d::gizmo_shown;
 use crate::doc_windows::Win;
 
 /// The bounding box on show: the box and the layer colour it is drawn in.
@@ -348,7 +347,7 @@ impl Component for ShapeWidgets {
 /// Nothing here is shown while a revolve is edited.
 // PLAN: `win` is unused: assumed it names the canvas window of the pass, and only a `Live` body shows these.
 pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft::ui::canvas::CanvasSpace, _win: Win, kind: BodyKind) {
-    if kind != BodyKind::Live || gizmo_shown(app) {
+    if kind != BodyKind::Live || super::revolve_editing(app) {
         return;
     }
     // PLAN: assumed the body's rect is the canvas rect the controls are shown at.

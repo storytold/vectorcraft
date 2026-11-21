@@ -207,7 +207,7 @@ fn the_engine_follows_the_interface_language() {
     let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     let ctx = egui::Context::default();
     let frame = |app: &mut crate::VectorcraftApp| {
-        ctx.run_ui(egui::RawInput::default(), |ui| app.logic(ui.ctx())).textures_delta.clear();
+        ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
     };
     frame(&mut app);
     assert_eq!(app.session.ui_language.as_deref(), Some("en"), "tests resolve `auto` to English");

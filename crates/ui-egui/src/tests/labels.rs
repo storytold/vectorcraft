@@ -46,7 +46,7 @@ pub(crate) fn shapes_text(out: &egui::FullOutput) -> String {
 #[test]
 fn effect_menu_has_a_vector_effects_section() {
     let tree = menus::menu_tree();
-    let effect = &tree.iter().find(|menu| menu.title == "Effect").expect("Effect menu").children;
+    let effect = &tree.iter().find(|(title, _)| *title == "Effect").expect("Effect menu").1;
     assert!(effect.iter().any(|n| matches!(n, Node::Heading(h) if h == "Vector Effects")));
 }
 
@@ -275,7 +275,7 @@ fn effect_menu_lists_glowing_edges_in_the_raster_stylize_between_sharpen_and_tex
 #[test]
 fn effect_menu_keeps_glowing_edges_out_of_the_vector_stylize() {
     let tree = menus::menu_tree();
-    let effect = &tree.iter().find(|menu| menu.title == "Effect").expect("Effect menu").children;
+    let effect = &tree.iter().find(|(title, _)| *title == "Effect").expect("Effect menu").1;
     let raster = effect.iter().position(|n| matches!(n, Node::Heading(h) if h == "Raster Effects")).expect("Raster Effects");
     let stylize: Vec<(usize, Vec<&str>)> = effect
         .iter()

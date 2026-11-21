@@ -67,8 +67,7 @@ fn popup_of(app: &mut VectorcraftApp, cell: GlyphCell) -> Vec<GlyphCell> {
 
 /// Use the popup of `cell` to pick `glyph`.
 fn pick(app: &mut VectorcraftApp, cell: GlyphCell, glyph: GlyphCell) {
-    // PLAN: `AlternatePick` is `#[non_exhaustive]`, so the app crate cannot build it with a struct literal; assumed `AlternatePick::new(cell, glyph)`.
-    pick_alternate(app, AlternatePick::new(cell, glyph));
+    pick_alternate(app, cell, glyph);
 }
 
 fn show_category(app: &mut VectorcraftApp, category: &str) {
@@ -113,7 +112,7 @@ fn threaded(text: &str, area: Value, frames: &[Value]) -> (VectorcraftApp, Vec<u
 }
 
 /// What activating glyph `gid` of `face` would do to the selection ([`Fit::pick`], [`Fit::why`]).
-fn verdict(app: &VectorcraftApp, face: &vectorcraft_text::FontFace, gid: u32) -> Result<Pick, String> {
+fn verdict(app: &mut VectorcraftApp, face: &vectorcraft_text::FontFace, gid: u32) -> Result<Pick, String> {
     let fit = Fit::of(app, face);
     fit.pick(face, gid).ok_or_else(|| fit.why(face, gid))
 }
@@ -150,24 +149,31 @@ fn listed_chars(face: &vectorcraft_text::FontFace) -> Vec<(char, u32)> {
     face.chars().into_iter().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).collect()
 }
 
-/// Choose the panel menu row labelled `label`: what a click on it runs.
-fn choose(app: &mut VectorcraftApp, label: &str) {
-    // PLAN: assumed `menu_rows(app) -> Vec<MenuRow>` with `id`, `label` and `params`, and `run(app, id, params) -> Result<(), String>`.
-    let row = menu_rows(app).into_iter().find(|r| r.label == label).unwrap_or_else(|| panic!("{label} missing from the menu"));
-    run(app, &row.id, row.params.clone()).unwrap();
+/// The command rows of the panel menu.
+fn rows(app: &VectorcraftApp) -> Vec<CommandRef> {
+    menu_rows(app)
+        .into_iter()
+        .filter_map(|row| match row {
+            PanelRow::Command(command) => Some(command),
+            _ => None,
+        })
+        .collect()
 }
 
-/// The labels of the panel menu's rows.
-fn labels(app: &VectorcraftApp) -> Vec<String> {
-    menu_rows(app).into_iter().map(|r| r.label).collect()
+/// Choose the panel menu row of `form`: what a click on it runs.
+fn choose(app: &mut VectorcraftApp, form: GlyphForm) {
+    let row = form_ref(form);
+    assert!(rows(app).contains(&row), "{form:?} missing from the menu");
+    run(app, &row.id, &row.params).unwrap();
 }
 
-/// Whether the row labelled `label` is checked and enabled.
-fn row_state(app: &VectorcraftApp, label: &str) -> (bool, bool) {
-    // PLAN: assumed `menu_states(app) -> Vec<MenuState>` parallel to `menu_rows(app)`, with `checked` and `enabled`.
-    let at = menu_rows(app).iter().position(|r| r.label == label).unwrap_or_else(|| panic!("{label} missing from the menu"));
-    let state = &menu_states(app)[at];
-    (state.checked, state.enabled)
+/// Whether the row of `form` is checked and enabled.
+fn row_state(app: &VectorcraftApp, form: GlyphForm) -> (bool, bool) {
+    let mut states = CommandStates::new();
+    menu_states(app, &mut states);
+    let state = states.get(&form_ref(form)).unwrap_or_else(|| panic!("no state for {form:?}"));
+    // PLAN: assumed CommandState::is_checked(&self) -> bool
+    (state.is_checked(), state.is_enabled())
 }
 
 #[test]
@@ -200,11 +206,11 @@ fn the_selected_character_is_the_range_start_or_the_one_before_the_caret() {
 fn east_asian_glyph_forms_in_the_panel_menu_set_the_selected_characters_form() {
     let (mut app, id) = editing("亜唖");
     app.session.prefs.show_east_asian_options = false;
-    assert!(!labels(&app).iter().any(|l| l == "JIS 78 Forms"), "hidden without Show East Asian Options");
+    assert!(!rows(&app).contains(&form_ref(GlyphForm::Jis78)), "hidden without Show East Asian Options");
     app.session.prefs.show_east_asian_options = true;
-    let shown = labels(&app);
+    let shown = rows(&app);
     for form in GlyphForm::ALL {
-        assert!(shown.iter().any(|l| l == glyph_form_label(form)), "{form:?} in {shown:?}");
+        assert!(shown.contains(&form_ref(form)), "{form:?} in {shown:?}");
     }
     const FAMILY: &str = "BIZ UDMincho";
     if FontDb::global().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
@@ -217,28 +223,28 @@ fn east_asian_glyph_forms_in_the_panel_menu_set_the_selected_characters_form() {
         _ => panic!("text"),
     };
     select(&mut app, 3, 6);
-    choose(&mut app, "JIS 78 Forms");
+    choose(&mut app, GlyphForm::Jis78);
     assert_eq!(forms(&app), [("亜".to_string(), GlyphForm::Default), ("唖".to_string(), GlyphForm::Jis78)]);
-    assert_eq!(row_state(&app, "JIS 78 Forms"), (true, true), "checked");
+    assert_eq!(row_state(&app, GlyphForm::Jis78), (true, true), "checked");
     // A selection whose first font has no JIS 83 forms, and whose second one does, takes them.
     let fallback = vectorcraft_text::FALLBACK_FAMILY;
     if FontDb::global().face(fallback, "Regular").is_some_and(|f| !f.has_substitution_feature(*b"jp83")) {
         app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "font": fallback})).unwrap();
         select(&mut app, 0, 6);
-        choose(&mut app, "JIS 83 Forms");
+        choose(&mut app, GlyphForm::Jis83);
         assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Jis83), "{:?}", forms(&app));
         app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "font": FAMILY})).unwrap();
         app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "default"})).unwrap();
         select(&mut app, 3, 6);
-        choose(&mut app, "JIS 78 Forms");
+        choose(&mut app, GlyphForm::Jis78);
     }
     // Choosing it again changes nothing, and the font has no JIS 04 forms: that row is disabled.
     let n = undo_len(&app);
-    choose(&mut app, "JIS 78 Forms");
-    assert_eq!(row_state(&app, "JIS 04 Forms"), (false, false), "no feature for it");
+    choose(&mut app, GlyphForm::Jis78);
+    assert_eq!(row_state(&app, GlyphForm::Jis04), (false, false), "no feature for it");
     assert_eq!(undo_len(&app), n);
     assert_eq!(forms(&app)[1].1, GlyphForm::Jis78);
-    choose(&mut app, "Revert To Default Forms");
+    choose(&mut app, GlyphForm::Default);
     assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Default), "{:?}", forms(&app));
 }
 
@@ -257,7 +263,7 @@ fn glyph_form_items_at_a_caret_follow_all_the_text() {
     app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "glyphForm": "jis78"})).unwrap();
     select(&mut app, 6, 6);
     assert_eq!(selection_glyph_form(&app), None, "the caret's form is not every character's");
-    choose(&mut app, "Revert To Default Forms");
+    choose(&mut app, GlyphForm::Default);
     assert!(forms(&app).iter().all(|f| *f == GlyphForm::Default), "{:?}", forms(&app));
     app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "jis78"})).unwrap();
     select(&mut app, 6, 6);
@@ -296,11 +302,11 @@ fn alternates_for_current_selection_lists_and_replaces_the_selected_character() 
     show_category(&mut app, "Alternates for Selection");
     let list = listed(&mut app, "Alternates for Selection");
     assert_eq!(list.len(), 7, "a, its six alternates and nothing else (the whole font lists {entire})");
-    assert_eq!(marked_cell(&app), list.first().copied(), "the default glyph is the one drawn");
+    assert_eq!(marked_cell(&mut app), list.first().copied(), "the default glyph is the one drawn");
     app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "allCaps": true})).unwrap();
-    assert_eq!(marked_cell(&app), None, "All Caps draws a different glyph, so no alternate of a is marked");
+    assert_eq!(marked_cell(&mut app), None, "All Caps draws a different glyph, so no alternate of a is marked");
     app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "allCaps": false})).unwrap();
-    assert_eq!(marked_cell(&app), list.first().copied());
+    assert_eq!(marked_cell(&mut app), list.first().copied());
 
     // The panel's own font does not change what is listed.
     app.ui.glyphs_font = Some(("Source Serif 4".into(), "Regular".into()));
@@ -315,7 +321,7 @@ fn alternates_for_current_selection_lists_and_replaces_the_selected_character() 
     assert_eq!(undo_len(&app), undo + 1, "status: {}", app.ui.status);
     assert_eq!(plain_of(&app, id.as_u64().unwrap()), "xay");
     assert_eq!(glyph_ids(&app, &id)[1], u1, "the a is drawn with the chosen glyph");
-    assert_eq!(marked_cell(&app), Some(list[1]), "the chosen glyph is marked");
+    assert_eq!(marked_cell(&mut app), Some(list[1]), "the chosen glyph is marked");
 
     select(&mut app, 1, 1);
     assert!(listed(&mut app, "Alternates for Selection").is_empty(), "x has no alternates");
@@ -346,7 +352,7 @@ fn alternates_are_found_once_per_revision() {
         app.canvas.glyphs_found.as_ref().map(|(k, _)| k.clone()).expect("the alternates were found")
     };
     let first = key(&mut app);
-    assert_eq!(marked_cell(&app), listed(&mut app, "Alternates for Selection").first().copied(), "the default glyph is drawn");
+    assert_eq!(marked_cell(&mut app), listed(&mut app, "Alternates for Selection").first().copied(), "the default glyph is drawn");
     let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
     let node = NodeId(id.as_u64().unwrap());
     let state = app.session.active_mut().unwrap();
@@ -370,13 +376,13 @@ fn the_default_glyph_is_listed_when_the_font_leaves_it_out() {
     show_category(&mut app, "Alternates for Selection");
     let list = listed(&mut app, "Alternates for Selection");
     assert_eq!(list.len(), 7, "the default glyph and the six alternates");
-    assert_eq!(marked_cell(&app), list.first().copied(), "the default glyph is first and drawn");
+    assert_eq!(marked_cell(&mut app), list.first().copied(), "the default glyph is first and drawn");
     let face = FontDb::global().face(alternates_family(false), "Regular").expect("the test face");
     assert_eq!(cell_info(&mut app, list[0]).gid, Some(face.glyph_for('a')), "describe names the default glyph");
     app.run("text.setGlyphAlternate", json!({"id": id, "start": 1, "gid": u1})).unwrap();
     let list = listed(&mut app, "Alternates for Selection");
     assert_eq!(list.len(), 7);
-    assert_eq!(marked_cell(&app), Some(list[5]), "the chosen glyph, after b, u2, u4 and u3");
+    assert_eq!(marked_cell(&mut app), Some(list[5]), "the chosen glyph, after b, u2, u4 and u3");
 }
 
 /// For the selected medial letter of an Arabic word the panel lists that form's alternates, and activating one applies the
@@ -394,7 +400,7 @@ fn a_double_click_applies_a_feature_value_to_one_letter_of_a_joined_word() {
     show_category(&mut app, "Alternates for Selection");
     let list = listed(&mut app, "Alternates for Selection");
     assert_eq!(list.len(), 4, "the medial teh and its three alternates, not the isolated form's");
-    assert_eq!(marked_cell(&app), list.first().copied(), "the form the letter has is first and drawn");
+    assert_eq!(marked_cell(&mut app), list.first().copied(), "the form the letter has is first and drawn");
     let undo = undo_len(&app);
     activate(&mut app, list[2]);
     assert_eq!(undo_len(&app), undo + 1, "one undo step; status: {}", app.ui.status);
@@ -408,7 +414,7 @@ fn a_double_click_applies_a_feature_value_to_one_letter_of_a_joined_word() {
     );
     assert!(text.runs.iter().all(|r| r.style.glyph_alternate.is_none()));
     assert_eq!(glyph_ids(&app, &id), [g('B'), g('x'), g('M')], "the neighbours keep their initial and final forms");
-    assert_eq!(marked_cell(&app), Some(list[2]), "the applied variant is the one drawn");
+    assert_eq!(marked_cell(&mut app), Some(list[2]), "the applied variant is the one drawn");
     // The default glyph takes the feature off again, and undo takes each step back.
     activate(&mut app, list[0]);
     assert_eq!(glyph_ids(&app, &id), [g('B'), g('u'), g('M')]);
@@ -611,8 +617,7 @@ fn a_pick_that_cannot_be_drawn_leaves_the_text_as_it_was() {
 fn a_pick_replaces_a_threaded_story_that_select_all_selected() {
     let [_, u2, ..] = vectorcraft_text::test_fonts::unencoded_glyphs().expect("unencoded glyphs");
     let story = "a bad cab ".repeat(30);
-    let (mut app, ids) =
-        threaded(&story, json!({"width": 150, "height": 60}), &[json!([200, 10, 150, 60]), json!([400, 10, 150, 200])]);
+    let (mut app, ids) = threaded(&story, json!({"width": 150, "height": 60}), &[json!([200, 10, 150, 60]), json!([400, 10, 150, 200])]);
     let a = ids[0];
     app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
     app.run("select.all", json!({})).unwrap();
@@ -695,7 +700,8 @@ fn a_wider_pick_on_the_selected_character_moves_the_selection_with_it() {
             list.push(alt.gid);
         }
     }
-    let (index, wide) = list.iter().copied().enumerate().max_by(|x, y| face.advance(x.1).total_cmp(&face.advance(y.1))).expect("the popup lists glyphs");
+    let (index, wide) =
+        list.iter().copied().enumerate().max_by(|x, y| face.advance(x.1).total_cmp(&face.advance(y.1))).expect("the popup lists glyphs");
     assert!(face.advance(wide) > face.advance(plain_a), "an alternate wider than the a");
     // The first frame holds "x a" with the plain a, and not with the wider glyph.
     let pt = |g: u32| face.advance(g) * 12.0 / face.units_per_em();
@@ -751,8 +757,7 @@ fn entire_font_lists_the_unencoded_glyphs() {
     assert!(unencoded.len() > 1000 && encoded.len() == 4, "{} unencoded, {} encoded", unencoded.len(), encoded.len());
     let list = listed(&mut app, "Entire Font");
     assert_eq!(list.len(), encoded.len() + unencoded.len());
-    let expected: Vec<GlyphCell> =
-        encoded.iter().map(|(c, _)| GlyphCell::Char(*c)).chain(unencoded.iter().map(|g| GlyphCell::Glyph(*g))).collect();
+    let expected: Vec<GlyphCell> = encoded.iter().map(|(c, _)| GlyphCell::Char(*c)).chain(unencoded.iter().map(|g| GlyphCell::Glyph(*g))).collect();
     assert_eq!(list, expected, "characters first, then the unencoded glyphs");
     let first = cell_info(&mut app, GlyphCell::Glyph(unencoded[0]));
     assert!(first.name.is_some(), "the font names its glyphs");
@@ -773,15 +778,15 @@ fn the_show_menu_lists_the_fonts_opentype_categories() {
     assert_eq!(names, ["Ligatures", "Round Dots", "Small Caps", "Figures"]);
     let id_of = |name: &str| faces.iter().find(|(_, n)| n == name).map(|(id, _)| id.clone()).expect("the category");
     let (figures, dots) = (id_of("Figures"), id_of("Round Dots"));
-    run(&mut app, "ui.glyphs.show", json!({"category": figures})).unwrap();
+    run(&mut app, "ui.glyphs.show", &json!({"category": figures})).unwrap();
     assert_eq!(app.ui.glyphs_panel.category, figures);
     assert_eq!(listed(&mut app, &figures).len(), 2);
-    run(&mut app, "ui.glyphs.show", json!({"category": dots})).unwrap();
+    run(&mut app, "ui.glyphs.show", &json!({"category": dots})).unwrap();
     assert_eq!(listed(&mut app, &dots).len(), 1);
     // A face without the category shows Entire Font.
     app.ui.glyphs_font = Some((HALF_FORM_FAMILY.to_string(), "Regular".to_string()));
     assert!(source(&mut app).categories(HALF_FORM_FAMILY, "Regular").is_empty(), "the half form font has no categories of its own");
-    run(&mut app, "ui.glyphs.show", json!({"category": dots})).unwrap();
+    run(&mut app, "ui.glyphs.show", &json!({"category": dots})).unwrap();
     assert_eq!(app.ui.glyphs_panel.category, "Entire Font", "a category the face lacks leaves Entire Font shown");
 }
 
@@ -853,7 +858,7 @@ fn a_glyph_that_cannot_go_on_the_selection_is_dimmed_and_says_why() {
         let (mut app, id, last) = khwarizmi_in_heavy(letter);
         let plain = glyph_ids(&app, &id);
         select(&mut app, last, last + letter.len_utf8());
-        let why = verdict(&app, &face, glyph).err().expect("not applicable");
+        let why = verdict(&mut app, &face, glyph).err().expect("not applicable");
         assert_eq!(why, format!("yehfarsi.fina.alt2 belongs to ی (U+06CC) at the end of a word; your selection is {selected}."));
         let info = cell_info(&mut app, cell);
         assert!(info.dimmed, "{letter}: dimmed");
@@ -873,14 +878,14 @@ fn a_glyph_that_cannot_go_on_the_selection_is_dimmed_and_says_why() {
     // Nothing selected, and a variant of the letter's other form.
     select(&mut app, 0, 0);
     let why = "Select one character with the Type tool first.";
-    assert_eq!(verdict(&app, &face, glyph).err().as_deref(), Some(why));
+    assert_eq!(verdict(&mut app, &face, glyph).err().as_deref(), Some(why));
     let info = cell_info(&mut app, cell);
     assert!(info.dimmed, "dimmed without a selection");
     assert_eq!(info.note.as_deref(), Some(why));
     select(&mut app, last, last + 2);
     let medial = gid_named(&face, "yehfarsi.medi.alt1");
     assert_eq!(
-        verdict(&app, &face, medial).err().as_deref(),
+        verdict(&mut app, &face, medial).err().as_deref(),
         Some("yehfarsi.medi.alt1 is not an alternate of ی (U+06CC) as it stands in its word."),
         "its own letter, another place in a word"
     );
@@ -902,14 +907,14 @@ fn entire_font_applies_a_glyph_no_feature_reaches_to_its_letter() {
     // Another letter, and nothing selected: dimmed, and activating changes nothing.
     for (start, end) in [(2, 3), (0, 0)] {
         select(&mut app, start, end);
-        assert!(verdict(&app, &face, glyph).is_err());
+        assert!(verdict(&mut app, &face, glyph).is_err());
         assert!(cell_info(&mut app, cell).dimmed, "{start}..{end}: dimmed");
         activate(&mut app, cell);
         assert_eq!(glyph_ids(&app, &id), plain);
     }
     // The letter itself: enabled, one undo step, drawn with that glyph.
     select(&mut app, 1, 2);
-    assert!(matches!(verdict(&app, &face, glyph), Ok(Pick::Glyph(g)) if g == glyph));
+    assert!(matches!(verdict(&mut app, &face, glyph), Ok(Pick::Glyph(g)) if g == glyph));
     assert!(!cell_info(&mut app, cell).dimmed);
     let undo = undo_len(&app);
     activate(&mut app, cell);
@@ -1058,7 +1063,11 @@ fn the_grid_lists_the_same_cells_from_the_character_list_read_once() {
                 let rest = c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).map(GlyphCell::Glyph);
                 chars.into_iter().chain(rest).collect()
             }
-            None => listed_chars(face).into_iter().map(|(c, _)| GlyphCell::Char(c)).chain(face.unencoded_glyphs().iter().map(|g| GlyphCell::Glyph(*g))).collect(),
+            None => listed_chars(face)
+                .into_iter()
+                .map(|(c, _)| GlyphCell::Char(c))
+                .chain(face.unencoded_glyphs().iter().map(|g| GlyphCell::Glyph(*g)))
+                .collect(),
         }
     }
 

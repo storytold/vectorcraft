@@ -76,10 +76,7 @@ fn params() -> Vec<Param> {
         Param::new(
             "all",
             tl!("Artboards"),
-            ParamKind::radio(
-                vec![("true".into(), Label::from(tl!("All"))), ("false".into(), Label::from(tl!("Range:")))],
-                Some("true".into()),
-            ),
+            ParamKind::radio(vec![("true".into(), Label::from(tl!("All"))), ("false".into(), Label::from(tl!("Range:")))], Some("true".into())),
         )
         .enabled_when("useArtboards", true),
         Param::new("range", "", ParamKind::text("")).hint("1-3, 5").enabled_when("all", "false"),
@@ -169,9 +166,7 @@ pub(super) fn confirm(app: &mut VectorcraftApp, _open: &Open, fields: &DialogFie
 /// `params` of an options dialog for [`io::export`]: with [`io::EXPORT_SELECTION`] when
 /// Export Selection opened the dialog (`selection`).
 pub(super) fn exported(selection: bool, mut params: Value) -> Value {
-    if selection
-        && let Some(o) = params.as_object_mut()
-    {
+    if selection && let Some(o) = params.as_object_mut() {
         o.insert(io::EXPORT_SELECTION.into(), json!(true));
     }
     params
@@ -184,11 +179,12 @@ pub(super) fn exported(selection: bool, mut params: Value) -> Value {
 pub fn export_selection(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document")?;
     fileio::selection_doc(st, "document.exportSelection", false).map_err(|e| e.to_string())?;
-    let path = io::selection_path(app)?;
-    let f = fileio::writable_format(None, Some(&path))?;
-    let plugin = vectorcraft_plugins::export::by_format(f.id);
-    let pages = Pages { use_artboards: false, all: true, range: String::new(), selection: true };
-    options_or_write(app, f, plugin, path, pages)
+    io::selection_path(app, |app, path| {
+        let f = fileio::writable_format(None, Some(&path))?;
+        let plugin = vectorcraft_plugins::export::by_format(f.id);
+        let pages = Pages { use_artboards: false, all: true, range: String::new(), selection: true };
+        options_or_write(app, f, plugin, path, pages)
+    })
 }
 
 /// What an export writes: with `use_artboards` the artboards (`all`, else the 1-based `range`),

@@ -8,8 +8,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat::{self as tpl, Given};
 
-use super::tests_export::{confirm, frame, kind, set};
-use super::tests_plugin_export::fields;
+use super::tests_export::{fields, frame, kind, set, try_confirm};
 use super::*;
 use crate::Services;
 use crate::VectorcraftApp;
@@ -17,9 +16,8 @@ use crate::tests::picks::{poll, scripted};
 
 /// Sends `app.open` with `params` through the control channel and returns the reply.
 fn control(app: &mut VectorcraftApp, params: serde_json::Value) -> serde_json::Value {
-    // PLAN: assumed shell-w12's `craft::automation::ControlRequest` with the old `control::handle` and `Outcome::Done` call shape.
     let (req, _rx) = craft::automation::ControlRequest::new("app.open", params);
-    let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
+    let craft::automation::Reply::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
     r
 }
 
@@ -69,10 +67,11 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     let mut app = app();
     install(&mut app, &tpl::returning(&tpl::importer("test.ui.svgreader", r#"["svg","tui"]"#, "{}"), RECT));
     let menu = plugin::open_with_menu();
-    // PLAN: assumed menus-w9's `craft::menu::Node` rows expose `command`, `params` and `label`.
-    let listed = menu
-        .iter()
-        .any(|n| n.command == "file.openWith" && n.label == "Test test.ui.svgreader…" && n.params["importer"] == "plugin.test.ui.svgreader");
+    let listed = menu.iter().any(|n| {
+        matches!(n, craft::menu::Node::Item(item) if item.command.id == "file.openWith"
+            && item.label == "Test test.ui.svgreader…"
+            && item.command.params["importer"] == "plugin.test.ui.svgreader")
+    });
     assert!(listed, "{menu:?}");
 
     let svg = dir.join("a.svg");
@@ -115,12 +114,12 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     let file = file.to_string_lossy().into_owned();
 
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file})).unwrap();
-    assert_eq!(kind(&app), Some(plugin::IMPORT_KIND));
+    assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
     assert_eq!(fields(&app)["density"], json!(4.0));
     assert!(app.session.documents().is_empty(), "nothing opened before Open");
     frame(&mut app);
     set(&mut app, "density", json!(7));
-    confirm(&mut app).unwrap();
+    try_confirm(&mut app).unwrap();
     assert!(kind(&app).is_none());
     assert_eq!(app.session.documents().len(), 1);
     assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0));
@@ -132,12 +131,11 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams"})).unwrap();
     picker.answer(&[&file]);
     poll(&mut app, &egui::Context::default());
-    assert_eq!(kind(&app), Some(plugin::IMPORT_KIND));
+    assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
     frame(&mut app);
     set(&mut app, "density", json!(7));
-    confirm(&mut app).unwrap();
+    try_confirm(&mut app).unwrap();
     assert_eq!(app.session.documents().len(), 1, "not before the open has run");
-    // PLAN: assumed `crate::opening::poll(&mut VectorcraftApp)` finishes the open the picker started.
     crate::opening::poll(&mut app);
     assert_eq!(app.session.documents().len(), 2);
 
@@ -152,7 +150,7 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     assert_eq!(app.session.documents().len(), 4);
     let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.importparams"}));
     assert!(r.get("error").is_some(), "the defaults (density 4) don't open the file: {r}");
-    assert_ne!(kind(&app), Some(plugin::IMPORT_KIND));
+    assert_ne!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
     assert_eq!(app.session.documents().len(), 4);
 
     // Without `importer`, `params` go to the importer File › Open picks for the file.
@@ -217,12 +215,11 @@ fn export_as_lists_exporters_and_not_importers() {
 /// extension; a file File › Place reads is still placed on the canvas.
 #[test]
 fn a_dropped_file_only_an_importer_reads_opens() {
-    // PLAN: assumed files-w14's `DropSpot::{Canvas(Pos2), Unknown}` in `crate::place`.
     use crate::place::{DropSpot, DropTarget};
     let mut app = app();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    app.view_mut().rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
-    let on_canvas = DropSpot::Canvas(egui::pos2(400.0, 300.0));
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let on_canvas = DropSpot::Canvas(vectorcraft_geom::Point::new(400.0, 300.0));
     let placed = |app: &VectorcraftApp, name, spot| matches!(app.drop_target(name, spot, false), DropTarget::Place(_));
     assert!(placed(&app, "a.tud", on_canvas), "no importer lists the extension yet");
 

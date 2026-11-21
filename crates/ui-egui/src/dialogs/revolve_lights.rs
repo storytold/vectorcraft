@@ -137,7 +137,6 @@ fn selected(fields: &DialogFields, count: usize) -> usize {
 
 /// Makes light `index` the selected one, as a choice in the list of lights does.
 fn select(fields: &mut DialogFields, index: usize) {
-    // PLAN: assumed `FieldValue: From<i64>`
     fields.set("__light", index as i64);
 }
 
@@ -213,7 +212,7 @@ fn geometry(rect: Rect) -> (Pos2, f32) {
 
 /// What a press on a light holds while it runs: the light and the offset from the press to the light's centre, kept for the
 /// drag.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct Hold {
     index: usize,
     grip: Vec2,

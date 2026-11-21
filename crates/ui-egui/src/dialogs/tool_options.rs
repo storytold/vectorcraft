@@ -35,9 +35,9 @@ pub(crate) fn reference_param(key: &str, label: impl Into<Label>) -> Param {
     let name = key.to_owned();
     Param::custom(key, label, move |ui, fields, _| {
         let shown = reference_index(fields, &name);
-        let mut anchor = Anchor9::ALL.get(shown).copied().unwrap_or(Anchor9::TopLeft);
+        let mut anchor = Some(Anchor9::ALL.get(shown).copied().unwrap_or(Anchor9::TopLeft));
         let edit = ReferencePoint::new(tl!("Reference Point"), Bind::bound(&mut anchor)).look(ReferencePointLook::Squares).show(ui);
-        if let Some(picked) = Anchor9::ALL.iter().position(|point| *point == anchor).filter(|at| *at != shown) {
+        if let Some(picked) = Anchor9::ALL.iter().position(|point| Some(*point) == anchor).filter(|at| *at != shown) {
             fields.set(name.clone(), picked as i64);
         }
         edit.response

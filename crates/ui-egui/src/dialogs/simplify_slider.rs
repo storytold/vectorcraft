@@ -16,13 +16,12 @@
 use craft::behavior::overlay::{Align, Side};
 use craft::behavior::{CanvasView, IconId};
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::Bind;
-use craft::ui::contract::overlay::{Dismiss, Outside, Place};
+use craft::ui::contract::overlay::{Anchor, Dismiss, Outside, Place};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::layout_components::Row;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::overlay::CloseReason;
-use craft::ui::value_drag::Anchor;
 use craft::ui::value_drag::Slider;
 use egui::{Pos2, Rect as ScreenRect};
 use serde_json::{Value, json};

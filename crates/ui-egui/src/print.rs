@@ -85,14 +85,15 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         if let Some(path) = s("path") {
             q["path"] = json!(path);
         }
-        let (path, mut v) = io::run_to_file(app, "file.print", if postscript { "ps" } else { "pdf" }, q)?;
-        io::report_saved(app, &path, &v);
-        if !to_file {
-            app.ui.status.push_str(" (printing isn't available here: the job was saved as a PDF)");
-        }
-        v["path"] = json!(path);
-        v["printed"] = json!(false);
-        return Ok(v);
+        return io::run_to_file(app, "file.print", if postscript { "ps" } else { "pdf" }, q, move |app, path, mut v| {
+            io::report_saved(app, &path, &v);
+            if !to_file {
+                app.ui.status.push_str(" (printing isn't available here: the job was saved as a PDF)");
+            }
+            v["path"] = json!(path);
+            v["printed"] = json!(false);
+            Ok(v)
+        });
     }
     if app.services.print.as_ref().is_some_and(|s| !s.turns_landscape()) {
         q["forPrinter"] = json!(true);

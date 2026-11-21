@@ -4,8 +4,8 @@ use std::hash::{Hash, Hasher};
 
 use craft::automation::ui::actions::{ActionSelection, ActionsPanelCommands};
 use craft::keymap::CommandRef;
-use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandState, CommandStates};
 use serde_json::{Value, json};
 
 use super::edits::{self, BUTTON_MODE, INSERT_SELECT_PATH};
@@ -95,9 +95,10 @@ impl Facts {
         let panel = &app.ui.actions_panel;
         let buttons = panel.settings.button_mode;
         let list = &app.ui.actions;
-        let sets = list.sets().len();
+        let names = list.sets();
+        let sets = names.len();
         let recording = app.ui.recording.is_some();
-        let current = app.ui.action_set.filter(|&s| !buttons && s < sets);
+        let current = app.ui.action_set.as_deref().and_then(|set| names.iter().position(|n| *n == set)).filter(|_| !buttons);
         // A selected action counts only while its set is the current one, as the panel shows it.
         let (flat, step) = match panel.selected {
             Some(ActionSelection::Action(i)) => (Some(i), None),
@@ -132,9 +133,9 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     use ActionsPanelCommands as C;
     let f = Facts::of(app);
     let (has, recording) = (f.has(), f.recording);
-    let mut set = |row: Row, enabled: bool| states.set(row.command(), CommandState::new().enabled(enabled));
     // Button Mode is off while an action records, so the Stop button the list shows stays in reach.
     states.set(Row::Panel(C::ButtonMode).command(), CommandState::new().enabled(f.buttons || !recording).checked(f.buttons));
+    let mut set = |row: Row, enabled: bool| states.set(row.command(), CommandState::new().enabled(enabled));
     set(Row::Panel(C::NewAction), crate::dialogs::action_new::can_open(app));
     set(Row::Panel(C::NewSet), true);
     set(Row::Panel(C::Duplicate), f.current.is_some());
@@ -170,7 +171,7 @@ pub(crate) fn key(app: &VectorcraftApp) -> u64 {
     let panel = &app.ui.actions_panel;
     app.ui.actions.revision().hash(&mut h);
     (&panel.selected, &panel.selected_sets, panel.expanded.len(), panel.settings.button_mode).hash(&mut h);
-    (app.ui.recording.is_some(), app.ui.action_playing.is_some(), playback::waiting_at_stop(app), app.ui.action_set).hash(&mut h);
+    (app.ui.recording.is_some(), app.ui.action_playing.is_some(), playback::waiting_at_stop(app), &app.ui.action_set).hash(&mut h);
     app.session.active().is_some_and(|st| vectorcraft_engine::storable_selection(st).is_ok()).hash(&mut h);
     h.finish()
 }

@@ -277,22 +277,23 @@ impl StackDialog for InsertMenuItemDialog {
                 let texts: Vec<String> = listed.iter().map(|row| row.shown.clone()).collect();
                 let lead = listed.iter().position(|row| picked(fields, row));
                 let mut selection = lead.map_or_else(Selection::default, Selection::single);
-                List::<usize>::new(label("Menu Items")).select(SelectMode::Single).selection(Bind::bound(&mut selection)).sizing(Sizing::Content).max_rows(8).show_items(
-                    ui,
-                    &Listed(&texts),
-                    &mut |key, _| ListRow::new(texts.get(*key).cloned().unwrap_or_default()),
-                );
+                List::<usize>::new(label("Menu Items"))
+                    .select(SelectMode::Single)
+                    .selection(Bind::bound(&mut selection))
+                    .sizing(Sizing::Content)
+                    .max_rows(8)
+                    .show_items(ui, &Listed(&texts), &mut |key, _| ListRow::new(texts.get(*key).cloned().unwrap_or_default()));
                 if selection.lead != lead
                     && let Some(row) = selection.lead.and_then(|at| listed.get(at))
                 {
                     pick(fields, row);
                 }
-                let current = rows.iter().find(|row| picked(fields, row)).map_or_else(
+                let current = Label::from(rows.iter().find(|row| picked(fields, row)).map_or_else(
                     || if fields.command.is_empty() { crate::i18n::t("None").to_owned() } else { fields.command.clone() },
                     |row| row.shown.clone(),
-                );
+                ));
                 Field::new(label("Menu Item:")).show(ui, |ui, _| {
-                    Text::new(Label::from(current)).show(ui);
+                    Text::new(current.clone()).show(ui);
                 });
                 Text::new(label("Items that open a dialog, and File, Window and Help menu items, are not listed.")).shade(Shade::Muted).show(ui);
             });
@@ -454,7 +455,7 @@ mod tests {
         app.ui_ctx = Some(ctx.clone());
         let dir = vectorcraft_testkit::TempDir::new("insert-menu-item-proof-setups");
         app.session.attach_proof_setups(dir.join("Proof Setups"));
-        proof_setup::refresh_saved(&app, None);
+        proof_setup::refresh_saved(&app);
         proof_setup::wait();
         let de = Lang::from_code("de").unwrap();
         crate::i18n::set_current(de);
@@ -469,7 +470,7 @@ mod tests {
         };
         let before = listed(&app);
         app.run("view.proofSetup.save", json!({"name": "Group", "target": "workingCmyk"})).unwrap();
-        proof_setup::refresh_saved(&app, None);
+        proof_setup::refresh_saved(&app);
         proof_setup::wait();
         pump(&mut app, &ctx);
         let after = listed(&app);

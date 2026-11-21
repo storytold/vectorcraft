@@ -39,6 +39,15 @@ const OPTION: &str = "ui.cssProperties.option";
 /// The export options the panel menu switches, as `ui.cssProperties.option` names them.
 const FLAGS: [&str; 4] = ["position", "dimensions", "unnamed", "rasterize"];
 
+/// The CSS Properties panel's own state, kept while the app runs.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct CssPropertiesPanel {
+    /// The export options the panel menu sets, which the code view, Copy and Export use.
+    pub(crate) options: CssOptions,
+    /// Generate CSS: the whole document's CSS while nothing is selected.
+    pub(crate) all: bool,
+}
+
 /// What [`shown`] was made for: (document uid, revision, whole document, options).
 pub(crate) type CssKey = (u64, u64, bool, CssOptions);
 
@@ -153,7 +162,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let scope = if all { "all" } else { "selection" };
     // Generate at the start edge; Export at the end edge with Copy before it.
     let footer = FooterBar::actions([
-        FooterAction::new(IconId::new("sparkles"), tl!("Generate CSS: the whole document's CSS while nothing is selected")).pressed(all).enabled(!selected),
+        FooterAction::new(IconId::new("sparkles"), tl!("Generate CSS: the whole document's CSS while nothing is selected"))
+            .pressed(all)
+            .enabled(!selected),
         FooterAction::new(IconId::new("save"), if all { tl!("Export All…") } else { tl!("Export Selected CSS…") }).enabled(has_css),
         FooterAction::new(IconId::new("copy"), if all { tl!("Copy All Styles") } else { tl!("Copy Selected Style") }).enabled(has_css),
     ])

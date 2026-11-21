@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
-use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
+use craft::ui::dialog::{DialogId, PromptChoice, StandardPrompt};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, ParamDialog, ParamResult};
 use craft::ui::runtime::memory::{Lifetime, SaveKey};
 use serde_json::{Map, Value, json};
@@ -79,9 +79,6 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     // An SVG filter is chosen and edited in Apply SVG Filter.
     if id == vectorcraft_effects::SVG_FILTER {
         return super::svg_filter::open(app, p);
-    }
-    if vectorcraft_effects::is_three_d(id) {
-        return super::three_d::open(app, p);
     }
     vectorcraft_effects::effect_info(id).ok_or_else(|| format!("unknown effect `{id}`"))?;
     // The list the effect goes to: `item` as given, else the active item's (the object's without
@@ -199,7 +196,6 @@ fn normalized(app: &VectorcraftApp, id: &str, values: Map<String, Value>, fresh:
         _ => Map::new(),
     };
     fill_pathfinder_options(app, id, &mut values, fresh);
-    // PLAN: assumed `fn pad_tones(&mut Map<String, Value>)` (effects-w6) and `fn clamp_blur_center(&mut Map<String, Value>)` (effects-w5)
     if id == vectorcraft_effects::addons::duotone::DUOTONE {
         super::duotone::pad_tones(&mut values);
     } else if id == super::effect_params::RADIAL_BLUR {
@@ -234,6 +230,18 @@ fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>
     let fresh = open.index.is_none();
     let mut shown = baseline.clone();
     shown.extend(seed);
+    // A 3D effect has its own dialog: it takes the resolved record and the values to start from.
+    if vectorcraft_effects::is_three_d(&id) {
+        let params = normalized(app, &id, shown, fresh);
+        let mut record = json!({"effect": id, "editTarget": open.edit_target, "aligned": open.aligned, "params": params});
+        if let Some(item) = open.item {
+            record["item"] = item;
+        }
+        if let Some(index) = open.index {
+            record["index"] = json!(index);
+        }
+        return super::three_d::open(app, &record);
+    }
     let (baseline, shown) = (normalized(app, &id, baseline, fresh), normalized(app, &id, shown, fresh));
     let rows = effect_params(&open.cx, &DialogFields::new());
     open.opened = form::json_of(&rows, &form::fields_of(&rows, &baseline));
@@ -353,10 +361,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// The answer of the Edit or Add New question; `open` back while it is still asked.
 fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
     let result = app.dialogs()?.with(|h| h.take_by_id::<StandardPrompt>(open.id))?;
-    let choice = match result {
-        DialogResult::Ok(answer) => answer.choice,
-        DialogResult::Cancel => PromptChoice::Cancel,
-    };
+    let choice = result.ok().map_or(PromptChoice::Cancel, |answer| answer.choice);
     let id = open.cx.id.clone();
     let launched = match (choice, open.index) {
         (PromptChoice::Proceed, Some(k)) => {
@@ -597,9 +602,9 @@ mod tests {
         let open = |app: &mut VectorcraftApp| app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
         open(&mut app);
         let dialog = id(&app);
-        let fields = fields(&app, dialog);
-        assert!(fields.contains("removeRedundantPoints") && fields.contains("removeUnpainted"));
-        assert_eq!(fields.number("precision"), Some(0.5));
+        let values = fields(&app, dialog);
+        assert!(values.contains("removeRedundantPoints") && values.contains("removeUnpainted"));
+        assert_eq!(values.number("precision"), Some(0.5));
         let before = steps(&app);
         ok(&mut app);
         assert_eq!(steps(&app), before, "OK with nothing changed records no step");
@@ -617,18 +622,18 @@ mod tests {
             .unwrap();
         open(&mut app);
         let dialog = id(&app);
-        let fields = fields(&app, dialog);
+        let values = fields(&app, dialog);
         assert_eq!(
-            (fields.number("precision"), fields.bool("removeRedundantPoints"), fields.bool("removeUnpainted")),
+            (values.number("precision"), values.bool("removeRedundantPoints"), values.bool("removeUnpainted")),
             (Some(0.01), Some(false), Some(false))
         );
         // A new Soft Mix takes the panel's options and shows Mixing Rate beside them.
         app.run("object.pathfinder.options", json!({"removeUnpainted": true})).unwrap();
         app.run("effect.dialog", json!({"effect": "pathfinder.softMix"})).unwrap();
         let dialog = id(&app);
-        let fields = fields(&app, dialog);
-        assert!(fields.contains("mixingRate") || fields.contains("rate"), "Mixing Rate beside the options");
-        assert_eq!(fields.bool("removeUnpainted"), Some(true));
+        let values = fields(&app, dialog);
+        assert!(values.contains("mixingRate") || values.contains("rate"), "Mixing Rate beside the options");
+        assert_eq!(values.bool("removeUnpainted"), Some(true));
     }
 
     /// A Pathfinder effect whose precision Scale Strokes & Effects took past the range opens at
@@ -687,7 +692,6 @@ mod tests {
             fx.params["centerY"] = json!(-0.25);
         }
         app.run("effect.dialog", json!({"effect": RADIAL_BLUR, "index": 0})).unwrap();
-        // PLAN: assumed row keys `centerX` and `centerY` of effects-w5's Blur Center row
         assert_eq!((number(&mut app, "centerX"), number(&mut app, "centerY")), (Some(1.0), Some(0.0)), "the rows hold the center the box shows");
         let before = steps(&app);
         ok(&mut app);

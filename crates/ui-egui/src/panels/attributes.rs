@@ -184,7 +184,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let name = side_name(tl!("URL:"));
         Field::new(name.clone()).show(ui, |ui, _| {
             let edit = ComboBox::new(name.clone(), Bind::given(or_mixed(info.url.clone())), &recent).enabled(has).show(ui);
-            acts.extend(edit.events.committed().map(|u| ("attributes.set", json!({ "url": u }))));
+            acts.extend(edit.edit.events.committed().map(|u| ("attributes.set", json!({ "url": u }))));
         });
     }
     if !part_hidden(app, NOTE_KEY) {

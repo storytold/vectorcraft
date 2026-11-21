@@ -5,11 +5,12 @@
 
 use std::sync::LazyLock;
 
+use craft::behavior::{IconId, Mixed};
 use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSections};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, SideLabel, TooltipSpec};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
 use craft::ui::form::Field;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
@@ -192,7 +193,9 @@ pub(crate) fn style_of(st: Option<&StrokeLayer>) -> draw::StrokeStyle {
 /// The editor's mixed flags for the engine's. Offset and alignment are kept per stroke by the command, so only the
 /// pattern is ever shown as mixed.
 fn mixed_of(m: &StrokeMixed) -> draw::StrokeMixed {
-    draw::StrokeMixed { align: m.align, cap: m.cap, join: m.join, miter_limit: m.miter_limit, dashes: m.dash, ..Default::default() }
+    let mut mixed = draw::StrokeMixed::default();
+    (mixed.align, mixed.cap, mixed.join, mixed.miter_limit, mixed.dashes) = (m.align, m.cap, m.join, m.miter_limit, m.dash);
+    mixed
 }
 
 /// A style number as the document's number, without the `f32` noise (`0.1` stays `0.1`).
@@ -302,8 +305,7 @@ pub(crate) fn weight_number(app: &VectorcraftApp, weight: Option<f64>) -> Number
     let field =
         NumberField::length(tl!("Weight"), Bind::given(weight), lengths).range(0.0..=1000.0).step_arrows(StepArrows::Leading).scrub_by_label();
     match ladder {
-        // PLAN: assumed `fields::stops_stepper(size, stops, shown)` (wg.S8) over the ladder's stops in points.
-        Some(l) => field.presets(&l.rows).stepper(crate::fields::stops_stepper(1.0, &l.stops, lengths)),
+        Some(l) => field.presets(&l.rows).stepper(crate::fields::stops_stepper(1.0, &l.stops, move |pt| unit.format(pt))),
         None => field,
     }
 }
@@ -328,26 +330,20 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
     });
 }
 
-/// The weight field in a row labelled `label` with the side label `side`: the output of the number field.
-fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &str, side: SideLabel, weight: Option<f64>) -> (NumberOutput, egui::Response) {
-    let mut out = None;
-    // PLAN: assumed `Field::show` returns the field's `Response`.
-    let response = Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| {
-        out = Some(weight_number(app, weight).show(ui));
-    });
-    // A field whose body did not run has no output to report; the caller then has nothing to apply.
-    (out.unwrap_or_else(|| weight_number(app, weight).show(ui)), response)
+/// The weight field in a row labelled `label` with the side label `side`: the output of the number field, none when
+/// the row's body did not run.
+fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
+    Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")
 /// opens the Stroke panel in a popover under it, and whose drag scrubs the weight.
 pub(crate) fn link_field(app: &mut VectorcraftApp, ui: &mut Ui, label: &str, weight: Option<f64>) {
     let side = SideLabel::new().scrub(true).link().tooltip(TooltipSpec::new(tl!("Stroke options")));
-    let (out, _) = weight_row(app, ui, label, side, weight);
-    apply_weight(app, &out, WeightTarget::Shown);
     let mut open = app.ui.stroke_panel.link_open;
-    if out.link {
-        open = !open;
+    if let Some(out) = weight_row(app, ui, label, side, weight) {
+        apply_weight(app, &out, WeightTarget::Shown);
+        open ^= out.link;
     }
     Popover::new(tl!("Stroke"), Bind::bound(&mut open)).show(ui, |ui, _| show(app, ui));
     app.ui.stroke_panel.link_open = open;
@@ -359,8 +355,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = current_stroke(app);
     let mixed = stroke_mixed(app, ui.ctx());
     let weight = shown_weight(app, st.as_ref(), &mixed);
-    let (out, _) = weight_row(app, ui, tl!("Weight"), SideLabel::new().scrub(true), weight);
-    apply_weight(app, &out, WeightTarget::Shown);
+    if let Some(out) = weight_row(app, ui, tl!("Weight"), SideLabel::new().scrub(true), weight) {
+        apply_weight(app, &out, WeightTarget::Shown);
+    }
     if app.ui.stroke_panel.hide_options {
         return;
     }
@@ -398,15 +395,17 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     ];
     Field::new(tl!("Arrowheads")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
-            for (head, start, label, key) in heads {
-                let out =
-                    Select::new(label, Bind::given(head), &entries).picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start)).show(ui);
+            for (head, start, label, key) in &heads {
+                let (start, key) = (*start, *key);
+                let out = Select::new(*label, Bind::given(head.clone()), &entries)
+                    .picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start))
+                    .show(ui);
                 // A custom head goes with its art, as document.inspect reports it.
                 if let Some(a) = out.events.landed() {
                     set(app, json!({ key: a }));
                 }
             }
-            let swap = IconButton::new("arrow-left-right").label(tl!("Swap start and end arrowheads")).enabled(st.is_some()).show(ui);
+            let swap = IconButton::new(IconId::new("arrow-left-right")).label(tl!("Swap start and end arrowheads")).enabled(st.is_some()).show(ui);
             if swap.clicked() {
                 app.run("stroke.setAdvanced", json!({"swapArrows": true})).ok();
             }
@@ -415,7 +414,7 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     let (arrow_align, has_head) = arrow_align_state(st);
     let scale = st.map_or((100.0, 100.0), |s| s.arrow_scale);
     let linked = app.ui.stroke_panel.scale_linked;
-    let out = LinkedFields::new(tl!("Scale"), Bind::given(craft::behavior::Mixed::each([scale.0, scale.1])), Bind::given(linked))
+    let out = LinkedFields::new(tl!("Scale"), Bind::given(Mixed::each([Some(scale.0), Some(scale.1)])), Bind::given(linked))
         .mode(LinkMode::Equal)
         .unit_kind(UnitKind::Percent)
         .enabled(has_head)
@@ -423,10 +422,10 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     if let Some(on) = out.link.landed() {
         app.ui.stroke_panel.scale_linked = *on;
     }
-    if let Some([a, b]) = out.edit.events.landed().map(|p| p.clone().map(|m| m.same().copied())) {
+    if let Some([a, b]) = out.edit.events.landed().map(|p| p.clone().map(|m| m.same().copied().flatten())) {
         app.run("stroke.setAdvanced", json!({"arrowScale": [a.unwrap_or(scale.0), b.unwrap_or(scale.1)]})).ok();
     }
-    let aligns: Vec<Entry<ArrowAlign>> = ARROW_ALIGN.iter().map(|(v, _, icon, tip)| Entry::new(*v, *tip).icon(*icon)).collect();
+    let aligns: Vec<Entry<ArrowAlign>> = ARROW_ALIGN.iter().map(|(v, _, icon, tip)| Entry::new(*v, *tip).icon(IconId::new(*icon))).collect();
     let out = Segmented::new(tl!("Align"), Bind::given(arrow_align), &aligns).enabled(has_head).show(ui);
     if let Some(v) = out.events.landed()
         && let Some((_, name, _, _)) = ARROW_ALIGN.iter().find(|(a, ..)| a == v)
@@ -441,7 +440,7 @@ fn flip_buttons(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>)
     // Lucide names these icons for their mirror line: the vertical-line icon flips the
     // profile along the path, while the horizontal-line icon flips it across the path.
     for (icon, label, way) in [("flip-vertical-2", tl!("Flip Along"), "along"), ("flip-horizontal-2", tl!("Flip Across"), "across")] {
-        if IconButton::new(icon).label(label).enabled(can_flip).show(ui).clicked() {
+        if IconButton::new(IconId::new(icon)).label(label).enabled(can_flip).show(ui).clicked() {
             app.run("stroke.setAdvanced", json!({"flipProfile": way})).ok();
         }
     }
@@ -509,7 +508,7 @@ impl ThumbSource<(String, bool)> for ArrowSource<'_> {
         let scale = f64::from(request.side.max(1)) / w;
         let (px, py) = ((w * scale).round().max(1.0) as u32, (h * scale).round().max(1.0) as u32);
         let img = vectorcraft_render::Renderer::new().render_region(&doc, vectorcraft_geom::Rect::new(0.0, 0.0, w, h), scale, false);
-        let rgba: Vec<u8> = (0..py).flat_map(|y| (0..px).flat_map(move |x| (x, y))).flat_map(|(x, y)| img.pixel(x, y)).collect();
+        let rgba: Vec<u8> = (0..py).flat_map(|y| (0..px).map(move |x| (x, y))).flat_map(|(x, y)| img.pixel(x, y)).collect();
         ThumbRender::Ready(egui::ColorImage::from_rgba_unmultiplied([px as usize, py as usize], &rgba))
     }
 }

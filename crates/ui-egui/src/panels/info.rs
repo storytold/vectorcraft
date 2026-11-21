@@ -94,7 +94,7 @@ fn paint_block(ui: &mut Ui, p: &PaintLines) {
     Row::new().show(ui, |ui, _| {
         Picture::painter("", ThumbAspect::SQUARE, |cx, rect| {
             if !p.mixed {
-                swatches::paint_swatch(&cx.painter, rect, &p.paint, (false, false), (false, false), None);
+                swatches::paint_swatch(cx, rect, &p.paint, false, (false, false), None);
             }
         })
         .show(ui);
@@ -190,7 +190,7 @@ fn shared_type(app: &VectorcraftApp) -> Option<(String, f64, f64)> {
 }
 
 /// What the panel shows for the document, the tool in use and the selection.
-pub(crate) fn lines(app: &VectorcraftApp, ctx: &egui::Context) -> InfoLines {
+pub(crate) fn lines(app: &mut VectorcraftApp, ctx: &egui::Context) -> InfoLines {
     let options = !app.ui.info_hide_options;
     // W and H are the sides of the bounding box the Transform panel shows, measured as Use Preview
     // Bounds says.
@@ -321,7 +321,7 @@ mod tests {
         let id = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 12}))["id"].clone();
         run(&mut app, "select.set", json!({ "ids": [id] }));
         run(&mut app, "object.scale", json!({"sx": 200}));
-        let size = lines(&app, &egui::Context::default()).type_block.map(|(_, size)| size);
+        let size = lines(&mut app, &egui::Context::default()).type_block.map(|(_, size)| size);
         assert_eq!(size.as_deref(), Some("Size: 24 pt  Tracking: 0"));
     }
 

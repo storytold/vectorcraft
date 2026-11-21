@@ -113,7 +113,7 @@ fn the_shaper_widget_points_to_the_other_mode() {
     for x in [0, 50] {
         app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap();
     }
-    app.run("shaper.scribble", &json!({"points": [[25, 20], [75, 35], [30, 50], [125, 65]]})).unwrap();
+    app.run("shaper.scribble", json!({"points": [[25, 20], [75, 35], [30, 50], [125, 65]]})).unwrap();
     let mark = layout(&mut app, ALL).shaper.unwrap();
     assert!(!mark.construction);
     let v = view(&app);

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::dnd::group_of;
 use super::libraries::SwatchLibraries;
-use super::library_panel::LibraryKind;
+use super::library_panel;
 use super::{View, active_paint, selected};
 use crate::VectorcraftApp;
 use crate::menus::Sep;
@@ -126,23 +126,11 @@ fn view_ref(v: View) -> CommandRef {
     CommandRef::with_params(id("view"), json!({ "view": v }))
 }
 
-/// The libraries of Open Swatch Library: each opens in its panel; the ones with a category sit in its submenu.
+/// The libraries of Open Swatch Library, each opening in its panel, then Other Library….
 fn library_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
-    let mut top = vec![];
-    let mut subs: Vec<(&'static str, Vec<PanelRow>)> = vec![];
-    for l in SwatchLibraries::list(app) {
-        let row = PanelRow::Command(CommandRef::with_params(SwatchLibraries::OPEN, json!({ "library": l.id })));
-        match l.submenu {
-            None => top.push(row),
-            Some(s) => match subs.iter_mut().find(|(n, _)| *n == s) {
-                Some((_, rows)) => rows.push(row),
-                None => subs.push((s, vec![row])),
-            },
-        }
-    }
-    top.extend(subs.into_iter().map(|(s, rows)| PanelRow::Submenu(tl!(s).into(), rows)));
-    top.push(PanelRow::Command(CommandRef::new("window.swatchLibrary.other")));
-    top
+    let mut rows = library_panel::library_rows::<SwatchLibraries>(app);
+    rows.push(PanelRow::Command(CommandRef::new("window.swatchLibrary.other")));
+    rows
 }
 
 /// The rows of the panel menu, in order.

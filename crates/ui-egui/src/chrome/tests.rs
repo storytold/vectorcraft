@@ -726,7 +726,8 @@ fn set_zoom_100_matches_actual_size_with_display_print_size() {
 /// position, document, selection or either branch of its edit history.
 fn assert_status_coordinates(bar: &mut Shown, expected: Option<&str>) {
     let read = |app: &crate::VectorcraftApp| {
-        let state = app.session.active().map(|st| (st.doc.clone(), st.selection.clone(), st.history.undo.len(), st.history.redo.len(), st.is_dirty()));
+        let state =
+            app.session.active().map(|st| (st.doc.clone(), st.selection.clone(), st.history.undo.len(), st.history.redo.len(), st.is_dirty()));
         (app.hover_doc, state)
     };
     let (hover, before) = read(&bar.app());
@@ -1511,7 +1512,10 @@ fn window_title_follows_the_active_file() {
     assert!(saved.contains("foo.svg") && saved.contains("VectorCraft"), "{saved}");
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     let modified = super::window_title(&app);
-    assert!(modified != saved && modified.contains("foo.svg") && modified.contains("VectorCraft"), "an edit marks the title: {saved} then {modified}");
+    assert!(
+        modified != saved && modified.contains("foo.svg") && modified.contains("VectorCraft"),
+        "an edit marks the title: {saved} then {modified}"
+    );
 }
 
 /// The document tabs over `app`, with the same per-frame view synchronization as the app.
@@ -1969,7 +1973,8 @@ fn artboard_close_active_tab_properties_delete_uses_shown_board() {
 fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     use craft::ui::shell::ScreenMode;
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
-    for (kept, mode) in [(0, ScreenMode::Standard), (1, ScreenMode::FullScreenWithMenuBar), (2, ScreenMode::FullScreen), (3, ScreenMode::FullScreen)] {
+    for (kept, mode) in [(0, ScreenMode::Standard), (1, ScreenMode::FullScreenWithMenuBar), (2, ScreenMode::FullScreen), (3, ScreenMode::FullScreen)]
+    {
         app.ui.screen_mode = kept;
         assert_eq!(app.ui.screen_mode(), mode, "screen mode {kept}");
     }
@@ -2428,9 +2433,9 @@ fn label_links_open_their_panels() {
     let click = |bar: &mut Shown, name: &str| {
         // Closing a panel that is already closed is an error that changes nothing.
         bar.app().run("window.panel.close", json!({"panel": links})).ok();
-        assert!(!crate::panel_docking::visible(&bar.app().ui, links), "{name}: the panel is closed first");
+        assert!(!crate::panel_docking::visible(&bar.app(), links), "{name}: the panel is closed first");
         bar.click(name);
-        crate::panel_docking::visible(&bar.app().ui, links)
+        crate::panel_docking::visible(&bar.app(), links)
     };
     // Whether Links floats, and whether it opens in its collapsed column's flyout.
     let placed = |bar: &Shown| {

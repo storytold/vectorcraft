@@ -4,6 +4,7 @@
 //! Fields: `name`, `saveTo` (`user` or `file`), `selectedOnly`, plus `names` (the items selected in the
 //! panel) and `hasNames` (there are some), which have no row.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Value, json};
 
@@ -48,7 +49,10 @@ pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String
     let mut save_to = Param::new(
         "saveTo",
         tl!("Save To:"),
-        ParamKind::radio(options([("user", tl!("User Defined Libraries")), ("file", tl!("A File…"))]), Some(if has_user_dir { "user" } else { "file" }.into())),
+        ParamKind::radio(
+            options([("user", tl!("User Defined Libraries")), ("file", tl!("A File…"))]),
+            Some(if has_user_dir { "user" } else { "file" }.into()),
+        ),
     );
     if !has_user_dir {
         save_to = save_to.disabled_options(["user"]);
@@ -58,7 +62,8 @@ pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String
     params.push(save_to);
     params.push(Param::new("selectedOnly", format!("{only} ({count})"), ParamKind::bool(false)).enabled_when("hasNames", true));
 
-    let dialog = HostedParamDialog::new(&ctx, key, fields, move |fields| ParamDialog::new(key, title.clone(), params.clone()).values(fields));
+    let dialog =
+        HostedParamDialog::new(&ctx, key, fields, move |fields| ParamDialog::new(key, title.clone(), params.clone()).values(Bind::bound(fields)));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| save(app, cmd, ext, result);
     super::host::open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)

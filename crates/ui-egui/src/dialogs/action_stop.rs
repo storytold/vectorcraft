@@ -10,7 +10,7 @@
 //! `allowContinue`, Continue plays on.
 
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, HeldOk, PromptChoice, StackDialog, StandardPrompt, dialog_id};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::runtime::env::Label;

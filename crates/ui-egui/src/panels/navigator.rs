@@ -231,10 +231,9 @@ fn shifted(mut view: CanvasView, region: DRect) -> CanvasView {
 }
 
 /// The `view.setZoom` params for `edited`, a view of the region's frame: the zoom as the status bar
-/// shows it, and the centre back in document units.
-fn view_params(edited: &CanvasView, region: DRect) -> Value {
-    // PLAN: assumed `crate::state::zoom_display_percent(zoom: f64) -> f64` (cv.S4, through the scheme)
-    json!({"zoom": crate::state::zoom_display_percent(edited.zoom), "center": [edited.center.x + region.x0, edited.center.y + region.y0]})
+/// shows it (in print size with `print`), and the centre back in document units.
+fn view_params(edited: &CanvasView, region: DRect, print: bool) -> Value {
+    json!({"zoom": crate::state::zoom_display_percent(edited.zoom, print), "center": [edited.center.x + region.x0, edited.center.y + region.y0]})
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -279,7 +278,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(edited) = out.view.value()
         && *edited != given
     {
-        app.run("view.setZoom", view_params(edited, region)).ok();
+        let print = app.session.prefs.display_print_size;
+        app.run("view.setZoom", view_params(edited, region, print)).ok();
     }
 }
 
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!((given.center.x, given.center.y), (210.0, 170.0), "the centre minus the region's corner");
         let mut edited = given;
         edited.center = (100.0, 100.0).into();
-        assert_eq!(view_params(&edited, region)["center"], json!([90.0, 80.0]), "the edit plus the region's corner");
+        assert_eq!(view_params(&edited, region, false)["center"], json!([90.0, 80.0]), "the edit plus the region's corner");
     }
 
     /// The panel menu's rows are titled, checked and enabled as the option says, and each row's
@@ -334,8 +334,8 @@ mod tests {
         assert!(app.ui.navigator_panel.view_artboard_contents_only, "the row turns it on again");
         let options = options_row();
         app.run(&options.id, options.params.clone()).unwrap();
-        // PLAN: assumed `app.dialogs().is_open::<T>()` (hub) and `NavigatorOptionsDialog` (document-panels-w11)
-        assert!(app.dialogs().is_open::<craft::ui::patterns::form_dialogs::NavigatorOptionsDialog>(), "Panel Options… opens the dialog");
+        let open = app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<crate::dialogs::navigator_panel_options::NavigatorOptionsDialog>()));
+        assert!(open, "Panel Options… opens the dialog");
     }
 
     /// `ui.navigatorPanelOptions` sets the view box color and Draw Dashed Lines as Solid Lines: the

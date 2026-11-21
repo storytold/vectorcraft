@@ -506,7 +506,7 @@ fn switch_rgb_units(app: &mut VectorcraftApp) -> bool {
 }
 
 /// The proxy's paint as one well: the colour of a solid paint or a gradient's first stop.
-fn well(label: &str, paint: &Paint, mixed: bool) -> (PairWell, Srgba) {
+fn well(label: &'static str, paint: &Paint, mixed: bool) -> (PairWell, Srgba) {
     let color = srgba(&paint.color().unwrap_or(Color::BLACK));
     // PLAN: PairWell::paint (wg.W48) would also show gradients and None as they are.
     (PairWell::new(label, if mixed { Mixed::Mixed } else { Mixed::Same(color) }), color)

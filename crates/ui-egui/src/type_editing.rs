@@ -165,7 +165,7 @@ impl<'a> TypeEditor<'a> {
                 let r = app.session.tool_typed_text(&text, view);
                 crate::canvas::apply_requests(app, r);
             }
-            EditorInput::Preedit { text, cursor } => {
+            EditorInput::Preedit { text, cursor, .. } => {
                 // The IME's cursor counts bytes of `text`; the tool counts characters.
                 let chars = |at: usize| text.get(..at).map_or_else(|| text.chars().count(), |head| head.chars().count());
                 let active = cursor.map(|r| chars(r.start)..chars(r.end));

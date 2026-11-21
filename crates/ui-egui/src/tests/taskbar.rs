@@ -165,7 +165,7 @@ pub(crate) fn offer(app: &mut VectorcraftApp) -> Option<Offer> {
 
 /// Whether the bar shows the action labelled `what` or the chip with id `what`.
 fn shows(o: &Offer, what: &str) -> bool {
-    o.actions.iter().any(|a| a.0 == what) || o.chips.iter().any(|c| c.id() == what)
+    o.actions.iter().any(|a| a.0 == what) || o.chips.iter().any(|c| c.id(o.shape.is_some()) == what)
 }
 
 /// Whether the bar offers `what` by label, by Bar Actions id or as a chip, hidden or not.
@@ -174,7 +174,7 @@ fn offers(o: &Offer, what: &str) -> bool {
 }
 
 fn names_of(o: &Offer) -> Vec<&str> {
-    o.actions.iter().map(|a| a.0).chain(o.chips.iter().map(|c| c.id())).chain(o.listed.iter().filter_map(|l| l.1)).collect()
+    o.actions.iter().map(|a| a.0).chain(o.chips.iter().map(|c| c.id(o.shape.is_some()))).chain(o.listed.iter().filter_map(|l| l.1)).collect()
 }
 
 /// Turns the bar's action or chip `action` on or off (`window.taskBar.actions`).
@@ -523,7 +523,7 @@ fn selection_kinds_offer_their_actions() {
         ),
         row(
             "a group keeps Lock",
-            |app| {
+            move |app| {
                 rects(app);
                 app.run("object.group", json!({})).unwrap();
             },

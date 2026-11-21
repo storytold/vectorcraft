@@ -13,12 +13,11 @@ use vectorcraft_engine::cmd::fileio::pdf;
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset};
 use vectorcraft_pdf::Overprint;
 
-// PLAN: assumed the facade `craft_ui` re-exports these framework items at its root.
 use craft::ui::contract::{Bind, TooltipSpec};
 use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, HostedPdfExport, Param, ParamDialog, ParamKind, ParamResult};
-use craft::ui::patterns::presets::{NamedPresetEvent, PresetPicker, PresetRow};
-use craft::ui::runtime::env::UnitKind;
+use craft::ui::patterns::presets::{NamedPresetEvent, PresetFns, PresetPicker, PresetRow, PresetSource};
+use craft::ui::runtime::env::{Env, UnitKind};
 use craft::ui::value_drag::SliderScale;
 
 use super::form;
@@ -64,11 +63,18 @@ pub(crate) fn put_options(fields: &mut Map<String, Value>, o: &FlattenOptions) {
     }
 }
 
+/// `o` as the values of the [`option_params`] rows.
+pub(crate) fn option_fields(o: &FlattenOptions) -> DialogFields {
+    let mut map = Map::new();
+    put_options(&mut map, o);
+    form::fields_of(&option_params(&[], ""), &map)
+}
+
 /// The flattener options as Flatten Transparency, the preset manager and the Flattener Preview
 /// panel edit them: the raster/vector balance, both resolutions and the six switches. The switches
 /// named in `fixed` show but can't be changed (the file format or another control sets them);
 /// `reasons` is what their tooltip says.
-pub(crate) fn option_params(fixed: &[&str], reasons: &str) -> Vec<Param> {
+pub(crate) fn option_params(fixed: &[&str], reasons: &'static str) -> Vec<Param> {
     let d = FlattenOptions::default();
     let ppi = |key, label, default| Param::number(key, label, default, 1.0, 0).bounds(Some(1.0), Some(2400.0)).unit(UnitKind::PixelsPerInch);
     let switches = [
@@ -101,40 +107,40 @@ pub(crate) fn is_builtin(name: &str) -> bool {
     FlattenOptions::PRESETS.iter().any(|id| FlattenOptions::preset_label(id) == Some(name))
 }
 
-/// The presets the session lists, as what a presets row and a picker take: the rows (the built-in
-/// ones translated), the values each applies, and the built-in names.
+/// The presets the session lists, as (name, shown name): a built-in preset's name is translated.
+pub(crate) fn preset_names(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let shown = |name: &str| if is_builtin(name) { tl!(name).to_string() } else { name.to_string() };
+    app.session.flattener_presets().iter().map(|p| (p.name.clone(), shown(&p.name))).collect()
+}
+
+/// The rows of (name, shown name) pairs.
+fn name_rows(names: &&[(String, String)], _: &Env) -> Vec<PresetRow<String>> {
+    names.iter().map(|(name, shown)| PresetRow::item(name.clone(), shown.clone(), 0)).collect()
+}
+
+/// The presets the session lists, as what a presets row takes: the rows (the built-in ones
+/// translated), the values each applies, and the built-in names.
 pub(crate) fn preset_rows(app: &VectorcraftApp) -> (Vec<PresetRow<String>>, Vec<(String, DialogFields)>, Vec<String>) {
-    let params = option_params(&[], "");
     let presets = app.session.flattener_presets();
-    let rows = presets
-        .iter()
-        .map(|p| PresetRow::item(p.name.clone(), if is_builtin(&p.name) { tl!(&p.name).to_string() } else { p.name.clone() }, 0))
-        .collect();
-    let values = presets
-        .iter()
-        .map(|p| {
-            let mut map = Map::new();
-            put_options(&mut map, &p.options);
-            (p.name.clone(), form::fields_of(&params, &map))
-        })
-        .collect();
+    let rows = preset_names(app).into_iter().map(|(name, shown)| PresetRow::item(name, shown, 0)).collect();
+    let values = presets.iter().map(|p| (p.name.clone(), option_fields(&p.options))).collect();
     let built_in = presets.iter().filter(|p| is_builtin(&p.name)).map(|p| p.name.clone()).collect();
     (rows, values, built_in)
 }
 
-/// A picker over `presets` bound to the text field `key`, for a `Param::custom` row. While
-/// `custom` is true no preset is current and the picker shows `[Custom]`.
-pub(crate) fn preset_picker(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str, presets: &[PresetRow<String>], custom: bool) -> egui::Response {
+/// A picker over `presets` ([`preset_names`]) bound to the text field `key`, for a `Param::custom`
+/// row. While `custom` is true no preset is current and the picker shows `[Custom]`.
+pub(crate) fn preset_picker(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str, presets: &[(String, String)], custom: bool) -> egui::Response {
     let current = if custom { None } else { fields.text(key).map(str::to_string) };
     let mut value = current.clone();
-    // PLAN: assumed `PresetPicker::new(label, value, rows, state)`, `.placeholder(..)` and a `show` output with `.response`.
-    let out = PresetPicker::new(tl!("Preset:"), Bind::bound(&mut value), presets, Bind::kept()).placeholder(tl!("[Custom]")).show(ui);
+    let source = PresetSource::new(presets, PresetFns::new(name_rows));
+    let out = PresetPicker::new(tl!("Preset:"), Bind::bound(&mut value), &source, Bind::kept()).placeholder(tl!("[Custom]")).show(ui);
     if value != current
         && let Some(name) = value
     {
         fields.set(key, name);
     }
-    out.response
+    out.edit.response
 }
 
 /// `o` as the PDF 1.3 writer flattens with it (see [`FIXED`]).
@@ -164,9 +170,7 @@ pub(crate) fn custom_dialog(ctx: &egui::Context, parent: &HostedPdfExport, job: 
     let mut o = job.flattener.clone().or_else(listed).unwrap_or_else(|| FlattenOptions::preset(pdf::DEFAULT_FLATTENER).unwrap_or_default());
     let kept = o.preserve_overprints;
     as_written(&mut o, parent.settings().advanced.overprint);
-    let mut map = Map::new();
-    put_options(&mut map, &o);
-    let mut fields = form::fields_of(&params, &map);
+    let mut fields = option_fields(&o);
     fields.set(KEPT_OVERPRINTS, kept);
     HostedParamDialog::new(ctx, CUSTOM_KEY, fields, |_| {
         ParamDialog::new(
@@ -206,13 +210,9 @@ pub(crate) fn apply_custom(job: &mut SavePdfJob, parent: &HostedPdfExport, field
 /// Open Flatten Transparency for the selection with the default preset.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let params = option_params(&[], "");
-    let mut map = Map::new();
-    put_options(&mut map, &FlattenOptions::default());
-    let dialog = HostedParamDialog::new(&ctx, KEY, form::fields_of(&params, &map), |_| {
+    let dialog = HostedParamDialog::new(&ctx, KEY, option_fields(&FlattenOptions::default()), |_| {
         ParamDialog::new(KEY, tl!("Flatten Transparency"), option_params(&[], "")).previews(true)
     });
-    // PLAN: assumed wg.A17's `HeldOptions` fields as the contract row gives them.
     let held = HeldOptions {
         parent: None,
         cancel: Some(Box::new(|app: &mut VectorcraftApp| {

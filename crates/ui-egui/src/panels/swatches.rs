@@ -15,10 +15,11 @@ use craft::color_ui::ui::{SwatchKey, SwatchesPanel, SwatchesState};
 use craft::theme::Srgba;
 use craft::ui::choice::SwatchFace;
 use craft::ui::contract::{Bind, DropAt, DropPlace, MemoProps, SelectMode};
-use craft::ui::contract::{Entry, Trigger};
+use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
 use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec, StrokeWidth};
+use craft::ui::runtime::env::Label;
 use craft::ui::sections::{FooterAction, FooterBar};
 use craft::ui::style::UiTokens;
 use egui::{Color32, Painter, Rect, Response, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
@@ -199,6 +200,7 @@ impl Model {
             Some(match k {
                 SwatchKey::Group(_) => SwatchKey::Group(new),
                 SwatchKey::Swatch(_) => SwatchKey::Swatch(new),
+                _ => k.clone(),
             })
         };
         let s = &mut self.state.selection;
@@ -211,6 +213,7 @@ impl Model {
 fn name_of(key: &SwatchKey) -> &str {
     match key {
         SwatchKey::Group(n) | SwatchKey::Swatch(n) => n,
+        _ => "",
     }
 }
 
@@ -410,7 +413,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),
-            SwatchKey::Group(_) => vec![],
+            _ => vec![],
         })
         .row_items(|key| row_items(shown_app, key))
         .takes_drop::<PanelDrag>(DropPlace::Between, takes)
@@ -470,6 +473,7 @@ fn activate(app: &mut VectorcraftApp, key: &SwatchKey) {
         SwatchKey::Swatch(n) => {
             app.run("ui.swatchOptions", json!({"name": n})).ok();
         }
+        _ => {}
     }
 }
 
@@ -714,20 +718,18 @@ fn row_icons(app: &VectorcraftApp, name: &str) -> Vec<(IconSpec<'static>, String
 }
 
 /// A row of a framework menu: whether it was picked. `checked` shows a radio mark.
-pub(super) fn item(ui: &mut Ui, label: &str, enabled: bool, checked: Option<bool>) -> bool {
+pub(super) fn item(ui: &mut Ui, label: impl Into<Label>, enabled: bool, checked: Option<bool>) -> bool {
     let mut row = MenuItem::new(label).enabled(enabled);
     if let Some(on) = checked {
         row = row.radio_mark(on);
     }
-    // PLAN: assumed `MenuItem::show(ui)` returns an output with `response`.
-    row.show(ui).response.clicked()
+    row.show(ui).ran
 }
 
-/// A menu hung from `opener` with the rows of `body`.
-fn popup(ui: &mut Ui, id: &'static str, opener: Option<&Response>, body: impl FnOnce(&mut Ui)) {
-    // PLAN: assumed `Menu::new(id).opened_by(opener, Trigger::Primary).show(ui, body)`.
+/// The menu named `label` that the footer button `opener` pops up, with the rows of `body`.
+fn popup(ui: &mut Ui, label: &'static str, opener: Option<&Response>, mut body: impl FnMut(&mut Ui)) {
     if let Some(opener) = opener {
-        Menu::new(id).opened_by(opener, Trigger::Primary).show(ui, body);
+        Menu::new(label).opened_by(opener, Trigger::Press).show(ui, |ui, _| body(ui));
     }
 }
 
@@ -785,14 +787,14 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => {}
         }
     }
-    popup(ui, "swatch-kinds", out.responses.get(4), |ui| {
+    popup(ui, tl!("Show Swatch Kinds"), out.responses.get(4), |ui| {
         for (k, label) in Kind::ALL {
             if item(ui, label, true, Some(k == kind)) {
                 app.ui.swatches_panel.kind = k;
             }
         }
     });
-    popup(ui, "swatch-libraries", out.responses.get(5), |ui| {
+    popup(ui, tl!("Swatch Libraries"), out.responses.get(5), |ui| {
         ui.set_min_width(200.0);
         library_panel::library_menu::<SwatchLibraries>(app, ui);
     });

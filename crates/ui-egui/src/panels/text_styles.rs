@@ -7,12 +7,12 @@
 use std::cell::RefCell;
 
 // PLAN: the framework import paths below are assumed from the crate names; adjust to the app's re-exports.
-use craft::host::{PickKind, PickRequest};
 use craft::behavior::Selection;
+use craft::host::{PickKind, PickRequest};
 use craft::text::ui::style_panel::{TextStyleAction, TextStyleKind, TextStyleRow, TextStylesPanel};
 use craft::ui::contract::Bind;
-use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
@@ -253,21 +253,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let panel = app.ui.text_styles.of(kind);
     let (lead, anchor, reveal) = (panel.lead.clone(), panel.anchor.clone(), panel.reveal.take());
     let mut sel = Selection::new(names.iter().filter_map(|n| id_of(n)).collect(), lead.as_deref().and_then(id_of), anchor.as_deref().and_then(id_of));
-    let rows: Vec<TextStyleRow> = listed.iter().enumerate().map(|(i, name)| TextStyleRow::new(i as u64, super::label_or_name(name, i == 0))).collect();
+    let rows: Vec<TextStyleRow> =
+        listed.iter().enumerate().map(|(i, name)| TextStyleRow::new(i as u64, super::label_or_name(name, i == 0))).collect();
     let cur_id = current(app, kind).and_then(|n| match n {
         None => Some(0),
         Some(n) => id_of(&n),
     });
     let overridden = cur_id.and_then(|i| all.get(i as usize)).is_some_and(|s| has_overrides(app, kind, &s.1));
     let label = if kind == Kind::Char { tl!("Character Styles") } else { tl!("Paragraph Styles") };
-    let out = TextStylesPanel::new(label, kind.panel_kind(), &rows, Bind::bound(&mut sel))
+    let mut list = TextStylesPanel::new(label, kind.panel_kind(), &rows, Bind::bound(&mut sel))
         .current(cur_id, overridden)
         .target(text_style(app).is_some() || selection_len(app) > 0)
         // A character style has nothing to apply to at a bare caret; the panel then reports a status instead.
         .text_selected(text_editing(app).is_none_or(|(_, a, b)| a != b))
-        .highlighting(true)
-        .reveal(reveal.as_deref().and_then(id_of))
-        .show(ui);
+        .highlighting(true);
+    if let Some(id) = reveal.as_deref().and_then(id_of) {
+        list = list.reveal(id);
+    }
+    let out = list.show(ui);
     let name_of = |id: &u64| listed.get(*id as usize).map(|n| n.to_string());
     let panel = app.ui.text_styles.of(kind);
     panel.highlight = sel.items.iter().filter_map(name_of).collect();
@@ -295,7 +298,7 @@ pub(crate) fn run_action(app: &mut VectorcraftApp, kind: Kind, action: TextStyle
         listed.iter().enumerate().filter(|(i, n)| (with_normal || *i != 0) && picked.iter().any(|s| s == *n)).map(|(_, n)| n.to_string()).collect()
     };
     match action {
-        TextStyleAction::Apply { id, clear_overrides } => {
+        TextStyleAction::Apply { id, clear_overrides, .. } => {
             if let Some(n) = name(id) {
                 app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": clear_overrides }))).ok();
             }

@@ -106,7 +106,7 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
         }
         ManagerAction::Import => preset_manager::import(app, KEY, "pdf.preset.import", "PDF presets", PRESET_EXTS),
         ManagerAction::Export => {
-            crate::io::save_command_output(app, "pdf.preset.export", PRESET_FORMAT, json!({ "names": [current] }))?;
+            crate::io::save_command_output(app, "pdf.preset.export", PRESET_FORMAT, json!({ "names": [current] }), |_, _| Ok(Value::Null))?;
             Ok(None)
         }
     }

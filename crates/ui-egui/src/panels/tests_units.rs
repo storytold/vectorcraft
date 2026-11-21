@@ -115,12 +115,11 @@ fn type_sizes_follow_units_type() {
     run(&mut app, "select.set", json!({ "ids": [id] }));
     general_mm(&mut app);
     let mut p = Panel::new(app, character::show);
-    // PLAN: assumed `character::type_unit(&VectorcraftApp) -> Unit` (type-w10 note 12) and a "Font Size" control.
-    assert_eq!(character::type_unit(&p.app()), Unit::Points, "General leaves type alone");
+    assert_eq!(character::type_unit(&p.app()), character::doc_unit(Unit::Points), "General leaves type alone");
     assert_eq!(p.value("Font Size"), Some(Unit::Points.format(24.0)));
     p.app().run("prefs.set", json!({"key": "unitsType", "value": "inches"})).unwrap();
     p.frame();
-    assert_eq!(character::type_unit(&p.app()), Unit::Inches);
+    assert_eq!(character::type_unit(&p.app()), character::doc_unit(Unit::Inches));
     assert_eq!(p.value("Font Size"), Some(Unit::Inches.format(24.0)));
 }
 

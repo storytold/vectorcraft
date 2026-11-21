@@ -5,6 +5,7 @@ use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::GPU_PREFERENCES;
 
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 use crate::theme::Brightness;
 
 /// Copy the engine prefs into `UiState` so the host persists them with the UI state.

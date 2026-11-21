@@ -75,7 +75,7 @@ fn undos(app: &VectorcraftApp) -> usize {
 
 /// Draws the progress window at `time` seconds → the texts it drew.
 fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| export_progress::show(app, ui.ctx()));
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| export_progress::show(app, ui));
     out.textures_delta.clear();
     let mut texts = String::new();
     for shape in out.shapes {

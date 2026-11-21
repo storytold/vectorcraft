@@ -4,6 +4,7 @@ use vectorcraft_engine::Session;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app
 }
@@ -12,7 +13,7 @@ fn app() -> VectorcraftApp {
 fn open_id(app: &VectorcraftApp, key: &str) -> DialogId {
     app.dialogs()
         .expect("a window")
-        .with(|host| host.open_dialogs().into_iter().find(|d| d.key == key).map(|d| d.id))
+        .with(|host| host.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(key)).map(|d| d.id))
         .unwrap_or_else(|| panic!("`{key}` is open"))
 }
 
@@ -20,7 +21,7 @@ fn open_id(app: &VectorcraftApp, key: &str) -> DialogId {
 /// held answer through.
 fn set_through_dialog(app: &mut VectorcraftApp, tool: &str, fields: &[(&str, Value)]) {
     let key = app.run("tool.options", json!({"tool": tool})).unwrap()["dialog"].as_str().unwrap().to_owned();
-    let (ctx, id) = (app.ui_ctx.clone(), open_id(app, &key));
+    let (ctx, id) = (app.ui_ctx.clone().expect("a window"), open_id(app, &key));
     let host = app.dialogs().expect("a window");
     for (field, value) in fields {
         host.with(|host| host.set_json_field(&ctx, id, field, value.clone())).unwrap();

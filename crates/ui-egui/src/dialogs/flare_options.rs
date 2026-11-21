@@ -89,7 +89,10 @@ pub fn open(app: &mut VectorcraftApp, at: Option<Point>) -> Value {
     let build = move |fields: &mut DialogFields| {
         ParamDialog::new(KIND, tl!("Flare Tool Options"), params(lengths)).values(Bind::bound(fields)).previews(previews).reset_to(defaults.clone())
     };
-    let ctx = app.ui_ctx.clone();
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status("no window");
+        return Value::Null;
+    };
     // An open the host replaces leaves its preview behind unless it is rolled back here.
     if let Some(old) = app.object_dialogs.flare.take()
         && let Some(preview) = old.preview
@@ -322,7 +325,10 @@ mod tests {
 
     /// The id of the open Flare Tool Options.
     fn id(app: &VectorcraftApp) -> DialogId {
-        app.dialogs().unwrap().with(|host| host.open_dialogs().into_iter().find(|d| d.key == KIND).map(|d| d.id)).expect("the dialog is open")
+        app.dialogs()
+            .unwrap()
+            .with(|host| host.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(KIND)).map(|d| d.id))
+            .expect("the dialog is open")
     }
 
     /// The open dialog's values.
@@ -332,31 +338,36 @@ mod tests {
     }
 
     fn set(app: &VectorcraftApp, key: &str, value: Value) {
-        let (ctx, id) = (app.ui_ctx.clone(), id(app));
+        let (ctx, id) = (window(app), id(app));
         app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, id, key, value)).unwrap();
+    }
+
+    /// The test app's window context.
+    fn window(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().expect("the app has a window")
     }
 
     /// One frame's pump.
     fn pump(app: &mut VectorcraftApp) {
-        let ctx = app.ui_ctx.clone();
+        let ctx = window(app);
         crate::dialogs::host::pump(app, &ctx);
     }
 
     /// Presses OK and lets the held answer through.
     fn press_ok(app: &mut VectorcraftApp) {
-        let (ctx, id) = (app.ui_ctx.clone(), id(app));
+        let (ctx, id) = (window(app), id(app));
         app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id));
         pump(app);
     }
 
     fn press_cancel(app: &mut VectorcraftApp) {
-        let (ctx, id) = (app.ui_ctx.clone(), id(app));
+        let (ctx, id) = (window(app), id(app));
         app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id));
         pump(app);
     }
 
     fn press_reset(app: &VectorcraftApp) {
-        let (ctx, id) = (app.ui_ctx.clone(), id(app));
+        let (ctx, id) = (window(app), id(app));
         assert!(app.dialogs().unwrap().with(|host| host.reset_by_id(&ctx, id)));
     }
 

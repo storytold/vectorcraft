@@ -204,7 +204,7 @@ fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
-    crate::workspaces::switch(&mut app.ui, crate::workspaces::TOUCH).unwrap();
+    crate::workspaces::switch(&mut app, crate::workspaces::TOUCH).unwrap();
     app.select_tool("rectangle");
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, vec![]);
@@ -249,7 +249,7 @@ fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
     assert_eq!(app.session.tool_id(), "selection", "off: no switch");
     app.session.prefs.touch_gestures = true;
     // Another workspace: two fingers undo again and switch no tool.
-    crate::workspaces::switch(&mut app.ui, crate::workspaces::ESSENTIALS).unwrap();
+    crate::workspaces::switch(&mut app, crate::workspaces::ESSENTIALS).unwrap();
     app.select_tool("rectangle");
     frame(&mut app, &ctx, vec![]);
     let before = count(&app);
@@ -1899,7 +1899,9 @@ fn without_a_worker_a_heavy_canvas() {
     assert_eq!(k.revision, app.session.active().unwrap().revision, "the edit is drawn");
     assert_eq!((k.cx, k.cy, k.zoom), (now.cx, now.cy, now.zoom), "at the view of the frame shown");
     assert_eq!(app.canvas.last_ms, render_ms, "the frame was not rendered whole");
-    let (old, new) = (CanvasView { center: Point::new(now.cx, now.cy), ..app.canvas_view().unwrap() }, app.canvas_view().unwrap());
+    let new = app.canvas_view().unwrap();
+    let mut old = new;
+    old.center = Point::new(now.cx, now.cy);
     let (a, z) = (new.to_screen(old.to_doc(rect.min)), new.to_screen(old.to_doc(rect.max)));
     assert!((b.min - a).length() < 0.01 && (b.max - z).length() < 0.01, "{b:?}: the frame shown at {a:?} to {z:?}");
     assert!(delay <= std::time::Duration::from_secs_f64(STILL_SECS), "a frame within STILL_SECS: {delay:?}");

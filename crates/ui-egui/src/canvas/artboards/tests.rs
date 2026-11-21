@@ -16,8 +16,7 @@ fn app_with(boards: usize) -> VectorcraftApp {
 
 fn frames_of(app: &VectorcraftApp, outline: bool) -> Vec<PageFrame> {
     let st = app.session.active().unwrap();
-    let view = app.ui.view;
-    frames(app, st, &view, outline)
+    frames(app, st, app.view().unwrap(), outline)
 }
 
 fn use_tool(app: &mut VectorcraftApp, id: &str) {

@@ -9,23 +9,21 @@
 use std::borrow::Cow;
 use std::sync::{Arc, RwLock};
 
-use craft::ui::contract::CollectionEvent;
 use craft::behavior::keyed;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{ActivateOn, Bind, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
 use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::Stack;
+use craft::ui::list::ThumbAspect;
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamRows};
 use craft::ui::sections::DropAction;
 use craft::ui::tile_grid::{Tile, TileGrid};
-// PLAN: assumed `craft::ui::form_dialogs` re-exports these form-dialog items.
-use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamRows};
-use craft::ui::list::ThumbAspect;
-use craft::ui::docking::PanelDrag;
 use egui::{Response, Ui};
 use serde_json::{Value, json};
 use vectorcraft_effects::{GRAPHICS, INFLATE, MappedGraphic, PlanarFace, REVOLVE, ROTATE};
 
 use super::three_d::Data;
+use crate::panel_drag::PanelDrag;
 
 /// The field that holds what the panel runs after drawing the page ([`Action`]), as JSON. It is UI
 /// state and never enters the effect's parameters.
@@ -90,7 +88,7 @@ fn draw(ui: &mut Ui, fields: &mut DialogFields, cx: &mut CustomContext, data: &R
             body(ui, fields, cx, &data);
         }
     });
-    out.response
+    out.output
 }
 
 fn body(ui: &mut Ui, fields: &mut DialogFields, cx: &mut CustomContext, data: &Data) {
@@ -118,7 +116,6 @@ fn body(ui: &mut Ui, fields: &mut DialogFields, cx: &mut CustomContext, data: &D
     let shown = fields.int(SELECTED).map_or(0, |i| usize::try_from(i).unwrap_or(0));
     let mut index = shown.min(list.len() - 1);
     for (i, g) in list.iter().enumerate() {
-        // PLAN: assumed `.selected(bool)` on `Button` (`Common::selected`).
         if clicked(&Button::new(format!("{} · {}", g.symbol, face_label(g.face))).selected(i == index).id_salt(("mapped", i)).show(ui)) {
             index = i;
         }
@@ -140,12 +137,11 @@ fn body(ui: &mut Ui, fields: &mut DialogFields, cx: &mut CustomContext, data: &D
     // The ranges the effect takes, so every stored value shows as it is.
     let max = vectorcraft_effects::GRAPHIC_MAX_OFFSET;
     let (scale_lo, scale_hi) = vectorcraft_effects::GRAPHIC_SCALE_RANGE;
-    // PLAN: assumed `Param::range_limits(min, max)` for the limits of a number row (no unit on X and Y until `Data.unit` maps to a `UnitKind`).
     let params = [
-        Param::number("graphicX", "X", 0.0, 1.0, 1).range_limits(-max, max).resettable(),
-        Param::number("graphicY", "Y", 0.0, 1.0, 1).range_limits(-max, max).resettable(),
-        Param::number("graphicScale", tl!("Scale"), 100.0, 1.0, 1).range_limits(scale_lo, scale_hi).resettable(),
-        Param::number("graphicRotation", tl!("Rotation"), 0.0, 1.0, 1).range_limits(-360.0, 360.0).resettable(),
+        Param::number("graphicX", "X", 0.0, 1.0, 1).bounds(Some(-max), Some(max)).resettable(),
+        Param::number("graphicY", "Y", 0.0, 1.0, 1).bounds(Some(-max), Some(max)).resettable(),
+        Param::number("graphicScale", tl!("Scale"), 100.0, 1.0, 1).bounds(Some(scale_lo), Some(scale_hi)).resettable(),
+        Param::number("graphicRotation", tl!("Rotation"), 0.0, 1.0, 1).bounds(Some(-360.0), Some(360.0)).resettable(),
     ];
     let numbers = DialogFields::from_pairs([("graphicX", g.x), ("graphicY", g.y), ("graphicScale", g.scale), ("graphicRotation", g.rotation)]);
     let rows = ParamRows::new(tl!("Mapped graphic"), &params, Bind::given(numbers)).show(ui);
@@ -182,7 +178,7 @@ fn library(ui: &mut Ui, data: &Data, apply: bool) -> Option<Action> {
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let keys = crate::panels::symbols::document_symbols(&doc, data.revision);
     let source = keyed(&names[..], |name: &String| name.clone()).with_text(|name| Cow::Borrowed(name.as_str()));
-    let dropped = DropAction::<PanelDrag>::new(|drag| matches!(drag, PanelDrag::Art { .. })).show(ui, |ui, _| {
+    let mut dropped = DropAction::<PanelDrag>::new(|drag| matches!(drag, PanelDrag::Art { .. })).show(ui, |ui, _| {
         TileGrid::new(tl!("Graphics")).activate(ActivateOn::Click).show_items(ui, &source, &mut |name, _| {
             let tip = if apply { name.clone() } else { format!("{name}: {}", tl!("Select a 3D object to map the graphic onto it.")) };
             let (doc, keys, name) = (doc.clone(), keys.clone(), name.clone());
@@ -194,14 +190,15 @@ fn library(ui: &mut Ui, data: &Data, apply: bool) -> Option<Action> {
     if names.is_empty() {
         Text::new(tl!("Add art with Add as Single Graphic, or drop art here.")).shade(Shade::Faint).show(ui);
     }
-    for event in dropped.inner.response.events {
+    let picked = dropped.settle(|_, grid| std::mem::take(&mut grid.response.events)).unwrap_or_default();
+    for event in picked {
         if let CollectionEvent::Activate(name) = event
             && apply
         {
             action = Some(Action::Map(name));
         }
     }
-    if let Some(PanelDrag::Art { ids, .. }) = dropped.dropped {
+    if let Some(PanelDrag::Art { ids, .. }) = dropped.output.dropped {
         action = Some(Action::Add(Some(ids.iter().map(|id| id.0).collect())));
     }
     if clicked(&Button::new(tl!("Add as Single Graphic")).enabled(data.selected).show(ui)) {

@@ -16,6 +16,7 @@
 //! Each view of a document that Window › New Window opened ([`views`]) is a window of its own
 //! here: it has its own tab, pane or floating window.
 
+use craft::ui::contract::{Props as _, ShowContainer as _};
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::DocumentWindow;
 use serde_json::{Value, json};
@@ -360,20 +361,18 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let is_current = views::current(app) == Some(win);
         let live = is_current && !crate::menus::home_showing(app);
         let mut pressed = false;
-        let out = DocumentWindow::new(title)
-            .id_salt((w.uid, w.number, w.generation))
-            .first_placed(w.place.translate(origin))
-            .raise(raise == Some((w.uid, w.view)))
-            .show(ui, |ui, _| {
-                crate::chrome::window_tab(app, ui, win);
-                let rect = ui.available_rect_before_wrap();
-                crate::canvas::panes::refit_resized(app, &[(win, rect)]);
-                if live {
-                    show_document(app, ui, win, BodyKind::Live);
-                } else {
-                    pressed = crate::canvas::pane(app, ui, win, rect);
-                }
-            });
+        let window = DocumentWindow::new(title).id_salt((w.uid, w.number, w.generation)).first_placed(w.place.translate(origin));
+        let window = if raise == Some((w.uid, w.view)) { window.raise() } else { window };
+        let out = window.show(ui, |ui, _| {
+            crate::chrome::window_tab(app, ui, win);
+            let rect = ui.available_rect_before_wrap();
+            crate::canvas::panes::refit_resized(app, &[(win, rect)]);
+            if live {
+                show_document(app, ui, win, BodyKind::Live);
+            } else {
+                pressed = crate::canvas::pane(app, ui, win, rect);
+            }
+        });
         if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == w.uid && x.view == w.view) {
             x.focused = out.focused;
         }

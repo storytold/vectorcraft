@@ -184,7 +184,7 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
         next_at: None,
         hold: false,
         doc: None,
-        played_in: app.tick_iteration.filter(|&t| t == app.host_iteration),
+        played_in: pass_now(app),
         stop: None,
     };
     let results = advance(app, playing)?;
@@ -442,6 +442,11 @@ pub fn waiting_at_stop(app: &VectorcraftApp) -> bool {
 /// The command that plays on from a stop ([`continue_playback`]).
 pub const CONTINUE_PLAYBACK: &str = "ui.action.continue";
 
+/// The window's current pass, `None` before the app has a window.
+fn pass_now(app: &VectorcraftApp) -> Option<u64> {
+    app.ui_ctx.as_ref().map(egui::Context::cumulative_pass_nr)
+}
+
 /// `ui.action.continue {}`: plays on from the stop the playback waits at, on the document active
 /// now, and closes the stop's message box. The next step runs at once, or at Accelerated the steps
 /// up to the next stop as one undo step; a failing step ends the playback with its error. With no
@@ -451,7 +456,7 @@ pub fn continue_playback(app: &mut VectorcraftApp, _: &Value) -> Result<Value, S
         return Err("no action is waiting at a stop".into());
     };
     playing.stop = None;
-    playing.played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
+    playing.played_in = pass_now(app);
     close_stop_message(app);
     let results = advance(app, playing)?;
     Ok(playback_result(app, results))
@@ -522,11 +527,8 @@ pub struct Playing {
     /// The [`uid`](vectorcraft_engine::DocState::uid) of the document that was active after the
     /// last step played, if any.
     pub(super) doc: Option<u64>,
-    /// The host iteration in which Play or Continue ran a step, when that iteration's [`tick`] had
-    /// already begun (a control request, or the UI pass after it): the pause before the next step
-    /// starts in a later iteration.
-    ///
-    /// [`tick`]: VectorcraftApp::tick
+    /// The pass in which Play or Continue ran a step ([`pass_now`]): the pause before the next step
+    /// starts in a later pass.
     played_in: Option<u64>,
     /// The stop the playback waits at, if any: no step runs until [`continue_playback`] or
     /// [`stop`](super::stop).
@@ -576,7 +578,7 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     }
     let pause = f64::from(playing.options.seconds);
     if playing.options.speed == PlaybackSpeed::Pause {
-        if playing.next_at.is_none() && playing.played_in == Some(app.host_iteration) {
+        if playing.next_at.is_none() && playing.played_in.is_some_and(|pass| pass_now(app) == Some(pass)) {
             return Some(0.0);
         }
         let due = *playing.next_at.get_or_insert(now + pause);

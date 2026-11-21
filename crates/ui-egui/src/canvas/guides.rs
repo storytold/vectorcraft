@@ -67,11 +67,12 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, w
     let env = Env::of(ui);
     let Some((mut guides, selected, key)) = shown(app, st, env.tokens.tokens()) else { return };
     // The edits of a display-only control are none: the local copy is dropped.
-    Guides::new("Ruler guides", super::canvas_id(win), Bind::bound(&mut guides))
-        .selected_guides(&selected)
-        .key_guide(key)
-        .interactive(false)
-        .show_at(ui, space.view.rect);
+    let control = Guides::new("Ruler guides", super::canvas_id(win), Bind::bound(&mut guides)).selected_guides(&selected).interactive(false);
+    match key {
+        Some(key) => control.key_guide(key),
+        None => control,
+    }
+    .show_at(ui, space.view.rect);
 }
 
 /// The guide label colors of `doc`'s artboards that have one, by artboard id.

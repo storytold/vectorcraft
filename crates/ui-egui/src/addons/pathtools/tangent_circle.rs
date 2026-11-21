@@ -77,40 +77,11 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
     use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
+    use crate::addons::dialogs::tests::{cancel, confirm, ctx, dialog_id, frame, read, set};
     use crate::{VectorcraftApp, menus};
-
-    /// Reads the open dialog's values.
-    fn read<R>(app: &VectorcraftApp, f: impl FnOnce(&DialogFields) -> R) -> R {
-        app.dialogs().expect("window host").with(|host| f(host.get::<HostedParamDialog>().expect("the dialog is open").fields()))
-    }
-
-    // PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog.id` (host.rs:385)
-    fn set(app: &VectorcraftApp, key: &str, value: Value) -> Result<(), String> {
-        let ctx = app.ui_ctx.clone();
-        app.dialogs().expect("window host").with(|host| {
-            let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-            host.set_json_field(&ctx, id, key, value)
-        })
-    }
-
-    fn pump(app: &mut VectorcraftApp) {
-        let ctx = app.ui_ctx.clone();
-        crate::dialogs::host::pump(app, &ctx);
-    }
-
-    /// Answers the open dialog with OK or Cancel, then runs the frame's pump.
-    fn answer(app: &mut VectorcraftApp, ok: bool) {
-        let ctx = app.ui_ctx.clone();
-        app.dialogs().expect("window host").with(|host| {
-            let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-            if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
-        });
-        pump(app);
-    }
 
     fn circle(app: &mut VectorcraftApp, cx: f64, cy: f64, r: f64) -> u64 {
         app.run("shape.ellipse", json!({"x": cx - r, "y": cy - r, "width": 2.0 * r, "height": 2.0 * r})).unwrap()["id"].as_u64().unwrap()
@@ -119,37 +90,48 @@ mod tests {
     #[test]
     fn tangent_circle_previews_picks_one_cancels_and_runs_on_ok() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let a = circle(&mut app, 100.0, 100.0, 10.0);
         let b = circle(&mut app, 130.0, 100.0, 10.0);
         app.run("select.set", json!({"ids": [a, b]})).unwrap();
         menus::invoke(&mut app, super::COMMAND, Value::Null);
+        let dialog = dialog_id(&app);
         let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
         // Preview is on from the start: radius 36 gives eight circles, and the choice lists them.
-        pump(&mut app);
+        frame(&mut app);
         assert_eq!(count(&app), 10, "previewed on opening: {}", app.ui.status);
-        assert_eq!(read(&app, |f| f.int("found")), Some(8));
-        set(&app, "radius", json!(20)).unwrap();
-        pump(&mut app);
+        assert_eq!(read(&app, dialog, |f| f.int("found")), Some(8));
+        set(&app, dialog, "radius", json!(20));
+        frame(&mut app);
         // Six circles of radius 20 touch both: all previewed.
         assert_eq!(count(&app), 8, "previewed: {}", app.ui.status);
-        assert_eq!(read(&app, |f| f.int("found")), Some(6));
-        set(&app, "circle", json!("2")).unwrap();
-        pump(&mut app);
+        assert_eq!(read(&app, dialog, |f| f.int("found")), Some(6));
+        set(&app, dialog, "circle", json!("2"));
+        frame(&mut app);
         assert_eq!(count(&app), 3, "one previewed");
         // A pick past the circles found is refused: the choice holds only the circles it lists.
-        assert!(set(&app, "circle", json!(u64::MAX.to_string())).is_err());
+        let past = json!(u64::MAX.to_string());
+        assert!(app.dialogs().unwrap().with(|h| h.set_json_field(&ctx(&app), dialog, "circle", past)).is_err());
         // Radius 2 cannot reach across the 10 pt gap: no circles are found, and the choice goes back to All.
-        set(&app, "radius", json!(2)).unwrap();
-        pump(&mut app);
-        assert_eq!(read(&app, |f| (f.int("found"), f.text("circle").map(str::to_string))), (Some(0), Some("0".to_string())), "{}", app.ui.status);
-        answer(&mut app, false);
+        set(&app, dialog, "radius", json!(2));
+        frame(&mut app);
+        assert_eq!(
+            read(&app, dialog, |f| (f.int("found"), f.text("circle").map(str::to_string))),
+            (Some(0), Some("0".to_string())),
+            "{}",
+            app.ui.status
+        );
+        cancel(&app, dialog);
+        frame(&mut app);
         assert_eq!(count(&app), 2, "rolled back");
         app.run("select.set", json!({"ids": [a, b]})).unwrap();
         menus::invoke(&mut app, super::COMMAND, Value::Null);
+        let dialog = dialog_id(&app);
         let n = app.session.doc().unwrap().history.undo.len();
-        set(&app, "radius", json!(5)).unwrap();
-        answer(&mut app, true);
+        set(&app, dialog, "radius", json!(5));
+        assert!(confirm(&app, dialog), "OK is on");
+        frame(&mut app);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), n + 1);
         // Radius 5: the one circle in the gap.
         assert_eq!(count(&app), 3);

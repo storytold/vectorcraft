@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use craft::menu::{Backend, Chord, Dispatch, Event as MenuEvent, Item, LayoutOptions, MenuBar, MenuRole, NativeMenu, Node, mac_layout};
+use craft::menu::{Backend, Chord, Dispatch, Event as MenuEvent, Item, MenuBar, MenuRole, NativeMenu, Node, mac_layout};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -36,8 +36,7 @@ fn find<'a>(bar: &'a MenuBar, command: &str) -> &'a Item {
 #[test]
 fn settings_lists_every_preferences_page() {
     let mut m = Mac::new(true);
-    let layout =
-        mac_layout(&m.app.menus.bar, &LayoutOptions { app_name: "VectorCraft", label: &|text: &'static str| text.to_string(), keys: &|_| None });
+    let layout = mac_layout(&m.app.menus.bar, &menus::native::options());
     let app_menu = layout.bar.menus.iter().find(|menu| menu.role == MenuRole::App).expect("the app menu");
     let settings = app_menu
         .children

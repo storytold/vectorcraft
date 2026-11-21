@@ -14,7 +14,7 @@ use craft::behavior::{IconId, NavShape};
 use craft::menu::Node;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};

@@ -76,7 +76,7 @@ fn kind_id(k: CornerKind) -> String {
 }
 
 /// The dialog over its rows; the radius row is a percentage while the radii are relative, a length otherwise.
-fn dialog(relative: bool, lengths: LengthUnits) -> ParamDialog<'static> {
+fn dialog<'a>(relative: bool, lengths: LengthUnits) -> ParamDialog<'a> {
     let kinds = CornerKind::ALL.iter().map(|k| (kind_id(*k), kind_label(*k).into())).collect();
     let radius = if relative {
         Param::new("radius", tl!("Radius:"), ParamKind::number(Some(0.0), Some(100.0), 0.0, 1.0, 1)).unit(UnitKind::Percent)

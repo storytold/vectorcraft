@@ -51,7 +51,8 @@ pub fn is_text(p: &Value) -> bool {
 
 /// The rows of the dialog.
 fn params() -> Vec<Param> {
-    let choices = |pairs: &[(&str, &str)]| -> Vec<(String, Label)> { pairs.iter().map(|(id, label)| ((*id).to_string(), (*label).into())).collect() };
+    let choices =
+        |pairs: &[(&str, &'static str)]| -> Vec<(String, Label)> { pairs.iter().map(|(id, label)| ((*id).to_string(), (*label).into())).collect() };
     vec![
         Param::section(tl!("Encoding")),
         Param::new("platform", tl!("Platform"), ParamKind::choice(choices(&PLATFORMS), None)),

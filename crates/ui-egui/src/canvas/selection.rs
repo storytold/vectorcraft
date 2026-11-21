@@ -461,7 +461,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
     app.selection_bounds();
     let tool_points = tool_draws_points(app);
     let still = {
-        let wait = super::cursor::hover_wait(&mut app.canvas.view_moved, ViewKey::from(space.view), ui.input(|i| i.time));
+        let wait = super::cursor::hover_wait(&mut app.canvas.view_moved, ViewKey::of(&space.view), craft::ui::runtime::frame::clock(ui.ctx()));
         if let Some(secs) = wait {
             ui.ctx().request_repaint_after_secs(secs as f32);
         }

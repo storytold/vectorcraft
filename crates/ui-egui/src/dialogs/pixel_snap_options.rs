@@ -17,10 +17,11 @@ pub const KIND: &str = "pixelSnapOptions";
 
 /// Open the dialog with the current options.
 pub fn open(app: &mut VectorcraftApp) {
-    let mut params: Vec<Param> = [("drawing", "Snap to Pixel While Drawing"), ("moving", "Snap to Pixel While Moving"), ("scaling", "Snap to Pixel While Scaling")]
-        .into_iter()
-        .map(|(key, label)| Param::new(key, tl!(label), ParamKind::bool(true)))
-        .collect();
+    let mut params: Vec<Param> =
+        [("drawing", "Snap to Pixel While Drawing"), ("moving", "Snap to Pixel While Moving"), ("scaling", "Snap to Pixel While Scaling")]
+            .into_iter()
+            .map(|(key, label)| Param::new(key, tl!(label), ParamKind::bool(true)))
+            .collect();
     if !app.ui.view.snap_to_pixel {
         params.push(Param::read_only_text("note", "", tl!("These options take effect when View › Snap to Pixel is on.")).full_width());
     }

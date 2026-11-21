@@ -33,7 +33,7 @@ use vectorcraft_color::Color;
 use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
-use super::color::color_of_values;
+use super::color::{color_of_values, working_rgb};
 use super::{active_paint, c32, color_json, proxy_cmd, srgba};
 use crate::VectorcraftApp;
 
@@ -213,6 +213,35 @@ fn channels(mode: ColorPanelMode) -> &'static [(&'static str, f64, f64)] {
     }
 }
 
+/// The model the sliders of `mode` edit in, as [`ModelValues::model`] names it.
+fn model_of(mode: ColorPanelMode) -> &'static str {
+    match mode {
+        ColorPanelMode::CmykSliders => "cmyk",
+        ColorPanelMode::RgbSliders => "rgb",
+        ColorPanelMode::LabSliders => "lab",
+        _ => "hsb",
+    }
+}
+
+/// The numbers the sliders of `mode` show for `c`, in the channels' units ([`channels`]).
+fn values_in(c: &Color, mode: ColorPanelMode) -> ModelValues {
+    let rgb = || working_rgb(c).map(|v| v.clamp(0.0, 1.0));
+    let values = match mode {
+        ColorPanelMode::CmykSliders => c.to_cmyk().map(|v| v * 100.0).to_vec(),
+        ColorPanelMode::RgbSliders => rgb().map(|v| v * 255.0).to_vec(),
+        ColorPanelMode::LabSliders => {
+            let lab = c.to_lab();
+            vec![lab.l, lab.a, lab.b]
+        }
+        _ => {
+            let [r, g, b] = rgb();
+            let [h, s, v] = Color::rgb(r, g, b).to_hsb();
+            vec![h, s * 100.0, v * 100.0]
+        }
+    };
+    ModelValues::new(model_of(mode), &values)
+}
+
 fn mode_label(mode: ColorPanelMode) -> &'static str {
     match mode {
         ColorPanelMode::CmykSliders => tl!("CMYK"),
@@ -246,7 +275,7 @@ impl DisplayOrder<usize> for Names<'_> {
 impl ItemSource<usize> for Names<'_> {}
 
 /// A single-choice `Select` over `labels`: the index picked this pass.
-fn select(ui: &mut Ui, label: &'static str, current: usize, labels: &[&str]) -> Option<usize> {
+fn select(ui: &mut Ui, label: &'static str, current: usize, labels: &[&'static str]) -> Option<usize> {
     let entries: Vec<Entry<usize>> = labels.iter().enumerate().map(|(i, l)| Entry::new(i, Label::from(*l))).collect();
     Select::new(label, Bind::given(current), &entries).show(ui).value().copied()
 }
@@ -258,26 +287,24 @@ fn select(ui: &mut Ui, label: &'static str, current: usize, labels: &[&str]) -> 
 fn sliders(ui: &mut Ui, d: &mut Draft, mode_pick: &mut Option<ColorPanelMode>, held: &mut Option<Held>) {
     let Some(color) = d.colors.get(d.sel).cloned() else { return };
     let current = slider_mode(*mode_pick, &color);
-    let labels: Vec<&str> = SLIDER_MODES.iter().map(|m| mode_label(*m)).collect();
+    let labels: Vec<&'static str> = SLIDER_MODES.iter().map(|m| mode_label(*m)).collect();
     let at = SLIDER_MODES.iter().position(|m| *m == current).unwrap_or(0);
     if let Some(&m) = select(ui, tl!("Color Mode:"), at, &labels).and_then(|i| SLIDER_MODES.get(i)) {
         *mode_pick = Some(m);
     }
     let mode = slider_mode(*mode_pick, &color);
-    // PLAN: assumed `ModelValues { pub mode: ColorPanelMode, pub v: Vec<f64> }` and
-    // `ModelValues::in_mode(&Color, ColorPanelMode) -> ModelValues` (co.A1 gives only `model_values`).
     let shown = held
         .as_ref()
-        .filter(|h| h.sel == d.sel && h.color == color && h.values.mode == mode)
-        .map_or_else(|| ModelValues::in_mode(&color, mode), |h| h.values.clone());
+        .filter(|h| h.sel == d.sel && h.color == color && h.values.model == model_of(mode))
+        .map_or_else(|| values_in(&color, mode), |h| h.values);
     let mut set: Option<ModelValues> = None;
     for (n, &(letter, lo, hi)) in channels(mode).iter().enumerate() {
-        let value = shown.v.get(n).copied().unwrap_or(0.0);
+        let value = shown.values.get(n).copied().map_or(0.0, f64::from);
         let track: Vec<_> = (0..TRACK_STOPS)
             .map(|i| {
-                let mut probe = shown.clone();
-                if let Some(x) = probe.v.get_mut(n) {
-                    *x = lo + (hi - lo) * i as f64 / (TRACK_STOPS - 1) as f64;
+                let mut probe = shown;
+                if let Some(x) = probe.values.get_mut(n) {
+                    *x = (lo + (hi - lo) * i as f64 / (TRACK_STOPS - 1) as f64) as f32;
                 }
                 srgba(&color_of_values(&probe))
             })
@@ -286,9 +313,9 @@ fn sliders(ui: &mut Ui, d: &mut Draft, mode_pick: &mut Option<ColorPanelMode>, h
         let Some(row) = ChannelRow::new(letter, Bind::given(value), rule).short(letter).track(track).show(ui) else { continue };
         for event in row.events {
             if let Some(&nv) = event.value().filter(|v| v.is_finite()) {
-                let mut next = set.take().unwrap_or_else(|| shown.clone());
-                if let Some(x) = next.v.get_mut(n) {
-                    *x = nv.clamp(lo, hi);
+                let mut next = set.take().unwrap_or(shown);
+                if let Some(x) = next.values.get_mut(n) {
+                    *x = nv.clamp(lo, hi) as f32;
                 }
                 set = Some(next);
             }
@@ -441,7 +468,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .shown(cur)
         .show_items(ui, &Names(&titles), &mut |key, _| Tab::new(titles.get(*key).cloned().unwrap_or_default()).id_salt(("ct-tab", *key)));
     for event in strip.response.events {
-        if let CollectionEvent::Selection(SelectionChange::Set(keys)) = event
+        if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
             && let Some(&tab) = keys.last()
         {
             app.ui.color_themes_panel.tab = tab;
@@ -560,7 +587,7 @@ fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
         );
         for event in out.events {
             match event {
-                CollectionEvent::Selection(SelectionChange::Set(keys)) => {
+                CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => {
                     if let Some(name) = keys.last().and_then(|k| names.get(*k)) {
                         app.ui.color_themes_panel.picked = Some(name.clone());
                     }
@@ -585,8 +612,8 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
+    use craft::ui::contract::Role;
     use craft::ui::testing::Fixture;
-    use egui::accesskit::Role;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
@@ -609,7 +636,7 @@ mod tests {
 
     /// The slider rails, top to bottom (the wheel's Brightness rail first).
     fn rails(fx: &Fixture) -> Vec<craft::ui::testing::Target> {
-        let mut rails = fx.by_role(Role::Slider);
+        let mut rails = fx.by_role(Role::SLIDER);
         rails.sort_by(|a, b| a.center().y.total_cmp(&b.center().y));
         rails
     }
@@ -914,12 +941,12 @@ mod tests {
             assert_eq!(now.colors[i], d.colors[i], "color {i} stays");
         }
         let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
-        assert_eq!(held.values.mode, ColorPanelMode::RgbSliders);
+        assert_eq!(held.values.model, "rgb");
         // The arrow keys step the focused rail by one; the other numbers stay as set.
         fx.key(egui::Key::ArrowRight, egui::Modifiers::NONE).settle();
         let after = app.borrow().ui.color_themes_panel.held.clone().expect("held");
-        assert_eq!(after.values.v[1], held.values.v[1] + 1.0);
-        assert_eq!((after.values.v[0], after.values.v[2]), (held.values.v[0], held.values.v[2]));
+        assert_eq!(after.values.values[1], held.values.values[1] + 1.0);
+        assert_eq!((after.values.values[0], after.values.values[2]), (held.values.values[0], held.values.values[2]));
     }
 
     /// The sliders keep the numbers they set: an HSB color taken to no saturation keeps its hue on
@@ -932,14 +959,14 @@ mod tests {
         let mut fx = fixture(&app);
         let (h_rail, s_rail) = (rails(&fx)[1].clone(), rails(&fx)[2].clone());
         fx.click(&h_rail).settle();
-        let hue = app.borrow().ui.color_themes_panel.held.clone().expect("held").values.v[0];
+        let hue = app.borrow().ui.color_themes_panel.held.clone().expect("held").values.values[0];
         fx.click(&s_rail).settle();
         fx.key(egui::Key::Home, egui::Modifiers::NONE).settle();
         let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
-        assert_eq!((held.values.v[1], held.values.v[0]), (0.0, hue), "a gray keeps the hue it was set to");
+        assert_eq!((held.values.values[1], held.values.values[0]), (0.0, hue), "a gray keeps the hue it was set to");
         fx.key(egui::Key::ArrowRight, egui::Modifiers::NONE).settle();
         let [h, s, _] = draft(&mut app.borrow_mut()).colors[2].to_hsb();
-        assert!((f64::from(h) - hue).abs() < 0.5 && s > 0.0, "{h} {s}");
+        assert!((h - hue).abs() < 0.5 && s > 0.0, "{h} {s}");
     }
 
     /// With a rule, a slider edit makes the edited color the theme's new base, as a hex edit does,

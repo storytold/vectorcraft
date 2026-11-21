@@ -26,7 +26,7 @@ const PRESERVE: [(&str, &str); 5] = [
     ("fill", "Bounds (Fill Proportionally)"),
 ];
 /// The alignment points, row by row from the top left (the reference point widget's order).
-const ALIGN: [&str; 9] = ["topLeft", "top", "topRight", "left", "center", "right", "bottomLeft", "bottom", "bottomRight"];
+pub(crate) const ALIGN: [&str; 9] = ["topLeft", "top", "topRight", "left", "center", "right", "bottomLeft", "bottom", "bottomRight"];
 /// The centre, for a name `ALIGN` does not list.
 const CENTRE: usize = 4;
 /// Bounds stretches the art into the old bounds: with it there is nothing to align or clip.

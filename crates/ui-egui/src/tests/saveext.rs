@@ -172,7 +172,9 @@ fn save_panels_show_the_file_type_they_write() {
     };
     shows(&mut app, &picker, run, &[("Graphic Style Libraries", &["vcstyles"])], "Save Graphic Style Library");
     let id = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
-    let run = |a: &mut VectorcraftApp| io::save_command_output_named(a, "library.export", "Brand.vclibrary", json!({"library": id}));
+    let run = |a: &mut VectorcraftApp| {
+        io::save_command_output_named(a, "library.export", "Brand.vclibrary", json!({"library": id}), |_, _| Ok(Value::Null))
+    };
     shows(&mut app, &picker, run, &[("Libraries", &["vclibrary"])], "Libraries panel › Export Library…");
     shows(&mut app, &picker, |a| a.run("css.exportFile", json!({"scope": "all"})), &[("CSS", &["css"])], "CSS Properties › Export All…");
     shows(&mut app, &picker, |a| a.run("file.print", json!({"format": "postscript"})), &[("PostScript", &["ps"])], "Print to a PostScript file");
@@ -206,7 +208,7 @@ fn save_panels_show_the_file_type_they_write() {
     ];
     for (save, params, export, label, exts) in presets {
         app.run(save, params).unwrap();
-        let run = |a: &mut VectorcraftApp| io::save_command_output(a, export, exts[0], json!({"names": ["Mine"]}));
+        let run = |a: &mut VectorcraftApp| io::save_command_output(a, export, exts[0], json!({"names": ["Mine"]}), |_, _| Ok(Value::Null));
         shows(&mut app, &picker, run, &[(label, exts)], &format!("{export}: the presets dialog's Export…"));
     }
 }
@@ -447,10 +449,12 @@ fn an_export_replaces_a_typed_extension_of_another_format() {
             "Save as PDF" => io::export_pdf(a, json!({})).map(|_| ()),
             "document.exportForOffice" => a.run(what, json!({"ppi": 150})).map(|_| ()),
             "document.exportSelection" => a.run(what, json!({"format": "svg"})).map(|_| ()),
-            "Text Export Options" => io::save_command_output(a, "document.export", "txt", json!({"format": "txt"})).map(|_| ()),
+            "Text Export Options" => {
+                io::save_command_output(a, "document.export", "txt", json!({"format": "txt"}), |_, _| Ok(Value::Null)).map(|_| ())
+            }
             _ => {
                 let id = a.run("library.create", json!({"name": "Brand"}))?["id"].as_str().unwrap_or_default().to_string();
-                io::save_command_output_named(a, "library.export", "Brand.vclibrary", json!({"library": id})).map(|_| ())
+                io::save_command_output_named(a, "library.export", "Brand.vclibrary", json!({"library": id}), |_, _| Ok(Value::Null)).map(|_| ())
             }
         };
         save_via(&mut app, &picker, run, (typed, None));

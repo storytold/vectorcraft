@@ -6,7 +6,7 @@ use craft::behavior::{CanvasView, PressPhase};
 use craft::ui::canvas::{
     Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
 };
-use craft::ui::contract::{Bind, Show as _};
+use craft::ui::contract::{Bind, Props as _, Show as _};
 use craft::ui::runtime::env::Env;
 use craft::ui::style::StyleCx;
 use egui::Ui;
@@ -235,7 +235,6 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         }
         crate::type_editing::show(app, ui);
         out.reply = pass.map(|pass| tool_adapter::run(app, ui, pass));
-        crate::place::canvas_drop(app, ui, space);
         drops::show(app, ui, space, win, kind);
     }
     raster::picture(app, ui, space, win, kind);
@@ -254,12 +253,13 @@ fn grids(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, win: Win) {
 }
 
 /// The Rotate View compass while the view is turned: the view with the angle the user set.
-fn compass(app: &VectorcraftApp, ui: &Ui, space: &CanvasSpace) -> Option<CanvasView> {
+fn compass(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) -> Option<CanvasView> {
     if app.ui.screen_mode >= 3 || !RotateView::visible(space.view.rotation) {
         return None;
     }
     let mut turn = space.view.rotation;
-    RotateView::new(tl!("Rotate View"), Bind::bound(&mut turn), false).show_at(ui, RotateView::compass_rect(ui, space.view.rect));
+    let rect = RotateView::compass_rect(ui, space.view.rect);
+    RotateView::new(tl!("Rotate View"), Bind::bound(&mut turn), false).show_at(ui, rect);
     (turn != space.view.rotation).then(|| {
         let mut view = space.view;
         view.rotation = turn;
@@ -269,7 +269,7 @@ fn compass(app: &VectorcraftApp, ui: &Ui, space: &CanvasSpace) -> Option<CanvasV
 
 /// The scroll bars along the right and bottom edges (Normal and Full Screen with Menu Bar): the view
 /// a thumb drag or page press moved.
-fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, space: &CanvasSpace) -> Option<CanvasView> {
+fn scroll_bars(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) -> Option<CanvasView> {
     if app.ui.screen_mode >= 2 {
         return None;
     }
@@ -287,13 +287,16 @@ fn view_target(app: &VectorcraftApp, win: Win) -> ViewTarget {
         return ViewTarget::new(Size::new(1.0, 1.0));
     };
     let boards = st.doc.artboards.iter().map(|a| a.rect).reduce(|r, a| r.union(a));
-    let all: Option<Rect> = vectorcraft_geom::union_opt(st.doc.art_bounds(), boards);
-    let size = all.map_or(Size::new(1.0, 1.0), |r| Size::new(r.width().max(1.0), r.height().max(1.0)));
-    let target = ViewTarget::new(size);
+    let target = ViewTarget::new(document_size(vectorcraft_geom::union_opt(st.doc.art_bounds(), boards)));
     match st.doc.artboards.get(view.artboard).or(st.doc.artboards.first()) {
         Some(a) => target.artboard(a.rect),
         None => target,
     }
+}
+
+/// The size the view fits and an autoscroll stops at: the art and the artboards together (`all`), at least 1 × 1.
+pub(crate) fn document_size(all: Option<Rect>) -> Size {
+    all.map_or(Size::new(1.0, 1.0), |r| Size::new(r.width().max(1.0), r.height().max(1.0)))
 }
 
 #[cfg(test)]

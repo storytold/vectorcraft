@@ -89,11 +89,9 @@ fn run(app: &mut VectorcraftApp, event: &ManagerEvent, current: &str) -> Result<
             let above = preset_manager::above(i, FlattenOptions::PRESETS.len());
             Ok(app.session.flattener_presets().get(above).map(|p| p.name.clone()))
         }
-        ManagerEvent::Action(ManagerAction::Import) => {
-            preset_manager::import(app, KEY, "flattener.presets.import", "Flattener presets", PRESET_EXTS)
-        }
+        ManagerEvent::Action(ManagerAction::Import) => preset_manager::import(app, KEY, "flattener.presets.import", "Flattener presets", PRESET_EXTS),
         ManagerEvent::Action(ManagerAction::Export) => {
-            crate::io::save_command_output(app, "flattener.presets.export", PRESET_FORMAT, json!({ "names": [current] }))?;
+            crate::io::save_command_output(app, "flattener.presets.export", PRESET_FORMAT, json!({ "names": [current] }), |_, _| Ok(Value::Null))?;
             Ok(None)
         }
         // A new name that is taken or a built-in one is refused by the command.
@@ -119,31 +117,41 @@ mod tests {
 
     use super::super::preset_manager::PresetManager;
 
-    // PLAN: assumed `VectorcraftApp::new` gives an app whose `dialogs()` host works without a window (wg.S1).
+    /// An app with a window, whose dialog host the manager opens on.
     fn app() -> VectorcraftApp {
-        VectorcraftApp::new(Session::new(), Default::default())
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
+        app
+    }
+
+    fn ctx(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().expect("a window")
+    }
+
+    fn host(app: &VectorcraftApp) -> craft::ui::shell::WindowDialogs {
+        app.dialogs().expect("a window")
     }
 
     /// One frame: the host's pump carries out what the manager queued.
     fn frame(app: &mut VectorcraftApp) {
-        // PLAN: assumed `dialogs::host::pump(app, ctx)` (hub-w2).
-        super::super::host::pump(app, &egui::Context::default());
+        let ctx = ctx(app);
+        super::super::host::pump(app, &ctx);
     }
 
     /// Press a manager button as the user does: the manager queues it and the pump carries it out.
     fn press(app: &mut VectorcraftApp, action: ManagerAction) {
-        let manager = app.dialogs().get_mut_by_id::<PresetManager>(dialog_id(KEY));
-        manager.expect("manager is open").queue(ManagerEvent::Action(action));
+        host(app).with(|h| h.get_mut_by_id::<PresetManager>(dialog_id(KEY)).expect("manager is open").queue(ManagerEvent::Action(action)));
         frame(app);
     }
 
     fn fields(app: &mut VectorcraftApp) -> Value {
-        app.dialogs().get_by_id::<PresetManager>(dialog_id(KEY)).and_then(|m| m.json_fields()).expect("manager is open")
+        host(app).with(|h| h.get_by_id::<PresetManager>(dialog_id(KEY)).and_then(|m| m.json_fields())).expect("manager is open")
     }
 
     /// `ui.dialog.set` on the open manager, then a frame.
     fn set(app: &mut VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
-        let set = app.dialogs().set_json_field(&egui::Context::default(), dialog_id(KEY), field, value);
+        let ctx = ctx(app);
+        let set = host(app).with(|h| h.set_json_field(&ctx, dialog_id(KEY), field, value));
         frame(app);
         set
     }
@@ -176,9 +184,9 @@ mod tests {
         press(&mut app, ManagerAction::Delete);
         assert_eq!(fields(&mut app)["selected"], "Low Resolution");
         assert!(app.session.prefs.flattener_presets.is_empty());
-        let (id, ctx) = (dialog_id(KEY), egui::Context::default());
-        app.dialogs().confirm_by_id(&ctx, id);
-        assert!(app.dialogs().get_by_id::<PresetManager>(id).is_none(), "Close");
+        let (id, ctx) = (dialog_id(KEY), ctx(&app));
+        host(&app).with(|h| h.confirm_by_id(&ctx, id));
+        assert!(host(&app).with(|h| h.get_by_id::<PresetManager>(id).is_none()), "Close");
     }
 
     #[test]
@@ -202,17 +210,17 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("vc-flattener-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("mine.vcflattener").to_string_lossy().to_string();
-        let services = crate::Services {
-            write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
-            ..Default::default()
-        };
+        let services =
+            crate::Services { write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))), ..Default::default() };
         let mut app = VectorcraftApp::new(Session::new(), services);
         app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
-        open(&mut app, Some("Mine"));
-        // PLAN: assumed files-w7's `tests::picks::scripted(app) -> Picker` and `Picker::answer_saved(app, path)`.
+        // The scripted file service gives the app its window too.
         let picker = crate::tests::picks::scripted(&mut app);
+        open(&mut app, Some("Mine"));
         press(&mut app, ManagerAction::Export);
-        picker.answer_saved(&mut app, &file);
+        // The answered save panel writes the file in the next frame.
+        picker.answer_saved(&file, None);
+        frame(&mut app);
         // Opening the file imports it (also how the web's picked file arrives).
         let bytes = std::fs::read(&file).unwrap();
         crate::io::open_bytes(&mut app, &file, &bytes, Some(file.clone())).unwrap();

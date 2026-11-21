@@ -9,7 +9,7 @@
 use craft::behavior::Mixed;
 use craft::ui::buttons::Button as _;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Outcome as _, Show as _, clicked};
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::display::Text;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
@@ -148,6 +148,7 @@ mod tests {
     #[test]
     fn the_trees_set_the_options() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         open(&mut app);
         // A branch's box sets the flags under it; a mixed branch shows a dash.
         let mut apply = field_of(&app, KIND, "apply");

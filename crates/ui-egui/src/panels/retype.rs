@@ -45,7 +45,8 @@ pub enum Size {
 }
 
 /// Each size with the name `retype.preview` takes for it and its thumbnail size.
-const SIZES: [(Size, &str, ThumbSize); 3] = [(Size::Small, "small", ThumbSize::Small), (Size::Medium, "medium", ThumbSize::Medium), (Size::Large, "large", ThumbSize::Large)];
+const SIZES: [(Size, &str, ThumbSize); 3] =
+    [(Size::Small, "small", ThumbSize::Small), (Size::Medium, "medium", ThumbSize::Medium), (Size::Large, "large", ThumbSize::Large)];
 
 /// One font in the list.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,12 +110,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let indexed: Vec<(usize, &Found)> = view.fonts.iter().enumerate().collect();
         let source = keyed(&indexed, |(at, _)| *at);
         // A click activates a row, so the same row chosen again sets its font again.
-        let list = List::<usize>::new(tl!("Matching fonts")).select(SelectMode::Single).activate(ActivateOn::Click).show_items(ui, &source, &mut |key, _| {
-            let (family, style) = indexed.get(*key).map_or(("", ""), |(_, f)| (f.family.as_str(), f.style.as_str()));
-            ListRow::new(format!("{family} {style}")).thumb_aspect(size, ThumbAspect::new(8, 1), move |cx: &ContentPainterCx, rect: Rect| {
-                crate::font_menu::paint_family_sample(cx, rect, family, style, sample, on_white);
-            })
-        });
+        let list = List::<usize>::new(tl!("Matching fonts")).select(SelectMode::Single).activate(ActivateOn::Click).show_items(
+            ui,
+            &source,
+            &mut |key, _| {
+                let (family, style) = indexed.get(*key).map_or(("", ""), |(_, f)| (f.family.as_str(), f.style.as_str()));
+                ListRow::new(format!("{family} {style}")).thumb_aspect(size, ThumbAspect::new(8, 1), move |cx: &ContentPainterCx, rect: Rect| {
+                    crate::font_menu::paint_family_sample(cx, rect, family, style, sample, on_white);
+                })
+            },
+        );
         let chosen = list.events.iter().find_map(|e| match e {
             CollectionEvent::Activate(at) => view.fonts.get(*at),
             _ => None,

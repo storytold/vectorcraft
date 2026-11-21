@@ -3,12 +3,12 @@
 use craft::behavior::{Codec, NotAValue, NumberCodec, Reader};
 use craft::ui::contract::Entry;
 use craft::ui::patterns::blend_keys::{BlendKeyEntry, BlendShortcut, blend_entries as framework_blend_entries};
-use craft::ui::runtime::env::{Label, LengthUnits, Units};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind, Units};
 use craft::ui::text::NumberStepper;
 use vectorcraft_color::BlendMode;
 
 /// Every blend mode with its Shift+Alt letter, in the order of the menu.
-fn blend_table() -> Vec<(BlendMode, BlendKeyEntry<BlendMode>)> {
+fn blend_table() -> Vec<(BlendMode, BlendShortcut)> {
     use BlendShortcut as S;
     BlendMode::ALL
         .into_iter()
@@ -31,7 +31,7 @@ fn blend_table() -> Vec<(BlendMode, BlendKeyEntry<BlendMode>)> {
                 BlendMode::Color => S::Color,
                 BlendMode::Luminosity => S::Luminosity,
             };
-            (mode, BlendKeyEntry::new(mode, shortcut))
+            (mode, shortcut)
         })
         .collect()
 }
@@ -39,19 +39,18 @@ fn blend_table() -> Vec<(BlendMode, BlendKeyEntry<BlendMode>)> {
 /// The blend-mode list: Normal | darken | lighten | contrast | inversion | component modes, the
 /// groups separated where the framework's blend list separates them.
 pub fn blend_entries() -> Vec<Entry<BlendMode>> {
-    let entries: Vec<_> = blend_table().into_iter().map(|(_, entry)| entry).collect();
-    framework_blend_entries(&entries, |entry| Label::word(entry.key.label()))
+    let entries: Vec<_> = blend_table().into_iter().map(|(mode, shortcut)| BlendKeyEntry::new(mode, shortcut)).collect();
+    framework_blend_entries(&entries, |entry| mode_label(entry.key))
 }
 
 /// The blend modes keyed by [`blend_key`], for a form parameter (`Param::blend`).
 pub fn blend_modes() -> Vec<(BlendKeyEntry<String>, Label)> {
-    blend_table()
-        .into_iter()
-        .map(|(mode, entry)| {
-            let key = BlendKeyEntry { key: blend_key(mode), shortcut: entry.shortcut };
-            (key, Label::word(mode.label()))
-        })
-        .collect()
+    blend_table().into_iter().map(|(mode, shortcut)| (BlendKeyEntry::new(blend_key(mode), shortcut), mode_label(mode))).collect()
+}
+
+/// `mode`'s name in the interface language.
+fn mode_label(mode: BlendMode) -> Label {
+    Label::from(crate::i18n::t(mode.label()))
 }
 
 /// The parameter value naming `mode` (`"multiply"`).
@@ -64,11 +63,15 @@ pub fn blend_of(key: &str, value: &serde_json::Value) -> Option<BlendMode> {
     value.as_str().filter(|_| key == "mode").and_then(BlendMode::parse)
 }
 
-/// A reader for lengths shown in `lengths.shown`. With `bare_points` (Numbers Without Units Are
-/// Points) a bare number in a picas field counts as points.
-pub fn length_reader(units: &Units, lengths: LengthUnits, bare_points: bool) -> Reader {
-    let reader = units.length_reader(lengths);
-    if bare_points && lengths.shown == craft::ui::runtime::env::UnitKind::Picas { reader.bare(1.0 / 12.0) } else { reader }
+/// `lengths` with `bare_points` (Numbers Without Units Are Points) applied: a bare number in a picas
+/// field counts as points.
+pub fn bare_points(lengths: LengthUnits, on: bool) -> LengthUnits {
+    if on && lengths.shown == UnitKind::Picas { lengths.bare_in(UnitKind::Points) } else { lengths }
+}
+
+/// A reader for lengths shown in `lengths.shown`, with [`bare_points`].
+pub fn length_reader(units: &Units, lengths: LengthUnits, on: bool) -> Reader {
+    units.length_reader(bare_points(lengths, on))
 }
 
 /// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any
@@ -238,8 +241,7 @@ mod tests {
     }
 
     fn kerning(automatic: bool) -> KerningCodec {
-        let units = Units::default();
-        KerningCodec::new(NumberCodec::new(units.reader(None), 0), automatic)
+        KerningCodec::new(NumberCodec::new(Reader::new(), 0), automatic)
     }
 
     /// Kerning drops one pair of parentheses around its whole text, with a manual value or an

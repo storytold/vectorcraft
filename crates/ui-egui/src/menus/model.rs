@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
 use super::{TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
+use crate::i18n::LangExt as _;
 use crate::{UiState, VectorcraftApp};
 
 /// The application's name in the application menu and in the layout's own rows.

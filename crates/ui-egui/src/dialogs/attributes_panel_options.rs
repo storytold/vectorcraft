@@ -7,9 +7,9 @@ use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::RECENT_URLS;
 
+use crate::VectorcraftApp;
 use crate::dialogs::host::open_held;
 use crate::panels::attributes::{DEFAULT_RECENT_URLS, side_name};
-use crate::VectorcraftApp;
 
 /// The dialog's key: the command's dialog name and the one its fields are set under.
 pub const KEY: &str = "attributesPanelOptions";

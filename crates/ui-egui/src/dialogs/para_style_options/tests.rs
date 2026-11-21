@@ -35,7 +35,7 @@ fn fields(app: &VectorcraftApp) -> Value {
 
 /// Sets a value as the user editing that control would.
 fn set(app: &VectorcraftApp, key: &str, value: Value) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     with_dialog(app, |host, id| host.set_json_field(&ctx, id, key, value)).unwrap_or_else(|why| panic!("{key}: {why}"));
 }
 
@@ -51,7 +51,7 @@ fn with_fields(app: &VectorcraftApp, f: impl FnOnce(&mut DialogFields)) {
 
 /// One pass of the per-frame dialog pump: previews run, results are applied.
 fn pump(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     crate::dialogs::host::pump(app, &ctx);
 }
 
@@ -62,7 +62,7 @@ fn ok(app: &mut VectorcraftApp) -> bool {
         if !is_open(app) {
             break;
         }
-        let ctx = app.ui_ctx.clone();
+        let ctx = app.ui_ctx.clone().expect("a window");
         with_dialog(app, |host, id| host.confirm_by_id(&ctx, id));
         pump(app);
     }
@@ -70,14 +70,14 @@ fn ok(app: &mut VectorcraftApp) -> bool {
 }
 
 fn cancel(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     with_dialog(app, |host, id| host.cancel_by_id(&ctx, id));
     pump(app);
 }
 
 /// Presses Reset Panel on the shown tab.
 fn reset_shown(app: &VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert!(with_dialog(app, |host, id| host.reset_by_id(&ctx, id)), "the shown tab has a Reset Panel");
 }
 
@@ -378,7 +378,7 @@ fn tabs_section_edits_the_style_stops() {
     assert_eq!(a["left_indent"], json!(3.0), "other attributes stay");
 
     open(&mut app, "Body");
-    with_fields(&app, add_tab);
+    with_fields(&app, |fields| add_tab(fields, Unit::Points));
     assert_eq!((tab_rows(&app).len(), fields(&app)["__tabSel"].clone()), (3, json!(2)));
     set(&app, "__tabSel", json!(0));
     with_fields(&app, delete_tab);
@@ -396,7 +396,7 @@ fn tabs_section_edits_the_style_stops() {
     open(&mut app, "Body");
     set(&app, "tab", json!("tabs"));
     reset_shown(&app);
-    with_fields(&app, add_tab);
+    with_fields(&app, |fields| add_tab(fields, Unit::Points));
     assert!(ok(&mut app));
     let a = def(&app, "Body");
     assert_eq!(a["tabs"], json!([{"position": 36.0, "align": "left", "alignOn": "."}]));
@@ -413,7 +413,10 @@ fn a_repeated_tab_position_keeps_the_stop_edited_last() {
     open(&mut app, "Body");
     set(&app, "tabs", rows.clone());
     assert!(ok(&mut app));
-    assert_eq!(def(&app, "Body")["tabs"], json!([{"position": 10.0, "align": "left", "alignOn": "."}, {"position": 36.0, "align": "right", "alignOn": "."}]));
+    assert_eq!(
+        def(&app, "Body")["tabs"],
+        json!([{"position": 10.0, "align": "left", "alignOn": "."}, {"position": 36.0, "align": "right", "alignOn": "."}])
+    );
     app.run("paraStyle.new", json!({"name": "Edited", "attrs": {}})).unwrap();
     open(&mut app, "Edited");
     set(&app, "tabs", rows);
@@ -432,7 +435,7 @@ fn add_leaves_a_stop_at_the_largest_position_alone() {
     let stored = def(&app, "Body");
     open(&mut app, "Body");
     let before = tab_rows(&app);
-    with_fields(&app, add_tab);
+    with_fields(&app, |fields| add_tab(fields, Unit::Points));
     assert_eq!(tab_rows(&app), before, "no stop is added");
     assert!(new_tab_position(&before, Unit::Points).is_none(), "Add is disabled");
     assert!(ok(&mut app));
@@ -478,7 +481,7 @@ fn invalid_tab_stops_keep_the_dialog_open() {
     let held = json!([{"position": 200000.0, "align": "left", "leader": "123456789", "alignOn": "."}]);
     doc.para_styles.iter_mut().find(|d| d.name == "Body").unwrap().attrs.insert("tabs".into(), held.clone());
     open(&mut app, "Body");
-    with_fields(&app, add_tab);
+    with_fields(&app, |fields| add_tab(fields, Unit::Points));
     assert!(ok(&mut app));
     assert_eq!(def(&app, "Body")["tabs"][1], held[0]);
 }

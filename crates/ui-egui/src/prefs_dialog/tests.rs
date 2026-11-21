@@ -1,11 +1,11 @@
 use super::*;
 use crate::Services;
-// PLAN: assumed paths `craft::ui::patterns::preferences::{PageSpec, PreferencesModel}` and `craft::ui::dialog::PromptChoice`
 use craft::ui::dialog::PromptChoice;
 use craft::ui::patterns::preferences::{PageSpec, PreferencesModel};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::prefscmds::PREF_SPECS;
 
+use crate::i18n::LangExt as _;
 use crate::theme::Brightness;
 
 fn app() -> VectorcraftApp {
@@ -35,11 +35,8 @@ fn reset_preferences(a: &mut VectorcraftApp, choice: PromptChoice) {
 
 /// Runs `f` over the pages the open window builds from its draft.
 fn with_pages<R>(a: &mut VectorcraftApp, f: impl FnOnce(&[PageSpec<'_>]) -> R) -> R {
-    // PLAN: assumed `model::Live { app: &mut VectorcraftApp, w: PrefsWindow }` and `app.prefs: Option<PrefsWindow>`
-    let w = a.prefs.take().expect("Preferences is open");
-    let live = model::Live { app: &mut *a, w };
-    let r = f(&live.pages());
-    let w = live.w;
+    let mut w = a.prefs.take().expect("Preferences is open");
+    let r = f(&model::Live { app: &mut *a, w: &mut w }.pages());
     a.prefs = Some(w);
     r
 }
@@ -137,7 +134,7 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     }
     let ctx = egui::Context::default();
     for _ in 0..2 {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.logic(ui.ctx()));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
         let (theme, _, accent) = crate::theme::root_theme(&app.session.prefs);
         let (default_theme, _, default_accent) = crate::theme::root_theme(&Prefs::default());
@@ -523,12 +520,12 @@ fn prefs_import_of_touch_workspace_switches_the_workspace() {
     let mut a = app();
     a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
     a.touch_screen = true;
-    a.ui.workspace = "Typography".into();
+    crate::workspaces::switch(&mut a, "Typography").unwrap();
     let file = |on: bool| json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"touchWorkspace": on}}).to_string();
     a.run("prefs.import", json!({ "data": file(true) })).unwrap();
-    assert_eq!(a.ui.workspace, crate::workspaces::TOUCH);
+    assert!(crate::workspaces::is_current(&a.ui, crate::workspaces::TOUCH));
     a.run("prefs.import", json!({ "data": file(false) })).unwrap();
-    assert_eq!(a.ui.workspace, "Typography");
+    assert!(crate::workspaces::is_current(&a.ui, "Typography"));
 }
 
 /// A folder that no folder can be created in, or that is not there, is refused on OK with the
@@ -589,7 +586,8 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
         let before = a.session.prefs.to_json();
         for path in [file.to_string_lossy().into_owned(), missing.clone()] {
             set_field(&mut a, key, json!(path)).unwrap();
-            set_field(&mut a, "showToolTips", json!(!a.session.prefs.show_tool_tips)).unwrap();
+            let tips = !a.session.prefs.show_tool_tips;
+            set_field(&mut a, "showToolTips", json!(tips)).unwrap();
             assert_eq!(confirm(&mut a), Err(format!("{path} is not a folder")), "{key}");
             assert!(is_open(&a), "{key}: the window stays open");
             assert_eq!(a.session.prefs.to_json(), before, "{key}: no preference changes");
@@ -610,7 +608,8 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
         a.run("prefs.set", json!({"key": key, "value": missing})).unwrap();
         std::fs::remove_dir(&missing).unwrap();
         open(&mut a, Some("File Handling"));
-        set_field(&mut a, "showToolTips", json!(!a.session.prefs.show_tool_tips)).unwrap();
+        let tips = !a.session.prefs.show_tool_tips;
+        set_field(&mut a, "showToolTips", json!(tips)).unwrap();
         confirm(&mut a).unwrap();
         assert_eq!(a.session.prefs.to_json()[key], json!(missing), "{key}");
     }

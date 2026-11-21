@@ -2,9 +2,9 @@
 //! the system clipboard, as any Copy replaces what it held, so the next Paste takes the guides and
 //! not what another app copied before. What another app copies after it still wins.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
+use craft::platform::clipboard::{EventClipboard, Flavor};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
@@ -93,23 +93,26 @@ fn a_guides_only_copy_drops_an_earlier_copys_formats_not_written_yet() {
     assert_eq!((guides(&app), count(&app)), (2, objects), "the guide, not the rectangle or the text");
 }
 
-/// The web (no clipboard service): a guides-only Copy puts empty text on the clipboard through
-/// egui, in place of the SVG an object Copy puts there, so another app's SVG copied before is not
-/// pasted instead of the guides.
+/// The web (a clipboard read only inside a paste event): a guides-only Copy puts empty text on the
+/// clipboard, in place of the SVG an object Copy puts there, so another app's SVG copied before is
+/// not pasted instead of the guides.
 #[test]
 fn on_the_web_a_guides_only_copy_empties_the_clipboard_text() {
-    let browser = Rc::new(RefCell::new(r#"<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/></svg>"#.to_string()));
-    let read = browser.clone();
-    let services = Services { clipboard_read: Some(Box::new(move || Some(read.borrow().clone()))), ..Default::default() };
-    let mut app = VectorcraftApp::new(Session::new(), services);
+    let sent = Arc::new(Mutex::new(Vec::<Flavor>::new()));
+    let out = sent.clone();
+    let clipboard = EventClipboard::new(
+        || 0,
+        move |flavors| {
+            out.lock().unwrap().extend_from_slice(flavors);
+            Ok(0)
+        },
+    );
+    let mut app = VectorcraftApp::new(Session::new(), Services { clipboard: Some(Box::new(clipboard)), ..Default::default() });
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));
     copy_guide(&mut app, 120.0);
-    let out = frame(&mut app, vec![]);
-    let copied: Vec<&String> =
-        out.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::CopyText(t) = c { Some(t) } else { None }).collect();
-    assert_eq!(copied, [""], "empty text replaces the browser's clipboard");
-    // The browser now holds that empty text.
-    browser.borrow_mut().clear();
+    frame(&mut app, vec![]);
+    let texts: Vec<Vec<u8>> = sent.lock().unwrap().iter().filter(|f| f.mime == TEXT).map(|f| f.data.clone()).collect();
+    assert_eq!(texts, [Vec::<u8>::new()], "empty text replaces the browser's clipboard");
     run(&mut app, "edit.paste", json!({}));
     assert_eq!((guides(&app), count(&app)), (2, 0), "the guide, not the other app's SVG");
 }

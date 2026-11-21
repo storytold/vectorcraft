@@ -275,7 +275,8 @@ fn isolatable(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, n: &vectorc
 /// that no longer separate anything.
 fn prune(app: &VectorcraftApp, mut items: Vec<Node>) -> Vec<Node> {
     retain_runnable(app, &mut items);
-    tidy(items)
+    tidy(&mut items);
+    items
 }
 
 /// Drops the items of `items` (and of its submenus, at every depth) whose command can't run now.

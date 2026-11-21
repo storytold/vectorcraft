@@ -31,12 +31,6 @@ fn fields_all(app: &mut VectorcraftApp, ui: &mut Ui) {
     transform::object_fields(app, ui, TransformGroups::ALL);
 }
 
-/// The Artboard tool's fields.
-fn artboard(app: &mut VectorcraftApp, ui: &mut Ui) {
-    // PLAN: assumed `artboard_fields(app, ui)`.
-    transform::artboard_fields(app, ui);
-}
-
 /// The paths of the document, bottom to top: their size and angle (rounded), and whether each is
 /// selected.
 fn paths(app: &VectorcraftApp) -> Vec<((f64, f64), f64, bool)> {
@@ -72,12 +66,12 @@ fn enter_modifiers_set_copy_and_proportional() {
         }
         let undo = app.session.doc().unwrap().history.undo.len();
         let mut p = Panel::new(app, fields_all);
-        p.type_into_with(field, text, mods); // PLAN: assumed op.A15 `type_into_with` (Writer note 3)
+        p.type_into_with(field, text, mods);
         let app = p.app();
-        let all = paths(app);
+        let all = paths(&app);
         assert_eq!(all.len(), 1 + usize::from(copy), "{case}: copy");
         if let Some(s) = want_size {
-            assert_eq!(size(app), s, "{case}: size");
+            assert_eq!(size(&app), s, "{case}: size");
         }
         assert_eq!(all.last().map(|a| a.1), Some(angle), "{case}: angle");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{case}: one undo step");
@@ -90,7 +84,8 @@ fn enter_modifiers_set_copy_and_proportional() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         run(&mut app, "file.new", json!({"width": 200, "height": 150}));
         app.run("tool.select", json!({"tool": "artboard"})).unwrap();
-        let mut p = Panel::new(app, artboard);
+        // With the Artboard tool the panel shows the artboard's fields.
+        let mut p = Panel::new(app, transform::show);
         p.type_into_with("Width", "400", mods);
         let r = p.app().session.active().unwrap().doc.artboards[0].rect;
         (r.width().round(), r.height().round())

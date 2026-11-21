@@ -106,7 +106,7 @@ impl GuideDrag {
         };
         let app = &mut self.app;
         let mut out = self.ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();

@@ -2,7 +2,7 @@ use super::{Ui, VectorcraftApp, json, zoom_label};
 use crate::doc_windows::{self, GRAB, Win};
 use craft::ui::bars::{Bar, BarKind, BreadcrumbBar};
 use craft::ui::buttons::{Button, IconButton};
-use craft::ui::contract::Entry;
+use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::layout_components::Row;
 use craft::ui::tabs::{DocumentTab, DocumentTabs, DocumentTabsEvent};
 
@@ -223,7 +223,8 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                 });
             }
             if pattern_edit.is_some() {
-                for (label, cmd) in [("Save a Copy", "object.pattern.saveCopy"), ("Done", "object.pattern.done"), ("Cancel", "object.pattern.cancel")] {
+                for (label, cmd) in [("Save a Copy", "object.pattern.saveCopy"), ("Done", "object.pattern.done"), ("Cancel", "object.pattern.cancel")]
+                {
                     if Button::new(tl!(label)).show(ui).clicked() {
                         pattern_cmd = Some(cmd);
                     }

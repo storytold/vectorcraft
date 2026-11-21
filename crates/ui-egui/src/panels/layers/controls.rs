@@ -291,7 +291,7 @@ fn object_menu(tree: &DocLayers, id: NodeId, ids: &[u64]) -> Vec<MenuRow<String>
         entry(&lock, lock_params, lock_label, lock_ok && others_ok),
         entry(&hide, hide_params, hide_label, hide_ok && others_ok),
         separator(),
-        locate_entry(tree, id.0),
+        locate_entry(tree, Some(id.0)),
         separator(),
         MenuRow::Submenu(
             tl!("Collect for Export").to_string().into(),

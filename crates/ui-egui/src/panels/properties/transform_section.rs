@@ -6,7 +6,7 @@ use craft::behavior::{IconId, Mixed};
 use craft::draw::ui::TransformGroups;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -16,7 +16,6 @@ use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeKind};
-use vectorcraft_geom::shapes::CornerKind;
 
 use crate::VectorcraftApp;
 use crate::panels::{self, first_selected, transform};
@@ -97,18 +96,12 @@ pub(super) fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = n.clone();
     // The corners differ in kind: no entry is the value.
     let kind = panels::corner_style(app, &n).1.map_or(Mixed::Mixed, Mixed::Same);
-    let entries = corner_entries();
+    let entries = panels::corner_entries();
     let picked = Field::new(tl!("Corner:")).show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied()).inner;
     if let Some(Some(kind)) = picked {
         app.run("object.setLiveShape", json!({"kind": kind})).ok();
     }
     Field::new(tl!("Corner Radius:")).show(ui, |ui, _| panels::corner_radius_field(app, ui, &n));
-}
-
-// PLAN: `panels::corner_entries()` (hub-w2's request) is not in the tree; this is the one copy until it lands, then it is deleted.
-/// One entry per corner kind, labelled as the Corners dialog labels them.
-fn corner_entries() -> Vec<Entry<CornerKind>> {
-    CornerKind::ALL.iter().map(|k| Entry::new(*k, crate::dialogs::corners::kind_label(*k))).collect()
 }
 
 /// Ruler guides selected on their own: a Transform section with the X of the vertical ones and

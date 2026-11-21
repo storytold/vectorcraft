@@ -41,8 +41,8 @@ use craft::ui::layout_components::Row;
 use craft::ui::list::{ListRow, ThumbSize};
 use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::presets::{
-    NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetExport, PresetFileEvent, PresetFileFailure, PresetFileRequest, PresetFiles,
-    PresetPicker, PresetRow, PresetState, PresetWords,
+    NameCheck, NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetExport, PresetFileEvent, PresetFileFailure, PresetFileRequest,
+    PresetFiles, PresetPicker, PresetRow, PresetSource, PresetState, PresetWords,
 };
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::{Env, Label};
@@ -59,9 +59,9 @@ use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CustomCharSet};
 use vectorcraft_engine::cmd::compositefonts::{EXTS, file_bytes};
 use vectorcraft_text::FontDb;
 
+use crate::VectorcraftApp;
 use crate::file_asks::{Owner, ask, open_params};
 use crate::font_menu::{PickerHold, family_picker, family_sets};
-use crate::VectorcraftApp;
 
 mod sample;
 
@@ -342,8 +342,8 @@ impl CompositeFontsDialog {
                     self.select(i);
                 }
             }
-            NamedPresetEvent::Create { name } => self.new_font(name),
-            NamedPresetEvent::Rename { key, text } => self.rename_font(&key, text),
+            NamedPresetEvent::Create { name, .. } => self.new_font(name),
+            NamedPresetEvent::Rename { key, text, .. } => self.rename_font(&key, text),
             NamedPresetEvent::Delete(key) => {
                 if let Some(i) = at(self, &key) {
                     self.selected = i;
@@ -365,8 +365,8 @@ impl CompositeFontsDialog {
                 }
                 Ok(())
             }
-            NamedPresetEvent::Create { name } => self.edit_sets(SetAction::New(name)),
-            NamedPresetEvent::Rename { key, text } => {
+            NamedPresetEvent::Create { name, .. } => self.edit_sets(SetAction::New(name)),
+            NamedPresetEvent::Rename { key, text, .. } => {
                 if let (Some(i), Some(f)) = (at(self, &key), self.fonts.get_mut(self.selected))
                     && let Some(s) = f.custom.get_mut(i)
                 {
@@ -519,11 +519,13 @@ impl CompositeFontsDialog {
             let rows: Vec<PresetRow<String>> = fonts.iter().map(|f| PresetRow::item(f.name.clone(), f.name.clone(), 0)).collect();
             let current = self.fonts.get(self.selected).map(|f| f.name.clone());
             let entries = files(fonts);
+            let source = PresetSource::listed(&rows);
+            let refuses = |typed: &str| name_error(fonts.iter().map(|f| f.name.as_str()), typed);
             let picker =
-                PresetPicker::new(tl!("Composite Font"), Bind::given(current), &rows, Bind::bound(&mut self.pickers.0)).field(PickerField::Name);
+                PresetPicker::new(tl!("Composite Font"), Bind::given(current), &source, Bind::bound(&mut self.pickers.0)).field(PickerField::Name);
             NamedPresetRow::new(tl!("Composite Font"), picker)
                 .suggest_name(new_name(fonts))
-                .check_name(|typed| name_error(fonts.iter().map(|f| f.name.as_str()), typed))
+                .check_name(NameCheck::of_host(&refuses))
                 .files(&entries)
                 .show(ui)
                 .events
@@ -625,11 +627,13 @@ impl CompositeFontsDialog {
             let sets = self.fonts.get(self.selected).map(|f| f.custom.as_slice()).unwrap_or_default();
             let rows: Vec<PresetRow<String>> = sets.iter().map(|s| PresetRow::item(s.name.clone(), s.name.clone(), 0)).collect();
             let current = sets.get(self.set_index()).map(|s| s.name.clone());
+            let source = PresetSource::listed(&rows);
+            let refuses = |typed: &str| name_error(sets.iter().map(|s| s.name.as_str()), typed);
             let picker =
-                PresetPicker::new(tl!("Character Set"), Bind::given(current), &rows, Bind::bound(&mut self.pickers.1)).field(PickerField::Name);
+                PresetPicker::new(tl!("Character Set"), Bind::given(current), &source, Bind::bound(&mut self.pickers.1)).field(PickerField::Name);
             NamedPresetRow::new(tl!("Character Set"), picker)
                 .suggest_name(new_set_name(sets))
-                .check_name(|typed| name_error(sets.iter().map(|s| s.name.as_str()), typed))
+                .check_name(NameCheck::of_host(&refuses))
                 .show(ui)
                 .events
         };

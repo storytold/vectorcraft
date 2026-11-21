@@ -204,7 +204,7 @@ mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
     use craft::automation::actions::{Action, ActionStep};
-    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
     use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
     use egui::Modifiers;
     use vectorcraft_engine::doc::{NodeId, NodeKind};
@@ -357,19 +357,37 @@ mod tests {
         assert_eq!(shape_mode_states(&mut p), [OFF; 4], "nothing selected");
     }
 
+    /// An app with a window, so its dialogs open, and a 200 pt document.
+    fn windowed() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app
+    }
+
+    fn host(app: &VectorcraftApp) -> craft::ui::shell::WindowDialogs {
+        app.dialogs().expect("a window")
+    }
+
     /// The id of the dialog on top of the host's stack.
     fn open_dialog(app: &mut VectorcraftApp) -> egui::Id {
-        app.dialogs().stack().top().expect("an open dialog")
+        host(app).with(|h| h.stack().top()).expect("an open dialog")
+    }
+
+    /// The values of the open parameter dialog `id`.
+    fn dialog_fields(app: &VectorcraftApp, id: egui::Id) -> DialogFields {
+        host(app).with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())).expect("an open parameter dialog")
     }
 
     /// Sets `fields` of the open dialog `id`, presses its OK and lets the app apply the answer.
     fn confirm_dialog(app: &mut VectorcraftApp, id: egui::Id, fields: &[(&str, Value)]) {
-        let ctx = egui::Context::default();
-        for (key, value) in fields {
-            app.dialogs().set_json_field(&ctx, id, key, value.clone()).unwrap();
-        }
-        assert!(app.dialogs().confirm_by_id(&ctx, id), "OK is enabled");
-        // PLAN: assumed `pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context)` (hub-w2's dialogs::host).
+        let ctx = app.ui_ctx.clone().expect("a window");
+        host(app).with(|h| {
+            for (key, value) in fields {
+                h.set_json_field(&ctx, id, key, value.clone()).unwrap();
+            }
+            assert!(h.confirm_by_id(&ctx, id), "OK is enabled");
+        });
         crate::dialogs::host::pump(app, &ctx);
     }
 
@@ -377,8 +395,7 @@ mod tests {
     /// trap above them as one selected group in one undo step.
     #[test]
     fn trap_opens_its_options_and_ok_traps_the_selection() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut app = windowed();
         let mut rect = |x: f64, color: &str| {
             let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
             app.run("paint.setFill", json!({"color": color})).unwrap();
@@ -391,9 +408,9 @@ mod tests {
         assert!(crate::menus::enabled(&app, "ui.pathfinder.trap"));
         app.run("ui.pathfinder.trap", json!({})).unwrap();
         let id = open_dialog(&mut app);
-        let dialog = app.dialogs().get_by_id::<HostedParamDialog>(id).expect("the Trap options");
+        let fields = dialog_fields(&app, id);
         for key in ["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"] {
-            assert!(dialog.fields().contains(key), "{key}");
+            assert!(fields.contains(key), "{key}");
         }
         let undo = app.session.doc().unwrap().history.undo.len();
         confirm_dialog(&mut app, id, &[("thickness", json!(2))]);
@@ -410,8 +427,7 @@ mod tests {
     /// them, and the next Divide leaves out the pieces of the object with no fill.
     #[test]
     fn pathfinder_options_open_and_ok_sets_what_the_next_divide_uses() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut app = windowed();
         let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 100})).unwrap()["id"].clone();
         app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
         let b = app.run("shape.rectangle", json!({"x": 60, "y": 30, "width": 100, "height": 50})).unwrap()["id"].clone();
@@ -420,12 +436,12 @@ mod tests {
         assert!(crate::menus::enabled(&app, "object.pathfinder.options"));
         crate::menus::invoke(&mut app, "object.pathfinder.options", json!({}));
         let id = open_dialog(&mut app);
-        let fields = app.dialogs().get_by_id::<HostedParamDialog>(id).expect("the Pathfinder Options").fields();
+        let fields = dialog_fields(&app, id);
         assert_eq!(fields.number("precision"), Some(0.01));
         assert_eq!(fields.bool("removeRedundantPoints"), Some(false));
         assert_eq!(fields.bool("removeUnpainted"), Some(false));
         confirm_dialog(&mut app, id, &[("removeUnpainted", json!(true)), ("precision", json!(0.1))]);
-        assert!(app.dialogs().stack().is_empty());
+        assert!(host(&app).with(|h| h.stack().is_empty()));
         let o = app.session.prefs.pathfinder;
         assert!(o.remove_unpainted && !o.remove_redundant_points && o.precision == 0.1, "{o:?}");
         let id = app.run("object.pathfinder.divide", json!({})).unwrap()["ids"][0].as_u64().unwrap();

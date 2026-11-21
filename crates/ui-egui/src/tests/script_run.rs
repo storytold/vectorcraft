@@ -9,7 +9,9 @@ use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
 
 use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
-use crate::dialogs::script_run::{self, BY_PERSON, CLOSE_KIND, FilesAnswer, GROWTH_KIND, GrowthQuestion, KIND, PICKER_KIND, RunQuestion, ScriptFiles};
+use crate::dialogs::script_run::{
+    self, BY_PERSON, CLOSE_KIND, FilesAnswer, GROWTH_KIND, GrowthQuestion, KIND, PICKER_KIND, RunQuestion, ScriptFiles,
+};
 use crate::tests::picks::{Picker, scripted};
 use crate::{VectorcraftApp, menus, script_runs};
 
@@ -145,7 +147,8 @@ fn a_canceled_pick_does_not_take_a_dropped_script() {
     let r = menus::run_ui_command(&mut app, "ui.runScript", &json!({})).unwrap().unwrap();
     assert_eq!(r["pending"], "fileDialog");
     picker.cancel();
-    crate::tests::picks::poll(&mut app, &app.ui_ctx.clone().unwrap());
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
     // The next file that opens is an ordinary open.
     let _ = crate::io::open_bytes(&mut app, "dropped.js", DRAW.as_bytes(), None);
     assert!(!is_open::<RunQuestion>(&app));
@@ -162,7 +165,8 @@ fn a_picked_script_goes_to_the_warning() {
     let picker = scripted(&mut app);
     menus::run_ui_command(&mut app, "ui.runScript", &json!({})).unwrap().unwrap();
     picker.answer(&[&path.to_string_lossy()]);
-    crate::tests::picks::poll(&mut app, &app.ui_ctx.clone().unwrap());
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
     assert!(is_open::<RunQuestion>(&app));
     assert!(confirm(&mut app, KIND));
     finish(&mut app);
@@ -287,7 +291,7 @@ fn a_run_waiting_at_its_file_dialog_lets_the_app_idle() {
         app.now_override = Some(time);
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
         let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| app.logic(ui.ctx()));
+        let mut out = ctx.run_ui(raw, |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
         wait = out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay);
     }
@@ -423,7 +427,8 @@ fn enter_in_a_scripts_file_dialog_denies() {
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "vc.log(Folder.selectDialog('Pick'));" })).unwrap().unwrap();
     script_runs::poll(&mut app);
     let dir = folder("enterdeny");
-    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().map(|d| d.add(vec![dir.to_string_lossy().into_owned()], false, false))).unwrap();
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().map(|d| d.add(vec![dir.to_string_lossy().into_owned()], false, false)))
+        .unwrap();
     frame(&app, vec![]);
     frame(&app, vec![]);
     frame(&app, vec![key(egui::Key::Enter)]);
@@ -450,7 +455,8 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     script_runs::poll(&mut app);
     let refs: Vec<&str> = given.iter().map(String::as_str).collect();
     choose(&mut app, &picker, &refs);
-    let (paths, left_out) = script_run::with_host(&app, |host, _| host.get::<ScriptFiles>().map(|d| (d.paths().to_vec(), d.left_out()))).unwrap().unwrap();
+    let (paths, left_out) =
+        script_run::with_host(&app, |host, _| host.get::<ScriptFiles>().map(|d| (d.paths().to_vec(), d.left_out()))).unwrap().unwrap();
     assert_eq!(paths, given[..2048]);
     assert!(left_out);
     cancel(&mut app, PICKER_KIND);

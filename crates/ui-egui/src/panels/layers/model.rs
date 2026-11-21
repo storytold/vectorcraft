@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash as _, Hasher as _};
 
 use craft::keymap::Mods;
-use craft::layers::ui::filter::{LayerFilter, SmartSource};
 pub(super) use craft::layers::ui::filter::{FilterObject, FilterState};
+use craft::layers::ui::filter::{LayerFilter, SmartSource};
 use craft::layers::ui::panel::MenuTarget;
 use craft::layers::ui::tree::{
     LayerInfo, LayerKind, LayerPart, LayerProperties, LayerRowKey, LayerSelection, LayerTree, LayerView, SubRowGroup, SubRows,
@@ -75,9 +75,9 @@ pub(super) fn names<T: FilterName>(all: &[T], on: &[T]) -> Vec<&'static str> {
 pub(super) fn parse_names<T: FilterName>(p: &Value, key: &str, all: &[T]) -> Result<Option<Vec<T>>, String> {
     let given = match p.get(key) {
         None | Some(Value::Null) => return Ok(None),
-        Some(v) => v
-            .as_array()
-            .and_then(|a| a.iter().map(|name| all.iter().find(|t| Some(t.param()) == name.as_str()).copied()).collect::<Option<Vec<T>>>()),
+        Some(v) => {
+            v.as_array().and_then(|a| a.iter().map(|name| all.iter().find(|t| Some(t.param()) == name.as_str()).copied()).collect::<Option<Vec<T>>>())
+        }
     };
     let Some(given) = given else {
         let names: Vec<&str> = all.iter().map(|t| t.param()).collect();
@@ -243,7 +243,9 @@ impl<'a> DocLayers<'a> {
     pub(super) fn lands_in(&self, group: NodeId, moving: &[NodeId], objects: bool) -> bool {
         let Some(g) = self.doc.node(group) else { return false };
         let around = self.doc.ancestry(group).unwrap_or_default();
-        !moving.iter().any(|m| around.contains(m)) && self.root.is_none_or(|r| around.contains(&r)) && super::rows::takes(g, objects, moving, self.doc)
+        !moving.iter().any(|m| around.contains(m))
+            && self.root.is_none_or(|r| around.contains(&r))
+            && super::rows::takes(g, objects, moving, self.doc)
     }
 
     /// The ruler guide rows of `n`, under a layer before its art, the highest `guide.list` index first.
@@ -276,11 +278,8 @@ impl<'a> DocLayers<'a> {
     }
 
     fn node_info(&self, n: &Node) -> LayerInfo {
-        let name = if self.doc.mask_edit.is_some_and(|m| m.layer == n.id) {
-            tl!("<Opacity Mask>").to_string()
-        } else {
-            shown_name(self.app, n, self.lang)
-        };
+        let name =
+            if self.doc.mask_edit.is_some_and(|m| m.layer == n.id) { tl!("<Opacity Mask>").to_string() } else { shown_name(self.app, n, self.lang) };
         let mut info = LayerInfo::new(name, kind_of(n));
         info.visible = n.visible;
         info.dimmed = !self.shown(n.id) || n.is_template();
@@ -405,7 +404,9 @@ impl LayerTree for DocLayers<'_> {
                 _ => filter.lists(self, id),
             },
             RowId::Guide(_) => {
-                filter.name.trim().is_empty() && filter.states.is_empty() && (filter.objects.is_empty() || filter.objects.contains(&FilterObject::Guides))
+                filter.name.trim().is_empty()
+                    && filter.states.is_empty()
+                    && (filter.objects.is_empty() || filter.objects.contains(&FilterObject::Guides))
             }
             RowId::Spine(_) => false,
         }
@@ -470,7 +471,8 @@ impl LayerTree for DocLayers<'_> {
     /// The rows change with the document, its open rows, isolation mode and the Panel Options.
     fn revision(&self) -> Option<u64> {
         let mut hasher = DefaultHasher::new();
-        (self.st.uid, self.st.revision, self.st.layers_open.generation(), self.st.isolation, self.opts.layers_only, self.opts.row_size).hash(&mut hasher);
+        (self.st.uid, self.st.revision, self.st.layers_open.generation(), self.st.isolation, self.opts.layers_only, self.opts.row_size)
+            .hash(&mut hasher);
         Some(hasher.finish())
     }
 }

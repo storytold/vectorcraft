@@ -645,11 +645,12 @@ pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
         Taken::Answered(answer) => answer,
     };
     let command = answer["command"].as_str().unwrap_or_default().to_string();
-    let seen: Vec<Value> = answer["asked"].as_array().cloned().unwrap_or_default();
+    let seen = answer["asked"].clone();
     let changed = |app: &mut VectorcraftApp, command: &str, params: &Value| match question {
-        // PLAN: assumed `swatch_conflict::changed(app, params, asked: &[Value]) -> bool` (color-w12)
         Question::SwatchConflict => crate::dialogs::swatch_conflict::changed(app, params, &seen),
-        Question::ProfileMismatch => crate::dialogs::profile_mismatch::paste_changed(app, command, params, &seen),
+        Question::ProfileMismatch => {
+            crate::dialogs::profile_mismatch::paste_changed(app, command, params, seen.as_array().map_or(&[], Vec::as_slice))
+        }
     };
     let key = match question {
         Question::SwatchConflict => "swatchConflict",

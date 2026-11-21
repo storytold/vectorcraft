@@ -16,7 +16,7 @@ use craft::behavior::{EditEvent, IconId, Selection, SelectionChange};
 use craft::pages::ui::list::{PageList, PageListEvent, PageListRow};
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Outcome as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Divider;
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -548,14 +548,14 @@ pub(crate) fn apply(app: &mut VectorcraftApp, events: Vec<PageListEvent>) {
                 use_artboard_tool(app);
                 toggle(app, row, n);
             }
-            PageListEvent::Rename { row, text } => {
+            PageListEvent::Rename { row, text, .. } => {
                 let text = text.trim();
                 if !text.is_empty() {
                     rename(app, &renamed_with(app, row), text).ok();
                 }
             }
             PageListEvent::Reorder(edit) => reorder(app, &edit),
-            PageListEvent::Lock { row, locked } => {
+            PageListEvent::Lock { row, locked, .. } => {
                 app.run("artboard.setProps", json!({"index": row, "locked": locked})).ok();
             }
             PageListEvent::New { duplicate: Some(row), .. } => duplicate(app, row),

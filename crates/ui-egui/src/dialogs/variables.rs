@@ -195,7 +195,8 @@ fn empty_marker(key: &str) -> String {
 /// A dropdown row over the document's names (shown as they are, never translated). The empty
 /// option is first so a fresh dialog can still be filled in.
 fn names_row(key: &str, label: &'static str, names: Vec<&str>) -> Param {
-    let options = std::iter::once((String::new(), Label::from(""))).chain(names.into_iter().map(|n| (n.to_string(), Label::from(n.to_string())))).collect();
+    let options =
+        std::iter::once((String::new(), Label::from(""))).chain(names.into_iter().map(|n| (n.to_string(), Label::from(n.to_string())))).collect();
     Param::new(key, Label::from(label), ParamKind::choice(options, None))
 }
 
@@ -306,7 +307,7 @@ fn params_of(command: &str, result: &ParamResult, vars: &Variables) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use craft::ui::dialog::StackDialog;
+    use craft::ui::dialog::{DialogId, StackDialog};
     use serde_json::json;
     use vectorcraft_engine::Session;
 
@@ -326,33 +327,31 @@ mod tests {
         app.ui_ctx.clone().unwrap()
     }
 
+    /// The id of the open dialog.
+    fn open_id(app: &VectorcraftApp) -> DialogId {
+        app.dialogs().unwrap().with(|h| h.open_dialogs().into_iter().find(|d| d.key.as_deref() == Some(KEY)).map(|d| d.id)).unwrap()
+    }
+
     /// Sets `key` on the open dialog the way `ui.dialog.set` does.
     fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
-        let ctx = ctx(app);
-        // PLAN: assumed `WindowDialogs::get_mut::<D>(&self) -> Option<impl DerefMut<Target = D>>`
-        let dialogs = app.dialogs().unwrap();
-        let mut d = dialogs.get_mut::<HostedParamDialog>().unwrap();
-        d.set_json_field(&ctx, key, value).unwrap();
+        let (ctx, id) = (ctx(app), open_id(app));
+        app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, key, value)).unwrap();
     }
 
     /// The open dialog's fields.
     fn fields(app: &VectorcraftApp) -> Value {
-        let dialogs = app.dialogs().unwrap();
-        let d = dialogs.get_mut::<HostedParamDialog>().unwrap();
-        d.json_fields().unwrap()
+        let id = open_id(app);
+        app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).and_then(|d| d.json_fields())).unwrap()
     }
 
     fn is_open(app: &VectorcraftApp) -> bool {
-        app.dialogs().unwrap().open_dialogs().iter().any(|d| d.key.as_deref() == Some(KEY))
+        app.dialogs().unwrap().with(|h| h.open_dialogs().iter().any(|d| d.key.as_deref() == Some(KEY)))
     }
 
     /// Presses OK on the open dialog and runs the host pass that answers it.
     fn ok(app: &mut VectorcraftApp) {
-        let ctx = ctx(app);
-        // PLAN: assumed `WindowDialogs::confirm_by_id(DialogId)` and `dialogs::host::pump(&mut VectorcraftApp, &egui::Context)`
-        let dialogs = app.dialogs().unwrap();
-        let id = dialogs.open_dialogs().iter().find(|d| d.key.as_deref() == Some(KEY)).map(|d| d.id).unwrap();
-        dialogs.confirm_by_id(id);
+        let (ctx, id) = (ctx(app), open_id(app));
+        app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
         crate::dialogs::host::pump(app, &ctx);
     }
 

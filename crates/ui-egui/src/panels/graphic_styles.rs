@@ -17,25 +17,28 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
-use craft::ui::contract::{Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, ReorderMove, SelectMode};
+use craft::ui::contract::{
+    Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
+};
 use craft::ui::display::Divider;
-use craft::ui::menu::{MenuItem, PanelRow};
+use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
-    PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFooterEvent, PresetFooterOptions, PresetPicker, PresetReorder, PresetRow, PresetState,
-    PresetView, ThumbPainter,
+    PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetPicker, PresetReorder, PresetRow, PresetSource, PresetState, PresetView,
+    ThumbPainter,
 };
 use craft::ui::primitives::{
     ContentPainterCx, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
 };
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft::ui::sections::FooterAction;
+use craft::ui::sections::{FooterAction, FooterBar, FooterOutput, Panel};
 use egui::{Color32, Rect, Sense, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_doc::text::{CharStyle, TextObject};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeKind, PatternDef, StrokeLayer, StyleLibrary,
+    Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    StyleLibrary,
 };
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
@@ -375,9 +378,13 @@ fn large_tip(thumbs: &StyleThumbs, ui: &mut Ui, key: &StyleKey) {
 
 // ---------- the panel ----------
 
-/// The panel's rows: one preset per style, in document order.
-fn style_rows(d: &Document) -> Vec<PresetRow<StyleKey>> {
-    d.graphic_styles.iter().map(|g| PresetRow::item(g.name.clone(), g.name.clone(), 0)).collect()
+/// The panel's presets: one per style, in document order. The Default Graphic Style is neither renamed nor deleted.
+fn style_source(d: &Document) -> PresetSource<'static, StyleKey> {
+    let names: Vec<StyleKey> = d.graphic_styles.iter().map(|g| g.name.clone()).collect();
+    let fns = PresetFns::new(|names: &Vec<StyleKey>, _| names.iter().map(|n| PresetRow::item(n.clone(), n.clone(), 0)).collect())
+        .can_delete(|names, key| key != DEFAULT_GRAPHIC_STYLE && names.contains(key))
+        .can_rename(|_, key| key != DEFAULT_GRAPHIC_STYLE);
+    PresetSource::new(names, fns)
 }
 
 /// The styles selected in the panel (those still in the document), in panel order.
@@ -403,12 +410,21 @@ fn doomed(names: &[String]) -> Vec<String> {
     names.iter().filter(|n| *n != DEFAULT_GRAPHIC_STYLE).cloned().collect()
 }
 
+/// The footer's actions, by their index in the order [`show`] gives them: the first [`AT_START`] sit at the start
+/// edge (Library, Break Link), then Delete at the end edge with New before it.
+const AT_LIBRARY: usize = 0;
+const AT_BREAK_LINK: usize = 1;
+const AT_DELETE: usize = 2;
+const AT_NEW: usize = 3;
+const AT_START: usize = 2;
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The document is shared (an `Arc`): holding it while drawing copies nothing.
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else {
         super::empty_state(ui, "dc-graphic-styles", tl!("No document"), tl!("Open a document to see its graphic styles."));
         return;
     };
+    let sel = selected(app);
     // The panel's state is out of the app while the browser writes it and the thumbnails read the app.
     let mut panel = std::mem::take(&mut app.ui.graphic_styles_panel);
     let looks = look_hashes(&mut panel, app);
@@ -418,19 +434,29 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let before = panel.selection.clone();
     let (alt, linked) = (alt_held(ui), app.session.selection_graphic_style().is_some());
-    let rows = style_rows(&doc);
+    let source = style_source(&doc);
     let thumbs = StyleThumbs { app, d: &doc, looks: &looks, preview: panel.preview };
-    let sel_count = before.items.len();
-    let events = {
+    let browser_id = ui.make_persistent_id("graphic-styles-browser");
+    let list = PresetBrowser::<StyleKey>::list_id(browser_id);
+    // A style dragged from this panel's list.
+    let ours = move |drag: &ListDrag<StyleKey>| drag.list == list;
+    let svg = |name: &'static str| IconSpec::svg(IconId::new(name));
+    let actions = [
+        FooterAction::new(svg("library"), tl!(GraphicStyleLibraries::MENU))
+            .popup(PopupKind::Menu)
+            .pressed(library_panel::any_open::<GraphicStyleLibraries>(&app.ui)),
+        FooterAction::new(svg("link-2-off"), tl!("Break Link to Graphic Style")).enabled(linked),
+        FooterAction::new(svg("trash-2"), tl!("Delete Graphic Style")).enabled(!sel.is_empty()).takes_drops_disabled(true).accepts_drops(ours),
+        // A style dropped here is duplicated with or without art selected.
+        FooterAction::new(svg("dc-new-item"), tl!("New Graphic Style"))
+            .enabled(selection_len(app) > 0)
+            .takes_drops_disabled(true)
+            .accepts_drops(ours),
+    ];
+    let footer: RefCell<Option<FooterOutput>> = RefCell::new(None);
+    let mut shown = {
         let store = thumbnails(ui.ctx(), "vc-style-thumbs");
-        let (state, selection, store) = (&mut panel.state, &mut panel.selection, &store);
-        let footer = PresetFooterOptions::new()
-            .new_group(false)
-            .can_delete(sel_count > 0)
-            .slider(view == View::Thumbnail)
-            .action(FooterAction::new(IconSpec::svg(IconId::new("link_2_off")), tl!("Break Link to Graphic Style")).enabled(linked));
-        let in_doc = |key: &StyleKey| doc.graphic_style(key).is_some();
-        // PLAN: assumed `Entry::new(value, label)` with `.enabled(bool)`, and `PresetBrowser::row_items`.
+        let store = &store;
         let items = |key: &StyleKey| {
             let (is_default, multi) = (key == DEFAULT_GRAPHIC_STYLE, targets(app, key).len() > 1);
             vec![
@@ -440,26 +466,41 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Entry::new("breakLink".to_string(), tl!("Break Link to Graphic Style").to_string()).enabled(linked_to(app, key)),
             ]
         };
-        let browser = PresetBrowser::new(tl!("Graphic Styles").to_string(), Bind::bound(state), &rows)
-            .select(SelectMode::Multi)
-            .selection(Bind::bound(selection))
-            .view_lock(view.preset_view())
-            .reorder(PresetReorder::items_only())
-            .footer(footer)
-            .empty(tl!("Select styled art and click New Graphic Style.").to_string())
-            .can_delete(|key: &StyleKey| key != DEFAULT_GRAPHIC_STYLE && in_doc(key))
-            .can_rename(|key: &StyleKey| key != DEFAULT_GRAPHIC_STYLE)
-            .row_items(items)
-            .thumb(ThumbPainter::new(|cx, rect, info| paint_thumb(cx, rect, store, &thumbs, info.key)))
-            .tip(|ui, key| large_tip(&thumbs, ui, key))
-            .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Between, |_, _| true))
-            .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, |_, _| true))
-            .takes_drop(PresetDrop::new::<ListDrag<StyleKey>>(DropPlace::Onto, |drag, at| at.over().is_some_and(|name| !drag.keys.contains(name))));
-        browser.show(ui).events
+        Panel::new(tl!("Graphic Styles"))
+            .footer(|ui, _| *footer.borrow_mut() = Some(FooterBar::actions(actions.clone()).at_start(AT_START).show_footer(ui)))
+            .show(ui, |ui, _| {
+                PresetBrowser::new(tl!("Graphic Styles"), Bind::bound(&mut panel.state), &source)
+                    .browser_id(browser_id)
+                    .select(SelectMode::Multi)
+                    .selection(Bind::bound(&mut panel.selection))
+                    .view_lock(view.preset_view())
+                    .reorder(PresetReorder::items())
+                    .empty(tl!("Select styled art and click New Graphic Style."))
+                    .row_items(items)
+                    .thumb(ThumbPainter::new(|cx, rect, info| paint_thumb(cx, rect, store, &thumbs, info.key)))
+                    .tip(|ui, key| large_tip(&thumbs, ui, key))
+                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Between, |drag, _| dropped_object(drag).is_some()))
+                    .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, |drag, _| dropped_object(drag).is_some()))
+                    .takes_drop(PresetDrop::new::<ListDrag<StyleKey>>(
+                        DropPlace::Onto,
+                        |drag, at| matches!(at, DropAt::Onto(name) if !drag.keys.contains(name)),
+                    ))
+                    .show(ui)
+            })
     };
+    let events = shown.settle(|_, browser| std::mem::take(&mut browser.events)).unwrap_or_default();
     app.ui.graphic_styles_panel = panel;
+    let footer = footer.into_inner();
+    if let Some(opener) = footer.as_ref().and_then(|out| out.responses.get(AT_LIBRARY)) {
+        Menu::new(tl!(GraphicStyleLibraries::MENU))
+            .opened_by(opener, Trigger::Press)
+            .show(ui, |ui, _| library_panel::library_menu::<GraphicStyleLibraries>(app, ui));
+    }
     for event in events {
         on_event(app, event, alt);
+    }
+    if let Some(out) = footer {
+        on_footer(app, &out);
     }
     // The Symbol Styler and the Symbol Sprayer's User Defined Style take the style last selected; Shift and
     // Cmd/Ctrl selections apply nothing, so they are followed here and not through `Select`.
@@ -492,17 +533,16 @@ fn batch(app: &mut VectorcraftApp, label: &str, commands: Vec<Value>) -> Result<
 fn on_event(app: &mut VectorcraftApp, event: PresetEvent<StyleKey>, alt: bool) {
     match event {
         // A plain click also applies the style (with nothing selected the next object drawn takes it).
-        PresetEvent::Select { key, mods } => run_status(app, "graphicStyle.apply", json!({"name": key, "add": mods.alt})),
+        PresetEvent::Select { key, mods, .. } => run_status(app, "graphicStyle.apply", json!({"name": key, "add": mods.alt})),
         PresetEvent::Activate { key, .. } => run_status(app, "ui.graphicStyleOptions", json!({ "name": key })),
-        PresetEvent::Rename { key, text } => run_status(app, "graphicStyle.rename", json!({ "name": key, "to": text })),
+        PresetEvent::Rename { key, text, .. } => run_status(app, "graphicStyle.rename", json!({ "name": key, "to": text })),
         PresetEvent::Delete(key) => {
             let names = doomed(&targets(app, &key));
             delete(app, &names, alt);
         }
         PresetEvent::Reorder(edit) => reorder(app, edit),
         PresetEvent::Dropped { at, payload, mods, .. } => dropped(app, &at, &payload, mods.alt),
-        PresetEvent::Menu { target, command } => context_command(app, &target, &command),
-        PresetEvent::Footer(footer) => on_footer(app, footer, alt),
+        PresetEvent::Menu { target, command, .. } => context_command(app, &target, &command),
         _ => {}
     }
 }
@@ -519,26 +559,41 @@ fn reorder(app: &mut VectorcraftApp, edit: EditEvent<ReorderMove<StyleKey>>) {
     }
 }
 
-/// A host payload dropped on the panel. Art (its first object) or an appearance becomes a new style,
-/// or with Alt held over a style replaces that style with its look, unless the object is linked to it with
-/// its look. A style dropped on another with Alt held replaces that style with its look.
-fn dropped(app: &mut VectorcraftApp, at: &DropAt<StyleKey>, payload: &DropPayload, alt: bool) {
-    // PLAN: assumed `DropPayload::get::<T>() -> Option<&T>` and `DropAt::over() -> Option<&K>`.
-    let object = payload.get::<PanelDrag>().and_then(|p| match p {
-        PanelDrag::Art(ids) => ids.first().copied(),
+/// The object whose look a dropped payload carries: the first of the art dragged off the canvas, or the Appearance
+/// panel's object.
+fn dropped_object(drag: &PanelDrag) -> Option<NodeId> {
+    match drag {
+        PanelDrag::Art { ids, .. } => ids.first().copied(),
         PanelDrag::Appearance(id) => Some(*id),
         _ => None,
-    });
-    match (at.over(), alt, object) {
+    }
+}
+
+/// A host payload dropped on the panel, onto a style or between styles.
+fn dropped(app: &mut VectorcraftApp, at: &DropAt<StyleKey>, payload: &DropPayload, alt: bool) {
+    let onto = match at {
+        DropAt::Onto(name) => Some(name.as_str()),
+        _ => None,
+    };
+    let object = payload.get::<PanelDrag>().and_then(dropped_object);
+    let style = payload.get::<ListDrag<StyleKey>>().map(|drag| drag.grabbed.as_str());
+    drop_on(app, onto, object, style, alt);
+}
+
+/// A drop `onto` a style or between styles of the look of `object` or of the dragged `style`. The object's look
+/// becomes a new style, or with Alt held onto a style replaces that style, unless the object is linked to it with its
+/// look. A style dropped onto another with Alt held replaces that style with its look.
+fn drop_on(app: &mut VectorcraftApp, onto: Option<&str>, object: Option<NodeId>, style: Option<&str>, alt: bool) {
+    match (onto, alt, object) {
         (Some(name), true, Some(id)) => {
-            if !app.session.graphic_style_of(id).is_some_and(|(g, linked)| linked && g.name == *name) {
+            if !app.session.graphic_style_of(id).is_some_and(|(g, linked)| linked && g.name == name) {
                 run_status(app, "graphicStyle.redefine", json!({ "name": name, "id": id.0 }));
             }
         }
         (_, _, Some(id)) => run_status(app, "graphicStyle.new", json!({ "id": id.0 })),
         (Some(name), true, None) => {
-            if let Some(drag) = payload.get::<ListDrag<StyleKey>>().filter(|d| d.grabbed != *name) {
-                run_status(app, "graphicStyle.redefine", json!({ "name": name, "from": drag.grabbed }));
+            if let Some(from) = style.filter(|from| *from != name) {
+                run_status(app, "graphicStyle.redefine", json!({ "name": name, "from": from }));
             }
         }
         _ => {}
@@ -556,32 +611,42 @@ fn context_command(app: &mut VectorcraftApp, target: &str, command: &str) {
     }
 }
 
-/// A button of the footer.
-fn on_footer(app: &mut VectorcraftApp, event: PresetFooterEvent<StyleKey>, alt: bool) {
-    match event {
-        PresetFooterEvent::New => new_style(app, alt),
-        PresetFooterEvent::Delete => {
-            let names = doomed(&selected(app));
+/// What the footer reported: a button pressed, or a style of the list dropped on New or Delete.
+fn on_footer(app: &mut VectorcraftApp, out: &FooterOutput) {
+    match &out.dropped {
+        Some(dropped) => {
+            if let Some(drag) = dropped.payload::<ListDrag<StyleKey>>() {
+                footer_drop(app, dropped.index, &drag.grabbed, out.mods.alt);
+            }
+        }
+        None => match out.picked {
+            Some(AT_BREAK_LINK) => run_status(app, "graphicStyle.breakLink", json!({})),
+            Some(AT_NEW) => new_style(app, out.mods.alt),
+            Some(AT_DELETE) => {
+                let names = doomed(&selected(app));
+                if !names.is_empty() {
+                    delete(app, &names, out.mods.alt);
+                }
+            }
+            _ => {}
+        },
+    }
+}
+
+/// The style `grabbed`, dragged from the list, dropped on the footer action `index`: on New it is duplicated at the
+/// end, on Delete deleted as the button deletes (at once with `alt`); a highlighted style carries the others.
+fn footer_drop(app: &mut VectorcraftApp, index: usize, grabbed: &str, alt: bool) {
+    let Some(st) = app.session.active() else { return };
+    let names = carried(&st.doc, &selected(app), grabbed);
+    match index {
+        AT_NEW => duplicate(app, &names),
+        AT_DELETE => {
+            let names = doomed(&names);
             if !names.is_empty() {
                 delete(app, &names, alt);
             }
         }
-        PresetFooterEvent::Custom { index: 0 } => run_status(app, "graphicStyle.breakLink", json!({})),
-        // PLAN: assumed `PresetFooterEvent::{DropNew, DropDelete} { keys }`: styles dropped on the footer's New and Delete (ap.AP7).
-        PresetFooterEvent::DropNew { keys } => duplicate(app, &carried_by(app, &keys)),
-        PresetFooterEvent::DropDelete { keys } => {
-            let names = doomed(&carried_by(app, &keys));
-            delete(app, &names, alt);
-        }
         _ => {}
-    }
-}
-
-/// The styles a drag of `keys` carries: [`carried`] over the panel's selection.
-fn carried_by(app: &VectorcraftApp, keys: &[StyleKey]) -> Vec<String> {
-    match (app.session.active(), keys.first()) {
-        (Some(st), Some(first)) => carried(&st.doc, &selected(app), first),
-        _ => Vec::new(),
     }
 }
 
@@ -592,13 +657,13 @@ pub(crate) fn style_picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut panel = std::mem::take(&mut app.ui.graphic_styles_panel);
     let looks = look_hashes(&mut panel, app);
     let mut linked: Option<StyleKey> = app.session.selection_graphic_style().filter(|(_, linked)| *linked).map(|(g, _)| g.name.clone());
-    let rows = style_rows(&doc);
+    let source = style_source(&doc);
     let thumbs = StyleThumbs { app, d: &doc, looks: &looks, preview: panel.preview };
     let out = {
         let store = thumbnails(ui.ctx(), "vc-style-thumbs");
         let (state, store) = (&mut panel.picker_state, &store);
         // PLAN: assumed `PresetPicker::thumb(ThumbPainter)` as the browser's.
-        PresetPicker::new(tl!("Graphic Styles").to_string(), Bind::bound(&mut linked), &rows, Bind::bound(state))
+        PresetPicker::new(tl!("Graphic Styles").to_string(), Bind::bound(&mut linked), &source, Bind::bound(state))
             .field(PickerField::Thumbnail)
             .thumb(ThumbPainter::new(|cx, rect, info| paint_thumb(cx, rect, store, &thumbs, info.key)))
             .show(ui)
@@ -986,14 +1051,6 @@ mod tests {
         open_dialogs(app).into_iter().find(|d| d.key.as_deref() == Some(key)).map(|d| d.id)
     }
 
-    /// A `Dropped` event of `payload` over `over` with Alt as `alt`.
-    // PLAN: assumed `DropAt::onto(key)`, `DropAt::end()`, `DropPayload::new(value)` and `DropOperation::Move`.
-    fn dropped<P: Send + Sync + 'static>(over: Option<&str>, payload: P, alt: bool) -> PresetEvent<StyleKey> {
-        let at = over.map_or_else(DropAt::end, |n| DropAt::onto(n.to_string()));
-        let mods = Mods { alt, ..Mods::NONE };
-        PresetEvent::Dropped { at, op: craft::behavior::DropOperation::Move, payload: DropPayload::new(payload), mods }
-    }
-
     #[test]
     fn a_delete_event_asks_then_deletes_every_selected_style() {
         let mut app = app();
@@ -1173,12 +1230,12 @@ mod tests {
         let mut app = app();
         let n = names(&app);
         select(&mut app, vec![n[3].clone(), n[0].clone()]);
-        on_event(&mut app, PresetEvent::Footer(PresetFooterEvent::DropNew { keys: vec![n[3].clone()] }), false);
+        footer_drop(&mut app, AT_NEW, &n[3], false);
         assert_eq!(names(&app)[n.len()..], [format!("{} copy", n[0]), format!("{} copy", n[3])]);
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(names(&app), n, "one undo step");
         // A style that is not highlighted is copied alone.
-        on_event(&mut app, PresetEvent::Footer(PresetFooterEvent::DropNew { keys: vec![n[2].clone()] }), false);
+        footer_drop(&mut app, AT_NEW, &n[2], false);
         assert_eq!(names(&app)[n.len()..], [format!("{} copy", n[2])]);
     }
 
@@ -1188,13 +1245,13 @@ mod tests {
         let mut app = app();
         app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
         let n = names(&app);
-        on_event(&mut app, PresetEvent::Footer(PresetFooterEvent::DropDelete { keys: vec!["Mine".into()] }), false);
+        footer_drop(&mut app, AT_DELETE, "Mine", false);
         assert_eq!(names(&app), n);
         assert_eq!(asked_delete(&app), Some(vec!["Mine".to_string()]));
         answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
         assert!(!names(&app).iter().any(|s| s == "Mine"));
         app.run("edit.undo", json!({})).unwrap();
-        on_event(&mut app, PresetEvent::Footer(PresetFooterEvent::DropDelete { keys: vec!["Mine".into()] }), true);
+        footer_drop(&mut app, AT_DELETE, "Mine", true);
         assert!(!names(&app).iter().any(|s| s == "Mine") && confirm::open_question(&app).is_none());
     }
 
@@ -1210,8 +1267,9 @@ mod tests {
         app.run("paint.setFill", json!({"color": "#00ff00", "ids": [oval.0]})).unwrap();
         let (red, green) = (doc(&app).graphic_style("Red").unwrap().appearance.fill_paint(), doc(&app).node(oval).unwrap().appearance.fill_paint());
         let n = names(&app);
-        for payload in [PanelDrag::Art(vec![oval]), PanelDrag::Appearance(oval)] {
-            on_event(&mut app, dropped(Some("Red"), payload, true), false);
+        let document = app.session.active().unwrap().uid;
+        for payload in [PanelDrag::Art { document, ids: vec![oval] }, PanelDrag::Appearance(oval)] {
+            drop_on(&mut app, Some("Red"), dropped_object(&payload), None, true);
             let d = doc(&app);
             assert_eq!(d.graphic_style("Red").unwrap().appearance.fill_paint(), green);
             assert_eq!(d.node(oval).unwrap().extras().graphic_style, d.graphic_style("Red").map(|g| g.id));
@@ -1219,12 +1277,12 @@ mod tests {
             assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance.fill_paint(), red);
         }
         // Without Alt it makes a new style.
-        on_event(&mut app, dropped(Some("Red"), PanelDrag::Art(vec![oval]), false), false);
+        drop_on(&mut app, Some("Red"), Some(oval), None, false);
         assert_eq!(names(&app).len(), n.len() + 1);
         app.run("edit.undo", json!({})).unwrap();
         // The rectangle is linked to Red with its look: nothing changes.
         let steps = app.session.doc().unwrap().history.undo.len();
-        on_event(&mut app, dropped(Some("Red"), PanelDrag::Art(vec![rect]), true), false);
+        drop_on(&mut app, Some("Red"), Some(rect), None, true);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), steps);
     }
 
@@ -1238,14 +1296,13 @@ mod tests {
         app.run("paint.setFill", json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
         app.run("graphicStyle.new", json!({"name": "Green", "id": rect.0})).unwrap();
         let green = doc(&app).graphic_style("Green").unwrap().clone();
-        let drag = |grabbed: &str| ListDrag::new(egui::Id::NULL, vec![grabbed.to_string()], grabbed.to_string());
-        on_event(&mut app, dropped(Some("Red"), drag("Green"), true), false);
+        drop_on(&mut app, Some("Red"), None, Some("Green"), true);
         let d = doc(&app);
         assert_eq!(d.graphic_style("Red").unwrap().appearance, green.appearance);
         assert_eq!(d.graphic_style("Green").unwrap(), &green, "Green stays as it was");
         app.run("edit.undo", json!({})).unwrap();
         let steps = app.session.doc().unwrap().history.undo.len();
-        on_event(&mut app, dropped(Some("Red"), drag("Red"), true), false);
+        drop_on(&mut app, Some("Red"), None, Some("Red"), true);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), steps);
     }
 
@@ -1270,9 +1327,9 @@ mod tests {
         app.run("graphicStyle.new", json!({"name": "Style A"})).unwrap();
         app.run("graphicStyle.new", json!({"name": "Style B"})).unwrap();
         select(&mut app, vec!["Style A".into(), "Style B".into()]);
-        on_event(&mut app, PresetEvent::Menu { target: "Style A".into(), command: "duplicate".into() }, false);
+        context_command(&mut app, "Style A", "duplicate");
         assert!(names(&app).contains(&"Style A copy".to_string()) && names(&app).contains(&"Style B copy".to_string()));
-        on_event(&mut app, PresetEvent::Menu { target: "Style A".into(), command: "options".into() }, false);
+        context_command(&mut app, "Style A", "options");
         assert!(open_dialog(&app, graphic_style_options::KIND).is_some());
     }
 
@@ -1284,7 +1341,7 @@ mod tests {
         let state = |app: &VectorcraftApp, id: &str| {
             let mut states = CommandStates::new();
             menu_states(app, &mut states);
-            states.get(&CommandRef::new(id)).map(|s| s.enabled)
+            states.get(&CommandRef::new(id)).map(CommandState::is_enabled)
         };
         assert_eq!(state(&app, "ui.graphicStyles.options"), Some(false), "Options disabled on Default Graphic Style");
         assert_eq!(state(&app, "ui.graphicStyles.delete"), Some(false), "Delete disabled on Default Graphic Style");

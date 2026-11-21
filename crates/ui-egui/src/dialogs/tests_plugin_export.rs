@@ -6,18 +6,13 @@
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{app, app_saving, confirm, frame, kind, names, set};
+use super::tests_export::{app, app_saving, fields, frame, kind, names, set, try_confirm};
 use super::*;
 use crate::VectorcraftApp;
 
 /// The id of the hosted dialog on top.
 pub(super) fn top(app: &VectorcraftApp) -> Option<egui::Id> {
     app.dialogs()?.with(|host| host.open_dialogs().last().map(|d| d.id))
-}
-
-/// The values of the hosted dialog on top, as automation lists them.
-pub(super) fn fields(app: &VectorcraftApp) -> Value {
-    app.dialogs().and_then(|d| d.with(|host| host.open_dialogs().last().and_then(|d| d.fields.clone()))).unwrap_or(Value::Null)
 }
 
 fn install(app: &mut VectorcraftApp, src: &str) {
@@ -41,12 +36,12 @@ fn export_as_lists_exporters_and_writes_their_file_whole() {
     assert!(e.contains("is an exporter (File › Export › Export As…)"), "{e}");
 
     app.run("file.exportAs", json!({"format": "plugin.test.ui.whole"})).unwrap();
-    assert_eq!(kind(&app), Some("exportAs"));
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     assert_eq!(fields(&app)["format"], "plugin.test.ui.whole");
     // Use Artboards is greyed out and doesn't apply: one file of the whole document.
     set(&mut app, "useArtboards", json!(true));
     frame(&mut app);
-    confirm(&mut app).unwrap();
+    try_confirm(&mut app).unwrap();
     assert!(kind(&app).is_none(), "an exporter without parameters writes at once");
     assert_eq!(names(&written), ["/out/Untitled-1.tuw"]);
     assert_eq!(written.borrow()[0].1, b"Hi");
@@ -63,13 +58,13 @@ fn an_exporter_with_parameters_asks_for_them_once_the_file_is_picked() {
     // Asked for by its extension, as agents may.
     app.run("file.exportAs", json!({"format": "tup"})).unwrap();
     assert_eq!(fields(&app)["format"], "plugin.test.ui.params");
-    confirm(&mut app).unwrap();
-    assert_eq!(kind(&app), Some(plugin::EXPORT_KIND));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(kind(&app).as_deref(), Some(plugin::EXPORT_KIND));
     assert_eq!(fields(&app)["density"], json!(4.0));
     assert!(written.borrow().is_empty(), "nothing written before Export");
     frame(&mut app);
     set(&mut app, "density", json!(7));
-    confirm(&mut app).unwrap();
+    try_confirm(&mut app).unwrap();
     assert!(kind(&app).is_none());
     assert_eq!(names(&written), ["/out/Untitled-1.tup"]);
     let sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
@@ -83,7 +78,7 @@ fn a_declining_exporter_writes_nothing() {
     let (mut app, written) = app(1);
     install(&mut app, &tpl::returning(&tpl::exporter("test.ui.declines", r#"["tud"]"#, "{}"), r#"{"error":"Nothing to plot."}"#));
     app.run("file.exportAs", json!({"format": "plugin.test.ui.declines"})).unwrap();
-    let r = confirm(&mut app);
+    let r = try_confirm(&mut app);
     assert!(written.borrow().is_empty());
     let said = r.err().unwrap_or_default() + &app.ui.status;
     assert!(said.contains("Nothing to plot."), "{said}");

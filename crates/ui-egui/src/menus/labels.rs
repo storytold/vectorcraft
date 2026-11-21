@@ -351,6 +351,8 @@ pub(crate) fn holds_plugin_commands(children: &[Node]) -> bool {
 /// of the Scripts folder, saved proof setups), the point sizes and the view angles are left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
+
+    use crate::i18n::LangExt as _;
     fn user_data(id: &str, params: &Value) -> bool {
         hidden_when_disabled(id)
             || id.starts_with("type.recentFont")

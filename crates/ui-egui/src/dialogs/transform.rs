@@ -199,7 +199,7 @@ fn opening(app: &VectorcraftApp, kind: Kind) -> Value {
     let prefs = &app.session.prefs;
     let mut fields = match kind {
         Kind::Move => {
-            let [dx, dy, distance, angle] = offset(last_move(app).unwrap_or_default());
+            let [dx, dy, distance, angle] = offset(last_move(app).map_or([0.0; 2], |(dx, dy)| [dx, dy]));
             json!({"dx": dx, "dy": dy, "distance": distance, "angle": angle, POLAR_DISTANCE: distance, POLAR_ANGLE: angle})
         }
         Kind::Rotate => json!({"angle": 0}),

@@ -6,10 +6,10 @@
 //! command's parameters). The live effect's dialog shows the same rows but Keep Original
 //! ([`screen_params`]).
 
-use craft::ui::runtime::env::{Label, UnitKind};
-use craft::ui::dialog::DialogId;
 use craft::ui::contract::Bind;
+use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::{Label, UnitKind};
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
 
@@ -36,7 +36,7 @@ pub fn fields() -> Value {
 
 /// A choice's options from `(id, label)` pairs, the labels translated.
 pub(super) fn options<I: AsRef<str>>(list: &[(I, &str)]) -> Vec<(String, Label)> {
-    list.iter().map(|(id, label)| (id.as_ref().to_string(), Label::from(tl!(label)))).collect()
+    list.iter().map(|(id, label)| (id.as_ref().to_string(), Label::from(tl!(label).to_owned()))).collect()
 }
 
 /// The rows Object › Vector Halftone and the live effect (Effect › Color Effects › Vector
@@ -69,8 +69,7 @@ pub(crate) fn screen_params(live: bool, fields: &DialogFields) -> Vec<Param> {
 
 /// Opens Object › Vector Halftone, previewing from its first frame.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    // PLAN: assumed VectorcraftApp::egui_ctx(&self) -> Option<egui::Context>
-    let ctx = app.egui_ctx().ok_or("no window")?;
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let defaults = fields();
     let rows = screen_params(false, &DialogFields::new());
     let initial = fields_of(&rows, defaults.as_object().unwrap_or(&Default::default()));
@@ -81,8 +80,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ok = |app: &mut VectorcraftApp, result: &ParamResult| {
         let params = Value::Object(json_of(&screen_params(false, &result.fields), &result.fields));
         let mut open = app.effect_dialogs.halftone.take().ok_or("the dialog is closed")?;
-        // PLAN: assumed LivePreview::commit(&mut self, ..) so an Err keeps the dialog and its preview
-        let done = open.preview.commit(app, CMD, params);
+        let done = std::mem::take(&mut open.preview).commit(app, CMD, params);
         if done.is_err() {
             app.effect_dialogs.halftone = Some(open);
         }
@@ -101,9 +99,13 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// Runs or ends the open dialog's preview for this frame.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.effect_dialogs.halftone.take() else { return };
-    let shown = app.dialogs().get_by_id::<HostedParamDialog>(open.id).map(|d| {
-        let params = json_of(&screen_params(false, d.fields()), d.fields());
-        (d.is_previewing(), Value::Object(params))
+    let shown = app.dialogs().and_then(|host| {
+        host.with(|h| {
+            h.get_by_id::<HostedParamDialog>(open.id).map(|d| {
+                let params = json_of(&screen_params(false, d.fields()), d.fields());
+                (d.is_previewing(), Value::Object(params))
+            })
+        })
     });
     if let Some((on, params)) = shown {
         // `run` reports a failed preview on the status line itself.
@@ -115,6 +117,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// Whether the open Object → Vector Halftone dialog is showing its temporary dot group.
 pub(crate) fn previewing(app: &VectorcraftApp) -> bool {
     let Some(open) = app.effect_dialogs.halftone.as_ref() else { return false };
-    app.dialogs().get_by_id::<HostedParamDialog>(open.id).is_some_and(|d| d.is_previewing())
+    app.dialogs().is_some_and(|host| host.with(|h| h.get_by_id::<HostedParamDialog>(open.id).is_some_and(HostedParamDialog::is_previewing)))
         && app.session.active().and_then(|st| st.interaction.as_ref()?.preview.as_ref()).is_some_and(|(cmd, _)| cmd == CMD)
 }

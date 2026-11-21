@@ -405,7 +405,7 @@ fn confirm(app: &mut VectorcraftApp, source: &Source, choices: &DxfChoices) -> R
 
 /// Renders the picture of the layout the open dialog wants, once per layout. A layout that can't be
 /// read gets an empty picture, so it isn't read again.
-pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(windows) = app.dialogs() else { return };
     let wanted = windows.with(|h| {
         let dialog = h.get::<DxfImportDialog>()?;
@@ -413,11 +413,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     });
     let Some((key, file, layout)) = wanted else { return };
     let o = vectorcraft_cad::ImportOptions { layout: Some(layout), fit: true, ..Default::default() };
-    // PLAN: assumed `render_preview(app, doc, key: Revision) -> Arc<ColorImage>` (files-w17, decided with `Revision` as the key).
-    let image = match vectorcraft_cad::import(&file.bytes, &o) {
-        Ok(imported) => render_preview(app, imported.document, key),
-        Err(_) => Arc::new(ColorImage::filled([1, 1], Color32::TRANSPARENT)),
-    };
+    let image = vectorcraft_cad::import(&file.bytes, &o)
+        .ok()
+        .and_then(|imported| render_preview(app, ctx, &imported.document))
+        .unwrap_or_else(|| Arc::new(ColorImage::filled([1, 1], Color32::TRANSPARENT)));
     windows.with(|h| {
         if let Some(dialog) = h.get_mut::<DxfImportDialog>() {
             dialog.set_preview(key, image);

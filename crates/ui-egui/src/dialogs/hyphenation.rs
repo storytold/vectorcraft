@@ -23,19 +23,13 @@ pub const KIND: &str = "hyphenation";
 /// The check boxes.
 const FLAGS: [&str; 2] = ["hyphenate", "hyphenateCapitalized"];
 /// The numbers: (field, range).
-const NUMBERS: [(&str, i64, i64); 5] = [
-    ("wordsLongerThan", 1, 25),
-    ("afterFirst", 1, 15),
-    ("beforeLast", 1, 15),
-    ("hyphenLimit", 0, 25),
-    ("hyphenationZone", 0, 0),
-];
+const NUMBERS: [(&str, i64, i64); 5] =
+    [("wordsLongerThan", 1, 25), ("afterFirst", 1, 15), ("beforeLast", 1, 15), ("hyphenLimit", 0, 25), ("hyphenationZone", 0, 0)];
 
 /// The rows of the dialog; the zone is shown in `lengths`.
 fn rows(lengths: LengthUnits) -> Vec<Param> {
-    let count = |(key, lo, hi): (&str, i64, i64), label, default, unit| {
-        Param::new(key, label, ParamKind::int(Some(lo), Some(hi), default)).unit(unit)
-    };
+    let count =
+        |(key, lo, hi): (&str, i64, i64), label, default, unit| Param::new(key, label, ParamKind::int(Some(lo), Some(hi), default)).unit(unit);
     vec![
         Param::new(FLAGS[0], tl!("Hyphenation"), ParamKind::bool(false)),
         count(NUMBERS[0], tl!("Words Longer Than:"), 5, UnitKind::Letters),

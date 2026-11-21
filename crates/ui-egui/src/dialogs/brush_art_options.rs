@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 use craft::theme::Srgba;
 use craft::ui::buttons::Button;
-use craft::ui::choice::{Segmented, Swatch};
+use craft::ui::choice::{CellMarks, Segmented, Swatch};
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::dialog::StackDialog;
 use craft::ui::display::{Picture, PictureSize, Text};
@@ -697,7 +697,7 @@ fn colorization_rows() -> Vec<Param> {
             .show(ui, |ui, _| {
                 for c in colors {
                     let [r, g, b] = c.to_rgb();
-                    let well = Swatch::new(c.to_hex(), Srgba::new(r, g, b, 1.0)).marked(c == key).show(ui);
+                    let well = Swatch::new(c.to_hex(), Srgba::new(r, g, b, 1.0)).marks(CellMarks::default().edge(c == key)).show(ui);
                     if well.clicked {
                         f.set("keyColor", FieldValue::Json(serde_json::to_value(c).unwrap_or_default()));
                     }

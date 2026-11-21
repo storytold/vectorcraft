@@ -116,7 +116,7 @@ fn step_by_step_and_pause_for_hold_at_a_stop() {
             frame(&mut app, now);
             now += 1.0;
         }
-        assert_eq!(open_kind(&app), Some(crate::dialogs::action_stop::MESSAGE_KIND), "{speed}");
+        assert_eq!(open_kind(&app).as_deref(), Some(crate::dialogs::action_stop::MESSAGE_KIND), "{speed}");
         for _ in 0..5 {
             assert_eq!(frame(&mut app, now + 1000.0), None, "{speed}");
             assert_eq!(x(&app), 1.0, "{speed}: no later step runs while the action waits");
@@ -234,7 +234,7 @@ fn a_stop_with_an_empty_message_still_waits() {
     play(&mut app, 0, 0).unwrap();
     assert!(waiting_at_stop(&app));
     assert_eq!(x(&app), 1.0);
-    assert_eq!(open_kind(&app), Some(crate::dialogs::action_stop::MESSAGE_KIND));
+    assert_eq!(open_kind(&app).as_deref(), Some(crate::dialogs::action_stop::MESSAGE_KIND));
 }
 
 #[test]

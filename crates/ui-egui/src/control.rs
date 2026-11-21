@@ -222,11 +222,10 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // Not saved with the UI state, so not in `ui`: 0 normal … 3 Presentation Mode.
         "screenMode": app.ui.screen_mode,
         // The Contextual Task Bar: pinned (not saved either); `ui.locate` finds where it shows.
-        "taskBar": {"pinned": app.ui.task_bar_place.pinned},
+        "taskBar": {"pinned": app.ui.task_bar_place.place.pinned},
         // The Quick Pen toolbar: pinned (not saved either); `ui.locate` finds where it shows.
-        "quickPenToolbar": {"pinned": app.ui.quick_pen_bar_place.pinned},
+        "quickPenToolbar": {"pinned": app.ui.quick_pen_bar_place.place.pinned},
         "view": app.view().map(|v| serde_json::to_value(v).unwrap_or_default()),
-        // PLAN: assumed `CanvasView::rect: egui::Rect` from `app.canvas_view()` (canvas A1)
         "canvasRect": app.canvas_view().map(|v| json!([v.rect.left(), v.rect.top(), v.rect.width(), v.rect.height()])),
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
@@ -1572,15 +1571,46 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
         "ui.dialog.set" | "ui.dialog.confirm" | "ui.dialog.cancel" => {
             // Create Object Mosaic and Width Point convert against the selection as it is now.
             crate::dialogs::host::sync(app);
+            let Some(dialogs) = app.dialogs() else { return err("no window") };
             // The dialog asked for is `dialog`, the top one when it is missing.
             let mut params = if p.is_object() { p.clone() } else { json!({}) };
             if params.get("dialog").is_none_or(Value::is_null) {
                 params["dialog"] = json!("top");
             }
-            // PLAN: assumed `dialog_method(method, &params, &WindowHost, ViewportId) -> Result<Value, String>`
-            // and `WindowHost::of(ctx)` in craft_automation (widgets-02)
-            let host = craft::ui::runtime::windows::WindowHost::of(ctx);
-            wrap(craft::automation::dialogs::dialog_method(&req.method, &params, &host, egui::ViewportId::ROOT))
+            // `ui.dialog.set {action}` answers the dialog after setting its fields: the app's own key, which the
+            // framework's method does not take.
+            let action = if req.method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };
+            let answer = match action.as_ref().map(Value::as_str) {
+                None => None,
+                Some(Some("confirm")) => Some("ui.dialog.confirm"),
+                Some(Some("cancel")) => Some("ui.dialog.cancel"),
+                Some(_) => return err("`action` must be confirm or cancel"),
+            };
+            let reply = dialogs.with(|host| {
+                // The answer goes to the dialog the fields went to, even when setting them opens another over it.
+                if answer.is_some()
+                    && params["dialog"] == "top"
+                    && let Some(top) = host.open_dialogs().last()
+                {
+                    params["dialog"] = json!(top.id.value().to_string());
+                }
+                let sets = params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog"));
+                let set = if answer.is_none() || sets {
+                    craft::automation::dialogs::dialog_method(host, ctx, &req.method, &params)
+                } else {
+                    Some(Ok(Value::Null))
+                };
+                match (set, answer) {
+                    (Some(Ok(_)), Some(answer)) => {
+                        craft::automation::dialogs::dialog_method(host, ctx, answer, &json!({ "dialog": params["dialog"] }))
+                    }
+                    (set, _) => set,
+                }
+            });
+            match reply {
+                Some(r) => wrap(r),
+                None => err(format!("unknown method `{}`", req.method)),
+            }
         }
         "ui.resize" => {
             let (w, h) = match coord(p, "width", 1440.0).and_then(|w| Ok((w, coord(p, "height", 900.0)?))) {
@@ -1905,9 +1935,9 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
         Err(e) => return err(e),
     };
     let view = app.view_info();
-    let xf = app.canvas_xf();
+    let canvas = app.canvas_view();
     let screen = |e: &Value| e.get("space").and_then(Value::as_str) == Some("screen");
-    if !rotating && xf.is_none() && events.iter().any(screen) {
+    if !rotating && canvas.is_none() && events.iter().any(screen) {
         return err("no canvas yet");
     }
     let from = app.session.input_count();
@@ -1926,16 +1956,16 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
             continue;
         }
         let pos = if screen {
-            match xf {
-                Some(xf) => xf.to_doc(egui::pos2(x as f32, y as f32)),
+            match canvas {
+                Some(canvas) => canvas.to_doc(egui::pos2(x as f32, y as f32)),
                 None => return err("no canvas yet"),
             }
         } else {
             vectorcraft_geom::Point::new(x, y)
         };
         // A tilt given in screen axes leans the same way on the page as on the screen.
-        let pen = PointerEvent::json_pen(e).map(|q| match xf {
-            Some(xf) if screen => crate::canvas::pose_on_page(q, &xf),
+        let pen = PointerEvent::json_pen(e).map(|q| match &canvas {
+            Some(canvas) if screen => crate::canvas::pose_on_page(q, canvas),
             _ => q,
         });
         crate::canvas::dispatch(app, &PointerEvent { kind, pos, mods, backquote, pressure: PointerEvent::json_pressure(e), pen }, view);

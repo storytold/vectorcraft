@@ -24,7 +24,7 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::form::{Field, SliderField, SliderFieldLayout};
 use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::FormDialog;
-use craft::ui::patterns::presets::{PresetPicker, PresetRow, PresetState};
+use craft::ui::patterns::presets::{PresetPicker, PresetRow, PresetSource, PresetState};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::runtime::overlay::CloseReason;
@@ -132,7 +132,13 @@ fn grid_fields(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 /// Opens the dialog on `def` as `mode`.
 fn open_on(app: &mut VectorcraftApp, def: GridDefinition, mode: GridMode) -> Result<Value, String> {
-    let dialog = GridDialog::new(def, mode, general_lengths(app).pixels_per_inch, app.session.perspective_presets(), app.session.new_perspective_preset_name());
+    let dialog = GridDialog::new(
+        def,
+        mode,
+        general_lengths(app).pixels_per_inch,
+        app.session.perspective_presets(),
+        app.session.new_perspective_preset_name(),
+    );
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -278,7 +284,9 @@ impl Pass<'_> {
         }
         let current = draft.matched(self.presets);
         Row::new().id_salt("preset").show(ui, |ui, _| {
-            let shown = PresetPicker::new(word("Preset:"), Bind::given(current.clone()), self.rows, Bind::bound(picker)).placeholder(CUSTOM).show(ui);
+            let shown = PresetPicker::new(word("Preset:"), Bind::given(current.clone()), &PresetSource::listed(self.rows), Bind::bound(picker))
+                .placeholder(CUSTOM)
+                .show(ui);
             if let Some(preset) = shown.picked.and_then(|name| self.presets.iter().find(|p| p.name == name)) {
                 draft.def = preset.clone();
             }
@@ -372,7 +380,9 @@ fn length(ui: &mut egui::Ui, name: &str, salt: &str, value: &mut f64, lengths: L
 /// The three planes' gridline colours, and the opacity.
 fn colors(ui: &mut egui::Ui, draft: &mut GridDraft) {
     let d = &mut draft.def;
-    for (name, salt, rgb) in [("Left Grid:", "left", &mut d.left_color), ("Right Grid:", "right", &mut d.right_color), ("Horizontal Grid:", "ground", &mut d.ground_color)] {
+    for (name, salt, rgb) in
+        [("Left Grid:", "left", &mut d.left_color), ("Right Grid:", "right", &mut d.right_color), ("Horizontal Grid:", "ground", &mut d.ground_color)]
+    {
         let label = word(name);
         let shown = Rgba::rgb(rgb.0[0], rgb.0[1], rgb.0[2]);
         row(ui, &label, salt, |ui| {
@@ -454,7 +464,13 @@ impl StackDialog for GridDialog {
         }
         let mut save = false;
         let title = self.title();
-        let pass = Pass { mode: &self.mode, presets: &self.presets, rows: &self.rows, ppi: self.ppi, refusal: self.held.refusal().map(|(reason, _)| reason) };
+        let pass = Pass {
+            mode: &self.mode,
+            presets: &self.presets,
+            rows: &self.rows,
+            ppi: self.ppi,
+            refusal: self.held.refusal().map(|(reason, _)| reason),
+        };
         let picker = &mut self.picker;
         let accepted = Cell::new(false);
         // OK files the answer and the dialog stays; it closes once the app accepted it.

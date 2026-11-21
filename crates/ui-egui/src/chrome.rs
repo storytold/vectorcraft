@@ -91,7 +91,7 @@ impl Trailing {
             Trailing::Discord => crate::community::discord_button(app, ui),
             Trailing::Learn => {
                 // PLAN: assumed `IconButton::command` is bound by a `&str` command id.
-                IconButton::command(IconId::new("graduation-cap"), "window.learn").selected(crate::panels::learn::visible(&app.ui)).show(ui);
+                IconButton::command(IconId::new("graduation-cap"), "window.learn").selected(crate::panels::learn::visible(app)).show(ui);
             }
             Trailing::Arrange => arrange_documents(app, ui),
             Trailing::Search => {
@@ -125,7 +125,11 @@ fn arrange_documents(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Node::Item(item) => {
                     let (id, params) = (item.command.id, item.command.params);
                     let Some((enabled, checked)) = menus::shown_state(state, &id, &params) else { continue };
-                    let row = MenuItem::new(crate::i18n::t_id(&id, &item.label)).enabled(enabled).check(checked).show(ui);
+                    let mut row = MenuItem::new(crate::i18n::t_id(&id, &item.label)).enabled(enabled);
+                    if let Some(checked) = checked {
+                        row = row.check(checked);
+                    }
+                    let row = row.show(ui);
                     if row.ran {
                         chosen = Some((id, if params.is_null() { json!({}) } else { params }));
                     }

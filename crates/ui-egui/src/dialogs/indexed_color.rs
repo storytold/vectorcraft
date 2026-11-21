@@ -10,7 +10,7 @@ use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 use vectorcraft_render::encode::quantize::{Dither, Reduction};
 
-use super::host::open_held;
+use super::host::{HeldOptions, open_held_with};
 use crate::VectorcraftApp;
 use crate::dialogs::preview::LivePreview;
 
@@ -18,6 +18,8 @@ use crate::dialogs::preview::LivePreview;
 pub const KIND: &str = "indexedColor";
 
 const CMD: &str = "edit.colors.toIndexed";
+/// The undo step a preview and OK make.
+const PREVIEW_LABEL: &str = "Convert to Indexed Color";
 
 /// The reductions besides those of a PNG-8 export, as (value, label).
 const MORE_REDUCTIONS: [(&str, &str); 2] = [("uniform", "Uniform"), ("document", "Document Swatches")];
@@ -28,9 +30,17 @@ fn rows() -> Vec<Param> {
     let with_colors: Vec<String> = reductions.iter().filter(|(id, _)| takes_colors(id)).map(|(id, _)| id.to_string()).collect();
     let dithers = Dither::ALL.iter().filter(|d| **d != Dither::None).map(|d| d.id().to_string()).collect::<Vec<_>>();
     vec![
-        Param::new("reduction", tl!("Reduction"), ParamKind::choice(reductions.iter().map(|(id, l)| (id.to_string(), (*l).into())).collect(), Some("selective".into()))),
+        Param::new(
+            "reduction",
+            tl!("Reduction"),
+            ParamKind::choice(reductions.iter().map(|(id, l)| (id.to_string(), (*l).into())).collect(), Some("selective".into())),
+        ),
         Param::new("colors", tl!("Colors"), ParamKind::int(Some(least_colors("") as i64), Some(256), 256)).visible_when_in("reduction", with_colors),
-        Param::new("dither", tl!("Dither"), ParamKind::choice(Dither::ALL.iter().map(|d| (d.id().to_string(), d.label().into())).collect(), Some("diffusion".into()))),
+        Param::new(
+            "dither",
+            tl!("Dither"),
+            ParamKind::choice(Dither::ALL.iter().map(|d| (d.id().to_string(), d.label().into())).collect(), Some("diffusion".into())),
+        ),
         Param::new("ditherAmount", tl!("Amount"), ParamKind::int(Some(0), Some(100), 100)).unit(UnitKind::Percent).visible_when_in("dither", dithers),
     ]
 }
@@ -63,13 +73,12 @@ pub fn open(app: &mut VectorcraftApp) {
         }
         done
     };
-    let cancel = |app: &mut VectorcraftApp| {
+    let cancel = Box::new(|app: &mut VectorcraftApp| {
         if let Some(preview) = app.object_dialogs.indexed.take() {
             preview.cancel(app);
         }
-    };
-    // PLAN: assumed `open_held(app, dialog, ok, cancel: impl FnOnce(&mut VectorcraftApp) + 'static)`, the Cancel hook of the sheet's open question 1
-    if open_held(app, dialog, ok, cancel).is_none() {
+    });
+    if open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }).is_none() {
         app.object_dialogs.indexed = None;
         app.status("no window".to_string());
     }
@@ -78,11 +87,11 @@ pub fn open(app: &mut VectorcraftApp) {
 /// Each frame: show the dialog's values on the canvas while its Preview box is on.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut preview) = app.object_dialogs.indexed.take() else { return };
-    let shown = app.dialogs().and_then(|h| {
-        h.with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| (d.is_previewing(), params(d.fields()))))
-    });
+    let shown = app
+        .dialogs()
+        .and_then(|h| h.with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| (d.is_previewing(), params(d.fields())))));
     if let Some((on, p)) = &shown {
-        preview.run(app, *on, CMD, p);
+        let _ = preview.run(app, *on, PREVIEW_LABEL, CMD, p);
     }
     app.object_dialogs.indexed = Some(preview);
 }
@@ -153,11 +162,11 @@ mod tests {
         app.run("ui.indexedColorDialog", json!({})).unwrap();
         let ctx = app.ui_ctx.clone().unwrap();
         let host = app.dialogs().unwrap();
-        let id = host.with(|h| h.open_dialogs().into_iter().next()).expect("the dialog is open").id;
+        let dialog = host.with(|h| h.open_dialogs().into_iter().next()).expect("the dialog is open").id;
         for (field, value) in [("reduction", "blackWhite"), ("dither", "none")] {
-            host.with(|h| h.set_json_field(&ctx, id, field, json!(value))).unwrap();
+            host.with(|h| h.set_json_field(&ctx, dialog, field, json!(value))).unwrap();
         }
-        assert!(host.with(|h| h.confirm_by_id(&ctx, id)));
+        assert!(host.with(|h| h.confirm_by_id(&ctx, dialog)));
         crate::dialogs::host::pump(&mut app, &ctx);
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1);

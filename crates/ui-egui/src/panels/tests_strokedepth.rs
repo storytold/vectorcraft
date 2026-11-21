@@ -67,9 +67,10 @@ fn menu_saves_deletes_and_resets_profiles() {
     // A name dialog (OK runs stroke.widthProfile.add).
     let ctx = panel.ctx().clone();
     let mut app = panel.app();
-    let id = app.dialogs().open_dialogs().first().map(|d| d.id).expect("name dialog");
-    app.dialogs().set_json_field(&ctx, id, "name", json!("Mine")).unwrap();
-    assert!(app.dialogs().confirm_by_id(&ctx, id));
+    let host = app.dialogs().expect("the window's dialog host");
+    let id = host.with(|h| h.open_dialogs().first().map(|d| d.id)).expect("name dialog");
+    host.with(|h| h.set_json_field(&ctx, id, "name", json!("Mine"))).unwrap();
+    assert!(host.with(|h| h.confirm_by_id(&ctx, id)));
     assert_eq!(app.session.prefs.width_profiles[0].name, "Mine");
     // Saved profiles don't trip the Preferences dialog, which only edits preferences.
     crate::prefs_dialog::open(&mut app, None);

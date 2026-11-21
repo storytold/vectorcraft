@@ -9,6 +9,7 @@ use vectorcraft_engine::Session;
 use super::color_wheel::{Channel, Settings, View};
 use super::tests_color_wheel::Panel;
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 /// An app with a selected rectangle filled with `fill`, its Color Wheel panel on `view` with Show
 /// Out-of-Gamut Colors set to `gamut`.

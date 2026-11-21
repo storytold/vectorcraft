@@ -16,7 +16,7 @@ fn view() -> CanvasView {
 
 /// The event carries the document point under the pointer and its pressure, whatever its kind.
 #[test]
-fn pointer_event() {
+fn a_pointer_event_carries_the_document_point_and_pressure() {
     let view = view();
     let cx = context(view);
     let at = egui::pos2(250.0, 175.0);
@@ -41,13 +41,9 @@ fn a_consumed_pick_does_not_count_toward_the_click_run() {
     assert_eq!(app.ui.trace_pick_clicks, 0);
 }
 
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, modifiers: egui::Modifiers) {
-    let raw = egui::RawInput {
-        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))),
-        events,
-        modifiers,
-        ..Default::default()
-    };
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    let raw =
+        egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), events, ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
     out.textures_delta.clear();
 }
@@ -59,13 +55,13 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     app.run("file.new", serde_json::json!({"width": 400, "height": 300})).unwrap();
     app.select_tool("livePaintBucket");
     let ctx = egui::Context::default();
-    frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+    frame(&mut app, &ctx, vec![]);
     let at = app.canvas_view().unwrap().to_screen(Point::new(200.0, 150.0));
     let shown = |app: &mut VectorcraftApp, mods: egui::Modifiers| {
-        frame(app, &ctx, vec![egui::Event::ModifiersChanged(mods)], mods);
+        frame(app, &ctx, vec![egui::Event::ModifiersChanged(mods)]);
         craft::ui::runtime::cursor::current(&ctx)
     };
-    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
     let plain = craft::ui::runtime::cursor::current(&ctx);
     let alt = shown(&mut app, egui::Modifiers::ALT);
     assert_ne!(alt, plain, "Alt shows the Eyedropper's cursor");

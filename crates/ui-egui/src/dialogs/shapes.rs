@@ -548,7 +548,9 @@ fn confirm(app: &mut VectorcraftApp, kind: &str, click: Option<Click>, fields: &
         _ => return Err(format!("the {kind} tool has no size dialog")),
     };
     let options = options.or_else(|| {
-        (kind == "spiral").then(|| object(json!({"decay": params["decay"], "segments": params["segments"], "clockwise": params["clockwise"]}))).flatten()
+        (kind == "spiral")
+            .then(|| object(json!({"decay": params["decay"], "segments": params["segments"], "clockwise": params["clockwise"]})))
+            .flatten()
     });
     // Options the tool would refuse leave the dialog open, before anything is drawn.
     if let Some(options) = &options {
@@ -582,9 +584,8 @@ fn rounded_radius(app: &VectorcraftApp, fields: &DialogFields) -> Result<f64, St
 /// over also when the dialog is cancelled.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    let link = dialogs.with(|host| {
-        SIZE_KINDS.iter().find_map(|kind| host.get_by_id::<HostedParamDialog>(dialog_id(*kind))?.fields().bool("constrain"))
-    });
+    let link =
+        dialogs.with(|host| SIZE_KINDS.iter().find_map(|kind| host.get_by_id::<HostedParamDialog>(dialog_id(*kind))?.fields().bool("constrain")));
     if let Some(link) = link {
         app.object_dialogs.shape_link = link;
     }

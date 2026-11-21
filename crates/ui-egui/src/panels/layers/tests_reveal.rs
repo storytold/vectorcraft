@@ -215,7 +215,6 @@ fn rename_opens_the_name_field_of_the_selected_object() {
     pass(&mut app, &ctx);
     assert_eq!(app.ui.layers_ui.rename, None, "the panel took the rename request");
     assert_eq!(reveal_of(&app), None, "and the reveal request");
-    // PLAN: assumed `LayersEvent::rename(layer, text)`, the constructor of the non-exhaustive `Rename` event
     apply(&mut app, LayersEvent::rename(row(a), "Sun".into()));
     assert_eq!(name(&app), "Sun");
     assert_eq!(undo_len(&app), steps + 1, "one undo step");
@@ -809,10 +808,11 @@ fn with_the_option_art_the_panel_does_not_list_opens_nothing() {
     options(&mut app).layers_only = false;
     pass(&mut app, &ctx);
     assert!(!open(&app, 0), "Show Layers Only: the group stays closed");
-    app.ui.layers_ui.filter = LayerFilter { objects: vec![FilterObject::Text], ..Default::default() };
+    app.ui.layers_ui.filter = LayerFilter::default();
+    app.ui.layers_ui.filter.objects = vec![FilterObject::Text];
     locate(&mut app, 1);
     assert!(!open(&app, 1), "a filter that leaves the path out: the group stays closed");
-    app.ui.layers_ui.filter = LayerFilter { objects: vec![FilterObject::Paths], ..Default::default() };
+    app.ui.layers_ui.filter.objects = vec![FilterObject::Paths];
     locate(&mut app, 2);
     assert!(open(&app, 2), "a filter that keeps the path: the group opens");
 }

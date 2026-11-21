@@ -28,10 +28,11 @@ fn dialog_keymap(app: &mut VectorcraftApp) -> &mut craft::keymap::Keymap {
     app.shortcuts_dialog.as_mut().and_then(|d| d.keymap.as_mut()).expect("the dialog's keymap")
 }
 
-/// The review the dialog shows: its set's name and each entry's item, line and target.
-// PLAN: assumed `DialogSnapshot::review: Option<ReviewSnapshot { name, entries: [{ item, line, target, .. }], .. }>` (kb.C16c request)
-#[allow(clippy::type_complexity)]
-fn review(app: &VectorcraftApp) -> Option<(String, Vec<(String, usize, Option<craft::keymap::CommandRef>)>)> {
+/// A set's name and each entry's item, line and target.
+type Review = (String, Vec<(String, Option<usize>, Option<craft::keymap::CommandRef>)>);
+
+/// The review the dialog shows.
+fn review(app: &VectorcraftApp) -> Option<Review> {
     let d = app.shortcuts_dialog.as_ref()?;
     let r = d.state.snapshot(d.keymap.as_ref()?)?.review?;
     Some((r.name, r.entries.into_iter().map(|e| (e.item, e.line, e.target)).collect()))
@@ -72,8 +73,9 @@ fn kys_files_open_the_review() {
     frame(&mut app);
     let (name, entries) = review(&app).expect("a review is open");
     assert_eq!(name, "Acme Keys");
-    let places: Vec<(&str, usize)> = entries.iter().map(|(item, line, _)| (item.as_str(), *line)).collect();
-    assert_eq!(places, [("Menus > Edit > Acme Undo", 3), ("Menus > Edit > Acme Copy", 4), ("Menus > Acme Pen", 6), ("Menus > Acme Gadget", 7)]);
+    let places: Vec<(&str, Option<usize>)> = entries.iter().map(|(item, line, _)| (item.as_str(), *line)).collect();
+    let lines = [("Menus > Edit > Acme Undo", 3), ("Menus > Edit > Acme Copy", 4), ("Menus > Acme Pen", 6), ("Menus > Acme Gadget", 7)];
+    assert_eq!(places, lines.map(|(item, line)| (item, Some(line))));
     let targets: Vec<Option<String>> = entries.iter().map(|(.., t)| t.as_ref().map(crate::keymap::entry_key)).collect();
     assert_eq!(targets, [Some("edit.undo".into()), Some("edit.copy".into()), Some("tool:pen".into()), None], "saved targets come first");
 
@@ -99,7 +101,7 @@ fn a_set_dropped_with_no_document_open_opens_the_review() {
     let kys = dir.join("Dropped.kys");
     std::fs::write(&kys, SET).unwrap();
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-    let target = app.drop_target("Dropped.kys", None, false);
+    let target = app.drop_target("Dropped.kys", crate::place::DropSpot::Unknown, false);
     assert_eq!(target, crate::place::DropTarget::Open);
     crate::place::drop_files(&mut app, vec![(target, ("Dropped.kys".into(), Some(kys.to_string_lossy().into_owned()), vec![]))]);
     frame(&mut app);

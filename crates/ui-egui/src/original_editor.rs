@@ -136,7 +136,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, enabled: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{prefs_dialog, tests::picks::{Picker, scripted}};
+    use crate::{
+        prefs_dialog,
+        tests::picks::{Picker, scripted},
+    };
     use craft::automation::{ControlRequest, Reply};
     use craft::ui::dialog::PromptChoice;
     use serde_json::{Value, json};
@@ -310,7 +313,7 @@ mod tests {
         app.ui.answering_control = false;
         // A pass that carries injected input acts for automation too.
         let ctx = ctx(&app);
-        craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, egui::Key::A, Default::default(), false);
+        craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, craft::keymap::Key::A, Default::default(), false);
         let _ = ctx.run_ui(egui::RawInput::default(), |_| assert!(pick(&mut app).is_err()));
         assert!(app.original_editor.choice.path.is_none());
     }

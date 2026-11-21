@@ -10,6 +10,7 @@ use craft::menu::Node;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
+use crate::i18n::LangExt as _;
 use crate::menus;
 use crate::{VectorcraftApp, script_runs, scripts_menu};
 

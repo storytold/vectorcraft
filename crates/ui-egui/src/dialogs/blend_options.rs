@@ -64,7 +64,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 }
 
 /// The dialog over its rows; Steps shows (disabled for Smooth Color) with the two modes that have a count of steps.
-fn dialog(on_blend: bool, lengths: LengthUnits) -> ParamDialog<'static> {
+fn dialog<'a>(on_blend: bool, lengths: LengthUnits) -> ParamDialog<'a> {
     let spacing = SPACING.iter().map(|(value, label)| ((*value).to_owned(), tl!(label).into())).collect();
     let params = vec![
         Param::new("spacing", tl!("Spacing:"), ParamKind::choice(spacing, None)),

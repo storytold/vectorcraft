@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft::ui::runtime::env::{LengthUnits, Label, UnitKind};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use serde_json::{Map, Value};
 
+use super::form;
 use super::host::{HeldOptions, open_held_with};
 use super::preview::LivePreview;
-use super::form;
 use crate::VectorcraftApp;
 
 /// The open parameter dialog and what it keeps between frames.
@@ -206,7 +206,8 @@ fn row(command: &str, key: &str, value: &Value, setting: Setting) -> Option<Para
         return Some(Param::new(key, label, ParamKind::choice(options, value.as_str().map(str::to_string))));
     }
     if command == "text.areaOptions" && key == "flow" {
-        let options = vec![("rows".to_string(), Label::from(tl!("By Rows").to_string())), ("columns".to_string(), Label::from(tl!("By Columns").to_string()))];
+        let options =
+            vec![("rows".to_string(), Label::from(tl!("By Rows").to_string())), ("columns".to_string(), Label::from(tl!("By Columns").to_string()))];
         return Some(Param::new(key, label, ParamKind::radio(options, value.as_str().map(str::to_string))));
     }
     Some(match value {
@@ -215,12 +216,10 @@ fn row(command: &str, key: &str, value: &Value, setting: Setting) -> Option<Para
             let whole = n.is_i64() || n.is_u64();
             let mut param = Param::number(key, label, n.as_f64().unwrap_or(0.0), 1.0, if whole { 0 } else { 3 });
             if lengths(command).contains(&key) {
-                param = param.length(setting.units);
+                param = param.length(crate::fields::bare_points(setting.units, setting.bare_points));
                 if let Some(range) = length_range(command, key) {
                     param = param.bounds(Some(*range.start()), Some(*range.end()));
                 }
-                // PLAN: assumed `fields::length_codec(LengthUnits, bool) -> NumberCodec`, `length_reader` with `NumberCodec::new` (wg.S8)
-                param = param.codec(crate::fields::length_codec(setting.units, setting.bare_points));
             }
             if key == "ppi" {
                 param = param.unit(UnitKind::PixelsPerInch);
@@ -455,6 +454,7 @@ mod tests {
     use vectorcraft_engine::Session;
 
     use super::*;
+    use crate::i18n::LangExt as _;
 
     /// An app with a window context, so a dialog can open.
     fn windowed() -> VectorcraftApp {
@@ -579,12 +579,7 @@ mod tests {
                 value: json!("emBoxHeight"),
                 effect: |app, id| area!(app, id).first_baseline == vectorcraft_doc::FirstBaseline::EmBoxHeight,
             },
-            Row {
-                command: "text.areaOptions",
-                field: "flow",
-                value: json!("rows"),
-                effect: |app, id| area!(app, id).flow == TextFlow::Rows,
-            },
+            Row { command: "text.areaOptions", field: "flow", value: json!("rows"), effect: |app, id| area!(app, id).flow == TextFlow::Rows },
             Row { command: "object.rasterize", field: "background", value: json!("white"), effect: |app, _| corner(app) == [255, 255, 255, 255] },
             Row {
                 command: "object.mesh.create",

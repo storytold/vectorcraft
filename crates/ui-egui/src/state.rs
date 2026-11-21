@@ -62,7 +62,7 @@ pub struct View {
     #[serde(default)]
     pub outline: bool,
     /// The canvas on screen, inside the rulers, as the last pass laid it out (screen points).
-    #[serde(skip)]
+    #[serde(skip, default = "no_rect")]
     pub rect: egui::Rect,
     /// A view command or placement the canvas runs on its next pass, with the document area it
     /// fits when the command fits one.
@@ -409,7 +409,9 @@ pub struct ContextSpelling {
     pub suggestions: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Two states are equal when they save the same: the settings store writes only a changed saved form,
+/// and the panels' session state is no change to save.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
     /// The interface language older versions saved here (`ja`, `cs`…). It now lives in the
@@ -1318,6 +1320,12 @@ impl UiState {
     }
 }
 
+impl PartialEq for UiState {
+    fn eq(&self, other: &Self) -> bool {
+        serde_json::to_value(self).ok() == serde_json::to_value(other).ok()
+    }
+}
+
 impl Default for UiState {
     /// The interface of a first start.
     fn default() -> Self {
@@ -1501,6 +1509,10 @@ impl Default for UiState {
 
 fn yes() -> bool {
     true
+}
+
+fn no_rect() -> egui::Rect {
+    egui::Rect::NOTHING
 }
 
 /// Seconds between two in-line looks at the system clipboard for `VectorcraftApp::system_paste`,

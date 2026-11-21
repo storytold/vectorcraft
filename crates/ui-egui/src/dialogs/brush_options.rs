@@ -48,8 +48,7 @@ use crate::VectorcraftApp;
 
 // PLAN: the `craft::ui::…` import paths above follow the framework crates' module layout; the app tree
 // has no other user of these components yet. `brush_art_options::{params, edited_def, fields,
-// heading, rows}` are called with `&DialogFields` where they took `&Dialog`,
-// and `app.session.general_unit()` is taken to be the framework's `UnitKind`.
+// heading, rows}` are called with `&DialogFields` where they took `&Dialog`.
 
 /// The dialog key of Brush Options.
 pub const KIND: &str = "brushOptions";
@@ -170,7 +169,7 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     // Modal: no edit changes the document while the dialog is open, so the previews read this snapshot.
     let doc = app.session.active().map(|st| st.doc.clone());
-    let rows = rows(ty, object, doc, app.session.general_unit());
+    let rows = rows(ty, object, doc, crate::canvas::rulers::unit_kind(app.session.general_unit()));
     let title = Label::from(title(ty, object));
     let mut initial = form::fields_of(&rows, f);
     if let Some(keys) = object_keys {
@@ -518,12 +517,11 @@ fn variation_row(key: &'static str, label: Label, suffix: &'static str, decimals
                 edits.push((mode_id.clone(), FieldValue::Text(picked.clone())));
             }
             Field::new(tl!("Variation:")).id_salt("variation").show(ui, |ui, _| {
-                // PLAN: assumed the common `disabled(bool)` builder.
                 let typed = NumberField::new(tl!("Variation:"), Bind::given(Some(clamped(d, &variation_id, (0.0, max)))))
                     .range(0.0..=max)
                     .unit(suffix)
                     .fixed_decimals(decimals as _)
-                    .disabled(mode == Variation::Fixed.id())
+                    .enabled(mode != Variation::Fixed.id())
                     .id_salt("amount")
                     .show(ui);
                 if let Some(Some(v)) = typed.edit.value() {

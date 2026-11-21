@@ -21,7 +21,9 @@ use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusa
 use craft::ui::display::Text;
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::{Row, Stack};
-use craft::ui::patterns::presets::{NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetState};
+use craft::ui::patterns::presets::{
+    NameCheck, NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetSource, PresetState,
+};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::Label;
 use craft::ui::sections::{DialogRole, FooterButton};
@@ -357,8 +359,10 @@ impl KinsokuDialog {
         let mut value = list.get(self.index(list.len())).map(|s| name_of(s).to_owned());
         let suggestion = new_name(&list, &self.opened);
         // PLAN: PresetPicker has no placeholder: an empty list shows an empty name field, not "None".
-        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &rows, Bind::bound(&mut self.picker)).field(PickerField::Name);
-        let out = NamedPresetRow::new(tl!("Kinsoku Set"), picker).suggest_name(suggestion).check_name(|typed| name_problem(&list, typed)).show(ui);
+        let source = PresetSource::listed(&rows);
+        let refuses = |typed: &str| name_problem(&list, typed);
+        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &source, Bind::bound(&mut self.picker)).field(PickerField::Name);
+        let out = NamedPresetRow::new(tl!("Kinsoku Set"), picker).suggest_name(suggestion).check_name(NameCheck::of_host(&refuses)).show(ui);
         self.apply(out.events);
 
         let list = self.list();

@@ -308,8 +308,7 @@ mod tests {
         crate::background::wait_all(&mut app);
         assert!(safe_to_close(&app));
 
-        crate::opening::start(&mut app, "/art/Wait.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false))
-            .unwrap();
+        crate::opening::start(&mut app, "/art/Wait.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false));
         assert!(!safe_to_close(&app), "a file opening");
         app.opening.pending.clear();
         assert!(safe_to_close(&app));

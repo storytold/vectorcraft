@@ -14,8 +14,7 @@ fn near(value: Option<f32>, want: f64) -> bool {
 
 /// A change the Character controls raise, applied as one step the way the framework delivers it.
 fn change(app: &mut VectorcraftApp, change: CharacterChange) {
-    // PLAN: assumed apply(app: &mut VectorcraftApp, event: &EditEvent<CharacterChange>)
-    apply(app, &EditEvent::set(Mixed::Mixed, change, "Character".into(), None));
+    apply_character_event(app, EditEvent::set(Mixed::Mixed, change, "Character".into(), None));
 }
 
 /// The commands the panel menu lists, the rows of its submenus included.
@@ -113,7 +112,7 @@ fn scaled_collapsed_text_keeps_nondimensional_controls_available() {
     app.run("text.setFormat", json!({"leftIndent": 4})).unwrap();
     assert_eq!(shared(&app, |s| s.tracking), Some(40.0));
     assert_eq!(text_style(&app).unwrap().1.left_indent, 4.0);
-    let v = values(&app);
+    let v = values(&mut app);
     assert_eq!(v.size, None, "a collapsed scaled object has no size to show");
     assert_eq!(v.tracking, Some(40.0));
 }
@@ -314,7 +313,7 @@ fn character_kerning_setter_and_automatic_pair_value() {
 /// document key, and nothing is focused when no type is selected.
 #[test]
 fn highlight_commands_ask_the_framework_to_focus_the_field_by_key() {
-    use crate::tests::panel_harness::Panel; // PLAN: assumed path of op.A15's Panel
+    use crate::tests::panel_harness::Panel;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "AVAX", "size": 12})).unwrap()["id"].clone();
@@ -322,14 +321,14 @@ fn highlight_commands_ask_the_framework_to_focus_the_field_by_key() {
     let fields = [(Field::FontName, "Font family"), (Field::FontSize, "Font size"), (Field::Kerning, "Kerning"), (Field::Tracking, "Tracking")];
     let mut panel = Panel::new(app, show);
     for (field, name) in fields {
-        assert!(highlight(panel.app(), field).is_err(), "{field:?} without selected type");
+        assert!(highlight(&mut panel.app(), field).is_err(), "{field:?} without selected type");
         panel.frame();
         assert!(!panel.focused(name), "{name} took the focus without selected type");
         assert_eq!(panel.app().character_focus, None);
     }
     panel.app().run("select.set", json!({"ids": [id]})).unwrap();
     for (field, name) in fields {
-        highlight(panel.app(), field).unwrap();
+        highlight(&mut panel.app(), field).unwrap();
         panel.frame();
         assert!(panel.focused(name), "{name} has the focus");
         assert_eq!(panel.app().character_focus, None, "{field:?}: the request is taken");
@@ -348,7 +347,7 @@ fn variable_fonts_get_a_slider_per_axis() {
     let plain = app.run("text.create", json!({"x": 20, "y": 50, "text": "Static"})).unwrap()["id"].clone();
     let id = app.run("text.create", json!({"x": 20, "y": 120, "text": "lIn", "font": TWO_AXIS_FAMILY})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [plain]})).unwrap();
-    assert!(face_axes(&app).is_none() && values(&app).axes.is_none(), "a static font has no sliders");
+    assert!(face_axes(&app).is_none() && values(&mut app).axes.is_none(), "a static font has no sliders");
     app.run("select.set", json!({"ids": [id]})).unwrap();
     let tags = face_axes(&app).map(|(axes, _)| axes.iter().map(|a| a.tag).collect::<Vec<_>>()).unwrap_or_default();
     assert!(tags.contains(b"wght") && tags.contains(b"wdth"), "{tags:?}");
@@ -365,7 +364,7 @@ fn variable_fonts_get_a_slider_per_axis() {
     let bold =
         app.run("text.create", json!({"x": 20, "y": 160, "text": "lIn", "font": TWO_AXIS_FAMILY, "style": "Bold"})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id, bold]})).unwrap();
-    let mixed = values(&app).mixed_axes;
+    let mixed = values(&mut app).mixed_axes;
     assert!(mixed.contains(b"wght") && !mixed.contains(b"wdth"), "{mixed:?}");
     change(&mut app, CharacterChange::Axes(vec![(*b"wdth", 90.0)]));
     let font_axes = |app: &VectorcraftApp, id: u64| {
@@ -434,7 +433,7 @@ fn superscript_and_subscript_decide_from_the_characters_they_change() {
     app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
     app.session.set_tool_option("select", &json!({"start": 2, "end": 2}));
     assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((2, 2)));
-    assert_ne!(values(&app).position, Some(BaselinePosition::Superscript), "the text is not all superscript");
+    assert_ne!(values(&mut app).position, Some(BaselinePosition::Superscript), "the text is not all superscript");
     assert_eq!(app.run("type.superscript", json!({})).unwrap(), json!("superscript"));
     assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "superscript"), "{:?}", scripts(&app, &id));
     app.run("type.superscript", json!({})).unwrap();
@@ -458,7 +457,7 @@ fn superscript_and_subscript_decide_from_the_characters_they_change() {
     };
     let before = runs(&app);
     assert!(before.len() == 2 && before[0] != before[1] && before.iter().all(|p| p.id() == "superscript"), "{before:?}");
-    assert_eq!(values(&app).position, Some(BaselinePosition::Superscript), "the field shows superscript");
+    assert_eq!(values(&mut app).position, Some(BaselinePosition::Superscript), "the field shows superscript");
     assert_eq!(app.run("type.superscript", json!({})).unwrap(), json!("normal"));
     assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "normal"), "{:?}", scripts(&app, &id));
 }
@@ -532,33 +531,33 @@ fn a_change_runs_its_commands_with_the_panels_params() {
     };
     for (label, c, check) in table {
         let mut app = new_app();
-        assert!(!check(&values(&app)), "{label}: not set yet");
+        assert!(!check(&values(&mut app)), "{label}: not set yet");
         let undo = undo_steps(&app);
         change(&mut app, c);
-        assert!(check(&values(&app)), "{label}");
+        assert!(check(&values(&mut app)), "{label}");
         assert_eq!(undo_steps(&app), undo + 1, "{label}: one undo step");
     }
     // Pressing the pressed position again is Position(Normal): back to normal.
     let mut app = new_app();
     change(&mut app, CharacterChange::Position(BaselinePosition::Superscript));
     change(&mut app, CharacterChange::Position(BaselinePosition::Normal));
-    assert_eq!(values(&app).position, Some(BaselinePosition::Normal));
+    assert_eq!(values(&mut app).position, Some(BaselinePosition::Normal));
     // The Type tool's selection takes it, the rest of the text does not.
     let mut app = new_app();
     app.select_tool("type");
     app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
     app.session.set_tool_option("select", &json!({"start": 0, "end": 3}));
     change(&mut app, CharacterChange::Caps(Caps::SmallCaps));
-    assert_eq!(values(&app).caps, Some(Caps::SmallCaps));
+    assert_eq!(values(&mut app).caps, Some(Caps::SmallCaps));
     app.session.set_tool_option("select", &json!({"start": 3, "end": 6}));
-    assert_eq!(values(&app).caps, Some(Caps::Normal), "the rest of the text is unchanged");
+    assert_eq!(values(&mut app).caps, Some(Caps::Normal), "the rest of the text is unchanged");
     // The method belongs to the object: another with a different one leaves the field blank.
     let mut app = new_app();
     let other = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
     change(&mut app, CharacterChange::AntiAlias(TextAntiAlias::Crisp));
     let first = story_selected_ids(&app);
     app.run("select.set", json!({"ids": [first[0], other]})).unwrap();
-    assert!(values(&app).anti_alias.is_none(), "the methods differ");
+    assert!(values(&mut app).anti_alias.is_none(), "the methods differ");
 }
 
 /// The ids of the selected objects.
@@ -906,14 +905,14 @@ fn reset_panel_resets_every_attribute_but_the_font() {
 /// Snap to Glyph is off, run `view.snapToGlyph.options`.
 #[test]
 fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
-    use crate::tests::panel_harness::Panel; // PLAN: assumed path of op.A15's Panel
+    use crate::tests::panel_harness::Panel;
     // PLAN: assumed row id and params (type-w10's table).
     let toggle = CommandRef::with_params("ui.character.show", json!({"option": "snapToGlyph"}));
     let labels = ["Baseline", "x-height", "Glyph Bounds", "Proximity Guides", "Angular Guides", "Anchor Point"];
     let mut panel = Panel::new(VectorcraftApp::new(Session::new(), Default::default()), show);
     panel.frame();
     assert!(!panel.shows("Proximity Guides"), "hidden at first");
-    fire(panel.app(), &toggle);
+    fire(&mut panel.app(), &toggle);
     assert!(panel.app().ui.snap_to_glyph_options);
     panel.frame();
     assert!(labels.iter().all(|l| panel.shows(l)), "every option of the block shows");
@@ -929,7 +928,7 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     assert!(!o.angular && !o.x_height && o.baseline && o.bounds && o.proximity && o.anchors, "{o:?}");
     panel.click("Angular Guides");
     assert!(panel.app().session.prefs.glyph_snap.angular);
-    fire(panel.app(), &toggle);
+    fire(&mut panel.app(), &toggle);
     panel.frame();
     assert!(!panel.shows("Proximity Guides"));
 }
@@ -939,14 +938,14 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
 /// first checkbox does.
 #[test]
 fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
-    use crate::tests::panel_harness::Panel; // PLAN: assumed path of op.A15's Panel
+    use crate::tests::panel_harness::Panel;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Glyphs"})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [id]})).unwrap();
     let mut panel = Panel::new(app, show);
     // PLAN: assumed row id and params (type-w10's table).
-    fire(panel.app(), &CommandRef::with_params("ui.character.show", json!({"option": "snapToGlyph"})));
+    fire(&mut panel.app(), &CommandRef::with_params("ui.character.show", json!({"option": "snapToGlyph"})));
     assert!(panel.app().ui.snap_to_glyph_reveal, "the menu asks for the scroll");
     panel.frame();
     assert!(!panel.app().ui.view.snap_to_glyph, "showing the options leaves snapping off");

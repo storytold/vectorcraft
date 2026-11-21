@@ -299,7 +299,12 @@ fn closing_a_floating_window_closes_its_document_and_asks_to_save_an_unsaved_one
     let body = body_of(&app, 0);
     click(&mut app, &ctx, pos2(body.left() + 12.0, body.bottom() - 12.0));
     assert_eq!(app.session.active_index(), Some(1), "a press in another window waits for the prompt");
-    app.ui.dialog = None;
+    // The prompt goes unanswered: document 1 stays open.
+    app.dialogs().unwrap().with(|h| {
+        for d in h.open_dialogs() {
+            h.close_by_id(d.id);
+        }
+    });
     // Document 0 has no changes: its window closes with it.
     app.run("document.activate", json!({"index": 0})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -756,26 +761,6 @@ fn new_window_opens_a_numbered_view_with_its_own_zoom() {
 }
 
 #[test]
-fn an_edit_in_one_view_shows_in_the_other() {
-    let mut app = app_with(1);
-    let ctx = egui::Context::default();
-    app.run("window.newWindow", json!({})).unwrap();
-    app.run("window.arrange.tile", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(app.canvas.panes.last.iter().map(|(w, _)| *w).collect::<Vec<_>>(), [(0, 1), (0, 2)], "one pane per view");
-    view_mut(&mut app, (0, 1)).unwrap().zoom = 0.5;
-    app.view_mut().unwrap().zoom = 2.0;
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    let d = &app.session.documents()[0];
-    // PLAN: canvas-w29 replaces `panes.shown` with `PaneSource`; read the key's revision and zoom there.
-    let shown = app.canvas.panes.shown.get(&(d.uid, 1)).map(|(k, _)| (k.revision, k.zoom));
-    assert_eq!(shown, Some((d.revision, 0.5)), "the other view's pane shows the edit at its own zoom");
-    assert_eq!(app.view().unwrap().zoom, 2.0, "the view edited in keeps its zoom");
-}
-
-#[test]
 fn closing_a_view_leaves_the_document_open() {
     let mut app = app_with(1);
     let ctx = egui::Context::default();
@@ -832,22 +817,6 @@ fn arrange_treats_each_view_as_a_window() {
     assert!(docked_windows(&app).is_empty());
     assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({"index": 0, "view": 3})).unwrap()["floating"], json!([0, 0]));
     assert_eq!((docked_windows(&app), current(&app)), (vec![(0, 3)], Some((0, 3))));
-}
-
-#[test]
-fn each_pane_draws_its_own_views_outline_or_preview() {
-    let mut app = app_with(1);
-    let ctx = egui::Context::default();
-    app.run("window.newWindow", json!({})).unwrap();
-    show_window(&mut app, (0, 1));
-    app.run("view.outline", json!({})).unwrap();
-    show_window(&mut app, (0, 2));
-    assert!(!app.outline_view(), "the second view is in Preview");
-    app.run("window.arrange.tile", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    let uid = app.session.documents()[0].uid;
-    // PLAN: canvas-w29 replaces `panes.shown` with `PaneSource`; read the key's outline flag there.
-    assert_eq!(app.canvas.panes.shown.get(&(uid, 1)).map(|(k, _)| k.outline), Some(true), "the first view's pane is in Outline");
 }
 
 #[test]

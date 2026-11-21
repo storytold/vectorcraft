@@ -309,11 +309,8 @@ pub fn read_set(text: &str, name: &str) -> Result<(String, Vec<Action>), String>
         .map(|a| {
             let disabled = a.steps.iter().enumerate().filter_map(|(i, step)| step.excluded.then_some(i)).collect();
             let steps = a.steps.into_iter().map(|s| ActionStep::new(s.command, s.params)).collect();
-            let mut action = Action {
-                disabled,
-                color: a.color.as_deref().map(ActionColor::from_name).unwrap_or_default(),
-                ..Action::new(a.name, steps)
-            };
+            let mut action =
+                Action { disabled, color: a.color.as_deref().map(ActionColor::from_name).unwrap_or_default(), ..Action::new(a.name, steps) };
             model::set_function_key(&mut action, a.key);
             model::set_automatic_align_to(&mut action, a.automatic_align_to);
             action
@@ -353,9 +350,7 @@ pub fn save_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let sets = app.ui.actions.sets();
     let set: String = match (p.get("name"), p.get("set")) {
         (Some(name), _) if !name.is_null() => name.as_str().filter(|n| sets.contains(n)).ok_or("no such action set")?.to_string(),
-        (_, None | Some(Value::Null)) => {
-            app.ui.action_set.clone().filter(|s| sets.contains(&s.as_str())).ok_or("no action set to save")?
-        }
+        (_, None | Some(Value::Null)) => app.ui.action_set.clone().filter(|s| sets.contains(&s.as_str())).ok_or("no action set to save")?,
         (_, Some(v)) => v.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| sets.get(i)).ok_or("no such action set")?.to_string(),
     };
     let actions = model::stored_actions(&app.ui.actions, &set);
@@ -368,7 +363,7 @@ pub fn save_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     read_set(&text, "")?;
     let name = format!("{}.{ACTIONS_EXT}", set_file_stem(&set));
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
-    crate::io::write_named(app, path, &name, text.as_bytes(), |app, path| {
+    crate::io::write_named(app, path, &name, text.into_bytes(), |app, path| {
         app.status(format!("Saved {path}"));
         Ok(json!({ "path": path }))
     })
@@ -577,7 +572,11 @@ fn read_data(app: &mut VectorcraftApp, data: &str) -> Result<FileRead, String> {
 /// The set of the file at `path`.
 fn read_path(app: &mut VectorcraftApp, path: &str) -> Result<FileRead, String> {
     // One byte past the limit tells a larger file apart without reading all of it.
-    let bytes = app.files().read_head(path, MAX_SET_FILE + 1)?; // PLAN: assumed hub-w3 host file service call
+    let bytes = match (&app.services.read_head, &app.services.read) {
+        (Some(read_head), _) => read_head(path, MAX_SET_FILE + 1)?,
+        (None, Some(read)) => read(path)?,
+        (None, None) => return Err("no file reader".into()),
+    };
     if bytes.len() > MAX_SET_FILE {
         return Err("the action set file is larger than 8 MiB".into());
     }

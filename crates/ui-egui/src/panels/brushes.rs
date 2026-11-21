@@ -15,13 +15,14 @@ use std::sync::Arc;
 
 use craft::behavior::{EditEvent, GesturePhase, IconId, Selection, SelectionChange, SelectionModel as _};
 use craft::ui::contract::{
-    Bind, DropAt, DropPlace, Entry, ListDrag, PopupKind, Props as _, ReorderMove, SelectMode, Show as _, ShowContainer as _, Sizing, Trigger,
+    Bind, DropAt, DropPlace, Entry, ListDrag, MemoProps, PopupKind, Props as _, ReorderMove, SelectMode, Show as _, ShowContainer as _, Sizing,
+    Trigger,
 };
 use craft::ui::display::Divider;
 use craft::ui::layout_components::Stack;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
-    CellShape, PresetBrowser, PresetDrop, PresetEvent, PresetReorder, PresetRow, PresetRowMenu, PresetState, PresetView, ThumbInfo,
+    CellShape, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetReorder, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetView,
 };
 use craft::ui::primitives::{
     ContentPainterCx, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
@@ -296,9 +297,18 @@ fn delete(app: &mut VectorcraftApp, names: &[String], now: bool) {
     crate::dialogs::brush_delete::ask(app, params, used);
 }
 
+/// The Brushes panel's view choices for the session (`UiState::brushes_view`).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct BrushesView {
+    /// List View; Thumbnail View when off.
+    pub list: bool,
+    /// The brush types (`KINDS` ids) the menu hid.
+    pub hidden: Vec<String>,
+}
+
 /// A row of the Brushes panel: brush `name` of the document `doc` (its uid), or with `group` the rule over the brushes
 /// of type `name`. A brush may be named like a type, so the flag keeps a brush's key apart from its group's.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, MemoProps)]
 pub(crate) struct BrushKey {
     /// The uid of the document whose brush it is: a drag from another document's panel names another brush.
     pub doc: u64,
@@ -329,6 +339,35 @@ fn rows(doc: u64, shown: &[Shown], hidden: &[String]) -> Vec<PresetRow<BrushKey>
         rows.extend(of_type.into_iter().map(|b| PresetRow::item(BrushKey::brush(doc, &b.name), b.name.clone(), 1)));
     }
     rows
+}
+
+/// What the panel's rows, its reorder rule and its stroke previews read: the brushes of one version of a document,
+/// without the `hidden` types.
+#[derive(MemoProps)]
+struct BrushSource<'a> {
+    uid: u64,
+    revision: u64,
+    #[memo_props(covered_by = "revision", reason = "a document version's brushes and resources are fixed")]
+    doc: Option<&'a Document>,
+    #[memo_props(covered_by = "revision", reason = "worked out once from the document version")]
+    shown: &'a [Shown],
+    hidden: Vec<String>,
+}
+
+/// The panel's presets: [`rows`]; a brush moves only among those of its type, and paints its stroke preview.
+fn brush_source(inputs: BrushSource<'_>) -> PresetSource<'_, BrushKey> {
+    let fns = PresetFns::<BrushSource<'_>, BrushKey>::new(|s, _| rows(s.uid, s.shown, &s.hidden))
+        .accepts(|s, drag, over, _| {
+            let first = by_name(s.shown);
+            over.and_then(|over| type_of(&first, over)).is_some_and(|ty| type_of(&first, &drag.grabbed) == Some(ty))
+        })
+        .thumb(|s, cx, rect, info| {
+            // The first brush of a name is the one its row stands for, as `by_name` keeps it.
+            if let (Some(doc), false, Some(b)) = (s.doc, info.key.group, s.shown.iter().find(|b| b.name == info.key.name)) {
+                paint_brush(cx, rect, doc, b);
+            }
+        });
+    PresetSource::new(inputs, fns)
 }
 
 /// The type of the brush or group row `key` (`first`: the brushes by name).
@@ -508,7 +547,7 @@ fn keys_of(sel: &Selection<String>, doc: u64) -> Selection<BrushKey> {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (list, current) = brushes(app);
     let doc = app.session.active().map(|st| st.doc.clone());
-    let uid = app.session.active().map_or(0, |st| st.uid);
+    let (uid, revision) = app.session.active().map_or((0, 0), |st| (st.uid, st.revision));
     let memo = app.session.active().map(document_brushes).unwrap_or_default();
     let first = by_name(&memo);
     let multi = picked(app, &list, current.as_deref());
@@ -525,7 +564,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(sel) => keys_of(sel, uid),
         None => highlighted.as_deref().map(|name| Selection::single(BrushKey::brush(uid, name))).unwrap_or_default(),
     };
-    let rows = rows(uid, &memo, &app.ui.brushes_view.hidden);
+    let hidden = app.ui.brushes_view.hidden.clone();
     let view = if app.ui.brushes_view.list { PresetView::List } else { PresetView::Grid };
     let targets = targets(app, &list, current.as_deref());
     let on = FooterOn {
@@ -536,6 +575,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let ctx = ui.ctx().clone();
     let (doc, first, multi_ref, list_ref) = (doc.as_deref(), &first, multi.as_ref(), list.as_slice());
+    let source = brush_source(BrushSource { uid, revision, doc, shown: &memo, hidden: hidden.clone() });
     let browser = |ui: &mut Ui| {
         let mut state = PresetState::new();
         let ctx = ctx.clone();
@@ -549,12 +589,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 && type_of(first, key).is_some_and(takes_art)
                 && craft::ui::runtime::pointer::frame(&ctx).pick_mods.alt
         });
-        // A brush moves only among those of its type.
-        let same_type = move |drag: &ListDrag<BrushKey>, over: Option<&BrushKey>, _: usize| {
-            over.and_then(|over| type_of(first, over)).is_some_and(|ty| type_of(first, &drag.grabbed) == Some(ty))
-        };
         let empty = format!("{}\n{}", tl!("No brushes"), tl!("Select art and use New Brush to make one."));
-        PresetBrowser::new(tl!("Brushes"), Bind::bound(&mut state), &rows)
+        PresetBrowser::new(tl!("Brushes"), Bind::bound(&mut state), &source)
             .group_heads(GroupHeads::Rule)
             .cell_shape(CellShape::ratio(64, 28))
             .view_lock(view)
@@ -562,14 +598,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             .selection(Bind::given(given.clone()))
             .row_menu(PresetRowMenu::Host)
             .row_items(move |key: &BrushKey| item_menu(key, multi_ref, list_ref))
-            .reorder(PresetReorder::items().accepts(same_type))
+            .reorder(PresetReorder::items())
             .takes_drop(art_onto)
             .empty(empty)
-            .thumb(move |cx: &ContentPainterCx, rect: Rect, info: ThumbInfo<'_, BrushKey>| {
-                if let (Some(doc), false, Some(b)) = (doc, info.key.group, first.get(info.key.name.as_str())) {
-                    paint_brush(cx, rect, doc, b);
-                }
-            })
             .show(ui)
             .events
     };
@@ -609,7 +640,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
             PresetEvent::Menu { target, command, .. } => item_command(app, &target, &command, multi.as_ref()),
-            PresetEvent::Reorder(edit) => move_brush(app, &rows, first, &edit),
+            PresetEvent::Reorder(edit) => move_brush(app, &rows(uid, &memo, &hidden), first, &edit),
             PresetEvent::Dropped { at, payload, .. } => {
                 if let (DropAt::Onto(key), Some(ids)) = (&at, payload.get::<PanelDrag>().and_then(|p| art_of(p, uid))) {
                     crate::dialogs::brush_replace_art::replace(app, &key.name, &ids);

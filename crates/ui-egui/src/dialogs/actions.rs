@@ -8,7 +8,7 @@
 
 use craft::automation::actions::ActionColor;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogResult, FieldRefusal, HeldAnswer, HeldOk, PromptChoice, StackDialog, serde_fields, set_serde_field};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
@@ -386,7 +386,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
     answered |= settle::<super::action_playback::PlaybackDialog>(app);
     answered |= settle::<BatchDialog>(app);
     if let Some(dialogs) = app.dialogs() {
-        let proceed = dialogs.with(|host| matches!(host.take::<StopMessage>(), Some(DialogResult::Ok(answer)) if answer.choice == PromptChoice::Proceed));
+        let proceed =
+            dialogs.with(|host| matches!(host.take::<StopMessage>(), Some(DialogResult::Ok(answer)) if answer.choice == PromptChoice::Proceed));
         if proceed {
             if let Err(message) = app.run(CONTINUE_PLAYBACK, json!({})) {
                 app.status(message);

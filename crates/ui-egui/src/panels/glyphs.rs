@@ -24,12 +24,12 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use craft::font_manager::glyphs::{AlternatePick, CATEGORIES, CellInfo, GlyphCell, GlyphSource, GlyphsPanel, GlyphsWords};
+use craft::font_manager::glyphs::{CATEGORIES, CellInfo, GlyphCell, GlyphSource, GlyphsPanel, GlyphsWords};
 use craft::keymap::CommandRef;
 use craft::ui::contract::Bind;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::runtime::env::{Env, Label};
+use craft::ui::runtime::env::Env;
 use egui::{Color32, ColorImage, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, GlyphForm, NodeId, NodeKind};
@@ -471,14 +471,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let (families, styles) = (db.families(), db.styles(&family));
     let can_insert = can_insert(app);
-    let out = GlyphsPanel::new(tl!("Glyphs"), &source, Bind::bound(&mut family), Bind::bound(&mut style), Bind::bound(&mut app.ui.glyphs_panel))
-        .families(&families)
-        .styles(&styles)
-        .can_insert(can_insert)
-        .marked(marked)
-        .reveal(reveal)
-        .empty(source.empty.clone().map(Label::from))
-        .show(ui);
+    let mut panel =
+        GlyphsPanel::new(tl!("Glyphs"), &source, Bind::bound(&mut family), Bind::bound(&mut style), Bind::bound(&mut app.ui.glyphs_panel))
+            .families(&families)
+            .styles(&styles)
+            .can_insert(can_insert);
+    if let Some(cell) = marked {
+        panel = panel.marked(cell);
+    }
+    if let Some(cell) = reveal {
+        panel = panel.reveal(cell);
+    }
+    if let Some(note) = &source.empty {
+        panel = panel.empty(note.clone());
+    }
+    let out = panel.show(ui);
     if out.font_changed {
         app.ui.glyphs_font = Some((family, style));
     }
@@ -486,7 +493,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         activate(app, cell);
     }
     if let Some(pick) = out.alternate {
-        pick_alternate(app, pick);
+        pick_alternate(app, pick.cell, pick.glyph);
     }
 }
 
@@ -513,10 +520,10 @@ pub(crate) fn activate(app: &mut VectorcraftApp, cell: GlyphCell) {
 }
 
 /// A pick in the alternates pop-up of a cell of the browsed face.
-pub(crate) fn pick_alternate(app: &mut VectorcraftApp, pick: AlternatePick) {
+pub(crate) fn pick_alternate(app: &mut VectorcraftApp, cell: GlyphCell, glyph: GlyphCell) {
     let (_, _, Some(face)) = browsed_face(app) else { return };
-    let (Some(gid), Some(picked)) = (gid_of_cell(&face, pick.cell), gid_of_cell(&face, pick.glyph)) else { return };
-    match pick.cell {
+    let (Some(gid), Some(picked)) = (gid_of_cell(&face, cell), gid_of_cell(&face, glyph)) else { return };
+    match cell {
         GlyphCell::Char(c) => insert_alternate(app, &face, c, gid, picked),
         // A glyph no character maps goes on the selected character as a double-click on its cell
         // in Entire Font puts it.

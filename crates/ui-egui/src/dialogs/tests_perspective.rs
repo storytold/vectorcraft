@@ -257,7 +257,7 @@ fn digit_keys_switch_planes_and_the_widget_follows_the_window() {
     key(&mut app, egui::Key::Num2);
     assert_eq!(grid(&app).plane.id(), "ground");
     // The window the widget stays in: none before the canvas is laid out.
-    app.view_mut().rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
     let f = app.screen_frame().unwrap();
     assert_eq!(f.size, (800.0, 600.0));
     let z = app.view().unwrap().zoom;

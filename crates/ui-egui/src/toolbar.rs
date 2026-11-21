@@ -15,12 +15,12 @@ use craft::color_ui::ui::PaintChip;
 use craft::theme::Size; // PLAN: assumed path of the theme's `Size` through the facade
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope};
+use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};
 use craft::ui::docking::GroupAt;
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::Select;
-use craft::ui::rails::{RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
+use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
@@ -279,6 +279,36 @@ fn opens(app: &VectorcraftApp, owner: &Owner) -> Side {
 /// The rail of `owner`, drawn by the dock: measured at a width, or shown in a rect. Returns the
 /// height it takes.
 pub(crate) fn rail_view(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, _cx: &mut BodyCx<'_>) -> f32 {
+    let panel = owner.panel();
+    // The model leaves the app for the pass, which lends the app to the footer.
+    let mut model = app.dock_rt.rail_models.remove(&panel).unwrap_or_default();
+    let height = show_rail(app, ui, owner, at, &mut model);
+    app.dock_rt.rail_models.insert(panel, model);
+    height
+}
+
+/// What a rail reads across passes: its slots and the tools they showed last, each edited only when
+/// it changed, so a pass where neither changed reads neither.
+#[derive(Default)]
+pub(crate) struct RailModel {
+    slots: Tracked<Vec<ToolSlot<String>>>,
+    last_used: Tracked<LastUsed<String>>,
+}
+
+impl RailModel {
+    /// Brings the model up to `slots` and `last_used`.
+    fn refresh(&mut self, slots: Vec<ToolSlot<String>>, last_used: LastUsed<String>) {
+        if *self.slots != slots {
+            self.slots.edit(|kept| *kept = slots);
+        }
+        if *self.last_used != last_used {
+            self.last_used.edit(|kept| *kept = last_used);
+        }
+    }
+}
+
+/// [`rail_view`] over `model`, the rail's own.
+fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, model: &mut RailModel) -> f32 {
     let (slots, last_used) = match &owner {
         Owner::Tools => (rail_slots(&slots(app)), app.ui.tools_last_used.clone()),
         Owner::Toolbar(id) => {
@@ -293,6 +323,7 @@ pub(crate) fn rail_view(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at:
             (tools.iter().map(|tool| ToolSlot::new(slot_id(tool), vec![rail_tool(tool)])).collect(), Default::default())
         }
     };
+    model.refresh(slots, last_used);
     let current = app.session.tool_id().to_string();
     // PLAN: the sheet's `Cards<'a> { app }` cannot be held beside the footer's `&mut app`; Cards copies the two prefs.
     let cards = card::Cards::new(app);
@@ -300,15 +331,15 @@ pub(crate) fn rail_view(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at:
     let own_bar = !matches!(owner, Owner::Strip(..));
     let opens = opens(app, &owner);
     let scope = if tools_panel && app.ui.toolbar_compact { ThemeScope::new().density(Size::Compact) } else { ThemeScope::new() };
-    let mut rail = ToolRail::new(tl!("Tools"), &slots, &current, &last_used)
-        .opens(opens)
-        .theme(scope)
-        .tips(&cards)
-        .captions(app.session.prefs.tool_group_labels)
-        .tear_off(own_bar)
-        .editing(editing(app, &owner));
+    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).theme(scope).tips(&cards);
+    if app.session.prefs.tool_group_labels {
+        rail = rail.captions();
+    }
     if own_bar {
-        rail = rail.edit_toolbar(tl!("Edit Toolbar"));
+        rail = rail.tear_off().edit_toolbar(tl!("Edit Toolbar"));
+    }
+    if editing(app, &owner) {
+        rail = rail.editing();
     }
     let footer = |ui: &mut Ui, footer: RailFooter| {
         if tools_panel {
@@ -336,7 +367,7 @@ pub(crate) fn rail_view(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at:
         app.run("window.editToolbar", params).ok();
     }
     if let Some(torn) = &out.torn_off
-        && let Some(first) = slots.iter().find(|slot| slot.id == torn.grabbed).and_then(|slot| slot.tools.first())
+        && let Some(first) = model.slots.iter().find(|slot| slot.id == torn.grabbed).and_then(|slot| slot.tools.first())
     {
         // The strip floats inside this window: an OS window would never see the held press move.
         match place_strip(app, &owner, &first.id, Some(torn.pointer)) {
@@ -457,7 +488,8 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if app.session.tool_id() == "dimension" {
-        return crate::dialogs::dimension::controls(app, ui);
+        crate::dialogs::dimension::controls(app, ui);
+        return;
     }
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];

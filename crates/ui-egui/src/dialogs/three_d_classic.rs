@@ -3,7 +3,6 @@
 //! surface rows, and the Map Art page with its surface outline on the artboard. Position (presets, rotation,
 //! perspective) is the page every 3D effect shares; the classic effects add the track cube to it ([`super::track_cube`]).
 
-// PLAN: assumed import paths for the framework items (craft_ui_patterns form_dialogs, craft_ui, craft_draw, craft_behavior).
 use craft::behavior::CanvasView;
 use craft::behavior::geometry::quad::{BoxAllow, BoxRules, BoxState, Parts, ScaleRule};
 use craft::behavior::kurbo::{BezPath, Point, Rect, Size, Vec2};
@@ -11,9 +10,9 @@ use craft::draw::ui::transform::{RotateZone, TransformBox};
 use craft::theme::Srgba;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::Canvas;
-use craft::ui::canvas::CanvasSpace;
+use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::canvas_controls::SelectionOutline;
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Picture;
 use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
@@ -102,7 +101,7 @@ fn map_art_button(fields: &DialogFields) -> Option<Param> {
             if button.clicked() {
                 fields.set(PAGE, MAP_PAGE);
             }
-            button
+            button.response
         })
         .full_width()
     })
@@ -195,7 +194,7 @@ fn shading_custom() -> Param {
         if button.clicked() {
             cx.pick_color(SHADING_CUSTOM, color);
         }
-        button
+        button.response
     })
     .opens_with("#000000")
 }
@@ -208,7 +207,7 @@ fn maps_of(fields: &DialogFields) -> Vec<SurfaceMap> {
 /// The JSON a field holds, null when it has none.
 fn json_field(fields: &DialogFields, key: &str) -> Value {
     match fields.get(key) {
-        Some(FieldValue::Json(value)) => value.clone(), // PLAN: assumed `FieldValue::Json(Value)`
+        Some(FieldValue::Json(value)) => value.clone(),
         _ => Value::Null,
     }
 }
@@ -369,14 +368,16 @@ fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
     let (width, height) = (flat.width.max(1e-6), flat.height.max(1e-6));
     let margin = f64::from(ui.spacing().item_spacing.x) * 2.0;
     let zoom = ((f64::from(room.width()) - margin) / width).min((f64::from(room.height()) - margin) / height).max(1e-6);
-    let view = CanvasView::new(room.into(), Point::ZERO, zoom); // PLAN: assumed ScreenRect: From<egui::Rect>
+    let view = CanvasView::new(room.into(), Point::ZERO, zoom);
     let rect = flat.art.map(art_rect);
     let mut edited = map.clone();
     Canvas::new(tl!("Surface")).view(view).show_at(ui, room, |ui, body| {
         let corner = |x: f64, y: f64| view.to_screen(Point::new(x, y));
         let page = egui::Rect::from_two_pos(corner(-width / 2.0, -height / 2.0), corner(width / 2.0, height / 2.0));
         let fill = if flat.visible { Color32::from_gray(205) } else { Color32::from_gray(90) };
-        body.space.paint_picture(ui.ctx(), vec![egui::Shape::rect_filled(page, 0.0, fill)]); // PLAN: assumed `body.space: CanvasSpace`
+        if let Some(space) = canvas_space(&body.env) {
+            space.paint_picture(ui.ctx(), vec![egui::Shape::rect_filled(page, 0.0, fill)]);
+        }
         let (Some(m), Some(rect)) = (map.as_ref(), rect) else { return };
         let mut state = map_box(m, rect);
         if m.rotation.abs() < 0.01
@@ -414,7 +415,7 @@ fn map_actions(flat: Flat, has_map: bool, any_map: bool) -> Param {
         ui.horizontal(|ui| {
             let fit = Button::new(tl!("Scale to Fit")).enabled(has_map && flat.art.is_some()).show(ui);
             if let (true, Some(m), Some(art)) = (fit.clicked(), map.as_ref(), flat.art) {
-                let art = vectorcraft_geom::Rect::new(0.0, 0.0, art.0, art.1); // PLAN: assumed `Rect::new(x0, y0, x1, y1)`
+                let art = vectorcraft_geom::Rect::new(0.0, 0.0, art.0, art.1);
                 let (scale_x, scale_y) = m.fitting_scales(art, (flat.width, flat.height)).unwrap_or((m.scale_x, m.scale_y));
                 store_map(fields, surface, Some(&SurfaceMap { x: 0.0, y: 0.0, scale_x, scale_y, ..m.clone() }));
             }
@@ -439,13 +440,13 @@ pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -
     if !vectorcraft_effects::takes_map_art(effect) {
         return Vec::new();
     }
-    let first_page = if effect == CLASSIC_ROTATE { "rotation" } else { "object" }; // PLAN: assumed page ids of effects-w10
+    let first_page = if effect == CLASSIC_ROTATE { "rotation" } else { "object" };
     let mut rows = vec![Param::custom("__mapDone", tl!("Map Art"), move |ui, fields, _| {
         let done = Button::new(tl!("Done")).show(ui);
         if done.clicked() {
             fields.set(PAGE, first_page);
         }
-        done
+        done.response
     })];
     let Some(listed) = data.surfaces.as_ref().filter(|s| !s.is_empty()) else { return rows };
     let count = listed.len();
@@ -512,7 +513,7 @@ pub(crate) fn show_outline(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canvas
         path.line_to((b.x, b.y));
     }
     let paths = [path];
-    SelectionOutline::solid(tl!("Map Art surface"), &paths).color(DataColor::new(Color32::RED)).show_at(ui, space.view.rect.into()); // PLAN: assumed ScreenRect -> egui::Rect
+    SelectionOutline::solid(tl!("Map Art surface"), &paths).color(DataColor::new(Color32::RED)).show_at(ui, space.view.rect.into());
 }
 
 #[cfg(test)]

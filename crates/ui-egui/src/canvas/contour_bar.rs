@@ -9,17 +9,17 @@ use craft::ui::buttons::Button;
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::choice::Segmented;
 use craft::ui::contract::overlay::{Anchor, Dismiss, Outside, Overlay, Place};
-use craft::ui::contract::{Bind, Entry};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::Env;
 use craft::ui::style::SurfaceKind;
 use craft::ui::text::NumberField;
-use egui::vec2;
-use serde_json::Value;
+use egui::{Ui, vec2};
+use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
-use super::{Ui, VectorcraftApp, json};
+use crate::{VectorcraftApp, tl};
 
 /// The live effect a Contour is made of.
 const EFFECT: &str = "path.offsetPath";

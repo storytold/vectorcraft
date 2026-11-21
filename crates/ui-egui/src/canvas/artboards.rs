@@ -86,7 +86,7 @@ pub(super) fn apply(app: &mut VectorcraftApp, out: &PasteboardOutput) -> Option<
     if let Some((i, mods)) = out.name_clicked {
         select_named_artboard(app, i, mods.shift);
     }
-    if let Some(EditEvent::Commit(Rename { key, name, .. })) = &out.rename {
+    if let Some(EditEvent::Commit { after: Rename { key, name, .. }, .. }) = &out.rename {
         commit_artboard_name(app, *key, name);
     }
     out.context_at
@@ -99,7 +99,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
     let outline = view.outline;
     let list = frames(app, st, view, outline);
     // The pasteboard's colour is the canvas's (`Canvas::pasteboard`).
-    let out = Pasteboard::new("Artboards", &list).border(border(outline)).shows_outside(true).show_at(ui, space.view.rect);
+    let out = Pasteboard::new("Artboards", &list).border(border(outline)).shows_outside().show_at(ui, space.view.rect);
     match kind {
         BodyKind::Live => apply(app, &out),
         BodyKind::Pane => None,

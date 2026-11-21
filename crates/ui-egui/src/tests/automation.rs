@@ -12,7 +12,7 @@ use crate::background::SharedWriteFn;
 use craft::automation::actions::ActionList;
 use craft::automation::{ControlRequest, Reply};
 
-use super::picks::open_dialogs;
+use super::picks::{answer_dialog, open_dialogs};
 use crate::dialogs::plugin::InstallOrigin;
 use crate::{Services, VectorcraftApp};
 
@@ -48,6 +48,17 @@ fn confined_with(tag: &str, write_shared: Option<SharedWriteFn>) -> (Vectorcraft
 
 fn s(p: PathBuf) -> String {
     p.to_string_lossy().into_owned()
+}
+
+/// The fields of the top dialog in a `ui.inspect` result's `dialogs` (the top one last).
+fn top_dialog_fields(inspected: &Value) -> &Value {
+    inspected["dialogs"].as_array().and_then(|dialogs| dialogs.last()).map_or(&Value::Null, |dialog| &dialog["fields"])
+}
+
+/// Sets `fields` on the app's top dialog, as a person's edits would.
+fn set_top_fields(app: &mut VectorcraftApp, fields: &[(&str, Value)]) {
+    let top = open_dialogs(app).pop().expect("an open dialog").id;
+    answer_dialog(app, top, fields, false);
 }
 
 /// The Actions panel's list of the sets `sets` (`[{name, actions: [{name, steps}]}]`, as preferences
@@ -578,7 +589,6 @@ fn a_pass_with_injected_input_runs_inside_the_roots() {
         if dropped {
             raw.dropped_files.push(std::sync::Arc::new(Dropped(outside.clone())));
         }
-        app.begin_host_iteration();
         ctx.run_ui(raw, |ui| {
             app.tick(ui.ctx());
             app.ui(ui);
@@ -659,7 +669,7 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let (a, b, c) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")), s(base.join("in/c.svg")));
     let svg = std::fs::read(&a).unwrap();
     for path in [&a, &b, &c] {
-        assert!(crate::opening::start(&mut app, path, svg.clone()).is_ok(), "{path} opens off the UI thread");
+        assert_eq!(crate::opening::start(&mut app, path, svg.clone())["background"], true, "{path} opens off the UI thread");
     }
     app.ui.recent_files = vec![a.clone(), b.clone(), c.clone()];
     let panel = |id: &str, path: &str| -> crate::panels::library_panel::LibraryPanel {
@@ -728,20 +738,20 @@ fn ui_inspect_leaves_out_an_insert_menu_item_path_outside_the_read_root() {
     let (mut app, tx, base) = confined("inspect-insert-menu-item");
     let load = crate::dialogs::proof_setup::LOAD;
     let (inside, outside) = (s(base.join("in/Press.vcproof")), s(base.join("outside/Press.vcproof")));
-    let dialog = |path: &str| {
-        let fields = json!({"find": "", "command": load, "params": {"path": path}, "note": ""});
-        Some(crate::state::Dialog::new(crate::dialogs::action_insert_menu_item::KIND, fields))
+    crate::dialogs::action_insert_menu_item::open(&mut app, None, None);
+    let pick = |app: &mut VectorcraftApp, path: &str| {
+        set_top_fields(app, &[("command", json!(load)), ("params", json!({"path": path}))]);
     };
-    app.ui.dialog = dialog(&outside);
+    pick(&mut app, &outside);
     let ctx = egui::Context::default();
-    assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["dialog"]["fields"]["params"]["path"], outside, "the person sees it");
+    assert_eq!(top_dialog_fields(&crate::control::inspect(&app, &ctx))["params"]["path"], outside, "the person sees it");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
-    let fields = &r["result"]["ui"]["dialog"]["fields"];
+    let fields = top_dialog_fields(&r["result"]);
     assert_eq!((fields["command"].as_str(), fields["params"].get("path")), (Some(load), None), "{r}");
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["params"]["path"].clone()), Some(json!(outside)), "the UI state is not changed");
-    app.ui.dialog = dialog(&inside);
+    assert_eq!(top_dialog_fields(&crate::control::inspect(&app, &ctx))["params"]["path"], outside, "the dialog is not changed");
+    pick(&mut app, &inside);
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
-    assert_eq!(r["result"]["ui"]["dialog"]["fields"]["params"]["path"], inside, "{r}");
+    assert_eq!(top_dialog_fields(&r["result"])["params"]["path"], inside, "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -769,17 +779,18 @@ fn ui_inspect_hides_a_selected_javascript_file_outside_the_read_root() {
     for f in [&inside, &outside] {
         app.run("svgInteractivity.addFile", json!({ "file": f })).unwrap();
     }
-    let kind = crate::dialogs::javascript_files::KIND;
-    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": outside})));
-    let selected = |v: &Value| v["ui"]["dialog"]["fields"]["selected"].clone();
-    assert_eq!(selected(&crate::control::inspect(&app, &egui::Context::default())), json!(outside), "the person's");
+    crate::dialogs::javascript_files::open(&mut app).unwrap();
+    set_top_fields(&mut app, &[("selected", json!(outside))]);
+    let selected = |v: &Value| top_dialog_fields(v)["selected"].clone();
+    let ctx = egui::Context::default();
+    assert_eq!(selected(&crate::control::inspect(&app, &ctx)), json!(outside), "the person's");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(selected(&r["result"]), "menu.js", "{r}");
     assert!(!r.to_string().contains(&json!(outside).to_string().trim_matches('"').to_string()), "{r}");
-    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": inside})));
+    set_top_fields(&mut app, &[("selected", json!(inside))]);
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(selected(&r["result"]), json!(inside), "{r}");
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("selected")), Some(inside), "the dialog is not changed");
+    assert_eq!(selected(&crate::control::inspect(&app, &ctx)), json!(inside), "the dialog is not changed");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -1239,9 +1250,24 @@ fn a_library_panel_command_answers_with_a_hidden_librarys_shown_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// A closed panel's former place, as `ui.docking_hidden` keeps it.
+/// A closed panel's former place, as the dock workspace keeps it.
 fn hidden_place() -> craft::behavior::dock::Location<String> {
     serde_json::from_value(json!({"floating": null, "anchor": null, "placement": {"Tab": {"before": null}}, "size": null, "stack": null})).unwrap()
+}
+
+/// Closes `panel` into the dock workspace's closed panels, with [`hidden_place`] as its former place.
+fn hide_panel(app: &mut VectorcraftApp, panel: String) {
+    let ws = &app.ui.dock_workspace;
+    let mut hidden = ws.hidden().to_vec();
+    hidden.push((panel, hidden_place()));
+    let next = craft::behavior::dock::Workspace::from_parts(ws.layout().clone(), hidden, ws.floated().to_vec());
+    std::sync::Arc::make_mut(&mut app.ui.dock_workspace).replace(next);
+}
+
+/// The closed panels of a `ui.inspect` result's UI state, in order.
+fn hidden_panels(ui: &Value) -> Vec<String> {
+    let hidden = ui["dock_workspace"]["hidden"].as_array().map(Vec::as_slice).unwrap_or_default();
+    hidden.iter().filter_map(|entry| entry[0].as_str().map(str::to_owned)).collect()
 }
 
 /// `ui.inspect` hides the path of a library loaded from outside the read root wherever the reply holds
@@ -1252,11 +1278,11 @@ fn ui_inspect_hides_a_closed_librarys_path_outside_the_read_root() {
     let (mut app, tx, base) = confined("inspect-closed-lib");
     let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
     app.ui.color_guide_limit = theirs.clone();
-    app.ui.docking_hidden.insert(format!("library:swatches:{theirs}"), hidden_place());
+    hide_panel(&mut app, format!("library:swatches:{theirs}"));
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let ui = &r["result"]["ui"];
     assert_eq!(ui["color_guide_limit"], "loaded/b.svg", "{r}");
-    assert!(ui["docking_hidden"].as_object().unwrap().contains_key("library:swatches:loaded/b.svg"), "{r}");
+    assert!(hidden_panels(ui).iter().any(|p| p == "library:swatches:loaded/b.svg"), "{r}");
     let hidden = json!(s(base.join("outside"))).to_string();
     assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_guide_limit"], json!(theirs), "the person's");
@@ -1272,15 +1298,14 @@ fn ui_inspect_keeps_two_hidden_libraries_with_one_file_name_apart() {
     let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
     app.ui.library_panels = vec![panel(&x), panel(&y)];
     for id in [&x, &y] {
-        app.ui.docking_hidden.insert(format!("library:swatches:{id}"), hidden_place());
+        hide_panel(&mut app, format!("library:swatches:{id}"));
     }
     app.ui.color_guide_limit = y.clone();
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let ui = &r["result"]["ui"];
     let ids: Vec<_> = ui["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
     assert_eq!(ids, [json!("loaded/b.svg"), json!("loaded/b.svg (2)")], "{r}");
-    let keys: Vec<_> = ui["docking_hidden"].as_object().unwrap().keys().cloned().collect();
-    assert_eq!(keys, ["library:swatches:loaded/b.svg", "library:swatches:loaded/b.svg (2)"], "no entry is dropped: {r}");
+    assert_eq!(hidden_panels(ui), ["library:swatches:loaded/b.svg", "library:swatches:loaded/b.svg (2)"], "no entry is dropped: {r}");
     assert_eq!(ui["color_guide_limit"], "loaded/b.svg (2)", "the same id everywhere");
     let _ = std::fs::remove_dir_all(base);
 }
@@ -1422,13 +1447,13 @@ fn ui_set_reopens_a_hidden_librarys_panel_by_its_shown_id() {
     let (mut app, tx, base) = confined("set-hidden-panel");
     let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
     let real = format!("library:swatches:{theirs}");
-    app.ui.docking_hidden.insert(real.clone(), hidden_place());
+    hide_panel(&mut app, real.clone());
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let shown = "library:swatches:loaded/b.svg";
-    assert!(r["result"]["ui"]["docking_hidden"].as_object().unwrap().contains_key(shown), "{r}");
+    assert!(hidden_panels(&r["result"]["ui"]).iter().any(|p| p == shown), "{r}");
     let r = request(&mut app, &tx, "ui.set", json!({"panel": shown}));
     assert_eq!(r["ok"], true, "{r}");
-    assert!(!app.ui.docking_hidden.contains_key(&real), "the closed panel is reopened: {r}");
+    assert!(!app.ui.dock_workspace.hidden().iter().any(|(p, _)| p == &real), "the closed panel is reopened: {r}");
     let layout = crate::panel_docking::layout_of(&app.ui);
     assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
     let hidden = json!(s(base.join("outside"))).to_string();
@@ -1462,19 +1487,18 @@ fn ui_set_reopens_a_hidden_librarys_panel_by_its_shown_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// A shortcut for showing the panel of a library outside the read root, saved and in an open Keyboard
-/// Shortcuts dialog, is keyed by the panel id shown, also when nothing else refers to the library.
+/// A shortcut for showing the panel of a library outside the read root, saved in a shortcut set, is
+/// keyed by the panel id shown, also when nothing else refers to the library.
 #[test]
 fn ui_inspect_hides_a_library_panels_path_in_shortcut_overrides() {
     let (mut app, tx, base) = confined("shortcut-hidden-panel");
     let real = format!("panel:library:swatches:loaded/{}", s(base.join("outside/b.svg")));
-    crate::keymap::set_override(&mut app.ui.shortcut_overrides, &real, "Cmd+Alt+Shift+F7");
-    app.ui.dialog = Some(crate::state::Dialog::new("shortcuts", json!({"overrides": { real.clone(): "Cmd+Alt+Shift+F8" }})));
+    let mut overrides = craft::keymap::Overrides::new();
+    overrides.insert(real, vec!["Cmd+Alt+Shift+F7".to_owned()]);
+    app.ui.shortcut_sets.save_as("Mine", overrides, &crate::shortcut_editor::BUILTINS).unwrap();
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let shown = "panel:library:swatches:loaded/b.svg";
-    let ui = &r["result"]["ui"];
-    assert_eq!(ui["shortcut_overrides"][shown], "Cmd+Alt+Shift+F7", "{r}");
-    assert_eq!(ui["dialog"]["fields"]["overrides"][shown], "Cmd+Alt+Shift+F8", "{r}");
+    assert_eq!(r["result"]["ui"]["shortcut_sets"]["sets"]["Mine"][shown], "Cmd+Alt+Shift+F7", "{r}");
     let hidden = json!(s(base.join("outside"))).to_string();
     assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
@@ -1489,11 +1513,11 @@ fn ui_inspect_shows_full_library_ids_without_a_read_root() {
     let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": theirs})).unwrap();
     app.ui.library_panels = vec![panel];
     app.ui.color_guide_limit = theirs.clone();
-    app.ui.docking_hidden.insert(format!("library:swatches:{theirs}"), hidden_place());
+    hide_panel(&mut app, format!("library:swatches:{theirs}"));
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let ui = &r["result"]["ui"];
     assert_eq!((&ui["library_panels"][0]["id"], &ui["color_guide_limit"]), (&json!(theirs), &json!(theirs)), "{r}");
-    assert!(ui["docking_hidden"].as_object().unwrap().contains_key(&format!("library:swatches:{theirs}")), "{r}");
+    assert!(hidden_panels(ui).contains(&format!("library:swatches:{theirs}")), "{r}");
 }
 
 /// A plug-in's permissions are approved only by a person who asked for the install. A control

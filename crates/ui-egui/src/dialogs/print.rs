@@ -21,9 +21,9 @@ use std::sync::{Arc, LazyLock, mpsc};
 use craft::behavior::{EditEvent, EditEvents, Mixed};
 use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
 use craft::ui::contract::{Bind, Show as _};
-use craft::ui::dialog::DialogId;
+use craft::ui::dialog::{DialogId, StackDialog as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
-use craft::ui::patterns::presets::{NamedPresetEvent, PresetRow};
+use craft::ui::patterns::presets::{NamedPresetEvent, PresetError, PresetRow};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::shell::WindowDialogs;
@@ -187,18 +187,64 @@ fn start(app: &mut VectorcraftApp, mode: PrintMode, fields: DialogFields, preset
         .layout(PrintLayout::Sections)
         .header(header)
         .json_form(|fields, out| out.extend(form::json_of(&KEYS, fields)))
-        .check_name(move |name: &str| refusal(&taken, &named, name).map_or(Ok(()), |m| Err(m.into())))
+        .check_name(move |name: &str| refusal(&taken, &named, name).map(|_| PresetError::NameTaken))
         .held_ok();
     let id = dialogs.with(|h| h.open(hosted));
     app.print_dialog.open = Some(Open { id, mode, preset, editing, art: None, preview: None });
     Ok(Value::Null)
 }
 
-/// The settings as dialog fields.
+/// The settings as dialog fields: a section's settings (`output: {mode}`) under the rows' dotted keys
+/// (`output.mode`).
 pub(super) fn fields_of(set: &PrintSettings) -> Result<DialogFields, String> {
     match serde_json::to_value(set).map_err(|e| e.to_string())? {
-        Value::Object(map) => Ok(form::fields_of(&KEYS, &map)),
+        Value::Object(map) => {
+            let mut flat = Map::new();
+            flatten_into("", map, &mut flat);
+            Ok(form::fields_of(&KEYS, &flat))
+        }
         _ => Err("print settings are not an object".into()),
+    }
+}
+
+/// `map`'s values into `out` under dotted keys below `prefix`: an object is opened up unless a row holds it whole.
+fn flatten_into(prefix: &str, map: Map<String, Value>, out: &mut Map<String, Value>) {
+    for (k, v) in map {
+        let key = if prefix.is_empty() { k } else { format!("{prefix}.{k}") };
+        match v {
+            Value::Object(inner) if !KEYS.iter().any(|p| p.key == key) => flatten_into(&key, inner, out),
+            v => {
+                out.insert(key, v);
+            }
+        }
+    }
+}
+
+/// `flat`'s dotted keys (`output.mode`) as nested objects (`output: {mode}`), as the print settings have them.
+fn nested(flat: Map<String, Value>) -> Map<String, Value> {
+    let mut out = Map::new();
+    for (key, v) in flat {
+        insert_at(&mut out, &key.split('.').collect::<Vec<_>>(), v);
+    }
+    out
+}
+
+/// `v` into `map` at the key path `path`, making the objects on the way.
+fn insert_at(map: &mut Map<String, Value>, path: &[&str], v: Value) {
+    match path {
+        [] => {}
+        [last] => {
+            map.insert((*last).to_string(), v);
+        }
+        [first, rest @ ..] => {
+            let slot = map.entry(*first).or_insert_with(|| Value::Object(Map::new()));
+            if !slot.is_object() {
+                *slot = Value::Object(Map::new());
+            }
+            if let Value::Object(next) = slot {
+                insert_at(next, rest, v);
+            }
+        }
     }
 }
 
@@ -231,7 +277,7 @@ pub(super) fn settings(fields: &DialogFields) -> Value {
     for k in NOT_SETTINGS {
         p.remove(k);
     }
-    Value::Object(p)
+    Value::Object(nested(p))
 }
 
 /// The work of the open dialog, once per frame: the printer list, Setup…, the preview, the placement the preview was
@@ -256,7 +302,8 @@ fn on<R>(dialogs: &WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Opti
 fn serve(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open) -> bool {
     let Some(mut d) = on(dialogs, |p| Drained {
         refresh: p.take_refresh(),
-        setup: p.take_setup(),
+        // Print Settings… opens the driver's dialog of the printer chosen.
+        setup: if p.take_setup() { p.json_fields().and_then(|f| f["printer"].as_str().map(str::to_string)) } else { None },
         moves: p.take_moves(),
         events: p.take_preset_events(),
         ok: p.take_ok(),
@@ -398,13 +445,14 @@ fn accept(app: &mut VectorcraftApp, open: &Open, answer: &PrintAnswer) -> Result
     app.session.execute("print.preview", &json!({ "settings": settings })).map_err(|e| e.to_string())?;
     app.run("print.setup", json!({ "settings": settings }))?;
     match answer.finish {
-        PrintFinish::Done => Ok(()),
         PrintFinish::Print => {
             let to_file = answer.settings.printer == PDF_FILE;
             let printer = if to_file { "" } else { answer.settings.printer.as_str() };
             let direct_pdf = answer.fields.bool("directPdf").unwrap_or(false);
             crate::print::run(app, &json!({ "settings": settings, "printer": printer, "toFile": to_file, "directPdf": direct_pdf })).map(|_| ())
         }
+        // Done only keeps the settings.
+        _ => Ok(()),
     }
 }
 
@@ -539,20 +587,20 @@ fn art_texture(app: &mut VectorcraftApp, open: &mut Open, layers: PrintLayers, a
 // ---------- sections ----------
 
 /// A select over the choices of `T`.
-fn pick<T: Choice>(key: &str, label: &str) -> Param {
+fn pick<T: Choice>(key: &str, label: &'static str) -> Param {
     Param::new(key, label, ParamKind::choice(T::IDS.iter().zip(T::LABELS).map(|(i, l)| (i.to_string(), tl!(*l).into())).collect(), None))
 }
 
-fn flag(key: &str, label: &str) -> Param {
+fn flag(key: &str, label: &'static str) -> Param {
     Param::new(key, label, ParamKind::bool(false))
 }
 
-fn note(key: &str, text: &str) -> Param {
+fn note(key: &str, text: &'static str) -> Param {
     Param::read_only_text(key, "", text).full_width()
 }
 
 /// A length in points, shown in the document's unit.
-fn length(key: &str, label: &str) -> Param {
+fn length(key: &str, label: &'static str) -> Param {
     // PLAN: the shown unit is the document's general unit; the framework's env supplies it once `Param::length` is written (wg.W21).
     Param::number(key, label, 0.0, 1.0, 2).length(LengthUnits::new(UnitKind::Points, UnitKind::Points, 72.0))
 }
@@ -687,7 +735,7 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         pick::<FontDownload>("graphics.fonts", tl!("Download:")),
     ];
     let profiles: Vec<(String, _)> =
-        std::iter::once((String::new(), tl!(SAME_AS_SOURCE).into())).chain(lists.profiles.iter().map(|p| (p.clone(), p.as_str().into()))).collect();
+        std::iter::once((String::new(), tl!(SAME_AS_SOURCE).into())).chain(lists.profiles.iter().map(|p| (p.clone(), p.clone().into()))).collect();
     let intents = Intent::ALL
         .iter()
         .map(|i| (serde_json::to_value(i).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), tl!(i.label()).into()))

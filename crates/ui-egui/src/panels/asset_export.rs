@@ -51,7 +51,7 @@ use craft::ui::sections::{DropAction, FooterAction, FooterBar, Section};
 use craft::ui::tile_grid::{BadgeKind, BadgeSlot, Tile, TileBadge, TileGrid};
 use egui::{Color32, Rect, Ui};
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{ExportAsset, Node, NodeId};
+use vectorcraft_doc::{Document, ExportAsset, Node, NodeId};
 use vectorcraft_engine::DocState;
 use vectorcraft_engine::cmd::fileio::{FORMATS_3D, SCREEN_SETTINGS_KEYS, format_3d_label, screen_export_preset_list};
 
@@ -60,11 +60,6 @@ use crate::dialogs::{ExportForScreensDialog, drop_unread_screen_settings, open_e
 use crate::file_asks::{self, Owner};
 use crate::panel_drag::PanelDrag;
 use crate::{VectorcraftApp, io};
-
-// PLAN: `screen_formats::{rows, save_preset_row, import_presets, export_preset, settings_format}`, `ExportForScreensDialog` and the
-// `crate::dialogs` re-exports above are coded against the ex.A8/ex.A9 contract rows (export-w13, export-w14); `import_presets` and
-// `export_preset` are taken as `fn(&mut VectorcraftApp[, &str]) -> Result<_, String>` that ask for their own files, and
-// `PanelDrag::Art { ids, .. }` as carrying `Vec<u64>` object ids (widgets-w13).
 
 pub const ID: &str = "assetExport";
 /// The id prefix of the panel menu's commands.
@@ -120,9 +115,10 @@ type Look = Vec<usize>;
 /// A document (uid) at one revision.
 type Revision = (u64, u64);
 
-/// Asset `a`'s art fitted into `r` on white. Rendered once per look of its objects (an edited
-/// object is a new allocation, so its address is a free change detector, as in the Layers panel).
-pub(crate) fn paint_thumb(painter: &egui::Painter, st: &DocState, a: &ExportAsset, r: Rect) {
+/// Asset `a` of `doc` (document uid and revision `revision`) fitted into `r` on white. Rendered once
+/// per look of its objects (an edited object is a new allocation, so its address is a free change
+/// detector, as in the Layers panel).
+pub(crate) fn paint_thumb(painter: &egui::Painter, revision: Revision, doc: &Document, a: &ExportAsset, r: Rect) {
     thread_local! {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
         /// The addresses of each asset's objects in one document revision (no tree walks per frame).
@@ -133,26 +129,26 @@ pub(crate) fn paint_thumb(painter: &egui::Painter, st: &DocState, a: &ExportAsse
     if !painter.clip_rect().intersects(r) {
         return;
     }
-    let ids = || st.doc.paint_order(a.nodes.iter().copied());
+    let ids = || doc.paint_order(a.nodes.iter().copied());
     let nodes = KEYS.with(|k| {
         let mut k = k.borrow_mut();
-        if k.0 != (st.uid, st.revision) {
-            *k = ((st.uid, st.revision), HashMap::new());
+        if k.0 != revision {
+            *k = (revision, HashMap::new());
         }
-        k.1.entry(a.id).or_insert_with(|| ids().iter().filter_map(|id| st.doc.node(*id)).map(|n| std::ptr::from_ref(n) as usize).collect()).clone()
+        k.1.entry(a.id).or_insert_with(|| ids().iter().filter_map(|id| doc.node(*id)).map(|n| std::ptr::from_ref(n) as usize).collect()).clone()
     });
     let px = (r.width() * painter.ctx().pixels_per_point()).round().max(8.0) as u32;
     let key = (nodes, px);
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
-        let art: Vec<&Node> = ids().iter().filter_map(|id| st.doc.node(*id)).collect();
+        let art: Vec<&Node> = ids().iter().filter_map(|id| doc.node(*id)).collect();
         // Same Art Optimized supersample as assets.export (#983): abutting fills leave no seam in
         // the tile (Layers row thumbs stay cheap without it).
         let opts = vectorcraft_render::RenderOptions { image_mips: true, precise: true, supersample: true, ..Default::default() };
         let img = RENDERER.with(|rr| match art.as_slice() {
-            [one] => rr.borrow_mut().render_node_thumbnail_with(&st.doc, one, px, None, &opts),
+            [one] => rr.borrow_mut().render_node_thumbnail_with(doc, one, px, None, &opts),
             many => {
                 let group = Node::group(NodeId(0), many.iter().map(|n| Arc::new((*n).clone())).collect());
-                rr.borrow_mut().render_node_thumbnail_with(&st.doc, &group, px, None, &opts)
+                rr.borrow_mut().render_node_thumbnail_with(doc, &group, px, None, &opts)
             }
         })?;
         let color = crate::canvas::color_image(&img);
@@ -204,7 +200,7 @@ fn tile(st: &DocState, id: u64) -> Tile<'_> {
     let Some(a) = st.doc.asset(id) else { return Tile::new("") };
     let mut tile = Tile::new(a.name.clone())
         .tooltip(TooltipSpec::new(format!("{}\n{}", a.name, tl!("Double-click to rename"))))
-        .thumb(ThumbAspect::SQUARE, move |cx, r| paint_thumb(&cx.painter, st, a, r));
+        .thumb(ThumbAspect::SQUARE, move |cx, r| paint_thumb(&cx.painter, (st.uid, st.revision), &st.doc, a, r));
     if a.format_3d.is_some() {
         tile = tile.badge(TileBadge::new(BadgeSlot::StartTop, BadgeKind::Text("3D".into()), Tone::Neutral, None));
     }
@@ -374,10 +370,8 @@ fn open_location(saved: &Map<String, Value>) -> bool {
 fn format_settings(app: &mut VectorcraftApp, ids: &[u64], format: &str) {
     open_export_for_screens_assets(app, Some(ids));
     let Some(ctx) = app.ui_ctx.clone() else { return };
-    let Some(mut dialogs) = app.dialogs() else { return };
-    if let Some(d) = dialogs.get_mut::<ExportForScreensDialog>()
-        && let Err(e) = d.set_json_field(&ctx, "__settings", json!(format))
-    {
+    let Some(dialogs) = app.dialogs() else { return };
+    if let Some(Err(e)) = dialogs.with(|h| h.get_mut::<ExportForScreensDialog>().map(|d| d.set_json_field(&ctx, "__settings", json!(format)))) {
         app.status(e);
     }
 }
@@ -417,7 +411,8 @@ fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
     let (rows, preset) = screen_saved_rows(&st.doc.export_settings);
     let preset = preset.unwrap_or_default().to_string();
     let n = rows.len();
-    let mut fields = Map::from_iter([("formats".to_string(), json!(&rows)), ("preset".to_string(), json!(preset)), ("__settings".to_string(), json!(""))]);
+    let mut fields =
+        Map::from_iter([("formats".to_string(), json!(&rows)), ("preset".to_string(), json!(preset)), ("__settings".to_string(), json!(""))]);
     screen_formats::rows(ui, &mut fields, None);
     let (shown, picked) = (text_of(&fields, "__settings"), text_of(&fields, "preset"));
     let formats = fields.remove("formats").unwrap_or(Value::Null);
@@ -530,14 +525,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 .show(ui);
         } else {
             let items = Assets::of(st);
-            let grid = TileGrid::<u64>::new(tl!("Assets")).id(grid_id).select(SelectMode::Multi).selection(Bind::bound(&mut model.selection)).rename(true);
+            let grid =
+                TileGrid::<u64>::new(tl!("Assets")).id(grid_id).select(SelectMode::Multi).selection(Bind::bound(&mut model.selection)).rename(true);
             let out = grid.show_items(ui, &items, &mut |id, _| tile(st, *id));
             opener = Some(out.response.response.clone());
             events = out.response.events;
         }
     });
     if let Some(PanelDrag::Art { ids, .. }) = zone.output.dropped {
-        seen.dropped = Some((ids, alt));
+        seen.dropped = Some((ids.into_iter().map(|id| id.0).collect(), alt));
     }
     for event in events {
         match event {
@@ -663,9 +659,15 @@ pub(crate) fn preset(app: &mut VectorcraftApp, doc: u64, pick: PresetPick) {
             })
         }
         PresetPick::Delete(name) => app.run("document.exportPresets.delete", json!({ "name": name })).map(|_| set_applied(app, doc, None)),
-        PresetPick::Import => screen_formats::import_presets(app).map(|_| ()),
-        PresetPick::Export(name) => screen_formats::export_preset(app, &name).map(|_| ()),
+        // The file asks report when they are answered.
+        PresetPick::Import => return screen_formats::import_presets(app, report::<Vec<String>>),
+        PresetPick::Export(name) => return screen_formats::export_preset(app, &name, report::<String>),
     };
+    report(app, done);
+}
+
+/// Reports a failed preset action in the status bar; a cancelled file ask says nothing.
+fn report<T>(app: &mut VectorcraftApp, done: Result<T, String>) {
     if let Err(e) = done
         && e != "cancelled"
     {
@@ -681,7 +683,8 @@ fn preset_settings(app: &VectorcraftApp, doc: u64) -> Value {
     let current = app.ui.asset_export_panel.docs.get(&doc).and_then(|d| d.applied.clone()).filter(|name| !name.is_empty());
     let Some(current) = current else { return Value::Object(shared) };
     let list = screen_export_preset_list(&app.session.prefs.screen_export_presets);
-    let Some(applied) = list.as_array().and_then(|rows| rows.iter().find(|p| p["name"] == current.as_str())).and_then(|p| p["settings"].as_object()) else {
+    let Some(applied) = list.as_array().and_then(|rows| rows.iter().find(|p| p["name"] == current.as_str())).and_then(|p| p["settings"].as_object())
+    else {
         return Value::Object(shared);
     };
     let Some(st) = app.session.active() else { return Value::Object(shared) };

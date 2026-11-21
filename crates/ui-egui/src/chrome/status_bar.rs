@@ -58,10 +58,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles).show(ui).value().copied();
         });
         Divider::vertical().show(ui);
-        for (icon, to, tip, enabled) in [
-            ("chevrons_left", "first", tl!("First Artboard"), cur > 0),
-            ("chevron_left", "previous", tl!("Previous Artboard"), cur > 0),
-        ] {
+        for (icon, to, tip, enabled) in
+            [("chevrons_left", "first", tl!("First Artboard"), cur > 0), ("chevron_left", "previous", tl!("Previous Artboard"), cur > 0)]
+        {
             if IconButton::new(IconId::new(icon)).label(tip).enabled(enabled).show(ui).clicked() {
                 go = Some(json!(to));
             }
@@ -71,10 +70,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 go = Some(json!(i));
             }
         });
-        for (icon, to, tip, enabled) in [
-            ("chevron_right", "next", tl!("Next Artboard"), cur + 1 < nab),
-            ("chevrons_right", "last", tl!("Last Artboard"), cur + 1 < nab),
-        ] {
+        for (icon, to, tip, enabled) in
+            [("chevron_right", "next", tl!("Next Artboard"), cur + 1 < nab), ("chevrons_right", "last", tl!("Last Artboard"), cur + 1 < nab)]
+        {
             if IconButton::new(IconId::new(icon)).label(tip).enabled(enabled).show(ui).clicked() {
                 go = Some(json!(to));
             }
@@ -82,7 +80,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         Divider::vertical().show(ui);
         // An empty readout shows a dash.
         let shown = if info.is_empty() { "\u{2013}" } else { info.as_str() };
-        Text::new(shown).shade(Shade::Muted).elide(Elide::End).show(ui);
+        Text::new(shown.to_owned()).shade(Shade::Muted).elide(Elide::End).show(ui);
         let more = IconButton::new(IconId::new("chevron_down")).label(tl!("Show")).show(ui);
         show_pick = Menu::new(tl!("Show")).values().opened_by(more.response(), Trigger::Press).pick(ui, &shows).picked;
         let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);

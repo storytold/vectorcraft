@@ -861,7 +861,6 @@ mod tests {
 
         app.session.execute("object.unlockAll", &json!({})).unwrap();
         let ctx = egui::Context::default();
-        app.begin_host_iteration();
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
         assert_eq!(app.ui.status, "");

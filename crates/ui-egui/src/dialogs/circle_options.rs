@@ -32,7 +32,7 @@ const COLOR_LABELS: [&str; 6] = ["Red", "Blue", "Magenta", "Green", "Black", "Gr
 
 /// The rows: the three display switches, the Color, then the two drawing switches.
 fn params() -> Vec<Param> {
-    let switch = |(key, label): &(&str, &str)| Param::new(*key, tl!(*label), ParamKind::bool(true));
+    let switch = |(key, label): &(&str, &'static str)| Param::new(*key, tl!(*label), ParamKind::bool(true));
     let colors = COLORS.iter().zip(COLOR_LABELS).map(|((name, _), label)| (name.to_string(), Label::from(tl!(label)))).collect();
     let mut rows: Vec<Param> = SWITCHES[..3].iter().map(switch).collect();
     rows.push(Param::new("color", tl!("Color:"), ParamKind::choice(colors, Some("blue".into()))));

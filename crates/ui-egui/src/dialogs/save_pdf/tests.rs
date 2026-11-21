@@ -7,45 +7,41 @@ use vectorcraft_engine::Session;
 use super::super::tests_export::{answer_saves, save_panel};
 use super::*;
 use crate::Services;
-// PLAN: assumed paths of the framework items the host helpers name.
 use craft::ui::dialog::{DialogHost, DialogId};
-use craft::ui::patterns::form_dialogs::HostedPdfExport;
+use craft::ui::patterns::form_dialogs::{HostedPdfExport, PdfExportWords};
 
 type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
 /// The key the host registers Save PDF (and the preset editor) under.
 const PDF_KEY: &str = "pdf-export";
 
-/// An app with three artboards whose writer and URL opener record what they get.
-fn app() -> (VectorcraftApp, Log, Log) {
-    let (written, opened) = (Log::default(), Log::default());
-    let (w, o) = (written.clone(), opened.clone());
+/// An app with three artboards whose writer records what it gets.
+fn app() -> (VectorcraftApp, Log) {
+    let written = Log::default();
+    let w = written.clone();
     let services = Services {
         write: Some(Box::new(move |p: &str, b: &[u8]| {
             w.borrow_mut().push((p.to_string(), b.to_vec()));
             Ok(())
         })),
-        open_url: Some(Box::new(move |u: &str| o.borrow_mut().push((u.to_string(), vec![])))),
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
     app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 120, "height": 90, "artboards": 3})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
-    (app, written, opened)
+    (app, written)
 }
 
 /// Run `f` on the window's dialog host and the UI context.
 fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost, &egui::Context) -> R) -> R {
     let ctx = app.ui_ctx.clone().expect("a UI context");
-    // PLAN: assumed `WindowDialogs::with(|host| ..)` (wg.S1).
     app.dialogs().expect("the dialog host").with(|h| f(h, &ctx))
 }
 
 /// The open dialogs, bottom to top, as (id, key).
 fn open_dialogs(app: &VectorcraftApp) -> Vec<(DialogId, String)> {
-    // PLAN: assumed `DialogHost::open_dialogs() -> Vec<(DialogId, key)>`.
-    host(app, |h, _| h.open_dialogs().into_iter().map(|(id, k)| (id, k.to_string())).collect())
+    host(app, |h, _| h.open_dialogs().into_iter().map(|d| (d.id, d.key.unwrap_or_default())).collect())
 }
 
 /// The open Save PDF dialog (`pdf`) or the topmost other one, such as Custom….
@@ -62,7 +58,7 @@ fn is_open(app: &VectorcraftApp) -> bool {
 }
 
 fn fields_of(app: &VectorcraftApp, id: DialogId) -> Value {
-    host(app, |h, _| h.json_fields(id))
+    host(app, |h, _| h.open_dialogs().into_iter().find(|d| d.id == id).and_then(|d| d.fields)).unwrap_or(Value::Null)
 }
 
 fn fields(app: &VectorcraftApp) -> Value {
@@ -85,13 +81,13 @@ fn set_field(app: &VectorcraftApp, name: &str, v: Value) {
 
 fn with_pdf<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedPdfExport) -> R) -> R {
     let id = pdf_id(app);
-    host(app, |h, _| h.dialog_mut::<HostedPdfExport>(id).map(f)).expect("a Save PDF dialog")
+    host(app, |h, _| h.get_mut_by_id::<HostedPdfExport>(id).map(f)).expect("a Save PDF dialog")
 }
 
 /// The Summary as the open dialog writes it.
 fn summary(app: &VectorcraftApp) -> String {
-    let ctx = app.ui_ctx.clone().expect("a UI context");
-    with_pdf(app, |d| d.summary_text(&ctx))
+    let words = app.host.words().set::<PdfExportWords>();
+    with_pdf(app, |d| d.summary_text(&words))
 }
 
 fn pump(app: &mut VectorcraftApp) {
@@ -123,8 +119,13 @@ fn cancel(app: &mut VectorcraftApp) {
 
 /// Press a control that has no automation field, by its name.
 fn press(app: &mut VectorcraftApp, name: &str) {
-    // PLAN: assumed hub-w2 control handle: `crate::control::handle(app, method, &params)`.
-    crate::control::handle(app, "ui.click", &json!({"control": {"name": name}})).unwrap();
+    let ctx = app.ui_ctx.clone().expect("a UI context");
+    let (click, _reply) = crate::control::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
+    crate::control::handle(app, &ctx, &click);
+    // The click lands in the passes that draw the dialogs after it.
+    for _ in 0..2 {
+        crate::tests::picks::draw_dialogs(app, &ctx);
+    }
     pump(app);
 }
 
@@ -140,15 +141,15 @@ fn line_count(text: &str) -> usize {
 
 /// The flattener options the pending save carries, as JSON.
 fn job_flattener(app: &VectorcraftApp) -> Option<Value> {
-    // PLAN: assumed where the pump keeps the job: `app.ui.save_pdf_job` (ex.A12).
-    app.ui.save_pdf_job.as_ref().expect("a pending save").flattener.as_ref().map(|o| serde_json::to_value(o).unwrap())
+    let job = app.save_pdf.as_ref().and_then(|o| o.job.as_ref()).expect("a pending save");
+    job.flattener.as_ref().map(|o| serde_json::to_value(o).unwrap())
 }
 
 /// `ui.pdfSummary.save` writes the Summary as the dialog shows it, as UTF-8 text with LF line
 /// endings. The dialog stays open and the document does not change.
 #[test]
 fn save_summary_writes_the_summary_as_text() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("file.export.pdf", json!({})).unwrap();
     let before = summary(&app);
     set_field(&app, "thumbnails", json!(true));
@@ -173,7 +174,7 @@ fn save_summary_writes_the_summary_as_text() {
 /// file has one kind of line ending.
 #[test]
 fn save_summary_writes_line_breaks_in_values_as_lf() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("file.export.pdf", json!({})).unwrap();
     set_field(&app, "output.outputCondition", json!("first\r\nsecond\rthird"));
     app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap();
@@ -186,7 +187,7 @@ fn save_summary_writes_line_breaks_in_values_as_lf() {
 /// editor stays open.
 #[test]
 fn save_summary_writes_the_preset_editors_summary() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     open_preset(&mut app, &json!({})).unwrap();
     let untouched = save_summary_to(&mut app, &written, "/tmp/preset summary.txt");
     set_field(&app, "thumbnails", json!(true));
@@ -201,7 +202,7 @@ fn save_summary_writes_the_preset_editors_summary() {
 /// nothing.
 #[test]
 fn save_summary_refuses_a_bad_path_and_a_closed_dialog() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     assert_eq!(app.run(SAVE_SUMMARY, json!({"path": "/tmp/s.txt"})).unwrap_err(), "the Save PDF dialog is not open");
     app.run("file.export.pdf", json!({})).unwrap();
     assert_eq!(app.run(SAVE_SUMMARY, json!({"path": ""})).unwrap_err(), "path is empty");
@@ -215,7 +216,7 @@ fn save_summary_refuses_a_bad_path_and_a_closed_dialog() {
 /// nothing.
 #[test]
 fn save_summary_requires_a_path() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     let asked: Rc<RefCell<usize>> = Rc::default();
     let a = asked.clone();
     save_panel(&mut app, move |pick| {
@@ -234,7 +235,7 @@ fn save_summary_requires_a_path() {
 /// values.
 #[test]
 fn save_summary_compares_against_a_replaced_preset() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
     app.run("ui.savePdfDialog", json!({"preset": "Mine"})).unwrap();
     set_field(&app, "thumbnails", json!(false));
@@ -253,7 +254,7 @@ fn save_summary_compares_against_a_replaced_preset() {
 /// the dialog stays open: they are then refused, and nothing is written.
 #[test]
 fn save_summary_sees_a_deleted_flattener_preset() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("flattener.presets.save", json!({"name": "Mine Flat", "preset": "Low Resolution"})).unwrap();
     // The flattener preset is only editable where the save flattens: PDF 1.3.
     app.run("ui.savePdfDialog", json!({"compatibility": "1.3"})).unwrap();
@@ -280,7 +281,7 @@ fn save_summary_sees_a_removed_profile() {
     bytes[at..at + to.len()].copy_from_slice(&to);
     let path = vectorcraft_testkit::temp_dir("save-summary-profile").join("stamp.icc");
     std::fs::write(&path, bytes).unwrap();
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     assert_eq!(app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap()["name"], name);
     app.run("file.export.pdf", json!({})).unwrap();
     set_field(&app, "output.conversion", json!("destination"));
@@ -335,7 +336,7 @@ fn save_summary_writes_files_on_disk_within_the_automation_roots() {
 /// message closes. The web downloads the file under the suggested name.
 #[test]
 fn the_save_summary_button_writes_the_summary() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     let suggested: Rc<RefCell<Vec<String>>> = Rc::default();
     let s = suggested.clone();
     save_panel(&mut app, move |pick| {
@@ -390,7 +391,7 @@ fn the_save_summary_button_writes_the_summary() {
 
 #[test]
 fn confirm_runs_export_pdf_with_the_dialog_options() {
-    let (mut app, written, opened) = app();
+    let (mut app, written) = app();
     app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.5"})).unwrap();
     set_field(&app, "artboards", json!("range"));
     set_field(&app, "range", json!("1,3"));
@@ -404,8 +405,7 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(w[0].1.starts_with(b"%PDF-1.5"), "compatibility reaches the writer");
     assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 2, "range 1,3");
     assert!(!String::from_utf8_lossy(&w[0].1).contains("/FlateDecode"), "uncompressed content");
-    assert_eq!(opened.borrow().len(), 1, "View PDF after Saving opens the file once");
-    let url = &opened.borrow()[0].0;
+    let url = app.pending_url.take().expect("View PDF after Saving opens the file");
     assert!(url.starts_with("file:///") && url.ends_with("/tmp/out.pdf"), "the written file as a URL: {url}");
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
@@ -413,7 +413,7 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
 /// A Save PDF that fails keeps the dialog open (#6861); saving again, once it works, closes it.
 #[test]
 fn a_failed_save_says_why_in_the_dialog() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf"})).unwrap();
     set_field(&app, "artboards", json!("range"));
     set_field(&app, "range", json!("9"));
@@ -431,7 +431,7 @@ fn a_failed_save_says_why_in_the_dialog() {
 /// and View PDF after Saving included.
 #[test]
 fn a_page_of_the_arts_bounds_has_no_artboards_section_and_takes_the_options() {
-    let (mut app, written, opened) = app();
+    let (mut app, written) = app();
     app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.5"})).unwrap();
     app.run("ui.savePdfDialog", json!({"path": "/tmp/artboards.pdf"})).unwrap();
     assert_eq!(fget(&app, "artboards"), "all");
@@ -449,15 +449,15 @@ fn a_page_of_the_arts_bounds_has_no_artboards_section_and_takes_the_options() {
     assert_eq!(pdf.artboards.len(), 1);
     let size = pdf.artboards[0].rect.size();
     assert!((50.0..52.0).contains(&size.width) && (40.0..42.0).contains(&size.height), "the rectangle's bounds with its stroke: {size:?}");
-    assert_eq!(opened.borrow().len(), 1, "View PDF after Saving opens the file");
-    assert!(opened.borrow()[0].0.ends_with("/tmp/art.pdf"));
+    let url = app.pending_url.take().expect("View PDF after Saving opens the file");
+    assert!(url.ends_with("/tmp/art.pdf"), "{url}");
 }
 
 /// `useArtboards` other than true, false or null is refused, as `document.exportPdf` refuses it,
 /// and no dialog opens.
 #[test]
 fn a_use_artboards_that_is_not_true_or_false_is_refused() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     for bad in [json!("false"), json!(0), json!({})] {
         let e = app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "useArtboards": bad})).unwrap_err();
         assert!(e.contains("useArtboards must be true or false"), "{bad}: {e}");
@@ -503,7 +503,7 @@ fn a_page_of_the_arts_bounds_is_written_in_the_background() {
 /// that title.
 #[test]
 fn a_page_of_the_arts_bounds_shows_the_title_only_when_it_is_the_documents_own() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.session.doc_mut().unwrap().path = Some("/docs/Poster.vectorcraft".into());
     for artboards in [true, false] {
         app.run("ui.savePdfDialog", json!({"path": "/tmp/t.pdf", "useArtboards": artboards, "compression": {"compressText": false}})).unwrap();
@@ -524,12 +524,12 @@ fn a_page_of_the_arts_bounds_shows_the_title_only_when_it_is_the_documents_own()
 
 #[test]
 fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
-    let (mut app, written, opened) = app();
+    let (mut app, written) = app();
     app.run("ui.savePdfDialog", json!({"path": "/tmp/w.pdf"})).unwrap();
     set_field(&app, "security.printing", json!("low"));
     confirm(&mut app);
     assert!(app.ui.status.contains("1 note:") && app.ui.status.contains("permissions"), "{}", app.ui.status);
-    assert!(opened.borrow().is_empty(), "not opened unless asked");
+    assert!(app.pending_url.is_none(), "not opened unless asked");
     app.run("ui.savePdfDialog", json!({"path": "/tmp/bad.pdf"})).unwrap();
     set_field(&app, "artboards", json!("range"));
     set_field(&app, "range", json!("7"));
@@ -564,7 +564,7 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
 /// shows the note raster exports give.
 #[test]
 fn an_image_that_couldnt_be_decoded_is_named_in_the_status() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     // A PNG whose header reads but whose pixel data is cut short.
     let mut png = vec![];
     {
@@ -612,7 +612,7 @@ fn an_image_that_couldnt_be_decoded_is_named_in_the_status() {
 
 #[test]
 fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     app.run("ui.savePdfDialog", json!({"compatibility": "1.4", "marks": {"trim": true}})).unwrap();
     assert_eq!(fget(&app, "compatibility"), "1.4");
     assert_eq!(fget(&app, "marks.weight"), 0.25, "the rest of a section keeps its defaults");
@@ -626,7 +626,7 @@ fn presets_reset_the_settings_and_fields_fall_back_to_defaults() {
 
 /// The bytes and status a save writes after `setup` and the given field writes.
 fn written_with(setup: impl FnOnce(&mut VectorcraftApp), options: &[(&str, Value)]) -> (Vec<u8>, String) {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     setup(&mut app);
     app.run("ui.savePdfDialog", json!({"path": "/tmp/option.pdf"})).unwrap();
     for (name, v) in options {
@@ -678,7 +678,7 @@ fn a_sections_option_reaches_the_pdf() {
 #[test]
 fn confirming_preserves_passwords_supplied_when_opening_the_dialog() {
     for (open, owner) in [("open", ""), ("", "owner"), ("open", "owner")] {
-        let (mut app, written, _) = app();
+        let (mut app, written) = app();
         app.run(
             "ui.savePdfDialog",
             json!({"path": "/tmp/locked.pdf", "security": {"openPassword": open, "permissionsPassword": owner, "printing": "none"}}),
@@ -710,7 +710,7 @@ fn confirming_preserves_passwords_supplied_when_opening_the_dialog() {
 
 #[test]
 fn the_security_section_takes_passwords_that_presets_drop() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     app.run("ui.savePdfDialog", json!({})).unwrap();
     set_field(&app, "security.openPassword", json!("open"));
     set_field(&app, "security.permissionsPassword", json!("own"));
@@ -727,7 +727,7 @@ fn the_security_section_takes_passwords_that_presets_drop() {
 
 #[test]
 fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "createLayers": true})).unwrap();
     set_field(&app, "standard", json!("pdfX1a"));
     assert_eq!((fget(&app, "compatibility"), fget(&app, "createLayers"), fget(&app, "preserveEditing")), (json!("1.3"), json!(false), json!(false)));
@@ -742,7 +742,7 @@ fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
 
 #[test]
 fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("ui.savePdfDialog", json!({"path": "/tmp/old.pdf", "compatibility": "1.3"})).unwrap();
     set_field(&app, "flattenerPreset", json!("Low Resolution"));
     assert_eq!((fget(&app, "compatibility"), fget(&app, "flattenerPreset")), (json!("1.3"), json!("Low Resolution")));
@@ -756,7 +756,7 @@ fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
 
 #[test]
 fn save_pdf_flattens_transparent_document_without_modal_prompt() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     // Add transparent artwork to the document
     app.run("transparency.set", json!({"opacity": 50})).unwrap();
 
@@ -772,7 +772,7 @@ fn save_pdf_flattens_transparent_document_without_modal_prompt() {
 
 #[test]
 fn summary_warnings_include_flattener_resolutions_when_flattening_transparency() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     app.run("transparency.set", json!({"opacity": 50})).unwrap();
 
     app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
@@ -788,14 +788,14 @@ fn summary_warnings_include_flattener_resolutions_when_flattening_transparency()
     assert!(text.contains("600") && text.contains("200"), "{text}");
 
     // An opaque document is not flattened, so there is nothing to warn about.
-    let (mut plain, _, _) = app_without_transparency();
+    let (mut plain, _) = app_without_transparency();
     plain.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
     pump(&mut plain);
     assert!(!summary(&plain).contains("1200"));
 }
 
 /// The default app: nothing in it is transparent.
-fn app_without_transparency() -> (VectorcraftApp, Log, Log) {
+fn app_without_transparency() -> (VectorcraftApp, Log) {
     app()
 }
 
@@ -837,7 +837,7 @@ fn number(v: &Value) -> Option<f64> {
 
 #[test]
 fn custom_starts_from_the_preset_and_cancel_goes_back_unchanged() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "low"}));
     let before = fields(&app);
     let child = open_custom(&mut app);
@@ -855,7 +855,7 @@ fn custom_starts_from_the_preset_and_cancel_goes_back_unchanged() {
 
 #[test]
 fn custom_options_are_written_until_a_preset_is_chosen() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     transparent_overlap(&mut app);
     // Choosing a preset drops the custom options.
     open_advanced(&mut app, json!({"compatibility": "1.3"}));
@@ -884,7 +884,7 @@ fn custom_options_are_written_until_a_preset_is_chosen() {
 /// that drop overprints stay dropped, and alpha shows as the PDF 1.3 writer drops it.
 #[test]
 fn custom_confirm_rules() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     for overprint in ["preserve", "discard"] {
         open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "medium", "advanced": {"overprint": overprint}}));
         let child = open_custom(&mut app);
@@ -904,7 +904,7 @@ fn custom_confirm_rules() {
     assert_eq!(job_flattener(&app).unwrap()["preserveOverprints"], json!(false));
     cancel(&mut app);
 
-    let (mut app, written, _) = app_with_overlap();
+    let (mut app, written) = app_with_overlap();
     open_advanced(&mut app, json!({"compatibility": "1.3", "flattener": {"balance": 0, "preserveAlpha": true}}));
     let child = open_custom(&mut app);
     assert_eq!(fields_of(&app, child)["preserveAlpha"], json!(false), "shown as written");
@@ -914,7 +914,7 @@ fn custom_confirm_rules() {
     assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3") && images(&written.borrow()[0].1) > 0);
 }
 
-fn app_with_overlap() -> (VectorcraftApp, Log, Log) {
+fn app_with_overlap() -> (VectorcraftApp, Log) {
     let mut t = app();
     transparent_overlap(&mut t.0);
     t
@@ -922,7 +922,7 @@ fn app_with_overlap() -> (VectorcraftApp, Log, Log) {
 
 #[test]
 fn bad_custom_options_keep_the_dialog_open() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     open_advanced(&mut app, json!({"compatibility": "1.3"}));
     let before = fields(&app);
     let child = open_custom(&mut app);
@@ -938,7 +938,7 @@ fn bad_custom_options_keep_the_dialog_open() {
 /// open.
 #[test]
 fn a_deleted_saved_preset_keeps_what_custom_opened_with() {
-    let (mut app, written, _) = app();
+    let (mut app, written) = app();
     app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
     open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine"}));
     let child = open_custom(&mut app);
@@ -978,7 +978,7 @@ fn a_deleted_saved_preset_keeps_what_custom_opened_with() {
 /// A flattener preset named in another case opens as the listed name, not as [Custom].
 #[test]
 fn flattener_preset_shows_a_name_given_in_any_case() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
     for (given, shown) in [("MINE", "Mine"), ("HIGH RESOLUTION", "High Resolution")] {
         open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": given}));
@@ -990,7 +990,7 @@ fn flattener_preset_shows_a_name_given_in_any_case() {
 
 #[test]
 fn save_pdf_opens_with_the_flattener_options_given_and_refuses_bad_ones() {
-    let (mut app, _, _) = app();
+    let (mut app, _) = app();
     app.run("ui.savePdfDialog", json!({"compatibility": "1.3", "flattener": {"lineArtPpi": 600}})).unwrap();
     assert_eq!(job_flattener(&app).map(|o| number(&o["lineArtPpi"])), Some(Some(600.0)));
     cancel(&mut app);

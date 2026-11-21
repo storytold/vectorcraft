@@ -577,7 +577,7 @@ mod tests {
 
     fn scripted(app: &mut VectorcraftApp, files: ScriptedFiles) -> Arc<ScriptedFiles> {
         let files = Arc::new(files);
-        app.host = app.host.with_files(files.clone());
+        app.host = Arc::new(app.host.with_files(files.clone()));
         files
     }
 

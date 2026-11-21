@@ -42,13 +42,13 @@ fn fields<D: StackDialog>(app: &VectorcraftApp) -> Value {
 
 /// Sets a value as the user editing that control would.
 fn set<D: StackDialog>(app: &VectorcraftApp, key: &str, value: Value) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     with_dialog::<D, _>(app, |host, id| host.set_json_field(&ctx, id, key, value)).unwrap_or_else(|why| panic!("{key}: {why}"));
 }
 
 /// One pass of the per-frame dialog pump: previews run, results are applied.
 fn pump(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     crate::dialogs::host::pump(app, &ctx);
 }
 
@@ -59,7 +59,7 @@ fn ok<D: StackDialog>(app: &mut VectorcraftApp) -> bool {
         if !is_open::<D>(app) {
             break;
         }
-        let ctx = app.ui_ctx.clone();
+        let ctx = app.ui_ctx.clone().expect("a window");
         with_dialog::<D, _>(app, |host, id| host.confirm_by_id(&ctx, id));
         pump(app);
     }
@@ -67,14 +67,14 @@ fn ok<D: StackDialog>(app: &mut VectorcraftApp) -> bool {
 }
 
 fn cancel<D: StackDialog>(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     with_dialog::<D, _>(app, |host, id| host.cancel_by_id(&ctx, id));
     pump(app);
 }
 
 /// Presses Reset Panel on the shown tab.
 fn reset_shown<D: StackDialog>(app: &VectorcraftApp) {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert!(with_dialog::<D, _>(app, |host, id| host.reset_by_id(&ctx, id)), "the shown tab has a Reset Panel");
 }
 
@@ -114,8 +114,8 @@ fn attrs(v: Value) -> Map<String, Value> {
 /// The fields and the opening state of a dialog opened on a style with the attributes `original`.
 fn dialog_for(original: Value) -> (DialogFields, Opening) {
     let map = attrs(original);
-    // PLAN: assumed `fields_from_attrs(&Map) -> DialogFields` and `Opening::new(style, attrs, &DocSetup, swatches)` (type-w21)
-    (fields_from_attrs(&map), Opening::new("", map, &DocSetup::default(), Value::Null))
+    let opening = Opening::new("", map, &DocSetup::default(), Value::Null);
+    (opening.fields(""), opening)
 }
 
 /// A style, a text object in it, and the document before anything is edited.
@@ -296,7 +296,9 @@ fn character_style_numbers_outside_their_limits_are_errors() {
         assert_eq!(edited_attrs(&d, &o).unwrap_err(), message, "{key} {value}");
     }
     let (mut d, o) = dialog_for(json!({}));
-    for (key, value) in [("size", "1296"), ("leading", "5000"), ("h_scale", "1"), ("v_scale", "10000"), ("baseline_shift", "-1296"), ("rotation", "-200")] {
+    for (key, value) in
+        [("size", "1296"), ("leading", "5000"), ("h_scale", "1"), ("v_scale", "10000"), ("baseline_shift", "-1296"), ("rotation", "-200")]
+    {
         put(&mut d, key, json!(value));
     }
     assert_eq!(
@@ -347,7 +349,10 @@ fn advanced_options_preview_cancel_reset_and_commit() {
     );
     let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
     assert_eq!(
-        t.runs.iter().map(|r| (r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone())).collect::<Vec<_>>(),
+        t.runs
+            .iter()
+            .map(|r| (r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone()))
+            .collect::<Vec<_>>(),
         [(80.0, 60.0, 2.0, 45.0, Some("tr".to_string())), (80.0, 60.0, 5.0, 45.0, Some("tr".to_string()))]
     );
     app.run("edit.undo", json!({})).unwrap();
@@ -556,7 +561,8 @@ fn color_and_opentype_fields_keep_unset_explicit_and_untouched_values() {
     assert_eq!((text(&d, "stroke_width"), text(&d, "fill_tint")), (String::new(), String::new()));
     assert_eq!(edited_attrs(&d, &o).unwrap(), Map::new());
 
-    let mut explicit = vec!["-tnum", "-onum", "-pnum", "-lnum", "-sups", "-subs", "-numr", "-dnom", "-liga"].into_iter().map(String::from).collect::<Vec<_>>();
+    let mut explicit =
+        vec!["-tnum", "-onum", "-pnum", "-lnum", "-sups", "-subs", "-numr", "-dnom", "-liga"].into_iter().map(String::from).collect::<Vec<_>>();
     explicit.extend(no_sets());
     for original in [
         json!({"fill": {"type": "none"}, "stroke_width": 0.0, "overprint_fill": false, "features": explicit}),
@@ -654,7 +660,8 @@ fn color_tint_and_weight_outside_their_limits_are_errors() {
 
 #[test]
 fn reset_panel_in_color_and_opentype_clears_only_that_section() {
-    let original = json!({"size": 12.0, "h_scale": 90.0, "fill": {"type": "none"}, "stroke_width": 2.0, "overprint_stroke": true, "features": ["dlig", "zzzz"]});
+    let original =
+        json!({"size": 12.0, "h_scale": 90.0, "fill": {"type": "none"}, "stroke_width": 2.0, "overprint_stroke": true, "features": ["dlig", "zzzz"]});
     let (mut d, o) = dialog_for(original.clone());
     assert!(can_reset(&d, &o, "color"));
     reset(&mut d, &o, "color");

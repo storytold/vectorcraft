@@ -55,8 +55,9 @@ use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit, ColorArea, Color
 use craft::keymap::CommandRef;
 use craft::theme::{ColorModel, HsbModel, ModelValues, RgbModel, Srgba};
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
-use craft::ui::contract::{ActivateOn, Bind, EditResponse, Props as _, Show as _};
+use craft::ui::contract::{ActivateOn, Bind, EditResponse, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::Stack;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::Label;
@@ -1000,22 +1001,25 @@ fn oklch_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &P
     // The C track's L and H stay fixed, so its largest chroma is found once per frame.
     let max_c = if enabled { oklab::max_chroma(lch[0], lch[2]) } else { 0.0 };
     let marks = [(max_c / CHROMA_FULL * 100.0).clamp(0.0, 100.0)];
-    for (i, (letter, name, max, unit)) in rows.into_iter().enumerate() {
-        let rule = ChannelRule { range: 0.0..=max, step: 1.0, decimals: 0 };
-        let mut row = ChannelRow::new(name, Bind::given(shown[i].clamp(0.0, max)), rule).short(letter).unit(unit).enabled(enabled);
-        if enabled {
-            row = row.track(oklch_stops(panel, lch, i, max, max_c));
+    // The rows read dim and take no edit without a colour to edit.
+    Stack::new().enabled(enabled).show(ui, |ui, _| {
+        for (i, &(letter, ref name, max, unit)) in rows.iter().enumerate() {
+            let rule = ChannelRule { range: 0.0..=max, step: 1.0, decimals: 0 };
+            let mut row = ChannelRow::new(name.clone(), Bind::given(shown[i].clamp(0.0, max)), rule).short(letter).unit(unit);
+            if enabled {
+                row = row.track(oklch_stops(panel, lch, i, max, max_c));
+            }
+            if i == 1 && enabled {
+                row = row.marks(&marks);
+            }
+            if let Some(edit) = row.show(ui) {
+                apply_edits(app, &edit, EditPath::Preview, |app, v, phase| {
+                    let lch = oklch_with(lch, i, *v);
+                    cx.rows(app, panel, oklab::from_oklch(lch[0], lch[1], lch[2]).0, phase, Remembered::Oklch(lch));
+                });
+            }
         }
-        if i == 1 && enabled {
-            row = row.marks(&marks);
-        }
-        if let Some(edit) = row.show(ui) {
-            apply_edits(app, &edit, EditPath::Preview, |app, v, phase| {
-                let lch = oklch_with(lch, i, *v);
-                cx.rows(app, panel, oklab::from_oklch(lch[0], lch[1], lch[2]).0, phase, Remembered::Oklch(lch));
-            });
-        }
-    }
+    });
 }
 
 /// The H, S and L rows of HSL Sliders for the target's color through the pick's color settings: hue
@@ -1038,20 +1042,23 @@ fn hsl_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pic
         ("L", hsl_name(&tl!("Lightness").to_string()), 100.0, ChannelUnit::Percent),
     ];
     let shown = [f64::from(hsl[0]), f64::from(hsl[1]) * 100.0, f64::from(hsl[2]) * 100.0];
-    for (i, (letter, name, max, unit)) in rows.into_iter().enumerate() {
-        let rule = ChannelRule { range: 0.0..=max, step: 1.0, decimals: 0 };
-        let mut row = ChannelRow::new(name, Bind::given(shown[i].clamp(0.0, max)), rule).short(letter).unit(unit).enabled(enabled);
-        if enabled {
-            let last = (HSL_STOPS - 1) as f64;
-            row = row.track((0..HSL_STOPS).map(|s| srgb(hsl_to_rgb(hsl_with(hsl, i, s as f64 / last * max)))).collect());
+    // The rows read dim and take no edit without a colour to edit.
+    Stack::new().enabled(enabled).show(ui, |ui, _| {
+        for (i, &(letter, ref name, max, unit)) in rows.iter().enumerate() {
+            let rule = ChannelRule { range: 0.0..=max, step: 1.0, decimals: 0 };
+            let mut row = ChannelRow::new(name.clone(), Bind::given(shown[i].clamp(0.0, max)), rule).short(letter).unit(unit);
+            if enabled {
+                let last = (HSL_STOPS - 1) as f64;
+                row = row.track((0..HSL_STOPS).map(|s| srgb(hsl_to_rgb(hsl_with(hsl, i, s as f64 / last * max)))).collect());
+            }
+            if let Some(edit) = row.show(ui) {
+                apply_edits(app, &edit, EditPath::Preview, |app, v, phase| {
+                    let hsl = hsl_with(hsl, i, *v);
+                    cx.rows(app, panel, hsl_to_rgb(hsl), phase, Remembered::Hsl(hsl));
+                });
+            }
         }
-        if let Some(edit) = row.show(ui) {
-            apply_edits(app, &edit, EditPath::Preview, |app, v, phase| {
-                let hsl = hsl_with(hsl, i, *v);
-                cx.rows(app, panel, hsl_to_rgb(hsl), phase, Remembered::Hsl(hsl));
-            });
-        }
-    }
+    });
 }
 
 /// The wheel: the hue ring around the saturation and brightness square, with Show Harmony's markers
@@ -1067,7 +1074,7 @@ fn show_wheel(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &P
         .markers(&markers)
         .marker_names(names);
     if set.gamut {
-        wheel = wheel.gamut(Some(gamut(app)));
+        wheel = wheel.gamut(gamut(app));
     }
     let out = wheel.show(ui);
     match out.picked.and_then(|i| others.get(i)) {
@@ -1083,7 +1090,7 @@ fn show_box(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pic
     let values = cx.color.map(|_| box_values(ch, cx.shown));
     let mut area = ColorArea::new(tl!("Color box").to_string(), mode, bind(values));
     if set.gamut {
-        area = area.gamut(Some(gamut(app)));
+        area = area.gamut(gamut(app));
     }
     cx.edits(app, panel, &area.show(ui));
     cx.edits(app, panel, &ColorStrip::new(ch.name().to_string(), mode, bind(values)).show(ui));

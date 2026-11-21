@@ -278,7 +278,9 @@ impl StackDialog for MissingFontsDialog {
                         }
                     }
                     Row::new().show(ui, |ui, _| {
-                        if !next.is_empty() && clicked(&Button::new(tl!("Search Fonts Folder")).id_salt("next").enabled(!searching).tooltip(next.clone()).show(ui)) {
+                        if !next.is_empty()
+                            && clicked(&Button::new(tl!("Search Fonts Folder")).id_salt("next").enabled(!searching).tooltip(next.clone()).show(ui))
+                        {
                             *search_folder = next.clone();
                             act = Some(Act::Search);
                         }

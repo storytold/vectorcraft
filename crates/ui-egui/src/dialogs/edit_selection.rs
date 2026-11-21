@@ -19,7 +19,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     if names.is_empty() {
         return Err("No saved selections (Select → Save Selection…)".into());
     }
-    let dialog = SavedNames { kind: KIND, title: tl!("Edit Selection"), list: tl!("Saved Selections"), command: "select.editSaved", max: SavedSelection::MAX };
+    let dialog =
+        SavedNames { kind: KIND, title: tl!("Edit Selection"), list: tl!("Saved Selections"), command: "select.editSaved", max: SavedSelection::MAX };
     saved_names::open(app, dialog, names)?;
     Ok(Value::Null)
 }

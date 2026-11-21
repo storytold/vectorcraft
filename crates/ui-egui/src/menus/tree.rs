@@ -4,6 +4,8 @@ use super::{Node, Sep, c, cp, json, sub};
 use craft::keymap::CommandRef;
 use craft::menu::{Item, ItemRole, Platforms};
 
+use crate::i18n::LangExt as _;
+
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
 /// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels

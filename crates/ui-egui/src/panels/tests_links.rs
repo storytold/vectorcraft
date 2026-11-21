@@ -11,6 +11,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 use crate::tests_labels::painted_text;
 
 /// A fresh folder for one test (removed when dropped).
@@ -134,7 +135,7 @@ fn command(h: &mut Rig, id: &str, params: serde_json::Value) {
 }
 
 /// The menu item named `label` of an open row menu (the footer has buttons of the same names).
-fn menu_item<'h>(h: &'h Rig, label: &str) -> egui_kittest::Node<'h> {
+fn menu_item<'h>(h: &'h Rig, label: &'h str) -> egui_kittest::Node<'h> {
     h.get_all_by_label(label).find(|n| n.accesskit_node().role() == egui::accesskit::Role::MenuItem).unwrap_or_else(|| panic!("no item `{label}`"))
 }
 
@@ -289,7 +290,6 @@ fn copy_info_copies_the_file_names_of_the_links() {
     assert!(app.clipboard_out.is_none());
 }
 
-
 /// A linked image kept only in a symbol's art has a row of its own: a click picks it in the panel
 /// (the canvas selection is cleared), Link Info shows it, Ctrl/Cmd-click adds an image in the
 /// layers, a change of the canvas selection drops the pick, and Go To clears the selection and
@@ -411,7 +411,6 @@ fn a_row_in_a_stored_brushs_art_finds_its_object() {
     assert!(matches!(found[0].1.kind, vectorcraft_doc::NodeKind::Image(_)), "{:?}", found[0].1.kind);
 }
 
-
 #[test]
 fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     let dir = Folder::new("open");
@@ -489,8 +488,13 @@ fn edit_original_with_chosen_editor_still_refuses_automation() {
     app.ui.answering_control = true;
     assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
     app.ui.answering_control = false;
-    app.synthetic_frame = true;
-    assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+    // A pass that carries injected input acts for automation too.
+    let ctx = crate::testing::ui_context();
+    app.adopt_context(&ctx);
+    craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, craft::keymap::Key::A, Default::default(), false);
+    let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+        assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+    });
 }
 
 /// Edit Original hands only regular image and document files to the system's default app.

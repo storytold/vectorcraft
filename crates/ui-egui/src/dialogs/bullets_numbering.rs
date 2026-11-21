@@ -46,8 +46,6 @@ use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::{LIST_HANGING_INDENT, LIST_LEVELS, MAX_LIST_START, NumberStyle, ParaList};
 
-// PLAN: `BulletGlyph` (ty.S11) is assumed at `panels::paragraph::BulletGlyph`, and `bullet_presets()` (type-w12) to
-// return `(name, key, &'static BulletGlyph)` for each preset, as this set's request to type-w12 asks.
 use crate::VectorcraftApp;
 use crate::panels::paragraph::BulletGlyph;
 
@@ -70,9 +68,6 @@ const INPUTS: [&str; 9] = ["list", "bullet", "number", "listAlign", "listLevel",
 
 /// The OK button's place among the footer buttons.
 const OK: usize = 0;
-
-/// The glyph of the None preset of the Numbers tab.
-static NO_BULLET: BulletGlyph = BulletGlyph(None);
 
 /// The tab the dialog shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -260,11 +255,14 @@ impl BulletsDialog {
             _ => None,
         };
         Text::new(tl!("Bullet Character:")).show(ui);
-        let tiles: Vec<Preset> =
-            presets.iter().enumerate().map(|(at, &(name, _, glyph))| Preset { at, name: name.to_owned(), face: Face::Glyph(glyph) }).collect();
+        let tiles: Vec<Preset> = presets
+            .iter()
+            .enumerate()
+            .map(|(at, &(name, _, bullet))| Preset { at, name: name.to_owned(), face: Face::Glyph(BulletGlyph::of(bullet)) })
+            .collect();
         let picked = preset_row(ui, tl!("Bullet Character:"), &tiles, current);
         match picked.and_then(|i| presets.get(i)) {
-            Some((_, _, glyph)) if glyph.0.is_none() => pick(self, "none", None),
+            Some((_, _, None)) => pick(self, "none", None),
             Some((_, key, _)) => pick(self, "bullet", Some(*key)),
             None => {}
         }
@@ -281,7 +279,7 @@ impl BulletsDialog {
         };
         Text::new(tl!("Number Style:")).show(ui);
         // Screen readers name each style by its first three numbers, as the Numbered List presets do.
-        let none = Preset { at: 0, name: tl!("None").to_owned(), face: Face::Glyph(&NO_BULLET) };
+        let none = Preset { at: 0, name: tl!("None").to_owned(), face: Face::Glyph(BulletGlyph::of(None)) };
         let styles = NumberStyle::ALL.iter().enumerate().map(|(i, &style)| Preset {
             at: i + 1,
             name: crate::panels::paragraph::number_sample(style, 3),
@@ -291,7 +289,8 @@ impl BulletsDialog {
         match preset_row(ui, tl!("Number Style:"), &tiles, current) {
             Some(0) => pick(self, "none", None),
             Some(i) => {
-                if let Some(key) = NumberStyle::ALL.get(i - 1).and_then(|s| serde_json::to_value(s).ok()).and_then(|v| v.as_str().map(str::to_string)) {
+                if let Some(key) = NumberStyle::ALL.get(i - 1).and_then(|s| serde_json::to_value(s).ok()).and_then(|v| v.as_str().map(str::to_string))
+                {
                     pick(self, "number", Some(&key));
                 }
             }

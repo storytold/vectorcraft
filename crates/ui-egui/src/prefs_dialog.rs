@@ -9,7 +9,7 @@ use craft::color_ui::ui::ColorPickerDialog;
 use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
 use craft::ui::dialog::{DialogHost, DialogId, PromptChoice, StandardPrompt};
-use craft::ui::patterns::preferences::{PreferencesModel, PreferencesState, PreferencesWindow, SettingsDraft};
+use craft::ui::patterns::preferences::{PreferencesDraft as _, PreferencesState, PreferencesWindow, SettingsDraft};
 use craft::ui::runtime::memory::SaveKey;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
@@ -17,6 +17,7 @@ use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_GROUPS, spec};
 
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
+use crate::i18n::LangExt as _;
 
 mod descriptions;
 mod model;
@@ -140,7 +141,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     draft.set("__taskBar", &app.ui.task_bar);
     let selected = category.and_then(|c| PREF_CATEGORIES.iter().find(|x| x.eq_ignore_ascii_case(c))).copied().unwrap_or(PREF_CATEGORIES[0]);
     let mut w = PrefsWindow {
-        state: PreferencesState { selected: selected.to_string(), search: String::new(), error: None },
+        state: PreferencesState::default(),
         opened: draft.clone(),
         draft,
         reset_units: None,
@@ -148,6 +149,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
         reset_asked: None,
         strings: Default::default(),
     };
+    w.state.selected = selected.to_string();
     w.sync_strings();
     app.prefs = Some(Box::new(w));
 }
@@ -157,10 +159,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some(mut w) = app.prefs.take() else { return };
     // Rows drawn by `PathSetting` edit the draft directly.
     w.sync_strings();
-    let mut state = std::mem::replace(&mut w.state, PreferencesState { selected: String::new(), search: String::new(), error: None });
+    let mut state = std::mem::take(&mut w.state);
     let out = {
         let mut live = Live { app: &mut *app, w: &mut w };
-        PreferencesWindow::new(Bind::bound(&mut state)).remember(Some(SaveKey::new("vectorcraft.preferences"))).show(ui, &mut live)
+        PreferencesWindow::new(Bind::bound(&mut state)).remember(SaveKey::new("vectorcraft.preferences")).show(ui, &mut live)
     };
     w.state = state;
     if let Some(request) = out.pick_color {

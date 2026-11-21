@@ -390,9 +390,8 @@ fn revert(app: &mut VectorcraftApp, sheet: &mut Sheet, graph: Option<u64>) -> Re
 }
 
 /// Whether Import Data can ask for a file here: the host has a picker and the app can read files.
-// PLAN: `file_asks::can(&VectorcraftApp) -> bool` is assumed from the files-01 table (`picks::can`); fl.A3 names `ask` only.
 fn can_import(app: &VectorcraftApp) -> bool {
-    file_asks::can(app) && app.services.read.is_some()
+    file_asks::can(app, craft::host::PickKind::Open) && app.services.read.is_some()
 }
 
 /// Import Data's answer: a tab-separated text file's rows into the sheet.
@@ -915,8 +914,7 @@ mod tests {
             Ok(f.get(path).ok_or("no such file")?.iter().copied().take(max).collect())
         }));
         let scripted = Arc::new(ScriptedFiles::new());
-        // PLAN: the app's test seam for a host with this file service is files-w5's; `install_files` stands for it.
-        app.install_files(scripted.clone());
+        app.host = app.host.with_files(scripted.clone());
         let mut h = harness(app);
         h.run_steps(4);
         let import = |h: &mut Harness, picked: Picked| {

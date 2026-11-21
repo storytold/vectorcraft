@@ -5,10 +5,10 @@ use std::collections::BTreeSet;
 use std::sync::{Mutex, PoisonError};
 
 // PLAN: assumed import paths through the `craft_ui` facade, as in `prefs_dialog.rs`.
-use craft::host::PickRequest;
+use craft::host::{PickKind, PickRequest};
 use craft::theme::Rgba;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry};
+use craft::ui::contract::{Bind, Entry, Show as _};
 use craft::ui::form::{SliderField, SliderFieldLayout};
 use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesDraft, PreferencesModel, RowKind, RowSpec};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
@@ -18,7 +18,7 @@ use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, 
 
 use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions};
 use crate::VectorcraftApp;
-use crate::i18n::Lang;
+use crate::i18n::{Lang, LangExt as _};
 use craft::color_ui::ui::ColorPickerDialog;
 use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
 
@@ -223,8 +223,7 @@ impl Live<'_> {
             }
             PrefKind::Color => {
                 let hex = self.w.draft.get::<String>(key).unwrap_or_default();
-                // PLAN: assumed `Rgba::from_hex(&str) -> Option<Rgba>`.
-                RowKind::Color(Rgba::from_hex(&hex).unwrap_or_else(|| Rgba::from_hex("#000000").unwrap_or_default()))
+                RowKind::Color(Rgba::from_hex(&hex).unwrap_or(Rgba::BLACK))
             }
             PrefKind::Text if key == "interfaceLanguage" => {
                 // `auto` plus every registered language, by its own name.
@@ -236,7 +235,7 @@ impl Live<'_> {
             }
             // File Handling › Data Recovery › Folder and Plug-ins & Scratch Disks › Additional Plug-ins Folder:
             // typed, or picked where the host has a folder picker (not on the web).
-            PrefKind::Text if folder_check(key).is_some() && self.app.services.pick_folder.is_some() => {
+            PrefKind::Text if folder_check(key).is_some() && crate::file_asks::can(self.app, PickKind::Folder) => {
                 return self.row(key, "", sp.label, RowKind::Custom);
             }
             PrefKind::Text => RowKind::Text(self.text_of(key)),
@@ -261,9 +260,10 @@ impl Live<'_> {
             let tools = self.row("prefsFile", "", "export import reset preferences", RowKind::Custom);
             groups.add("", tools);
         }
-        // PLAN: the id is the English category (the window's `selected`, `prefs_dialog::page`); the sheet's
-        // translated id would never match it.
-        PageSpec { groups: groups.groups, ..PageSpec::new(cat, tl!(cat), Vec::new()) }
+        // The id is the English category (the window's `selected`, `prefs_dialog::page`).
+        let mut page = PageSpec::new(cat, tl!(cat), Vec::new());
+        page.groups = groups.groups;
+        page
     }
 
     /// Sets every key of the draft to its default, as the answered Reset question does.
@@ -328,6 +328,8 @@ impl PreferencesModel for Live<'_> {
             PrefValue::Text(s) | PrefValue::Choice(s) => json!(s),
             // The six hex digits: preferences hold no alpha.
             PrefValue::Color(c) => json!(c.to_hex().chars().take(7).collect::<String>()),
+            // A kind of value no row of this window shows.
+            _ => return,
         };
         // A row the window shows is always a known key of the right kind.
         let _ = self.w.put(key, &value);
@@ -337,7 +339,10 @@ impl PreferencesModel for Live<'_> {
         match key {
             "uiScaling" => self.slider(ui, key, 0.75..=2.0, 0.05, Some(UnitKind::Times), |v| json!(v)),
             "anchorSize" => self.slider(ui, key, 1.0..=7.0, 1.0, None, |v| json!(v.round() as i64)),
-            "editOriginal" => crate::original_editor::show(ui, self.app, &self.w.draft),
+            "editOriginal" => {
+                let enabled = self.enabled(key);
+                crate::original_editor::show(self.app, ui, enabled);
+            }
             "prefsFile" => {
                 let (mut export, mut import, mut reset) = (false, false, false);
                 ui.horizontal_wrapped(|ui| {

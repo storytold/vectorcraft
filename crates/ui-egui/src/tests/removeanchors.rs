@@ -153,7 +153,6 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     assert_eq!(texts.iter().filter(|(t, _)| t == LABEL).count(), 1, "task bar: {texts:?}");
 }
 
-
 /// The centre of the `i`-th 24 pt icon button after `label`.
 fn button(texts: &[(String, Rect)], ctx: &egui::Context, label: &str, i: usize) -> Pos2 {
     let r = texts.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("no `{label}`"));
@@ -225,7 +224,7 @@ fn anchor_delete_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Ve
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0));
     let time = ctx.input(|i| i.time) + 0.1;
     let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();

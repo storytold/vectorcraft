@@ -5,19 +5,28 @@ use vectorcraft_engine::Session;
 /// same path a ruler edit takes.
 fn edit_ruler(app: &mut VectorcraftApp, f: impl FnOnce(&mut RulerValues)) {
     let (node, para, span) = current_para(app).unwrap();
-    // PLAN: assumed ruler_values(&ParaStyle, &[TabStop]) -> RulerValues (type-w17)
     let before = ruler_values(&para, &para.tabs);
     let mut after = before.clone();
     f(&mut after);
-    // PLAN: assumed apply_ruler_edit(app, &Node, &ParaStyle, f64, &RulerValues, &RulerValues) (ty.S13)
     apply_ruler_edit(app, &node, &para, span, &before, &after);
 }
 
-/// Moves both indent markers by `by` points, as a drag of the lower marker with the box does.
-fn move_box(v: &mut RulerValues, by: f64) {
-    // PLAN: assumed RulerValues::{left_indent, first_line_indent}: f64, both absolute ruler positions
+/// Moves both indent markers by `by` points, as a drag of the lower marker with the box does: the
+/// first line's indent is relative to the left one, so it goes along.
+fn move_box(v: &mut RulerValues, by: f32) {
     v.left_indent += by;
-    v.first_line_indent += by;
+}
+
+/// A left-aligned stop with no leader at `position`, as a click on the ruler adds one.
+fn stop_at(position: f32) -> RulerStop {
+    RulerStop::new(position, RulerAlign::Left, TabLeader::None)
+}
+
+/// Types `value` in the X field, as the field does for the stop or marker picked on the ruler.
+fn type_position(app: &mut VectorcraftApp, value: f64) {
+    let (node, para, span) = current_para(app).unwrap();
+    let picked = (app.ui.tabs_panel.stop, app.ui.tabs_panel.marker);
+    set_position(app, &node, &para, span, picked, value);
 }
 
 /// Runs the panel menu command `id` (`ui.tabs.*`) on the app.
@@ -81,8 +90,7 @@ fn a_stop_added_on_a_mixed_selection_sets_every_selected_text() {
     let shape = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().clone();
     let before = shape(&app);
     app.run("select.set", json!({"ids": [rect, a, b]})).unwrap();
-    // PLAN: assumed RulerValues::stops: Vec<f64>
-    edit_ruler(&mut app, |v| v.stops.push(60.0));
+    edit_ruler(&mut app, |v| v.stops.push(stop_at(60.0)));
     for text in [a, b] {
         assert_eq!(text_of(&app, text).para_at(0).tabs.iter().map(|s| s.position).collect::<Vec<_>>(), [40.0, 60.0], "text {text}");
     }
@@ -594,11 +602,10 @@ fn indent_markers_show_and_set_a_list_paragraphs_laid_out_indent() {
 fn selected_marker_position_field_sets_its_absolute_position() {
     let mut app = indent_app(24.0, 12.0);
     app.ui.tabs_panel.marker = Some(RulerItem::FirstLine);
-    // PLAN: assumed set_position(app: &mut VectorcraftApp, position: f64) (ty.S13)
-    set_position(&mut app, 80.0);
+    type_position(&mut app, 80.0);
     assert_eq!(indent_values(&app, 0), (24.0, 56.0));
     app.ui.tabs_panel.marker = Some(RulerItem::Hanging);
-    set_position(&mut app, 40.0);
+    type_position(&mut app, 40.0);
     assert_eq!(indent_values(&app, 0), (40.0, 40.0));
 }
 
@@ -724,18 +731,18 @@ fn an_x_typed_past_the_next_stop_keeps_the_stop_selected() {
     app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 100}})).unwrap();
     app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}]})).unwrap();
     app.ui.tabs_panel.stop = 0;
-    set_position(&mut app, 70.0);
+    type_position(&mut app, 70.0);
     assert_eq!(stop_positions(&app), [50.0, 70.0]);
     assert_eq!(app.ui.tabs_panel.stop, 1);
     app.ui.tabs_panel.stop = 0;
-    set_position(&mut app, 200000.0);
+    type_position(&mut app, 200000.0);
     assert_eq!(stop_positions(&app), [50.0, 70.0]);
     assert_eq!(app.ui.tabs_panel.stop, 0);
     // An X less than 1e-6 pt above another stop merges the two into the stop already there,
     // which is selected.
     app.session.execute("text.tabs.set", &json!({"stops": [{"position": 30}, {"position": 50}, {"position": 70}]})).unwrap();
     app.ui.tabs_panel.stop = 0;
-    set_position(&mut app, 50.0000001);
+    type_position(&mut app, 50.0000001);
     assert_eq!(stop_positions(&app), [50.0, 70.0]);
     assert_eq!(app.ui.tabs_panel.stop, 0);
 }
@@ -774,8 +781,7 @@ fn panel_menu_does_not_change_stops_while_an_indent_marker_is_selected() {
     app.ui.tabs_panel.stop = 1;
     app.ui.tabs_panel.marker = Some(RulerItem::FirstLine);
     let before = current(&app).unwrap().1;
-    // PLAN: assumed can(app: &VectorcraftApp) -> bool, the enabled rule of Repeat Tab and Delete Tab (ty.S8)
-    assert!(!can(&app), "Repeat Tab and Delete Tab are off");
+    assert!(!can(&app, REPEAT_TAB) && !can(&app, DELETE_TAB), "Repeat Tab and Delete Tab are off");
     // A disabled command refuses; the stops stay as they were either way.
     let _ = app.run("ui.tabs.repeatTab", json!({}));
     assert_eq!(current(&app).unwrap().1, before);
@@ -796,7 +802,7 @@ fn the_ruler_and_repeat_tab_stop_at_256_stops() {
     let stops: Vec<Value> = start.iter().map(|p| json!({"position": p})).collect();
     app.session.execute("text.tabs.set", &json!({ "stops": stops })).unwrap();
     app.ui.tabs_panel.stop = 3;
-    edit_ruler(&mut app, |v| v.stops.push(290.0));
+    edit_ruler(&mut app, |v| v.stops.push(stop_at(290.0)));
     assert_eq!(stop_positions(&app), start);
     assert_eq!(app.ui.tabs_panel.stop, 3);
     assert_eq!(app.ui.status, "at most 256 tab stops");
@@ -868,7 +874,7 @@ fn delete_tab_after_the_last_stop_deletes_the_stop_the_ruler_shows_selected() {
 
 /// The panel's rect while it floats.
 fn tabs_rect(app: &VectorcraftApp) -> egui::Rect {
-    app.ui.dock_workspace.layout.floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap().rect
+    app.ui.dock_workspace.layout().floating.iter().find(|w| w.contains(&"tabs".to_string())).unwrap().rect
 }
 
 /// Sets the canvas to a 1000 by 700 pt area starting `top` points down the window, at `zoom`.
@@ -889,9 +895,8 @@ fn above_text_keeps_the_zoom_on_a_ruler_wider_than_asked() {
     app.session.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
     app.session.execute("text.create", &json!({"x": 40, "y": 200, "text": "a\tb", "area": {"width": 100, "height": 100}})).unwrap();
     show_canvas(&mut app, 40.0, 0.5);
-    let ctx = egui::Context::default();
     let (node, _, span) = current(&app).unwrap();
-    place_above_text(&mut app, &ctx, &node, span);
+    place_above_text(&mut app, &node, span);
     // The panel asked for: a 50 pt ruler, less than the narrowest panel's.
     let asked = tabs_rect(&app).width();
     assert!((asked - RULER_LEFT * 2.0 - 50.0).abs() < 0.01, "{asked}");
@@ -928,8 +933,8 @@ fn above_text_keeps_the_zoom_on_a_ruler_wider_than_asked() {
     assert!(app.session.set_active(0));
     assert!((scale(&app, narrowest) - 0.5).abs() < 1e-3);
     // The panel made wider than the narrowest floating window fits the span to its ruler again.
-    let window = app.ui.dock_workspace.layout.floating.iter_mut().find(|w| w.contains(&"tabs".to_string())).unwrap();
-    window.rect = egui::Rect::from_min_size(window.rect.min, egui::vec2(400.0, window.rect.height()));
+    let at = tabs_rect(&app).min;
+    crate::panel_docking::place_floating(&mut app, "tabs", at, 400.0).unwrap();
     let wide = scale(&app, tabs_rect(&app).width());
     assert!((wide - (400.0 - 8.0) / span).abs() < 1e-3, "{wide}");
 }
@@ -945,8 +950,7 @@ fn above_text_puts_the_ruler_over_the_text_at_the_zoom() {
         // The canvas starts low enough in the window for the panel to fit above the text at 200%.
         show_canvas(&mut app, 440.0, zoom);
         let (node, _, span) = current(&app).unwrap();
-        let ctx = egui::Context::default();
-        above_text(&mut app, &ctx, &node, span).unwrap();
+        above_text(&mut app, &node, span).unwrap();
         let g = tabs_rect(&app);
         let frame = egui::Rect::from_points(&app.canvas_view().unwrap().quad(node.geometric_bounds().unwrap()));
         assert!((g.min.x + RULER_LEFT - frame.left()).abs() < 0.01, "0 on the frame's left edge");
@@ -956,7 +960,7 @@ fn above_text_puts_the_ruler_over_the_text_at_the_zoom() {
         assert!((ruler - frame.width()).abs() < 0.01, "{ruler} {}", frame.width());
         assert!((ruler - 300.0 * zoom as f32).abs() < 0.01);
     }
-    let windows = app.ui.dock_workspace.layout.floating.iter().filter(|w| w.contains(&"tabs".to_string())).count();
+    let windows = app.ui.dock_workspace.layout().floating.iter().filter(|w| w.contains(&"tabs".to_string())).count();
     assert_eq!(windows, 1, "placed again, not floated twice");
 }
 
@@ -973,8 +977,7 @@ fn above_text_keeps_the_panel_bar_in_the_window() {
         let (node, _, span) = current(&app).unwrap();
         let frame = egui::Rect::from_points(&app.canvas_view().unwrap().quad(node.geometric_bounds().unwrap()));
         assert!(frame.top() < 240.0, "no room above the text");
-        let ctx = egui::Context::default();
-        above_text(&mut app, &ctx, &node, span).unwrap();
+        above_text(&mut app, &node, span).unwrap();
         let top = if below { frame.bottom() + 6.0 } else { 0.0 };
         assert_eq!(tabs_rect(&app).min.y, top, "text {text_height} high");
     }
@@ -996,8 +999,7 @@ fn above_text_puts_the_panel_at_the_top_when_below_the_text_does_not_fit() {
             v.center = vectorcraft_geom::Point::new(300.0, center_y);
         }
         let (node, _, span) = current(&app).unwrap();
-        let ctx = egui::Context::default();
-        above_text(&mut app, &ctx, &node, span).unwrap();
+        above_text(&mut app, &node, span).unwrap();
         assert_eq!(tabs_rect(&app).min.y, 0.0, "view centered at y {center_y}");
     }
 }

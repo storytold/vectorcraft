@@ -6,7 +6,7 @@
 use std::ops::RangeInclusive;
 
 use craft::behavior::Mixed;
-use craft::ui::contract::{Bind, Entry};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::ContentPainterCx;
@@ -48,15 +48,16 @@ fn sized_row(key: &str, label: Label, default: f64, relative: bool, lengths: Len
     }
 }
 
-/// The Relative/Absolute choice that decides the unit of the rows above it.
-fn relative_radio() -> Param {
-    // PLAN: assumed `ParamKind::bool_radio(on: Label, off: Label, default: bool)`, the two-id `Radio` of wg.S12
-    Param::new("relative", Label::Empty, ParamKind::bool_radio(lbl!("Relative"), lbl!("Absolute"), true))
+/// The Relative/Absolute choice over the flag `relative` that decides the unit of the rows above it: its two ids are
+/// the flag's JSON values, which `form::json_of` writes back as a bool.
+pub(super) fn relative_radio(label: impl Into<Label>, default: bool) -> Param {
+    let options = vec![("true".to_owned(), lbl!("Relative")), ("false".to_owned(), lbl!("Absolute"))];
+    Param::new("relative", label, ParamKind::radio(options, Some(default.to_string())))
 }
 
 /// Whether the pair's rows are shares of the object's size.
-fn is_relative(fields: &DialogFields) -> bool {
-    fields.bool("relative").unwrap_or(true)
+pub(super) fn is_relative(fields: &DialogFields) -> bool {
+    fields.text("relative").is_none_or(|id| id == "true")
 }
 
 /// Transform: Transform Each's rows, the options, Copies, the reflections and the reference point.
@@ -90,7 +91,7 @@ pub(super) fn distort(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         Param::section(lbl!("Options")),
         sized_row("size", lbl!("Size:"), if roughen { 5.0 } else { 10.0 }, is_relative(fields), cx.lengths),
         second,
-        relative_radio(),
+        relative_radio(Label::Empty, true),
         Param::new(
             "points",
             Label::from(crate::i18n::tr_ctx(crate::i18n::current(), "effect", "Points").to_string()),
@@ -106,7 +107,7 @@ pub(super) fn tweak(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         Param::section(lbl!("Amount")),
         sized_row("h", lbl!("Horizontal:"), 10.0, relative, cx.lengths),
         sized_row("v", lbl!("Vertical:"), 10.0, relative, cx.lengths),
-        relative_radio(),
+        relative_radio(Label::Empty, true),
         Param::section(lbl!("Modify")),
         Param::new("anchors", lbl!("Anchor Points"), ParamKind::bool(true)),
         Param::new("in", lbl!("\"In\" Control Points"), ParamKind::bool(false)),
@@ -219,7 +220,6 @@ pub(super) fn textured(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
 
 /// The Pathfinder effects: Soft Mix's Mixing Rate where it has one, then the Pathfinder Options.
 pub(super) fn pathfinder(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
-    // PLAN: assumed `pub(super) fn has_only_pathfinder_options(id: &str) -> bool` in effect.rs (effects-w4)
     let own: Vec<Param> = if super::effect::has_only_pathfinder_options(&cx.id) {
         Vec::new()
     } else {

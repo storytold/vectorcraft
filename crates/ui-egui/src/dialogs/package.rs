@@ -15,6 +15,7 @@ use craft::host::PickRequest;
 use craft::ui::contract::Bind;
 use craft::ui::dialog::dialog_id;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::runtime::env::Label;
 use craft::ui::runtime::requests::PathKind;
 use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
@@ -69,7 +70,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         ParamDialog::new(KEY, tl!("Package"), params.clone())
             .values(Bind::bound(fields))
             .ok_label(tl!("Package"))
-            .footer_note(tl!("Fonts whose licence doesn't allow embedding are not copied."))
+            .footer_note(Label::from(tl!("Fonts whose licence doesn't allow embedding are not copied.")))
     });
     crate::dialogs::host::open_held(app, dialog, |app, answer| confirm(app, &answer.fields).map(|_| ())).ok_or("no window")?;
     Ok(Value::Null)

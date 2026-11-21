@@ -346,12 +346,11 @@ fn plugin_row(key: &str, p: &PluginParam) -> Param {
 pub(crate) fn plugin_params(manifest: &Manifest, _fields: &Map<String, Value>) -> Vec<Param> {
     let mut conditions: HashMap<&str, Vec<(String, Vec<FieldValue>)>> = HashMap::new();
     for (name, p) in &manifest.params {
-        let mut own: Vec<(String, Vec<FieldValue>)> = p
-            .ui
-            .visible_when
-            .iter()
-            .map(|(other, allowed)| (other.clone(), allowed.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect()))
-            .collect();
+        let mut own: Vec<(String, Vec<FieldValue>)> =
+            p.ui.visible_when
+                .iter()
+                .map(|(other, allowed)| (other.clone(), allowed.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect()))
+                .collect();
         for other in p.ui.visible_when.keys() {
             own.extend(conditions.get(other.as_str()).cloned().unwrap_or_default());
         }
@@ -470,6 +469,7 @@ pub(super) fn humanized(k: &str) -> String {
 #[cfg(test)]
 mod plugin_field_tests {
     use super::*;
+    use crate::i18n::LangExt as _;
 
     /// [`json_of`] reads back what [`fields_of`] took in: numbers as the command reads them, a flag pair as a bool,
     /// unknown keys through, UI-only keys dropped.

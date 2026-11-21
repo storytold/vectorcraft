@@ -66,7 +66,7 @@ fn dialog_fields(map: &Map<String, Value>) -> DialogFields {
 
 /// The rows as far as their kinds go, for reading values to and from JSON.
 fn kinds() -> Vec<Param> {
-    params(false, false, false)
+    rows(false, false, false)
 }
 
 /// Gives the dialog the fields the current preset sets and the others have lost (a change of the preset row removes
@@ -84,25 +84,25 @@ fn settle(fields: &mut DialogFields) {
 }
 
 /// A choice row over `rows` (id, label).
-pub(super) fn choice_param<'a>(key: &str, label: &str, rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> Param {
+pub(super) fn choice_param(key: &str, label: &'static str, rows: impl IntoIterator<Item = (&'static str, &'static str)>) -> Param {
     let options = rows.into_iter().map(|(id, name)| (id.to_string(), tl!(name).into())).collect();
     Param::new(key, label, ParamKind::choice(options, None))
 }
 
 /// A radio row over `rows` (id, label).
-pub(super) fn radio_param<'a>(key: &str, label: &str, rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> Param {
+pub(super) fn radio_param(key: &str, label: &'static str, rows: impl IntoIterator<Item = (&'static str, &'static str)>) -> Param {
     let options = rows.into_iter().map(|(id, name)| (id.to_string(), tl!(name).into())).collect();
     Param::new(key, label, ParamKind::radio(options, None))
 }
 
 /// A check box row.
-pub(super) fn check_param(key: &str, label: &str) -> Param {
+pub(super) fn check_param(key: &str, label: &'static str) -> Param {
     Param::new(key, label, ParamKind::bool(false))
 }
 
 /// The rows. Export Selection leaves Export Selected Art Only out, as it writes the selected art alone;
 /// without a selection that row is off. `note` shows the true-colour note.
-fn params(selection: bool, has_selection: bool, note: bool) -> Vec<Param> {
+fn rows(selection: bool, has_selection: bool, note: bool) -> Vec<Param> {
     let keys: Vec<String> = preset_fields(DxfPreset::Custom).keys().cloned().collect();
     let mut rows = vec![
         choice_param(PRESET, tl!("Preset:"), DxfPreset::ALL.iter().map(|p| (p.id(), p.label()))).resets(keys),
@@ -112,11 +112,7 @@ fn params(selection: bool, has_selection: bool, note: bool) -> Vec<Param> {
         choice_param("colors", tl!("Number of Colors:"), ColorDepth::ALL.iter().map(|c| (c.id(), c.label()))),
     ];
     if note {
-        rows.push(Param::read_only_text(
-            "__colorNote",
-            "",
-            tl!("True colour needs version 2004 or later: the nearest of 256 colours is written."),
-        ));
+        rows.push(Param::read_only_text("__colorNote", "", tl!("True colour needs version 2004 or later: the nearest of 256 colours is written.")));
     }
     rows.extend([
         choice_param("rasterFormat", tl!("Raster File Format:"), RasterFormat::ALL.iter().map(|r| (r.id(), r.label()))),
@@ -194,15 +190,13 @@ pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
     let mut values = dialog_fields(&fields);
     settle(&mut values);
     let has_selection = app.session.active().is_some_and(|st| !st.selection.is_empty());
-    // PLAN: assumed `app.ui_ctx: Option<egui::Context>` is set whenever a window is shown.
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, values, move |fields| {
         settle(fields);
         let note = fields.text("colors").and_then(ColorDepth::from_id) == Some(ColorDepth::True)
             && fields.text("version").and_then(DxfVersion::from_id).unwrap_or_default() < DxfVersion::R2004;
-        ParamDialog::new(KIND, tl!("DXF Options"), params(selection, has_selection, note))
+        ParamDialog::new(KIND, tl!("DXF Options"), rows(selection, has_selection, note))
             .values(Bind::bound(fields))
-            // PLAN: assumed `ok_label` takes a `Label`.
             .ok_label(tl!("Export").into())
             .below(|ui, fields| {
                 ui.weak(match fields.text("preserve").and_then(Preserve::from_id).unwrap_or_default() {
@@ -220,7 +214,7 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     // drawing) counts as drawn.
     let mut fields = fields.clone();
     settle(&mut fields);
-    let map = form::json_of(&params(open.selection, true, false), &fields);
+    let map = form::json_of(&rows(open.selection, true, false), &fields);
     let params = Value::Object(map.clone());
     fileio::dxf::check(&params)?;
     // Nothing selected keeps the dialog open too.
@@ -229,6 +223,5 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     }
     app.ui.dxf_options = Value::Object(map.into_iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).collect());
     let path = fields.text("path").map(str::to_string);
-    // PLAN: assumed `After` is an `Option` of the step to run once the dialog closed.
     io::export(app, Some("dxf"), path, &super::export_as::exported(open.selection, params)).map(|_| None)
 }

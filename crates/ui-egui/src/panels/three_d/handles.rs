@@ -7,13 +7,15 @@ use std::sync::Arc;
 use craft::behavior::kurbo::Point as DocPoint;
 use craft::behavior::{CanvasView, HitShape, Metrics, PartKey, PointerButton, PressPhase, Sense};
 use craft::ui::canvas::{CanvasSpace, canvas_space};
-use craft::ui::contract::{Access, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Role, Show as _};
+use craft::ui::contract::{
+    Access, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Remember as _, Role, Show as _,
+};
 use craft::ui::primitives::{PaintShape, StrokeWidth};
 use craft::ui::runtime::focus::KeyUse;
 use craft::ui::style::{ComponentStyle, StyleColor, StyleCx};
 use egui::{Pos2, Response, Ui, Vec2};
 use serde_json::{Map, Value};
-use vectorcraft_effects::{GRAPHICS, GraphicFrame, MappedGraphic, PlanarFace};
+use vectorcraft_effects::{GRAPHICS, GraphicFrame, MappedGraphic};
 use vectorcraft_geom::{Point, Vec2 as DocVec};
 
 use super::{Target, find, send, set_selected_graphic};
@@ -49,7 +51,7 @@ fn drag_owner(app: &VectorcraftApp) -> Owner {
 /// whose face the viewer sees, and none while a geometry effect follows a selected object's 3D
 /// effect. The frame is built once for each revision of the document ([`super::Model::frames`]).
 pub(super) fn graphic_handles(app: &mut VectorcraftApp) -> Option<Handles> {
-    if app.three_d.page != "materials" || !crate::panel_docking::visible(&app.ui, super::ID) {
+    if app.three_d.page != "materials" || !crate::panel_docking::visible(app, super::ID) {
         return None;
     }
     let st = app.session.active()?;
@@ -110,12 +112,11 @@ fn to_doc(view: &CanvasView, at: Pos2) -> Point {
     Point::new(p.x, p.y)
 }
 
-/// A grab of one handle: its graphic, that graphic's face, the page offset from the handle to the
-/// point where it was grabbed, and what it was grabbed for.
-#[derive(Clone, Debug, PartialEq)]
+/// A grab of one handle: its graphic, the page offset from the handle to the point where it was
+/// grabbed, and what it was grabbed for.
+#[derive(Clone, Debug, Default, PartialEq)]
 struct Held {
     index: usize,
-    face: PlanarFace,
     grab: DocVec,
     owner: Owner,
 }
@@ -166,7 +167,6 @@ pub(super) struct GraphicHandles<'a> {
     #[common]
     common: Common,
     handles: &'a [(usize, Point)],
-    graphics: &'a [MappedGraphic],
     /// The graphic the page edits.
     #[prop]
     selected: usize,
@@ -175,8 +175,8 @@ pub(super) struct GraphicHandles<'a> {
 }
 
 impl<'a> GraphicHandles<'a> {
-    fn new(handles: &'a [(usize, Point)], graphics: &'a [MappedGraphic], selected: usize, owner: Owner) -> Self {
-        GraphicHandles { common: Common::new(), handles, graphics, selected, owner, edit: None }.label(tl!("Graphic handles"))
+    fn new(handles: &'a [(usize, Point)], selected: usize, owner: Owner) -> Self {
+        GraphicHandles { common: Common::new(), handles, selected, owner, edit: None }.label(tl!("Graphic handles"))
     }
 }
 
@@ -198,7 +198,6 @@ impl Component for GraphicHandles<'_> {
     fn parts(&mut self, _: egui::Rect, cx: &mut PartsCx<'_, Self>) {
         let Some(space) = canvas_space(&cx.env) else { return };
         for (index, at) in self.handles {
-            // PLAN: assumed `HitShape::circle(center, radius)`.
             cx.part(HANDLE.at(*index as u64), HitShape::circle(to_screen(&space.view, *at), HANDLE_REACH)).sense(Sense::CLICK);
         }
     }
@@ -217,9 +216,8 @@ impl Component for GraphicHandles<'_> {
             let Some(press) = cx.part_if_declared(HANDLE.at(*index as u64)).map(|result| result.press) else { continue };
             match press.phase {
                 PressPhase::Down { start, .. } if start.button == PointerButton::Primary => {
-                    let Some(face) = self.graphics.get(*index).map(|g| g.face) else { continue };
                     let grab = to_doc(&space.view, start.origin);
-                    held = Some(Held { index: *index, face, grab: DocVec::new(grab.x - at.x, grab.y - at.y), owner: self.owner.clone() });
+                    held = Some(Held { index: *index, grab: DocVec::new(grab.x - at.x, grab.y - at.y), owner: self.owner.clone() });
                     self.edit = Some(HandleEdit::Grab(*index));
                 }
                 PressPhase::DragStart { pos, .. } | PressPhase::Drag { pos, .. } => {
@@ -277,15 +275,14 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
     };
     let view_gesture = ui.input(|i| i.key_down(egui::Key::Space)) || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView");
     let owner = drag_owner(app);
-    let out = GraphicHandles::new(&handles, &list, app.three_d.graphic, owner).enabled(!view_gesture).show(ui);
+    let out = GraphicHandles::new(&handles, app.three_d.graphic, owner).enabled(!view_gesture).show_at(ui, space.view.rect);
     match out.edit {
         Some(HandleEdit::Grab(index)) => set_selected_graphic(app, index),
         Some(HandleEdit::Move { held, to, phase }) => {
-            let moved = frame
-                .as_ref()
-                .as_ref()
-                .and_then(|f| f.offset_at(held.face, Point::new(to.x - held.grab.x, to.y - held.grab.y)))
-                .and_then(|(x, y)| list.get(held.index).and_then(|g| moved_to(g, x, y)));
+            let moved = list.get(held.index).and_then(|g| {
+                let (x, y) = frame.as_ref().as_ref()?.offset_at(g.face, Point::new(to.x - held.grab.x, to.y - held.grab.y))?;
+                moved_to(g, x, y)
+            });
             let mut changed = Map::new();
             if let Some((x, y)) = moved {
                 let mut list = list.clone();
@@ -300,5 +297,4 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
         Some(HandleEdit::End) => send(app, Map::new(), Live::Released),
         None => {}
     }
-    let _ = &space.view;
 }

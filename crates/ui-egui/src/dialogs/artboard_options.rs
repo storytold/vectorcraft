@@ -422,8 +422,8 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
     }
     let reference = Label::from(tl!("Reference Point:"));
     Field::new(reference.clone()).id_salt("reference").show(ui, |ui, _| {
-        let pick = ReferencePoint::new(reference.clone(), Bind::given(anchor(refi))).look(ReferencePointLook::Squares).show(ui);
-        if let Some(a) = pick.value().copied() {
+        let pick = ReferencePoint::new(reference.clone(), Bind::given(Some(anchor(refi)))).look(ReferencePointLook::Squares).show(ui);
+        if let Some(a) = pick.value().copied().flatten() {
             refi = reference_of(a);
         }
     });
@@ -490,7 +490,7 @@ fn background_row(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsV
                 v.color = custom_background_json(c);
             }
         }
-        None => {}
+        _ => {}
     }
 }
 
@@ -511,7 +511,7 @@ fn guide_label_row(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptions
                 v.guide_label = Some(LayerColor::Custom(rgb8(c)).label_text());
             }
         }
-        None => {}
+        _ => {}
     }
 }
 
@@ -879,7 +879,7 @@ mod tests {
         crate::dialogs::open_tool_dialog(
             &mut app,
             "artboardOptions",
-            &json!({"index": 0, "name": "Artboard 1", "x": 0, "y": 0, "width": 200, "height": 150,
+            json!({"index": 0, "name": "Artboard 1", "x": 0, "y": 0, "width": 200, "height": 150,
             "showVideoSafeAreas": true, "videoRulerPixelAspectRatio": 1.5}),
         );
         let v = app.dialogs().unwrap().with(|h| h.get::<ArtboardOptionsDialog>().unwrap().value.clone());

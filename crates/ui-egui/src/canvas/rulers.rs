@@ -169,7 +169,9 @@ fn drag_state(ui: &Ui, key: &str) -> Option<Drag> {
 fn set_drag(ui: &Ui, key: &str, state: Option<Drag>) {
     let id = egui::Id::new(key);
     ui.data_mut(|d| match state {
-        Some(state) => d.insert_temp(id, state),
+        Some(state) => {
+            d.insert_temp(id, state);
+        }
         None => d.remove::<Drag>(id),
     });
 }

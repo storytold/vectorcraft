@@ -74,7 +74,7 @@ fn unit_kind(unit: &str) -> Option<UnitKind> {
 }
 
 /// The choice over `list`'s `(id, label)` pairs, on its first.
-fn choice(list: &[(&str, &str)]) -> ParamKind {
+fn choice(list: &[(&str, &'static str)]) -> ParamKind {
     ParamKind::choice(list.iter().map(|&(id, label)| (id.to_string(), tl!(label).into())).collect(), list.first().map(|(id, _)| id.to_string()))
 }
 

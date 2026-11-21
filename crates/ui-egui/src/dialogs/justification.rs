@@ -84,7 +84,7 @@ fn problem(fields: &DialogFields) -> Option<&'static str> {
 
 /// The dialog over its values: three titled groups of Minimum, Desired and Maximum, Auto Leading and
 /// Single Word Justification. Preview starts off ([`HostedParamDialog::preview_off`]).
-fn form(fields: &DialogFields) -> ParamDialog<'static> {
+fn form(fields: &DialogFields) -> ParamDialog<'_> {
     let titles = [tl!("Word Spacing"), tl!("Letter Spacing"), tl!("Glyph Scaling")];
     let columns = [tl!("Minimum"), tl!("Desired"), tl!("Maximum")];
     let mut rows = Vec::new();
@@ -98,8 +98,11 @@ fn form(fields: &DialogFields) -> ParamDialog<'static> {
     rows.push(Param::number("autoLeading", tl!("Auto Leading:"), 120.0, 1.0, 0).bounds(Some(lo), Some(hi)).unit(UnitKind::Percent));
     let options = single_word_choices().into_iter().map(|(id, label)| (id.to_owned(), label.into())).collect();
     rows.push(Param::new("singleWord", tl!("Single Word Justification:"), ParamKind::choice(options, Some("fullJustify".to_owned()))));
-    let why = problem(fields);
-    ParamDialog::new(KIND, tl!("Justification"), rows).previews(true).ok_enabled(why.is_none()).ok_reason(why.map(Into::into))
+    let dialog = ParamDialog::new(KIND, tl!("Justification"), rows).previews(true);
+    match problem(fields) {
+        Some(why) => dialog.ok_enabled(false).ok_reason(why.into()),
+        None => dialog,
+    }
 }
 
 /// Open Justification on the paragraph attributes the Paragraph panel shows.
@@ -195,9 +198,8 @@ fn changes(p: &Map<String, Value>) -> bool {
 /// rolls the preview back when the dialog went away without OK.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.justification.take() else { return };
-    let shown = app
-        .dialogs()
-        .and_then(|d| d.with(|h| h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone()))));
+    let shown =
+        app.dialogs().and_then(|d| d.with(|h| h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone()))));
     // The host lock is released: a command never runs inside `DialogHost::with`.
     let Some((on, fields)) = shown else {
         open.preview.cancel(app);

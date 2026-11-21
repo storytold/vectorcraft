@@ -40,7 +40,7 @@ fn typed(start: f64, text: &str, codec: impl Fn(&Units) -> NumberCodec + 'static
 /// `typed` in a field that stores points and shows `shown`, reading with the size codec.
 fn typed_in_size(shown: UnitKind, text: &str) -> Option<f64> {
     let lengths = LengthUnits::new(UnitKind::Points, shown, PPI);
-    typed(PPI, text, move |units| fields::size_codec(units, lengths, 2, None))
+    typed(PPI, text, move |units| fields::size_codec(units, lengths, 2, None, false))
 }
 
 #[test]
@@ -109,5 +109,5 @@ fn a_press_on_the_canvas_commits_to_the_object_being_edited() {
     let app = app.borrow();
     assert_eq!(width(&app, &small), Some(42.0), "the typed value went to the object being edited");
     assert_eq!(width(&app, &big), Some(400.0), "the object the press selected is unchanged");
-    assert_eq!(app.session.doc().map(|d| d.selection.objects.clone()), Some(big), "the press selected the other object");
+    assert_eq!(app.session.doc().ok().map(|d| d.selection.objects.clone()), Some(big), "the press selected the other object");
 }

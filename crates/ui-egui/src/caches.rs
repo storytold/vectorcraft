@@ -117,7 +117,6 @@ pub struct CanvasCache {
     /// The CSS Properties panel's code, for the panel's key.
     pub(crate) css_shown: Option<(crate::panels::css_properties::CssKey, Arc<crate::panels::css_properties::Shown>)>,
     /// The SVG Options dialog's SVG code, for every input it reads (compared with `==`).
-    // PLAN: assumed `crate::dialogs::svg_options::SvgCodeKey` (op.A4 names the type, not its module; export-w10).
     pub(crate) svg_code: Option<(crate::dialogs::svg_options::SvgCodeKey, Arc<str>)>,
     /// The Export for Screens dialog's artboard thumbnails, for (document uid, revision).
     pub artboard_thumbs: Option<((u64, u64), Vec<Option<egui::TextureHandle>>)>,
@@ -138,11 +137,10 @@ pub struct CanvasCache {
     pub character_quads: Option<((u64, u64, NodeId, usize, usize), (Vec<[Point; 4]>, bool))>,
     /// The Tabs panel's guide line, for (document uid, text object, paragraph, revision): layout is
     /// too slow to run on every frame of a stop's drag.
-    // PLAN: assumed the axis `Option<(Point, Point, Vec2)>` of `panels::tabs::guide_axis` (type-w17 note; ty.S18 has no row for it).
     pub tabs_guide_axis: Option<((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>)>,
-    /// The Appearance panel's summary of the selection, for (document uid, revision).
-    // PLAN: assumed key (document uid, revision) and `panels::appearance::Summary` (ap.AS1 names the cache, not its key).
-    pub(crate) appearance_summary: Option<((u64, u64), Option<Arc<crate::panels::appearance::Summary>>)>,
+    /// The Appearance panel's summary of the selection, which holds the document, revision and
+    /// subjects it was made for.
+    pub(crate) appearance_summary: Option<Arc<crate::panels::appearance::Summary>>,
     /// The Transparency panel's values of the selection and its first object, for the panel's key.
     pub(crate) transparency_state:
         Option<(crate::panels::transparency::StateKey, vectorcraft_engine::cmd::TransparencyInfo, Option<Arc<vectorcraft_doc::Node>>)>,

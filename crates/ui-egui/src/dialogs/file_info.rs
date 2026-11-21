@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use craft::behavior::IconId;
-use craft::host::{PickId, PickKind, PickRequest};
+use craft::host::{Host, PickId, PickKind, PickRequest};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Radio, RadioGroup, Rating};
@@ -26,7 +26,7 @@ use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{FormCx, FormDialog};
 use craft::ui::pickers::Select;
-use craft::ui::runtime::env::{Env, Label};
+use craft::ui::runtime::env::Label;
 use craft::ui::runtime::measure;
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::sections::GroupBox;
@@ -191,7 +191,7 @@ impl Templates {
             if !self.listed.is_empty() {
                 Divider::horizontal().show(ui);
                 for (label, file) in &self.listed {
-                    if MenuItem::new(label.as_str()).show(ui).ran {
+                    if MenuItem::new(label.clone()).show(ui).ran {
                         chosen = Some(Chosen::Template(file.clone()));
                     }
                 }
@@ -325,12 +325,16 @@ fn ask_import(templates: &mut Templates, import: &Option<Info>, mode: &'static s
 }
 
 /// A text row `label` over the string under `key`, `lines` lines tall.
-fn text_row(ui: &mut egui::Ui, fields: &mut Info, key: &str, label: &str, lines: usize) {
+fn text_row(ui: &mut egui::Ui, fields: &mut Info, key: &str, label: &'static str, lines: usize) {
     let mut text = text_of(fields, key);
     let shown = text.clone();
     Field::new(label).show(ui, |ui, _| {
         let field = TextField::new(label, Bind::bound(&mut text));
-        if lines > 1 { field.lines(lines).show(ui) } else { field.show(ui) };
+        if lines > 1 {
+            field.lines(lines).show(ui)
+        } else {
+            field.show(ui)
+        };
     });
     if text != shown {
         fields.insert(key.into(), json!(text));
@@ -490,7 +494,7 @@ impl StackDialog for FileInfoDialog {
 
     fn cancelled(&mut self, ctx: &egui::Context) {
         if let Some((id, _)) = self.templates.ticket.take()
-            && let Some(host) = Env::host_of(ctx)
+            && let Some(host) = Host::try_of_ctx(ctx)
         {
             host.files().forget(id);
         }
@@ -564,8 +568,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     // PLAN: fl.A9 lists no `file_info::pump`; the Templates menu needs the session, so hub-w2 adds this line to `dialogs::host::pump`.
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KEY);
-    let (can_save, can_open, has_folder) =
-        (file_asks::can(app, PickKind::Save), file_asks::can(app, PickKind::Open), has_templates_folder(app));
+    let (can_save, can_open, has_folder) = (file_asks::can(app, PickKind::Save), file_asks::can(app, PickKind::Open), has_templates_folder(app));
     let requests = dialogs.with(|host| {
         host.get_mut_by_id::<FileInfoDialog>(id).map(|d| {
             d.templates.can_save = can_save;
@@ -696,7 +699,10 @@ mod tests {
         let (import_left, fields) = with_dialog(&app, |d| (d.import.is_some(), d.filed_fields())).unwrap();
         assert!(!import_left);
         // Appended: the typed author stays, the typed keyword is kept and the template's added.
-        assert_eq!((fields["author"].clone(), fields["keywords"].clone(), fields["rating"].clone()), (json!("Ada"), json!(["fair", "print"]), json!(3)));
+        assert_eq!(
+            (fields["author"].clone(), fields["keywords"].clone(), fields["rating"].clone()),
+            (json!("Ada"), json!(["fair", "print"]), json!(3))
+        );
         assert_eq!(app.session.active().unwrap().history.undo.len(), 0, "nothing changes before OK");
         assert!(press_ok(&mut app));
         let st = app.session.active().unwrap();

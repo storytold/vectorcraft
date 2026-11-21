@@ -135,9 +135,12 @@ pub fn tell(app: &mut VectorcraftApp, message: &str, detail: &str) {
     let Some(dialogs) = app.dialogs() else {
         return;
     };
-    if !app.told.admit(message, detail) {
+    // A message already waiting is not queued twice, and at most 16 wait.
+    let told = &mut app.told.0;
+    if told.len() >= 16 || told.iter().any(|(m, d)| m == message && d == detail) {
         return;
     }
+    told.push((message.to_string(), detail.to_string()));
     let alert = HostedAlert::new(Alert::new(message.to_string(), detail.to_string()).ok_label(tl!("Close")));
     dialogs.with(|host| host.enqueue(StartupStage::Warning, Message(alert)));
 }
@@ -221,7 +224,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     }
     // The host opens queued messages in `enqueue` order, so the one closed is the oldest.
     while dialogs.with(|host| host.take::<Message>()).is_some() {
-        app.told.pop_front();
+        if !app.told.0.is_empty() {
+            app.told.0.remove(0);
+        }
     }
 }
 

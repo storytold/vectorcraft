@@ -6,7 +6,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// PLAN: assumed `craft::ui::contract` re-exports the behavior crate's edit-stream types.
 use craft::behavior::{CancelReason, EditEvent, GestureId, Mixed};
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::patterns::form_dialogs::DialogFields;
@@ -14,8 +13,9 @@ use craft::ui::testing::Fixture;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 
-// PLAN: assumed `fn apply(app: &mut VectorcraftApp, events: &EditEvents<DialogFields>)` in three_d.rs (ef.C19).
 use super::{Target, apply, changed_settings, handles, send, set_type, show, target};
+use crate::dialogs::form;
+use crate::panels::Live;
 use crate::tests_labels::painted_text;
 use crate::{Services, VectorcraftApp};
 
@@ -45,38 +45,41 @@ fn whole(app: &VectorcraftApp, changes: &[(&str, Value)]) -> DialogFields {
     let t = target(app).unwrap();
     let mut settings = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap();
     settings.extend(changes.iter().map(|(key, value)| (key.to_string(), value.clone())));
-    // PLAN: assumed `fn fields_of(&Map<String, Value>) -> DialogFields` in `dialogs::form` (wg.S12).
-    crate::dialogs::form::fields_of(&settings)
+    form::fields_of(&super::rows(app, &t).0, &settings)
 }
 
 /// The first selected effect's settings with the keys the selected effects disagree on marked mixed, and the same
 /// settings as JSON, where a mixed key is absent.
 fn mixed_settings(app: &VectorcraftApp) -> (DialogFields, Map<String, Value>) {
     let mut fields = whole(app, &[]);
-    // PLAN: assumed `fn mark_mixed(app: &VectorcraftApp, fields: &mut DialogFields)` (ty.X64).
     super::mark_mixed(app, &mut fields);
-    // PLAN: assumed `fn json_of(&DialogFields) -> Map<String, Value>` in `dialogs::form` (wg.S12).
-    let settings = crate::dialogs::form::json_of(&fields);
+    let settings = form::json_of(&super::rows(app, &target(app).unwrap()).0, &fields);
     (fields, settings)
+}
+
+/// One pass of the panel's rows that reports `event`, over the values `input` they were shown with.
+fn pass(app: &mut VectorcraftApp, input: &DialogFields, event: EditEvent<DialogFields>) {
+    let params = super::rows(app, &target(app).unwrap()).0;
+    apply(app, &params, input, &event.into());
 }
 
 /// A gesture `id` begins on the panel's current values; returns them.
 fn begin(app: &mut VectorcraftApp, id: GestureId) -> DialogFields {
     let before = whole(app, &[]);
-    apply(app, &EditEvent::begin(id, Mixed::Same(before.clone()), super::LABEL.into(), None).into());
+    pass(app, &before, EditEvent::begin(id, Mixed::Same(before.clone()), super::LABEL.into(), None));
     before
 }
 
 /// Gesture `id` proposes the panel's values with `changes`.
 fn update(app: &mut VectorcraftApp, id: GestureId, changes: &[(&str, Value)]) {
-    let value = whole(app, changes);
-    apply(app, &EditEvent::update(id, value).into());
+    let (input, value) = (whole(app, &[]), whole(app, changes));
+    pass(app, &input, EditEvent::update(id, value));
 }
 
 /// Gesture `id` commits the panel's values as they stand.
 fn commit(app: &mut VectorcraftApp, id: GestureId, before: DialogFields) {
     let after = whole(app, &[]);
-    apply(app, &EditEvent::commit(id, Mixed::Same(before), after).into());
+    pass(app, &after.clone(), EditEvent::commit(id, Mixed::Same(before), after));
 }
 
 /// `app` drawn by the panel in a trial that runs frame by frame, and the handle the trial reads the app through.
@@ -181,9 +184,8 @@ fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
         n.appearance.effects[0].params.get("render").and_then(|r| r.get("mode")).and_then(Value::as_str).map(str::to_string)
     };
     app.run("select.set", json!({"ids": [a, b, c]})).unwrap();
-    let ctx = egui::Context::default();
     let history = undo_len(&app);
-    super::set_wireframe(&mut app, &ctx, true);
+    super::set_wireframe(&mut app, true);
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!((mode(&app, a).as_deref(), mode(&app, b).as_deref()), (Some("wireframe"), Some("wireframe")));
     assert_eq!(mode(&app, c), None, "the classic effect takes no render settings");
@@ -193,7 +195,7 @@ fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
     set_type(&mut app, "inflate").unwrap();
     assert_eq!(mode(&app, a).as_deref(), Some("wireframe"));
     let history = undo_len(&app);
-    super::set_wireframe(&mut app, &ctx, false);
+    super::set_wireframe(&mut app, false);
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(mode(&app, a).as_deref(), Some("shaded"));
     assert!(!super::wireframe_on(&target(&app).unwrap()));
@@ -208,7 +210,6 @@ fn render_settings_wireframe_turns_the_mode_on_and_off_for_the_selection() {
 fn a_drag_previews_and_records_one_undo_step_when_released() {
     let mut app = app();
     set_type(&mut app, "extrude").unwrap();
-    let ctx = egui::Context::default();
     let history = undo_len(&app);
     let before = begin(&mut app, GESTURE);
     for depth in [60.0, 80.0, 120.0] {
@@ -227,11 +228,11 @@ fn a_drag_previews_and_records_one_undo_step_when_released() {
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(effect(&app).1["depth"], 50.0);
     // A typed value is one undo step at once.
-    send(&mut app, &ctx, Map::from_iter([("taper".to_string(), json!(60.0))]), false);
+    send(&mut app, Map::from_iter([("taper".to_string(), json!(60.0))]), Live::Released);
     assert_eq!(effect(&app).1["taper"], 60.0);
     assert_eq!(undo_len(&app), history + 1);
     // Nothing changed and no drag: nothing runs.
-    send(&mut app, &ctx, Map::new(), false);
+    send(&mut app, Map::new(), Live::Released);
     assert_eq!(undo_len(&app), history + 1);
 }
 
@@ -252,10 +253,9 @@ fn a_change_reaches_each_selected_3d_effect_and_no_other_effect() {
     };
     let (b_shadow, c_shadow) = (shadow(&app, b), shadow(&app, c));
     let history = undo_len(&app);
-    let ctx = egui::Context::default();
     // `bevel` is an Extrude & Bevel setting only; `depth` both effects take.
-    send(&mut app, &ctx, Map::from_iter([("depth".to_string(), json!(75.0)), ("bevel".to_string(), json!("classic"))]), true);
-    send(&mut app, &ctx, Map::new(), false);
+    send(&mut app, Map::from_iter([("depth".to_string(), json!(75.0)), ("bevel".to_string(), json!("classic"))]), Live::Dragging);
+    send(&mut app, Map::new(), Live::Released);
     assert_eq!(undo_len(&app), history + 1);
     let st = app.session.active().unwrap();
     let fx = |id: u64| st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects.clone();
@@ -277,7 +277,6 @@ fn a_custom_bevel_sends_its_name_and_points() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.inflate", "item": null})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    let ctx = egui::Context::default();
     let pick = |name: &str, points: Value| {
         Map::from_iter([
             ("bevel".to_string(), json!("custom")),
@@ -286,7 +285,7 @@ fn a_custom_bevel_sends_its_name_and_points() {
         ])
     };
     let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
-    send(&mut app, &ctx, pick("Notch", notch.clone()), false);
+    send(&mut app, pick("Notch", notch.clone()), Live::Released);
     let fx = |app: &VectorcraftApp, id: u64| {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone()
     };
@@ -297,7 +296,7 @@ fn a_custom_bevel_sends_its_name_and_points() {
     );
     assert!(fx(&app, b).get(vectorcraft_effects::BEVEL_PROFILE).is_none());
     let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
-    send(&mut app, &ctx, pick("Steps", steps.clone()), false);
+    send(&mut app, pick("Steps", steps.clone()), Live::Released);
     let p = fx(&app, a);
     assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Steps"), &steps));
 }
@@ -321,7 +320,7 @@ fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
     fields.insert("bevel".into(), json!("custom"));
     let changed = changed_settings(&before, &Value::Object(fields));
     assert_eq!(Value::Object(changed.clone()), json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch}));
-    send(&mut app, &egui::Context::default(), changed, false);
+    send(&mut app, changed, Live::Released);
     let st = app.session.active().unwrap();
     for id in [a, b] {
         let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
@@ -359,7 +358,7 @@ fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
     let before = Value::Object(fields.clone());
     fields.insert(vectorcraft_effects::BEVEL_NAME.into(), json!(name));
     fields.insert(vectorcraft_effects::BEVEL_PROFILE.into(), points);
-    send(&mut app, &egui::Context::default(), changed_settings(&before, &Value::Object(fields)), false);
+    send(&mut app, changed_settings(&before, &Value::Object(fields)), Live::Released);
     let st = app.session.active().unwrap();
     for id in [a, b] {
         let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
@@ -371,7 +370,6 @@ fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
 /// under its own label, so Bevel Shape does not show two entries of one name.
 #[test]
 fn an_own_custom_bevel_named_like_a_file_bevel_gets_its_own_label() {
-    // PLAN: assumed `bevel_options` stays at `dialogs::revolve` (effects-w10 may move it).
     use crate::dialogs::revolve::bevel_options;
     let dir = std::env::temp_dir().join(format!("vectorcraft-ui-bevels-own-label-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -417,7 +415,7 @@ fn settings_the_selected_effects_disagree_on_are_unset_so_a_reset_reaches_them_a
     fields.insert("depth".into(), json!(50.0));
     let changed = changed_settings(&before, &Value::Object(fields));
     assert_eq!(Value::Object(changed.clone()), json!({"depth": 50.0}));
-    send(&mut app, &egui::Context::default(), changed, false);
+    send(&mut app, changed, Live::Released);
     let st = app.session.active().unwrap();
     for id in [a, b] {
         assert_eq!(st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["depth"], 50.0);
@@ -444,7 +442,7 @@ fn a_light_list_edit_reaches_only_the_objects_with_the_same_lights() {
     let b_before = lights(&app, b);
     let three = json!([{"color": "#ff8040"}, {"color": "#4080ff", "rotation": -35.0}, {"color": "#ffffff", "rotation": 0.0, "height": 90.0}]);
     let history = undo_len(&app);
-    send(&mut app, &egui::Context::default(), Map::from_iter([("lights".to_string(), three.clone())]), false);
+    send(&mut app, Map::from_iter([("lights".to_string(), three.clone())]), Live::Released);
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(lights(&app, a).as_array().map(Vec::len), Some(3));
     assert_eq!(lights(&app, c), lights(&app, a));
@@ -507,8 +505,8 @@ fn a_drag_ends_when_the_panel_is_no_longer_drawn() {
     ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui)).textures_delta.clear();
     assert!(app.session.in_interaction());
     // The first pass that does not draw it ends the gesture with `Cancel { Removed }`, which commits what was previewed.
-    // PLAN: assumed the panel's host delivers this event through `apply` (ef.C19, q102).
-    apply(&mut app, &EditEvent::cancel(GESTURE, CancelReason::Removed, None).into());
+    let input = whole(&app, &[]);
+    pass(&mut app, &input, EditEvent::cancel(GESTURE, CancelReason::Removed, None));
     assert!(!app.session.in_interaction());
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(effect(&app).1["depth"], 90.0);
@@ -614,7 +612,6 @@ fn materials_app() -> (VectorcraftApp, egui::Context) {
     set_type(&mut app, "extrude").unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "params": {"rotationX": 0.0, "rotationY": 0.0, "rotationZ": 0.0}})).unwrap();
     let ctx = crate::testing::ui_context();
-    // PLAN: assumed `Model::page` is a `String` naming the page ("materials").
     app.three_d.page = "materials".into();
     (app, ctx)
 }
@@ -631,7 +628,7 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     named(&nodes, "Add as Single Graphic");
     named(&nodes, "Graphic");
     let history = undo_len(&app);
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
     assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
     assert_eq!(graphics(&app)[0]["symbol"], "Graphic");
     assert_eq!(undo_len(&app), history + 1);
@@ -655,7 +652,7 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
 fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
     let (mut app, ctx) = materials_app();
     ctx.enable_accesskit();
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
     let drawn = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
         out.textures_delta.clear();
@@ -666,7 +663,7 @@ fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
     set_type(&mut app, "revolve").unwrap();
     assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
     let history = undo_len(&app);
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
     assert_eq!(graphics(&app).as_array().map(Vec::len), Some(2));
     assert_eq!(undo_len(&app), history + 1);
     named(&controls(&mut app, &ctx), "Scale");
@@ -678,8 +675,7 @@ fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
 fn art_can_be_added_as_a_graphic_before_any_3d_effect() {
     let mut app = app();
     let history = undo_len(&app);
-    let ctx = egui::Context::default();
-    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Add(None));
+    super::run_action(&mut app, crate::dialogs::three_d_materials::Action::Add(None));
     assert_eq!(undo_len(&app), history + 1);
     assert_eq!(app.session.active().unwrap().doc.symbols.len(), 1);
     // The selection is still the square, not an instance.
@@ -698,7 +694,8 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     let handle = screen_at(&app, &fixture, 150.0, 150.0);
     let target = screen_at(&app, &fixture, 170.0, 140.0);
     // A press away from the handle is left to the tool.
-    assert!(!grabs(&app, &mut fixture, screen_at(&app, &fixture, 110.0, 110.0)));
+    let away = screen_at(&app, &fixture, 110.0, 110.0);
+    assert!(!grabs(&app, &mut fixture, away));
     let before = graphics(&app.borrow());
     fixture.drag_hold_at(handle, target - handle);
     assert_eq!(undo_len(&app.borrow()), history, "previewed while the pointer is down");
@@ -722,7 +719,6 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     fixture.idle(1);
     assert!(grabs(&app, &mut fixture, target), "the selected object's graphic has its handle");
     // With the tab closed, the artboard shows no handles.
-    // PLAN: assumed `Model::page` is a `String` naming the page ("rotation").
     app.borrow_mut().three_d.page = "rotation".into();
     fixture.idle(1);
     assert!(!grabs(&app, &mut fixture, target));
@@ -750,7 +746,6 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
 fn the_graphics_frame_is_built_once_for_each_revision() {
     let (app, _) = materials_app();
     let (app, mut fixture) = handles_fixture(app);
-    // PLAN: assumed `Model::frames` is `Option<(FrameKey, Arc<Option<GraphicFrame>>)>` (ef.C19).
     let cached = |app: &Rc<RefCell<VectorcraftApp>>| app.borrow().three_d.frames.as_ref().map(|(_, frame)| std::sync::Arc::clone(frame));
     fixture.idle(1);
     assert!(cached(&app).is_none_or(|frame| frame.is_none()), "no graphics, no frame");
@@ -940,7 +935,6 @@ fn expand_as_wireframes_replaces_the_object_with_its_edges() {
 fn lighting(params: Value) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
     let mut app = app();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": params})).unwrap();
-    // PLAN: assumed `Model::page` names the Lighting page "lighting".
     app.three_d.page = "lighting".into();
     shown(app)
 }
@@ -1004,7 +998,6 @@ fn a_key_leaves_the_other_setting_as_each_selected_effect_has_it() {
     let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": {"lightRotation": 0.0, "lightHeight": 40.0}})).unwrap();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
-    // PLAN: assumed `Model::page` names the Lighting page "lighting".
     app.three_d.page = "lighting".into();
     let (app, mut fixture) = shown(app);
     let (_, at) = light(&fixture, 1);
@@ -1082,11 +1075,10 @@ fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
 fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     let mut app = app();
     assert!(painted_text(&mut app, show).contains("Export 3D Object"));
-    let ctx = egui::Context::default();
     // Without a 3D object: the button is dimmed, and an error, nothing recorded, no asset.
     let history = undo_len(&app);
     assert!(!super::can_export_3d(&app));
-    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert!(super::export_3d_object(&mut app).is_err());
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history, 0));
     let a = app.session.active().unwrap().selection.objects[0].0;
     set_type(&mut app, "extrude").unwrap();
@@ -1098,25 +1090,25 @@ fn export_3d_object_adds_the_selected_3d_objects_to_asset_export() {
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
     app.run("effect.setParams", json!({"index": 0, "item": null, "visible": false})).unwrap();
     assert!(!super::can_export_3d(&app));
-    assert!(super::export_3d_object(&mut app, &ctx).is_err());
+    assert!(super::export_3d_object(&mut app).is_err());
     app.run("select.set", json!({"ids": [plain, a, hidden]})).unwrap();
     assert!(super::can_export_3d(&app));
-    assert!(!crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    assert!(!crate::panel_docking::visible(&app, crate::panels::asset_export::ID));
     let history = undo_len(&app);
-    super::export_3d_object(&mut app, &ctx).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     assert_eq!(undo_len(&app), history + 1);
     let list = assets(&mut app);
     assert_eq!(list.len(), 1, "{list:?}");
     assert_eq!((list[0]["name"].clone(), list[0]["format3D"].clone()), (json!("Box"), json!("usda")));
     let asset = list[0]["id"].as_u64().unwrap();
     assert_eq!(crate::panels::asset_export::selected(&app), [asset]);
-    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    assert!(crate::panel_docking::visible(&app, crate::panels::asset_export::ID));
     // Already an asset: no undo step, the same asset selected again, the panel left showing.
     crate::panels::asset_export::doc_panel(&mut app).unwrap().selection = Default::default();
-    super::export_3d_object(&mut app, &ctx).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     assert_eq!((undo_len(&app), assets(&mut app).len()), (history + 1, 1));
     assert_eq!(crate::panels::asset_export::selected(&app), [asset]);
-    assert!(crate::panel_docking::visible(&app.ui, crate::panels::asset_export::ID));
+    assert!(crate::panel_docking::visible(&app, crate::panels::asset_export::ID));
     // Undo takes the asset away.
     app.run("edit.undo", json!({})).unwrap();
     assert!(assets(&mut app).is_empty());
@@ -1137,7 +1129,7 @@ fn export_3d_object_leaves_out_a_3d_object_inside_another() {
     app.run("select.set", json!({"ids": [inner, group]})).unwrap();
     let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
     assert!(selected.contains(&inner) && selected.contains(&group), "{selected:?}");
-    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     let list = assets(&mut app);
     assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([group])]);
 }
@@ -1172,7 +1164,7 @@ fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
     set_type(&mut app, "extrude").unwrap();
     app.run("select.set", json!({"ids": [a, group]})).unwrap();
     assert!(super::can_export_3d(&app));
-    super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
+    super::export_3d_object(&mut app).unwrap();
     let list = assets(&mut app);
     assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
 }

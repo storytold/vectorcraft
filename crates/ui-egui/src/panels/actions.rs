@@ -43,6 +43,13 @@ mod tests_recording;
 #[cfg(test)]
 mod tests_stops;
 
+pub(crate) use edits::select_object_params;
+pub use edits::{
+    ACTION_OPTIONS, BUTTON_MODE, CLEAR, DELETE_SETS, DELETE_STEP, DUPLICATE, INCLUDE_STEPS, INSERT_MENU_ITEM, INSERT_SELECT_OBJECT,
+    INSERT_SELECT_PATH, INSERT_STOP, MOVE_STEP, NEW_ACTION, RENAME_ACTION, RESET, SELECT_OBJECT_STEP, SELECT_PATH_STEP, action_options, button_mode,
+    clear, delete_sets, delete_step, duplicate, include_steps, insert_menu_item, insert_select_object, insert_select_path, insert_stop, move_step,
+    new_action, rename_action, reset,
+};
 pub(crate) use files::can_load;
 pub use files::{ACTIONS_EXT, LOAD_SET, REPLACE_SET, SAVE_SET, load_set, replace_set, save_set};
 pub use keys::{FUNCTION_KEYS, FunctionKey, function_keys, key_error};
@@ -54,13 +61,6 @@ pub use playback::{
 pub(crate) use playback::{KnownCommands, has_stop, is_ui_step, shown_text, step_place, stop_params, unknown_commands};
 pub use recording::{START_RECORDING, STOP_RECORDING, record, stop};
 pub(crate) use recording::{after_journaled_edit, after_recorded_command, before_recorded_command};
-pub use edits::{
-    ACTION_OPTIONS, BUTTON_MODE, CLEAR, DELETE_SETS, DELETE_STEP, DUPLICATE, INCLUDE_STEPS, INSERT_MENU_ITEM, INSERT_SELECT_OBJECT,
-    INSERT_SELECT_PATH, INSERT_STOP, MOVE_STEP, NEW_ACTION, RENAME_ACTION, RESET, SELECT_OBJECT_STEP, SELECT_PATH_STEP, action_options,
-    button_mode, clear, delete_sets, delete_step, duplicate, include_steps, insert_menu_item, insert_select_object, insert_select_path,
-    insert_stop, move_step, new_action, rename_action, reset,
-};
-pub(crate) use edits::select_object_params;
 
 /// The error a canceled file dialog reports; it is not worth a status line.
 const CANCELLED: &str = "cancelled";
@@ -139,7 +139,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 fn apply(app: &mut VectorcraftApp, event: ActionsEvent) {
     let result = match event {
         ActionsEvent::Play { action, .. } => play_selected(app, action),
-        ActionsEvent::BeginRecording { into } => begin_recording(app, into),
+        ActionsEvent::BeginRecording { into, .. } => begin_recording(app, into),
         ActionsEvent::StopRecording => run(app, STOP_RECORDING, json!({})),
         ActionsEvent::PlaySet(_) => {
             app.status(tl!("Select an action to play"));
@@ -163,16 +163,16 @@ fn apply(app: &mut VectorcraftApp, event: ActionsEvent) {
         ActionsEvent::ClearAll => command(app, ActionsPanelCommands::ClearAll),
         ActionsEvent::Reset => command(app, ActionsPanelCommands::Reset),
         ActionsEvent::Replace => command(app, ActionsPanelCommands::Replace),
-        ActionsEvent::Save { set: None } => command(app, ActionsPanelCommands::Save),
-        ActionsEvent::Save { set: Some(name) } => run(app, SAVE_SET, json!({ "name": name })),
+        ActionsEvent::Save { set: None, .. } => command(app, ActionsPanelCommands::Save),
+        ActionsEvent::Save { set: Some(name), .. } => run(app, SAVE_SET, json!({ "name": name })),
         ActionsEvent::Delete(selection) => delete(app, selection),
         ActionsEvent::DeleteSets(names) => {
             edits::ask_delete(app, names);
             Ok(())
         }
-        ActionsEvent::Rename { action, text } => action_command(app, RENAME_ACTION, action, json!({ "name": text })),
-        ActionsEvent::SetColor { action, color } => action_command(app, ACTION_OPTIONS, action, json!({ "color": color.name() })),
-        ActionsEvent::AssignShortcut { action, choice } => {
+        ActionsEvent::Rename { action, text, .. } => action_command(app, RENAME_ACTION, action, json!({ "name": text })),
+        ActionsEvent::SetColor { action, color, .. } => action_command(app, ACTION_OPTIONS, action, json!({ "color": color.name() })),
+        ActionsEvent::AssignShortcut { action, choice, .. } => {
             let key = choice.map_or_else(|| json!({ "key": 0 }), |c| json!({ "key": c.key, "cmd": c.command, "shift": c.shift }));
             action_command(app, ACTION_OPTIONS, action, key)
         }

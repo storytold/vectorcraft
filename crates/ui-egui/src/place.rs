@@ -327,6 +327,8 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
                     entry
                 })
                 .collect(),
+            // Only an open's answers carry files.
+            _ => return Ok(Value::Null),
         };
         open_dialog(app, files, None);
         Ok(Value::Null)
@@ -369,7 +371,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 app.status(e);
             }
         }
-        Some(DialogResult::Cancel) => app.place.reading_lines = None,
+        Some(_) => app.place.reading_lines = None,
         None => {}
     }
 }
@@ -985,7 +987,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
         });
     });
     Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| {
-        Text::new(details).shade(Shade::Muted).show(ui);
+        Text::new(details.clone()).shade(Shade::Muted).show(ui);
     });
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return true;

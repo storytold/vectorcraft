@@ -91,7 +91,11 @@ pub(super) fn params(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         rows.push(sliders_row(table).companions(keys));
     }
     if fields.contains("channel") {
-        let options = own_choices(effect, "channel", false).unwrap_or_default().into_iter().map(|(label, value)| (value.to_owned(), Label::from(label))).collect();
+        let options = own_choices(effect, "channel", false)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(label, value)| (value.to_owned(), Label::from(label)))
+            .collect();
         rows.push(Param::new("channel", tl!("Channel"), ParamKind::choice(options, None)));
     }
     if fields.contains("points") {

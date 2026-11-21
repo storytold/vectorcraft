@@ -373,8 +373,7 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         permissions: asked.iter().filter_map(Value::as_str).map(str::to_string).collect(),
         heavy,
     };
-    let pending =
-        dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, origin, shown: Default::default() };
+    let pending = dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, origin };
     Ok(dialogs::plugin::ask_install(app, pending))
 }
 
@@ -640,7 +639,6 @@ fn new_from_path(app: &mut VectorcraftApp, path: String) -> Result<Value, String
     opened(app, &r);
     Ok(r)
 }
-
 
 /// The most recent files remembered: Preferences → File Handling → Number of Recent Files to Display
 /// shows 0 to this many of them.

@@ -1,5 +1,9 @@
 //! Recolor Artwork (M3.78) and Edit or Apply Color Group (M3.79), driven through the dialog host.
 
+use std::sync::Arc;
+
+use craft::color_ui::ui::ColorPickerDialog;
+use craft::ui::dialog::{DialogId, StackDialog};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
@@ -9,12 +13,6 @@ use vectorcraft_engine::Session;
 use crate::dialogs::recolor::fixture::Recolor;
 use crate::{VectorcraftApp, dialogs};
 
-// PLAN: assumed the fixture's `Recolor` API (color-w19): `Recolor::open(app: VectorcraftApp, params: Value) -> Recolor`
-// (runs `ui.recolorDialog`, draws nothing), `app(&self) -> &VectorcraftApp`, `app_mut(&mut self) -> &mut VectorcraftApp`,
-// `frame(&mut self, Vec<Event>)`, `settled(&mut self)`, `by_label(&self, &str) -> Option<Target>`,
-// `click_label(&mut self, &str)`, `enabled(&self, &str) -> bool`, `field(&self, &str) -> Value`,
-// `set(&mut self, &str, Value)`, `confirm(&mut self)`, `cancel(&mut self)`, `is_open(&self) -> bool`,
-// `child_field(&self, &str) -> Value` and `cancel_child(&mut self)` (the colour picker the dialog opened).
 // PLAN: assumed control names: the wheel's accessible name is "Color wheel" / "Segmented color wheel", its markers are
 // named by their `#RRGGBB` hex, menu items carry no leading padding, and the Assign row's hex field is "Color N".
 
@@ -22,6 +20,29 @@ fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
     app
+}
+
+/// Recolor Artwork opened on `app` by `ui.recolorDialog` with `params`; no frame has run.
+fn open(app: VectorcraftApp, params: Value) -> Recolor {
+    let r = Recolor::new(app);
+    r.app().run("ui.recolorDialog", params).unwrap();
+    r
+}
+
+/// Field `k` of the open dialog; null when it has no such field.
+fn field(r: &Recolor, k: &str) -> Value {
+    r.field(k).unwrap_or_default()
+}
+
+/// Whether Undo Changes and Redo Changes can run.
+fn steps(r: &Recolor) -> (bool, bool) {
+    let app = r.app();
+    (dialogs::recolor::can_step(&app, true), dialogs::recolor::can_step(&app, false))
+}
+
+/// The Color Picker open over Recolor Artwork: its id, the key it was asked for with and its fields.
+fn picker(r: &Recolor) -> Option<(DialogId, String, Value)> {
+    r.host(|host, _| host.get::<ColorPickerDialog>().map(|p| (p.id(), p.key().to_owned(), p.json_fields().unwrap_or_default()))).flatten()
 }
 
 fn pointer(at: Pos2, button: PointerButton, pressed: bool) -> Event {
@@ -35,29 +56,32 @@ fn press(at: Pos2, clicks: usize) -> Vec<Event> {
 
 /// A primary click at `at`, then the dialog settles.
 fn click(r: &mut Recolor, at: Pos2) {
-    r.frame(press(at, 1));
+    r.frame_with(press(at, 1), Modifiers::NONE);
     r.settled();
 }
 
 /// A secondary click at `at`, then the dialog settles with its menu open.
 fn right_click(r: &mut Recolor, at: Pos2) {
-    r.frame(vec![Event::PointerMoved(at), pointer(at, PointerButton::Secondary, true), pointer(at, PointerButton::Secondary, false)]);
+    r.frame_with(
+        vec![Event::PointerMoved(at), pointer(at, PointerButton::Secondary, true), pointer(at, PointerButton::Secondary, false)],
+        Modifiers::NONE,
+    );
     r.settled();
 }
 
 /// Presses at the first point of `path` and moves through the rest, one frame each; the button stays held.
 fn drag_path(r: &mut Recolor, path: &[Pos2]) {
     let Some((first, rest)) = path.split_first() else { return };
-    r.frame(vec![Event::PointerMoved(*first)]);
-    r.frame(vec![pointer(*first, PointerButton::Primary, true)]);
+    r.frame_with(vec![Event::PointerMoved(*first)], Modifiers::NONE);
+    r.frame_with(vec![pointer(*first, PointerButton::Primary, true)], Modifiers::NONE);
     for p in rest {
-        r.frame(vec![Event::PointerMoved(*p)]);
+        r.frame_with(vec![Event::PointerMoved(*p)], Modifiers::NONE);
     }
 }
 
 /// Lets go of the primary button at `at` and settles.
 fn let_go(r: &mut Recolor, at: Pos2) {
-    r.frame(vec![pointer(at, PointerButton::Primary, false)]);
+    r.frame_with(vec![pointer(at, PointerButton::Primary, false)], Modifiers::NONE);
     r.settled();
 }
 
@@ -79,7 +103,7 @@ fn tap(r: &mut Recolor, label: &str) {
 
 /// Sets field `k` and lets the dialog draw it.
 fn put(r: &mut Recolor, k: &str, v: Value) {
-    r.set(k, v);
+    r.set(k, v).unwrap();
     r.settled();
 }
 
@@ -118,11 +142,11 @@ fn hex_of(to: &Value) -> String {
 
 /// Where the wheel draws row `i`'s marker.
 fn marker(r: &Recolor, i: usize) -> Pos2 {
-    rect(r, &hex_of(&r.field("rows")[i]["to"])).center()
+    rect(r, &hex_of(&field(r, "rows")[i]["to"])).center()
 }
 
 fn key(r: &mut Recolor, key: Key) {
-    r.frame(vec![Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE }]);
+    r.frame_with(vec![Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE }], Modifiers::NONE);
     r.settled();
 }
 
@@ -130,7 +154,7 @@ fn undo_len(app: &VectorcraftApp) -> usize {
     app.session.doc().unwrap().history.undo.len()
 }
 
-fn snapshot(app: &VectorcraftApp) -> vectorcraft_doc::Document {
+fn snapshot(app: &VectorcraftApp) -> Arc<vectorcraft_doc::Document> {
     app.session.doc().unwrap().doc.clone()
 }
 
@@ -158,17 +182,17 @@ fn group_keys(app: &VectorcraftApp, name: &str) -> Vec<Value> {
 fn edit(colors: &[&str]) -> Recolor {
     let mut app = app();
     art(&mut app, colors);
-    let mut r = Recolor::open(app, json!({}));
-    r.set("tab", json!("edit"));
-    assert_eq!(r.field("linked"), json!(true));
+    let mut r = open(app, json!({}));
+    r.set("tab", json!("edit")).unwrap();
+    assert_eq!(field(&r, "linked"), json!(true));
     r.settled();
     r
 }
 
 /// Recolor Artwork open on the Assign tab of `app` (its art selected).
 fn assign(app: VectorcraftApp, open: Value) -> Recolor {
-    let mut r = Recolor::open(app, open);
-    r.set("method", json!("exact"));
+    let mut r = open(app, open);
+    r.set("method", json!("exact")).unwrap();
     r.settled();
     r
 }
@@ -177,27 +201,27 @@ fn assign(app: VectorcraftApp, open: Value) -> Recolor {
 fn the_dialog_reduces_previews_and_applies_as_one_undo_step() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0", "#ff3030"]);
-    let mut r = Recolor::open(app, json!({}));
+    let mut r = open(app, json!({}));
     r.settled();
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 5, "Auto: a row per colour");
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 5, "Auto: a row per colour");
     assert!(r.app().session.in_interaction(), "the dialog previews");
     // Two colours, Exact; OK without another frame still reduces first.
-    r.set("colors", json!(2));
-    r.set("method", json!("exact"));
-    let undo = undo_len(r.app());
-    r.confirm();
+    r.set("colors", json!(2)).unwrap();
+    r.set("method", json!("exact")).unwrap();
+    let undo = undo_len(&r.app());
+    r.confirm().unwrap();
     assert!(!r.is_open());
-    assert_eq!(colors(r.app_mut()), 2);
-    assert_eq!(undo_len(r.app()), undo + 1);
-    r.app_mut().run("edit.undo", json!({})).unwrap();
-    assert_eq!(colors(r.app_mut()), 5);
+    assert_eq!(colors(&mut r.app()), 2);
+    assert_eq!(undo_len(&r.app()), undo + 1);
+    r.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(colors(&mut r.app()), 5);
     // Cancel rolls the preview back.
-    r.app_mut().run("ui.recolorDialog", json!({"colors": 1})).unwrap();
-    r.set("method", json!("exact"));
+    r.app().run("ui.recolorDialog", json!({"colors": 1})).unwrap();
+    r.set("method", json!("exact")).unwrap();
     r.settled();
-    assert_eq!(colors(r.app_mut()), 1, "previewed");
+    assert_eq!(colors(&mut r.app()), 1, "previewed");
     r.cancel();
-    assert_eq!(colors(r.app_mut()), 5);
+    assert_eq!(colors(&mut r.app()), 5);
 }
 
 #[test]
@@ -210,21 +234,21 @@ fn presets_open_colour_jobs_and_libraries_and_both_tabs_draw() {
         .map(|e| (e.label.clone(), e.params.clone()))
         .collect();
     assert_eq!(presets.iter().map(|p| p.0.as_str()).collect::<Vec<_>>(), ["1 Color Job…", "2 Color Job…", "3 Color Job…", "Color Library…"]);
-    let mut r = Recolor::open(app, presets[1].1.clone());
+    let mut r = open(app, presets[1].1.clone());
     r.settled();
-    assert_eq!((r.field("colors"), r.field("method")), (json!(2), json!("scaleTints")));
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 2);
+    assert_eq!((field(&r, "colors"), field(&r, "method")), (json!(2), json!("scaleTints")));
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 2);
     r.cancel();
-    r.app_mut().run("ui.recolorDialog", presets[3].1.clone()).unwrap();
-    assert_eq!(r.field("limitTo"), "web-safe-216", "Color Library starts on the first library");
+    r.app().run("ui.recolorDialog", presets[3].1.clone()).unwrap();
+    assert_eq!(field(&r, "limitTo"), "web-safe-216", "Color Library starts on the first library");
     r.settled();
     let web = |k: &Value| vectorcraft_engine::cmd::color_value(k).unwrap().to_rgb().iter().all(|v| ((v * 5.0).round() - v * 5.0).abs() < 1e-3);
-    assert!(r.field("rows").as_array().unwrap().iter().all(|row| web(&row["to"])));
+    assert!(field(&r, "rows").as_array().unwrap().iter().all(|row| web(&row["to"])));
     r.cancel();
     // The Color Guide's colours become the new colours.
-    r.app_mut().run("ui.recolorDialog", json!({"colors": ["#123456", "#abcdef"]})).unwrap();
+    r.app().run("ui.recolorDialog", json!({"colors": ["#123456", "#abcdef"]})).unwrap();
     r.settled();
-    let tos: Vec<Value> = r.field("rows").as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
+    let tos: Vec<Value> = field(&r, "rows").as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
     assert_eq!(tos, [json!("rgb 18 52 86"), json!("rgb 171 205 239")]);
     r.cancel();
 }
@@ -232,37 +256,37 @@ fn presets_open_colour_jobs_and_libraries_and_both_tabs_draw() {
 #[test]
 fn double_clicking_a_colour_group_opens_it_and_ok_rewrites_it() {
     let app = app();
-    let mut r = Recolor::open(app, json!({"group": "Brights"}));
-    assert_eq!(r.field("group"), "Brights");
-    let keys = group_keys(r.app(), "Brights");
-    let from: Vec<Value> = r.field("rows").as_array().unwrap().iter().map(|row| row["from"][0].clone()).collect();
+    let mut r = open(app, json!({"group": "Brights"}));
+    assert_eq!(field(&r, "group"), "Brights");
+    let keys = group_keys(&r.app(), "Brights");
+    let from: Vec<Value> = field(&r, "rows").as_array().unwrap().iter().map(|row| row["from"][0].clone()).collect();
     assert_eq!(from, keys, "a row per group colour, in order");
     r.settled();
     // A new first colour and a new name; nothing is selected, so only the group changes.
-    let mut rows = r.field("rows");
+    let mut rows = field(&r, "rows");
     rows[0]["to"] = json!("cmyk 100 0 0 0");
-    r.set("rows", rows);
-    r.set("groupName", json!("Brights 2026"));
-    let undo = undo_len(r.app());
-    r.confirm();
+    r.set("rows", rows).unwrap();
+    r.set("groupName", json!("Brights 2026")).unwrap();
+    let undo = undo_len(&r.app());
+    r.confirm().unwrap();
     let mut want = keys.clone();
     want[0] = json!("cmyk 100 0 0 0");
-    assert_eq!(group_keys(r.app(), "Brights 2026"), want);
-    assert_eq!(undo_len(r.app()), undo + 1, "one undo step");
+    assert_eq!(group_keys(&r.app(), "Brights 2026"), want);
+    assert_eq!(undo_len(&r.app()), undo + 1, "one undo step");
 }
 
 #[test]
 fn the_options_button_edits_a_selected_group_and_applies_it_to_the_art() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff"]);
-    let mut r = Recolor::open(app, json!({"group": "Brights"}));
-    assert_eq!(r.field("group"), "Brights");
+    let mut r = open(app, json!({"group": "Brights"}));
+    assert_eq!(field(&r, "group"), "Brights");
     r.settled();
-    let group = group_keys(r.app(), "Brights");
-    let tos: Vec<Value> = r.field("rows").as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
+    let group = group_keys(&r.app(), "Brights");
+    let tos: Vec<Value> = field(&r, "rows").as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
     assert_eq!(tos, group, "the art's colours in as many rows as the group has, taking its colours");
-    r.confirm();
-    let used: Vec<String> = r.app_mut().session.execute("recolor.colors", &json!({})).unwrap()["colors"]
+    r.confirm().unwrap();
+    let used: Vec<String> = r.app().session.execute("recolor.colors", &json!({})).unwrap()["colors"]
         .as_array()
         .unwrap()
         .iter()
@@ -277,14 +301,14 @@ fn a_group_keeps_the_colours_no_art_row_took() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#0000ff"]);
     let before = group_keys(&app, "Brights");
-    let mut r = Recolor::open(app, json!({"group": "Brights"}));
+    let mut r = open(app, json!({"group": "Brights"}));
     r.settled();
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 2, "two art colours");
-    let mut rows = r.field("rows");
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 2, "two art colours");
+    let mut rows = field(&r, "rows");
     rows[1]["to"] = json!("rgb 1 2 3");
-    r.set("rows", rows);
-    r.confirm();
-    let after = group_keys(r.app(), "Brights");
+    r.set("rows", rows).unwrap();
+    r.confirm().unwrap();
+    let after = group_keys(&r.app(), "Brights");
     assert_eq!(after.len(), before.len());
     assert_eq!((&after[0], &after[1]), (&before[0], &json!("rgb 1 2 3")));
     assert_eq!(after[2..], before[2..]);
@@ -306,7 +330,7 @@ fn the_color_sliders_edit_the_selected_rows_new_color_in_their_mode() {
         let before = first_fill(&app);
         let undo = undo_len(&app);
         let mut r = assign(app, json!({}));
-        let rows = r.field("rows");
+        let rows = field(&r, "rows");
         let blue = 0;
         assert_eq!(rows[blue]["from"], json!(["rgb 0 0 255"]), "the first object's blue is the first row");
         // Both rows selected, the second one first: the sliders edit the first row.
@@ -314,23 +338,22 @@ fn the_color_sliders_edit_the_selected_rows_new_color_in_their_mode() {
         assert!(has(&r, "R"), "RGB art shows the RGB sliders");
         put(&mut r, "sliderMode", json!("cmyk"));
         rail(&mut r, "C", 0.5);
-        let edited = r.field("rows");
+        let edited = field(&r, "rows");
         let to = edited[blue]["to"].as_str().unwrap().to_string();
         assert!(to.starts_with("cmyk 50 "), "the first selected row takes C 50%: {to}");
         assert_eq!(edited[1], rows[1], "the other selected row keeps its new color");
-        let Some(Color::Cmyk { c, .. }) = first_fill(r.app()).color() else {
-            panic!("the art previews the CMYK color: {:?}", first_fill(r.app()))
-        };
+        let previewed = first_fill(&r.app());
+        let Some(Color::Cmyk { c, .. }) = previewed.color() else { panic!("the art previews the CMYK color: {previewed:?}") };
         assert!((c - 0.5).abs() < 1e-3, "{c}");
         tap(&mut r, if confirm { "OK" } else { "Cancel" });
         assert!(!r.is_open());
         let app = r.app();
         if confirm {
-            assert_eq!(first_fill(app).color(), vectorcraft_engine::cmd::color_value(&json!(to)), "OK keeps the color, in CMYK");
-            assert_eq!(undo_len(app), undo + 1, "one undo step");
+            assert_eq!(first_fill(&app).color(), vectorcraft_engine::cmd::color_value(&json!(to)), "OK keeps the color, in CMYK");
+            assert_eq!(undo_len(&app), undo + 1, "one undo step");
         } else {
-            assert_eq!(first_fill(app), before, "Cancel leaves the art unchanged");
-            assert_eq!(undo_len(app), undo, "and records no undo step");
+            assert_eq!(first_fill(&app), before, "Cancel leaves the art unchanged");
+            assert_eq!(undo_len(&app), undo, "and records no undo step");
         }
     }
 }
@@ -344,10 +367,10 @@ fn a_gray_row_keeps_the_hsb_sliders_while_it_is_edited() {
     put(&mut r, "__sel", json!([0]));
     assert!(has(&r, "H"), "a gray row shows HSB");
     rail(&mut r, "S", 0.5);
-    let to = r.field("rows")[0]["to"].clone();
+    let to = field(&r, "rows")[0]["to"].clone();
     assert!(to.as_str().is_some_and(|k| k.starts_with("rgb ")), "{to}");
     assert!(has(&r, "H"), "still HSB after the edit");
-    assert_eq!(r.field("sliderMode"), json!("hsb"));
+    assert_eq!(field(&r, "sliderMode"), json!("hsb"));
 }
 
 /// With Limit to Library, a row whose new color is a spot color of the library shows Tint, whose T
@@ -364,9 +387,9 @@ fn the_tint_slider_sets_a_spot_rows_tint() {
     put(&mut r, "__sel", json!([0]));
     assert!(has(&r, "T"), "a spot row shows Tint");
     rail(&mut r, "T", 0.4);
-    assert_eq!(r.field("rows")[0]["tint"], json!(40.0));
+    assert_eq!(field(&r, "rows")[0]["tint"], json!(40.0));
     tap(&mut r, "OK");
-    match first_fill(r.app()) {
+    match first_fill(&r.app()) {
         vectorcraft_color::Paint::Solid { swatch, tint, .. } => {
             assert_eq!(swatch.as_deref(), Some("Ink"), "linked to the spot color");
             assert!((tint - 0.4).abs() < 1e-4, "at the row's tint: {tint}");
@@ -387,19 +410,19 @@ fn a_new_color_from_the_edit_tab_drops_a_spot_rows_tint() {
     );
     art(&mut app, &["#ff00ff"]);
     let mut r = assign(app, json!({"library": lib}));
-    let mut rows = r.field("rows");
+    let mut rows = field(&r, "rows");
     rows[0]["tint"] = json!(40.0);
-    r.set("rows", rows);
+    r.set("rows", rows).unwrap();
     put(&mut r, "tab", json!("edit"));
     rail(&mut r, "Brightness", 0.9);
-    let row = r.field("rows")[0].clone();
+    let row = field(&r, "rows")[0].clone();
     assert_eq!((&row["to"], &row["tint"]), (&json!("rgb 255 0 255"), &json!(40.0)), "snapped back to the same spot color");
     rail(&mut r, "Brightness", 0.4);
-    let row = r.field("rows")[0].clone();
+    let row = field(&r, "rows")[0].clone();
     assert_eq!(row["to"], json!("rgb 128 0 128"), "snapped to the darker spot color");
     assert!(row.get("tint").is_none(), "the row's tint went with its old color: {row}");
     tap(&mut r, "OK");
-    match first_fill(r.app()) {
+    match first_fill(&r.app()) {
         vectorcraft_color::Paint::Solid { swatch, tint, .. } => {
             assert_eq!(swatch.as_deref(), Some("Mix Dark"), "linked to the new spot color");
             assert!((tint - 1.0).abs() < 1e-4, "at full strength: {tint}");
@@ -415,7 +438,7 @@ fn randomize_order_moves_a_tint_between_rows_of_the_same_color() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#0000ff"]);
     let mut r = assign(app, json!({}));
-    let mut rows = r.field("rows");
+    let mut rows = field(&r, "rows");
     for row in rows.as_array_mut().unwrap() {
         row["to"] = json!("rgb 0 255 0");
     }
@@ -424,7 +447,7 @@ fn randomize_order_moves_a_tint_between_rows_of_the_same_color() {
     let mut moved = false;
     for _ in 0..8 {
         tap(&mut r, "Randomly change color order");
-        let rows = r.field("rows");
+        let rows = field(&r, "rows");
         let tinted: Vec<usize> = (0..2).filter(|i| rows[*i].get("tint").is_some()).collect();
         assert_eq!(tinted.len(), 1, "one tinted row: {rows}");
         moved |= tinted == [1];
@@ -472,7 +495,7 @@ fn a_spot_row_of_a_group_without_art_shows_no_tint() {
     let lib = library_of(&mut app, &[json!({"name": "Mix Ink", "color": {"c": 0, "m": 1, "y": 0, "k": 0}, "spot": true})]);
     app.run("swatch.newGroup", json!({"name": "Mix", "colors": ["cmyk 0 100 0 0"], "keepModel": true})).unwrap();
     let mut r = assign(app, json!({"group": "Mix", "library": lib}));
-    assert_ne!(r.field("__art"), json!(true), "no art");
+    assert_ne!(field(&r, "__art"), json!(true), "no art");
     put(&mut r, "__sel", json!([0]));
     assert!(!has(&r, "T"), "no Tint without art");
     assert!(has(&r, "C"), "the CMYK sliders");
@@ -500,12 +523,12 @@ fn reset_after_a_slider_edit_keeps_the_arts_model() {
     let mut r = assign(app, json!({"group": "Mix"}));
     put(&mut r, "__sel", json!([0]));
     rail(&mut r, "C", 0.5);
-    assert_eq!(r.field("rows")[0]["model"], json!("new"), "the sliders edited the row");
+    assert_eq!(field(&r, "rows")[0]["model"], json!("new"), "the sliders edited the row");
     tap(&mut r, "Reset the rows to the artwork's colors");
-    assert_eq!(r.field("rows")[0]["from"], json!(["rgb 255 0 255"]), "Reset reads the art's colors, not the preview's");
+    assert_eq!(field(&r, "rows")[0]["from"], json!(["rgb 255 0 255"]), "Reset reads the art's colors, not the preview's");
     tap(&mut r, "OK");
     assert!(!r.is_open());
-    assert!(matches!(first_fill(r.app()).color(), Some(Color::Rgb { .. })), "the art stays RGB: {:?}", first_fill(r.app()));
+    assert!(matches!(first_fill(&r.app()).color(), Some(Color::Rgb { .. })), "the art stays RGB: {:?}", first_fill(&r.app()));
 }
 
 /// A change of the color count rebuilds the rows and discards a slider edit: OK then gives RGB art
@@ -518,13 +541,13 @@ fn a_new_color_count_after_a_slider_edit_keeps_the_arts_model() {
     let mut r = assign(app, json!({"group": "Mix"}));
     put(&mut r, "__sel", json!([0]));
     rail(&mut r, "C", 0.5);
-    assert_eq!(r.field("rows")[0]["model"], json!("new"), "the sliders edited the row");
+    assert_eq!(field(&r, "rows")[0]["model"], json!("new"), "the sliders edited the row");
     put(&mut r, "colors", json!(1));
-    assert_eq!(r.field("rows").as_array().map(Vec::len), Some(1), "the rows are rebuilt");
-    assert_eq!(r.field("rows")[0].get("model"), None, "the slider edit is discarded");
+    assert_eq!(field(&r, "rows").as_array().map(Vec::len), Some(1), "the rows are rebuilt");
+    assert_eq!(field(&r, "rows")[0].get("model"), None, "the slider edit is discarded");
     tap(&mut r, "OK");
     assert!(!r.is_open());
-    assert!(matches!(first_fill(r.app()).color(), Some(Color::Rgb { .. })), "the art stays RGB: {:?}", first_fill(r.app()));
+    assert!(matches!(first_fill(&r.app()).color(), Some(Color::Rgb { .. })), "the art stays RGB: {:?}", first_fill(&r.app()));
 }
 
 /// The fill of the `n`th object of the document.
@@ -542,17 +565,17 @@ fn a_slider_edit_changes_the_model_of_its_own_row_only() {
     app.run("swatch.newGroup", json!({"name": "Mix", "colors": ["cmyk 0 100 0 0", "cmyk 100 0 0 0"], "keepModel": true})).unwrap();
     art(&mut app, &["#ff00ff", "#00ffff"]);
     let mut r = assign(app, json!({"group": "Mix"}));
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     let magenta = (0..2).find(|i| rows[*i]["from"] == json!(["rgb 255 0 255"])).expect("a row of the magenta art");
     put(&mut r, "__sel", json!([magenta]));
     rail(&mut r, "C", 0.5);
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     assert_eq!(rows[magenta]["model"], json!("new"), "the edited row: {rows}");
     assert_eq!(rows[1 - magenta].get("model"), None, "the other row: {rows}");
     tap(&mut r, "OK");
     assert!(!r.is_open());
-    assert!(matches!(fill_of(r.app(), 0).color(), Some(Color::Cmyk { .. })), "the edited row's art is CMYK: {:?}", fill_of(r.app(), 0));
-    assert!(matches!(fill_of(r.app(), 1).color(), Some(Color::Rgb { .. })), "the other row's art stays RGB: {:?}", fill_of(r.app(), 1));
+    assert!(matches!(fill_of(&r.app(), 0).color(), Some(Color::Cmyk { .. })), "the edited row's art is CMYK: {:?}", fill_of(&r.app(), 0));
+    assert!(matches!(fill_of(&r.app(), 1).color(), Some(Color::Rgb { .. })), "the other row's art stays RGB: {:?}", fill_of(&r.app(), 1));
 }
 
 /// The fills of the document's objects, in order.
@@ -570,37 +593,37 @@ fn fills(app: &VectorcraftApp) -> Vec<Option<Color>> {
 fn global_adjust_changes_every_color_at_once() {
     for confirm in [true, false] {
         let mut r = edit(&["#ff0000", "#0000ff", "#00ff00"]);
-        let before = fills(r.app());
-        let undo = undo_len(r.app());
+        let before = fills(&r.app());
+        let undo = undo_len(&r.app());
         put(&mut r, "sliderMode", json!("global"));
         for name in ["Saturation", "Brightness", "Temperature", "Luminosity"] {
             assert!(has(&r, name), "{name}");
         }
-        assert_eq!(fills(r.app()), before, "at 0% the art keeps its colors");
-        let rows = r.field("rows");
+        assert_eq!(fills(&r.app()), before, "at 0% the art keeps its colors");
+        let rows = field(&r, "rows");
         rail(&mut r, "Saturation", 0.0);
-        assert_eq!(r.field("globalAdjust")["saturation"], json!(-100.0));
-        assert_eq!(r.field("rows"), rows, "the rows keep their new colors");
+        assert_eq!(field(&r, "globalAdjust")["saturation"], json!(-100.0));
+        assert_eq!(field(&r, "rows"), rows, "the rows keep their new colors");
         let gray = |app: &VectorcraftApp| fills(app).iter().all(|c| c.is_some_and(|c| c.to_hsb()[1] < 1e-3));
-        assert!(gray(r.app()), "every color previews gray: {:?}", fills(r.app()));
+        assert!(gray(&r.app()), "every color previews gray: {:?}", fills(&r.app()));
         rail(&mut r, "Saturation", 0.5);
-        assert_eq!(r.field("globalAdjust")["saturation"], json!(0.0));
-        assert_eq!(fills(r.app()), before, "back at 0% the art has its own colors");
+        assert_eq!(field(&r, "globalAdjust")["saturation"], json!(0.0));
+        assert_eq!(fills(&r.app()), before, "back at 0% the art has its own colors");
         rail(&mut r, "Saturation", 0.0);
         for (k, v) in [("tab", json!("assign")), ("tab", json!("edit")), ("sliderMode", json!("hsb")), ("sliderMode", json!("global"))] {
             put(&mut r, k, v);
         }
-        assert_eq!(r.field("globalAdjust")["saturation"], json!(-100.0), "the amount stays");
-        assert!(gray(r.app()), "and still applies");
+        assert_eq!(field(&r, "globalAdjust")["saturation"], json!(-100.0), "the amount stays");
+        assert!(gray(&r.app()), "and still applies");
         tap(&mut r, if confirm { "OK" } else { "Cancel" });
         assert!(!r.is_open());
         let app = r.app();
         if confirm {
-            assert!(gray(app), "OK keeps the change: {:?}", fills(app));
-            assert_eq!(undo_len(app), undo + 1, "one undo step");
+            assert!(gray(&app), "OK keeps the change: {:?}", fills(&app));
+            assert_eq!(undo_len(&app), undo + 1, "one undo step");
         } else {
-            assert_eq!(fills(app), before, "Cancel leaves the art unchanged");
-            assert_eq!(undo_len(app), undo, "and records no undo step");
+            assert_eq!(fills(&app), before, "Cancel leaves the art unchanged");
+            assert_eq!(undo_len(&app), undo, "and records no undo step");
         }
     }
 }
@@ -609,14 +632,14 @@ fn global_adjust_changes_every_color_at_once() {
 /// new color group, each snapped to the library again, as `recolor.apply` gives them to a group.
 #[test]
 fn global_adjust_on_a_new_group_keeps_its_colors_in_the_library() {
-    let mut r = Recolor::open(app(), json!({"colors": ["#123456", "#abcdef"], "library": ""}));
-    assert_eq!(r.field("limitTo"), "web-safe-216");
+    let mut r = open(app(), json!({"colors": ["#123456", "#abcdef"], "library": ""}));
+    assert_eq!(field(&r, "limitTo"), "web-safe-216");
     let web = |k: &Value| vectorcraft_engine::cmd::color_value(k).unwrap().to_rgb().iter().all(|v| ((v * 5.0).round() - v * 5.0).abs() < 1e-3);
-    let rows: Vec<Value> = r.field("rows").as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
+    let rows: Vec<Value> = field(&r, "rows").as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
     assert!(rows.iter().all(web), "the rows open snapped: {rows:?}");
-    r.set("globalAdjust", json!({"brightness": -60}));
-    r.confirm();
-    let keys = group_keys(r.app(), "Color Group");
+    r.set("globalAdjust", json!({"brightness": -60})).unwrap();
+    r.confirm().unwrap();
+    let keys = group_keys(&r.app(), "Color Group");
     assert_eq!(keys.len(), 2);
     assert_ne!(keys, rows, "the Global Adjust changed the colors");
     assert!(keys.iter().all(web), "every group color is a library color: {keys:?}");
@@ -627,24 +650,24 @@ fn global_adjust_on_a_new_group_keeps_its_colors_in_the_library() {
 fn the_preserve_checkboxes_open_as_they_were_last_confirmed() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#ffffff", "#000000", "#808080"]);
-    let preserve = |r: &Recolor| ["preserveWhite", "preserveBlack", "preserveGrays"].map(|k| r.field(k));
-    let mut r = Recolor::open(app, json!({}));
+    let preserve = |r: &Recolor| ["preserveWhite", "preserveBlack", "preserveGrays"].map(|k| field(r, k));
+    let mut r = open(app, json!({}));
     assert_eq!(preserve(&r), [json!(true), json!(true), json!(false)], "a first open");
-    r.set("preserveWhite", json!(false));
-    r.set("preserveBlack", json!(false));
-    r.set("preserveGrays", json!(true));
-    r.confirm();
-    r.app_mut().run("select.all", json!({})).unwrap();
-    r.app_mut().run("ui.recolorDialog", json!({})).unwrap();
+    r.set("preserveWhite", json!(false)).unwrap();
+    r.set("preserveBlack", json!(false)).unwrap();
+    r.set("preserveGrays", json!(true)).unwrap();
+    r.confirm().unwrap();
+    r.app().run("select.all", json!({})).unwrap();
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
     assert_eq!(preserve(&r), [json!(false), json!(false), json!(true)], "as confirmed");
-    r.set("preserveWhite", json!(true));
+    r.set("preserveWhite", json!(true)).unwrap();
     r.cancel();
-    r.app_mut().run("ui.recolorDialog", json!({})).unwrap();
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
     assert_eq!(preserve(&r), [json!(false), json!(false), json!(true)], "Cancel keeps what OK left");
 }
 
 fn new_hsb(r: &Recolor) -> Vec<[f32; 3]> {
-    r.field("rows").as_array().unwrap().iter().map(|row| vectorcraft_engine::cmd::color_value(&row["to"]).unwrap().to_hsb()).collect()
+    field(r, "rows").as_array().unwrap().iter().map(|row| vectorcraft_engine::cmd::color_value(&row["to"]).unwrap().to_hsb()).collect()
 }
 
 /// #1733: on the Edit tab, dragging a handle of CMYK art (linked, Complementary) must leave every
@@ -670,7 +693,7 @@ fn dragging_a_wheel_handle_keeps_the_other_handles_apart() {
     let moved_v = brightness(&r);
     // Hold the pointer still: nothing should change.
     for _ in 0..20 {
-        r.frame(vec![]);
+        r.frame();
     }
     let held = handles(&r);
     let held_v = brightness(&r);
@@ -680,9 +703,9 @@ fn dragging_a_wheel_handle_keeps_the_other_handles_apart() {
     );
     assert!(gap(held[1].0, moved[1].0) < 1.0, "the other handle turned on its own while the pointer was held still: {moved:?} -> {held:?}");
     assert!(held[0].1.distance(held[1].1) > 18.0, "the other handle went under the dragged one (pointer {p:?}): {held:?}");
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     let_go(&mut r, p);
-    assert_eq!(r.field("rows"), rows, "releasing keeps the colours the drag ended on");
+    assert_eq!(field(&r, "rows"), rows, "releasing keeps the colours the drag ended on");
     // OK keeps the whole drag as one undo step; undo brings the art's colours back.
     let keys = |app: &mut VectorcraftApp| -> Vec<Value> {
         let mut k: Vec<Value> =
@@ -690,14 +713,14 @@ fn dragging_a_wheel_handle_keeps_the_other_handles_apart() {
         k.sort_by_key(Value::to_string);
         k
     };
-    let undo = undo_len(r.app());
-    r.confirm();
-    assert_eq!(undo_len(r.app()), undo + 1);
+    let undo = undo_len(&r.app());
+    r.confirm().unwrap();
+    assert_eq!(undo_len(&r.app()), undo + 1);
     let mut to: Vec<Value> = rows.as_array().unwrap().iter().map(|row| row["to"].clone()).collect();
     to.sort_by_key(Value::to_string);
-    assert_eq!(keys(r.app_mut()), to);
-    r.app_mut().run("edit.undo", json!({})).unwrap();
-    assert_eq!(keys(r.app_mut()), [json!("cmyk 0 100 100 0"), json!("cmyk 100 0 0 0")]);
+    assert_eq!(keys(&mut r.app()), to);
+    r.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(keys(&mut r.app()), [json!("cmyk 0 100 100 0"), json!("cmyk 100 0 0 0")]);
 }
 
 /// Preview off restores the artwork and on restores the edit; Cancel leaves the undo count and OK
@@ -706,31 +729,31 @@ fn dragging_a_wheel_handle_keeps_the_other_handles_apart() {
 fn the_last_edit_color_can_be_selected_edited_and_undone() {
     for confirm in [false, true] {
         let mut r = edit(&["#ff0000", "#ffff00", "#00ff00", "#0000ff", "#ff00ff"]);
-        let before = snapshot(r.app());
-        let undo = undo_len(r.app());
+        let before = snapshot(&r.app());
+        let undo = undo_len(&r.app());
         put(&mut r, "__sel", json!([4]));
         put(&mut r, "linked", json!(false));
-        let rows = r.field("rows");
+        let rows = field(&r, "rows");
         rail(&mut r, "Brightness", 0.25);
-        let edited = r.field("rows");
+        let edited = field(&r, "rows");
         assert_ne!(edited[4]["to"], rows[4]["to"], "the last color changed");
         assert_eq!(&edited.as_array().unwrap()[..4], &rows.as_array().unwrap()[..4], "unlinked editing preserves the other colors");
-        let after = snapshot(r.app());
+        let after = snapshot(&r.app());
         assert_ne!(after, before, "the edit previews on the artwork");
         tap(&mut r, "Preview");
-        assert_eq!(snapshot(r.app()), before, "Preview off restores the artwork");
+        assert_eq!(snapshot(&r.app()), before, "Preview off restores the artwork");
         tap(&mut r, "Preview");
-        assert_eq!(snapshot(r.app()), after, "Preview on restores the edit");
+        assert_eq!(snapshot(&r.app()), after, "Preview on restores the edit");
         tap(&mut r, if confirm { "OK" } else { "Cancel" });
         assert!(!r.is_open());
         if confirm {
-            assert_eq!(snapshot(r.app()), after);
-            assert_eq!(undo_len(r.app()), undo + 1, "one undo step");
-            r.app_mut().run("edit.undo", json!({})).unwrap();
+            assert_eq!(snapshot(&r.app()), after);
+            assert_eq!(undo_len(&r.app()), undo + 1, "one undo step");
+            r.app().run("edit.undo", json!({})).unwrap();
         } else {
-            assert_eq!(undo_len(r.app()), undo);
+            assert_eq!(undo_len(&r.app()), undo);
         }
-        assert_eq!(snapshot(r.app()), before);
+        assert_eq!(snapshot(&r.app()), before);
     }
 }
 
@@ -739,11 +762,11 @@ fn the_last_edit_color_can_be_selected_edited_and_undone() {
 #[test]
 fn a_segmented_wheel_marker_moves_freely() {
     let mut r = edit(&["rgb 200 100 100", "rgb 100 200 200", "rgb 20 160 20"]);
-    let mut rows = r.field("rows");
+    let mut rows = field(&r, "rows");
     let green = (0..3).find(|i| rows[*i]["from"] == json!(["rgb 20 160 20"])).unwrap();
     let red = (0..3).find(|i| rows[*i]["from"] == json!(["rgb 200 100 100"])).unwrap();
     rows[green]["exclude"] = json!(true);
-    r.set("rows", rows);
+    r.set("rows", rows).unwrap();
     put(&mut r, "__sel", json!([red]));
     tap(&mut r, "Show segmented color wheel");
     let start = new_hsb(&r);
@@ -760,10 +783,10 @@ fn a_segmented_wheel_marker_moves_freely() {
     let gap = |a: f32, b: f32| (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0));
     let other = 3 - red - green;
     assert!((gap(moved[other][0], start[other][0]) - 37.0).abs() < 1.5, "linked: {:?} -> {:?}", start[other], moved[other]);
-    assert_eq!(r.field("rows")[green]["to"], json!("rgb 20 160 20"), "the excluded row stays");
-    let rows = r.field("rows");
+    assert_eq!(field(&r, "rows")[green]["to"], json!("rgb 20 160 20"), "the excluded row stays");
+    let rows = field(&r, "rows");
     tap(&mut r, "Show smooth color wheel");
-    assert_eq!(r.field("rows"), rows, "the smooth wheel shows the same colors");
+    assert_eq!(field(&r, "rows"), rows, "the smooth wheel shows the same colors");
     tap(&mut r, "Show segmented color wheel");
     rail(&mut r, "Brightness", 0.25);
     assert!((new_hsb(&r)[red][2] - 0.25).abs() < 0.02, "the Brightness slider: {:?}", new_hsb(&r));
@@ -776,37 +799,37 @@ fn a_segmented_wheel_marker_moves_freely() {
 #[test]
 fn the_brightness_and_hue_wheel_swaps_the_wheel_axis_and_the_slider() {
     let mut r = edit(&["#ff0000", "#0000ff", "#00ff00"]);
-    let rows = r.field("rows");
-    let doc = snapshot(r.app());
-    let undo = undo_len(r.app());
-    assert_eq!(r.field("wheelAxes"), Value::Null, "hue and saturation first");
+    let rows = field(&r, "rows");
+    let doc = snapshot(&r.app());
+    let undo = undo_len(&r.app());
+    assert_eq!(field(&r, "wheelAxes"), Value::Null, "hue and saturation first");
     assert!(has(&r, "Brightness") && !has(&r, "Saturation"));
     tap(&mut r, "Show brightness and hue on wheel");
-    assert_eq!(r.field("wheelAxes"), json!("hueBrightness"));
+    assert_eq!(field(&r, "wheelAxes"), json!("hueBrightness"));
     assert!(has(&r, "Saturation") && !has(&r, "Brightness"), "the slider edits the component the wheel leaves out");
     assert!(has(&r, "Show saturation and hue on wheel"), "the button names the way back");
-    assert_eq!(r.field("rows"), rows, "switching changes no color");
-    assert_eq!(snapshot(r.app()), doc, "nor the art");
-    assert_eq!(undo_len(r.app()), undo);
-    assert!(!dialogs::recolor::can_step(r.app(), true), "the axis is no step of Undo Changes");
+    assert_eq!(field(&r, "rows"), rows, "switching changes no color");
+    assert_eq!(snapshot(&r.app()), doc, "nor the art");
+    assert_eq!(undo_len(&r.app()), undo);
+    assert!(!steps(&r).0, "the axis is no step of Undo Changes");
     tap(&mut r, "Show segmented color wheel");
-    assert_eq!(r.field("wheelAxes"), json!("hueBrightness"), "the segmented wheel keeps the choice");
+    assert_eq!(field(&r, "wheelAxes"), json!("hueBrightness"), "the segmented wheel keeps the choice");
     assert!(has(&r, "Saturation"));
     tap(&mut r, "Show color bars");
     assert!(!r.enabled("Show saturation and hue on wheel"), "the button is for the wheels");
     tap(&mut r, "Show smooth color wheel");
     assert!(has(&r, "Saturation"), "the bars keep the choice");
     tap(&mut r, "Show saturation and hue on wheel");
-    assert_eq!(r.field("wheelAxes"), json!("hueSaturation"));
+    assert_eq!(field(&r, "wheelAxes"), json!("hueSaturation"));
     assert!(has(&r, "Brightness") && !has(&r, "Saturation"));
-    assert_eq!(r.field("rows"), rows);
+    assert_eq!(field(&r, "rows"), rows);
     put(&mut r, "wheelAxes", json!("sideways"));
     assert!(has(&r, "Brightness"), "an unknown value shows hue and saturation");
     put(&mut r, "wheelAxes", json!("hueBrightness"));
     r.cancel();
-    r.app_mut().run("select.all", json!({})).unwrap();
-    r.app_mut().run("ui.recolorDialog", json!({})).unwrap();
-    assert_eq!(r.field("wheelAxes"), Value::Null, "a new opening shows hue and saturation");
+    r.app().run("select.all", json!({})).unwrap();
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(field(&r, "wheelAxes"), Value::Null, "a new opening shows hue and saturation");
 }
 
 /// On the hue and brightness wheel a marker sits at its color's brightness, and a drag sets hue and
@@ -818,8 +841,8 @@ fn a_marker_on_the_brightness_wheel_sets_hue_and_brightness() {
     for confirm in [false, true] {
         let mut r = edit(&["rgb 200 100 100", "rgb 100 200 200"]);
         put(&mut r, "__sel", json!([0]));
-        let before = snapshot(r.app());
-        let undo = undo_len(r.app());
+        let before = snapshot(&r.app());
+        let undo = undo_len(&r.app());
         tap(&mut r, "Show brightness and hue on wheel");
         let start = new_hsb(&r);
         let [hue, s, v] = start[0];
@@ -842,18 +865,18 @@ fn a_marker_on_the_brightness_wheel_sets_hue_and_brightness() {
         let slid = new_hsb(&r);
         assert!((slid[0][1] - 0.25).abs() < 0.02, "the Saturation slider: {slid:?}");
         assert!((slid[0][2] - 0.4).abs() < 0.02, "keeps the brightness: {slid:?}");
-        let after = snapshot(r.app());
+        let after = snapshot(&r.app());
         assert_ne!(after, before, "the art previews the edit");
         tap(&mut r, if confirm { "OK" } else { "Cancel" });
         assert!(!r.is_open());
         if confirm {
-            assert_eq!(snapshot(r.app()), after);
-            assert_eq!(undo_len(r.app()), undo + 1, "one undo step");
-            r.app_mut().run("edit.undo", json!({})).unwrap();
+            assert_eq!(snapshot(&r.app()), after);
+            assert_eq!(undo_len(&r.app()), undo + 1, "one undo step");
+            r.app().run("edit.undo", json!({})).unwrap();
         } else {
-            assert_eq!(undo_len(r.app()), undo, "Cancel records no undo step");
+            assert_eq!(undo_len(&r.app()), undo, "Cancel records no undo step");
         }
-        assert_eq!(snapshot(r.app()), before);
+        assert_eq!(snapshot(&r.app()), before);
     }
 }
 
@@ -869,7 +892,7 @@ fn the_add_color_tool_on_the_brightness_wheel_adds_the_brightness_clicked() {
     click(&mut r, wheel_at(&r, 120.0, 0.5));
     let [hue, sat, b] = new_hsb(&r)[2];
     assert!((hue - 120.0).abs() < 1.0 && (sat - s).abs() < 0.01 && (b - 0.5).abs() < 0.01, "{:?}", [hue, sat, b]);
-    assert_eq!(r.field("__sel"), json!([2]));
+    assert_eq!(field(&r, "__sel"), json!([2]));
     // The new color is now the base color; select the first one again.
     put(&mut r, "__sel", json!([0]));
     tap(&mut r, "Show segmented color wheel");
@@ -880,7 +903,7 @@ fn the_add_color_tool_on_the_brightness_wheel_adds_the_brightness_clicked() {
 
 /// The rows as `(current colors, new color)` pairs, sorted.
 fn row_pairs(r: &Recolor) -> Vec<String> {
-    let mut v: Vec<String> = r.field("rows").as_array().unwrap().iter().map(|row| format!("{} {}", row["from"], row["to"])).collect();
+    let mut v: Vec<String> = field(r, "rows").as_array().unwrap().iter().map(|row| format!("{} {}", row["from"], row["to"])).collect();
     v.sort();
     v
 }
@@ -892,47 +915,47 @@ fn row_pairs(r: &Recolor) -> Vec<String> {
 fn color_bars_select_edit_and_reorder_the_rows() {
     for confirm in [false, true] {
         let mut r = edit(&["#ff0000", "#0000ff", "#00ff00", "#ffff00"]);
-        let before = snapshot(r.app());
-        let undo = undo_len(r.app());
-        let mut rows = r.field("rows");
+        let before = snapshot(&r.app());
+        let undo = undo_len(&r.app());
+        let mut rows = field(&r, "rows");
         rows[1]["exclude"] = json!(true);
-        r.set("rows", rows);
-        r.set("linked", json!(false));
-        r.set("sliderMode", json!("hsb"));
+        r.set("rows", rows).unwrap();
+        r.set("linked", json!(false)).unwrap();
+        r.set("sliderMode", json!("hsb")).unwrap();
         tap(&mut r, "Show color bars");
         assert!(!has(&r, "Color 2"), "no bar for the excluded row");
         let first = rect(&r, "Color 1");
         let last = rect(&r, "Color 4");
         assert!(r.by_label("Color 3").is_some_and(|t| t.rect.top() > first.bottom() && t.rect.bottom() < last.top()), "in row order");
         click(&mut r, last.center());
-        assert_eq!(r.field("__sel"), json!([3]), "a click selects the bar's row");
-        let unedited = r.field("rows");
+        assert_eq!(field(&r, "__sel"), json!([3]), "a click selects the bar's row");
+        let unedited = field(&r, "rows");
         rail(&mut r, "H", 0.5);
-        let edited = r.field("rows");
+        let edited = field(&r, "rows");
         assert_ne!(edited[3]["to"], unedited[3]["to"], "the H slider edits the selected bar's color");
         assert_eq!(&edited.as_array().unwrap()[..3], &unedited.as_array().unwrap()[..3], "and only that one");
-        let previewed = snapshot(r.app());
+        let previewed = snapshot(&r.app());
         assert_ne!(previewed, before, "the art previews the edit");
         let pairs = row_pairs(&r);
         let last = rect(&r, "Color 4");
         let top = pos2(last.center().x, first.top() + 2.0);
         drag_path(&mut r, &line(last.center(), top, 8));
         let_go(&mut r, top);
-        let rows = r.field("rows");
+        let rows = field(&r, "rows");
         assert_eq!(rows[0], edited[3], "the dragged row moved to the top: {rows}");
         assert_eq!(rows.as_array().unwrap()[1..], [edited[0].clone(), edited[1].clone(), edited[2].clone()], "the others shift down");
         assert_eq!(row_pairs(&r), pairs, "moving a bar changes no color");
-        assert_eq!(r.field("__sel"), json!([0]), "the moved row stays selected");
-        assert_eq!(snapshot(r.app()), previewed, "and the art keeps the same colors");
+        assert_eq!(field(&r, "__sel"), json!([0]), "the moved row stays selected");
+        assert_eq!(snapshot(&r.app()), previewed, "and the art keeps the same colors");
         tap(&mut r, if confirm { "OK" } else { "Cancel" });
         assert!(!r.is_open());
         let app = r.app();
         if confirm {
-            assert_eq!(snapshot(app), previewed, "OK keeps the edit");
-            assert_eq!(undo_len(app), undo + 1, "as one undo step");
+            assert_eq!(snapshot(&app), previewed, "OK keeps the edit");
+            assert_eq!(undo_len(&app), undo + 1, "as one undo step");
         } else {
-            assert_eq!(snapshot(app), before, "Cancel restores the art");
-            assert_eq!(undo_len(app), undo);
+            assert_eq!(snapshot(&app), before, "Cancel restores the art");
+            assert_eq!(undo_len(&app), undo);
         }
     }
 }
@@ -945,34 +968,35 @@ fn color_bars_select_edit_and_reorder_the_rows() {
 fn the_add_color_tool_adds_a_row_with_no_current_colors() {
     let mut r = edit(&["rgb 200 100 100", "rgb 100 200 200"]);
     put(&mut r, "__sel", json!([0]));
-    let (fills_before, v) = (fills(r.app()), new_hsb(&r)[0][2]);
+    let fills_before = fills(&r.app());
+    let v = new_hsb(&r)[0][2];
     tap(&mut r, "Add Color Tool");
-    assert_eq!(r.field("wheelTool"), json!("add"));
+    assert_eq!(field(&r, "wheelTool"), json!("add"));
     let at = wheel_at(&r, 120.0, 0.5);
     click(&mut r, at);
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     assert_eq!(rows.as_array().unwrap().len(), 3, "a new row: {rows}");
     assert_eq!(rows[2]["from"], json!([]), "with no current colors");
     assert_eq!(rows[2]["added"], json!(true), "marked as an added color");
     let [hue, s, b] = new_hsb(&r)[2];
     assert!((hue - 120.0).abs() < 1.0 && (s - 0.5).abs() < 0.01 && (b - v).abs() < 0.01, "{:?}", [hue, s, b]);
-    assert_eq!(r.field("__sel"), json!([2]), "the new color is selected");
-    assert_eq!(fills(r.app()), fills_before, "a color with no current colors recolors no art");
+    assert_eq!(field(&r, "__sel"), json!([2]), "the new color is selected");
+    assert_eq!(fills(&r.app()), fills_before, "a color with no current colors recolors no art");
     // A second click adds another color; the tool stays on.
     click(&mut r, wheel_at(&r, 240.0, 0.75));
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 4);
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 4);
     tap(&mut r, "Add Color Tool");
-    assert_eq!(r.field("wheelTool"), Value::Null, "a second click turns the tool off");
+    assert_eq!(field(&r, "wheelTool"), Value::Null, "a second click turns the tool off");
     click(&mut r, at);
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 4, "without the tool a click adds nothing");
-    assert_eq!(r.field("__sel"), json!([2]), "it selects the marker clicked");
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 4, "without the tool a click adds nothing");
+    assert_eq!(field(&r, "__sel"), json!([2]), "it selects the marker clicked");
     put(&mut r, "tab", json!("assign"));
     assert!(has(&r, "Current Colors (2)"));
     assert!(has(&r, "Color 4"), "the Assign tab has a row for each added color");
-    let undo = undo_len(r.app());
-    r.confirm();
-    assert_eq!(fills(r.app()), fills_before, "OK leaves the art's colors");
-    assert_eq!(undo_len(r.app()), undo, "and records no undo step");
+    let undo = undo_len(&r.app());
+    r.confirm().unwrap();
+    assert_eq!(fills(&r.app()), fills_before, "OK leaves the art's colors");
+    assert_eq!(undo_len(&r.app()), undo, "and records no undo step");
 }
 
 /// On the segmented wheel the Add Color tool adds the patch's color. Opened on a color group without
@@ -987,15 +1011,15 @@ fn an_added_color_joins_the_color_group() {
     let v = new_hsb(&r)[0][2];
     tap(&mut r, "Add Color Tool");
     click(&mut r, wheel_at(&r, 187.0, 0.95));
-    let added = r.field("rows").as_array().unwrap().last().unwrap()["to"].clone();
+    let added = field(&r, "rows").as_array().unwrap().last().unwrap()["to"].clone();
     let [hue, s, b] = vectorcraft_engine::cmd::color_value(&added).unwrap().to_hsb();
     assert!((hue - 180.0).abs() < 1.0 && (s - 0.9).abs() < 0.01 && (b - v).abs() < 0.01, "the patch's color: {:?}", [hue, s, b]);
-    let undo = undo_len(r.app());
-    r.confirm();
+    let undo = undo_len(&r.app());
+    r.confirm().unwrap();
     let mut want = before.clone();
     want.push(added);
-    assert_eq!(group_keys(r.app(), "Brights"), want);
-    assert_eq!(undo_len(r.app()), undo + 1, "one undo step");
+    assert_eq!(group_keys(&r.app(), "Brights"), want);
+    assert_eq!(undo_len(&r.app()), undo + 1, "one undo step");
 }
 
 /// The Remove Color tool: a click on the base color's marker removes nothing; a click on another
@@ -1004,30 +1028,30 @@ fn an_added_color_joins_the_color_group() {
 #[test]
 fn the_remove_color_tool_removes_a_marker_but_not_the_base_colors() {
     let mut r = edit(&["rgb 200 100 100", "rgb 100 200 200", "rgb 20 160 20"]);
-    let fills_before = fills(r.app());
-    let mut rows = r.field("rows");
+    let fills_before = fills(&r.app());
+    let mut rows = field(&r, "rows");
     let tos = ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"];
     for (row, to) in rows.as_array_mut().unwrap().iter_mut().zip(tos) {
         row["to"] = json!(to);
     }
-    r.set("rows", rows.clone());
-    r.set("linked", json!(false));
+    r.set("rows", rows.clone()).unwrap();
+    r.set("linked", json!(false)).unwrap();
     put(&mut r, "__sel", json!([0]));
     tap(&mut r, "Remove Color Tool");
-    assert_eq!(r.field("wheelTool"), json!("remove"));
+    assert_eq!(field(&r, "wheelTool"), json!("remove"));
     let (red, green) = (marker(&r, 0), marker(&r, 1));
     click(&mut r, red);
-    assert_eq!(r.field("rows"), rows, "the base color stays");
+    assert_eq!(field(&r, "rows"), rows, "the base color stays");
     click(&mut r, green);
-    let now = r.field("rows");
+    let now = field(&r, "rows");
     assert_eq!(now.as_array().unwrap().len(), 3, "the row of art's colors stays");
     assert_eq!((&now[0], &now[1]["to"], &now[2]), (&rows[0], &Value::Null, &rows[2]), "with no new color: {now}");
-    assert_eq!(r.field("__sel"), json!([0]), "the base color stays selected");
+    assert_eq!(field(&r, "__sel"), json!([0]), "the base color stays selected");
     tap(&mut r, "Show color bars");
     assert!(!r.enabled("Remove Color Tool"), "the tools are for the wheels");
     let kept = rows[1]["from"][0].clone();
-    r.confirm();
-    let after = fills(r.app());
+    r.confirm().unwrap();
+    let after = fills(&r.app());
     for (b, a) in fills_before.iter().zip(&after) {
         let was = json!(ColorKey::of(&b.unwrap()).to_string());
         if was == kept {
@@ -1057,7 +1081,7 @@ fn a_markers_menu_sets_the_base_color_that_the_rules_build_from() {
         assert!(has(&r, item), "{item}");
     }
     tap(&mut r, "Set As Base Color");
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     assert_eq!(rows[1]["base"], json!(true), "{rows}");
     assert!(rows[0].get("base").is_none() && rows[2].get("base").is_none());
     right_click(&mut r, at);
@@ -1071,10 +1095,10 @@ fn a_markers_menu_sets_the_base_color_that_the_rules_build_from() {
     let now = new_hsb(&r);
     assert!(hue_gap(now[1][0], hsb[1][0]) < 1.0, "the base color keeps its hue: {hsb:?} -> {now:?}");
     assert!(hue_gap(now[0][0], now[1][0]) > 110.0 && hue_gap(now[2][0], now[1][0]) > 110.0, "the others are a triad from it: {now:?}");
-    assert_eq!(r.field("rows")[1]["base"], json!(true), "the rule keeps the base mark");
-    let before = fills(r.app());
-    r.confirm();
-    assert_eq!(fills(r.app()), before, "OK keeps the previewed colors");
+    assert_eq!(field(&r, "rows")[1]["base"], json!(true), "the rule keeps the base mark");
+    let before = fills(&r.app());
+    r.confirm().unwrap();
+    assert_eq!(fills(&r.app()), before, "OK keeps the previewed colors");
 }
 
 /// Select Shade on a marker's menu shows a grid of the color's hue; a click on a cell gives the color
@@ -1096,7 +1120,7 @@ fn select_shade_gives_a_marker_the_shade_clicked() {
         let other_moved = (now[1][2] - hsb[1][2]).abs() > 0.01;
         assert_eq!(other_moved, linked, "linked {linked}: {hsb:?} -> {now:?}");
         assert!(!has(&r, cell), "the menu closes");
-        assert_eq!(r.field("__sel"), json!([0]));
+        assert_eq!(field(&r, "__sel"), json!([0]));
     }
 }
 
@@ -1106,24 +1130,24 @@ fn select_shade_gives_a_marker_the_shade_clicked() {
 #[test]
 fn add_new_color_on_a_markers_line_moves_with_that_marker() {
     let mut r = edit(&["rgb 200 100 100", "rgb 100 200 200"]);
-    r.set("linked", json!(false));
+    r.set("linked", json!(false)).unwrap();
     put(&mut r, "__sel", json!([0]));
     let hsb = new_hsb(&r);
     right_click(&mut r, wheel_at(&r, 90.0, 0.6));
     assert!(!has(&r, "Set As Base Color"), "no marker there");
     tap(&mut r, "Add New Color");
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     assert_eq!(rows.as_array().unwrap().len(), 3, "{rows}");
     assert_eq!((&rows[2]["from"], &rows[2]["added"]), (&json!([]), &json!(true)));
     assert!(rows[2].get("follows").is_none(), "off every marker's line");
     let [hue, s, v] = new_hsb(&r)[2];
     assert!((hue - 90.0).abs() < 1.0 && (s - 0.6).abs() < 0.01 && (v - hsb[0][2]).abs() < 0.01, "{:?}", [hue, s, v]);
-    assert_eq!(r.field("__sel"), json!([2]));
+    assert_eq!(field(&r, "__sel"), json!([2]));
     // Halfway along the second color's line.
     let (c, _) = wheel(&r);
     right_click(&mut r, c.lerp(marker(&r, 1), 0.5));
     tap(&mut r, "Add New Color");
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     assert_eq!(rows.as_array().unwrap().len(), 4);
     assert!(rows[1]["tie"].is_u64() && rows[3]["follows"] == rows[1]["tie"], "{rows}");
     // Drag the second color's marker a little way round: the color on its line turns with it.
@@ -1149,13 +1173,13 @@ fn set_current_color_as_base_color_marks_the_selected_color() {
     assert!(!r.enabled(name), "the base color is the selected one");
     put(&mut r, "__sel", json!([2]));
     tap(&mut r, name);
-    assert_eq!(r.field("rows")[2]["base"], json!(true));
+    assert_eq!(field(&r, "rows")[2]["base"], json!(true));
     assert!(!r.enabled(name));
     tap(&mut r, "Show color bars");
     let bar = rect(&r, "Color 1").center();
     right_click(&mut r, bar);
     tap(&mut r, "Set As Base Color");
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     assert_eq!((&rows[0]["base"], rows[2].get("base")), (&json!(true), None), "{rows}");
 }
 
@@ -1179,28 +1203,30 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         let mut r = assign(app, json!({}));
         let row = 1;
         if empty_new {
-            let mut rows = r.field("rows");
+            let mut rows = field(&r, "rows");
             rows[row]["to"] = Value::Null;
             put(&mut r, "rows", rows);
         }
-        let before = r.field("rows");
+        let before = field(&r, "rows");
         let expected = if empty_new { before[row]["from"][0].clone() } else { before[row]["to"].clone() };
         let at = rect(&r, &format!("Color {}", row + 1)).center();
         right_click(&mut r, at);
-        assert_eq!(r.field("__sel"), json!([row]), "right-click selects the targeted row");
+        assert_eq!(field(&r, "__sel"), json!([row]), "right-click selects the targeted row");
         tap(&mut r, "Pick from Swatches");
-        assert_eq!(r.child_field("__recolorRow"), json!(row));
-        assert_eq!(r.child_field("swatches"), json!(true));
-        assert_eq!(vectorcraft_engine::cmd::color_value(&r.child_field("color")), vectorcraft_engine::cmd::color_value(&expected));
-        r.cancel_child();
+        let (picker_id, picked_row, picked) = picker(&r).expect("Pick from Swatches opens the Color Picker");
+        assert_eq!(picked_row, row.to_string(), "for the targeted row");
+        // PLAN: framework gap: `ColorRequest` cannot ask the picker to start on its swatches view (lead ruling).
+        assert_eq!(picked["swatches"], json!(true), "on its swatches");
+        assert_eq!(vectorcraft_engine::cmd::color_value(&picked["color"]), vectorcraft_engine::cmd::color_value(&expected));
+        r.host(|host, ctx| host.cancel_by_id(ctx, picker_id));
         r.settled();
-        assert_eq!(r.field("rows"), before, "picker Cancel preserves all rows");
+        assert_eq!(field(&r, "rows"), before, "picker Cancel preserves all rows");
 
         right_click(&mut r, at);
         tap(&mut r, "Limit to Library");
         tap(&mut r, "Document Swatches");
-        assert_eq!(r.field("limitTo"), json!("document"));
-        let snapped = r.field("rows");
+        assert_eq!(field(&r, "limitTo"), json!("document"));
+        let snapped = field(&r, "rows");
         for (i, row) in snapped.as_array().unwrap().iter().enumerate() {
             assert_eq!(row["to"], "rgb 255 255 0", "row {i} snaps to the palette");
         }
@@ -1208,10 +1234,10 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         right_click(&mut r, at);
         tap(&mut r, "Limit to Library");
         tap(&mut r, "None");
-        assert_eq!(r.field("limitTo"), json!(""));
-        assert_eq!(undo_len(r.app()), undo, "menu actions remain previews");
+        assert_eq!(field(&r, "limitTo"), json!(""));
+        assert_eq!(undo_len(&r.app()), undo, "menu actions remain previews");
         tap(&mut r, "Cancel");
-        assert_eq!(colors(r.app_mut()), 2, "Recolor Cancel restores the original artwork");
+        assert_eq!(colors(&mut r.app()), 2, "Recolor Cancel restores the original artwork");
     }
 }
 
@@ -1221,10 +1247,10 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
 #[test]
 fn undo_and_redo_changes_step_through_the_dialogs_own_edits() {
     let mut r = edit(&["#ff0000", "#00ff00", "#0000ff"]);
-    let undo = undo_len(r.app());
+    let undo = undo_len(&r.app());
     tap(&mut r, "Assign");
     assert!(!r.enabled("Undo Changes") && !r.enabled("Redo Changes"), "nothing to step to on opening");
-    let state = |r: &Recolor| (r.field("rows"), fills(r.app()));
+    let state = |r: &Recolor| (field(r, "rows"), fills(&r.app()));
     let start = state(&r);
     tap(&mut r, "Randomly change color order");
     let first = state(&r);
@@ -1237,7 +1263,7 @@ fn undo_and_redo_changes_step_through_the_dialogs_own_edits() {
         tap(&mut r, button);
         assert_eq!(&state(&r), want, "{button}");
     }
-    assert_eq!(undo_len(r.app()), undo, "the dialog's steps leave the document's history alone");
+    assert_eq!(undo_len(&r.app()), undo, "the dialog's steps leave the document's history alone");
     tap(&mut r, "Undo Changes");
     assert_eq!(state(&r), first);
     assert!(r.enabled("Redo Changes"));
@@ -1246,13 +1272,13 @@ fn undo_and_redo_changes_step_through_the_dialogs_own_edits() {
     let last = state(&r);
     tap(&mut r, "OK");
     assert!(!r.is_open());
-    assert_eq!(fills(r.app()), last.1, "OK keeps the edits");
-    assert_eq!(undo_len(r.app()), undo + 1, "as one undo step");
-    r.app_mut().run("edit.undo", json!({})).unwrap();
-    assert_eq!(fills(r.app()), start.1);
+    assert_eq!(fills(&r.app()), last.1, "OK keeps the edits");
+    assert_eq!(undo_len(&r.app()), undo + 1, "as one undo step");
+    r.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(fills(&r.app()), start.1);
     // A new opening has nothing to undo.
-    r.app_mut().run("select.all", json!({})).unwrap();
-    r.app_mut().run("ui.recolorDialog", json!({})).unwrap();
+    r.app().run("select.all", json!({})).unwrap();
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
     r.settled();
     assert!(!r.enabled("Undo Changes") && !r.enabled("Redo Changes"), "nothing to step to on a new opening");
     tap(&mut r, "Cancel");
@@ -1263,16 +1289,16 @@ fn undo_and_redo_changes_step_through_the_dialogs_own_edits() {
 #[test]
 fn a_drag_is_one_step_of_undo_changes() {
     let mut r = edit(&["rgb 200 100 100", "rgb 100 200 200"]);
-    let rows = r.field("rows");
+    let rows = field(&r, "rows");
     let rail = rect(&r, "Brightness");
     let v = new_hsb(&r)[0][2];
     let at = pos2(rail.left() + v * rail.width(), rail.center().y);
     let end = pos2(at.x + 72.0, at.y);
     drag_path(&mut r, &line(at, end, 6));
     let_go(&mut r, end);
-    assert_ne!(r.field("rows"), rows, "the drag changed the colors");
+    assert_ne!(field(&r, "rows"), rows, "the drag changed the colors");
     tap(&mut r, "Undo Changes");
-    assert_eq!(r.field("rows"), rows, "one Undo Changes goes back to before the drag");
+    assert_eq!(field(&r, "rows"), rows, "one Undo Changes goes back to before the drag");
     assert!(!r.enabled("Undo Changes"), "the drag was one step");
     assert!(r.enabled("Redo Changes"));
 }
@@ -1283,16 +1309,16 @@ fn undo_changes_reverses_reset() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#00ff00", "#0000ff"]);
     let mut r = assign(app, json!({}));
-    let start = r.field("rows");
+    let start = field(&r, "rows");
     tap(&mut r, "Randomly change saturation and brightness");
-    let edited = r.field("rows");
+    let edited = field(&r, "rows");
     assert_ne!(edited, start);
     tap(&mut r, "Reset the rows to the artwork's colors");
-    assert_eq!(r.field("rows"), start, "Reset reads the art's colors");
+    assert_eq!(field(&r, "rows"), start, "Reset reads the art's colors");
     tap(&mut r, "Undo Changes");
-    assert_eq!(r.field("rows"), edited, "Undo Changes gives back the rows before Reset");
+    assert_eq!(field(&r, "rows"), edited, "Undo Changes gives back the rows before Reset");
     tap(&mut r, "Redo Changes");
-    assert_eq!(r.field("rows"), start, "Redo Changes resets them again");
+    assert_eq!(field(&r, "rows"), start, "Redo Changes resets them again");
 }
 
 /// `ui.recolorUndo` and `ui.recolorRedo` step the open dialog as its buttons do, also through a
@@ -1304,44 +1330,44 @@ fn the_recolor_undo_and_redo_commands_step_the_open_dialog() {
     art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
     assert!(app.run("ui.recolorUndo", json!({})).is_err(), "no dialog open");
     // A field set before the dialog's first frame is a step back to the fields it opened with.
-    let mut r = Recolor::open(app, json!({}));
-    r.set("colors", json!(2));
-    assert!(dialogs::recolor::can_step(r.app(), true) && !dialogs::recolor::can_step(r.app(), false), "Undo Changes can run before the first frame");
-    let res = r.app_mut().run("ui.recolorUndo", json!({})).unwrap();
+    let mut r = open(app, json!({}));
+    r.set("colors", json!(2)).unwrap();
+    assert_eq!(steps(&r), (true, false), "Undo Changes can run before the first frame");
+    let res = r.app().run("ui.recolorUndo", json!({})).unwrap();
     assert_eq!(res, json!({"changed": true, "canUndo": false, "canRedo": true}));
-    assert_eq!(r.field("colors"), Value::Null);
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 4, "the rows of the art as it opened");
+    assert_eq!(field(&r, "colors"), Value::Null);
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 4, "the rows of the art as it opened");
     r.cancel();
-    r.app_mut().run("select.all", json!({})).unwrap();
-    r.app_mut().run("ui.recolorDialog", json!({})).unwrap();
+    r.app().run("select.all", json!({})).unwrap();
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
     r.settled();
-    assert!(!dialogs::recolor::can_step(r.app(), true) && !dialogs::recolor::can_step(r.app(), false));
-    let start = r.field("rows");
+    assert_eq!(steps(&r), (false, false));
+    let start = field(&r, "rows");
     assert_eq!(start.as_array().unwrap().len(), 4);
     put(&mut r, "colors", json!(2));
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 2);
-    let two = r.field("rows");
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 2);
+    let two = field(&r, "rows");
     put(&mut r, "globalAdjust", json!({"saturation": -50}));
-    let res = r.app_mut().run("ui.recolorUndo", json!({})).unwrap();
+    let res = r.app().run("ui.recolorUndo", json!({})).unwrap();
     assert_eq!(res, json!({"changed": true, "canUndo": true, "canRedo": true}));
-    assert_eq!((r.field("globalAdjust"), r.field("rows")), (Value::Null, two.clone()));
-    r.app_mut().run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!((field(&r, "globalAdjust"), field(&r, "rows")), (Value::Null, two.clone()));
+    r.app().run("ui.recolorUndo", json!({})).unwrap();
     r.settled();
-    assert_eq!((r.field("colors"), r.field("rows")), (Value::Null, start.clone()), "the count and its rows, not reduced again");
-    assert!(!dialogs::recolor::can_step(r.app(), true));
-    assert_eq!(r.app_mut().run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(false));
-    r.app_mut().run("ui.recolorRedo", json!({})).unwrap();
-    assert_eq!((r.field("colors"), r.field("rows")), (json!(2), two));
+    assert_eq!((field(&r, "colors"), field(&r, "rows")), (Value::Null, start.clone()), "the count and its rows, not reduced again");
+    assert!(!steps(&r).0);
+    assert_eq!(r.app().run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(false));
+    r.app().run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!((field(&r, "colors"), field(&r, "rows")), (json!(2), two));
     // A field set without a frame between is a step before Undo Changes goes back.
-    r.set("method", json!("exact"));
-    assert_eq!(r.app_mut().run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(true));
-    assert_eq!(r.field("method"), json!("scaleTints"));
+    r.set("method", json!("exact")).unwrap();
+    assert_eq!(r.app().run("ui.recolorUndo", json!({})).unwrap()["changed"], json!(true));
+    assert_eq!(field(&r, "method"), json!("scaleTints"));
     r.cancel();
-    assert!(r.app_mut().run("ui.recolorRedo", json!({})).is_err(), "Cancel closed the dialog");
-    r.app_mut().run("select.all", json!({})).unwrap();
-    r.app_mut().run("ui.recolorDialog", json!({})).unwrap();
+    assert!(r.app().run("ui.recolorRedo", json!({})).is_err(), "Cancel closed the dialog");
+    r.app().run("select.all", json!({})).unwrap();
+    r.app().run("ui.recolorDialog", json!({})).unwrap();
     r.settled();
-    assert!(!dialogs::recolor::can_step(r.app(), true) && !dialogs::recolor::can_step(r.app(), false), "a new opening");
+    assert_eq!(steps(&r), (false, false), "a new opening");
 }
 
 /// An edit made while the pointer is held from the dialog's first frame is a step from the fields
@@ -1350,18 +1376,18 @@ fn the_recolor_undo_and_redo_commands_step_the_open_dialog() {
 fn an_edit_with_the_pointer_down_from_the_first_frame_is_a_step() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
-    let mut r = Recolor::open(app, json!({}));
+    let mut r = open(app, json!({}));
     let at = Pos2::new(2.0, 2.0);
-    r.frame(vec![Event::PointerMoved(at), pointer(at, PointerButton::Primary, true)]);
-    let start = r.field("rows");
+    r.frame_with(vec![Event::PointerMoved(at), pointer(at, PointerButton::Primary, true)], Modifiers::NONE);
+    let start = field(&r, "rows");
     assert_eq!(start.as_array().unwrap().len(), 4);
-    r.set("colors", json!(2));
-    r.frame(vec![]);
-    r.frame(vec![pointer(at, PointerButton::Primary, false)]);
-    assert_eq!(r.field("rows").as_array().unwrap().len(), 2);
-    let res = r.app_mut().run("ui.recolorUndo", json!({})).unwrap();
+    r.set("colors", json!(2)).unwrap();
+    r.frame();
+    r.frame_with(vec![pointer(at, PointerButton::Primary, false)], Modifiers::NONE);
+    assert_eq!(field(&r, "rows").as_array().unwrap().len(), 2);
+    let res = r.app().run("ui.recolorUndo", json!({})).unwrap();
     assert_eq!(res, json!({"changed": true, "canUndo": false, "canRedo": true}));
-    assert_eq!((r.field("colors"), r.field("rows")), (Value::Null, start));
+    assert_eq!((field(&r, "colors"), field(&r, "rows")), (Value::Null, start));
 }
 
 /// Rows or weights set before the first frame, which the art's reduction then replaces or drops,
@@ -1371,13 +1397,13 @@ fn rows_and_weights_set_before_the_art_is_read_are_no_step() {
     for (k, v) in [("rows", json!([{"to": "#123456"}])), ("weights", json!([25, 75]))] {
         let mut app = app();
         art(&mut app, &["#ff0000", "#0000ff"]);
-        let mut r = Recolor::open(app, json!({}));
-        r.set(k, v);
-        assert!(!dialogs::recolor::can_step(r.app(), true), "{k}: Undo Changes is not available");
-        let res = r.app_mut().run("ui.recolorUndo", json!({})).unwrap();
+        let mut r = open(app, json!({}));
+        r.set(k, v).unwrap();
+        assert!(!steps(&r).0, "{k}: Undo Changes is not available");
+        let res = r.app().run("ui.recolorUndo", json!({})).unwrap();
         assert_eq!(res, json!({"changed": false, "canUndo": false, "canRedo": false}), "{k}");
         assert!(!r.app().session.in_interaction(), "{k}: a step that changes nothing previews nothing");
-        assert_eq!(r.field("rows").as_array().unwrap().len(), 2, "{k}: the rows of the art");
+        assert_eq!(field(&r, "rows").as_array().unwrap().len(), 2, "{k}: the rows of the art");
     }
 }
 
@@ -1387,15 +1413,15 @@ fn rows_and_weights_set_before_the_art_is_read_are_no_step() {
 fn the_recolor_undo_and_redo_commands_preview_the_step() {
     let mut app = app();
     art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
-    let mut r = Recolor::open(app, json!({}));
+    let mut r = open(app, json!({}));
     r.settled();
-    let start = fills(r.app());
+    let start = fills(&r.app());
     put(&mut r, "globalAdjust", json!({"saturation": -100}));
-    let adjusted = fills(r.app());
+    let adjusted = fills(&r.app());
     assert_ne!(adjusted, start, "the adjustment previews");
-    r.app_mut().run("ui.recolorUndo", json!({})).unwrap();
-    assert_eq!(fills(r.app()), start, "Undo Changes previews the step before");
-    r.app_mut().run("ui.recolorRedo", json!({})).unwrap();
-    assert_eq!(fills(r.app()), adjusted, "Redo Changes previews the step after");
+    r.app().run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(fills(&r.app()), start, "Undo Changes previews the step before");
+    r.app().run("ui.recolorRedo", json!({})).unwrap();
+    assert_eq!(fills(&r.app()), adjusted, "Redo Changes previews the step after");
     r.cancel();
 }

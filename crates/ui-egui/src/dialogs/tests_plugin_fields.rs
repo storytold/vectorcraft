@@ -8,7 +8,8 @@ use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
 
-use super::tests_plugin_export::{fields, top};
+use super::tests_export::fields;
+use super::tests_plugin_export::top;
 use super::*;
 use crate::VectorcraftApp;
 
@@ -129,10 +130,10 @@ fn the_help_button_opens_the_parameter_s_page() {
     };
     press(&mut h);
     assert_eq!(opened(&h), ["https://example.org/params/spacing"]);
-    // Automation can't send the person's browser anywhere.
-    h.state_mut().synthetic_frame = true;
+    // Automation can't send the person's browser anywhere: the press while a control request is answered.
+    h.state_mut().ui.answering_control = true;
     press(&mut h);
-    h.state_mut().synthetic_frame = false;
+    h.state_mut().ui.answering_control = false;
     assert!(opened(&h).is_empty(), "nothing opened for automation");
     remove(&mut h, id);
 }

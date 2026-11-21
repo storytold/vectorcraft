@@ -45,7 +45,7 @@ use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::Row;
 use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
-use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::env::{Label, LengthUnits};
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::sections::{DialogRole, FooterButton, Section};
 use craft::ui::text::{NumberField, link_toggle};
@@ -55,7 +55,7 @@ use vectorcraft_engine::doc::NodeId;
 use vectorcraft_engine::width_point_pair;
 
 use crate::VectorcraftApp;
-use crate::canvas::rulers::{general_lengths, unit_kind};
+use crate::canvas::stroke_lengths;
 
 /// The dialog kind of Width Point Edit.
 pub const KIND: &str = "widthPoint";
@@ -354,7 +354,12 @@ struct Form {
 
 impl Default for Form {
     fn default() -> Self {
-        Form { path: 0, doc: None, adjust: false, target: Target::Several { open: Vec::new(), points: Vec::new(), discontinuous: false, linked: [false; 2] } }
+        Form {
+            path: 0,
+            doc: None,
+            adjust: false,
+            target: Target::Several { open: Vec::new(), points: Vec::new(), discontinuous: false, linked: [false; 2] },
+        }
     }
 }
 
@@ -383,11 +388,6 @@ pub(crate) struct WidthPointDialog {
     held: HeldAnswer<Filed>,
     /// The answer automation's `choice` names for the next confirm.
     choice: Pressed,
-}
-
-/// The lengths the side widths are shown in: stored in points, shown in the stroke unit.
-fn lengths(app: &VectorcraftApp) -> LengthUnits {
-    LengthUnits::new(UnitKind::Points, unit_kind(app.session.stroke_unit()), general_lengths(app).pixels_per_inch)
 }
 
 impl WidthPointDialog {
@@ -454,7 +454,9 @@ fn body(ui: &mut egui::Ui, form: &mut Form, lengths: LengthUnits, refusal: Optio
                     Section::fixed(word(tl!("Single Width Only"))).show(ui, |ui, _| {
                         RadioGroup::new(word(tl!("Single Width Only")), Bind::bound(single)).show(ui, |ui, _| {
                             Row::new().show(ui, |ui, _| {
-                                for (choice, text) in [(Single::None, tl!("None")), (Single::Incoming, tl!("Incoming")), (Single::Outgoing, tl!("Outgoing"))] {
+                                for (choice, text) in
+                                    [(Single::None, tl!("None")), (Single::Incoming, tl!("Incoming")), (Single::Outgoing, tl!("Outgoing"))]
+                                {
                                     Radio::new(choice).label(word(text)).show(ui);
                                 }
                             });
@@ -700,7 +702,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
         None => one_point(app, id, index, p)?,
     };
-    let dialog = WidthPointDialog::new(Form { path: id, doc: uid, adjust, target }, lengths(app));
+    let dialog = WidthPointDialog::new(Form { path: id, doc: uid, adjust, target }, stroke_lengths(app));
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -856,7 +858,8 @@ fn answer(app: &mut VectorcraftApp, form: &Form, pressed: Pressed) -> Result<(),
             if pressed == Pressed::Delete {
                 let indices: Vec<usize> = open.iter().map(|e| e.index).collect();
                 ("stroke.widthPoint.remove", json!({"id": id, "indices": indices}))
-            } else if open.len() == points.len() && open.iter().zip(points).all(|(o, e)| o.index == e.index && o.left == e.left && o.right == e.right) {
+            } else if open.len() == points.len() && open.iter().zip(points).all(|(o, e)| o.index == e.index && o.left == e.left && o.right == e.right)
+            {
                 // Nothing changed: no command and no undo step.
                 return Ok(());
             } else {
@@ -900,7 +903,7 @@ fn answer(app: &mut VectorcraftApp, form: &Form, pressed: Pressed) -> Result<(),
 /// Gives the open dialog the stroke unit it shows the side widths in, which the preferences can change
 /// while it is open.
 pub(crate) fn sync(app: &mut VectorcraftApp) {
-    let lengths = lengths(app);
+    let lengths = stroke_lengths(app);
     let Some(dialogs) = app.dialogs() else { return };
     dialogs.with(|host| {
         if let Some(dialog) = host.get_mut::<WidthPointDialog>() {

@@ -84,7 +84,8 @@ fn pane_view(app: &VectorcraftApp, w: Win) -> CanvasView {
 fn fits(app: &VectorcraftApp, w: Win) -> bool {
     let Some(v) = crate::doc_windows::view(app, w) else { return false };
     let extent = pane_view(app, w).extent(Rect::new(0.0, 0.0, 400.0, 300.0));
-    let room = v.rect.size() - vec2(2.0 * FIT_MARGIN, 2.0 * FIT_MARGIN);
+    let margin = 2.0 * FIT_MARGIN as f32;
+    let room = v.rect.size() - vec2(margin, margin);
     v.fitted
         && extent.x <= v.rect.width() + 0.01
         && extent.y <= v.rect.height() + 0.01
@@ -128,7 +129,7 @@ fn wait_ready(
     let mut uploads = seed;
     for _ in 0..400 {
         if let TextureState::Ready(texture) = picture_of(app, ctx, w, uid)
-            && uploads.iter().flat_map(|d| d.set.iter()).any(|e| e.0 == texture.id)
+            && uploads.iter().flat_map(|d| d.set.iter()).any(|e| *e.0 == texture.id)
         {
             return (texture, uploads);
         }
@@ -768,14 +769,14 @@ fn an_edit_shows_in_its_pane_once_another_document_is_current() {
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let before = pane_source(&mut app, &ctx, (1, 1)).revision;
-    assert_eq!(pane_source(&mut app, &ctx, (1, 1)).revision, before, "without an edit the pane's picture stays");
+    let before = pane_source(&mut app, &ctx, (1, 1)).frame.revision;
+    assert_eq!(pane_source(&mut app, &ctx, (1, 1)).frame.revision, before, "without an edit the pane's picture stays");
     app.run("document.activate", json!({"index": 1})).unwrap();
     frame(&mut app, &ctx, vec![]);
     app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 80})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    assert_ne!(pane_source(&mut app, &ctx, (1, 1)).revision, before, "the pane shows the document as edited");
+    assert_ne!(pane_source(&mut app, &ctx, (1, 1)).frame.revision, before, "the pane shows the document as edited");
 }
 
 #[test]
@@ -792,8 +793,9 @@ fn other_panes_draw_their_guides_and_selected_objects() {
     frame(&mut app, &ctx, vec![]);
     // The pane hands its document's guides and selected objects to the overlays it shows.
     let st = &app.session.documents()[0];
-    // PLAN: assumed `guides::shown(app, st)` and `selection::outlines(app, st)` (canvas-w16, canvas-w17).
-    let guides = format!("{:?}", crate::canvas::guides::shown(&app, st));
+    let mut tokens = None;
+    let _ = crate::testing::ui_context().run_ui(Default::default(), |ui| tokens = Some(craft::theme::Tokens::clone(Env::of(ui).tokens.tokens())));
+    let guides = format!("{:?}", crate::canvas::guides::shown(&app, st, &tokens.unwrap()));
     assert!(guides.contains("300"), "the guide at 300 is shown in the pane: {guides}");
     assert!(!crate::canvas::selection::outlines(&app, st).is_empty(), "the selected rectangle is outlined in its pane");
 }
@@ -822,8 +824,8 @@ fn other_panes_show_pixel_preview() {
     app.ui.view.pixel_preview = true;
     app.views[0].zoom = 4.0;
     frame(&mut app, &ctx, vec![]);
-    let region = pane_source(&mut app, &ctx, (0, 1)).pixel.expect("the pane renders document pixels");
-    assert!(region.x1 > region.x0 && region.y1 > region.y0);
+    let [x0, y0, x1, y1] = pane_source(&mut app, &ctx, (0, 1)).frame.cache.pixel.expect("the pane renders document pixels");
+    assert!(x1 > x0 && y1 > y0);
 }
 
 /// A pane more device pixels across than the largest texture side the display supports renders
@@ -862,12 +864,12 @@ fn a_panes_key_takes_its_documents_placed_value() {
     let ctx = egui::Context::default();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let before = pane_source(&mut app, &ctx, (0, 1)).revision;
+    let before = pane_source(&mut app, &ctx, (0, 1)).frame.revision;
     let uid = app.session.documents()[0].uid;
     let generation = vectorcraft_render::placed_document::generation();
     let marked = generation.wrapping_add(1000);
     app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
-    assert_ne!(pane_source(&mut app, &ctx, (0, 1)).revision, before, "the picture follows the document's placed value");
+    assert_ne!(pane_source(&mut app, &ctx, (0, 1)).frame.revision, before, "the picture follows the document's placed value");
 }
 
 #[test]
@@ -962,7 +964,7 @@ fn other_panes_draw_through_their_documents_profiles() {
     let floating = |app: &mut VectorcraftApp| {
         ctx.run_ui(raw(), |ui| {
             app.canvas_area(ui);
-            crate::doc_windows::show(app, ui.ctx());
+            crate::doc_windows::show(app, ui);
         })
     };
     // The window takes its place in the first frame and fades in over the next few.
@@ -1037,7 +1039,6 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     let p3 = crate::display_profile::tests::p3();
     app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
     app.session.prefs.monitor_profile_display = true;
-    // PLAN: the display transform comes from the app's display profile; assumed it keeps `apply_premultiplied` and `apply8`.
     let t = app.display_profile.transform(true).expect("the reported profile gives a transform");
     let (shown, _) = pane(&mut app);
     let source = pane_source(&mut app, &ctx, (1, 1));
@@ -1054,16 +1055,21 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     };
     let plain = |s: Color32| {
         let mut px = s.to_array();
-        t.apply_premultiplied(&mut px);
+        t.apply_premultiplied_rgba8(&mut px);
         Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // One opaque sRGB color, converted.
+    let apply8 = |[r, g, b]: [u8; 3]| {
+        let c = plain(Color32::from_rgb(r, g, b));
+        [c.r(), c.g(), c.b()]
     };
     // Pixel `s` over the paper `paper` in sRGB, converted.
     let blend = |s: Color32, paper: [u8; 3]| {
         let k = 255 - u32::from(s.a());
-        t.apply8([0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (u32::from(paper[j]) * k + 127) / 255).min(255) as u8)).map(u32::from)
+        apply8([0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (u32::from(paper[j]) * k + 127) / 255).min(255) as u8)).map(u32::from)
     };
     let differs = |a: [u32; 3], b: [u32; 3]| (0..3).any(|j| a[j].abs_diff(b[j]) > 2);
-    let under = t.apply8(back_paper);
+    let under = apply8(back_paper);
     for (s, c) in srgb.iter().zip(&shown) {
         if s.a() == 0 || s.a() == 255 {
             assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
@@ -1125,4 +1131,40 @@ fn a_pane_blends_translucent_art_before_the_display_profile() {
     app.view_mut().unwrap().outline = false;
     let cache = pane_source(&mut app, &ctx, other).frame.cache;
     assert!(cache.outline && cache.over().is_none(), "the pane's Outline has no paper to blend with");
+}
+
+/// Each view of a document has a pane of its own: an edit made in one view shows in the other's pane, at that view's
+/// zoom.
+#[test]
+fn an_edit_in_one_view_shows_in_the_other() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    app.run("window.newWindow", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.canvas.panes.last.iter().map(|(w, _)| *w).collect::<Vec<_>>(), [(0, 1), (0, 2)], "one pane per view");
+    crate::doc_windows::view_mut(&mut app, (0, 1)).unwrap().zoom = 0.5;
+    app.view_mut().unwrap().zoom = 2.0;
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let revision = app.session.documents()[0].revision;
+    let key = pane_source(&mut app, &ctx, (0, 1)).frame.cache;
+    assert_eq!((key.revision, key.zoom), (revision, 0.5), "the other view's pane shows the edit at its own zoom");
+    assert_eq!(app.view().unwrap().zoom, 2.0, "the view edited in keeps its zoom");
+}
+
+/// A pane draws its own view's Outline or Preview, not the current view's.
+#[test]
+fn each_pane_draws_its_own_views_outline_or_preview() {
+    let mut app = app_with(1);
+    let ctx = egui::Context::default();
+    app.run("window.newWindow", json!({})).unwrap();
+    crate::doc_windows::show_window(&mut app, (0, 1));
+    app.run("view.outline", json!({})).unwrap();
+    crate::doc_windows::show_window(&mut app, (0, 2));
+    assert!(!app.outline_view(), "the second view is in Preview");
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(pane_source(&mut app, &ctx, (0, 1)).frame.cache.outline, "the first view's pane is in Outline");
 }

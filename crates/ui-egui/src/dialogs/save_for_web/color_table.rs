@@ -8,7 +8,6 @@ use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::webexport;
 use vectorcraft_render::encode::web::ColorSort;
 
-// PLAN: assumed path `craft::ui::patterns::form_dialogs::save_for_web` for the ex.W9 items.
 use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, TableMarks, TableOrder};
 
 /// `c` as lowercase `#rrggbb`.
@@ -54,7 +53,8 @@ fn toggle(table: &mut Value, key: &str, colors: &[String]) {
     if colors.iter().all(|c| v.contains(c)) {
         v.retain(|c| !colors.contains(c));
     } else {
-        v.extend(colors.iter().filter(|c| !v.contains(c)).cloned());
+        let missing: Vec<String> = colors.iter().filter(|c| !v.contains(c)).cloned().collect();
+        v.extend(missing);
     }
     set_table(table, key, json!(v));
 }

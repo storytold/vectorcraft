@@ -20,7 +20,7 @@ use craft::color_ui::display::DisplayTransform;
 use craft::theme::{Rgba, Srgba};
 use craft::ui::buttons::Button;
 use craft::ui::choice::Swatch;
-use craft::ui::contract::{Bind, Entry};
+use craft::ui::contract::{Bind, Entry, Show as _, clicked};
 use craft::ui::dialog::dialog_id;
 use craft::ui::display::Picture;
 use craft::ui::list::ThumbAspect;
@@ -77,11 +77,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let tabs = tabs(mode, setup, presets, display);
     let dialog = HostedPropertiesDialog::new(KIND, dialog_fields(flatten(map)), move |values| {
         PropertiesDialog::new(tl!("Document Setup"), tabs.clone(), values)
-    })
-    .held_ok();
-    let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
-    // PLAN: assumed wg.A17's `open_held` is the host's `open` for a dialog that holds its OK.
-    dialogs.with(|host| host.open(dialog));
+    });
+    super::host::open_held(app, dialog, |app, fields| confirm(app, fields).map(|_| ())).ok_or("no window to show the dialog in")?;
     Ok(Value::Null)
 }
 
@@ -214,24 +211,21 @@ fn short_of_bleed_note(app: &VectorcraftApp, before: [f64; 4]) -> Option<String>
     pdf::short_of_bleed_warning(pdf::short_of_bleed(doc, raised, None, false))
 }
 
-/// Runs what the open dialog asked of the app this frame: Edit Artboards applies the settings, then
-/// edits the artboards with the Artboard tool and closes the dialog; OK applies them. A refusal
-/// keeps the dialog open with the reason.
+/// Runs Edit Artboards when the open dialog asked for it this frame: it applies the settings, then
+/// edits the artboards with the Artboard tool and closes the dialog; a refusal keeps the dialog
+/// open. OK is the held OK [`open`] gives the dialog.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KIND);
-    let (edit, ok) = dialogs.with(|host| {
-        let Some(d) = host.get_mut_by_id::<HostedPropertiesDialog>(id) else { return (None, None) };
-        if d.fields().bool("editArtboards") == Some(true) { (Some(d.fields().clone()), None) } else { (None, d.take_ok()) }
+    let edit = dialogs.with(|host| {
+        host.get_by_id::<HostedPropertiesDialog>(id).filter(|d| d.fields().bool("editArtboards") == Some(true)).map(|d| d.fields().clone())
     });
     if let Some(fields) = edit {
         match confirm(app, &fields) {
             Ok(_) => {
                 app.select_tool("artboard");
-                dialogs.with(|host| {
-                    host.cancel_by_id(ctx, id);
-                    host.take_by_id::<HostedPropertiesDialog>(id);
-                });
+                // The held dialog's record takes the result as a cancel: the settings are applied already.
+                dialogs.with(|host| host.cancel_by_id(ctx, id));
             }
             Err(e) => {
                 app.status(e);
@@ -239,14 +233,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let _ = dialogs.with(|host| host.set_json_field(ctx, id, "editArtboards", json!(false)));
             }
         }
-    }
-    if let Some(fields) = ok {
-        let answer = confirm(app, &fields).map(|_| ()).map_err(Into::into);
-        dialogs.with(|host| {
-            if let Some(d) = host.get_mut_by_id::<HostedPropertiesDialog>(id) {
-                d.answer_ok(answer);
-            }
-        });
     }
 }
 
@@ -262,21 +248,21 @@ fn tabs(mode: ColorMode, setup: DocSetup, presets: Vec<String>, display: Display
 }
 
 /// A dropdown row over `options`, (value, label).
-fn choice(key: &str, label: &str, options: impl IntoIterator<Item = (String, String)>) -> PropertyRow {
+fn choice(key: &str, label: &'static str, options: impl IntoIterator<Item = (String, String)>) -> PropertyRow {
     let options = options.into_iter().map(|(id, text)| (id, text.into())).collect();
     PropertyRow::field(Param::new(key, label, ParamKind::choice(options, None)))
 }
 
-fn check(key: &str, label: &str) -> PropertyRow {
+fn check(key: &str, label: &'static str) -> PropertyRow {
     PropertyRow::field(Param::new(key, label, ParamKind::bool(false)))
 }
 
-fn section(label: &str) -> PropertyRow {
+fn section(label: &'static str) -> PropertyRow {
     PropertyRow::field(Param::section(label))
 }
 
 /// A percent field.
-fn percent(key: &str, label: &str, default: f64) -> PropertyRow {
+fn percent(key: &str, label: &'static str, default: f64) -> PropertyRow {
     PropertyRow::field(Param::number(key, label, default, 1.0, 1).unit(UnitKind::Percent))
 }
 
@@ -349,9 +335,8 @@ fn bleed_of(fields: &DialogFields) -> [f64; 4] {
 
 /// Edit Artboards: asks the pump to apply the settings and edit the artboards with the Artboard tool.
 fn edit_artboards_row(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext) -> egui::Response {
-    // PLAN: assumed `Button::show` answers a `Response`.
-    let button = Button::new(tl!("Edit Artboards")).show(ui);
-    if button.clicked() {
+    let button = Button::new(tl!("Edit Artboards")).show(ui).response;
+    if clicked(&button) {
         fields.set("editArtboards", true);
     }
     button
@@ -404,8 +389,7 @@ fn grid_colors_row(setup: DocSetup) -> Param {
                     let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
                     let [r, g, b, _] = color.to_rgba8(1.0);
                     let srgb = Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0);
-                    // PLAN: assumed `Swatch::show` answers a `Response`; a click files the picker's request.
-                    if Swatch::new(name.clone(), srgb).well().show(ui).clicked() {
+                    if Swatch::new(name.clone(), srgb).well().show(ui).clicked {
                         cx.pick_color(GRID_KEYS[i], srgb);
                     }
                     let edited = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
@@ -620,7 +604,7 @@ mod tests {
     fn press_ok(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
         let dialogs = app.dialogs().unwrap();
         dialogs.with(|h| h.confirm_by_id(ctx, id()));
-        super::pump(app, ctx);
+        crate::dialogs::host::pump(app, ctx);
         let accepted = dialogs.with(|h| matches!(h.held_state(id()), Some(HeldOk::Accepted)));
         if accepted {
             dialogs.with(|h| h.confirm_by_id(ctx, id()));
@@ -1027,7 +1011,8 @@ mod tests {
         let (mut app, ctx) = transparency_tab();
         set(&app, &ctx, "gridColors", json!(["#ff0000"]));
         settle(&app, &ctx);
-        app.dialogs().unwrap().with(|h| h.get_mut_by_id::<HostedPropertiesDialog>(id()).map(HostedPropertiesDialog::cancel_color));
+        // The Color Picker's Cancel: the request goes unanswered.
+        app.dialogs().unwrap().with(|h| h.take_color_request());
         settle(&app, &ctx);
         assert_eq!(super::json_map(&fields(&app))["gridColors"], json!(["#ff0000"]));
         assert!(!press_ok(&mut app, &ctx));

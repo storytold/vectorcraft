@@ -22,7 +22,8 @@ pub(crate) fn install(ctx: &egui::Context, app: &mut VectorcraftApp) -> Option<N
 
 /// Once per frame, before the UI: take what the native menu reported and run the clicks.
 pub(crate) fn run(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let gate = Gate::default().modal(app.file_dialog_open()).recording_shortcut(recording_shortcut(app)).text_editing(ctx.wants_keyboard_input());
+    let gate =
+        Gate::default().modal(app.file_dialog_open()).recording_shortcut(recording_shortcut(app)).text_editing(ctx.egui_wants_keyboard_input());
     let Some(menu) = app.services.native_menu.as_mut() else { return };
     menu.poll(ctx);
     menu.set_gate(gate);

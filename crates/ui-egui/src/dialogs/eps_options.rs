@@ -18,7 +18,6 @@ use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Show as _, TooltipSpec};
 use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
-use craft::ui::patterns::presets::PresetRow;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::{FlattenOptions, FlattenerPreset, fileio};
 use vectorcraft_eps::{Level, Overprint, Preview};
@@ -60,8 +59,8 @@ fn defaults() -> Map<String, Value> {
     m
 }
 
-/// The rows, with `presets` in the flattener picker.
-fn params(presets: &Arc<[PresetRow<String>]>) -> Vec<Param> {
+/// The rows, with `presets` ([`flatten::preset_names`]) in the flattener picker.
+fn rows(presets: &Arc<[(String, String)]>) -> Vec<Param> {
     let presets = Arc::clone(presets);
     // PLAN: assumed ids "true" and "false" for the two-id radio that holds a JSON bool (wg.S12).
     let transparency = Param::new(
@@ -107,7 +106,7 @@ fn params(presets: &Arc<[PresetRow<String>]>) -> Vec<Param> {
 
 /// The rows as far as their kinds go, for reading values to and from JSON.
 fn kinds() -> Vec<Param> {
-    params(&Arc::from(Vec::new()))
+    rows(&Arc::from(Vec::new()))
 }
 
 /// Open EPS Options for an export whose params (path, artboard choice, any EPS option) are
@@ -131,24 +130,18 @@ pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
     fields.insert("format".into(), json!("eps"));
     let mut values = form::fields_of(&kinds(), &fields);
     builtin_label(&mut values);
-    let (rows, _, _) = flatten::preset_rows(app);
-    let presets: Arc<[PresetRow<String>]> = rows.into();
-    // PLAN: assumed `app.ui_ctx: Option<egui::Context>` is set whenever a window is shown.
+    let presets: Arc<[(String, String)]> = flatten::preset_names(app).into();
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, values, move |fields| {
         builtin_label(fields);
         normalise_level(fields);
-        ParamDialog::new(KIND, tl!("EPS Options"), params(&presets))
-            .values(Bind::bound(fields))
-            // PLAN: assumed `ok_label` takes a `Label`.
-            .ok_label(tl!("Export").into())
-            .below(|ui, fields| {
-                ui.weak(if fields.text("level").and_then(Level::from_id) == Some(Level::Two) || fields.bool("compatibleGradients") == Some(true) {
-                    tl!("Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.")
-                } else {
-                    tl!("Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.")
-                });
-            })
+        ParamDialog::new(KIND, tl!("EPS Options"), rows(&presets)).values(Bind::bound(fields)).ok_label(tl!("Export").into()).below(|ui, fields| {
+            ui.weak(if fields.text("level").and_then(Level::from_id) == Some(Level::Two) || fields.bool("compatibleGradients") == Some(true) {
+                tl!("Transparency is flattened with the preset. Type is written as outlines; gradients as bands of colour.")
+            } else {
+                tl!("Transparency is flattened with the preset. Type is written as outlines; gradients stay smooth.")
+            });
+        })
     });
     export_host::open(app, Export::Eps, selection, dialog);
 }
@@ -197,11 +190,8 @@ pub(super) fn custom_dialog(app: &VectorcraftApp, parent: DialogId, fields: &Dia
     let _ = parent; // the host keeps the parent; `Export::EpsCustom` names it
     let mut o = flattener(fields, &app.session.prefs.flattener_presets).unwrap_or_default();
     o.preserve_alpha = false;
-    let mut start = DialogFields::new();
-    flatten::put_options(&mut start, &o);
-    // PLAN: assumed `app.ui_ctx: Option<egui::Context>` is set whenever a window is shown.
     let ctx = app.ui_ctx.clone().unwrap_or_default();
-    HostedParamDialog::new(&ctx, CUSTOM_KIND, start, |fields| {
+    HostedParamDialog::new(&ctx, CUSTOM_KIND, flatten::option_fields(&o), |fields| {
         ParamDialog::new(CUSTOM_KIND, tl!("Custom Transparency Flattener Options"), flatten::option_params(&FIXED, FIXED_REASON))
             .values(Bind::bound(fields))
             .below(|ui, _| {
@@ -233,6 +223,5 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     }
     app.ui.eps_options = Value::Object(map.into_iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).collect());
     let path = fields.text("path").map(str::to_string);
-    // PLAN: assumed `After` is an `Option` of the step to run once the dialog closed.
     io::export(app, Some("eps"), path, &super::export_as::exported(open.selection, params)).map(|_| None)
 }

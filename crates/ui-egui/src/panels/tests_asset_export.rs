@@ -371,9 +371,7 @@ fn asset_export_preserves_applied_mobile_preset_folder_choice() {
 fn the_preset_menu_saves_changes_and_opens_import_and_export() {
     let (mut app, log, _) = app(true);
     app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}]}})).unwrap();
-    let opened = Rc::new(RefCell::new(0));
-    let opened_for_picker = opened.clone();
-    app.services.open_async = Some(Box::new(move || *opened_for_picker.borrow_mut() += 1));
+    let picker = crate::tests::picks::scripted(&mut app);
     let p = panel(app);
     apply_preset(&p, "Pack");
     assert!(preset_checked(&p, "Pack"));
@@ -383,7 +381,7 @@ fn the_preset_menu_saves_changes_and_opens_import_and_export() {
     run(&p, "ui.assetExport.exportPreset", json!({}));
     assert_eq!(log.borrow()[0].0, "Pack.vcexportpresets");
     run(&p, "ui.assetExport.importPreset", json!({}));
-    assert_eq!(*opened.borrow(), 1);
+    assert_eq!(picker.requests().len(), 1, "Import Preset… asks for a file");
 }
 
 #[cfg(not(target_arch = "wasm32"))]

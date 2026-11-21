@@ -42,7 +42,7 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
-fn tool_mods(m: craft::keymap::Mods, space: bool) -> Mods {
+pub(super) fn tool_mods(m: craft::keymap::Mods, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.cmd, ctrl: m.ctrl, space }
 }
 
@@ -173,7 +173,7 @@ impl CanvasTool for SessionTool<'_> {
         let mut app = self.app();
         if app.ui.screen_mode == 3 {
             // Presentation Mode: a click steps to the next artboard and the tool gets nothing; a modal blocks it.
-            if app.ui.dialog.is_none() {
+            if !app.any_dialog_open() {
                 crate::shortcuts::presentation_step(&mut app, true);
             }
             return ToolAction::Done;
@@ -187,6 +187,8 @@ impl CanvasTool for SessionTool<'_> {
             return ToolAction::Done;
         }
         run_clicks(&mut app, pointer.clicks);
+        // Where the art was grabbed, should a move carry it off the canvas.
+        app.canvas.grab = Some(ev.pos);
         dispatch(&mut app, &ev, self.view);
         ToolAction::Claimed
     }
@@ -202,6 +204,7 @@ impl CanvasTool for SessionTool<'_> {
             // The art goes to the drop target: the move is given up where it started.
             let _ = self.app().session.cancel_interaction();
         }
+        self.app().canvas.grab = None;
         self.send(PointerKind::Up, pointer, cx);
         let clicks = run_clicks(&mut self.app(), pointer.clicks);
         let follow = match clicks {
@@ -227,6 +230,7 @@ impl CanvasTool for SessionTool<'_> {
 
     fn cancel(&mut self, reason: CancelReason, cx: &mut ToolContext<'_>) {
         let mut app = self.app();
+        app.canvas.grab = None;
         let view = self.view;
         let mods = tool_mods(cx.mods, cx.held(Key::Space));
         let r = if reason == CancelReason::Escape {
@@ -269,7 +273,7 @@ impl CanvasTool for SessionTool<'_> {
         let space = cx.held(Key::Space);
         let held = tool_mods(cx.mods, space);
         match key {
-            ToolKey::Nudge { direction, mods } => {
+            ToolKey::Nudge { direction, mods, .. } => {
                 let k = match (direction.x.abs() > direction.y.abs(), direction.x < 0.0, direction.y < 0.0) {
                     (true, true, _) => EngineKey::Left,
                     (true, false, _) => EngineKey::Right,
@@ -278,7 +282,7 @@ impl CanvasTool for SessionTool<'_> {
                 };
                 self.send_key(k, tool_mods(*mods, space))
             }
-            ToolKey::Delete { forward } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
+            ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
             ToolKey::Submit => self.send_key(EngineKey::Enter, held),
             ToolKey::Cancel => {
                 let ends = self.app().session.tool_ends_on_escape(self.view);
@@ -328,7 +332,6 @@ impl CanvasTool for SessionTool<'_> {
 /// Runs the tool host on `tool` with the app's momentary set, which the app keeps across passes.
 fn host_run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, tool: &mut dyn CanvasTool) -> ToolHostResponse {
     let options = crate::app::view::navigation(&app.session.prefs);
-    // PLAN: assumed `app.canvas.momentary: Option<Momentary>` (canvas-w10 owns the field).
     let mut momentary = app.canvas.momentary.take().unwrap_or_else(|| Momentary::new(options).shift(MomentaryShift::RotateView));
     momentary.set_options(options);
     momentary.hand_selected(app.session.tool_id() == "hand");
@@ -339,7 +342,7 @@ fn host_run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, tool: &mut dyn C
 
 /// One pass of the canvas's tool: the pointer and keys through the host, the view it moved, the document under the
 /// pointer, and the tool's overlays over the picture.
-pub(crate) fn run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass) -> ToolHostResponse {
+pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> ToolHostResponse {
     if crate::dialogs::three_d::gizmo_shown(app) {
         // The 3D dialog's gizmo owns the pointer.
         return ToolHostResponse::default();
@@ -348,16 +351,14 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass) -> ToolHos
         crate::stylus::sync_eraser_tool(app);
     }
     let view_info = app.view_info();
-    // PLAN: assumed `with_theme_pick(app, FnOnce(&mut VectorcraftApp, &mut dyn CanvasTool) -> ToolHostResponse) -> Option<ToolHostResponse>` (color-w20).
-    let picked = crate::dialogs::recolor::edit_tab::with_theme_pick(app, |app, tool| host_run(app, ui, pass, tool));
-    let response = match picked {
-        Some(response) => response,
-        None => {
-            let mut tool = SessionTool::new(app, view_info);
-            let response = host_run_session(&mut tool, ui, pass);
-            drop(tool);
-            response
-        }
+    let mut picked = ToolHostResponse::default();
+    let response = if crate::dialogs::recolor::edit_tab::with_theme_pick(app, |app, tool| picked = host_run(app, ui, pass, tool)) {
+        picked
+    } else {
+        let mut tool = SessionTool::new(app, view_info);
+        let response = host_run_session(&mut tool, ui, pass);
+        drop(tool);
+        response
     };
     if app.session.tool_waiting() {
         let r = app.session.tool_poll(view_info, false);
@@ -366,11 +367,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass) -> ToolHos
     }
     let mut view = response.view.or(pass.view).or_else(|| pass.space.map(|s| s.view));
     if let (Some(v), Some(step)) = (view.as_mut(), response.scroll) {
-        // PLAN: assumed `VectorcraftApp::document_size() -> Option<Size>` for the autoscroll's limits (canvas-w10).
-        if let Some(size) = app.document_size() {
-            if Autoscroll::scroll(v, step, size).is_some() {
-                ui.ctx().request_repaint();
-            }
+        if Autoscroll::scroll(v, step, super::document_size(app.content_bounds())).is_some() {
+            ui.ctx().request_repaint();
         }
     }
     let scaling = app.ui_scaling();
@@ -391,7 +389,6 @@ fn host_run_session(tool: &mut SessionTool<'_>, ui: &Ui, pass: &ToolPass) -> Too
     let mut app = tool.app();
     // The host borrows the tool and the app both through the cell, one call at a time.
     let options = crate::app::view::navigation(&app.session.prefs);
-    // PLAN: assumed `app.canvas.momentary: Option<Momentary>` (canvas-w10 owns the field).
     let mut momentary = app.canvas.momentary.take().unwrap_or_else(|| Momentary::new(options).shift(MomentaryShift::RotateView));
     momentary.set_options(options);
     momentary.hand_selected(app.session.tool_id() == "hand");
@@ -402,7 +399,7 @@ fn host_run_session(tool: &mut SessionTool<'_>, ui: &Ui, pass: &ToolPass) -> Too
 }
 
 /// The session's overlays, then the text threads and Live Paint gaps under them, shown over the picture.
-fn show_overlays(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, view_info: ViewInfo) {
+fn show_overlays(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass, view_info: ViewInfo) {
     let Some(space) = pass.space else { return };
     let revolve = crate::dialogs::three_d::gizmo_shown(app);
     // View → Hide Gradient Annotator hides the Gradient tool's annotator.

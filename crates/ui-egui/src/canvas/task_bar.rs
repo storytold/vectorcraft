@@ -5,7 +5,7 @@ use craft::theme::Srgba;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::TaskBar;
-use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::menu::PanelRow;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
@@ -249,7 +249,8 @@ fn offer(app: &VectorcraftApp, images_memo: &mut Memo, smooth_memo: &mut Memo) -
                 && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
                     if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
         })
-        .cloned();
+        .cloned()
+        .map(std::sync::Arc::new);
     let mut items: Vec<Action> = vec![];
     let none = || json!({});
     // Edit Path: the Direct Selection tool, to edit the path's anchors.
@@ -514,7 +515,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             }
                             let _ =
                                 Popover::new(tl!("Shape Properties"), Bind::bound(&mut shape_open)).opened_by(&props.response).show(ui, |ui, _| {
-                                    crate::panels::transform::live_shape_rows(app, ui, shape, live, "task-bar-shape", true);
+                                    crate::panels::transform::live_shape_rows(app, ui, shape, live, true);
                                 });
                         } else {
                             // The Lock button is off in isolation mode, as Object › Lock › Selection is.
@@ -578,7 +579,7 @@ pub(crate) enum Chip {
 impl Chip {
     /// The chip's id in [`TASK_BAR_CHIPS`]; Lock is `shapeProperties` while it shows a basic
     /// `shape`'s properties.
-    fn id(self, shape: bool) -> &'static str {
+    pub(crate) fn id(self, shape: bool) -> &'static str {
         match self {
             Chip::Fill => "fill",
             Chip::Stroke => "stroke",

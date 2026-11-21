@@ -8,6 +8,8 @@
 //! `__savePreset` (the name typed; absent when not saving), `exportPreset` (the preset applied
 //! last), `settings` (`{format id: {..}}`), `prefix`, `includeBleed`, `includeArtboardFill`.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::LazyLock;
 
 use craft::behavior::{ColumnWidth, IconId};
@@ -115,13 +117,11 @@ pub(crate) enum PresetPick {
     Export(String),
 }
 
-/// The format presets (the ☰ by iOS and Android): the built-in and saved ones to apply, Save Preset…
-/// (which sets `__savePreset`, shown by [`save_preset_row`]) and Delete Preset (the saved one applied
-/// last) → the pick to act on with [`preset_pick`]. The saved presets are read each time, so ones
-/// saved, deleted or imported elsewhere show at once.
-pub(crate) fn preset_menu(app: &VectorcraftApp, ui: &mut Ui, fields: &mut Map<String, Value>) -> Option<PresetPick> {
-    let list = fileio::screen_export_preset_list(&app.session.prefs.screen_export_presets);
-    let presets: &[Value] = list.as_array().map_or(&[], Vec::as_slice);
+/// The format presets (the ☰ by iOS and Android) over `presets` (the rows of
+/// `document.exportPresets.list`): the built-in and saved ones to apply, Save Preset… (which sets
+/// `__savePreset`, shown by [`save_preset_row`]) and Delete Preset (the saved one applied last) → the
+/// pick to act on with [`preset_pick`].
+pub(crate) fn preset_menu_of(presets: &[Value], ui: &mut Ui, fields: &mut Map<String, Value>) -> Option<PresetPick> {
     let current = text(fields, "exportPreset").to_string();
     let saved = presets.iter().any(|p| p["name"] == current.as_str() && p["builtIn"] == false);
     let name = Label::from(tl!("Format Presets"));
@@ -206,9 +206,21 @@ pub(crate) fn import_presets(app: &mut VectorcraftApp, then: impl FnOnce(&mut Ve
 /// gets where it went. The file question is asked by `io::save_command_output_named` through the
 /// files service, since it takes no path.
 pub(crate) fn export_preset(app: &mut VectorcraftApp, name: &str, then: impl FnOnce(&mut VectorcraftApp, Result<String, String>) + 'static) {
-    // PLAN: the sheet asks for `file_asks::ask` here, but `io::save_command_output_named` (unchanged) asks for the path itself and takes none.
-    let result = io::save_command_output_named(app, "document.exportPresets.export", &preset_file_name(name), json!({ "names": [name] }));
-    then(app, result);
+    // `then` runs once: with the path once the file is written, or with the error that stopped it first.
+    let then = Rc::new(Cell::new(Some(then)));
+    let written = Rc::clone(&then);
+    let result =
+        io::save_command_output_named(app, "document.exportPresets.export", &preset_file_name(name), json!({ "names": [name] }), move |app, path| {
+            if let Some(then) = written.take() {
+                then(app, Ok(path.clone()));
+            }
+            Ok(json!({ "path": path }))
+        });
+    if let Err(e) = result
+        && let Some(then) = then.take()
+    {
+        then(app, Err(e));
+    }
 }
 
 /// The file name Export Preset… suggests for preset `name`: the name made safe as a file name, as
@@ -235,13 +247,12 @@ pub(crate) fn preset_list(list: &mut Value, saved: &[fileio::ScreenExportPreset]
     !current
 }
 
-/// `ui.dialog.set` of `exportPreset` in the dialog's `fields`: the preset it names is applied as a
-/// pick in the ☰ menu applies it, and `""` is none. A name that is not a preset's is an error, and
-/// `exportPreset` is then cleared.
-pub(crate) fn preset_set(app: &VectorcraftApp, fields: &mut Map<String, Value>) -> Result<(), String> {
-    let list = fileio::screen_export_preset_list(&app.session.prefs.screen_export_presets);
+/// `ui.dialog.set` of `exportPreset` in the dialog's `fields`: the preset of `presets` (the rows of
+/// `document.exportPresets.list`) it names is applied as a pick in the ☰ menu applies it, and `""` is
+/// none. A name that is not a preset's is an error, and `exportPreset` is then cleared.
+pub(crate) fn preset_set(presets: &[Value], fields: &mut Map<String, Value>) -> Result<(), String> {
     let name = text(fields, "exportPreset").to_string();
-    let preset = list.as_array().and_then(|l| l.iter().find(|p| p["name"] == name.as_str())).cloned();
+    let preset = presets.iter().find(|p| p["name"] == name.as_str()).cloned();
     match preset {
         Some(preset) => {
             apply_preset(fields, &preset);
@@ -383,7 +394,7 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
                 let raster = row["format"].as_str().and_then(fileio::format).is_none_or(|f| f.raster);
                 let scale = row["scale"].as_str().unwrap_or("1x").to_string();
                 let typed = ComboBox::new(tl!("Scale"), Bind::given(scale.clone()), &sizes).id_salt(("efs-scale", i)).enabled(raster).show(ui);
-                if let Some(s) = typed.value().filter(|s| **s != scale) {
+                if let Some(s) = typed.edit.value().filter(|s| **s != scale) {
                     // The suffix follows the size while it is the automatic one.
                     let auto = |text: &str| ScreenSize::parse(text).map(ScreenSize::suffix);
                     if row["suffix"].as_str().is_none_or(|x| Some(x.to_string()) == auto(&scale))

@@ -10,7 +10,7 @@ use crate::VectorcraftApp;
 /// One pass of the whole window.
 // PLAN: assumed hub-w1's `ui_frame` (which sets `ScrubDrags` in `AppValues`) replaces these two calls.
 pub(super) fn window(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    app.logic(ui.ctx());
+    app.tick(ui.ctx());
     app.ui(ui);
 }
 

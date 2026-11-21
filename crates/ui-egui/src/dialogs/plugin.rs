@@ -569,9 +569,9 @@ pub(crate) fn ask_install(app: &mut VectorcraftApp, pending: PendingInstall) -> 
 /// when a person pressed it.
 fn pump_install(app: &mut VectorcraftApp) {
     let Some(answer) = app.dialogs().and_then(|d| d.with(|host| host.take::<InstallPrompt>())) else { return };
-    match answer {
-        DialogResult::Cancel => app.pending_plugin_install = None,
-        DialogResult::Ok(()) => approve(app),
+    match answer.ok() {
+        Some(()) => approve(app),
+        None => app.pending_plugin_install = None,
     }
 }
 

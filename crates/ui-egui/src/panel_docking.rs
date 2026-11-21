@@ -15,14 +15,15 @@ use craft::behavior::dock::{
     Action, Column, DockEdge, DockPlacement, Floating, Group, Layout, MAX_PANELS, Node, PanelPlace, PanelState, Permissions, SplitSize, Target,
     Workspace, node_at,
 };
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelSpec, PanelSpecs,
-    actions as command_actions, move_actions, request_actions,
+    DockCommands, DockConfig, DockEvent, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey, PanelSpec,
+    PanelSpecs, actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::dock::DockArea;
@@ -33,6 +34,7 @@ use craft::ui::shell::chrome_state;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 use crate::state::{DockTab, ICON_PANEL_GROUPS, UiState};
 use crate::toolbar::Owner;
 
@@ -63,6 +65,10 @@ pub(crate) struct Runtime {
     windows: Vec<(String, egui::ViewportId)>,
     /// What the dock reads of the panels, kept up to date by [`refresh_specs`].
     specs: Tracked<Specs>,
+    /// The tool rails of the layout, which Shift+Tab keeps shown, kept up to date by [`refresh_specs`].
+    rails: Tracked<BTreeSet<PanelKey>>,
+    /// What each tool rail of the layout reads across passes, by its panel.
+    pub(crate) rail_models: HashMap<String, crate::toolbar::RailModel>,
 }
 
 /// `ui.docking`: the layout in use, the hidden panels, the open flyout, the focused panel, the
@@ -70,14 +76,14 @@ pub(crate) struct Runtime {
 /// while they are hidden, and where the dock columns and floating windows were last drawn.
 pub(crate) fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     let workspace = &app.ui.dock_workspace;
-    let layout = &workspace.layout;
+    let layout = workspace.layout();
     let rect = |r: &egui::Rect| [r.left(), r.top(), r.width(), r.height()];
     let peek = chrome_state(ctx, egui::ViewportId::ROOT).revealed.and_then(peek::Edge::of_reveal).map(peek::Edge::id);
     let columns: Vec<Value> = app.dock_rt.columns.iter().map(|(panel, r)| json!({"panel": panel, "rect": rect(r)})).collect();
     let windows: Vec<Value> = app.dock_rt.windows.iter().map(|(panel, viewport)| json!({"panel": panel, "viewport": viewport.0.value()})).collect();
     json!({
         "layout": layout,
-        "hidden": workspace.hidden.iter().map(|(panel, _)| panel).collect::<Vec<_>>(),
+        "hidden": workspace.hidden().iter().map(|(panel, _)| panel).collect::<Vec<_>>(),
         "flyout": app.ui.open_panel,
         "focused": app.dock_rt.focused.as_ref().filter(|p| layout.contains(p)),
         "autoCollapse": app.session.prefs.auto_collapse_icon_panels,
@@ -88,7 +94,7 @@ pub(crate) fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     })
 }
 
-fn normalize(raw: &str) -> Option<&'static str> {
+fn normalize(raw: &str) -> Option<&str> {
     crate::menus::normalize_panel(raw)
 }
 
@@ -143,13 +149,13 @@ fn rail_owner_among(toolbars: impl Iterator<Item = u32>, id: &str) -> Option<Own
 
 /// The workspace a fresh window starts with: the Tools rail one column wide at the start edge, the
 /// canvas, and at the end edge the Properties · Layers · Libraries column and the icon column.
-/// `front` comes to the front of the group that holds it.
-pub(crate) fn default_workspace(front: Option<&str>) -> Workspace<String> {
+/// Each of `fronts` comes to the front of the group that holds it.
+pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
     let mut placed: Vec<String> = Vec::new();
     let mut group = |ids: &[&str]| {
         let fresh: Vec<String> = ids.iter().filter(|id| registered(id) && !placed.iter().any(|p| p == *id)).map(|id| (*id).to_owned()).collect();
         placed.extend(fresh.iter().cloned());
-        let active = front.and_then(|front| fresh.iter().position(|p| p == front)).unwrap_or(0);
+        let active = fresh.iter().position(|p| fronts.contains(&p.as_str())).unwrap_or(0);
         (!fresh.is_empty()).then(|| Group::new(fresh, active))
     };
     let main: Vec<&str> = DockTab::ALL.iter().map(|tab| tab.info().0).collect();
@@ -167,7 +173,7 @@ pub(crate) fn default_workspace(front: Option<&str>) -> Workspace<String> {
 /// Fits a loaded or switched-to workspace to the panels the app knows now ([`registered`]):
 /// unknown panels go back to hidden, missing default panels come back, the canvas always shows.
 pub(crate) fn reconcile(ws: &mut Arc<Workspace<String>>) {
-    Arc::make_mut(ws).reconcile(|p: &String| registered(p), |p: &String| permissions(p), &default_workspace(None));
+    Arc::make_mut(ws).reconcile(|p: &String| registered(p), |p: &String| permissions(p), &default_workspace(&[]));
 }
 
 /// Changes the workspace by `actions`, all or none. While a dock pass runs on `ctx` (a panel body
@@ -187,20 +193,23 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: Option<&egui::Context>, actio
 }
 
 /// Drops what no longer fits the layout after a change: F-key group memory of panels shown again,
-/// a flyout of a panel no longer in a column collapsed to icons, and a raise of a panel now closed.
+/// a flyout of a panel no longer in a column collapsed to icons, a raise of a panel now closed and
+/// the models of closed rails.
 fn settle(app: &mut VectorcraftApp) {
     let ui = &mut app.ui;
     let ws = &ui.dock_workspace;
     for group in &mut ui.docking_hidden_groups {
-        group.retain(|panel| ws.hidden.iter().any(|(hidden, _)| hidden == panel));
+        group.retain(|panel| ws.hidden().iter().any(|(hidden, _)| hidden == panel));
     }
     ui.docking_hidden_groups.retain(|group| !group.is_empty());
-    if ui.open_panel.as_ref().is_some_and(|panel| !ws.layout.opens_in_flyout(panel)) {
+    if ui.open_panel.as_ref().is_some_and(|panel| !ws.layout().opens_in_flyout(panel)) {
         ui.open_panel = None;
     }
-    if app.dock_rt.raise.as_ref().is_some_and(|panel| !app.ui.dock_workspace.layout.contains(panel)) {
+    let layout = app.ui.dock_workspace.layout();
+    if app.dock_rt.raise.as_ref().is_some_and(|panel| !layout.contains(panel)) {
         app.dock_rt.raise = None;
     }
+    app.dock_rt.rail_models.retain(|panel, _| layout.contains(panel));
 }
 
 /// Do the panels show: neither Tab nor Shift+Tab hides them in the main window, as its shell's
@@ -221,7 +230,7 @@ pub(crate) fn show_panels(app: &VectorcraftApp) {
 
 /// The layout in use.
 pub(crate) fn layout_of(ui: &UiState) -> &Layout<String> {
-    &ui.dock_workspace.layout
+    ui.dock_workspace.layout()
 }
 
 /// Every dock column of panels, from each dock's window edge inwards. Tool rail columns are left
@@ -327,10 +336,8 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
             let raw = params.get("panel").and_then(Value::as_str).unwrap_or_default();
             let Some(panel) = normalize(raw) else { return Some(Err(format!("unknown panel `{raw}`"))) };
             shared_command(app, "window.panel.minimize", &json!({"panel": panel, "minimized": minimized})).map(|mut value| {
-                let layout = layout_of(&app.ui);
-                let collapsed = layout.place(&panel.to_owned()).and_then(|place| layout.group(&place).map(|g| g.minimized)).unwrap_or(false);
                 value["panel"] = json!(panel);
-                value["collapsed"] = json!(collapsed);
+                value["collapsed"] = json!(group_minimized(layout_of(&app.ui), panel));
                 value
             })
         }
@@ -373,7 +380,7 @@ fn place_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
     if was_visible && floating_window(layout, panel).is_some() {
         return shared_command(app, "window.panel.close", &json!({"panel": panel}));
     }
-    let hidden = app.ui.dock_workspace.hidden.iter().any(|(p, _)| p == panel);
+    let hidden = app.ui.dock_workspace.hidden().iter().any(|(p, _)| p == panel);
     if !layout.contains(&id) && !hidden && crate::panels::library_panel::parse(panel).is_some() {
         return crate::panels::library_panel::float(app, panel);
     }
@@ -403,9 +410,9 @@ fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, 
     let ws = &app.ui.dock_workspace;
     let mut actions: Vec<Action<String>> = members
         .into_iter()
-        .filter(|member| ws.hidden.iter().any(|(id, _)| id == member))
+        .filter(|member| ws.hidden().iter().any(|(id, _)| id == member))
         .map(|member| {
-            let fallback = first_dock_panel(&ws.layout, &member);
+            let fallback = first_dock_panel(ws.layout(), &member);
             Action::open(member, fallback)
         })
         .collect();
@@ -567,6 +574,11 @@ fn float_or_dock(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<V
     let fields = params.as_object_mut().ok_or("params must be an object")?;
     let extra = take_legacy(id, fields)?;
     shared_command_with(app, id, &params, extra)
+}
+
+/// Is the group holding `panel` minimized to its title bar?
+pub(crate) fn group_minimized(layout: &Layout<String>, panel: &str) -> bool {
+    layout.place(&panel.to_owned()).and_then(|place| layout.group(&place).map(|g| g.minimized)).unwrap_or(false)
 }
 
 /// The panels of the group holding `panel` (an accordion entry is a group of one).
@@ -742,8 +754,8 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
     }
     let panel = p.panel.clone().ok_or("panel is required")?;
     let space = command_space(app);
-    let ws = &app.ui.dock_workspace;
-    let shown = ws.layout.contains(&panel);
+    let ws: &Workspace<String> = &app.ui.dock_workspace;
+    let shown = ws.layout().contains(&panel);
     let mut actions = match id {
         _ if shown => Vec::new(),
         "window.panel.close" | "window.panel.minimize" => Vec::new(),
@@ -758,9 +770,9 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
         Some(trial)
     };
     let current = trial.as_ref().unwrap_or(ws);
-    let layout = &current.layout;
+    let layout = current.layout();
     let rights = |p: &String| permissions(p);
-    let scene = DockScene::new(layout, &space, false, &rights).floated(&current.floated);
+    let scene = DockScene::new(layout, &space, false, &rights).floated(current.floated());
     let unit = match (p.column, floating_window(layout, &panel)) {
         (true, Some(_)) => DragUnit::Window(panel.clone()),
         (true, None) => DragUnit::Column(panel.clone()),
@@ -776,8 +788,7 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
         ("window.panel.activate", _) => vec![Action::activate(panel.clone())],
         ("window.panel.close", _) => vec![Action::close(panel.clone())],
         ("window.panel.minimize", _) => {
-            let now = layout.place(&panel).and_then(|place| layout.group(&place).map(|g| g.minimized)).unwrap_or(false);
-            vec![Action::set_minimized(panel.clone(), p.minimized.unwrap_or(!now))]
+            vec![Action::set_minimized(panel.clone(), p.minimized.unwrap_or(!group_minimized(layout, &panel)))]
         }
         ("window.panel.move", _) => {
             let anchor = p.anchor.clone().ok_or("anchor is required")?;
@@ -811,8 +822,8 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
 /// opens a panel when the command `docks` it, else floating.
 fn show_actions(ws: &Workspace<String>, space: &FloatSpace<String>, panel: &str, docks: bool) -> Vec<Action<String>> {
     let id = panel.to_owned();
-    let layout = &ws.layout;
-    if ws.hidden.iter().any(|(p, _)| p == panel) {
+    let layout = ws.layout();
+    if ws.hidden().iter().any(|(p, _)| p == panel) {
         return vec![Action::open(id.clone(), first_dock_panel(layout, panel)), Action::activate(id)];
     }
     let mate = ICON_PANEL_GROUPS
@@ -982,6 +993,7 @@ impl Specs {
     fn of(app: &VectorcraftApp) -> Specs {
         let libraries = layout_of(&app.ui)
             .panels()
+            .into_iter()
             .filter_map(|panel| crate::panels::library_panel::tab_label(app, panel).map(|label| (panel.clone(), label)))
             .collect();
         Specs {
@@ -1034,12 +1046,16 @@ impl PanelSpecs<String> for Specs {
     }
 }
 
-/// Brings the dock's spec model up to date: edited, which moves its revision, only when a label
-/// changed.
+/// Brings the dock's spec model and rail set up to date: each edited, which moves its revision,
+/// only when it changed.
 fn refresh_specs(app: &mut VectorcraftApp) {
     let now = Specs::of(app);
     if *app.dock_rt.specs != now {
         app.dock_rt.specs.edit(|specs| *specs = now);
+    }
+    let rails: BTreeSet<PanelKey> = layout_of(&app.ui).panels().into_iter().filter(|p| is_rail(p)).map(PanelKey::of).collect();
+    if *app.dock_rt.rails != rails {
+        app.dock_rt.rails.edit(|kept| *kept = rails);
     }
 }
 
@@ -1113,11 +1129,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut workspace = Arc::clone(&app.ui.dock_workspace);
     let flyout_before = app.ui.open_panel.clone();
     let mut flyout = flyout_before.clone();
-    let rails = |id: &String| is_rail(id);
-    let hide = if app.ui.screen_mode >= 3 { HidePanels::All } else { HidePanels::Except(&rails) };
+    let presenting = app.ui.screen_mode >= 3;
     let auto_collapse = app.session.prefs.auto_collapse_icon_panels;
-    // The specs leave the app for the pass, which lends the app to the panel bodies.
+    // The specs and rails leave the app for the pass, which lends the app to the panel bodies.
     let specs = std::mem::take(&mut app.dock_rt.specs);
+    let rails = std::mem::take(&mut app.dock_rt.rails);
+    let hide = if presenting { HidePanels::All } else { HidePanels::Except(&rails) };
     let output = {
         let mut panels = Panels { app: &mut *app };
         let area = DockArea::new("Dock", Bind::bound(&mut workspace), &specs, &mut panels, DockConfig::default())
@@ -1126,6 +1143,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         if auto_collapse { area.auto_collapse().show(ui) } else { area.show(ui) }
     };
     app.dock_rt.specs = specs;
+    app.dock_rt.rails = rails;
     // A workspace a command switched to in this pass (`Workspace::replace`) stays; the pass's edits
     // were to the one it replaced.
     if app.ui.dock_workspace.revision() == workspace.revision() {
@@ -1136,7 +1154,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.ui.open_panel = flyout;
     }
     if output.error.is_some() {
-        Arc::make_mut(&mut app.ui.dock_workspace).replace(default_workspace(None));
+        Arc::make_mut(&mut app.ui.dock_workspace).replace(default_workspace(&[]));
         app.status(tl!("Invalid panel layout; restored the default dock").to_string());
     }
     if !output.requested.is_empty()

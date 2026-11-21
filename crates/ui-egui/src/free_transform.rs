@@ -8,8 +8,8 @@ use craft::behavior::IconId;
 use craft::ui::bars::{Bar, BarKind};
 use craft::ui::buttons::ToggleButton;
 use craft::ui::canvas::CanvasSpace;
-use craft::ui::contract::Bind;
 use craft::ui::contract::overlay::Overlay;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Divider;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::Env;
@@ -47,10 +47,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
         .content_surface()
         .overlay(|_| Overlay::floating().modeless().bounds(canvas).placed_at(at))
         .show(ui, |ui, _| {
-            let _ = Bar::new("Free Transform", BarKind::Tool)
-                .surface(SurfaceKind::Floating)
-                .rows(NonZeroU8::MIN.saturating_add(3))
-                .show(ui, |ui, _| {
+            let _ =
+                Bar::new("Free Transform", BarKind::Tool).surface(SurfaceKind::Floating).rows(NonZeroU8::MIN.saturating_add(3)).show(ui, |ui, _| {
                     // Constrain shapes what the Free Transform and Free Distort modes do.
                     let toggle = ToggleButton::new(tl!("Constrain"), Bind::given(constrain))
                         .icon(IconId::new("link"))

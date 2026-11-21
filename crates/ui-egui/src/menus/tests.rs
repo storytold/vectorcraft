@@ -5,7 +5,7 @@ use crate::i18n::LangExt;
 
 /// The nodes of the top-level menu `title`.
 fn menu_nodes(title: &str) -> Vec<Node> {
-    menu_tree().into_iter().find(|menu| menu.title == title).map(|menu| menu.children).unwrap_or_default()
+    menu_tree().into_iter().find(|(name, _)| *name == title).map(|(_, children)| children).unwrap_or_default()
 }
 
 /// The children of the submenu `label` among `nodes`.
@@ -52,17 +52,21 @@ fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Ev
     let raw =
         egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))), ..Default::default() };
     ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     })
     .textures_delta
     .clear();
 }
 
-/// The key and the fields of the one open dialog.
-fn open_dialog(app: &VectorcraftApp) -> (String, serde_json::Map<String, Value>) {
-    // PLAN: assumed `tests::picks::open_dialogs(app) -> Vec<(String, Map<String, Value>)>`, the key and `json_fields` of each open dialog
-    crate::tests::picks::open_dialogs(app).into_iter().next().expect("a dialog is open")
+/// The first open dialog and its fields.
+fn open_dialog(app: &VectorcraftApp) -> (craft::ui::dialog::OpenDialog, serde_json::Map<String, Value>) {
+    let dialog = crate::tests::picks::open_dialogs(app).into_iter().next().expect("a dialog is open");
+    let fields = match &dialog.fields {
+        Some(Value::Object(fields)) => fields.clone(),
+        _ => serde_json::Map::new(),
+    };
+    (dialog, fields)
 }
 
 /// A text field of an open dialog's fields.
@@ -72,9 +76,9 @@ fn text_of(fields: &serde_json::Map<String, Value>, key: &str) -> String {
 
 /// Sets `fields` on the open dialog, then confirms it (`ok`) or cancels it.
 fn answer_open(app: &mut VectorcraftApp, fields: Value, ok: bool) {
-    let (id, _) = open_dialog(app);
-    // PLAN: assumed `tests::picks::answer_dialog(app, id: &str, fields: Value, ok: bool)`
-    crate::tests::picks::answer_dialog(app, &id, fields, ok);
+    let (dialog, _) = open_dialog(app);
+    let fields: Vec<(&str, Value)> = fields.as_object().into_iter().flatten().map(|(k, v)| (k.as_str(), v.clone())).collect();
+    crate::tests::picks::answer_dialog(app, dialog.id, &fields, ok);
 }
 
 #[test]
@@ -181,10 +185,13 @@ fn discover_says_why_a_tool_cannot_be_marked() {
     }
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    app.run("window.dock", json!({})).unwrap();
-    assert!(app.ui.tab_hid.is_some() && !app.ui.toolbar);
-    let reason = app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["reason"].as_str().unwrap().to_string();
     let ctx = crate::testing::ui_context();
+    app.ui_ctx = Some(ctx.clone());
+    // Tab hides the toolbars in the shell's next pass.
+    app.run("window.dock", json!({})).unwrap();
+    app_frame(&mut app, &ctx, vec![]);
+    assert!(craft::ui::shell::chrome_state(&ctx, egui::ViewportId::ROOT).hidden);
+    let reason = app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["reason"].as_str().unwrap().to_string();
 
     let found = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
     let hit = found["results"].as_array().unwrap().iter().find(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap().clone();
@@ -350,12 +357,16 @@ fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
     assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(false));
     assert!(app.ui.status_bar);
     assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(false));
-    // PLAN: assumed `workspaces::record(&UiState) -> WorkspaceRecord` and `workspaces::switch(&mut UiState, &WorkspaceRecord)`
     let saved = crate::workspaces::record(&app.ui);
     let saved: crate::workspaces::WorkspaceRecord = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    assert!(!saved.help_bar, "the record keeps the Help Bar off");
+    // A saved workspace brings its bars back after another workspace changed them.
+    crate::workspaces::save_as(&mut app.ui, "Bars").unwrap();
+    let other = crate::workspaces::names(&app.ui).into_iter().find(|n| n != "Bars").unwrap();
+    crate::workspaces::switch(&mut app, &other).unwrap();
     app.ui.help_bar = true;
     app.ui.status_bar = false;
-    crate::workspaces::switch(&mut app.ui, &saved);
+    crate::workspaces::switch(&mut app, "Bars").unwrap();
     assert!(!app.ui.help_bar && app.ui.status_bar);
     assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(true));
     let legacy: crate::workspaces::WorkspaceRecord = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
@@ -372,7 +383,7 @@ fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
 fn help_starts_with_search_commands() {
     let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     let tree = menu_tree();
-    let help = &tree.iter().find(|menu| menu.title == "Help").expect("Help menu").children;
+    let help = &tree.iter().find(|(title, _)| *title == "Help").expect("Help menu").1;
     assert!(
         matches!(&help[0], Node::Item(it) if (it.label.as_str(), it.command.id.as_str()) == ("Search Commands…", "help.commandPalette")),
         "{:?}",
@@ -391,7 +402,7 @@ fn help_starts_with_search_commands() {
             })
             .sum()
     }
-    assert_eq!(tree.iter().map(|menu| count(&menu.children)).sum::<usize>(), 1);
+    assert_eq!(tree.iter().map(|(_, children)| count(children)).sum::<usize>(), 1);
 }
 
 /// No application menu in the window (as in Illustrator): the bar starts at File.
@@ -711,17 +722,16 @@ fn panel_ids_are_case_insensitive_and_labels_work() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
     app.run("window.panel", json!({"panel": "Layers"})).unwrap();
-    assert_eq!(app.ui.dock_tab, crate::state::DockTab::Layers);
+    assert!(crate::panel_docking::showing(&app.ui, "layers"));
     app.run("window.panel", json!({"panel": "Swatches"})).unwrap();
-    assert_eq!(app.ui.open_panel.as_deref(), Some("swatches"));
+    assert!(crate::panel_docking::showing(&app.ui, "swatches"));
     assert!(checked(&app, "window.panel", &json!({"panel": "Swatches"})).unwrap());
     assert!(app.run("window.panel", json!({"panel": "nope"})).is_err());
     // A collapsed dock pops the panel out of its icon, by canonical id.
-    app.ui.dock_collapsed = true;
+    crate::panel_docking::collapse_dock(&mut app, Some(true)).unwrap();
     app.run("window.panel", json!({"panel": "Layers"})).unwrap();
     assert_eq!(app.ui.open_panel.as_deref(), Some("layers"));
     assert!(checked(&app, "window.panel", &json!({"panel": "Layers"})).unwrap());
-    app.ui.dock_collapsed = false;
 }
 
 /// #4542: Edit › Color Settings… and Assign Profile… show the Separations Preview panel, which
@@ -1031,8 +1041,8 @@ fn edit_selection_opens_its_dialog_on_the_saved_selections() {
     app.run("select.save", json!({"name": "Logo"})).unwrap();
     assert!(enabled(&app, "select.editSaved"));
     invoke(&mut app, "select.editSaved", json!({}));
-    let (id, fields) = open_dialog(&app);
-    assert_eq!(id, crate::dialogs::edit_selection::KIND);
+    let (dialog, fields) = open_dialog(&app);
+    assert_eq!(dialog.key.as_deref(), Some(crate::dialogs::edit_selection::KIND));
     assert_eq!((text_of(&fields, "orig0"), text_of(&fields, "name0")), ("Logo".to_string(), "Logo".to_string()));
 }
 
@@ -1216,8 +1226,8 @@ fn every_bound_menu_command_exists() {
         }
     }
     let mut bad = vec![];
-    for menu in menu_tree() {
-        walk(&menu.children, &mut bad);
+    for (_, children) in menu_tree() {
+        walk(&children, &mut bad);
     }
     assert!(bad.is_empty(), "menu items bound to unknown commands: {bad:?}");
 }

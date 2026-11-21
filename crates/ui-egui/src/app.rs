@@ -140,7 +140,6 @@ impl VectorcraftApp {
                 transparency_state: None,
                 nav_region: None,
                 doc_info: None,
-                variable_rows: None,
                 map_surfaces: None,
                 palette: None,
             },
@@ -153,7 +152,6 @@ impl VectorcraftApp {
             character_focus: None,
             run_count: 0,
             channel: None,
-            captures: Default::default(),
             control_rotate_press: None,
             context: 0,
             ui_ctx: None,
@@ -172,7 +170,7 @@ impl VectorcraftApp {
             system_paste: false,
             system_paste_at: f64::NEG_INFINITY,
             file_asks: Default::default(),
-            saves: Default::default(),
+            saves: io::save::Saves::new(Wake::none()),
             original_editor: Default::default(),
             screen_pick: craft::color_ui::ui::ScreenPick::new(),
             font_watch: None,
@@ -298,9 +296,7 @@ impl VectorcraftApp {
     /// The language the UI is drawn in: the Preferences window's choice while it is open (so a
     /// change shows before OK), else the `interfaceLanguage` preference (`auto` = the system's).
     pub fn ui_language(&self) -> i18n::Lang {
-        // PLAN: assumed `prefs_dialog::draft_language(&VectorcraftApp) -> Option<&str>`, the open window's `interfaceLanguage` (sh.S9 gives the name only).
-        let editing = prefs_dialog::draft_language(self);
-        i18n::Lang::from_pref(editing.unwrap_or(&self.session.prefs.interface_language))
+        prefs_dialog::draft_language(self).unwrap_or_else(|| i18n::Lang::from_pref(&self.session.prefs.interface_language))
     }
 
     /// What the runtime gets before each frame, from `embed::before_input`: the commands the last
@@ -466,7 +462,6 @@ impl VectorcraftApp {
     /// Window › Arrange › Tile is on) and the isolation bar over it. While the current document is
     /// in a floating window, the tab strip's document draws as a pane.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
-        self.canvas.windows.strip = None;
         let opening = !self.opening.pending.is_empty();
         let presenting = self.ui.presenting();
         // The tab strip and the document are two closures of one panel: they take the app in
@@ -583,10 +578,7 @@ impl VectorcraftApp {
         // A command run by a menu, panel or dialog in this pass may have queued its text copy
         // after the input. Publish it now: an idle web host may have no further frame to run it in.
         self.flush_clipboard_out();
-        if opening::long_operation_busy(self) {
-            // PLAN: assumed `crate::cursors::request_busy(&egui::Context)` (canvas-03:143 names the call only; canvas-w25).
-            crate::cursors::request_busy(&ctx);
-        }
+        crate::cursors::request_busy(self, &ctx);
         // A pass egui will discard and rerun is not a presented frame: it must not become the
         // frame-time sample.
         if !ctx.will_discard() {

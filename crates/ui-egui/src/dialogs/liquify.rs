@@ -45,18 +45,18 @@ const KEYS: [&str; 16] = [
 ];
 
 /// A slider row over `min..=max` with a unit.
-fn slider(key: &str, label: &str, (min, max, default): (f64, f64, f64), unit: UnitKind) -> Param {
+fn slider(key: &str, label: &'static str, (min, max, default): (f64, f64, f64), unit: UnitKind) -> Param {
     Param::new(key, label, ParamKind::range(min, max, default, SliderScale::Linear)).unit(unit)
 }
 
 /// A check box row.
-fn check(key: &str, label: &str, default: bool) -> Param {
+fn check(key: &str, label: &'static str, default: bool) -> Param {
     Param::new(key, label, ParamKind::bool(default))
 }
 
 /// The rows of the dialog of tool `k`, in the order the tool's options are laid out.
 fn params(k: LiquifyKind, lengths: LengthUnits) -> Vec<Param> {
-    let length = |key: &str, label: &str| Param::number(key, label, 50.0, 1.0, 0).length(lengths.clone());
+    let length = |key: &str, label: &'static str| Param::number(key, label, 50.0, 1.0, 0).length(lengths.clone());
     let mut rows = vec![
         Param::section(tl!("Global Brush Dimensions")),
         length("width", tl!("Width:")),

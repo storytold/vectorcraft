@@ -343,7 +343,7 @@ impl Window {
         let raw = egui::RawInput { screen_rect: Some(rect), time: Some(self.time), events, ..Default::default() };
         let app = &mut self.app;
         let mut out = self.ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();

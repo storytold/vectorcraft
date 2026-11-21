@@ -15,7 +15,9 @@ use craft::behavior::{DropOperation, Metrics, PointerButton, PressPhase, Sense};
 use craft::keymap::Mods;
 use craft::layers::ui::panel::LayerPosition;
 use craft::layers::ui::tree::LayerInfo;
-use craft::ui::contract::{Common, Component, Cx, DragPreview, DropMark, DropTarget, MeasureCx, NoValue, Outcome, PaintUi, Pointer as _, Props, Role};
+use craft::ui::contract::{
+    Common, Component, Cx, DragPreview, DropMark, DropTarget, MeasureCx, NoValue, Outcome, PaintUi, Pointer as _, Props, Role,
+};
 use craft::ui::primitives::{PaintShape, StrokeWidth};
 use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
 use egui::{Color32, CornerRadius, Pos2, Rect, Response, Vec2, vec2};
@@ -165,7 +167,8 @@ impl Component for TargetCircle {
         }
         let rect = cx.rect;
         let own = self.id;
-        self.held = cx.dragging::<PanelDrag>().is_some_and(|(drag, at)| rect.contains(at) && matches!(*drag, PanelDrag::Appearance(source) if source != own));
+        self.held =
+            cx.dragging::<PanelDrag>().is_some_and(|(drag, at)| rect.contains(at) && matches!(*drag, PanelDrag::Appearance(source) if source != own));
         if let Some((source, copy)) = cx.drop_target::<PanelDrag, _>(&TakesAppearance { own, rect }) {
             self.pick = Some(CellPick::TakeAppearance { source, copy });
         }
@@ -387,5 +390,7 @@ pub(super) fn output(out: &mut Vec<(String, Value)>, target: &mut Option<(NodeId
 /// Whether a row takes the selected art carried by a selection square ([`ArtDrag`]): only into a
 /// layer or group that takes the objects ([`DocLayers::lands_in`]).
 pub(super) fn accepts_art<'a>(tree: &'a DocLayers<'a>) -> impl Fn(&ArtDrag, &RowId, LayerPosition) -> bool + 'a {
-    move |art: &ArtDrag, row: &RowId, position: LayerPosition| position == LayerPosition::Into && matches!(*row, RowId::Node(id) if tree.lands_in(id, &art.0, true))
+    move |art: &ArtDrag, row: &RowId, position: LayerPosition| {
+        position == LayerPosition::Into && matches!(*row, RowId::Node(id) if tree.lands_in(id, &art.0, true))
+    }
 }

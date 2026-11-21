@@ -23,11 +23,15 @@ pub fn open(app: &mut VectorcraftApp, swatches: Vec<String>) -> Result<Value, St
     fields.set("name", st.doc.free_swatch_name("Color Group"));
     fields.set("from", if art && swatches.is_empty() { "artwork" } else { "swatches" });
     let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
-    let sources = vec![("swatches".to_owned(), tl!("Selected Swatches").to_owned().into()), ("artwork".to_owned(), tl!("Selected Artwork").to_owned().into())];
+    let sources =
+        vec![("swatches".to_owned(), tl!("Selected Swatches").to_owned().into()), ("artwork".to_owned(), tl!("Selected Artwork").to_owned().into())];
     let rows = vec![
         Param::new("name", field_label(tl!("Name:")), ParamKind::text("")),
-        Param::new("from", field_label(tl!("Create From:")), ParamKind::radio(sources, Some("swatches".to_owned())))
-            .disabled_options(if art { None } else { Some("artwork") }),
+        Param::new("from", field_label(tl!("Create From:")), ParamKind::radio(sources, Some("swatches".to_owned()))).disabled_options(if art {
+            None
+        } else {
+            Some("artwork")
+        }),
         Param::new("toGlobal", tl!("Convert Process to Global").to_owned(), ParamKind::bool(true)).enabled_when("from", "artwork"),
         Param::new("includeTints", tl!("Include Swatches for Tints").to_owned(), ParamKind::bool(false)).enabled_when("from", "artwork"),
     ];

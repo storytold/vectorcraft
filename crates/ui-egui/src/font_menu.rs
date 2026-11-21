@@ -60,14 +60,14 @@ pub(crate) fn picker_settings(app: &VectorcraftApp) -> FontPickerSettings {
     } else {
         FontPreviewSize::None
     };
-    FontPickerSettings {
-        favorites: app.ui.favorite_fonts.clone(),
-        recent: app.recent_fonts().to_vec(),
-        recent_limit: usize::try_from(prefs.recent_fonts_count).unwrap_or(usize::MAX),
-        preview,
-        names_in_english: prefs.font_names_in_english,
-        samples_on_white: prefs.font_samples_on_white,
-    }
+    let mut settings = FontPickerSettings::default();
+    settings.favorites = app.ui.favorite_fonts.clone();
+    settings.recent = app.recent_fonts().to_vec();
+    settings.recent_limit = usize::try_from(prefs.recent_fonts_count).unwrap_or(usize::MAX);
+    settings.preview = preview;
+    settings.names_in_english = prefs.font_names_in_english;
+    settings.samples_on_white = prefs.font_samples_on_white;
+    settings
 }
 
 /// Writes back what the picker changed in `after` against `before`: the stars, and a Font Preview Size

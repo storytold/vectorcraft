@@ -141,70 +141,73 @@ impl StackDialog for FindLinksDialog {
         edit.picks.resize(missing.len(), Value::Null);
         let (can_pick, copy_folder) = (self.can_pick, self.copy_folder.clone());
         let (mut pick, mut stop) = (false, false);
-        let shown = FormDialog::new(label(tl!("Find Linked Files")), Bind::bound(&mut edit)).ok_label(label(tl!("Relink"))).show(ui, |ui, _, edit| {
-            Text::new(label(tl!("Choose the file to relink each linked file to. Files with the size and contents saved with the link come first.")))
+        let shown =
+            FormDialog::new(label(tl!("Find Linked Files")), Bind::bound(&mut edit)).ok_label(label(tl!("Relink"))).show(ui, |ui, _, edit| {
+                Text::new(label(tl!(
+                    "Choose the file to relink each linked file to. Files with the size and contents saved with the link come first."
+                )))
                 .shade(Shade::Muted)
                 .show(ui);
-            Stack::new().scroll(Scroll::vertical()).show(ui, |ui, _| {
-                for (i, row) in missing.iter().enumerate() {
-                    let (name, path) = (row["name"].as_str().unwrap_or_default(), row["path"].as_str().unwrap_or_default());
-                    Text::new(label(name)).role(TypeRole::BodyStrong).show(ui);
-                    Text::new(label(path)).shade(Shade::Muted).elide(Elide::Path).tooltip(path.to_string()).show(ui);
-                    let files = files_for(&found, row);
-                    let current = files.iter().position(|f| edit.picks.get(i) == Some(&f["path"]));
-                    let mut chosen = current;
-                    RadioGroup::new(label(name), Bind::bound(&mut chosen)).show(ui, |ui, _| {
-                        for (at, f) in files.iter().enumerate() {
-                            let file = f["path"].as_str().unwrap_or_default();
-                            let p = std::path::Path::new(file);
-                            let file_name = p.file_name().map_or_else(|| file.to_string(), |n| n.to_string_lossy().into_owned());
-                            Row::new().show(ui, |ui, _| {
-                                Radio::new(Some(at)).label(label(&file_name)).show(ui);
-                                match f["match"].as_str() {
-                                    Some("same") => Badge::new(label(tl!("Same file"))).show(ui),
-                                    Some("size") => Badge::new(label(tl!("Same size"))).show(ui),
-                                    _ => return,
-                                };
-                            });
-                            let folder = p.parent().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
-                            Text::new(label(&folder)).shade(Shade::Muted).elide(Elide::Path).tooltip(file.to_string()).show(ui);
+                Stack::new().scroll(Scroll::vertical()).show(ui, |ui, _| {
+                    for (i, row) in missing.iter().enumerate() {
+                        let (name, path) = (row["name"].as_str().unwrap_or_default(), row["path"].as_str().unwrap_or_default());
+                        Text::new(label(name)).role(TypeRole::BodyStrong).show(ui);
+                        Text::new(label(path)).shade(Shade::Muted).elide(Elide::Path).tooltip(path.to_string()).show(ui);
+                        let files = files_for(&found, row);
+                        let current = files.iter().position(|f| edit.picks.get(i) == Some(&f["path"]));
+                        let mut chosen = current;
+                        RadioGroup::new(label(name), Bind::bound(&mut chosen)).show(ui, |ui, _| {
+                            for (at, f) in files.iter().enumerate() {
+                                let file = f["path"].as_str().unwrap_or_default();
+                                let p = std::path::Path::new(file);
+                                let file_name = p.file_name().map_or_else(|| file.to_string(), |n| n.to_string_lossy().into_owned());
+                                Row::new().show(ui, |ui, _| {
+                                    Radio::new(Some(at)).label(label(&file_name)).show(ui);
+                                    match f["match"].as_str() {
+                                        Some("same") => Badge::new(label(tl!("Same file"))).show(ui),
+                                        Some("size") => Badge::new(label(tl!("Same size"))).show(ui),
+                                        _ => return,
+                                    };
+                                });
+                                let folder = p.parent().map_or_else(String::new, |f| f.to_string_lossy().into_owned());
+                                Text::new(label(&folder)).shade(Shade::Muted).elide(Elide::Path).tooltip(file.to_string()).show(ui);
+                            }
+                            if !files.is_empty() {
+                                Radio::new(None::<usize>).label(label(tl!("Don't Relink"))).show(ui);
+                            }
+                        });
+                        if chosen != current
+                            && let Some(slot) = edit.picks.get_mut(i)
+                        {
+                            *slot = chosen.and_then(|at| files.get(at)).map_or(Value::Null, |f| f["path"].clone());
+                            if !edit.touched.contains(&json!(i)) {
+                                edit.touched.push(json!(i));
+                            }
                         }
-                        if !files.is_empty() {
-                            Radio::new(None::<usize>).label(label(tl!("Don't Relink"))).show(ui);
-                        }
-                    });
-                    if chosen != current
-                        && let Some(slot) = edit.picks.get_mut(i)
-                    {
-                        *slot = chosen.and_then(|at| files.get(at)).map_or(Value::Null, |f| f["path"].clone());
-                        if !edit.touched.contains(&json!(i)) {
-                            edit.touched.push(json!(i));
+                        // A failed search (a folder it refuses) didn't look: `progress` says why.
+                        if files.is_empty() && !state.is_empty() && state != "failed" {
+                            let line = if searching { tl!("Searching…") } else { tl!("Not found") };
+                            Text::new(label(line)).shade(Shade::Muted).show(ui);
                         }
                     }
-                    // A failed search (a folder it refuses) didn't look: `progress` says why.
-                    if files.is_empty() && !state.is_empty() && state != "failed" {
-                        let line = if searching { tl!("Searching…") } else { tl!("Not found") };
-                        Text::new(label(line)).shade(Shade::Muted).show(ui);
+                });
+                Row::new().show(ui, |ui, _| {
+                    if can_pick && Button::new(label(tl!("Find in Folder…"))).enabled(!searching).show(ui).clicked() {
+                        pick = true;
                     }
+                    if searching {
+                        stop = Button::new(label(tl!("Stop"))).show(ui).clicked();
+                        Spinner::new().show(ui);
+                    }
+                });
+                for line in &progress {
+                    Text::new(line.clone()).shade(Shade::Muted).show(ui);
                 }
+                if let Some(folder) = &copy_folder {
+                    Checkbox::new(Bind::bound(&mut edit.copy)).label(label(tl!("Copy into the document's folder"))).tooltip(folder.clone()).show(ui);
+                }
+                true
             });
-            Row::new().show(ui, |ui, _| {
-                if can_pick && Button::new(label(tl!("Find in Folder…"))).enabled(!searching).show(ui).clicked() {
-                    pick = true;
-                }
-                if searching {
-                    stop = Button::new(label(tl!("Stop"))).show(ui).clicked();
-                    Spinner::new().show(ui);
-                }
-            });
-            for line in &progress {
-                Text::new(line.clone()).shade(Shade::Muted).show(ui);
-            }
-            if let Some(folder) = &copy_folder {
-                Checkbox::new(Bind::bound(&mut edit.copy)).label(label(tl!("Copy into the document's folder"))).tooltip(folder.clone()).show(ui);
-            }
-            true
-        });
         self.fields.insert("picks".into(), json!(edit.picks));
         self.fields.insert("touched".into(), json!(edit.touched));
         self.fields.insert("copy".into(), json!(edit.copy));
@@ -281,7 +284,8 @@ impl FindLinksDialog {
 fn dialog(app: &VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, back: bool) -> Result<Fields, String> {
     let uid = app.session.active().map(|d| d.uid).ok_or("no document open")?;
     let picks = vec![Value::Null; missing.len()];
-    let fields = json!({ "document": uid, "missing": missing, "modified": modified, "back": back, "state": "", "picks": picks, "touched": [], "copy": false });
+    let fields =
+        json!({ "document": uid, "missing": missing, "modified": modified, "back": back, "state": "", "picks": picks, "touched": [], "copy": false });
     match fields {
         Value::Object(fields) => Ok(fields),
         _ => Err("the dialog has no fields".into()),

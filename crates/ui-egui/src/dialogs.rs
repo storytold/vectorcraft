@@ -179,12 +179,8 @@ pub(crate) use effect_params::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, 
 pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
-// PLAN: these re-exports are kept as they were; export-w13 removes any whose item it deletes.
 pub(crate) use export_for_screens::{
-    ExportForScreensDialog, KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, artboard_name_editing as export_artboard_name_editing,
-    export_preset as screen_export_preset, formats as screen_formats, import_presets as screen_import_presets,
-    open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
-    saved_rows as screen_saved_rows, settings_format as screen_settings_format,
+    ExportForScreensDialog, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
 pub(crate) use form::{humanize, number_list_text, read_number_list};
 pub(crate) use new_document::preset_name;

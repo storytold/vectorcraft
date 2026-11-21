@@ -907,7 +907,7 @@ fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
         app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": item.command, "params": item.params})).unwrap();
         let held = steps(&app, 0, 0)[3].1.clone();
         let start = app.session.journal.len();
-        crate::menus::invoke(&mut app, item.command, item.params.clone());
+        crate::menus::invoke(&mut app, &item.command, item.params.clone());
         assert!(app.dialogs().is_some_and(|d| d.with(|h| h.is_empty())), "{item:?} opens a dialog");
         let ran = app.session.journal_for_action(start);
         let without_artboard = |p: &Value| {
@@ -917,7 +917,7 @@ fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
             }
             p
         };
-        assert!(ran.iter().all(|(c, p)| c != item.command || without_artboard(p) == held), "{item:?} ran {ran:?}, its step holds {held}");
+        assert!(ran.iter().all(|(c, p)| *c != item.command || without_artboard(p) == held), "{item:?} ran {ran:?}, its step holds {held}");
     }
 }
 
@@ -980,8 +980,8 @@ fn every_pathfinder_effect_item_step_holds_the_options_its_click_applies() {
         assert_eq!(held["params"], options, "{item:?}");
         app.run("select.set", json!({ "ids": ids })).unwrap();
         let start = app.session.journal.len();
-        crate::menus::invoke(&mut app, item.command, item.params.clone());
-        let ran: Vec<_> = app.session.journal_for_action(start).into_iter().filter(|(c, _)| c == item.command).collect();
+        crate::menus::invoke(&mut app, &item.command, item.params.clone());
+        let ran: Vec<_> = app.session.journal_for_action(start).into_iter().filter(|(c, _)| *c == item.command).collect();
         assert!(!ran.is_empty(), "{item:?} did not run");
         for (_, mut p) in ran {
             if let Some(o) = p.as_object_mut() {

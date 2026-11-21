@@ -271,7 +271,11 @@ mod tests {
         // The menu item (and `object.expand` without params) opens the dialog.
         crate::menus::invoke(&mut app, "object.expand", json!({}));
         let shown = fields(&app);
-        assert_eq!((shown.bool("__canObject"), shown.bool("__canFill"), shown.bool("__canStroke")), (Some(true), Some(true), Some(false)), "no stroke to expand");
+        assert_eq!(
+            (shown.bool("__canObject"), shown.bool("__canFill"), shown.bool("__canStroke")),
+            (Some(true), Some(true), Some(false)),
+            "no stroke to expand"
+        );
         assert_eq!(params(&shown), json!({"object": true, "fill": true, "stroke": true, "gradient": "objects", "steps": 255.0}));
         let undo = app.session.doc().unwrap().history.undo.len();
         set(&app, "gradient", json!("mesh")).unwrap();

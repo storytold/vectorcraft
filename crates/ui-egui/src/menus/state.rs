@@ -1,6 +1,7 @@
-use super::run::normalize_panel;
+use super::run::{normalize_panel, toolbar_double, toolbar_panel};
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::{Brightness, Value, VectorcraftApp};
+use crate::i18n::LangExt as _;
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
@@ -74,11 +75,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.toolbar" => crate::toolbar::shown(&app.ui),
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
         "window.toolbarCompact" => app.ui.toolbar_compact,
-        "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
-        "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
-            None => app.ui.toolbar_double,
-            Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
-        },
+        "window.toolbarColumns" => toolbar_panel(&app.ui, p).is_ok_and(|panel| toolbar_double(&app.ui, &panel)),
         "window.editToolbar" => {
             app.ui.tools_drawer
                 && crate::custom_toolbars::drawer_target(&app.ui).map(crate::custom_toolbars::key)
@@ -94,20 +91,20 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.taskBar" => app.ui.task_bar,
         "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
-        "window.taskBar.pin" => app.ui.task_bar_place.pinned,
+        "window.taskBar.pin" => app.ui.task_bar_place.place.pinned,
         "window.taskBar.actions" => p
             .get("action")
             .and_then(Value::as_str)
             .is_some_and(|a| crate::canvas::is_task_bar_action(a) && !app.ui.task_bar_hidden_actions.contains(a)),
         "window.quickPenToolbar" => app.ui.quick_pen_bar,
-        "window.quickPenToolbar.pin" => app.ui.quick_pen_bar_place.pinned,
-        "window.learn" => crate::panels::learn::visible(&app.ui),
+        "window.quickPenToolbar.pin" => app.ui.quick_pen_bar_place.place.pinned,
+        "window.learn" => crate::panels::learn::visible(app),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
             normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(app, id))
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
-        "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
+        "window.workspace" => p.get("name").and_then(Value::as_str).is_some_and(|name| crate::workspaces::is_current(&app.ui, name)),
         // The Tile layout the panes show.
         "window.arrange.tile" => app.ui.tiled && crate::canvas::TileLayout::from_params(p) == Ok(app.ui.tile_layout),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
@@ -350,10 +347,10 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
         "links.copyInfo" => !crate::panels::links::selected_rows_of_app(app).is_empty(),
-        "ui.relinkDialog" => app.services.pick_open.is_some() && (selected_image(app, |_| true) || selected_placed(app)),
+        "ui.relinkDialog" => crate::file_asks::can(app, craft::host::PickKind::Open) && (selected_image(app, |_| true) || selected_placed(app)),
         "ui.findLinksInFolder" => app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
-        "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
+        "ui.batchDialog" => !app.ui.actions.actions().is_empty(),
         "ui.epsOptionsDialog" | "ui.hpglOptionsDialog" => app.session.active().is_some(),
         "file.saveForWeb" => app.session.active().is_some(),
         // A browser preview opens a file, and the web build has none to open.

@@ -11,6 +11,7 @@ use super::graphic_styles::GraphicStyleLibraries;
 use super::library_panel::tests::{click, confirm_save, context, menu_library_ids, save_to_tmp};
 use super::library_panel::{self, LibraryKind, last_open};
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 fn app_with(services: crate::Services) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), services);

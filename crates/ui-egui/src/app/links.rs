@@ -1,5 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::dialogs;
+use craft::ui::runtime::windows::WindowHost;
+
 use super::{VectorcraftApp, browsable_url};
 
 impl VectorcraftApp {
@@ -27,10 +29,10 @@ impl VectorcraftApp {
         Ok(())
     }
 
-    /// Did automation send what is being handled now: a control or MCP request, or a frame of
-    /// synthetic input?
+    /// Did automation send what is being handled now: a control or MCP request, or a pass that
+    /// carries injected input?
     pub(crate) fn automation_is_acting(&self) -> bool {
-        self.ui.answering_control || self.synthetic_frame
+        self.ui.answering_control || self.ui_ctx.as_ref().is_some_and(|ctx| WindowHost::of(ctx).injected_pass())
     }
 
     /// Did automation ask for what is being handled now: [`Self::automation_is_acting`], or the
@@ -83,7 +85,7 @@ impl VectorcraftApp {
         let focused = ctx.input(|i| i.focused);
         let was_focused: bool = ctx.data(|d| d.get_temp(focus_key)).unwrap_or(focused);
         ctx.data_mut(|d| d.insert_temp(focus_key, focused));
-        if self.ui.dialog.is_some() || self.session.active().is_none() {
+        if self.any_dialog_open() || self.session.active().is_none() {
             return;
         }
         let last: f64 = ctx.data(|d| d.get_temp(last_key)).unwrap_or(f64::NEG_INFINITY);

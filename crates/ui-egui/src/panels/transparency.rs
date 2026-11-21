@@ -4,19 +4,17 @@
 //! neutral → off) and Opacity & Mask Define Knockout Shape; the menu's Page Isolated Blending and
 //! Page Knockout Group.
 
-// PLAN: assumed `craft_ui` re-exports every framework item imported here; adjust the paths to the facade's modules.
 use std::cell::RefCell;
 use std::sync::Arc;
 
 use craft::behavior::IconId;
 use craft::behavior::Mixed;
-use craft::behavior::dock::Column;
 use craft::behavior::item_source::keyed;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, CollectionEvent, SelectMode};
+use craft::ui::contract::{Bind, CollectionEvent, Props as _, SelectMode, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
@@ -72,15 +70,14 @@ pub(crate) fn state(app: &mut VectorcraftApp) -> (TransparencyInfo, Option<Arc<N
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
     let key: StateKey = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied(), app.session.mesh_points_picked());
-    // PLAN: assumed `app.caches.transparency_state: Option<(StateKey, TransparencyInfo, Option<Arc<Node>>)>` (hub-w1, `CanvasCache`).
-    if let Some((k, info, n)) = &app.caches.transparency_state
+    if let Some((k, info, n)) = &app.canvas.transparency_state
         && *k == key
     {
         return (info.clone(), n.clone());
     }
     let info = app.session.transparency_info();
     let first = first_node(app, &info);
-    app.caches.transparency_state = Some((key, info.clone(), first.clone()));
+    app.canvas.transparency_state = Some((key, info.clone(), first.clone()));
     (info, first)
 }
 
@@ -171,9 +168,8 @@ fn mask_row(
     let source = MaskThumbs { doc: &st.doc, revision: st.revision };
     let store = Thumbnails::<MaskKey>::in_context(ui.ctx(), "vc-mask-thumbs", ThumbnailOptions::new());
     let request = ThumbRequest::for_cell(THUMB_POINTS, ui.ctx().pixels_per_point());
-    // PLAN: assumed `Priority::Visible`.
     let state_of = |ui: &Ui, node: NodeId, bg, own_mask| {
-        store.state(ui.ctx(), &source, &MaskKey { uid: st.uid, node, bg, own_mask }, &request, Priority::Visible)
+        store.state(ui.ctx(), &source, &MaskKey { uid: st.uid, node, bg, own_mask }, &request, Priority::VISIBLE)
     };
     let bg = mask.map(|m| if m.clip != m.invert { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
     let object_state = n.map(|n| state_of(ui, n.id, None, false));
@@ -261,7 +257,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    Divider::new().show(ui);
+    Divider::horizontal().show(ui);
 
     let mask = n.as_deref().and_then(|n| n.extras().mask.as_deref());
     let (new_clip, new_invert) = app.session.new_mask_defaults();
@@ -276,7 +272,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if !hide_thumbs {
             events = mask_row(app, ui, n.as_ref(), mask, editing, object);
         }
-        Column::new().show(ui, |ui, _| {
+        Stack::new().show(ui, |ui, _| {
             let label = if mask.is_some() { tl!("Release") } else { tl!("Make Mask") };
             let enabled = object && (mask.is_some() || can_make);
             let button = Button::new(label).enabled(enabled).tooltip(tl!("Select the art (and, on top of it, the mask object)")).show(ui);
@@ -310,7 +306,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 
     if !hide_options {
-        Divider::new().show(ui);
+        Divider::horizontal().show(ui);
         let enabled = has && object;
         let (mut isolated, mut shape) = (isolate, knockout_shape);
         // Neutral (and mixed) show a dash; a click moves on → neutral → off → on (mixed → on).

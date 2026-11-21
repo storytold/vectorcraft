@@ -1,9 +1,9 @@
-use craft::behavior::IconId; // PLAN: craft_behavior is not a dependency of ui-egui and craft_ui re-exports no IconId; the manifest or a craft_ui re-export needs adding by its owner.
-use craft::ui::contract::Bind;
-use craft::ui::shell::{RecentFile, StartAction, StartLink, StartScreen, Template};
+use craft::behavior::IconId;
 use craft::ui::buttons::Button;
-use craft::ui::layout_components::Row;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
+use craft::ui::layout_components::Row;
+use craft::ui::shell::{RecentFile, StartAction, StartLink, StartScreen, Template};
 
 use super::{Ui, VectorcraftApp, json};
 

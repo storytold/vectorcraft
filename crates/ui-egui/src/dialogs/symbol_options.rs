@@ -12,7 +12,7 @@
 //! Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
-use craft::ui::contract::{Bind, Outcome as _};
+use craft::ui::contract::{Bind, Outcome as _, Show as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::runtime::env::{Label, UnitKind};
@@ -52,7 +52,11 @@ fn slice_params(fields: &DialogFields, opened: [f64; 4]) -> Value {
         let percent = fields.number(SLICE_KEYS[i]).unwrap_or(DEFAULT_SLICE_PERCENT);
         if opened[i] * 100.0 == percent { opened[i] } else { percent / 100.0 }
     });
-    if fields.bool("nineSlice").unwrap_or(false) { json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] }) } else { json!({ "nineSlice": false }) }
+    if fields.bool("nineSlice").unwrap_or(false) {
+        json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] })
+    } else {
+        json!({ "nineSlice": false })
+    }
 }
 
 /// The dialog's rows. `name` is what the name field shows when it has no value.
@@ -66,9 +70,13 @@ fn rows(name: &str) -> Vec<Param> {
         Param::new("exportType", tl!("Export Type:"), ParamKind::choice(export, Some("movieClip".to_string()))),
         Param::new("type", tl!("Symbol Type:"), ParamKind::radio(kind, Some("dynamic".to_string()))),
         Param::custom("registration", tl!("Registration:"), |ui, fields, _| {
-            let at = fields.int("registration").and_then(|i| usize::try_from(i).ok()).and_then(|i| Anchor9::ALL.get(i).copied()).unwrap_or(Anchor9::Centre);
-            let shown = ReferencePoint::new(tl!("Registration:"), Bind::given(at)).look(ReferencePointLook::Squares).show(ui);
-            if let Some(i) = shown.value().and_then(|picked| Anchor9::ALL.iter().position(|a| a == picked)) {
+            let at = fields
+                .int("registration")
+                .and_then(|i| usize::try_from(i).ok())
+                .and_then(|i| Anchor9::ALL.get(i).copied())
+                .unwrap_or(Anchor9::Centre);
+            let shown = ReferencePoint::new(tl!("Registration:"), Bind::given(Some(at))).look(ReferencePointLook::Squares).show(ui);
+            if let Some(i) = shown.value().and_then(Option::as_ref).and_then(|picked| Anchor9::ALL.iter().position(|a| a == picked)) {
                 fields.set("registration", FieldValue::Int(i as i64));
             }
             shown.response().clone()
@@ -91,13 +99,7 @@ fn rows(name: &str) -> Vec<Param> {
 /// Opens Symbol Options on `fields`. OK makes a new symbol, or, with `edit` (the symbol being
 /// edited), applies the fields to it; `keep_art` leaves the selection as ordinary art for a new one;
 /// `opened` are the guides the dialog opened with.
-fn open_dialog(
-    app: &mut VectorcraftApp,
-    fields: DialogFields,
-    edit: Option<String>,
-    keep_art: bool,
-    opened: [f64; 4],
-) -> Result<Value, String> {
+fn open_dialog(app: &mut VectorcraftApp, fields: DialogFields, edit: Option<String>, keep_art: bool, opened: [f64; 4]) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let name = fields.text("name").unwrap_or_default().to_string();
     let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Symbol Options"), rows(&name)));

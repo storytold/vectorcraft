@@ -36,7 +36,7 @@ pub(crate) fn params(fields: &DialogFields) -> Value {
 }
 
 /// The choice options of `list`, as `(id, label)`.
-fn choice(list: &[(&str, &str)]) -> ParamKind {
+fn choice(list: &[(&str, &'static str)]) -> ParamKind {
     ParamKind::choice(list.iter().map(|&(id, label)| (id.to_string(), tl!(label).into())).collect(), list.first().map(|(id, _)| id.to_string()))
 }
 
@@ -70,38 +70,12 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{Value, json};
+    use serde_json::json;
     use vectorcraft_doc::{LiveCorners, NodeId};
     use vectorcraft_engine::Session;
 
+    use crate::addons::dialogs::tests::{cancel, confirm, dialog_id, frame, set};
     use crate::{VectorcraftApp, menus};
-
-    // PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog.id` (host.rs:385)
-    fn set(app: &VectorcraftApp, key: &str, value: Value) {
-        let ctx = app.ui_ctx.clone();
-        app.dialogs()
-            .expect("window host")
-            .with(|host| {
-                let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-                host.set_json_field(&ctx, id, key, value)
-            })
-            .unwrap();
-    }
-
-    fn pump(app: &mut VectorcraftApp) {
-        let ctx = app.ui_ctx.clone();
-        crate::dialogs::host::pump(app, &ctx);
-    }
-
-    /// Answers the open dialog with OK or Cancel, then runs the frame's pump.
-    fn answer(app: &mut VectorcraftApp, ok: bool) {
-        let ctx = app.ui_ctx.clone();
-        app.dialogs().expect("window host").with(|host| {
-            let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-            if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
-        });
-        pump(app);
-    }
 
     /// The anchor indices of `id`'s uncut outline with a corner drawn.
     fn cut(app: &VectorcraftApp, id: u64) -> Vec<usize> {
@@ -110,49 +84,59 @@ mod tests {
         (0..lc.base.anchor_count()).filter(|k| lc.drawn_radius(*k) > 0.0).collect()
     }
 
-    #[test]
-    fn set_corners_opens_from_the_menu_previews_odd_anchors_and_commits_one_step() {
+    /// A window's app with a document and the closed path through `anchors` selected; the path's id.
+    fn selected_path(anchors: serde_json::Value) -> (VectorcraftApp, u64) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let anchors = json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}, {"x": -50, "y": 50}]);
         let id = app.run("path.create", json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();
+        (app, id)
+    }
+
+    #[test]
+    fn set_corners_opens_from_the_menu_previews_odd_anchors_and_commits_one_step() {
+        let (mut app, id) =
+            selected_path(json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}, {"x": -50, "y": 50}]));
         menus::invoke(&mut app, super::COMMAND, json!({}));
-        pump(&mut app);
+        let dialog = dialog_id(&app);
+        frame(&mut app);
         assert_eq!(cut(&app, id), vec![0, 1, 2, 3, 4], "all previewed from the start");
         let n = app.session.doc().unwrap().history.undo.len();
-        set(&app, "every", json!("odd"));
-        pump(&mut app);
+        set(&app, dialog, "every", json!("odd"));
+        frame(&mut app);
         assert_eq!(cut(&app, id), vec![0, 2, 4], "odd previewed");
-        answer(&mut app, false);
+        cancel(&app, dialog);
+        frame(&mut app);
         assert_eq!(cut(&app, id), Vec::<usize>::new(), "rolled back");
         menus::invoke(&mut app, super::COMMAND, json!({}));
-        set(&app, "every", json!("even"));
-        set(&app, "radius", json!(6));
-        answer(&mut app, true);
+        let dialog = dialog_id(&app);
+        set(&app, dialog, "every", json!("even"));
+        set(&app, dialog, "radius", json!(6));
+        assert!(confirm(&app, dialog), "OK is on");
+        frame(&mut app);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), n + 1);
         assert_eq!(cut(&app, id), vec![1, 3]);
     }
 
     #[test]
     fn set_corners_previews_only_the_corners_in_its_angle_range() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         // A house: square corners at 0, 1 and 3, the roof's 135° corners at 2 and 4.
-        let anchors = json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 50, "y": 150}, {"x": 0, "y": 100}]);
-        let id = app.run("path.create", json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let (mut app, id) =
+            selected_path(json!([{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 50, "y": 150}, {"x": 0, "y": 100}]));
         menus::invoke(&mut app, super::COMMAND, json!({}));
+        let dialog = dialog_id(&app);
         let n = app.session.doc().unwrap().history.undo.len();
-        set(&app, "minAngle", json!(120));
-        pump(&mut app);
+        set(&app, dialog, "minAngle", json!(120));
+        frame(&mut app);
         assert_eq!(cut(&app, id), vec![2, 4], "the roof previewed");
         // The ends bound each other: the upper end goes first, then the lower one below it.
-        set(&app, "maxAngle", json!(100));
-        set(&app, "minAngle", json!(80));
-        pump(&mut app);
+        set(&app, dialog, "maxAngle", json!(100));
+        set(&app, dialog, "minAngle", json!(80));
+        frame(&mut app);
         assert_eq!(cut(&app, id), vec![0, 1, 3], "the square corners previewed");
-        answer(&mut app, true);
+        assert!(confirm(&app, dialog), "OK is on");
+        frame(&mut app);
         assert_eq!(app.session.doc().unwrap().history.undo.len(), n + 1);
         assert_eq!(cut(&app, id), vec![0, 1, 3]);
     }

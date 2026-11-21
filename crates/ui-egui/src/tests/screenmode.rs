@@ -12,7 +12,7 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
     let raw =
         egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), events, ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();
@@ -325,8 +325,7 @@ fn no_other_key_works_in_presentation_mode() {
     assert!(app.session.active().unwrap().selection.objects.is_empty(), "Cmd/Ctrl+A selected the rectangle");
     app.run("select.all", json!({})).unwrap();
     let unchanged = snapshot(&app);
-    // PLAN: assumed the chrome fields keep these names until chrome's P1 renames them (`ui.dock_workspace`).
-    let panels = (app.ui.dock, app.ui.toolbar);
+    let panels = crate::panel_docking::layout_of(&app.ui).clone();
     for (what, events) in [
         ("Delete", press(Key::Delete, Modifiers::NONE, None)),
         ("Backspace", press(Key::Backspace, Modifiers::NONE, None)),
@@ -338,8 +337,8 @@ fn no_other_key_works_in_presentation_mode() {
     ] {
         frame(&mut app, &ctx, events);
         assert!(unchanged(&app), "{what} changed the document, the selection or the undo steps");
-        let state = (app.session.tool_id(), !app.any_dialog_open(), app.ui.screen_mode, (app.ui.dock, app.ui.toolbar));
-        assert_eq!(state, ("selection", true, 3, panels), "{what}");
+        let state = (app.session.tool_id(), !app.any_dialog_open(), app.ui.screen_mode, crate::panel_docking::layout_of(&app.ui));
+        assert_eq!(state, ("selection", true, 3, &panels), "{what}");
     }
     app.select_tool("rectangle");
     frame(&mut app, &ctx, press(Key::V, Modifiers::NONE, Some("v")));
@@ -381,7 +380,7 @@ fn presentation_mode_fits_the_artboard() {
     // A bigger canvas (the window gone full screen) fits it again.
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1200.0))), ..Default::default() };
     let mut big = ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     big.textures_delta.clear();

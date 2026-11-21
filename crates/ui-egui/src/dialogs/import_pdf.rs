@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 // PLAN: `IconId` / `Revision` / `dialog_id` / `HeldAnswer` paths below are assumed.
+use craft::behavior::IconId;
 use craft::pages::range::{format_pages, parse_pages};
 use craft::pages::ui::range::PageRangeField;
 use craft::ui::buttons::IconButton;
@@ -36,7 +37,6 @@ use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbSize;
 use craft::ui::patterns::form_dialogs::{FormDialog, PasswordDialog, PasswordPurpose};
 use craft::ui::pickers::Select;
-use craft::behavior::IconId;
 use craft::ui::primitives::textures::Revision;
 use craft::ui::runtime::env::Label;
 use craft::ui::text::NumberField;
@@ -110,7 +110,11 @@ pub(super) fn with_file(place: &Value, path: Option<&str>, name: &str, file: &Di
 
 /// `doc`'s first artboard rendered for a preview picture, its longer side [`PREVIEW_PX`] points; `None` for a
 /// document without an artboard.
-pub(super) fn render_preview(app: &mut VectorcraftApp, ctx: &egui::Context, doc: &vectorcraft_engine::doc::Document) -> Option<Arc<egui::ColorImage>> {
+pub(super) fn render_preview(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    doc: &vectorcraft_engine::doc::Document,
+) -> Option<Arc<egui::ColorImage>> {
     let region = doc.artboards.first()?.rect;
     let px = PREVIEW_PX * ctx.pixels_per_point() as f64;
     let scale = px / region.width().max(region.height()).max(1.0);
@@ -254,7 +258,8 @@ impl State {
             }
             "linkPages" => self.link_pages = if value.is_null() { None } else { Some(value.as_bool().ok_or("linkPages takes true, false or null")?) },
             "cropTo" => {
-                let i = CropTo::IDS.iter().position(|id| *id == text()?).ok_or("cropTo is not a crop box")?;
+                let text = text()?;
+                let i = CropTo::IDS.iter().position(|id| *id == text).ok_or("cropTo is not a crop box")?;
                 self.crop = CropTo::ALL.get(i).copied().unwrap_or_default();
             }
             "textAs" => {
@@ -356,11 +361,8 @@ impl ImportPdfDialog {
         let preview = self.preview.as_ref().and_then(|(revision, image)| Some((*revision, image.clone()?)));
         let token = self.s.file.token;
         let waiting = self.held.is_waiting();
-        let out = FormDialog::new(title, Bind::bound(&mut self.s))
-            .ok_enabled(!waiting)
-            .accept_stays_open(true)
-            .alt_resets(false)
-            .show(ui, |ui, _, s| {
+        let out =
+            FormDialog::new(title, Bind::bound(&mut self.s)).ok_enabled(!waiting).accept_stays_open(true).alt_resets(false).show(ui, |ui, _, s| {
                 pages_body(ui, s, preview.as_ref(), token, refusal.as_ref());
                 true
             });
@@ -465,7 +467,7 @@ fn pages_body(ui: &mut egui::Ui, s: &mut State, preview: Option<&(Revision, Arc<
 }
 
 /// One page navigation button; the page it goes to when pressed.
-fn nav(ui: &mut egui::Ui, icon: &str, label: &str, to: usize, enabled: bool) -> Option<usize> {
+fn nav(ui: &mut egui::Ui, icon: &'static str, label: &'static str, to: usize, enabled: bool) -> Option<usize> {
     clicked(&IconButton::new(IconId::new(icon)).label(label).enabled(enabled).show(ui)).then_some(to)
 }
 

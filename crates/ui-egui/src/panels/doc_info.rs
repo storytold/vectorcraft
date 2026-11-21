@@ -314,9 +314,10 @@ pub(crate) fn save_report(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
-    let path = crate::io::write_named(app, path, &format!("{stem} Info.txt"), text.as_bytes())?;
-    app.status(format!("Saved {path}"));
-    Ok(json!({ "path": path }))
+    crate::io::write_named(app, path, &format!("{stem} Info.txt"), text.as_bytes().to_vec(), |app, path| {
+        app.status(format!("Saved {path}"));
+        Ok(json!({ "path": path }))
+    })
 }
 
 /// The row that shows category `id` (all of them when empty).

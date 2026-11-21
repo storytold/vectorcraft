@@ -858,7 +858,7 @@ mod tests {
         const ADDED: &str = "zqvaddone";
         const OTHER: &str = "zqvaddtwo";
         PAGE.with(|p| p.set(1));
-        let mut app = app();
+        let mut app = self::app();
         let id = text(&mut app, 50.0, &format!("{ADDED} {OTHER} {ADDED} {OTHER}"));
         begin(&mut app);
         act(&mut app, super::add_to_dictionary);

@@ -6,8 +6,8 @@
 //! the script's `#include` lines name. Without a file it asks for one, and File › Open of a `.jsx`,
 //! `.jsxinc` or `.jsxbin` file opens it too.
 
-use craft::ui::patterns::form_dialogs::{HostedReport, ReportGroup, ReportNote};
 use craft::theme::variant::Tone;
+use craft::ui::patterns::form_dialogs::{HostedReport, ReportGroup, ReportNote};
 use serde_json::{Value, json};
 
 // PLAN: assumed `craft::host::PickRequest` and `crate::file_asks::{ask, open_params, Owner}` (fl.A3, fl.A23)
@@ -24,7 +24,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     }
     let request = PickRequest::open("script").filter("Scripts", vectorcraft_engine::cmd::scripts::EXTS);
     Ok(file_asks::ask(app, request, Owner::Free, |app, picked| match file_asks::open_params(&picked) {
-        Some(params) => check(app, &params),
+        Some(params) => check(app, &Value::Object(params)),
         // A cancelled pick runs nothing.
         None => Ok(Value::Null),
     }))
@@ -150,15 +150,15 @@ fn list<'r>(r: &'r Value, key: &str) -> &'r [Value] {
 
 /// A neutral note of `text`, in the mono role when it is user data, with `detail` after it when there is one.
 fn note(text: &str, code: bool, detail: &str) -> ReportNote {
-    let note = ReportNote::new(Tone::Neutral, text);
+    let note = ReportNote::new(Tone::Neutral, text.to_string());
     let note = if code { note.code() } else { note };
-    if detail.is_empty() { note } else { note.detail(detail) }
+    if detail.is_empty() { note } else { note.detail(detail.to_string()) }
 }
 
 /// Adds a group under `heading` when it has notes.
 fn push(groups: &mut Vec<ReportGroup>, heading: &str, notes: Vec<ReportNote>) {
     if !notes.is_empty() {
-        groups.push(ReportGroup::new(heading, notes));
+        groups.push(ReportGroup::new(heading.to_string(), notes));
     }
 }
 
@@ -166,13 +166,13 @@ fn push(groups: &mut Vec<ReportGroup>, heading: &str, notes: Vec<ReportNote>) {
 fn groups(r: &Value) -> Vec<ReportGroup> {
     let name = r["name"].as_str().unwrap_or_default();
     if r["kind"].as_str() != Some("script") {
-        return vec![ReportGroup::new(name, Vec::new())];
+        return vec![ReportGroup::new(name.to_string(), Vec::new())];
     }
     let mut needs: Vec<ReportNote> = list(r, "needs").iter().filter_map(Value::as_str).filter_map(need_label).map(|n| note(n, false, "")).collect();
     if needs.is_empty() {
         needs.push(note(tl!("Needs nothing beyond plain JavaScript"), false, ""));
     }
-    let mut groups = vec![ReportGroup::new(name, needs)];
+    let mut groups = vec![ReportGroup::new(name.to_string(), needs)];
 
     let outside = list(r, "outside").iter().filter_map(|o| {
         let label = o["id"].as_str().and_then(outside_label)?;
@@ -183,7 +183,8 @@ fn groups(r: &Value) -> Vec<ReportGroup> {
     push(&mut groups, tl!("Outside the document"), outside.collect());
 
     let menu = &r["menuCommands"];
-    let mut menu_notes: Vec<ReportNote> = list(menu, "strings").iter().map(|s| note(s["value"].as_str().unwrap_or_default(), true, &tally(s))).collect();
+    let mut menu_notes: Vec<ReportNote> =
+        list(menu, "strings").iter().map(|s| note(s["value"].as_str().unwrap_or_default(), true, &tally(s))).collect();
     let dynamic = menu["dynamic"].as_u64().unwrap_or_default();
     if dynamic > 0 {
         let count = dynamic.to_string();
@@ -192,8 +193,10 @@ fn groups(r: &Value) -> Vec<ReportGroup> {
     push(&mut groups, tl!("Menu commands"), menu_notes);
 
     let dom = &r["dom"];
-    let mut dom_notes: Vec<ReportNote> =
-        list(dom, "members").iter().map(|m| note(m["path"].as_str().unwrap_or_default(), true, &m["count"].as_u64().unwrap_or_default().to_string())).collect();
+    let mut dom_notes: Vec<ReportNote> = list(dom, "members")
+        .iter()
+        .map(|m| note(m["path"].as_str().unwrap_or_default(), true, &m["count"].as_u64().unwrap_or_default().to_string()))
+        .collect();
     let types: Vec<&str> = list(dom, "types").iter().filter_map(|n| n["name"].as_str()).collect();
     if !types.is_empty() {
         dom_notes.push(note(&crate::i18n::fmt(tl!("Object types: {names}"), &[("names", &types.join(", "))]), false, ""));
@@ -201,7 +204,12 @@ fn groups(r: &Value) -> Vec<ReportGroup> {
     push(&mut groups, tl!("Document model"), dom_notes);
 
     let directives = list(r, "directives").iter().map(|d| {
-        let text = format!("{}{} {}", d["form"].as_str().unwrap_or_default(), d["name"].as_str().unwrap_or_default(), d["value"].as_str().unwrap_or_default());
+        let text = format!(
+            "{}{} {}",
+            d["form"].as_str().unwrap_or_default(),
+            d["name"].as_str().unwrap_or_default(),
+            d["value"].as_str().unwrap_or_default()
+        );
         note(text.trim_end(), true, &place(d))
     });
     push(&mut groups, tl!("Directives"), directives.collect());

@@ -13,7 +13,7 @@
 
 use craft::behavior::{CanvasView, Cursor, HitLevel, HitPriority, HitShape, Metrics, PartKey, PointerButton, PressPhase, PressState, Sense};
 use craft::ui::canvas::{CanvasSpace, canvas_space};
-use craft::ui::contract::{Common, Component, Cx, MeasureCx, Outcome, PaintUi, PartsCx, Props as _, Role};
+use craft::ui::contract::{Common, Component, Cx, MeasureCx, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Role, Show as _};
 use craft::ui::primitives::{PaintShape, StrokeWidth};
 use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
 use egui::{Color32, CornerRadius, Pos2, Rect, Response, Vec2};
@@ -148,7 +148,7 @@ impl Layout {
                 let ends = [at(a), at(b)];
                 if ends.iter().all(|p| p.is_finite()) {
                     l.nine.push(ends);
-                    l.item(Widget::Nine, HitShape::polyline(ends.to_vec(), false), move_cursor, 0);
+                    l.item(Widget::Nine, HitShape::polyline(ends.to_vec(), false), move_cursor.clone(), 0);
                 }
             }
         }
@@ -308,7 +308,7 @@ impl Component for SelectionWidgets {
             cx.part(item.widget.key().at(item.index), item.hit.clone())
                 .sense(Sense::DRAG | Sense::CLICK)
                 .priority(HitPriority::new(HitLevel::Edge, item.priority))
-                .cursor(item.cursor);
+                .cursor(item.cursor.clone());
         }
     }
 
@@ -485,7 +485,6 @@ pub(super) enum Gesture {
 /// The actions `g` gives for the press on `widget` that `held` holds, which this updates.
 pub(super) fn plan(app: &mut VectorcraftApp, held: &mut Option<Held>, widget: Widget, g: Gesture, mods: Mods) -> Vec<Action> {
     let view = app.view_info();
-    // PLAN: assumed `Session::with_tool_context<R: Default>(&mut self, view: ViewInfo, f: impl FnOnce(&ToolContext) -> R) -> R` (canvas-w25, tooling.rs).
     app.session.with_tool_context(view, |cx| match g {
         Gesture::Press(p) => {
             *held = Drag::hit(widget, cx, p, mods).map(|drag| Held { widget, drag, at: p });
@@ -520,10 +519,6 @@ pub(super) fn advance(app: &mut VectorcraftApp, held: &mut Option<Held>, widget:
         let result = app.session.apply_actions(actions);
         super::apply_requests(app, result);
     }
-}
-
-fn tool_mods(m: craft::keymap::Mods) -> Mods {
-    Mods { cmd: m.cmd, ctrl: m.ctrl, alt: m.alt, shift: m.shift }
 }
 
 /// Ends the drag `held` holds, as Escape does, when `layout` no longer shows its widget (another tool chosen, Edges or
@@ -561,14 +556,14 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
             continue;
         }
         let g = match press.phase {
-            PressPhase::Down { start } => Gesture::Press(space.view.to_doc(start.origin)),
+            PressPhase::Down { start, .. } => Gesture::Press(space.view.to_doc(start.origin)),
             PressPhase::DragStart { pos, .. } | PressPhase::Drag { pos, .. } => Gesture::Move(space.view.to_doc(pos)),
             PressPhase::Release { pos, click, .. } if widget == Widget::Shaper && click => Gesture::Click(space.view.to_doc(pos)),
             PressPhase::Release { pos, .. } => Gesture::Release(space.view.to_doc(pos)),
             PressPhase::Cancel { .. } => Gesture::Cancel,
             _ => continue,
         };
-        advance(app, &mut held, widget, g, tool_mods(press.mods));
+        advance(app, &mut held, widget, g, super::tool_adapter::tool_mods(press.mods, false));
     }
     ui.data_mut(|d| d.insert_temp(id, held));
 }

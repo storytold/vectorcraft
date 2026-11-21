@@ -49,14 +49,13 @@ fn params_of(result: &ParamResult) -> Value {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let selected = app.session.active().is_some_and(|d| !d.selection.is_empty());
-    let mut params: Vec<Param> =
-        options().into_iter().map(|(key, _, label)| Param::new(key, label, ParamKind::bool(matches!(key, "quotes" | "dashes" | "ellipsis")))).collect();
+    let mut params: Vec<Param> = options()
+        .into_iter()
+        .map(|(key, _, label)| Param::new(key, label, ParamKind::bool(matches!(key, "quotes" | "dashes" | "ellipsis"))))
+        .collect();
     params.push(Param::section(tl!("Replace In")));
     let scope = ParamKind::radio(
-        vec![
-            ("selection".to_owned(), Label::from(tl!("Selected Text Only"))),
-            ("document".to_owned(), Label::from(tl!("Entire Document"))),
-        ],
+        vec![("selection".to_owned(), Label::from(tl!("Selected Text Only"))), ("document".to_owned(), Label::from(tl!("Entire Document")))],
         Some("selection".to_owned()),
     );
     params.push(Param::new("scope", tl!("Replace In"), scope).disabled_options(if selected { vec![] } else { vec!["selection"] }));

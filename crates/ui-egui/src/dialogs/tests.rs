@@ -6,6 +6,7 @@ use vectorcraft_engine::Session;
 
 use super::*;
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 /// The window the tests draw in.
 pub(super) const SCREEN: egui::Vec2 = egui::vec2(1600.0, 1100.0);
@@ -663,7 +664,7 @@ fn free_distort_reset_puts_the_corners_back() {
 
 /// The id of the last object drawn on the first layer: the group a grid dialog made.
 fn last_group(app: &VectorcraftApp) -> vectorcraft_doc::Node {
-    app.session.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap().clone()
+    vectorcraft_doc::Node::clone(app.session.doc().unwrap().doc.layers[0].children().unwrap().last().unwrap())
 }
 
 #[test]

@@ -5,12 +5,12 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard};
 
 use craft::ui::contract::Bind;
 use craft::ui::dialog::DialogId;
-use craft::ui::runtime::env::Label;
-// PLAN: assumed paths of the form-dialog and live-preview items for the app crate.
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamLayout, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Map, Value};
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_effects::{MAP_ART, MAP_INVISIBLE, MAP_SHADE, MapSurface, is_classic_three_d};
+use vectorcraft_engine::EngineError;
 
 use super::form::{fields_of, json_of};
 use super::host::{HeldOptions, open_held_with};
@@ -30,7 +30,6 @@ pub(crate) struct Session {
     // PLAN: the contract has `item: Option<usize>`; the command needs `null` (the object's effects) apart from an omitted item.
     item: Option<Value>,
     index: Option<usize>,
-    // PLAN: ef.C13 lacks the edit target and `aligned`; effect.rs resolves them and hands them over (open question 3).
     edit_target: Value,
     aligned: bool,
     preview: LivePreview,
@@ -73,7 +72,6 @@ pub(crate) fn data(app: &VectorcraftApp, effect: Option<&str>, params: &Map<Stri
         unit: app.session.general_unit(),
         bevels: effect.map(|e| revolve::bevel_options(app, params, e).0).unwrap_or_default(),
         bevels_file: app.session.bevels.path().is_some(),
-        // PLAN: assumed `st.doc` is an `Arc<Document>`.
         doc: st.map(|s| s.doc.clone()),
         revision: st.map_or(0, |s| s.revision),
         selected: st.is_some_and(|s| !s.selection.objects.is_empty()),
@@ -167,13 +165,13 @@ fn cancel(app: &mut VectorcraftApp) {
     }
 }
 
-fn dialog_of<R>(app: &mut VectorcraftApp, id: DialogId, f: impl FnOnce(&mut HostedParamDialog) -> R) -> Option<R> {
-    app.dialogs().get_mut_by_id::<HostedParamDialog>(id).map(f) // PLAN: assumed `DialogHost::get_mut_by_id`
+fn dialog_of<R>(app: &VectorcraftApp, id: DialogId, f: impl FnOnce(&mut HostedParamDialog) -> R) -> Option<R> {
+    app.dialogs()?.with(|h| h.get_mut_by_id::<HostedParamDialog>(id).map(f))
 }
 
 fn peek<R>(app: &VectorcraftApp, f: impl FnOnce(&HostedParamDialog) -> R) -> Option<R> {
     let id = app.three_d_dialog.as_ref()?.id;
-    app.dialogs_ref().get_by_id::<HostedParamDialog>(id).map(f) // PLAN: assumed shared access to the dialog host
+    app.dialogs()?.with(|h| h.get_by_id::<HostedParamDialog>(id).map(f))
 }
 
 /// Gives the gizmo and the outline the open dialog; `None` when there is none.
@@ -256,7 +254,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         // Waits for another interaction to end: trying inside it would replace its preview and cancel it. A failure
         // to begin leaves no interaction: the try then reports it.
         let _ = app.begin_interaction(&s.label);
-        verdict = Some(app.session.preview(cmd, &p).map(|_| ()));
+        verdict = Some(app.session.preview(cmd, &p).map(|_| ()).map_err(|e| match e {
+            EngineError::BadParams { msg, .. } => msg,
+            other => other.to_string(),
+        }));
         // Only a try: without an interaction there is nothing to roll back.
         let _ = app.session.cancel_interaction();
         s.tried = Some(p);

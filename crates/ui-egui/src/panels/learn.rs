@@ -77,7 +77,7 @@ fn run(app: &mut VectorcraftApp, cmd: &str, params: Value) {
 /// The key a collection's last selection change set, if any: a click on a row or a tab.
 fn picked<K, E>(events: Vec<CollectionEvent<K, E>>) -> Option<K> {
     events.into_iter().rev().find_map(|event| match event {
-        CollectionEvent::Selection(SelectionChange::Set(keys)) => keys.into_iter().last(),
+        CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.into_iter().last(),
         _ => None,
     })
 }
@@ -306,7 +306,7 @@ impl Glyph for SkillRing {
         let width = tokens.stroke.thin;
         let center = rect.center();
         let radius = rect.width().min(rect.height()) / 2.0 - width;
-        painter.circle_stroke(center, radius, Stroke::new(width, rgba_color(tokens.color.border)));
+        painter.circle_stroke(center, radius, Stroke::new(width, rgba_color(tokens.color.line.border)));
         if self.done == 0 || self.total == 0 {
             return;
         }
@@ -339,12 +339,12 @@ impl Glyph for TutorialCheck {
         let center = rect.center();
         let radius = rect.width().min(rect.height()) / 2.0 - width;
         if !self.0 {
-            painter.circle_stroke(center, radius, Stroke::new(width, rgba_color(tokens.color.border)));
+            painter.circle_stroke(center, radius, Stroke::new(width, rgba_color(tokens.color.line.border)));
             return;
         }
         painter.circle_filled(center, radius, rgba_color(tokens.color.accent.solid));
         let tick = vec![center + radius * vec2(-0.5, 0.0), center + radius * vec2(-0.14, 0.36), center + radius * vec2(0.5, -0.36)];
-        painter.add(Shape::line(tick, Stroke::new(width, rgba_color(tokens.color.panel))));
+        painter.add(Shape::line(tick, Stroke::new(width, rgba_color(tokens.color.surface.panel))));
     }
 }
 

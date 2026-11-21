@@ -133,7 +133,7 @@ impl Harness {
         craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         let app = &mut self.app;
         let mut full = self.ctx.run_ui(input, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         full.textures_delta.clear();
@@ -276,12 +276,12 @@ fn enter_and_escape_in_a_native_windows_field_stay_in_the_field() {
         }
         h.frames(2);
         h.key_in(viewport, key);
-        assert!(!h.app.dialogs().any_dialog_open(), "{key:?} in the field opens no dialog");
+        assert!(!h.app.any_dialog_open(), "{key:?} in the field opens no dialog");
         assert_eq!(h.app.session.active().unwrap().selection.objects.len(), 1, "{key:?} in the field keeps the selection");
     }
     // Keys typed with no field editing still reach the main window.
     h.key_in(viewport, Key::Enter);
-    assert!(h.app.dialogs().any_dialog_open(), "Enter outside a field opens the Move dialog");
+    assert!(h.app.any_dialog_open(), "Enter outside a field opens the Move dialog");
 }
 
 /// A file dropped on a native panel window opens through the same route as one dropped on the app

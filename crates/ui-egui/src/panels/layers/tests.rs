@@ -362,7 +362,7 @@ fn cmd_alt_l_opens_new_layer_options() {
     press(&mut app, "Cmd+Alt+L");
     let dialogs = open(&app);
     assert_eq!(dialogs.len(), 1, "one dialog opens");
-    assert_eq!(dialogs[0].fields.get("mode"), Some(&json!("new")), "Layer Options for a new layer");
+    assert_eq!(dialogs[0].fields.as_ref().and_then(|f| f.get("mode")), Some(&json!("new")), "Layer Options for a new layer");
     assert_eq!(layers(&app), 1, "nothing is added before OK");
     answer(&mut app, &ctx, false);
     assert_eq!(layers(&app), 1, "Cancel adds none");

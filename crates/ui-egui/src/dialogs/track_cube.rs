@@ -114,9 +114,10 @@ fn edge_visible(m: M3, i: usize, axis: usize) -> bool {
 }
 
 /// What a press on the track cube takes hold of.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 enum Grip {
     /// A face: a free turn, or with Shift about the screen's horizontal or vertical axis.
+    #[default]
     Face,
     /// An edge: a turn about the object axis the edge runs along.
     Edge(usize),
@@ -165,7 +166,7 @@ fn sweep(from: Pos2, to: Pos2, center: Pos2) -> f64 {
 }
 
 /// A track cube gesture in progress.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct CubeDrag {
     grip: Grip,
     /// The rotation so far, kept unrounded so a long drag does not drift.

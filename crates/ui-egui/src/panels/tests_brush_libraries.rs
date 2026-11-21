@@ -10,6 +10,7 @@ use super::brushes::BrushLibraries;
 use super::library_panel::tests::{click, confirm_save, context, menu_library_ids};
 use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

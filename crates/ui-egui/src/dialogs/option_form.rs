@@ -3,9 +3,6 @@
 //! an [`OptionSpec`]: its keys, its rows, what OK runs. OK files the values as a held answer; [`pump`] checks the
 //! colours, runs the spec and answers it, so a refusal keeps the dialog open with its reason.
 
-// PLAN: hub-w2 owns `dialogs.rs`: it declares `pub mod layer_color;` and `pub mod option_form;`, drops the five
-// registry rows and calls `option_form::pump` and `live_paint_gaps::pump` (in that order) from `dialogs::host::pump`.
-
 use std::ops::RangeInclusive;
 
 use craft::theme::variant::Tone;
@@ -25,6 +22,7 @@ use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 
 use super::tile_edge_color::checked;
+pub(super) use super::tool_options::title as tool_title;
 use super::{layer_color, live_paint_bucket, live_paint_gaps, live_paint_selection, shape_builder_options, tile_edge_color};
 use crate::VectorcraftApp;
 use crate::canvas::rulers::unit_kind;
@@ -55,13 +53,8 @@ pub(super) struct OptionSpec {
 }
 
 /// Every dialog the form serves, to find the spec of a finished dialog by its kind.
-static SPECS: [&OptionSpec; 5] = [
-    &live_paint_bucket::SPEC,
-    &live_paint_selection::SPEC,
-    &shape_builder_options::SPEC,
-    &tile_edge_color::SPEC,
-    &live_paint_gaps::SPEC,
-];
+static SPECS: [&OptionSpec; 5] =
+    [&live_paint_bucket::SPEC, &live_paint_selection::SPEC, &shape_builder_options::SPEC, &tile_edge_color::SPEC, &live_paint_gaps::SPEC];
 
 /// The rows of a dialog over its values: each row reads a key and writes it when the user changes it.
 pub(super) struct Rows<'a> {
@@ -224,12 +217,6 @@ pub(super) fn open_tool(app: &mut VectorcraftApp, spec: &'static OptionSpec, too
     let values = spec.keys.iter().filter_map(|key| Some((key.to_string(), options.get(*key)?.clone()))).collect();
     open(app, spec, values, Value::Null).ok_or("no window")?;
     Ok(json!({ "dialog": spec.key }))
-}
-
-/// The title of the options dialog of `tool`.
-pub(super) fn tool_title(tool: &str) -> String {
-    let label = vectorcraft_tools::tool_info(tool).map_or("", |t| t.label);
-    crate::i18n::fmt(tl!("{tool} Options"), &[("tool", tl!(label))])
 }
 
 /// Sets `tool`'s options to `values`; the tool refuses a value it cannot take and sets none.
@@ -451,9 +438,7 @@ pub(super) mod tests {
         host.with(|host| host.confirm::<OptionForm>(&ctx));
         pump_all(app);
         // Another OK after a refusal would file the refused values again.
-        host.with(|host| {
-            host.get::<OptionForm>().and_then(|form| form.held_state()) == Some(HeldOk::Accepted) && host.confirm::<OptionForm>(&ctx)
-        })
+        host.with(|host| host.get::<OptionForm>().and_then(|form| form.held_state()) == Some(HeldOk::Accepted) && host.confirm::<OptionForm>(&ctx))
     }
 
     /// Closes the open form as Cancel or Escape does, then runs the pumps, which release what the dialog held.

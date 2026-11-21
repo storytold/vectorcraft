@@ -27,6 +27,7 @@ use craft::behavior::IconId;
 use craft::behavior::dock::{Action, DockEdge};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::dialog::DialogResult;
 use craft::ui::display::Divider;
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::form_dialogs::{
@@ -155,9 +156,26 @@ pub(crate) fn create(app: &mut VectorcraftApp, name: &str) -> Result<String, Str
         return Err(format!("a workspace keeps at most {MAX} toolbars"));
     }
     let id = next_id(&app.ui.custom_toolbars);
-    app.ui.custom_toolbars.push(CustomToolbar { id, name: name.clone(), slots: vec![], last_used: Default::default() });
+    app.ui.custom_toolbars.push(blank(id, name.clone()));
     float_new(app, id, NEW_AT, 0, 0.0)?;
     Ok(name)
+}
+
+/// A toolbar with no tools, called `name`, whose panel is `toolbar:<id>`.
+fn blank(id: u32, name: String) -> CustomToolbar {
+    CustomToolbar {
+        id,
+        name,
+        slots: Vec::new(),
+        last_used: Default::default(),
+        shown: true,
+        pos: [0.0; 2],
+        dock: None,
+        dock_right: false,
+        slot_tool: Default::default(),
+        double: false,
+        floating: Vec::new(),
+    }
 }
 
 /// Where the toolbar named `name` is in the list, whatever its case.
@@ -241,7 +259,7 @@ pub(crate) fn delete(app: &mut VectorcraftApp, name: &str) -> Result<(), String>
     let mut panels: Vec<String> = crate::toolbar::strips(app, Some(&bar_name))
         .iter()
         .filter_map(|tools| tools.first())
-        .map(|first| strip_id(Owner::Toolbar(id), first))
+        .map(|first| strip_id(&Owner::Toolbar(id), first))
         .collect();
     panels.push(panel_id(id));
     close_drawer(&mut app.ui, &bar_name, None);
@@ -294,7 +312,7 @@ pub(crate) fn keep_strips(app: &mut VectorcraftApp, id: u32) {
         .iter()
         .filter_map(|tools| tools.first())
         .filter(|first| !holds(first))
-        .map(|first| strip_id(Owner::Toolbar(id), first))
+        .map(|first| strip_id(&Owner::Toolbar(id), first))
         .collect();
     close_panels(app, gone);
 }
@@ -346,17 +364,19 @@ fn manage_id() -> craft::ui::dialog::DialogId {
 
 /// Opens Manage Toolbars; one already open stays.
 fn open_manage(app: &mut VectorcraftApp) -> Result<(), String> {
-    if app.dialogs().get_mut_by_id::<HostedListManager>(manage_id()).is_some() {
-        return Ok(());
-    }
+    let dialogs = app.dialogs().ok_or("no window")?;
     let words = ListManagerWords::default();
     // Copy is a row action that takes the selected entry like Edit does, so it starts from it.
     let mut copy = ListManagerAction::edit(&words);
     copy.id = DUPLICATE.into();
     copy.label = tl!("Duplicate Toolbar").into();
     let actions = vec![copy.keeps_open(), ListManagerAction::delete(&words), ListManagerAction::create(&words).keeps_open()];
-    let dialog = HostedListManager::new(MANAGE_KEY, tl!("Manage Toolbars"), tl!("Name:"), actions).renames(ENTRY_KIND);
-    app.dialogs().open(dialog);
+    let dialog = HostedListManager::new(MANAGE_KEY, tl!("Manage Toolbars"), tl!("Name:"), actions).entries(entries(&app.ui)).renames(ENTRY_KIND);
+    dialogs.with(|host| {
+        if host.get_by_id::<HostedListManager>(manage_id()).is_none() {
+            host.open(dialog);
+        }
+    });
     Ok(())
 }
 
@@ -368,12 +388,23 @@ fn entries(ui: &UiState) -> Vec<ListManagerEntry> {
 /// Once per frame: Manage Toolbars shows the toolbars as they are now, and the action pressed in it
 /// runs as the command of the same name.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
     let rows = entries(&app.ui);
-    let choice = app.dialogs().get_mut_by_id::<HostedListManager>(manage_id()).and_then(|d| {
-        d.set_entries(rows);
-        d.take_choice()
+    // A choice that kept the dialog open waits on it; the one that closed it is its answer.
+    let choices = dialogs.with(|host| {
+        let kept = host.get_mut_by_id::<HostedListManager>(manage_id()).and_then(|d| {
+            d.set_entries(rows);
+            d.take_choice()
+        });
+        [kept, host.take_by_id::<HostedListManager>(manage_id()).and_then(DialogResult::ok)]
     });
-    let Some(choice) = choice else { return };
+    for choice in choices.into_iter().flatten() {
+        run_choice(app, &choice);
+    }
+}
+
+/// Runs the Manage Toolbars action `choice` as the command of the same name.
+fn run_choice(app: &mut VectorcraftApp, choice: &ListManagerChoice) {
     let name = choice
         .entry
         .as_deref()
@@ -562,7 +593,7 @@ mod tests {
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
         let raw = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() };
         ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         })
         .textures_delta
@@ -629,7 +660,9 @@ mod tests {
         // Without a name: New Toolbar opens on the dialog host, and makes no toolbar by itself.
         window_frame(&mut app, &ctx, 0.0, 800.0);
         assert_eq!(app.run("window.toolbar.new", json!({})).unwrap(), Value::Null);
-        assert!(app.dialogs().get_mut_by_id::<HostedParamDialog>(craft::ui::dialog::dialog_id(NEW_KEY)).is_some());
+        let new_open =
+            |d: craft::ui::shell::WindowDialogs| d.with(|h| h.get_by_id::<HostedParamDialog>(craft::ui::dialog::dialog_id(NEW_KEY)).is_some());
+        assert!(app.dialogs().is_some_and(new_open));
         assert_eq!(app.ui.custom_toolbars.len(), 1);
         app.run("window.toolbar.new", json!({"name": "Toolbar 1"})).unwrap();
         let names: Vec<String> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();
@@ -719,7 +752,7 @@ mod tests {
         window_frame(&mut app, &ctx, 0.0, 800.0);
         window_frame(&mut app, &ctx, 0.1, 800.0);
         let mine = panel_id(find(&app.ui, "Mine").unwrap().id);
-        let (mine_strip, tools_strip) = (strip_id(Owner::Toolbar(find(&app.ui, "Mine").unwrap().id), "pen"), strip_id(Owner::Tools, "pen"));
+        let (mine_strip, tools_strip) = (strip_id(&Owner::Toolbar(find(&app.ui, "Mine").unwrap().id), "pen"), strip_id(&Owner::Tools, "pen"));
         assert!(panel_docking::visible(&app, &mine) && panel_docking::visible(&app, &mine_strip) && panel_docking::visible(&app, &tools_strip));
         // Window › Tools hides the Tools panel and its strip alone.
         app.run("window.toolbar", json!({})).unwrap();
@@ -926,10 +959,8 @@ mod tests {
     #[test]
     fn toolbars_load_sanitized() {
         let bar = |id: u32, name: &str, slots: &[&[&str]]| CustomToolbar {
-            id,
-            name: name.into(),
             slots: slots.iter().map(|s| s.iter().map(|id| id.to_string()).collect()).collect(),
-            last_used: Default::default(),
+            ..blank(id, name.into())
         };
         let slot = crate::toolbar::slot_id;
         let long = "x".repeat(MAX_NAME + 1);

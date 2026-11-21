@@ -26,6 +26,7 @@ use crate::canvas::rulers::general_lengths;
 use crate::chrome::rank;
 use crate::edits::{self, EditPath};
 use crate::menus::cp;
+use crate::panels::{Live, live_run};
 
 /// A choice's value, its label and its icon name.
 type Choice = (&'static str, &'static str, &'static str);
@@ -85,7 +86,7 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
 }
 
 /// One ranked member of the group: the unit a narrow bar leaves out whole.
-fn member(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
+fn member(ui: &mut Ui, mut add: impl FnMut(&mut Ui)) {
     Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| add(ui));
 }
 
@@ -117,9 +118,9 @@ fn choice(ui: &mut Ui, caption: &'static str, current: &str, choices: &[Choice])
 fn link(ui: &mut Ui, on: bool, icon: IconId, on_icon: Option<IconId>) -> Option<bool> {
     let mut flipped = None;
     member(ui, |ui| {
-        let mut button = ToggleButton::new(tr("Link"), Bind::given(on)).icon(icon).icon_only();
-        if let Some(on_icon) = on_icon {
-            button = button.on_icon(on_icon);
+        let mut button = ToggleButton::new(tr("Link"), Bind::given(on)).icon(icon.clone()).icon_only();
+        if let Some(on_icon) = &on_icon {
+            button = button.on_icon(on_icon.clone());
         }
         flipped = button.show(ui).value().copied();
     });
@@ -157,38 +158,44 @@ fn length(caption: &str, value: f64, lengths: LengthUnits) -> NumberField<'stati
 }
 
 /// A member with `field` under a scrubbable side label. A committed or scrubbed value goes to `apply`
-/// as one live edit; an emptied field changes nothing.
+/// with its phase, so a scrub is one live edit; an emptied field changes nothing.
 fn number(
     app: &mut VectorcraftApp,
     ui: &mut Ui,
     key: &'static str,
     caption: &str,
     field: NumberField<'static>,
-    mut apply: impl FnMut(&mut VectorcraftApp, f64),
+    mut apply: impl FnMut(&mut VectorcraftApp, f64, Live),
 ) {
+    let mut field = Some(field.scrub_by_label());
     member(ui, |ui| {
-        let mut field = Some(field.scrub_by_label());
         let mut response: Option<EditResponse<Option<f64>>> = None;
         Field::new(caption_of(caption)).id_salt(("cb-shape", key)).side(SideLabel::new().scrub(true)).show(ui, |ui, _| {
-            response = field.take().map(|field| field.show(ui));
+            response = field.take().map(|field| field.show(ui).edit);
         });
         if let Some(response) = response {
-            let path = EditPath::Preview { label: "Live Shape".into(), cmd: "addon.shapes.configure".into() };
-            edits::apply_edits(app, &response, path, |app, value| {
+            edits::apply_edits(app, &response, EditPath::Preview, |app, value, phase| {
                 if let Some(value) = *value {
-                    apply(app, value);
+                    apply(app, value, phase);
                 }
             });
         }
     });
 }
 
+/// A click's change of the shape: the tool's options, and the selected live shapes in one step.
 fn apply_shape(app: &mut VectorcraftApp, tool_kvs: &[(&str, Value)], live_patch: Value) {
+    shape_edit(app, tool_kvs, live_patch, Live::Released);
+}
+
+/// Sets the tool's options and edits the selected live shapes in phase `phase` of a field's edit: a
+/// scrub previews them, and its release makes the one step.
+fn shape_edit(app: &mut VectorcraftApp, tool_kvs: &[(&str, Value)], live_patch: Value, phase: Live) {
     for (k, v) in tool_kvs {
         app.run("tool.setOption", json!({ "key": *k, "value": v.clone() })).ok();
     }
     if app.session.active().is_some_and(|st| !st.selection.is_empty()) {
-        app.run("addon.shapes.configure", live_patch).ok();
+        live_run(app, "Live Shape", "addon.shapes.configure", live_patch, phase);
     }
 }
 
@@ -196,12 +203,12 @@ fn draw_arc_controls(app: &mut VectorcraftApp, ui: &mut Ui, start_deg: f64, end_
     // A whole ellipse becomes a pie once an angle is typed.
     let next_mode = if mode == "whole" { "pie" } else { mode };
     let start = plain(tl!("Start:"), start_deg, Some(UnitKind::Degrees), 1, None, ui);
-    number(app, ui, "arc-start", "Start:", start, |app, v| {
-        apply_shape(app, &[("arcStart", json!(v)), ("arcMode", json!(next_mode))], json!({ "startAngle": v, "arcMode": next_mode }));
+    number(app, ui, "arc-start", "Start:", start, |app, v, phase| {
+        shape_edit(app, &[("arcStart", json!(v)), ("arcMode", json!(next_mode))], json!({ "startAngle": v, "arcMode": next_mode }), phase);
     });
     let end = plain(tl!("End:"), end_deg, Some(UnitKind::Degrees), 1, None, ui);
-    number(app, ui, "arc-end", "End:", end, |app, v| {
-        apply_shape(app, &[("arcEnd", json!(v)), ("arcMode", json!(next_mode))], json!({ "endAngle": v, "arcMode": next_mode }));
+    number(app, ui, "arc-end", "End:", end, |app, v, phase| {
+        shape_edit(app, &[("arcEnd", json!(v)), ("arcMode", json!(next_mode))], json!({ "endAngle": v, "arcMode": next_mode }), phase);
     });
     const MODES: [Choice; 4] =
         [("pie", "Slice", "target"), ("chord", "Closed", "circle-off"), ("arc", "Arc", "dc-arc"), ("whole", "Open", "dc-ellipse")];
@@ -255,16 +262,16 @@ fn draw_rectangle_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, 
         apply_shape(app, &[("cornerSymmetry", json!(next_sym))], if next_sym { json!({ "radius": radii[0] }) } else { json!({ "radii": radii }) });
     }
     if sym {
-        number(app, ui, "rect-r", "Radius:", length("Radius:", radii[0], lengths), |app, v| {
+        number(app, ui, "rect-r", "Radius:", length("Radius:", radii[0], lengths), |app, v, phase| {
             let r = v.max(0.0);
-            apply_shape(app, &[("cornerRadius", json!(r)), ("cornerRadii", json!([r, r, r, r]))], json!({ "radius": r }));
+            shape_edit(app, &[("cornerRadius", json!(r)), ("cornerRadii", json!([r, r, r, r]))], json!({ "radius": r }), phase);
         });
     } else {
         for (i, (key, caption)) in [("rect-tl", "TL"), ("rect-tr", "TR"), ("rect-br", "BR"), ("rect-bl", "BL")].into_iter().enumerate() {
-            number(app, ui, key, caption, length(caption, radii[i], lengths), |app, v| {
+            number(app, ui, key, caption, length(caption, radii[i], lengths), |app, v, phase| {
                 let mut next = radii;
                 next[i] = v.max(0.0);
-                apply_shape(app, &[("cornerRadii", json!(next))], json!({ "radii": next }));
+                shape_edit(app, &[("cornerRadii", json!(next))], json!({ "radii": next }), phase);
             });
         }
     }
@@ -312,23 +319,23 @@ fn draw_polygon_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, ac
         None => {}
     }
     let corners = if is_star { "Points:" } else { "Sides:" };
-    number(app, ui, "poly-corners", corners, plain(corners, f64::from(count), None, 0, Some(3.0..=1000.0), ui), |app, v| {
+    number(app, ui, "poly-corners", corners, plain(corners, f64::from(count), None, 0, Some(3.0..=1000.0), ui), |app, v, phase| {
         let c = (v.round() as i64).clamp(3, 1000) as u32;
-        apply_shape(app, &[("sides", json!(c)), ("points", json!(c))], json!({ "sides": c }));
+        shape_edit(app, &[("sides", json!(c)), ("points", json!(c))], json!({ "sides": c }), phase);
     });
     if is_star {
-        number(app, ui, "poly-spoke", "Ratio", plain("Ratio", spoke, None, 2, Some(0.01..=1.0), ui), |app, v| {
+        number(app, ui, "poly-spoke", "Ratio", plain("Ratio", spoke, None, 2, Some(0.01..=1.0), ui), |app, v, phase| {
             let sr = v.clamp(0.01, 1.0);
-            apply_shape(app, &[("starRatio", json!(sr))], json!({ "spokeRatio": sr }));
+            shape_edit(app, &[("starRatio", json!(sr))], json!({ "spokeRatio": sr }), phase);
         });
     }
-    number(app, ui, "poly-round", "Round", plain("Round", rounded, None, 2, Some(-10.0..=10.0), ui), |app, v| {
+    number(app, ui, "poly-round", "Round", plain("Round", rounded, None, 2, Some(-10.0..=10.0), ui), |app, v, phase| {
         let rnd = v.clamp(-10.0, 10.0);
-        apply_shape(app, &[("rounded", json!(rnd))], json!({ "rounded": rnd }));
+        shape_edit(app, &[("rounded", json!(rnd))], json!({ "rounded": rnd }), phase);
     });
-    number(app, ui, "poly-rand", "Random", plain("Random", randomized, None, 2, Some(-10.0..=10.0), ui), |app, v| {
+    number(app, ui, "poly-rand", "Random", plain("Random", randomized, None, 2, Some(-10.0..=10.0), ui), |app, v, phase| {
         let rand = v.clamp(-10.0, 10.0);
-        apply_shape(app, &[("randomized", json!(rand))], json!({ "randomized": rand }));
+        shape_edit(app, &[("randomized", json!(rand))], json!({ "randomized": rand }), phase);
     });
     divider(ui);
     draw_arc_controls(app, ui, start_deg, end_deg, mode);
@@ -349,17 +356,17 @@ fn draw_spiral_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sel
         divergence = div_v;
         inner_r = ir_v;
     }
-    number(app, ui, "spiral-turns", "Segments", plain("Segments", turns, None, 2, Some(0.01..=1024.0), ui), |app, v| {
+    number(app, ui, "spiral-turns", "Segments", plain("Segments", turns, None, 2, Some(0.01..=1024.0), ui), |app, v, phase| {
         let tv = v.clamp(0.01, 1024.0);
-        apply_shape(app, &[("turns", json!(tv))], json!({ "turns": tv }));
+        shape_edit(app, &[("turns", json!(tv))], json!({ "turns": tv }), phase);
     });
-    number(app, ui, "spiral-div", "Ratio", plain("Ratio", divergence, None, 2, Some(0.0..=1000.0), ui), |app, v| {
+    number(app, ui, "spiral-div", "Ratio", plain("Ratio", divergence, None, 2, Some(0.0..=1000.0), ui), |app, v, phase| {
         let dv = v.clamp(0.0, 1000.0);
-        apply_shape(app, &[("divergence", json!(dv))], json!({ "divergence": dv }));
+        shape_edit(app, &[("divergence", json!(dv))], json!({ "divergence": dv }), phase);
     });
-    number(app, ui, "spiral-inner", "Inner Radius:", plain("Inner Radius:", inner_r, None, 2, Some(0.0..=0.999), ui), |app, v| {
+    number(app, ui, "spiral-inner", "Inner Radius:", plain("Inner Radius:", inner_r, None, 2, Some(0.0..=0.999), ui), |app, v, phase| {
         let iv = v.clamp(0.0, 0.999);
-        apply_shape(app, &[("innerRadius", json!(iv))], json!({ "innerRadius": iv }));
+        shape_edit(app, &[("innerRadius", json!(iv))], json!({ "innerRadius": iv }), phase);
     });
     if reset(ui) {
         apply_shape(app, &[("turns", json!(3.0)), ("divergence", json!(1.0)), ("innerRadius", json!(0.0))], json!({ "reset": true }));
@@ -382,8 +389,8 @@ fn draw_box3d_controls(app: &mut VectorcraftApp, ui: &mut Ui, opts: &Value, sele
     for (lbl, a_key, p_key, a_val, p_val) in
         [("X:", "angleX", "parallelX", ax, px), ("Y:", "angleY", "parallelY", ay, py), ("Angle:", "angleZ", "parallelZ", az, pz)]
     {
-        number(app, ui, a_key, lbl, plain(lbl, a_val, Some(UnitKind::Degrees), 1, None, ui), |app, v| {
-            apply_shape(app, &[(a_key, json!(v))], json!({ a_key: v }));
+        number(app, ui, a_key, lbl, plain(lbl, a_val, Some(UnitKind::Degrees), 1, None, ui), |app, v, phase| {
+            shape_edit(app, &[(a_key, json!(v))], json!({ a_key: v }), phase);
         });
         if let Some(next) = link(ui, p_val, IconId::new("dc-line"), None) {
             apply_shape(app, &[(p_key, json!(next))], json!({ p_key: next }));

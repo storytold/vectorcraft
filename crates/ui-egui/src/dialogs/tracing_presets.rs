@@ -47,7 +47,7 @@ pub(crate) const PRESET_KIND: &str = "tracingPreset";
 pub(crate) const REPLACE_KIND: &str = "tracingPresetsReplace";
 
 /// The rows the preset list shows before it scrolls.
-const LIST_ROWS: usize = 10;
+const LIST_ROWS: u16 = 10;
 
 /// What a button asked for, done by [`pump`] once the dialog is drawn.
 enum Action {
@@ -130,7 +130,7 @@ impl StackDialog for Manager {
                 .selection(Bind::given(Selection::single(at)))
                 .show_items(ui, &Labels(&labels), &mut |&k, _| ListRow::new(labels[k].clone()));
             for event in out.events {
-                if let CollectionEvent::Selection(SelectionChange::Set(keys)) = event
+                if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
                     && let Some(p) = keys.last().and_then(|&k| list.presets.get(k))
                 {
                     *action = Some(Action::Select(p.0.clone()));
@@ -246,7 +246,7 @@ fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Result<(), Strin
             let _ = file_asks::ask(app, request, Owner::Free, picked);
         }
         Action::Export => {
-            crate::io::save_command_output(app, "imageTrace.presets.export", TRACE_PRESET_FORMAT, json!({}))?;
+            crate::io::save_command_output(app, "imageTrace.presets.export", TRACE_PRESET_FORMAT, json!({}), |_, _| Ok(Value::Null))?;
         }
     }
     Ok(())

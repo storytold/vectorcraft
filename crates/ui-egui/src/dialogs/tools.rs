@@ -26,15 +26,14 @@ fn click_of(p: &Value) -> Option<Click> {
 pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
     match kind {
         "rectangle" | "ellipse" | "roundedRectangle" | "polygon" | "star" | "lineSegment" | "spiral" | "arc" | "rectangularGrid" | "polarGrid" => {
-            // PLAN: assumed shapes::open(app, &str, Option<Click>) -> Result<_, String>
-            let r = shapes::open(app, kind, click_of(&p));
-            reported(app, r);
+            shapes::open(app, kind, click_of(&p));
         }
         // Graph tool click: the graph's size.
         "graph" => {
             let at = click_of(&p).map_or(Point::new(0.0, 0.0), |c| c.at);
-            let params = json!({"type": p.get("type").cloned().unwrap_or(json!("column")), "x": at.x, "y": at.y, "width": 200, "height": 150});
-            // PLAN: assumed command::open(app, &str, &str, Value) -> Result<_, String>
+            let graph_type = p.get("type").cloned().unwrap_or(json!("column"));
+            let params = [("type", graph_type), ("x", json!(at.x)), ("y", json!(at.y)), ("width", json!(200)), ("height", json!(150))];
+            let params = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
             let r = command::open(app, "graph.create", "Graph", params);
             reported(app, r);
         }
@@ -48,14 +47,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             flare_options::open(app, click_of(&p).map(|c| c.at));
         }
         "rotate" | "reflect" | "scale" | "shear" => {
-            // PLAN: assumed transform::Kind::of_tool(&str) -> Option<Kind>; open -> Result<_, String>
             if let Some(k) = transform::Kind::of_tool(kind) {
-                let r = transform::open(app, k, &p);
-                reported(app, r);
+                transform::open(app, k, &p);
             }
         }
         "artboardOptions" => {
-            // PLAN: assumed artboard_options::open(app) -> Result<_, String>
             let r = artboard_options::open(app);
             reported(app, r);
         }
@@ -63,9 +59,7 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         "gradientStop" => {
             let index = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
             let coordinate = |key: &str| p.get(key).and_then(Value::as_f64).unwrap_or(0.0);
-            // PLAN: assumed gradient_stop::open_at(app, usize, Anchor) -> Result<_, String>
-            let r = gradient_stop::open_at(app, index, gradient_stop::Anchor::Chip(Point::new(coordinate("x"), coordinate("y"))));
-            reported(app, r);
+            gradient_stop::open_at(app, index, gradient_stop::Anchor::Chip(Point::new(coordinate("x"), coordinate("y"))));
         }
         // Image Trace's Ignore Color eyedropper updates the panel, not the document's paint.
         "imageTraceIgnoreColor" => crate::panels::image_trace::apply_ignore_color_sample(app, &p),

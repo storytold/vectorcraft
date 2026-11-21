@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use craft::host::{PickRequest, Picked};
+use craft::host::{Host, PickRequest, Picked};
 use craft::keymap::{
     AssignError, Binding, CommandDef, CommandKind, ConflictKind, ForeignSet, ImportOptions, Keymap, Overrides, Policy, PressKind, Profiles, Trigger,
 };
@@ -924,10 +924,10 @@ pub fn export_sections(keymap: &Keymap) -> Vec<crate::shortcut_sheet::Section> {
 
 /// The file `format` writes for the set `name` of `keymap`: the sheet on `page`, the text in the
 /// words of `ui`.
-fn export_text_file(format: TextFormat, keymap: &Keymap, name: &str, page: PageSize, ui: &egui::Ui) -> Result<Vec<u8>, String> {
+fn export_text_file(format: TextFormat, keymap: &Keymap, name: &str, page: PageSize, host: &Arc<Host>) -> Result<Vec<u8>, String> {
     let title = format!("{} · {name}", tl!("Keyboard Shortcuts"));
     match format {
-        TextFormat::Text => Ok(summary::text(keymap, ui, &title).into_bytes()),
+        TextFormat::Text => Ok(summary::text_for(keymap, host, &title).into_bytes()),
         TextFormat::Sheet => crate::shortcut_sheet::sheet_pdf(&title, &export_sections(keymap), page),
         TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(keymap), ["Group", "Command", "Shortcut"]).into_bytes()),
     }
@@ -1064,7 +1064,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         Some(Outcome::ExportAs { format, name, keymap, .. }) => {
             let format = TextFormat::ALL.into_iter().find(|f| f.name() == format).unwrap_or(TextFormat::Text);
             let page = default_sheet_page(app);
-            let written = export_text_file(format, &keymap, &name, page, ui)
+            let written = export_text_file(format, &keymap, &name, page, &app.host)
                 .and_then(|bytes| crate::io::save::write_named(app, None, &format.file_name(), bytes, |_, path| Ok(json!({ "path": path }))));
             report(app, written);
         }
@@ -1420,7 +1420,7 @@ fn write_text_file(
     page: PageSize,
     path: Option<String>,
 ) -> Result<Value, String> {
-    let bytes = export_text_file(format, keymap, name, page, ui)?;
+    let bytes = export_text_file(format, keymap, name, page, &app.host)?;
     match path {
         Some(path) => match app.services.write.as_mut() {
             Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
@@ -1489,6 +1489,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::LangExt as _;
     use craft::keymap::Scopes;
 
     /// Runs `f` again until no plug-in was installed or removed while it ran, and returns what it

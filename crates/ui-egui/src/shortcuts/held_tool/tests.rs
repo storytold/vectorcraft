@@ -6,7 +6,7 @@ use super::*;
 
 /// A keyboard on one context, so egui keeps the keys held down from frame to frame and marks a
 /// held key's later presses as repeats, with the frame times the test sets. A frame runs the app's own
-/// `logic` and `ui`.
+/// `tick` and `ui`.
 struct Keyboard {
     ctx: egui::Context,
 }
@@ -25,7 +25,7 @@ impl Keyboard {
     fn frame_with_focus(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>, focused: bool) {
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
         let mut out = self.ctx.run_ui(egui::RawInput { events, screen_rect, time: Some(time), focused, ..Default::default() }, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();
@@ -194,7 +194,7 @@ fn a_view_tool_drag_counts_as_using_the_held_tool() {
         let mut app = pen_app();
         let keys = Keyboard::new();
         keys.frame(&mut app, 0.0, vec![]);
-        let at = app.canvas_rect.expect("the canvas was drawn").center();
+        let at = app.canvas_view().expect("the canvas was drawn").rect.center();
         let to = at + egui::vec2(30.0, 20.0);
         let button =
             |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
@@ -309,18 +309,20 @@ fn with_the_preference_off_a_held_tool_key_chooses_the_tool_for_good() {
     assert_eq!(app.session.tool_id(), "scale");
 }
 
-/// With the preference off, each repeat of a held S chooses Scale again, as before: a flyout opened
-/// in between closes.
+/// With the preference off, each repeat of a held S chooses Scale again, as before: a tool chosen in
+/// between gives way to Scale. With it on, a repeat chooses nothing.
 #[test]
 fn with_the_preference_off_each_repeat_chooses_the_tool_again() {
-    let mut app = pen_app();
-    app.run("prefs.set", json!({"key": "holdToolKeys", "value": false})).unwrap();
-    let keys = Keyboard::new();
-    keys.press_s(&mut app, 0.0);
-    app.ui.flyout = Some(0);
-    keys.press_s(&mut app, 0.3);
-    assert_eq!(app.ui.flyout, None, "the repeat chose Scale again");
-    assert_eq!(app.session.tool_id(), "scale");
+    for hold in [false, true] {
+        let mut app = pen_app();
+        app.run("prefs.set", json!({"key": "holdToolKeys", "value": hold})).unwrap();
+        let keys = Keyboard::new();
+        keys.press_s(&mut app, 0.0);
+        app.select_tool("rectangle");
+        keys.press_s(&mut app, 0.3);
+        let chosen = if hold { "rectangle" } else { "scale" };
+        assert_eq!(app.session.tool_id(), chosen, "holdToolKeys: {hold}");
+    }
 }
 
 /// Scale chosen again on the toolbar while S is held stays chosen when S is let go.
@@ -330,10 +332,8 @@ fn the_held_tool_chosen_again_stays_when_the_key_is_let_go() {
     let keys = Keyboard::new();
     keys.press_s(&mut app, 0.0);
     app.select_tool("scale");
-    // A tool chosen closes an open flyout: the repeats of S, still down, choose nothing.
-    app.ui.flyout = Some(0);
+    // The repeats of S, still down, choose nothing.
     keys.press_s(&mut app, 0.3);
-    assert_eq!(app.ui.flyout, Some(0), "a repeat chooses no tool");
     keys.release_s(&mut app, 0.5);
     assert_eq!(app.session.tool_id(), "scale");
 }

@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 
-use craft::behavior::{ColumnKey, ColumnWidth, DisplayOrder, IconId, ItemSource};
+use craft::behavior::{ColumnKey, ColumnWidth, DisplayOrder, EditEvent, IconId, ItemSource};
 use craft::host::{PickRequest, Picked};
 use craft::keymap::CommandRef;
 use craft::theme::variant::Tone;
@@ -86,7 +86,7 @@ fn pick<T: Clone + PartialEq + Send + Sync + 'static>(
         if caption {
             Text::new(label.clone()).show(ui);
         }
-        picked = Select::new(label.clone(), Bind::given(current), &entries).enabled(enabled).id_salt(name).show(ui).value().cloned();
+        picked = Select::new(label.clone(), Bind::given(current.clone()), &entries).enabled(enabled).id_salt(name).show(ui).value().cloned();
     });
     picked
 }
@@ -162,14 +162,16 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if *key == 0 { tl!("Show all plates") } else { tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)") };
             let mut list_row = ListRow::new(row.shown.clone()).toggle(ToggleCell::eye(EYE, row.visible).tooltip(tooltip));
             if let Some(ink) = row.chip {
-                list_row = list_row.thumb(ThumbSize::Small, move |painter, rect| painter.painter.rect_filled(rect, 2.0, ink));
+                list_row = list_row.thumb(ThumbSize::Small, move |painter, rect| {
+                    painter.painter.rect_filled(rect, 2.0, ink);
+                });
             }
             list_row.cells(item.cells()).state(item.row.clone())
         },
     );
     for event in out.events {
-        // The event carries the Alt that was held at the press.
-        let CollectionEvent::Toggle(edit) = event else { continue };
+        // A flip lands once: a click's set, or a sweep's commit at the release. It carries the Alt held at the press.
+        let CollectionEvent::Toggle(EditEvent::Set { after: edit, .. } | EditEvent::Commit { after: edit, .. }) = event else { continue };
         let p = match edit.key.checked_sub(1).and_then(|n| plates.get(n)) {
             Some(plate) => eye_click(&plate.name, edit.mods.alt),
             None => json!({"plates": plates.iter().map(|p| p.name.clone()).collect::<Vec<_>>()}),

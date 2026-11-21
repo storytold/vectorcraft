@@ -65,7 +65,14 @@ pub fn open(app: &mut VectorcraftApp) {
 }
 
 /// One slider with its number field over the ramp of greys, for the fields' `key`; `ends` are the words under its ends.
-fn slider(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str, label: &str, range: std::ops::RangeInclusive<f64>, ends: Option<[(f64, String); 2]>) {
+fn slider(
+    ui: &mut egui::Ui,
+    fields: &mut DialogFields,
+    key: &str,
+    label: &str,
+    range: std::ops::RangeInclusive<f64>,
+    ends: Option<[(f64, String); 2]>,
+) {
     let ramp = [DataColor::new(egui::Color32::from_gray(60)), DataColor::new(egui::Color32::from_gray(220))];
     let shown = fields.number(key).unwrap_or(*range.start());
     let mut field = SliderField::new(field_label(label), Bind::given(shown), range).step(1.0).track_face(TrackFace::new(ToneRamp::new(&ramp)));

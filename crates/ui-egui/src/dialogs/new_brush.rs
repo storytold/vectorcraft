@@ -30,10 +30,8 @@ pub fn open(app: &mut VectorcraftApp, ids: Option<Value>) -> Result<Value, Strin
         None => !st.selection.is_empty(),
     };
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let fields = DialogFields::from_pairs([
-        ("type", FieldValue::Text(if art { "art" } else { "calligraphic" }.into())),
-        ("__art", FieldValue::Bool(art)),
-    ]);
+    let fields =
+        DialogFields::from_pairs([("type", FieldValue::Text(if art { "art" } else { "calligraphic" }.into())), ("__art", FieldValue::Bool(art))]);
     let (rows, title) = (params(art), Label::from(tl!("New Brush")));
     // PLAN: `HostedParamDialog::new` takes (ctx, key, fields, build); the sheet's (KIND, title, build) has no such form.
     let dialog =

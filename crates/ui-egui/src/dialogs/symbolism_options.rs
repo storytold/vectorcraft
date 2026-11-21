@@ -47,7 +47,7 @@ fn params(lengths: LengthUnits) -> Vec<Param> {
         ("random".to_string(), Label::from(tl!("Random"))),
     ];
     let not_sprayer = tools_but(&["symbolSprayer"]);
-    let range = |key: &str, label: &str| Param::new(key, label, ParamKind::range(1.0, 10.0, 5.0, SliderScale::Linear));
+    let range = |key: &str, label: &'static str| Param::new(key, label, ParamKind::range(1.0, 10.0, 5.0, SliderScale::Linear));
     let mut rows = vec![
         Param::new("tool", tl!("Tool:"), ParamKind::choice(tools, None)),
         Param::number("diameter", tl!("Diameter:"), 80.0, 1.0, 0).length(lengths),
@@ -59,9 +59,12 @@ fn params(lengths: LengthUnits) -> Vec<Param> {
         Param::section(tl!("Symbol Sprayer Options")).visible_when("tool", "symbolSprayer"),
     ];
     let labels = [tl!("Scrunch:"), tl!("Size:"), tl!("Spin:"), tl!("Screen:"), tl!("Stain:"), tl!("Style:")];
-    rows.extend(SPRAY.iter().zip(labels).map(|(key, label)| {
-        Param::new(*key, label, ParamKind::choice(modes(), Some("average".into()))).visible_when("tool", "symbolSprayer")
-    }));
+    rows.extend(
+        SPRAY
+            .iter()
+            .zip(labels)
+            .map(|(key, label)| Param::new(*key, label, ParamKind::choice(modes(), Some("average".into()))).visible_when("tool", "symbolSprayer")),
+    );
     rows.extend([
         Param::section(tl!("Symbol Sizer Options")).visible_when("tool", "symbolSizer"),
         Param::new("proportional", tl!("Proportional Resizing"), ParamKind::bool(true)).visible_when("tool", "symbolSizer"),

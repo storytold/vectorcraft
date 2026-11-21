@@ -18,7 +18,6 @@ pub(crate) struct Told(pub Vec<(String, String)>);
 
 /// The main window's dialog host.
 pub(crate) fn window_dialogs(ctx: &egui::Context) -> WindowDialogs {
-    // PLAN: assumed `WindowKey::main()` names the main window's key
     WindowDialogs::of(ctx, &WindowKey::main())
 }
 
@@ -126,8 +125,6 @@ macro_rules! pumps {
 }
 
 /// Runs once per frame after the shell pass: every dialog module's pump, then the held dialogs.
-// PLAN: every module pump below is assumed `pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context)`;
-// `file_asks`' crate path and `missing_fonts::open_next` are assumed too.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     sync(app);
     pumps!(app, ctx;
@@ -137,7 +134,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::recovery::pump,
         super::missing_links::pump,
         super::find_links::pump,
-        super::missing_fonts::open_next,
+    );
+    super::missing_fonts::open_next(app);
+    pumps!(app, ctx;
         super::dxf_import::pump,
         super::import_pdf::pump,
         crate::place::pump,

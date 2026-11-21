@@ -24,7 +24,7 @@ fn with_sets() -> VectorcraftApp {
     for set in ["S1", "S2"] {
         app.ui.actions.new_action(&format!("A in {set}"), Some(set.to_string())).unwrap();
     }
-    app.ui.action_set = Some(1);
+    app.ui.action_set = Some("S2".into());
     app.ui.actions_panel.selected = Some(ActionSelection::Action(1));
     app
 }
@@ -77,12 +77,11 @@ fn the_panel_menu_states_follow_selection_recording_and_playback() {
 
 #[test]
 fn menu_insert_rows_open_their_dialog_on_the_selected_step_the_action_end_or_the_recording() {
-    // PLAN: assumed the app has a dialog host over `ui_ctx` once a context is set.
     let place = |app: &VectorcraftApp| {
         app.dialogs().unwrap().with(|host| {
-            let stop = host.get::<RecordStopDialog>().map(|d| (d.set, d.action, Some(d.step)));
-            let item = host.get::<InsertMenuItemDialog>().map(|d| (d.set, d.action, Some(d.step)));
-            let object = host.get::<SelectObjectDialog>().map(|d| (d.set, d.action, Some(d.step)));
+            let stop = host.get::<RecordStopDialog>().map(|d| (d.target.set, d.target.action, Some(d.target.step)));
+            let item = host.get::<InsertMenuItemDialog>().map(|d| (d.target.set, d.target.action, Some(d.target.step)));
+            let object = host.get::<SelectObjectDialog>().map(|d| (d.target.set, d.target.action, Some(d.target.step)));
             (stop, item, object)
         })
     };

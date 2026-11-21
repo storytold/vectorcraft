@@ -11,15 +11,14 @@
 use std::borrow::Cow;
 use std::sync::{Arc, RwLock};
 
+use craft::behavior::EditEvents;
 use craft::behavior::{CancelReason, EditEvent, GestureId, SelectionChange, keyed};
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Show as _, ShowCollection as _, Trigger, clicked};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, Trigger, clicked};
 use craft::ui::display::{Shade, Text};
 use craft::ui::menu::Menu;
-use craft::ui::tabs::{TabKind, TabStrip};
-// PLAN: assumed `craft::ui::form_dialogs` re-exports these form-dialog items.
-use craft::behavior::EditEvents;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamRows};
+use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
@@ -243,8 +242,7 @@ pub(crate) fn send(app: &mut VectorcraftApp, changed: Map<String, Value>, phase:
 /// document moved under the gesture, or the panel was removed (the gesture commits as one step).
 pub(crate) fn apply(app: &mut VectorcraftApp, params: &[Param], input: &DialogFields, events: &EditEvents<DialogFields>) {
     let settings = |fields: &DialogFields| Value::Object(form::json_of(params, fields));
-    // PLAN: assumed `EditEvents::iter` and `EditEvent::Set { after, .. }` (the variants hidden in the framework excerpt).
-    for event in events.iter() {
+    for event in events {
         match event {
             EditEvent::Begin { id, .. } => {
                 app.three_d.gesture = Some(*id);
@@ -280,10 +278,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let labels = [tl!("Plane"), tl!("Extrude"), tl!("Revolve"), tl!("Inflate")];
     let tabs: Vec<(&'static str, &'static str)> = THREE_D_TYPES.iter().map(|(kind, _)| *kind).zip(labels).collect();
     let source = keyed(&tabs[..], |tab: &(&'static str, &'static str)| tab.0).with_text(|tab| Cow::Borrowed(tab.1));
-    let out = TabStrip::new(tl!("Object type")).kind(TabKind::Text).shown(current).enabled(selected).show_items(ui, &source, &mut |key, _| {
-        // PLAN: assumed `Tab::new(label)` as the About dialog's strip builds its tabs.
-        craft::ui::tabs::Tab::new(tabs.iter().find(|tab| tab.0 == *key).map_or("", |tab| tab.1))
-    });
+    let mut strip = TabStrip::new(tl!("Object type")).kind(TabKind::Text).enabled(selected);
+    if let Some(kind) = current {
+        strip = strip.shown(kind);
+    }
+    let out = strip.show_items(ui, &source, &mut |key, _| Tab::new(tabs.iter().find(|tab| tab.0 == *key).map_or("", |tab| tab.1)));
     for event in out.response.events {
         if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
             && let Some(kind) = keys.last()
@@ -309,18 +308,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if takes_render(&t.effect) {
         render_settings(app, ui, &t);
     }
-    // The applied effect's settings in the dialog's rows, over the view state of the panel.
-    let merged = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
-    let data = host::data(app, Some(&t.effect), &merged);
-    let mut json = merged;
-    json.insert(PAGE.into(), json!(app.three_d.page));
-    json.insert(LIGHT.into(), json!(app.three_d.light));
-    json.insert(materials::SELECTED.into(), json!(app.three_d.graphic));
-    // The rows depend on the values (the page) and the values' types on the rows, so the first
-    // pass over the bare values only fixes the page.
-    let params = revolve::params(&data, &form::fields_of(&[], &json), Place::Panel);
-    let mut fields = form::fields_of(&params, &json);
-    mark_mixed(app, &mut fields);
+    let (params, fields) = rows(app, &t);
     let out = ParamRows::new(tl!("3D and Materials"), &params, Bind::given(fields.clone())).show(ui);
     apply(app, &params, &fields, &out.events);
     let mut edit_bevels = false;
@@ -362,6 +350,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     export_button(app, ui);
 }
 
+/// The panel's rows for the applied effect `t` and the values they show: the effect's settings over the panel's view
+/// state, the settings another selected effect has with another value marked mixed.
+fn rows(app: &VectorcraftApp, t: &Target) -> (Vec<Param>, DialogFields) {
+    let merged = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
+    let data = host::data(app, Some(&t.effect), &merged);
+    let mut json = merged;
+    json.insert(PAGE.into(), json!(app.three_d.page));
+    json.insert(LIGHT.into(), json!(app.three_d.light));
+    json.insert(materials::SELECTED.into(), json!(app.three_d.graphic));
+    // The rows depend on the values (the page) and the values' types on the rows, so the first
+    // pass over the bare values only fixes the page.
+    let params = revolve::params(&data, &form::fields_of(&[], &json), Place::Panel);
+    let mut fields = form::fields_of(&params, &json);
+    mark_mixed(app, &mut fields);
+    (params, fields)
+}
+
 /// What the Materials row asked for in `fields`, if anything.
 fn action_of(fields: &DialogFields) -> Option<materials::Action> {
     match fields.get(materials::ACTION)? {
@@ -376,7 +381,7 @@ fn export_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let any = can_export_3d_shown(app);
     if clicked(&Button::new(tl!("Export 3D Object")).enabled(any).show(ui)) {
         finish(app);
-        if let Err(e) = export_3d_object(app, ui.ctx()) {
+        if let Err(e) = export_3d_object(app) {
             app.ui.status = e;
         }
     }
@@ -411,10 +416,10 @@ pub(crate) fn can_export_3d_shown(app: &mut VectorcraftApp) -> bool {
 /// (`assets.add3D` on the selection, one undo step, none when each is an asset already), selects
 /// their assets there and shows the Asset Export panel. The command leaves out the selected
 /// objects without a 3D effect and those inside another selected 3D object.
-pub(crate) fn export_3d_object(app: &mut VectorcraftApp, ctx: &egui::Context) -> Result<(), String> {
+pub(crate) fn export_3d_object(app: &mut VectorcraftApp) -> Result<(), String> {
     use super::asset_export;
-    asset_export::add_3d(app, ctx, None)?;
-    if !crate::panel_docking::visible(&app.ui, asset_export::ID) {
+    asset_export::add_3d(app, None)?;
+    if !crate::panel_docking::visible(app, asset_export::ID) {
         app.run("window.panel", json!({"panel": asset_export::ID}))?;
     }
     Ok(())

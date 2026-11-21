@@ -1,6 +1,6 @@
-use craft::ui::canvas::CanvasSpace; // PLAN: assumed path of `CanvasSpace` in the app's craft_ui re-export
+use craft::ui::canvas::CanvasSpace;
 use craft::ui::contract::overlay::Anchor;
-use craft::ui::contract::{Bind, Show as _, Trigger};
+use craft::ui::contract::{Bind, ShowContainer as _, Trigger};
 use craft::ui::menu::Menu;
 use egui::Pos2;
 use serde_json::json;

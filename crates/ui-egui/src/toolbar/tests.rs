@@ -59,14 +59,14 @@ fn named_rect(nodes: &[Node], label: &str) -> egui::Rect {
     nodes.iter().find(|n| n.label() == Some(label)).and_then(bounds).unwrap_or_else(|| panic!("{label} is drawn"))
 }
 
-/// Where the button of `tool` is drawn, found by its tool tip.
-fn tool_rect(nodes: &[Node], tool: &str) -> egui::Rect {
-    named_rect(nodes, &tool_info(tool).map(tip).unwrap_or_default())
+/// Where the button of `tool` is drawn, found by its tool tip in the window of `ctx`.
+fn tool_rect(ctx: &egui::Context, nodes: &[Node], tool: &str) -> egui::Rect {
+    named_rect(nodes, &tool_info(tool).map(|t| tip(ctx, t)).unwrap_or_default())
 }
 
 /// The rects of the Tools rail's tool buttons, top to bottom then left to right.
-fn cells(app: &VectorcraftApp, nodes: &[Node]) -> Vec<egui::Rect> {
-    let names: Vec<String> = slots(app).iter().flat_map(|(_, tools)| tools.iter()).filter_map(|id| tool_info(id).map(tip)).collect();
+fn cells(app: &VectorcraftApp, ctx: &egui::Context, nodes: &[Node]) -> Vec<egui::Rect> {
+    let names: Vec<String> = slots(app).iter().flat_map(|(_, tools)| tools.iter()).filter_map(|id| tool_info(id).map(|t| tip(ctx, t))).collect();
     let mut found: Vec<egui::Rect> = nodes
         .iter()
         .filter(|n| n.role() == Role::Button && n.toggled().is_some() && n.label().is_some_and(|l| names.iter().any(|name| name == l)))
@@ -210,7 +210,7 @@ fn clicking_the_active_blend_tool_button_finishes_the_blend() {
     }
     app.select_tool("blend");
     let ctx = reader();
-    let at = tool_rect(&settled(&mut app, &ctx, 0.0, 2000.0), "blend").center();
+    let at = tool_rect(&ctx, &settled(&mut app, &ctx, 0.0, 2000.0), "blend").center();
     let down = |x, y| vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
     let view = app.view_info();
     app.session.pointer(&down(20.0, 20.0), view).unwrap();
@@ -320,7 +320,7 @@ fn the_columns_command_toggles_or_sets_the_toolbar_columns() {
     // 700 pt: too short for the single column, which scrolls instead of turning into two.
     let laid_out = |app: &mut VectorcraftApp, t0: f64| {
         let nodes = settled(app, &ctx, t0, 700.0);
-        cells(app, &nodes)
+        cells(app, &ctx, &nodes)
     };
     assert_eq!(app.run("window.toolbarColumns", json!({})).unwrap(), json!(true));
     let two = laid_out(&mut app, 0.0);

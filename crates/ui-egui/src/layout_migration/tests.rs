@@ -15,24 +15,39 @@ fn read(saved: &Value) -> ReadPreferences {
     UiState::read_preferences(&serde_json::to_vec(saved).unwrap()).unwrap()
 }
 
+/// The file's `dock_tab_order`, which its workspace records convert with.
+fn tab_order(saved: &Value) -> Vec<DockTab> {
+    serde_json::from_value(saved["dock_tab_order"].clone()).unwrap_or_default()
+}
+
+/// The id of the workspace `name`.
+fn id_of(ui: &UiState, name: &str) -> String {
+    crate::workspaces::find(ui, name).expect("the workspace is kept").id.clone()
+}
+
+/// Whether the workspace `name` is kept.
+fn has_workspace(ui: &UiState, name: &str) -> bool {
+    crate::workspaces::names(ui).iter().any(|n| n == name)
+}
+
 #[test]
 fn legacy_help_bar_visibility_follows_each_layouts_status_bar() {
-    // PLAN: assumed `Workspaces::find(&str) -> Option<&WorkspaceRecord>` and `Workspaces::edited: Vec<WorkspaceRecord>`.
     let prefs = read(&json!({
         "status_bar": false,
         "custom_workspaces": [{"name":"Hidden", "statusBar": false}, {"name":"Shown", "statusBar":true}],
-        "workspace_changes": [{"name":"Changed", "statusBar":false}]
+        "workspace_changes": [{"name":"Shown", "statusBar":false}]
     }));
-    assert!(!prefs.ui.help_bar);
-    assert!(!prefs.ui.workspaces.find("Hidden").unwrap().help_bar);
-    assert!(prefs.ui.workspaces.find("Shown").unwrap().help_bar);
-    assert!(!prefs.ui.workspaces.edited.iter().find(|r| r.name == "Changed").unwrap().help_bar);
+    let ui = &prefs.ui;
+    assert!(!ui.help_bar);
+    assert!(!ui.workspaces.records[&id_of(ui, "Hidden")].help_bar);
+    assert!(ui.workspaces.records[&id_of(ui, "Shown")].help_bar);
+    assert!(!ui.workspaces.edited[&id_of(ui, "Shown")].help_bar, "the changes kept for a workspace follow their own status bar");
     assert!(read(&json!({})).ui.help_bar);
     for (status, help) in [(true, false), (false, true)] {
         let prefs = read(&json!({"status_bar":status, "help_bar":help,
             "custom_workspaces":[{"name":"Explicit", "statusBar":status, "helpBar":help}]}));
         assert_eq!(prefs.ui.help_bar, help);
-        assert_eq!(prefs.ui.workspaces.find("Explicit").unwrap().help_bar, help);
+        assert_eq!(prefs.ui.workspaces.records[&id_of(&prefs.ui, "Explicit")].help_bar, help);
     }
 }
 
@@ -46,7 +61,7 @@ fn dock(workspace: &Workspace<String>, side: DockEdge) -> &[Column<String>] {
         }
     }
     workspace.validate().unwrap();
-    workspace.layout.root.as_ref().and_then(|root| find(root, side)).unwrap_or_default()
+    workspace.layout().root.as_ref().and_then(|root| find(root, side)).unwrap_or_default()
 }
 
 fn groups(column: &Column<String>) -> Vec<Vec<&str>> {
@@ -88,17 +103,17 @@ fn a_layout_saved_before_the_canvas_joined_keeps_its_arrangement() {
     assert_eq!(groups(docked), [vec!["pathfinder"], vec!["transform"]], "set docked as a column");
     assert!(!docked.iconic);
 
-    floating_windows_keep_their_places(&workspace.layout);
+    floating_windows_keep_their_places(workspace.layout());
 
     // Symbols is in the icon column, and the floating panels came from it: none keeps a
     // place in the dock to go back to.
-    assert!(workspace.hidden.is_empty() && workspace.floated.is_empty(), "{:?} {:?}", workspace.hidden, workspace.floated);
+    assert!(workspace.hidden().is_empty() && workspace.floated().is_empty(), "{:?} {:?}", workspace.hidden(), workspace.floated());
 
     // The saved workspace carries the same arrangement as the top level.
-    assert!(ui.workspaces.names().iter().any(|n| n.to_string() == "Migration Test"));
-    let (record, _) = legacy_layout(&saved["custom_workspaces"][0], &ui.dock_tab_order);
-    assert_eq!(record.layout, workspace.layout);
-    assert_eq!(record.hidden, workspace.hidden);
+    assert!(has_workspace(&ui, "Migration Test"));
+    let (record, _) = legacy_layout(&saved["custom_workspaces"][0], &tab_order(&saved));
+    assert_eq!(record.layout(), workspace.layout());
+    assert_eq!(record.hidden(), workspace.hidden());
 }
 
 /// The three floating windows of the migrated layout.
@@ -146,7 +161,7 @@ fn a_converted_file_saved_again_has_no_legacy_fields_and_loads_the_same() {
     let reread = read(&again);
     assert!(reread.intact && !reread.converted);
     assert_eq!(reread.ui.dock_workspace, ui.dock_workspace);
-    let ids = |ui: &UiState| ui.dock_workspace.layout.floating.iter().map(|w| w.id).collect::<Vec<_>>();
+    let ids = |ui: &UiState| ui.dock_workspace.layout().floating.iter().map(|w| w.id).collect::<Vec<_>>();
     assert_eq!(ids(&reread.ui), ids(&ui), "floating windows keep their ids");
 }
 
@@ -168,16 +183,16 @@ fn a_file_from_before_the_shared_dock_converts_and_remembered_changes_too() {
     assert!(columns[0].iconic, "collapsed dock");
     assert_eq!(columns[0].width, Some(400.0));
     assert_eq!(groups(&columns[1])[0], ["properties"]);
-    assert_eq!(window_groups(&workspace.layout.floating[0]), [vec!["layers"]]);
-    assert_eq!(workspace.layout.floating[0].rect, Rect::from_min_size(pos2(10.0, 20.0), vec2(300.0, 400.0)));
+    assert_eq!(window_groups(&workspace.layout().floating[0]), [vec!["layers"]]);
+    assert_eq!(workspace.layout().floating[0].rect, Rect::from_min_size(pos2(10.0, 20.0), vec2(300.0, 400.0)));
 
-    let (changed, _) = legacy_layout(&saved["workspace_changes"][0], &ui.dock_tab_order);
+    let (changed, _) = legacy_layout(&saved["workspace_changes"][0], &tab_order(&saved));
     let columns = dock(&changed, DockEdge::End);
     assert_eq!(groups(&columns[0]), [vec!["properties", "layers", "libraries"]]);
     assert_eq!(columns[0].groups[0].active, 1);
     assert!(!columns[0].iconic);
     assert!(groups(&columns[1]).contains(&vec!["symbols", "patternOptions"]));
-    let window = &changed.layout.floating[0];
+    let window = &changed.layout().floating[0];
     assert_eq!(window_groups(window), [vec!["swatches", "brushes"]]);
     assert_eq!(window.groups()[0].active, 1);
     assert!(window.column.iconic);
@@ -195,7 +210,7 @@ fn a_file_from_before_the_shared_dock_converts_and_remembered_changes_too() {
         ]},
     }))
     .ui;
-    let set = &ui.dock_workspace.layout.floating[0];
+    let set = &ui.dock_workspace.layout().floating[0];
     assert_eq!(set.groups().iter().map(|g| g.height).collect::<Vec<_>>(), [Some(150.0), Some(450.0)]);
     assert_eq!(set.rect.height(), 600.0);
 
@@ -222,7 +237,7 @@ fn unreadable_docking_data_is_dropped_and_reported() {
         broken["custom_workspaces"][0]["docking"] = json!(false);
         let read = read(&broken);
         assert!(!read.intact, "{key}");
-        assert!(read.ui.workspaces.names().iter().any(|n| n.to_string() == "Migration Test"), "the saved workspace is kept");
+        assert!(has_workspace(&read.ui, "Migration Test"), "the saved workspace is kept");
         assert!(read.ui.dock_workspace.validate().is_ok(), "{key}: what is left still converts");
     }
     assert!(UiState::read_preferences(b"[1, 2]").is_none());
@@ -257,8 +272,8 @@ fn untrusted_legacy_fields_convert_without_failing() {
     let last = columns.last().unwrap();
     assert_eq!(groups(last), [vec!["stroke"]]);
     assert!(last.width.is_some_and(|w| w <= COLUMN_MAX));
-    assert_eq!(workspace.layout.floating.len(), 4, "every old window kept");
-    assert!(workspace.layout.floating.iter().all(|w| w.rect.is_finite() && w.rect.width() > 0.0 && w.rect.height() > 0.0));
+    assert_eq!(workspace.layout().floating.len(), 4, "every old window kept");
+    assert!(workspace.layout().floating.iter().all(|w| w.rect.is_finite() && w.rect.width() > 0.0 && w.rect.height() > 0.0));
 }
 
 #[test]
@@ -282,7 +297,7 @@ fn a_production_preferences_file_loads_into_the_same_arrangement() {
     assert_eq!(groups(&start[0]), [vec!["toolbar:2"]], "the docked custom toolbar");
     assert_eq!(start[0].steps, Some(2));
 
-    let floating = &workspace.layout.floating;
+    let floating = &workspace.layout().floating;
     let toolbar = floating.iter().find(|w| window_groups(w) == [vec!["toolbar:1"]]).expect("the floating toolbar");
     assert_eq!(toolbar.rect.min, pos2(500.0, 200.0));
     assert_eq!(floating.iter().filter(|w| w.panels().any(|p| p.starts_with("strip:"))).count(), 1, "one torn-off strip");

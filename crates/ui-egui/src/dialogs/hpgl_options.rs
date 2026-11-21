@@ -12,15 +12,16 @@
 //! nothing.
 
 use craft::behavior::IconId;
+use craft::theme::{Rgba, Srgba};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Radio, RadioGroup, Swatch};
-use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
 use craft::ui::layout_components::Stack;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
 use craft::ui::runtime::env::Env;
 use craft::ui::style::rgba_color;
-use craft::ui::text::HexField;
+use craft::ui::text::TextField;
 use serde_json::{Map, Value, json};
 use vectorcraft_cad::hpgl::write::{DEFAULT_TOLERANCE, MAX_PENS, TOLERANCE_RANGE};
 use vectorcraft_cad::hpgl::{Origin, Version};
@@ -62,7 +63,7 @@ fn defaults() -> Map<String, Value> {
 }
 
 /// The rows.
-fn params() -> Vec<Param> {
+fn rows() -> Vec<Param> {
     vec![
         choice_param("hpglVersion", tl!("Version:"), Version::ALL.iter().map(|v| (v.id(), v.label()))),
         Param::number("curveTolerance", tl!("Curve Tolerance:"), DEFAULT_TOLERANCE, 0.1, 2)
@@ -90,12 +91,10 @@ pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
         }
     }
     fields.insert("format".into(), json!("hpgl"));
-    let values = form::fields_of(&params(), &fields);
-    // PLAN: assumed `app.ui_ctx: Option<egui::Context>` is set whenever a window is shown.
+    let values = form::fields_of(&rows(), &fields);
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, values, |fields| {
-        // PLAN: assumed `ok_label` takes a `Label`.
-        ParamDialog::new(KIND, tl!("HP-GL Options"), params()).values(Bind::bound(fields)).ok_label(tl!("Export").into())
+        ParamDialog::new(KIND, tl!("HP-GL Options"), rows()).values(Bind::bound(fields)).ok_label(tl!("Export").into())
     });
     export_host::open(app, Export::Hpgl { doc }, selection, dialog);
 }
@@ -139,7 +138,7 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
         }
     }
     let mut on = list.is_some();
-    RadioGroup::new(tl!("Pens:"), Bind::bound(&mut on)).show(ui, |ui| {
+    RadioGroup::new(tl!("Pens:"), Bind::bound(&mut on)).show(ui, |ui, _| {
         Radio::new(false).label(tl!("One Pen per Color")).show(ui);
         Radio::new(true).label(tl!("Pen Table")).show(ui);
     });
@@ -160,17 +159,16 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
     let Some(mut pens) = list.filter(|a| a.len() <= MAX_PENS) else { return };
     let n = pens.len();
     let mut remove = None;
-    // PLAN: assumed `Stack::new().scroll(..).room_height(..)` builders and `show(ui, body)`.
-    Stack::new().scroll(craft::ui::contract::Scroll::vertical()).room_height(180.0).show(ui, |ui| {
+    Stack::new().scroll(Scroll::vertical()).room_height(180.0).show(ui, |ui, _| {
         for (i, pen) in pens.iter_mut().enumerate() {
             ui.horizontal(|ui| {
                 ui.label((i + 1).to_string());
-                let mut color = pen.as_str().and_then(craft::theme::Srgba::from_hex).unwrap_or(craft::theme::Srgba::rgb(0.0, 0.0, 0.0));
-                if Swatch::new(tl!("Pen color"), color).show(ui).response.clicked() {
-                    cx.pick_color(&pen_key(i), color);
+                let mut color = pen.as_str().and_then(Rgba::from_hex).unwrap_or(Rgba::rgb(0, 0, 0));
+                if Swatch::new(tl!("Pen color"), Srgba::from(color)).show(ui).clicked {
+                    cx.pick_color(&pen_key(i), Srgba::from(color));
                 }
                 let before = color;
-                HexField::new(tl!("Pen color"), Bind::bound(&mut color)).id_salt(("hpgl-pen", i)).show(ui);
+                TextField::hex(tl!("Pen color"), Bind::bound(&mut color)).id_salt(("hpgl-pen", i)).show(ui);
                 if color != before
                     && let Some(typed) = pen_color(&color.to_hex())
                 {
@@ -199,8 +197,7 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
 
 /// Starts Pen Table for dialog `id`: the table the export would give the art, or the reason it cannot. It runs from
 /// the host's pump, which holds no lock on the dialog while the document is read.
-pub(super) fn pen_ask(app: &mut VectorcraftApp, id: DialogId) {
-    let Some(selection) = app.export_dialogs.0.iter().find(|o| o.id == id).map(|o| o.selection) else { return };
+pub(super) fn pen_ask(app: &mut VectorcraftApp, id: DialogId, selection: bool) {
     let Some(dialogs) = app.dialogs() else { return };
     let Some(mut copy) = dialogs.with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())) else { return };
     let shown = copy.clone();
@@ -240,7 +237,7 @@ fn source<'a>(
     fields: &DialogFields,
     selection: bool,
 ) -> Result<(std::borrow::Cow<'a, vectorcraft_doc::Document>, Value), String> {
-    let params = Value::Object(form::json_of(&params(), fields));
+    let params = Value::Object(form::json_of(&rows(), fields));
     let (selection, params) = io::take_selection(&super::export_as::exported(selection, params))?;
     if !selection {
         let doc = fileio::export_source(st, &params).map_err(|e| e.to_string())?;
@@ -304,10 +301,9 @@ fn rgb(hex: &str) -> Option<[u8; 3]> {
 pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
     let Export::Hpgl { doc } = &open.kind else { return Err("this is not an HP-GL export".into()) };
     if Some(*doc) != app.session.active().map(|st| st.uid) {
-        // PLAN: assumed `After` is an `Option`; `None` closes the dialog with nothing to run.
         return Ok(None);
     }
-    let map = form::json_of(&params(), fields);
+    let map = form::json_of(&rows(), fields);
     let params = Value::Object(map.clone());
     let st = app.session.active().ok_or("no document")?;
     // A bad option or artboard choice, nothing selected, or no art to export keeps the dialog open.

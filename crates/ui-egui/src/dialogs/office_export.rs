@@ -81,6 +81,6 @@ pub(super) fn confirm(app: &mut VectorcraftApp, _open: &Open, fields: &DialogFie
         "artboard": number(fields, "artboard").unwrap_or(0.0).max(0.0) as u64,
         "transparent": fields.bool("transparent").unwrap_or(false),
     });
-    io::save_command_output(app, "document.exportForOffice", "png", params)?;
+    io::save_command_output(app, "document.exportForOffice", "png", params, |_, _| Ok(Value::Null))?;
     Ok(None)
 }

@@ -27,7 +27,7 @@ fn select(app: &mut VectorcraftApp, start: usize, end: usize) {
 const SCREEN: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(800.0, 600.0));
 
 /// The glyphs the row offers and whether it has the arrow, as the canvas finds them.
-fn offered(app: &VectorcraftApp) -> Option<(Vec<u32>, bool)> {
+fn offered(app: &mut VectorcraftApp) -> Option<(Vec<u32>, bool)> {
     glyphs::on_canvas(app).map(|f| ((0..f.count()).filter_map(|i| f.gid(i)).collect(), f.more))
 }
 
@@ -66,14 +66,14 @@ fn one_selected_character_shows_its_alternates_and_a_click_replaces_its_glyph() 
     let drawn = glyph_ids(&app, &id);
 
     select(&mut app, 1, 1);
-    assert_eq!(offered(&app), None, "a caret selects no character");
+    assert_eq!(offered(&mut app), None, "a caret selects no character");
     select(&mut app, 0, 2);
-    assert_eq!(offered(&app), None, "two characters are selected");
+    assert_eq!(offered(&mut app), None, "two characters are selected");
     select(&mut app, 0, 1);
-    assert_eq!(offered(&app), None, "x has no alternates");
+    assert_eq!(offered(&mut app), None, "x has no alternates");
 
     select(&mut app, 1, 2);
-    let (gids, more) = offered(&app).expect("the a has alternates");
+    let (gids, more) = offered(&mut app).expect("the a has alternates");
     assert_eq!(gids.len(), glyphs::ON_CANVAS_ALTERNATES, "five of the six alternates");
     assert!(more, "the sixth is in the Glyphs panel");
     assert_eq!(gids[0], u1);
@@ -81,17 +81,19 @@ fn one_selected_character_shows_its_alternates_and_a_click_replaces_its_glyph() 
 
     // A pick of the first glyph.
     let undo = undo_steps(&app);
-    glyphs::on_canvas(&app).expect("offered").pick(&mut app, 0);
+    let found = glyphs::on_canvas(&mut app).expect("offered");
+    found.pick(&mut app, 0);
     assert_eq!(undo_steps(&app), undo + 1, "one undo step; status: {}", app.ui.status);
     assert_eq!(glyph_ids(&app, &id), [drawn[0], u1, drawn[2]], "the a is drawn with the glyph");
     let NodeKind::Text(text) = &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
     assert_eq!(text.plain_text(), "xay", "the text keeps its characters");
 
     // The row stays for the same character: its default glyph first, the drawn glyph left out.
-    let (gids, _) = offered(&app).expect("still one character selected");
+    let (gids, _) = offered(&mut app).expect("still one character selected");
     assert_eq!(gids[0], drawn[1], "the default glyph comes first");
     assert!(!gids.contains(&u1));
-    glyphs::on_canvas(&app).expect("offered").pick(&mut app, 0);
+    let found = glyphs::on_canvas(&mut app).expect("offered");
+    found.pick(&mut app, 0);
     assert_eq!(undo_steps(&app), undo + 2);
     assert_eq!(glyph_ids(&app, &id), drawn, "the default glyph again");
     app.run("edit.undo", json!({})).unwrap();
@@ -104,13 +106,13 @@ fn one_selected_character_shows_its_alternates_and_a_click_replaces_its_glyph() 
     let app = Rc::new(RefCell::new(app));
     assert!(row_shown(&app), "the row is found by its access name");
     app.borrow_mut().run("prefs.set", json!({"key": "showCharacterAlternates", "value": false})).unwrap();
-    assert!(offered(&app.borrow()).is_none(), "the preference is off");
+    assert!(offered(&mut app.borrow_mut()).is_none(), "the preference is off");
     assert!(!row_shown(&app), "no row with the preference off");
     app.borrow_mut().run("prefs.set", json!({"key": "showCharacterAlternates", "value": true})).unwrap();
-    assert!(offered(&app.borrow()).is_some());
+    assert!(offered(&mut app.borrow_mut()).is_some());
 
     app.borrow_mut().session.select_tool("select", Default::default()).unwrap();
-    assert!(offered(&app.borrow()).is_none(), "the Selection tool edits no text");
+    assert!(offered(&mut app.borrow_mut()).is_none(), "the Selection tool edits no text");
     assert!(!row_shown(&app), "no row for the Selection tool");
 }
 
@@ -125,11 +127,12 @@ fn a_letter_of_a_joined_word_keeps_the_word_joined() {
     app.run("text.setRangeStyle", json!({"id": id, "font": JOINING_ALTERNATES_FAMILY})).unwrap();
     assert_eq!(glyph_ids(&app, &id), [g('B'), g('u'), g('M')]);
     select(&mut app, 2, 4);
-    let (gids, more) = offered(&app).expect("the medial teh has alternates");
+    let (gids, more) = offered(&mut app).expect("the medial teh has alternates");
     assert_eq!((gids.len(), more), (3, false), "the medial form's three alternates: {gids:?}");
     let at = gids.iter().position(|gid| *gid == g('x')).expect("the alternate salt=2 draws");
     let undo = undo_steps(&app);
-    glyphs::on_canvas(&app).expect("offered").pick(&mut app, at);
+    let found = glyphs::on_canvas(&mut app).expect("offered");
+    found.pick(&mut app, at);
     assert_eq!(undo_steps(&app), undo + 1, "status: {}", app.ui.status);
     assert_eq!(glyph_ids(&app, &id), [g('B'), g('x'), g('M')], "the neighbors keep their initial and final forms");
     let NodeKind::Text(text) = &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };

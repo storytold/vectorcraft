@@ -499,12 +499,15 @@ fn place_cursor_exec_checks_recording_step_limit_on_completion() {
             assert_eq!(app.session.journal.len(), journal, "the release places nothing yet");
             assert_eq!(placed(&app), 0);
             assert_ne!(app.ui.status, steps, "nothing is checked before the file is placed");
-            app.placing.wait_for_reads();
+            // The read runs on the place lane; a frame after it ends places the file.
             let ctx = egui::Context::default();
-            craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
-            out.textures_delta.clear();
-            assert!(app.placing.pending.is_empty(), "the frame after the read places the file");
+            let t0 = std::time::Instant::now();
+            while !app.placing.pending.is_empty() && t0.elapsed().as_secs() < 60 {
+                craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+                ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
+                std::thread::yield_now();
+            }
+            assert!(app.placing.pending.is_empty(), "a frame after the read places the file");
         }
         assert_eq!(app.session.journal.len(), journal + 1, "background {background}: the place journals one step");
         assert_eq!(app.session.journal.last().map(|(c, _)| c.as_str()), Some("file.place"));

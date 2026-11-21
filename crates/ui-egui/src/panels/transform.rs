@@ -7,6 +7,7 @@
 use std::ops::RangeInclusive;
 
 use craft::behavior::IconId;
+use craft::behavior::Mixed;
 use craft::behavior::geometry::BoxState;
 use craft::draw::ui::transform::{
     FieldArrangement, SizeUnit, TransformField, TransformFields, TransformFieldsOutput, TransformGroups, TransformRow, TransformSource,
@@ -15,7 +16,6 @@ use craft::keymap::CommandRef;
 use craft::ui::buttons::{IconButton, Link};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Props, Show, ShowContainer, SideLabel};
-use craft::behavior::Mixed;
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -30,8 +30,8 @@ use vectorcraft_doc::{LiveShape, Node, NodeKind, OrientedBox};
 use vectorcraft_geom::{Point, Rect, Vec2};
 
 use super::first_selected;
-use crate::caches::PixelAligned;
 use crate::VectorcraftApp;
+use crate::caches::PixelAligned;
 // PLAN: assumed `crate::edits::{EditPath, apply_edits, apply_event}` (wg.A16), `crate::fields::stops_stepper` (wg.S8),
 // `crate::canvas::rulers::general_rulers` / `general_lengths` (cv.B5b/B5c), `craft::ui::display::Shade`,
 // `craft::behavior::{IconId, geometry::BoxState}` and `craft::draw::ui::transform::FieldArrangement` (op.F12).
@@ -176,7 +176,7 @@ pub fn panel_reference(app: &VectorcraftApp, bx: &OrientedBox) -> PanelReference
 
 /// The page point the selection's reference is at, as the `origin` param of the rotations, shears and
 /// reflections; `Null` with nothing selected.
-pub(crate) fn reference_origin(app: &VectorcraftApp) -> Value {
+pub(crate) fn reference_origin(app: &mut VectorcraftApp) -> Value {
     app.selection_box().map_or(Value::Null, |b| panel_reference(app, &b).origin())
 }
 
@@ -443,8 +443,12 @@ fn shear_field(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The reference point picker alone, for forms that have no transform fields (Artboard Options).
 pub(crate) fn reference_picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let at = anchor_at(app.ui.transform_panel.reference_point);
-    let out = ReferencePoint::new(tl!("Reference Point"), Bind::given(at)).look(ReferencePointLook::Squares).show(ui);
-    apply_edits(app, &out, EditPath::Scope, |app, anchor, _| app.ui.transform_panel.reference_point = anchor_index(*anchor));
+    let out = ReferencePoint::new(tl!("Reference Point"), Bind::given(Some(at))).look(ReferencePointLook::Squares).show(ui);
+    apply_edits(app, &out, EditPath::Scope, |app, anchor, _| {
+        if let Some(anchor) = *anchor {
+            app.ui.transform_panel.reference_point = anchor_index(anchor);
+        }
+    });
 }
 
 /// The fields of artboard `index` at `r` about the shared reference point, in the panel's form or the bar's.
@@ -560,7 +564,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// A check box of the boolean preference `key`, shown as `on`.
-fn option_check(app: &mut VectorcraftApp, ui: &mut Ui, label: &str, key: &str, on: bool) {
+fn option_check(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, key: &str, on: bool) {
     let out = Checkbox::new(Bind::given(on)).label(label).show(ui);
     apply_edits(app, &out, EditPath::Scope, |app, v, _| set_pref(app, key, *v));
 }

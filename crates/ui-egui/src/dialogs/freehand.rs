@@ -178,7 +178,7 @@ fn tip_row(ui: &mut Ui, fields: &mut DialogFields, least: f64) -> Response {
 /// Three dabs of `tip`, as a stroke of it lays them down.
 // PLAN: a `Picture::painter` replaces the plain allocation once its `ThumbAspect` is known to this set.
 fn dabs(ui: &mut Ui, tip: TipAngle) {
-    let tokens = Env::of(ui).tokens;
+    let tokens = Env::of(ui).tokens.clone();
     let (dim, ink) = (rgba_color(tokens.color.text.muted), rgba_color(tokens.color.text.normal));
     let long = DAB_LONG;
     let (response, painter) = ui.allocate_painter(egui::vec2(7.0 * long, 2.0 * long), egui::Sense::hover());
@@ -279,7 +279,7 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
     let mut values: Map<String, Value> = present.iter().filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
     values.insert("tool".into(), json!(tool));
     let fields = form::fields_of(&params(tool, &present), &values);
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let build = {
         let (tool, present) = (tool.to_owned(), present.clone());
         move |fields: &mut DialogFields| ParamDialog::new(KIND, tool_options::title(&tool), params(&tool, &present)).values(Bind::bound(fields))

@@ -61,7 +61,7 @@ fn show_control(ui: &mut egui::Ui, rect: ScreenRect, o: &Overlay) {
         Overlay::SharedPath { path, color, width, dash } => {
             let paths = std::slice::from_ref(&**path);
             // The outline has no width prop, so `width` only keys the revision.
-            let revision = super::selection::outline_revision(paths, None, (*color, *width, *dash));
+            let revision = super::selection::outline_revision(paths, None, (*color, width.to_bits(), dash.map(f64::to_bits)));
             let outline = if dash.is_some() { SelectionOutline::dashed(Label::Empty, paths) } else { SelectionOutline::solid(Label::Empty, paths) };
             outline.color(data(*color)).revision(revision).show_at(ui, rect);
         }

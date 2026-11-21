@@ -35,8 +35,10 @@ fn app_with_canvas() -> (VectorcraftApp, egui::Context) {
     (app, ctx)
 }
 
-fn dropped(app: &VectorcraftApp, payload: Payload, at: Point, op: DropOperation) -> Dropped {
-    Dropped { payload, at, zoom: app.canvas_view().unwrap().zoom, op }
+/// Applies `payload` dropped at document point `at` with `op`, at the canvas's zoom.
+fn drop_at(app: &mut VectorcraftApp, payload: Payload, at: Point, op: DropOperation) -> Result<(), String> {
+    let drop = Dropped { payload, at, zoom: app.canvas_view().unwrap().zoom, op };
+    apply_drop(app, &drop)
 }
 
 fn undo_len(app: &VectorcraftApp) -> usize {
@@ -60,30 +62,30 @@ fn a_drop_runs_the_effect_of_its_payload() {
     let red = Paint::solid(Color::from_hex("#ed1c24").unwrap());
     let swatch = PanelDrag::Paint { paint: red.clone(), params: json!({"swatch": "Red"}), rows: None, library: None };
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(swatch.clone()), off, Move)).unwrap();
+    drop_at(&mut app, Payload::Panel(swatch.clone()), off, Move).unwrap();
     assert_eq!(undo_len(&app), n, "off art nothing happens");
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(swatch), on_b, Move)).unwrap();
+    drop_at(&mut app, Payload::Panel(swatch), on_b, Move).unwrap();
     assert_eq!(app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint(), red);
     assert_eq!(app.session.active().unwrap().selection.objects, [a], "the selection stays");
     let name = app.session.active().unwrap().doc.graphic_styles[2].name.clone();
-    apply_drop(&mut app, &dropped(&app, Payload::Style(name.clone()), on_b, Copy)).unwrap();
+    drop_at(&mut app, Payload::Style(name.clone()), on_b, Copy).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, st.doc.graphic_style(&name).map(|g| g.id));
     let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint();
     let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::paint(blue.clone())), on_b, Move)).unwrap();
+    drop_at(&mut app, Payload::Panel(PanelDrag::paint(blue.clone())), on_b, Move).unwrap();
     assert_eq!(fill(&app), blue, "a proxy's paint fills as a swatch does");
     let mut gradient = GradientPaint::new(Default::default());
     gradient.geom = Some(GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(10.0, 0.0), aspect: 1.0, focal: None });
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::paint(Paint::Gradient(Box::new(gradient)))), on_b, Move)).unwrap();
+    drop_at(&mut app, Payload::Panel(PanelDrag::paint(Paint::Gradient(Box::new(gradient)))), on_b, Move).unwrap();
     assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()), "a gradient fits the object it lands on");
     app.run("transparency.set", json!({"opacity": 40})).unwrap();
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::Appearance(a)), on_b, Move)).unwrap();
+    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance(a)), on_b, Move).unwrap();
     let doc = &app.session.active().unwrap().doc;
     let (na, nb) = (doc.node(a).unwrap(), doc.node(b).unwrap());
     assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity), "the appearance is copied");
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, Payload::Panel(PanelDrag::Appearance(b)), on_b, Move)).unwrap();
+    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance(b)), on_b, Move).unwrap();
     assert_eq!(undo_len(&app), n, "dropped on its own source: nothing changes");
 
     let path = NodeId(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 350, "y": 200}]})).unwrap()["id"].as_u64().unwrap());
@@ -94,21 +96,21 @@ fn a_drop_runs_the_effect_of_its_payload() {
         Payload::Library(LibraryKey { panel: library_panel::panel_id(kind, id), name: name.into(), folder: false })
     };
     let (on_path, empty) = (Point::new(200.0, 200.0), Point::new(200.0, 160.0));
-    apply_drop(&mut app, &dropped(&app, brush("Arrow"), on_path, Move)).unwrap();
+    drop_at(&mut app, brush("Arrow"), on_path, Move).unwrap();
     assert_eq!(brush_of(&app).as_deref(), Some("Arrow"));
     let sparkles = library(BrushLibraries::KIND, "scatter-shapes", "Sparkles");
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, sparkles.clone(), empty, Move)).unwrap();
+    drop_at(&mut app, sparkles.clone(), empty, Move).unwrap();
     assert_eq!(undo_len(&app), n, "off art a library brush does nothing");
-    apply_drop(&mut app, &dropped(&app, sparkles, on_path, Move)).unwrap();
+    drop_at(&mut app, sparkles, on_path, Move).unwrap();
     assert_eq!(brush_of(&app).as_deref(), Some("Sparkles"));
     assert_eq!(undo_len(&app), n + 1, "a library brush is added and applied in one step");
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, brush("3 pt. Round"), empty, Move)).unwrap();
+    drop_at(&mut app, brush("3 pt. Round"), empty, Move).unwrap();
     assert_eq!(undo_len(&app), n, "a calligraphic brush has no art to place");
     for (i, name) in ["Arrow", "Dots", "Chain"].into_iter().enumerate() {
         let at = Point::new(60.0 + 140.0 * i as f64, 260.0);
-        apply_drop(&mut app, &dropped(&app, brush(name), at, Move)).unwrap();
+        drop_at(&mut app, brush(name), at, Move).unwrap();
         let st = app.session.active().unwrap();
         let [placed] = st.selection.objects.as_slice() else { panic!("{name}: one object selected: {:?}", st.selection.objects) };
         assert!((st.doc.node(*placed).unwrap().geometric_bounds().unwrap().center() - at).hypot() < 0.1, "{name}: its art is centred there");
@@ -121,10 +123,10 @@ fn a_drop_runs_the_effect_of_its_payload() {
         assert!((placed.geometric_bounds().unwrap().center() - at).hypot() < 1e-6, "placed where it landed");
     };
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, library(SymbolLibraries::KIND, "basic-shapes", "Star"), on_b, Move)).unwrap();
+    drop_at(&mut app, library(SymbolLibraries::KIND, "basic-shapes", "Star"), on_b, Move).unwrap();
     assert_eq!(undo_len(&app), n + 1, "a library symbol is added and placed in one step");
     symbol_at(&app, on_b);
-    apply_drop(&mut app, &dropped(&app, Payload::Symbol(SymbolKey { doc: uid, name: "Star".into() }), empty, Move)).unwrap();
+    drop_at(&mut app, Payload::Symbol(SymbolKey { doc: uid, name: "Star".into() }), empty, Move).unwrap();
     symbol_at(&app, empty);
 }
 
@@ -144,13 +146,13 @@ fn a_symbol_from_another_document_is_added_and_placed_in_one_step() {
     let key = |doc| Payload::Symbol(SymbolKey { doc, name: "Leaf".into() });
     let at = Point::new(250.0, 180.0);
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, key(source), at, DropOperation::Move)).unwrap();
+    drop_at(&mut app, key(source), at, DropOperation::Move).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.history.undo.len(), n + 1);
     let placed = st.selection.objects[0];
     assert!(matches!(&st.doc.node(placed).unwrap().kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Leaf"));
     let n = undo_len(&app);
-    let _ = apply_drop(&mut app, &dropped(&app, key(u64::MAX), at, DropOperation::Move));
+    let _ = drop_at(&mut app, key(u64::MAX), at, DropOperation::Move);
     assert_eq!(undo_len(&app), n, "a closed source places nothing");
 }
 
@@ -172,8 +174,7 @@ fn a_color_dropped_on_a_selected_mesh_recolors_the_point_or_patch_under_it() {
     let m = mesh(&app).unwrap();
     let before: Vec<_> = m.points.iter().map(|q| q.color).collect();
     let drop = |app: &mut VectorcraftApp, c: Color, at: Point| {
-        let d = dropped(app, Payload::Panel(PanelDrag::paint(Paint::solid(c))), at, DropOperation::Move);
-        apply_drop(app, &d).unwrap();
+        drop_at(app, Payload::Panel(PanelDrag::paint(Paint::solid(c))), at, DropOperation::Move).unwrap();
         mesh(app).unwrap().points.iter().map(|q| q.color).collect::<Vec<_>>()
     };
     let red = Color::rgb(1.0, 0.0, 0.0);
@@ -202,7 +203,7 @@ fn carried_art_dropped_in_another_document_is_copied_and_the_source_stays() {
     let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let n = undo_len(&app);
-    apply_drop(&mut app, &dropped(&app, Payload::Art(art), Point::new(170.0, 120.0), DropOperation::Move)).unwrap();
+    drop_at(&mut app, Payload::Art(art), Point::new(170.0, 120.0), DropOperation::Move).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.history.undo.len(), n + 1);
     let placed = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
@@ -232,7 +233,7 @@ fn art_moved_off_the_canvas_is_carried_by_every_selection_tool() {
         // The tab strip is off the canvas.
         frame(&mut app, &ctx, vec![Event::PointerMoved(Pos2::new(500.0, 2.0))]);
         frame(&mut app, &ctx, vec![]);
-        let carried = craft::ui::runtime::drag::active::<PanelDrag>(&ctx); // PLAN: assumed `active::<P>(&Context) -> Option<Arc<P>>`
+        let carried = craft::ui::runtime::drag::active::<PanelDrag>(&ctx);
         assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { ids, .. }) if ids == &[id]), "{tool}");
     }
 }

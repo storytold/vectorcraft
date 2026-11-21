@@ -295,7 +295,8 @@ mod tests {
         set(&app, &ctx, "mode", json!("global"));
         set(&app, &ctx, "tint", json!(-20));
         host::pump(&mut app, &ctx);
-        let tint = app.dialogs().unwrap().with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| params(d.fields())["tint"].clone()));
+        let tint =
+            app.dialogs().unwrap().with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| params(d.fields())["tint"].clone()));
         assert_eq!(tint, Some(json!(-20.0)));
         confirm(&mut app, &ctx);
         let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();

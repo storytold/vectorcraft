@@ -58,7 +58,7 @@ fn card(ui: &mut Ui, tool: &ToolInfo, description: &'static str, animated_zoom: 
     let name = super::tip(ui.ctx(), tool);
     Row::new().show(ui, |ui, _| {
         Icon::new(IconSpec::svg(IconId::new(icons::tool_icon(tool.icon)))).show(ui);
-        Text::new(name).role(TypeRole::BodyStrong).show(ui);
+        Text::new(name.clone()).role(TypeRole::BodyStrong).show(ui);
     });
     Text::new(tl!(description)).show(ui);
     let lines = lines(tool.id, animated_zoom);

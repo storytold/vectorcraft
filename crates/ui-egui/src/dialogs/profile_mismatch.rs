@@ -93,7 +93,7 @@ pub fn open_or_ask(app: &mut VectorcraftApp, file: ReadFile, path: Option<String
 }
 
 /// [`open_or_ask`] for a file that has its scope already.
-fn ask_or_open(app: &mut VectorcraftApp, pending: PendingOpen) -> Result<Value, String> {
+fn ask_or_open(app: &mut VectorcraftApp, mut pending: PendingOpen) -> Result<Value, String> {
     let Some(q) = pending.file.ask() else {
         let PendingOpen { file, path, scope, .. } = pending;
         return scope.run(|| {
@@ -136,7 +136,8 @@ fn question_key(q: &ProfileQuestion) -> Value {
 fn open_dialog(name: &str, q: &ProfileQuestion) -> ProfileMismatchDialog {
     let (mode, kind) = if q.model_label() == "CMYK" { (ProfileMode::Cmyk, ProfileKind::Cmyk) } else { (ProfileMode::Rgb, ProfileKind::Rgb) };
     let missing = q.issue.id() == "missing";
-    let question = if missing { PromptQuestion::missing(&q.working) } else { PromptQuestion::mismatch(&q.profile, &q.working) };
+    let question =
+        if missing { PromptQuestion::missing(&q.working) } else { PromptQuestion::mismatch(q.profile.as_deref().unwrap_or_default(), &q.working) };
     let mut dialog = ProfileMismatchDialog::new(name, mode, question).rememberable(false);
     if let Some((_, action)) = ACTIONS.iter().find(|(id, _)| *id == q.default.id()) {
         dialog = dialog.action(*action);
@@ -175,9 +176,9 @@ fn open_choice(answer: ProfileAnswer) -> Result<ProfileChoice, String> {
 /// question once no dialog is open.
 pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
     let answered = app.dialogs().and_then(|d| d.with(|h| h.take::<ProfileMismatchDialog>()));
-    match answered {
-        Some(DialogResult::Ok(answer)) => answer_open(app, answer),
-        Some(DialogResult::Cancel) => cancel_open(app),
+    match answered.map(DialogResult::ok) {
+        Some(Some(answer)) => answer_open(app, answer),
+        Some(None) => cancel_open(app),
         None => {}
     }
     pump_paste(app);
@@ -222,18 +223,9 @@ fn finish_open(app: &mut VectorcraftApp, mut pending: PendingOpen, choice: Profi
 fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> Result<Value, String> {
     let PendingOpen { file, path, background, .. } = pending;
     let name = file.name();
-    let file = match &path {
-        Some(p) if background && crate::opening::available() => match crate::opening::finish_answered(app, p, file, scope.clone()) {
-            Ok(r) => return Ok(r),
-            Err(Some(file)) => *file,
-            Err(None) => {
-                let e = "the file stopped being read (please report this bug)".to_string();
-                crate::io::report_open_error(app, &name, &e);
-                return Err(e);
-            }
-        },
-        _ => file,
-    };
+    if let Some(p) = path.as_deref().filter(|_| background && crate::opening::available()) {
+        return Ok(crate::opening::finish_answered(app, p, file, scope));
+    }
     scope.run(|| match fileio::open_read(&mut app.session, file) {
         Ok(r) => {
             crate::io::opened(app, &r);
@@ -362,10 +354,7 @@ fn paste_answer(app: &VectorcraftApp, id: DialogId) -> Option<Option<Value>> {
         if h.get_dyn(id).is_some() {
             return None;
         }
-        h.take_by_id::<HostedParamDialog>(id).map(|result| match result {
-            DialogResult::Ok(result) => Some(chosen(&result.fields, &ask.mismatches)),
-            DialogResult::Cancel => None,
-        })
+        h.take_by_id::<HostedParamDialog>(id).map(|result| result.ok().map(|result| chosen(&result.fields, &ask.mismatches)))
     })
 }
 

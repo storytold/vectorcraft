@@ -391,7 +391,7 @@ impl StackDialog for ObjectMosaicDialog {
                     Row::new().show(ui, |ui, _| {
                         for (caption, size) in [(&width, image.0), (&height, image.1)] {
                             let shown = (size * scale * 1000.0).round() / 1000.0;
-                            Text::new(format!("{caption} {shown} {symbol}")).show(ui);
+                            Text::new(format!("{} {shown} {symbol}", caption.as_str())).show(ui);
                         }
                     });
                 });

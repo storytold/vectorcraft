@@ -7,6 +7,11 @@ use craft::automation::{ControlRequest, Reply};
 use super::handle;
 use crate::{Services, VectorcraftApp};
 
+/// Whether a dialog is open on the app's window.
+fn dialog_open(app: &VectorcraftApp) -> bool {
+    app.dialogs().is_some_and(|host| host.with(|h| !h.open_dialogs().is_empty()))
+}
+
 fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
     let (req, _) = ControlRequest::new(method, params);
     let Reply::Done(r) = handle(app, &egui::Context::default(), &req) else { panic!("expected immediate reply") };
@@ -29,7 +34,7 @@ fn a_reply_hides_a_hidden_library_whatever_surrounds_it() {
 fn hiding(hidden: &[(&str, &str)], readable: &[&str]) -> super::Hiding {
     let mut hidden: Vec<(String, String)> = hidden.iter().map(|(id, shown)| (id.to_string(), shown.to_string())).collect();
     hidden.sort_by_key(|(id, _)| std::cmp::Reverse(id.len()));
-    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect(), sent: Vec::new() }
+    super::Hiding { hidden, readable: readable.iter().map(|id| id.to_string()).collect(), sent: Vec::new(), folders: Vec::new() }
 }
 
 /// [`super::hide_library_ids`] on `reply`, under a read root made for `tag`.
@@ -751,12 +756,13 @@ fn the_method_table_routes_each_method_and_checks_its_params() {
         assert_eq!((app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar), before, "{method} {params}: nothing is set");
     }
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();
     app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
     let view = |app: &VectorcraftApp| app.view().map(|v| (v.zoom, v.center.x, v.center.y));
-    let before = (view(&app), app.ui.screen_mode, app.session.documents().len(), app.ui.dialog.is_some(), app.ui.open_panel.clone());
+    let before = (view(&app), app.ui.screen_mode, app.session.documents().len(), dialog_open(&app), app.ui.open_panel.clone());
     for (id, params, key) in [
         ("view.setZoom", json!({"zoom": "200"}), "zoom"),
         ("view.setZoom", json!({"zoom": 200, "center": [1]}), "center"),
@@ -776,7 +782,7 @@ fn the_method_table_routes_each_method_and_checks_its_params() {
     ] {
         let e = app.run(id, params.clone()).unwrap_err();
         assert!(e.contains(&format!("`{key}`")), "{id} {params}: {e}");
-        let after = (view(&app), app.ui.screen_mode, app.session.documents().len(), app.ui.dialog.is_some(), app.ui.open_panel.clone());
+        let after = (view(&app), app.ui.screen_mode, app.session.documents().len(), dialog_open(&app), app.ui.open_panel.clone());
         assert_eq!(after, before, "{id} {params}: nothing changes");
     }
     app.run("view.setZoom", json!({"zoom": null, "center": null})).unwrap();
@@ -1020,6 +1026,7 @@ fn held_cmd_click(then: &str) {
 fn menu_dialogs_open_after_a_merge_on_another_thread() {
     for route in ["menu", "ui.menuDialog", "app dialog from the menu", "app dialog from a panel"] {
         let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
         for k in 0..40 {
             app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
@@ -1050,7 +1057,7 @@ fn menu_dialogs_open_after_a_merge_on_another_thread() {
                 app.run("ui.recolorDialog", json!({})).unwrap();
             }
         }
-        assert!(app.ui.dialog.is_some(), "{route}: the dialog is open");
+        assert!(dialog_open(&app), "{route}: the dialog is open");
         assert!(!app.session.tool_editing(), "{route}");
         let merged = app.session.doc().unwrap().history.undo.last().map(|e| e.label.clone());
         assert_eq!(merged.as_deref(), Some("Shape Builder"), "{route}");

@@ -7,7 +7,7 @@ use craft::behavior::IconId;
 use craft::menu::Node;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
 use craft::ui::sections::Section;
 use egui::Ui;

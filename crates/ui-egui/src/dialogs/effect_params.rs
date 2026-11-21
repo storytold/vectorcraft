@@ -8,7 +8,6 @@ use vectorcraft_color::Color;
 
 use super::{duotone, effect_adjust, effect_rows, form, free_distort, halftone, raster_effects, warp_effect};
 use crate::VectorcraftApp;
-// PLAN: assumed path of cv.B5b's `general_lengths` (canvas-w15)
 use crate::canvas::general_lengths;
 
 /// What an effect's rows need from the app, built once for the dialog, the gallery catalog and
@@ -86,7 +85,7 @@ pub(crate) fn effect_params(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> 
     }
     match id {
         _ if vectorcraft_effects::is_adjustment(id) && !vectorcraft_effects::addons::color::is_color_effect(id) => effect_adjust::params(cx, fields),
-        vectorcraft_effects::addons::halftone::HALFTONE => halftone::screen_params(true),
+        vectorcraft_effects::addons::halftone::HALFTONE => halftone::screen_params(true, fields),
         vectorcraft_effects::addons::duotone::DUOTONE => duotone::params(cx, fields),
         GLASS | TEXTURIZER | ROUGH_PASTELS => effect_rows::textured(cx, fields),
         TRANSFORM => effect_rows::transform(cx, fields),
@@ -109,7 +108,7 @@ pub(crate) fn effect_params(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> 
 pub(super) fn generic(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
     let id = cx.id.as_str();
     let Some(info) = vectorcraft_effects::effect_info(id) else { return Vec::new() };
-    let relative = fields.bool("relative").unwrap_or(false);
+    let relative = fields.contains("relative") && effect_rows::is_relative(fields);
     let mut defaults: Vec<(&String, &Value)> = info.defaults.as_object().into_iter().flatten().collect();
     defaults.sort_by_key(|(key, _)| doc_rank(info.params, key));
     defaults.into_iter().filter_map(|(key, default)| generic_row(cx, key, default, relative)).collect()
@@ -122,17 +121,15 @@ fn generic_row(cx: &EffectCx, key: &str, default: &Value, relative: bool) -> Opt
     let label = label.trim_end_matches(':').to_string();
     let options = || {
         own_choices(id, key, cx.cmyk)
-            .map(|own| own.into_iter().map(|(label, value)| (value.to_string(), label.into())).collect::<Vec<(String, craft::ui::runtime::env::Label)>>())
+            .map(|own| {
+                own.into_iter().map(|(label, value)| (value.to_string(), label.into())).collect::<Vec<(String, craft::ui::runtime::env::Label)>>()
+            })
             .or_else(|| {
                 choices(id, key).map(|list| list.iter().map(|(label, value)| (value.to_string(), form::choice_label(label).into())).collect())
             })
     };
     Some(match default {
-        Value::Bool(on) if key == "relative" => {
-            // PLAN: assumed ids of the two-id Radio (wg.S12 keeps a JSON bool for it)
-            let radio = ParamKind::radio(vec![("relative".into(), "Relative".into()), ("absolute".into(), "Absolute".into())], Some(if *on { "relative" } else { "absolute" }.into()));
-            Param::new(key, label, radio)
-        }
+        Value::Bool(on) if key == "relative" => effect_rows::relative_radio(label, *on),
         Value::Bool(on) => Param::new(key, label, ParamKind::bool(*on)),
         Value::Number(n) => {
             let n = n.as_f64()?;

@@ -763,6 +763,8 @@ mod tests {
     use vectorcraft_engine::Session;
     use vectorcraft_testkit::fixtures::Fixture;
 
+    use crate::i18n::LangExt as _;
+
     /// An app over `session` with its menu model built, in English.
     fn app_on(session: Session) -> VectorcraftApp {
         crate::i18n::set_current(Lang::EN);
@@ -784,17 +786,17 @@ mod tests {
     }
 
     /// Cancels, or confirms, every open dialog.
-    // PLAN: assumed hub-w1 `app.dialogs()` with `open_dialogs()` (entries with `id`), `cancel_by_id(&ctx, id)` and `confirm_by_id(&ctx, id)`, and `app.any_dialog_open()`
     fn close_dialogs(app: &mut VectorcraftApp, confirm: bool) {
-        let ctx = egui::Context::default();
-        let ids: Vec<_> = app.dialogs().open_dialogs().iter().map(|d| d.id).collect();
-        for id in ids {
-            if confirm {
-                app.dialogs().confirm_by_id(&ctx, id);
-            } else {
-                app.dialogs().cancel_by_id(&ctx, id);
+        let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return };
+        dialogs.with(|host| {
+            for id in host.open_dialogs().into_iter().map(|d| d.id) {
+                if confirm {
+                    host.confirm_by_id(&ctx, id);
+                } else {
+                    host.cancel_by_id(&ctx, id);
+                }
             }
-        }
+        });
     }
 
     /// Whether a dialog is open, the active document's undo depth and the status line.
@@ -1712,11 +1714,11 @@ mod tests {
     #[test]
     fn a_panel_pick_in_presentation_mode_changes_nothing() {
         let mut app = app_on(Session::new());
-        let (open_panel, dock) = (app.ui.open_panel.clone(), app.ui.dock);
+        let (open_panel, dock) = (app.ui.open_panel.clone(), app.ui.dock_workspace.clone());
         app.ui.screen_mode = 3;
         pick(&mut app, "panel:swatches");
         assert!(app.ui.status.contains("Presentation Mode"), "{}", app.ui.status);
-        assert_eq!((app.ui.open_panel.clone(), app.ui.dock), (open_panel, dock));
+        assert_eq!((app.ui.open_panel.clone(), app.ui.dock_workspace.clone()), (open_panel, dock));
         app.ui.screen_mode = 0;
         assert!(!crate::panel_docking::showing(&app.ui, "swatches"), "the pick did not place the panel");
     }
@@ -1881,22 +1883,21 @@ mod tests {
         app.select_tool("groupSelection");
         assert_eq!(home(&app, "tool:groupSelection"), "Toolbar");
         assert_eq!(home(&app, "tool:directSelection"), "Toolbar, in the Group Selection Tool group");
-        let bar = |name: &str, slot: &[&str], shown: bool| crate::state::CustomToolbar {
-            name: name.into(),
-            slots: vec![slot.iter().map(|t| t.to_string()).collect()],
-            shown,
-            pos: [0.0, 0.0],
-            dock: None,
-            dock_right: false,
-            slot_tool: Default::default(),
-            double: false,
-            floating: vec![],
+        // A toolbar made with New Toolbar holding the tools of `slot`; a hidden one has its panel closed.
+        let bar = |app: &mut VectorcraftApp, name: &str, slot: &[&str], shown: bool| {
+            crate::custom_toolbars::create(app, name).unwrap();
+            let toolbar = crate::custom_toolbars::find_mut(&mut app.ui, name).unwrap();
+            toolbar.slots = vec![slot.iter().map(|t| t.to_string()).collect()];
+            let panel = crate::custom_toolbars::panel_id(toolbar.id);
+            if !shown {
+                crate::panel_docking::hide_group(app, &panel).unwrap();
+            }
         };
         // Window › Tools hides the Tools panel while a toolbar made with New Toolbar holds the Pen
         // Tool: the row names that toolbar.
-        crate::toolbar::set_shown(&mut app.ui, false);
+        crate::toolbar::set_shown(app, false);
         assert_eq!(home(&app, "tool:pen"), "Toolbar");
-        app.ui.custom_toolbars.push(bar("Drawing", &["pen", "curvature"], true));
+        bar(app, "Drawing", &["pen", "curvature"], true);
         assert_eq!(home(&app, "tool:pen"), "Drawing");
         assert_eq!(home(&app, "tool:curvature"), "Drawing, in the Pen Tool group");
         app.ui.custom_toolbars[0].name = "{tool}".into();
@@ -1910,7 +1911,7 @@ mod tests {
         window.frame(vec![]);
         let app = &mut window.app;
         // The Tools panel shown again comes first.
-        crate::toolbar::set_shown(&mut app.ui, true);
+        crate::toolbar::set_shown(app, true);
         assert_eq!(home(&app, "tool:pen"), "Toolbar");
         // In Presentation Mode no toolbar shows; the tool still lives on the Tools panel.
         app.ui.screen_mode = 3;
@@ -1922,7 +1923,7 @@ mod tests {
         let loose = vectorcraft_tools::catalog::all_tools().map(|t| t.id).find(|t| !on_tools.contains(t)).expect("a tool not on the Tools panel");
         let id = format!("tool:{loose}");
         assert_eq!(home(&app, &id), "All Tools");
-        app.ui.custom_toolbars.push(bar("Cutting", &[loose], false));
+        bar(app, "Cutting", &[loose], false);
         assert_eq!(home(&app, &id), "Cutting");
     }
 
@@ -2222,7 +2223,6 @@ mod tests {
     /// when it found no more than the palette lists, each of them is among the results it lists.
     #[test]
     fn every_result_found_before_is_still_found_and_shown() {
-        // PLAN: assumed menus-w3 re-exports `RESULTS` (mn.M31, `palette.rs:38`) from `patterns::panels`; its module is private
         use craft::ui::patterns::panels::RESULTS;
         assert_eq!(QUERIES.len(), 60);
         let c = built_for(&app_on(Session::new()));
@@ -2284,7 +2284,7 @@ mod tests {
             let input = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
             let app = &mut self.app;
             let mut out = self.ctx.run_ui(input, |ui| {
-                app.logic(ui.ctx());
+                app.tick(ui.ctx());
                 app.ui(ui);
             });
             out.textures_delta.clear();

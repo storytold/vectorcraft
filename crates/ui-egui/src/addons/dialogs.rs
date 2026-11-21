@@ -46,8 +46,7 @@ pub(crate) struct AddonDialogs {
 /// Closes the open `Commit` dialog without an answer and rolls its preview back.
 fn close_open(app: &mut VectorcraftApp) {
     let Some((id, _)) = app.addon_dialogs.open.take() else { return };
-    if let Some(host) = app.dialogs() {
-        let ctx = app.ui_ctx.clone();
+    if let (Some(host), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
         host.with(|h| {
             h.cancel_by_id(&ctx, id);
             // The cancel's answer is of no use: the preview is rolled back below.
@@ -64,7 +63,7 @@ pub(crate) fn open(
     fields: DialogFields,
     build: impl for<'b> Fn(&'b mut DialogFields) -> ParamDialog<'b> + Send + 'static,
 ) -> Result<Value, String> {
-    let ctx = app.ui_ctx.clone();
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, spec.command, fields, build);
     match spec.confirm {
         Confirm::Commit => {
@@ -129,8 +128,8 @@ fn pump_commit(app: &mut VectorcraftApp) {
             });
         }
     }
-    match host.with(|h| h.take_by_id::<HostedParamDialog>(id)) {
-        Some(DialogResult::Ok(result)) => {
+    match host.with(|h| h.take_by_id::<HostedParamDialog>(id)).map(DialogResult::ok) {
+        Some(Some(result)) => {
             app.addon_dialogs.open = None;
             let preview = mem::take(&mut app.addon_dialogs.preview);
             // The dialog is closed already, so a refusal can only go to the status line.
@@ -138,7 +137,7 @@ fn pump_commit(app: &mut VectorcraftApp) {
                 app.status(error);
             }
         }
-        Some(DialogResult::Cancel) => {
+        Some(None) => {
             app.addon_dialogs.open = None;
             mem::take(&mut app.addon_dialogs.preview).cancel(app);
         }

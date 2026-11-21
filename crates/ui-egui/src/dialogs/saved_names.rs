@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use craft::behavior::{ColumnKey, ColumnWidth, DisplayOrder, ItemSource, Selection};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, CollectionEvent, ColumnSpec, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::contract::{Bind, CollectionEvent, ColumnSpec, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;

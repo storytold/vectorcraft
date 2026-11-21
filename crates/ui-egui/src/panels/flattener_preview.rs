@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
@@ -23,7 +23,7 @@ use craft::ui::style::{TypeRole, rgba_color};
 use egui::load::SizedTexture;
 use egui::{Ui, vec2};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::flatten::{FlattenReport, Highlight, Overprints};
@@ -157,7 +157,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     }
     app.ui.flattener_preview = set;
     app.ui.open_panel = Some(ID.into());
-    app.ui.dock = true;
+    crate::panel_docking::show_panels(app);
     refresh(app)
 }
 
@@ -212,9 +212,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     Row::new().show(ui, |ui, _| {
         Text::new(tl!("Preset:")).shade(Shade::Muted).show(ui);
-        let (rows, ..) = flatten::preset_rows(app);
+        let names = flatten::preset_names(app);
         let mut fields = DialogFields::from_pairs([("preset", set.preset.clone())]);
-        flatten::preset_picker(ui, &mut fields, "preset", &rows, custom(app));
+        flatten::preset_picker(ui, &mut fields, "preset", &names, custom(app));
         if let Some(name) = fields.text("preset")
             && name != set.preset
             && let Some(p) = app.session.flattener_preset(name)
@@ -225,9 +225,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if set.show_options {
         Divider::horizontal().show(ui);
         let params = flatten::option_params(&[], "");
-        let mut options = Map::new();
-        flatten::put_options(&mut options, &set.options);
-        let mut fields = form::fields_of(&params, &options);
+        let mut fields = flatten::option_fields(&set.options);
         let out = ParamRows::new(tl!("Flattener options"), &params, Bind::bound(&mut fields)).show(ui);
         if out.changed
             && let Ok(o) = serde_json::from_value(Value::Object(form::json_of(&params, &fields)))

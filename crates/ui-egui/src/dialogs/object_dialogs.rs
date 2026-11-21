@@ -2,15 +2,13 @@
 
 use super::path_ops::PathOp;
 use super::simplify_slider::StripKind;
-use super::tools::reported;
 use super::{
     blend_options, dimension, flare_options, graph_data, graph_design, graph_type, indexed_color, live_paint_gaps, object_mosaic, option_form,
     path_ops, perspective_grid, perspective_presets, saved_names, shapes, simplify_slider, slices, smooth_slider, transform, transform_each,
     width_point,
 };
-// PLAN: assumed crate::dialogs::preview::LivePreview (widgets-w11)
-use crate::dialogs::preview::LivePreview;
 use crate::VectorcraftApp;
+use crate::dialogs::preview::LivePreview;
 
 /// What the object dialogs keep between frames. Held OK records are `app.held`, not here.
 #[derive(Default)]
@@ -33,6 +31,8 @@ pub(crate) struct ObjectDialogs {
     pub blend: Option<LivePreview>,
     /// The open Indexed Color dialog's live preview.
     pub indexed: Option<LivePreview>,
+    /// The open Gap Options dialog's live preview.
+    pub gaps: Option<live_paint_gaps::Open>,
     /// The Properties section's pending colour pick: dialog id, field key and target dimension.
     pub dimension: Option<dimension::Pick>,
 }
@@ -71,45 +71,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// An opener's failure goes to the status line and still counts as handled.
 pub(crate) fn open_from_menu(app: &mut VectorcraftApp, id: &str) -> bool {
     if let Some(kind) = transform::Kind::of_command(id) {
-        // PLAN: assumed transform::open(app, Kind, &Value) -> Result<_, String>
-        let r = transform::open(app, kind, &serde_json::Value::Null);
-        reported(app, r);
+        transform::open(app, kind, &serde_json::Value::Null);
         return true;
     }
-    // PLAN: assumed every opener below returns Result<_, String>
     match id {
-        "object.transformEach" => {
-            let r = transform_each::open(app);
-            reported(app, r);
-        }
-        "path.average" => {
-            let r = path_ops::open(app, PathOp::Average);
-            reported(app, r);
-        }
-        "path.averageJoin" => {
-            let r = path_ops::open(app, PathOp::AverageJoin);
-            reported(app, r);
-        }
-        "object.path.offsetPath" => {
-            let r = path_ops::open(app, PathOp::OffsetPath);
-            reported(app, r);
-        }
-        "object.path.splitIntoGrid" => {
-            let r = path_ops::open_split(app);
-            reported(app, r);
-        }
-        "object.path.simplify" => {
-            let r = if path_ops::retained_simplify(app) {
-                path_ops::open(app, PathOp::Simplify)
-            } else {
-                simplify_slider::open(app, StripKind::Simplify)
-            };
-            reported(app, r);
-        }
-        "object.path.smooth" => {
-            let r = smooth_slider::open(app);
-            reported(app, r);
-        }
+        "object.transformEach" => transform_each::open(app),
+        "path.average" => path_ops::open(app, PathOp::Average),
+        "path.averageJoin" => path_ops::open(app, PathOp::AverageJoin),
+        "object.path.offsetPath" => path_ops::open(app, PathOp::OffsetPath),
+        "object.path.splitIntoGrid" => path_ops::open_split(app),
+        "object.path.simplify" if path_ops::retained_simplify(app) => path_ops::open(app, PathOp::Simplify),
+        "object.path.simplify" => simplify_slider::open(app, StripKind::Simplify),
+        "object.path.smooth" => smooth_slider::open(app),
         _ => return false,
     }
     true

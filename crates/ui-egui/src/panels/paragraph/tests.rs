@@ -540,20 +540,21 @@ fn the_numbered_list_button_and_its_presets_set_the_list_and_reset_panel_clears_
 /// tab, and at the end of the Numbered List presets on its Numbers tab.
 #[test]
 fn more_options_opens_bullets_and_numbering_on_its_tab() {
+    use crate::dialogs::bullets_numbering::BulletsDialog;
+    use craft::ui::dialog::StackDialog as _;
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let (mut app, _) = editing_text("One\nTwo");
+    app.ui_ctx = Some(crate::testing::ui_context());
     select_range(&mut app, 0, 0);
+    let shown_tab = |app: &VectorcraftApp| {
+        app.dialogs().expect("a window").with(|host| host.get::<BulletsDialog>().map(|d| d.json_fields().unwrap_or_default()["tab"].clone()))
+    };
     for tab in ["bullets", "numbers"] {
         more_options(&mut app, tab);
-        // PLAN: assumed `app.dialogs().get::<BulletsDialog>()` and `json_fields()` (type-w27, hub-w1).
-        let dialog = app
-            .dialogs()
-            .get::<crate::dialogs::bullets_numbering::BulletsDialog>()
-            .unwrap_or_else(|| panic!("More Options opens the dialog on {tab}"));
-        assert_eq!(dialog.json_fields()["tab"], json!(tab));
+        assert_eq!(shown_tab(&app), Some(json!(tab)), "More Options opens the dialog on {tab}");
     }
     app.run("ui.bulletsAndNumbering", json!({})).unwrap();
-    assert!(app.dialogs().get::<crate::dialogs::bullets_numbering::BulletsDialog>().is_some());
+    assert!(shown_tab(&app).is_some());
 }
 
 /// Type › Bullets and Numbering › Convert to Text (`type.convertListToText`) acts on the
@@ -736,7 +737,14 @@ fn bar_names(app: &mut VectorcraftApp) -> Vec<String> {
 fn the_control_bar_shows_its_paragraph_section_for_selected_type_only() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 800, "height": 400})).unwrap();
-    assert!(control_bar(&mut app, &mut egui::Ui::__test_placeholder()), "always true");
+    let section = ["Paragraph:", "Align left", "Align center", "Align right"];
+    let names = bar_names(&mut app);
+    assert!(section.iter().all(|s| !names.iter().any(|n| n == s)), "nothing without type: {names:?}");
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "One"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let names = bar_names(&mut app);
+    assert!(section.iter().all(|s| names.iter().any(|n| n == s)), "the link and three alignments: {names:?}");
+    assert!(!names.iter().any(|n| n.starts_with("Justify")), "the justifying alignments are in the panel: {names:?}");
 }
 
 /// Reset Panel gives the paragraphs it acts on new type's Mojikumi Set (Line-end Punctuation

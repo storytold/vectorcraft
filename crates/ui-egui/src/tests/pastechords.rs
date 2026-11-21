@@ -29,8 +29,7 @@ fn cmd_shift_v_pastes_in_place() {
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, Modifiers::NONE, vec![]);
     frame(&mut app, &ctx, Modifiers::COMMAND, vec![Event::Copy]);
-    // PLAN: assumed `app.clipboard.read_text()` gives the text the Copy wrote (shell-w14).
-    let svg = app.clipboard.read_text().expect("copy publishes SVG");
+    let svg = app.clipboard.read_text().ok().flatten().expect("copy publishes SVG");
     // The text egui read from the clipboard comes with the chord still held.
     frame(&mut app, &ctx, Modifiers::COMMAND | Modifiers::SHIFT, vec![Event::Paste(svg.clone())]);
     assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 2);

@@ -79,7 +79,7 @@ fn dialog<'a>(command: &str, rows: Vec<Param>) -> ParamDialog<'a> {
     ParamDialog::new(command, tl!(heading), Cow::Owned(rows)).previews(true)
 }
 
-fn choice(key: &str, label: &'static str, options: &[(&str, &str)], default: &str) -> Param {
+fn choice(key: &str, label: &'static str, options: &[(&str, &'static str)], default: &str) -> Param {
     let options = options.iter().map(|&(id, text)| (id.to_string(), tl!(text).into())).collect();
     Param::new(key, tl!(label), ParamKind::choice(options, Some(default.into())))
 }
@@ -230,7 +230,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, S
         SORT => super::dialogs::open(app, &SORT_SPEC, fields, |_| dialog(SORT, sort_rows())),
         _ => super::dialogs::open(app, &SIZE_SPEC, fields, move |fields| {
             let either = fields.bool("widthOn").unwrap_or(true) || fields.bool("heightOn").unwrap_or(true);
-            dialog(SIZE, size_rows(lengths)).ok_enabled(either).ok_reason(tl!("Tick Width or Height."))
+            dialog(SIZE, size_rows(lengths)).ok_enabled(either).ok_reason(tl!("Tick Width or Height.").into())
         }),
     };
     Some(opened)

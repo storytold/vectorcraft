@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-// PLAN: assumed `craft::ui::contract::{EditEvent, Mixed, Preview}` re-export craft_behavior's value types
-use craft::behavior::{EditEvent, Mixed};
-use craft::ui::patterns::presets::Preview;
+use craft::behavior::{EditEvent, Mixed, Preview};
 
 use crate::VectorcraftApp;
 

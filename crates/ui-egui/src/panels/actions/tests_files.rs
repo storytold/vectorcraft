@@ -75,35 +75,35 @@ fn excluded_steps_do_not_play_and_survive_saved_sets() {
 #[test]
 fn a_recording_after_a_restart_goes_into_the_set_current_before_it() {
     let mut app = app_with_sets();
-    app.ui.action_set = Some(2);
+    app.ui.action_set = Some("Other".into());
     let saved = serde_json::to_value(&app.ui).unwrap();
     let mut app = new_app();
     app.ui = serde_json::from_value(saved).unwrap();
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-    assert_eq!(app.ui.action_set, Some(2), "Other is current after the restart");
+    assert_eq!(app.ui.action_set.as_deref(), Some("Other"), "Other is current after the restart");
     app.run(START_RECORDING, json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     app.run(STOP_RECORDING, json!({})).unwrap();
     assert_eq!(counts(&app), [6, 2, 1], "recorded into Other");
 }
 
-/// A saved current set that is not a set index, or is past the last set, leaves no set current;
-/// the other preferences still load, and Begin Recording then records into the first set and
-/// makes it current.
+/// A saved current set that is not a set name (an earlier version's index) leaves no set current,
+/// and the other preferences still load; with a name no set has, Begin Recording records into the
+/// first set and makes it current.
 #[test]
 fn a_saved_current_set_that_is_gone_falls_back_to_the_first_set() {
     let app = app_with_sets();
     let mut saved = serde_json::to_value(&app.ui).unwrap();
-    saved["action_set"] = json!("Other");
+    saved["action_set"] = json!(2);
     let restored = serde_json::from_value::<crate::state::UiState>(saved.clone()).unwrap();
-    assert_eq!((restored.action_set, restored.actions.sets().len()), (None, 3), "not an index: no set current, the sets load");
-    saved["action_set"] = json!(9);
+    assert_eq!((restored.action_set, restored.actions.sets().len()), (None, 3), "not a name: no set current, the sets load");
+    saved["action_set"] = json!("Gone");
     let mut app = new_app();
     app.ui = serde_json::from_value(saved).unwrap();
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run(START_RECORDING, json!({})).unwrap();
     // PLAN: `actions_panel.selected_sets` holds only a Shift-click range of sets (mn.M41), so the base's "and the only selected set" has no field left to assert.
-    assert_eq!(app.ui.action_set, Some(0), "the set recorded into is current");
+    assert_eq!(app.ui.action_set.as_deref(), Some("Default Actions"), "the set recorded into is current");
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     app.run(STOP_RECORDING, json!({})).unwrap();
     assert_eq!(counts(&app), [7, 2, 0], "recorded into Default Actions");
@@ -120,7 +120,7 @@ fn replace_actions_clears_what_named_the_old_sets_and_reads_aia_files() {
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     let undo = undo_steps(&app);
-    app.ui.action_set = Some(2);
+    app.ui.action_set = Some("Other".into());
     let nudge = model::flat(&app.ui.actions, 1, 1).unwrap();
     let panel = &mut app.ui.actions_panel;
     panel.selected_sets = vec!["Mine".into(), "Other".into()];
@@ -132,7 +132,7 @@ fn replace_actions_clears_what_named_the_old_sets_and_reads_aia_files() {
     let r = app.run(REPLACE_SET, json!({ "data": text })).unwrap();
     assert_eq!(r, json!({"changed": true, "set": 0, "name": "Mine", "actions": 2}));
     assert_eq!(set_names(&app), ["Mine"]);
-    assert_eq!((app.ui.action_set, &app.ui.actions_panel.selected), (Some(0), &Some(ActionSelection::Set("Mine".into()))));
+    assert_eq!((app.ui.action_set.as_deref(), &app.ui.actions_panel.selected), (Some("Mine"), &Some(ActionSelection::Set("Mine".into()))));
     assert!(app.ui.actions_panel.selected_sets.is_empty());
     assert!(app.ui.actions_panel.expanded.is_empty());
     assert!(!is_open::<BatchDialog>(&app), "the Batch dialog of a replaced set closes");
@@ -172,7 +172,7 @@ fn replace_actions_refuses_bad_params_bad_files_and_a_running_action() {
     let mut app = app_with_sets();
     let files = with_files(&mut app, "/sets/missing.vcactions");
     files.borrow_mut().insert("/sets/empty.vcactions".into(), vec![]);
-    app.ui.action_set = Some(1);
+    app.ui.action_set = Some("Mine".into());
     let before = saved_sets(&app);
     let many = json!({"format": "vcactions", "version": 1, "name": "Many", "actions": vec![json!({"name": "A", "steps": []}); 1001]});
     let eof = "not an action set file (EOF while parsing a value at line 1 column 0)";
@@ -193,12 +193,12 @@ fn replace_actions_refuses_bad_params_bad_files_and_a_running_action() {
     ] {
         assert_eq!(app.run(REPLACE_SET, p.clone()).unwrap_err(), error, "{p}");
         assert_eq!(saved_sets(&app), before, "{p} changes nothing");
-        assert_eq!(app.ui.action_set, Some(1));
+        assert_eq!(app.ui.action_set.as_deref(), Some("Mine"));
     }
     assert_eq!(app.run(REPLACE_SET, json!({})).unwrap()["pending"], "fileDialog");
     poll_picks(&mut app);
     assert_eq!(app.ui.status, "no such file");
-    assert_eq!((saved_sets(&app), app.ui.action_set), (before.clone(), Some(1)), "a picked file that can't be read changes nothing");
+    assert_eq!((saved_sets(&app), app.ui.action_set.as_deref()), (before.clone(), Some("Mine")), "a picked file that can't be read changes nothing");
     cancel_picks(&mut app);
     app.ui.status.clear();
     app.run(REPLACE_SET, Value::Null).unwrap();
@@ -231,7 +231,7 @@ fn save_actions_and_load_actions_round_trip_a_set() {
     let files = with_files(&mut app, "/sets/Mine.vcactions");
     assert_eq!(app.run(SAVE_SET, json!({})).unwrap_err(), "no action set to save");
     assert!(files.borrow().is_empty(), "no set is current: nothing to save");
-    app.ui.action_set = Some(1);
+    app.ui.action_set = Some("Mine".into());
     app.run(SAVE_SET, json!({})).unwrap();
     poll_picks(&mut app);
     let text = String::from_utf8(files.borrow()["/sets/Mine.vcactions"].clone()).unwrap();
@@ -241,7 +241,7 @@ fn save_actions_and_load_actions_round_trip_a_set() {
     app.run(LOAD_SET, json!({})).unwrap();
     poll_picks(&mut app);
     assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other", "Mine 2"], "added after the others, numbered");
-    assert_eq!(app.ui.action_set, Some(1), "the current set stays");
+    assert_eq!(app.ui.action_set.as_deref(), Some("Mine"), "the current set stays");
     // Action names are unique in the list, so the loaded actions take free names; the steps are the same.
     let steps = |set: usize| set_actions(&app, set).into_iter().map(|a| a.steps).collect::<Vec<_>>();
     assert_eq!(steps(3), steps(1), "the same actions and steps");
@@ -738,7 +738,7 @@ fn save_actions_saves_the_set_it_was_chosen_for() {
     app.run(SAVE_SET, json!({"name": "Other"})).unwrap();
     app.run(DELETE_SETS, json!({"names": ["Mine"]})).unwrap();
     push_set(&mut app, "Third", vec![]);
-    app.ui.action_set = Some(2);
+    app.ui.action_set = Some("Third".into());
     poll_picks(&mut app);
     let v: Value = serde_json::from_slice(&files.borrow()["/sets/x.vcactions"]).unwrap();
     assert_eq!(v["name"], json!("Other"), "the set chosen, not the current one");
@@ -799,7 +799,9 @@ fn a_saved_select_path_step_survives_and_a_damaged_one_is_refused() {
     let mut both = set_actions(&app, 0);
     both[0].steps.push(ActionStep::new(SELECT_OBJECT_STEP, json!({"note": "a", "caseSensitive": false, "wholeWord": false})));
     assert_eq!(serde_json::from_str::<Value>(&files::write_set("Moves", &both)).unwrap()["version"], json!(5), "with a Select Object step too");
-    for params in [json!({"id": 3}), json!({"id": -1, "fingerprint": step.params["fingerprint"]}), json!({"id": 3, "fingerprint": "v1:xyz"}), json!(42)] {
+    for params in
+        [json!({"id": 3}), json!({"id": -1, "fingerprint": step.params["fingerprint"]}), json!({"id": 3, "fingerprint": "v1:xyz"}), json!(42)]
+    {
         let bad = json!({"command": SELECT_PATH_STEP, "params": params});
         for s in [bad.clone(), json!({"command": "command.batch", "params": {"commands": [bad]}})] {
             let file = json!({"format": "vcactions", "version": 5, "name": "Bad", "actions": [{"name": "A", "steps": [s]}]});

@@ -13,7 +13,9 @@ use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented, Swatch};
 use craft::ui::contract::overlay::{Dismiss, Outside};
 use craft::ui::contract::{Bind, EditResponse, Entry, Overlay, Props as _, Show as _, ShowContainer as _};
-use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id, serde_fields, set_serde_field};
+use craft::ui::dialog::{
+    DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id, serde_fields, set_serde_field,
+};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -508,7 +510,8 @@ fn scale_row(ui: &mut Ui, o: &mut DimensionOptions) {
         Field::new(tl!("Scale")).show(ui, |ui, _| {
             TextField::new(tl!("Scale"), Bind::bound(&mut o.scale)).show(ui);
         });
-        if let Some(scale) = Select::new(tl!("Scale Presets"), Bind::given(o.scale.clone()), &presets).placeholder(tl!("Presets")).show(ui).value().cloned()
+        if let Some(scale) =
+            Select::new(tl!("Scale Presets"), Bind::given(o.scale.clone()), &presets).placeholder(tl!("Presets")).show(ui).value().cloned()
         {
             o.scale = scale;
         }

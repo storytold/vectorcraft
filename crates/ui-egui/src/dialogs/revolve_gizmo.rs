@@ -9,13 +9,14 @@
 //!   degrees. Nothing shows with Preview off or while the lighting page has no light to move ([`lit`]).
 //! - A press that never drags changes nothing: the gesture begins at the first drag.
 use craft::behavior::{
-    CancelReason, CanvasView, CursorIcon, CursorPriority, HitLevel, HitPriority, HitShape, Metrics, PartKey, PartRef, PointerButton, PressPhase, Sense,
+    CancelReason, CanvasView, CursorIcon, CursorPriority, HitLevel, HitPriority, HitShape, Metrics, PartKey, PartRef, PointerButton, PressPhase,
+    Sense,
 };
 // PLAN: the `craft` facade crate needs to be a dependency in crates/ui-egui/Cargo.toml (owner: hub-w1/hub-w2).
 use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::contract::{
-    Access, Bind, BindMut, Common, Component, Cx, Edit as _, EditResponse, MeasureCx, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Remember as _,
-    Role, Show as _,
+    Access, Bind, BindMut, Common, Component, Cx, Edit as _, EditResponse, MeasureCx, Outcome, PaintUi, PartsCx, Pointer as _, Props as _,
+    Remember as _, Role, Show as _,
 };
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog};
 use craft::ui::runtime::focus::KeyUse;
@@ -448,11 +449,7 @@ impl<'a> RevolveGizmo<'a> {
     }
 
     fn declare(cx: &mut PartsCx<'_, Self>, part: PartRef, shape: HitShape, level: HitLevel) {
-        cx.part(part, shape)
-            .sense(Sense::DRAG | Sense::CLICK)
-            .priority(HitPriority::new(level, 0))
-            .cursor(CursorIcon::Grab)
-            .pointer_only(BY_FIELDS);
+        cx.part(part, shape).sense(Sense::DRAG | Sense::CLICK).priority(HitPriority::new(level, 0)).cursor(CursorIcon::Grab).pointer_only(BY_FIELDS);
     }
 }
 
@@ -576,11 +573,14 @@ impl Component for RevolveGizmo<'_> {
             subject: self.subject,
             values: cx.value().copied().unwrap_or_default(),
             g,
-            active: self.report.held.and_then(|mode| match mode {
-                Mode::Ring { axis, .. } | Mode::LightRing { axis } => Some(axis),
-                _ => None,
-            })
-            .or(self.report.active),
+            active: self
+                .report
+                .held
+                .and_then(|mode| match mode {
+                    Mode::Ring { axis, .. } | Mode::LightRing { axis } => Some(axis),
+                    _ => None,
+                })
+                .or(self.report.active),
             dragging: self.report.held,
         };
         if self.light_mode() {
@@ -743,7 +743,9 @@ fn write(dialog: &mut HostedParamDialog, before: GizmoValues, landed: GizmoValue
     }
     // The selected light's keys are the light editor's rule (`set_light_value`); only the keys it changed are written.
     let mut fields = dialog.fields().clone();
-    for (key, was, now) in [("lightRotation", before.light_rotation, landed.light_rotation), ("lightHeight", before.light_height, landed.light_height)] {
+    for (key, was, now) in
+        [("lightRotation", before.light_rotation, landed.light_rotation), ("lightHeight", before.light_height, landed.light_height)]
+    {
         if was != now {
             set_light_value(&mut fields, key, json!(now));
         }

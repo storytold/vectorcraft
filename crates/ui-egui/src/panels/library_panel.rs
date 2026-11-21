@@ -21,10 +21,10 @@ use std::collections::HashMap;
 use craft::behavior::{IconId, Selection, SelectionModel};
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
-use craft::ui::contract::{Bind, SelectMode, Trigger};
+use craft::ui::contract::{Bind, MemoProps, SelectMode, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
-use craft::ui::patterns::presets::{PresetBrowser, PresetEvent, PresetRow, PresetRowMenu, PresetState, PresetView};
+use craft::ui::patterns::presets::{PresetBrowser, PresetEvent, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetView};
 use craft::ui::primitives::{ContentPainterCx, IconSpec};
 use craft::ui::runtime::access::PopupKind;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
@@ -92,7 +92,7 @@ pub(crate) struct Row<'a, I> {
 
 /// The key of a browser row: the panel it is in and the stored name of its item or folder. A drag out
 /// of the panel carries it, so a drop target knows the library an item came from.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, MemoProps)]
 pub(crate) struct LibraryKey {
     /// The id of the panel the row is in ([`panel_id`]).
     pub panel: String,
@@ -329,7 +329,7 @@ pub fn restore(app: &mut VectorcraftApp) {
             // A file now in the user library folder loads as that User Defined library.
             && let Ok(id) = app.run(k.load, json!({ "path": path })).map(|r| r["library"].as_str().unwrap_or_default().to_string())
             && id != p.id
-            && app.ui.dock_workspace.rename(&p.panel(), panel_id(k.kind, &id)).is_ok()
+            && std::sync::Arc::make_mut(&mut app.ui.dock_workspace).rename(&p.panel(), panel_id(k.kind, &id)).is_ok()
         {
             p.id = id;
         }
@@ -446,7 +446,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         if is_open(&app.ui, &to) {
             app.run("window.panel.activate", json!({ "panel": to }))?;
         } else if next != id {
-            app.ui.dock_workspace.rename(&given.to_string(), to.clone()).map_err(|e| e.to_string())?;
+            std::sync::Arc::make_mut(&mut app.ui.dock_workspace).rename(&given.to_string(), to.clone()).map_err(|e| e.to_string())?;
             app.ui.library_panels.retain(|q| !(q.kind == k.kind && q.id == next));
             let path = if next.starts_with("loaded/") { (k.path)(app, &next) } else { None };
             if let Some(s) = settings_mut(app, k, &id) {
@@ -566,18 +566,7 @@ pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     area.show(ctx, |ui| crate::dock::panel_body(app, ui, &panel));
 }
 
-/// The browser's view and thumbnail zoom for a saved [`View`].
-fn preset_view(view: View) -> (PresetView, f64) {
-    match view {
-        View::SmallThumb => (PresetView::Grid, 0.5),
-        View::MediumThumb => (PresetView::Grid, 0.75),
-        View::LargeThumb => (PresetView::Grid, 1.0),
-        View::SmallList => (PresetView::List, 0.5),
-        View::LargeList => (PresetView::List, 1.0),
-    }
-}
-
-/// The saved [`View`] nearest to what the browser's toolbar picked: the inverse of [`preset_view`].
+/// The saved [`View`] nearest to what the browser's toolbar picked: the inverse of [`View::preset`].
 // PLAN: the zoom slider can set a zoom the five views do not name; it saves as the nearest of them.
 fn saved_view(view: PresetView, zoom: f64) -> View {
     match (view == PresetView::List, zoom) {
@@ -627,14 +616,15 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let (view, hide_find) = settings(&app.ui, K::KIND, id).map_or((K::VIEW, false), |s| (s.view.unwrap_or(K::VIEW), s.hide_find));
     let flat = K::rows(&lib, id);
     let rows = browser_rows::<K>(&panel, id, &flat);
+    let source = PresetSource::listed(&rows);
     let items: HashMap<&str, &K::Item> = flat.iter().filter_map(|r| r.item.map(|i| (r.name, i))).collect();
     let selection = selected(app, &panel);
     // The search text and the open groups are the browser's; the view is the panel's setting.
     let state_id = egui::Id::new(("library-panel-state", &panel));
     let mut state: PresetState<LibraryKey> = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
-    (state.view, state.zoom) = preset_view(view);
+    (state.view, state.zoom) = view.preset();
     let shown = &*app;
-    let out = PresetBrowser::new(library_name(id, &name).to_string(), Bind::bound(&mut state), &rows)
+    let out = PresetBrowser::new(library_name(id, &name).to_string(), Bind::bound(&mut state), &source)
         .toolbar(true)
         .search(!hide_find)
         .select(SelectMode::Multi)
@@ -646,6 +636,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         })
         .empty(tl!("This library is empty."))
         .row_menu(PresetRowMenu::Off)
+        .drags(K::drags())
         .show(ui);
     let mut chosen = selection;
     let mut clicked = None;
@@ -653,7 +644,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         match event {
             PresetEvent::Selection(change) => chosen.apply(change),
             // A plain click on an item also adds and applies it; folders and modifier clicks only select.
-            PresetEvent::Select { key, mods } if !key.folder && !mods.shift && !mods.cmd => clicked = Some(key.name),
+            PresetEvent::Select { key, mods, .. } if !key.folder && !mods.shift && !mods.cmd => clicked = Some(key.name),
             _ => {}
         }
     }
@@ -673,14 +664,13 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
 /// The panel's footer: the libraries menu, previous / next library, and Add to … for the selection `names`.
 fn footer<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, names: Vec<String>) {
     let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
-    // PLAN: assumed `FooterBar::actions(..).show(ui) -> FooterOutput` (ui-panels footer)
     let out = FooterBar::actions([
         FooterAction::new(icon("library"), K::MENU).popup(PopupKind::Menu),
         FooterAction::new(icon("chevron-left"), tl!("Previous Library")),
         FooterAction::new(icon("chevron-right"), tl!("Next Library")),
         FooterAction::new(icon("dc-new-item"), K::ADD).enabled(!names.is_empty()),
     ])
-    .show(ui);
+    .show_footer(ui);
     if let Some(menu) = out.responses.first() {
         Menu::new(K::MENU).opened_by(menu, Trigger::Click).show(ui, |ui, _| library_menu::<K>(app, ui));
     }

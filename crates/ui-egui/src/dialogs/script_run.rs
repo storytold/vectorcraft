@@ -597,9 +597,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// Gives the running script the answer of its dialog. Cancel is Cancel for a prompt, No for a
 /// confirm and Stop for an alert.
 pub(crate) fn settle_notice(app: &mut VectorcraftApp, result: DialogResult<ScriptAnswer>) {
-    let answer = match result {
-        DialogResult::Ok(answer) => answer,
-        DialogResult::Cancel => {
+    let answer = match result.ok() {
+        Some(answer) => answer,
+        None => {
             let Some(d) = app.session.script_dialog() else { return };
             let kind = d.kind.id().to_string();
             let answer = match kind.as_str() {
@@ -647,10 +647,7 @@ fn give(app: &mut VectorcraftApp, a: &ScriptAnswer) -> Result<(), String> {
 /// automation asked for chose, are refused and the dialog opens again with the same paths; Deny
 /// and Stop are taken from anyone.
 pub(crate) fn settle_files(app: &mut VectorcraftApp, result: DialogResult<FilesAnswer>) {
-    let answer = match result {
-        DialogResult::Ok(answer) => answer,
-        DialogResult::Cancel => FilesAnswer { answer: "deny", paths: Vec::new(), left_out: false, automated: false },
-    };
+    let answer = result.ok().unwrap_or_else(|| FilesAnswer { answer: "deny", paths: Vec::new(), left_out: false, automated: false });
     if matches!(answer.answer, "once" | "always") && (answer.automated || app.automation_is_acting()) {
         app.status(BY_PERSON);
         if let Some(picker) = app.session.script_picker() {

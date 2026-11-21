@@ -6,8 +6,13 @@
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
 
-use craft::ui::contract::Bind;
+use craft::theme::{Rgba, Srgba};
+use craft::ui::choice::Swatch;
+use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::display::Text;
+use craft::ui::form::SliderField;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::pickers::Select;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::SliderScale;
@@ -19,7 +24,6 @@ use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 
 use super::export_host::{self, After, Export, Open};
-// PLAN: assumed `form::{fields_of, json_of}` (wg.S12, widgets-w12) live in `dialogs::form`.
 use super::form::{fields_of, json_of};
 use super::{psd_options, tiff_bmp_tga};
 use crate::{VectorcraftApp, io};
@@ -84,17 +88,13 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, f: &Format, mut params: Value,
     let (id, label, key) = (f.id, f.label, kind(f));
     let map = params.as_object().cloned().unwrap_or_default();
     let initial = fields_of(&raster_rows(id, false, size, &DialogFields::new()), &map);
-    let build = {
-        let key = key.clone();
-        move |fields: &mut DialogFields| {
-            normalize_colors(fields);
-            if id == "bmp" {
-                tiff_bmp_tga::normalize_bmp(fields);
-            }
-            ParamDialog::new(key.clone(), heading(label), raster_rows(id, false, size, fields)).values(Bind::bound(fields)).ok_label(tl!("Export"))
+    let dialog = HostedParamDialog::new(&ctx, key.clone(), initial, move |fields| {
+        normalize_colors(fields);
+        if id == "bmp" {
+            tiff_bmp_tga::normalize_bmp(fields);
         }
-    };
-    let dialog = HostedParamDialog::new(&ctx, key, initial, build);
+        ParamDialog::new(key.clone(), heading(label), raster_rows(id, false, size, fields)).values(Bind::bound(fields)).ok_label(tl!("Export").into())
+    });
     export_host::open(app, Export::Raster { format: id }, selection, dialog);
 }
 
@@ -198,13 +198,13 @@ fn raster_rows(id: &str, screens: bool, size: Option<[f64; 2]>, fields: &DialogF
 }
 
 /// A dropdown row bound to `key`: one of `ids`, shown by its label.
-pub(super) fn choice(key: &str, label: &str, ids: &[impl AsRef<str>], labels: &[&str]) -> Param {
+pub(super) fn choice(key: &str, label: &'static str, ids: &[impl AsRef<str>], labels: &[&'static str]) -> Param {
     let options = ids.iter().zip(labels).map(|(id, l)| (id.as_ref().to_string(), tl!(*l).into())).collect();
     Param::new(key, tl!(label), ParamKind::choice(options, ids.first().map(|id| id.as_ref().to_string())))
 }
 
 /// A check box row bound to `key`.
-pub(super) fn check(key: &str, label: &str, default: bool) -> Param {
+pub(super) fn check(key: &str, label: &'static str, default: bool) -> Param {
     Param::new(key, tl!(label), ParamKind::bool(default))
 }
 
@@ -214,27 +214,22 @@ fn resolution_row() -> Param {
     Param::custom("ppi", tl!("Resolution:"), |ui, fields, _| {
         let ppi = fields.number("ppi").unwrap_or(72.0);
         let preset = RESOLUTIONS.iter().position(|p| *p == ppi).filter(|_| fields.bool("__otherPpi") != Some(true));
-        let shown = preset.unwrap_or(RESOLUTION_LABELS.len() - 1);
+        let other = RESOLUTION_LABELS.len() - 1;
+        let entries: Vec<Entry<usize>> = RESOLUTION_LABELS.iter().enumerate().map(|(i, label)| Entry::new(i, tl!(*label))).collect();
         ui.horizontal(|ui| {
-            craft::ui::pickers::ComboBox::from_id_salt("ro-ppi")
-                .selected_text(tl!(RESOLUTION_LABELS.get(shown).copied().unwrap_or_default()))
-                .show_ui(ui, |ui| {
-                    for (i, label) in RESOLUTION_LABELS.iter().enumerate() {
-                        if ui.selectable_label(i == shown, tl!(*label)).clicked() {
-                            if let Some(p) = RESOLUTIONS.get(i) {
-                                fields.set("ppi", *p);
-                            }
-                            fields.set("__otherPpi", i == RESOLUTION_LABELS.len() - 1);
-                        }
-                    }
-                });
+            if let Some(i) = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied() {
+                if let Some(p) = RESOLUTIONS.get(i) {
+                    fields.set("ppi", *p);
+                }
+                fields.set("__otherPpi", i == other);
+            }
             if preset.is_none() {
                 let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
                     .range(1.0..=4608.0)
                     .step(1.0)
                     .unit_kind(UnitKind::PixelsPerInch)
                     .show(ui);
-                if let Some(Some(v)) = field.value().copied() {
+                if let Some(Some(v)) = field.edit.value().copied() {
                     fields.set("ppi", v);
                 }
             }
@@ -267,24 +262,15 @@ fn color_choice(
         let current = fields.text(key).unwrap_or_default().to_string();
         let at = ids.iter().position(|v| current.eq_ignore_ascii_case(v)).unwrap_or(ids.len());
         let start = first(fields);
-        let shown = at.max(start);
+        let entries: Vec<Entry<usize>> = labels.iter().enumerate().skip(start).map(|(i, l)| Entry::new(i, tl!(*l))).collect();
         ui.horizontal(|ui| {
-            craft::ui::pickers::ComboBox::from_id_salt(("ro", key)).selected_text(tl!(labels.get(shown).copied().unwrap_or_default())).show_ui(
-                ui,
-                |ui| {
-                    for (i, l) in labels.iter().enumerate().skip(start) {
-                        if ui.selectable_label(i == shown, tl!(*l)).clicked() {
-                            fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
-                        }
-                    }
-                },
-            );
+            if let Some(i) = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied() {
+                fields.set(key, ids.get(i).copied().unwrap_or(OTHER_COLOR));
+            }
             if at == ids.len() {
-                let c = vectorcraft_color::Color::from_hex(&current).map_or([128, 128, 128, 255], |c| c.to_rgba8(1.0));
-                let (rect, response) = ui.allocate_exact_size(egui::vec2(28.0, 18.0), egui::Sense::click());
-                ui.painter().rect_filled(rect, 2.0, egui::Color32::from_rgb(c[0], c[1], c[2]));
-                if response.clicked() {
-                    cx.pick_color(key, craft::theme::Srgba::rgb(f32::from(c[0]) / 255.0, f32::from(c[1]) / 255.0, f32::from(c[2]) / 255.0));
+                let color = Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128)));
+                if Swatch::new(tl!(label), color).show(ui).clicked {
+                    cx.pick_color(key, color);
                 }
             }
         })
@@ -323,12 +309,17 @@ fn jpeg_rows(screens: bool) -> Vec<Param> {
 /// JPEG quality on the dialog's 0–10 scale (stored ×10).
 fn quality_row() -> Param {
     Param::custom("quality", tl!("Quality:"), |ui, fields, _| {
-        let mut q = (fields.number("quality").unwrap_or(90.0) / 10.0).round().clamp(0.0, 10.0) as u8;
+        let q = (fields.number("quality").unwrap_or(90.0) / 10.0).round().clamp(0.0, 10.0);
         ui.horizontal(|ui| {
-            if ui.add(egui::Slider::new(&mut q, 0..=10)).changed() {
-                fields.set("quality", f64::from(q) * 10.0);
-            }
-            ui.label(tl!(QUALITY_BANDS.get(usize::from(q)).copied().unwrap_or_default()));
+            let out = SliderField::new(tl!("Quality:"), Bind::given(q), 0.0..=10.0).step(1.0).show(ui);
+            let q = match out.edit.value() {
+                Some(v) => {
+                    fields.set("quality", v.round() * 10.0);
+                    v.round()
+                }
+                None => q,
+            };
+            Text::new(tl!(QUALITY_BANDS.get(q as usize).copied().unwrap_or_default())).show(ui);
         })
         .response
     })
@@ -388,6 +379,5 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     if format == "psd" {
         psd_options::drop_unused(&mut params);
     }
-    // PLAN: assumed `After: From<Value>` (the export's result, what ex.A1's `confirm` hands the host).
-    io::export(app, Some(&format), Some(path), &super::export_as::exported(open.selection, params)).map(After::from)
+    io::export(app, Some(&format), Some(path), &super::export_as::exported(open.selection, params)).map(|_| None)
 }

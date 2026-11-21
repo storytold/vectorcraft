@@ -508,9 +508,7 @@ pub(super) mod drive {
     pub(crate) fn frame(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().expect("the context the app adopted");
         let dialogs = app.dialogs().expect("a window dialog host");
-        let _ = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| dialogs.with(|h| h.run(ui)));
-        });
+        let _ = ctx.run_ui(Default::default(), |ui| dialogs.with(|h| h.run(ui)));
     }
 
     /// One frame's pump.

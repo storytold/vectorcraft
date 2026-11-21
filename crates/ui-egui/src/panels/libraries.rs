@@ -261,7 +261,10 @@ enum Look<'a> {
     Color(vectorcraft_color::Color),
     Gradient(&'a GradientPaint),
     /// A PNG thumbnail (base64), stored as a texture under the library and the item's kind and key.
-    Png { key: (String, String), png: &'a str },
+    Png {
+        key: (String, String),
+        png: &'a str,
+    },
 }
 
 impl Look<'_> {
@@ -384,8 +387,9 @@ impl<'a> View<'a> {
 
     /// Whether the drag in progress holds an item of one of this library's groups.
     fn dragging_grouped(&self, ui: &Ui) -> bool {
-        craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx())
-            .is_some_and(|drag| matches!(grabbed(&drag, self.library), Some(Grab::Item(kind, item)) if self.membership.group_of(kind, &item).is_some()))
+        craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).is_some_and(
+            |drag| matches!(grabbed(&drag, self.library), Some(Grab::Item(kind, item)) if self.membership.group_of(kind, &item).is_some()),
+        )
     }
 
     /// Group `name` as a section of the stack: its items, its count at the header's end and the
@@ -471,9 +475,10 @@ impl<'a> View<'a> {
     fn collection(&self, ui: &mut Ui, cx: &mut BodyCx<'_>, kind: ItemKind, shown: &[&Shown<'a>], group: Option<usize>, acts: &RefCell<Vec<Act>>) {
         let keys: Vec<&str> = shown.iter().map(|item| item.key).collect();
         let source = keyed(shown, |item: &&Shown<'a>| item.key.to_string());
-        let takes = DropKind::new::<PanelDrag>(DropPlace::Between, move |drag: &PanelDrag, _: &DropAt<String>| {
-            matches!(grabbed(drag, self.library), Some(Grab::Item(k, _) | Grab::New(k, _)) if k == kind)
-        });
+        let takes = DropKind::new::<PanelDrag>(
+            DropPlace::Between,
+            move |drag: &PanelDrag, _: &DropAt<String>| matches!(grabbed(drag, self.library), Some(Grab::Item(k, _) | Grab::New(k, _)) if k == kind),
+        );
         // A graphic is placed by a double click; every other item is used by a click.
         let activate = if kind == ItemKind::Graphic { ActivateOn::DoubleClick } else { ActivateOn::Click };
         let label = heading(kind);
@@ -516,7 +521,15 @@ impl<'a> View<'a> {
     /// What the collection of `kind` in `group` (showing `keys`, in order) reported: a move within
     /// it, a drop from elsewhere, a click or double click that uses an item, and a request for an
     /// item's menu, which the menu shown after the collection reads.
-    fn handle<E>(&self, cx: &mut BodyCx<'_>, kind: ItemKind, keys: &[&str], group: Option<usize>, events: Vec<CollectionEvent<String, E>>, acts: &RefCell<Vec<Act>>) {
+    fn handle<E>(
+        &self,
+        cx: &mut BodyCx<'_>,
+        kind: ItemKind,
+        keys: &[&str],
+        group: Option<usize>,
+        events: Vec<CollectionEvent<String, E>>,
+        acts: &RefCell<Vec<Act>>,
+    ) {
         for event in events {
             let act = match event {
                 CollectionEvent::Reorder(EditEvent::Set { after, .. } | EditEvent::Commit { after, .. }) => {
@@ -590,7 +603,12 @@ impl<'a> View<'a> {
             Some(match kind {
                 ItemKind::Color => {
                     let color = *colors.get(&item)?;
-                    PanelDrag::Paint { paint: Paint::solid(color), params: json!({ "color": color }), rows: None, library: Some((library.clone(), item)) }
+                    PanelDrag::Paint {
+                        paint: Paint::solid(color),
+                        params: json!({ "color": color }),
+                        rows: None,
+                        library: Some((library.clone(), item)),
+                    }
                 }
                 ItemKind::Graphic => PanelDrag::LibraryGraphic { library: library.clone(), item },
                 kind => PanelDrag::LibraryItem { library: library.clone(), kind, item },
@@ -768,7 +786,9 @@ fn no_library(ui: &mut Ui) -> bool {
     let shown = Panel::new(tl!("Libraries")).show(ui, |ui, _| {
         Notice::new(
             Tone::Neutral,
-            tl!("Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required."),
+            tl!(
+                "Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required."
+            ),
         )
         .title(tl!("Local Libraries"))
         .layout(NoticeLayout::Centred)
@@ -870,7 +890,8 @@ fn paint_gradient(cx: &ContentPainterCx<'_>, rect: Rect, paint: &GradientPaint) 
     if stops.iter().any(|(_, [.., a])| *a < u8::MAX) {
         cx.checker(rect);
     }
-    let ramp: Vec<(f32, DataColor)> = stops.into_iter().map(|(at, [r, g, b, a])| (at, DataColor::new(Color32::from_rgba_unmultiplied(r, g, b, a)))).collect();
+    let ramp: Vec<(f32, DataColor)> =
+        stops.into_iter().map(|(at, [r, g, b, a])| (at, DataColor::new(Color32::from_rgba_unmultiplied(r, g, b, a)))).collect();
     cx.ramp(rect, CornerRadius::ZERO, &ramp, Axis::X);
 }
 

@@ -48,13 +48,10 @@ fn name_current_action_set(raw: &mut Value) {
     };
 }
 
-/// The settings `app` would save now. What a start resets (the status line, open dialogs and
-/// flyouts, the palette) is left at its default, so it never makes a change to save.
+/// The settings `app` would save now. What a start resets (the status line, the popped-out panel,
+/// the palette) is left at its default, so it never makes a change to save.
 pub fn from_app(app: &VectorcraftApp) -> AppSettings {
     let mut ui = app.ui.clone();
-    // An open dialog is never restored, and its fields can hold passwords (PDF import and save).
-    ui.dialog = None;
-    ui.flyout = None;
     ui.palette_open = false;
     ui.palette_query.clear();
     ui.status.clear();

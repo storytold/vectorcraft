@@ -66,6 +66,11 @@ impl NewActionDialog {
             self.sets = sets.to_vec();
         }
     }
+
+    /// The index of the set the action goes into, for a set edit that moves the sets to follow.
+    pub(crate) fn set_mut(&mut self) -> &mut usize {
+        &mut self.form.values.set
+    }
 }
 
 /// Whether New Action can open: there is a set to put the action in and nothing is recording.

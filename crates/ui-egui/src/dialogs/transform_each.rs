@@ -26,6 +26,7 @@ use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDia
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
+use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::{NumberField, follow_ratio, link_toggle};
 use craft::ui::value_drag::{AngleDial, Slider};
 use egui::{Response, Ui};
@@ -395,8 +396,8 @@ pub(crate) fn reflect_checks(ui: &mut Ui, fields: &mut DialogFields) -> Response
 pub(crate) fn reference_point(ui: &mut Ui, fields: &mut DialogFields) -> Response {
     let at = num(fields, "reference", 4.0).clamp(0.0, 8.0) as usize;
     let anchor = Anchor9::ALL.get(at).copied().unwrap_or(Anchor9::Centre);
-    let shown = ReferencePoint::new(tl!("Reference Point"), Bind::given(anchor)).look(ReferencePointLook::Squares).show(ui);
-    if let Some(i) = shown.value().and_then(|picked| Anchor9::ALL.iter().position(|a| a == picked)) {
+    let shown = ReferencePoint::new(tl!("Reference Point"), Bind::given(Some(anchor))).look(ReferencePointLook::Squares).show(ui);
+    if let Some(i) = shown.value().and_then(|picked| Anchor9::ALL.iter().position(|a| Some(*a) == *picked)) {
         fields.set("reference", i as i64);
     }
     shown.response
@@ -424,7 +425,7 @@ fn form(fields: &mut DialogFields, shared: Shared, lengths: LengthUnits) -> Para
     ParamDialog::new(KEY, tl!("Transform Each"), dialog_params(lengths))
         .values(Bind::bound(fields))
         .previews(true)
-        .extra_buttons(vec![(COPY.to_string(), tl!("Copy").to_string().into())])
+        .extra_buttons(vec![(COPY.to_string(), FooterButton::new(tl!("Copy"), DialogRole::Other))])
 }
 
 /// Opens Transform Each on the values it was last confirmed with.

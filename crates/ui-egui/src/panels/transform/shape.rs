@@ -1,8 +1,9 @@
 //! The Transform panel's live-shape rows: the Rectangle, Polygon, Ellipse and Line Properties, also shown by the
 //! Properties panel and the Contextual Task Bar.
 
+use craft::behavior::Mixed;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::form::Field;
 use craft::ui::pickers::Select;
 use craft::ui::sections::{HeaderStrength, Section};
@@ -14,10 +15,8 @@ use vectorcraft_geom::shapes::CornerKind;
 
 use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
-use crate::dialogs::corners::kind_label as corner_kind;
-// PLAN: assumed `crate::edits::{apply_edits, EditPath}` (widgets-w13, wg.A16).
 use crate::edits::{EditPath, apply_edits};
-use crate::panels::{corner_radius_field, corner_radius_row, corner_style};
+use crate::panels::{corner_entries, corner_radius_field, corner_radius_row, corner_style};
 
 /// What a number row counts, which sets its unit, decimals and range.
 #[derive(Clone, Copy)]
@@ -82,7 +81,7 @@ fn number_row(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, value:
     });
     if let Some(edit) = edit {
         // `Scope`, not `Preview`: `Preview` names one command, and each field sends its own params.
-        apply_edits(app, &edit, EditPath::Scope, |app, v| {
+        apply_edits(app, &edit, EditPath::Scope, |app, v, _| {
             if let Some(v) = v {
                 set_live_shape(app, params(*v));
             }
@@ -158,7 +157,14 @@ fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape) -> bool {
 fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64)) {
     let constrain = app.ui.constrain_pie_angle;
     for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
-        number_row(app, ui, label, Some(v), Quantity::Degrees, |a| if constrain { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) });
+        number_row(
+            app,
+            ui,
+            label,
+            Some(v),
+            Quantity::Degrees,
+            |a| if constrain { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) },
+        );
     }
     link_toggle(tl!("Constrain Pie Angle"), Bind::bound(&mut app.ui.constrain_pie_angle)).show(ui);
     if Button::new(tl!("Invert Pie")).show(ui).clicked() {
@@ -185,17 +191,12 @@ fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShap
 
 /// The polygon's Corner type select, blank while `kind` is `None` (the corners differ).
 fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, kind: Option<CornerKind>) {
-    // PLAN: use hub-w2's `corner_kind_entries()` in `panels.rs` if it provides one.
-    let entries: Vec<Entry<Option<CornerKind>>> = CornerKind::ALL.iter().map(|k| Entry::new(Some(*k), corner_kind(*k))).collect();
+    let entries = corner_entries();
     let mut edit = None;
     Field::new(tl!("Corner:")).show(ui, |ui, _| {
-        edit = Some(Select::new(tl!("Corner:"), Bind::given(kind), &entries).show(ui));
+        edit = Some(Select::new(tl!("Corner:"), Bind::given(kind.map_or(Mixed::Mixed, Mixed::Same)), &entries).show(ui));
     });
     if let Some(edit) = edit {
-        apply_edits(app, &edit, EditPath::Scope, |app, k| {
-            if let Some(k) = k {
-                set_live_shape(app, json!({ "kind": k }));
-            }
-        });
+        apply_edits(app, &edit, EditPath::Scope, |app, k, _| set_live_shape(app, json!({ "kind": k })));
     }
 }

@@ -5,10 +5,13 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use craft::behavior::{DisplayOrder, ItemSource};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Outcome as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::contract::{
+    Bind, CollectionEvent, Entry, Outcome as _, Props as _, Show as _, ShowCollection as _, ShowContainer as _, WordSetCx as _,
+};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::list::{Finding, FindingsList, FindingsWords, ListRow, Severity};
@@ -17,7 +20,6 @@ use craft::ui::pickers::Select;
 use craft::ui::runtime::frame::clock;
 use craft::ui::text::NumberField;
 use egui::Ui;
-use craft::behavior::{DisplayOrder, ItemSource};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -240,11 +242,16 @@ fn finding_row<'r>(key: u64, finding: &Value, words: &FindingsWords, pending: &'
 /// The Output, Minimum PPI, Active Artboard Only and Recheck controls; true when Recheck was pressed.
 fn options(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let current = app.ui.preflight_panel.options.clone();
-    let outputs: Vec<Entry<usize>> = [tl!("PDF"), tl!("Print"), tl!("Screen")].into_iter().enumerate().map(|(i, name)| Entry::new(i, name.to_owned())).collect();
+    let outputs: Vec<Entry<usize>> =
+        [tl!("PDF"), tl!("Print"), tl!("Screen")].into_iter().enumerate().map(|(i, name)| Entry::new(i, name.to_owned())).collect();
     let (mut output, mut ppi, mut active_only, mut force) = (None, None, None, false);
     FieldGroup::new(tl!("Preflight Options").to_owned()).show(ui, |ui, _| {
         Field::new(tl!("Output:").to_owned()).show(ui, |ui, _| {
-            output = Select::new(tl!("Output:").to_owned(), Bind::given(current.output), &outputs).show(ui).value().copied().filter(|i| *i != current.output);
+            output = Select::new(tl!("Output:").to_owned(), Bind::given(current.output), &outputs)
+                .show(ui)
+                .value()
+                .copied()
+                .filter(|i| *i != current.output);
         });
         Field::new(tl!("Minimum PPI:").to_owned()).show(ui, |ui, _| {
             ppi = NumberField::new(tl!("Minimum PPI:").to_owned(), Bind::given(Some(current.min_ppi)))

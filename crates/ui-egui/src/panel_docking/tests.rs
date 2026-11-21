@@ -47,7 +47,7 @@ impl Harness {
     fn run(&mut self, input: egui::RawInput) {
         let app = &mut self.app;
         let mut out = self.ctx.run_ui(input, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();
@@ -114,7 +114,14 @@ impl Harness {
 
     /// Whether the workspace remembers `panel` as hidden.
     fn hidden(&self, panel: &str) -> bool {
-        self.app.ui.dock_workspace.hidden.iter().any(|(id, _)| id == panel)
+        self.app.ui.dock_workspace.hidden().iter().any(|(id, _)| id == panel)
+    }
+
+    /// Puts `layout` in place of the workspace's, keeping the closed and floated panels' records.
+    fn set_layout(&mut self, layout: Layout<String>) {
+        let ws = &self.app.ui.dock_workspace;
+        let next = Workspace::from_parts(layout, ws.hidden().to_vec(), ws.floated().to_vec());
+        Arc::make_mut(&mut self.app.ui.dock_workspace).replace(next);
     }
 
     /// Hides the panels the way Tab (`Panels`) or Shift+Tab (`PanelsKeepTools`) does.
@@ -305,9 +312,9 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
         }),
         ("float collapsed minimizes its window", |h| {
             h.app.run("window.panel.float", json!({"panel": "swatches", "collapsed": true})).unwrap();
-            assert!(floating_window(&h.layout(), "swatches").unwrap().minimized);
+            assert!(floating_window(&h.layout(), "swatches").is_some() && group_minimized(&h.layout(), "swatches"));
             h.app.run("window.panel.float", json!({"panel": "swatches", "collapsed": false})).unwrap();
-            assert!(!floating_window(&h.layout(), "swatches").unwrap().minimized);
+            assert!(floating_window(&h.layout(), "swatches").is_some() && !group_minimized(&h.layout(), "swatches"));
             let r = h.app.run("window.panel.collapse", json!({"panel": "Layers"})).unwrap();
             assert_eq!((r["panel"].clone(), r["collapsed"].clone()), (json!("layers"), json!(true)), "a docked group minimizes too");
         }),
@@ -362,7 +369,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
                 columns[0].iconic = true;
             }
             assert!(layout.validate().is_ok());
-            h.app.ui.dock_workspace.layout = layout;
+            h.set_layout(layout);
             h.app.run("window.panel.dock", json!({"panel": "layers", "icon": true})).unwrap();
             let columns = column_panels(&h.layout());
             assert!(columns[2].contains(&"layers".to_string()), "{columns:?}");
@@ -378,7 +385,7 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             {
                 columns.remove(2);
             }
-            h.app.ui.dock_workspace.layout = layout;
+            h.set_layout(layout);
             assert_eq!(icon_column(&end_columns(&h.layout())), None);
             h.app.run("window.panel.dock", json!({"panel": "properties", "icon": true})).unwrap();
             let layout = h.layout();
@@ -610,18 +617,13 @@ fn window_panels_peek_rejects_what_it_cannot_show_and_changes_nothing() {
 
 #[test]
 fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
-    let layout = default_workspace(None).layout;
+    let layout = default_workspace(&[]).layout().clone();
     let right = peek::edge_panels(&layout, peek::Edge::Right);
     assert!(right.contains(&"properties".to_string()) && right.contains(&"swatches".to_string()));
     assert!(!right.contains(&CANVAS.to_string()));
     assert!(peek::edge_panels(&layout, peek::Edge::Left).is_empty());
     let mirrored = Layout::new(
-        Some(Node::Split {
-            axis: Axis::X,
-            size: SplitSize::FixedFirst(310.0),
-            first: Box::new(Node::Tabs { panels: vec!["layers".to_string()], active: 0 }),
-            second: Box::new(Node::Tabs { panels: vec![CANVAS.to_string()], active: 0 }),
-        }),
+        Some(Node::split(Axis::X, SplitSize::FixedFirst(310.0), Node::tabs(vec!["layers".to_string()], 0), Node::tabs(vec![CANVAS.to_string()], 0))),
         Vec::new(),
     );
     assert_eq!(peek::edge_panels(&mirrored, peek::Edge::Left), ["layers"]);
@@ -690,8 +692,10 @@ fn ui_docking_reports_the_layout_and_the_dock_state() {
 fn window_menu_panels_without_a_place_open_in_their_icon_group_or_float() {
     let mut h = Harness::new();
     // A saved layout that lost Swatches without remembering where it was.
-    h.app.ui.dock_workspace.layout.apply(Action::close("swatches".into())).unwrap();
-    h.app.ui.dock_workspace.hidden.clear();
+    let mut layout = h.layout();
+    layout.apply(Action::close("swatches".into())).unwrap();
+    h.set_layout(layout);
+    Arc::make_mut(&mut h.app.ui.dock_workspace).forget_hidden(|_| true);
     h.app.run("window.panel", json!({"panel": "Swatches"})).unwrap();
     let layout = h.layout();
     assert!(in_iconic_column(&layout, "swatches"), "back in the icon column");
@@ -764,7 +768,7 @@ fn presentation_panel_command_reports_unavailable_without_mutating_layout() {
     h.app.run("view.presentation", json!({})).unwrap();
     assert_eq!(h.app.ui.screen_mode, 3);
     assert_eq!(checked(&h, &item), Some(false), "no check mark in Presentation Mode");
-    let state = |h: &Harness| (h.layout(), panels_shown(&h.app), h.app.ui.open_panel.clone(), h.app.ui.dock_workspace.hidden.len());
+    let state = |h: &Harness| (h.layout(), panels_shown(&h.app), h.app.ui.open_panel.clone(), h.app.ui.dock_workspace.hidden().len());
     let before = state(&h);
     for params in [item.clone(), json!({"panel": "layers"}), json!({"panel": "swatches"}), json!({"panel": "brushes"})] {
         let error = h.app.run("window.panel", params.clone()).unwrap_err();

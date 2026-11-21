@@ -26,6 +26,8 @@ use crate::VectorcraftApp;
 pub const KIND: &str = "livePaintGapOptions";
 
 const CMD: &str = "livePaint.gapOptions";
+/// The undo step the preview and OK make.
+const PREVIEW_LABEL: &str = "Gap Options";
 
 /// Paint Stops At: (value, label).
 const SIZES: [(&str, &str); 4] = [("small", "Small Gaps"), ("medium", "Medium Gaps"), ("large", "Large Gaps"), ("custom", "Custom")];
@@ -138,7 +140,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
         Some((form.id(), params, form.preview))
     });
     let Some((id, params, on)) = shown else { return };
-    // PLAN: assumed `ObjectDialogs.gaps: Option<live_paint_gaps::Open>` (od.OS1, object-dialogs-w5)
     // A preview of another dialog is rolled back before this one starts its own.
     let mut open = match app.object_dialogs.gaps.take() {
         Some(open) if open.id == id => open,
@@ -149,7 +150,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
             Open { id, preview: LivePreview::default() }
         }
     };
-    let ran = open.preview.run(app, on, CMD, &params);
+    let ran = open.preview.run(app, on, PREVIEW_LABEL, CMD, &params);
     app.object_dialogs.gaps = Some(open);
     let found = match ran {
         Some(Ok(done)) => Some(done["gaps"].clone()),

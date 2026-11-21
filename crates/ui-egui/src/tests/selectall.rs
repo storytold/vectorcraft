@@ -55,7 +55,7 @@ impl App {
                 // PLAN: assumed `craft::keymap::CommandRef` is the type `commands::fire` takes.
                 craft::ui::runtime::commands::fire(ui.ctx(), craft::keymap::CommandRef::new(id), craft::ui::runtime::commands::FireSource::Menu);
             }
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         out.textures_delta.clear();
@@ -97,7 +97,6 @@ impl App {
 fn press(key: Key, modifiers: Modifiers) -> Event {
     Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
 }
-
 
 fn click(at: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }
@@ -172,7 +171,6 @@ fn cmd_a_while_editing_type_selects_all_of_its_text() {
     let names: Vec<_> = doc["layers"][0]["children"].as_array().unwrap().iter().map(|c| c["name"].clone()).collect();
     assert!(names.contains(&json!("Z")), "{names:?}");
 }
-
 
 /// With the Artboard tool, Cmd+A after a click on an Artboards panel row selects every artboard
 /// and leaves the active artboard and the art as they are; so does the macOS menu bar's Select All.

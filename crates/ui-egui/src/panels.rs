@@ -57,12 +57,14 @@ pub mod variables;
 use std::sync::Arc;
 
 use craft::behavior::{ColumnWidth, IconId, Mixed};
+use craft::color_ui::ui::HarmonyCommand;
 use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, SwatchPalette, Well};
+use craft::keymap::CommandRef;
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::SwatchSpacing;
-use craft::ui::contract::{Bind, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Grid, Row};
@@ -344,21 +346,40 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     }
 }
 
-/// A panel's menu: its rows and the states of its commands, both from the panel's module.
+/// Carries out one of a panel menu's commands; `None` for a command the panel does not run itself.
+type PanelRun = fn(&mut VectorcraftApp, &str, &Value) -> Option<Result<Value, String>>;
+
+/// A panel's menu: its rows, the states of its commands and the commands it runs itself, all from
+/// the panel's module.
 struct PanelMenuSource {
     id: &'static str,
     rows: fn(&VectorcraftApp) -> Vec<PanelRow>,
     states: fn(&VectorcraftApp, &mut CommandStates),
+    run: PanelRun,
 }
 
-/// Lists a panel's menu from its module's `menu_rows` and `menu_states`; a module that serves two
-/// panels takes the panel's kind.
+/// For a panel whose menu rows are commands that run elsewhere (engine, UI or add-on commands, or
+/// the framework's own rows).
+fn runs_none(_: &mut VectorcraftApp, _: &str, _: &Value) -> Option<Result<Value, String>> {
+    None
+}
+
+/// Lists a panel's menu from its module's `menu_rows`, `menu_states` and `run`; a module that serves
+/// two panels takes the panel's kind.
 macro_rules! menu {
     ($id:expr, $module:ident) => {
-        PanelMenuSource { id: $id, rows: $module::menu_rows, states: $module::menu_states }
+        menu!($id, $module, run: $module::run)
+    };
+    ($id:expr, $module:ident, run: $run:expr) => {
+        PanelMenuSource { id: $id, rows: $module::menu_rows, states: $module::menu_states, run: $run }
     };
     ($id:expr, $module:ident, $kind:expr) => {
-        PanelMenuSource { id: $id, rows: |app| $module::menu_rows(app, $kind), states: |app, states| $module::menu_states(app, $kind, states) }
+        PanelMenuSource {
+            id: $id,
+            rows: |app| $module::menu_rows(app, $kind),
+            states: |app, states| $module::menu_states(app, $kind, states),
+            run: runs_none,
+        }
     };
 }
 
@@ -366,11 +387,24 @@ macro_rules! menu {
 static PANEL_MENUS: &[PanelMenuSource] = &[
     menu!("swatches", swatches),
     menu!("color", color),
-    menu!("colorGuide", color_guide),
+    PanelMenuSource {
+        id: "colorGuide",
+        rows: |_| color_guide::menu_rows(),
+        states: |app, states| {
+            for (command, state) in color_guide::menu_states(app) {
+                states.set(command, state);
+            }
+        },
+        run: |app, id, _| {
+            let command = HarmonyCommand::from_ref(&CommandRef::new(id))?;
+            color_guide::run(app, command);
+            Some(Ok(Value::Null))
+        },
+    },
     menu!("stroke", stroke),
     menu!("transparency", transparency),
     menu!("appearance", appearance),
-    menu!("graphicStyles", graphic_styles),
+    menu!("graphicStyles", graphic_styles, run: |app, id, p| id.starts_with("ui.graphicStyles.").then(|| graphic_styles::run(app, id, p))),
     menu!("align", align),
     menu!("pathfinder", pathfinder),
     menu!("transform", transform),
@@ -381,8 +415,8 @@ static PANEL_MENUS: &[PanelMenuSource] = &[
     menu!("gradient", gradient),
     menu!("character", character),
     menu!("paragraph", paragraph),
-    menu!("glyphs", glyphs),
-    menu!("navigator", navigator),
+    menu!("glyphs", glyphs, run: |app, id, p| id.starts_with("ui.glyphs.").then(|| glyphs::run(app, id, p).map(|()| Value::Null))),
+    menu!("navigator", navigator, run: runs_none),
     menu!("brushes", brushes),
     menu!("symbols", symbols),
     menu!("patternOptions", pattern_options),
@@ -405,9 +439,9 @@ static PANEL_MENUS: &[PanelMenuSource] = &[
     menu!(css_properties::ID, css_properties),
     menu!(variables::ID, variables),
     menu!(script_console::ID, script_console),
-    menu!(retype::ID, retype),
+    menu!(retype::ID, retype, run: retype::command),
     menu!("actions", actions_menu),
-    menu!(crate::addons::packaging::ID, packaging_menu),
+    menu!(crate::addons::packaging::ID, packaging_menu, run: runs_none),
 ];
 
 use crate::addons::packaging as packaging_menu;
@@ -421,12 +455,25 @@ pub(crate) fn panel_rows(app: &VectorcraftApp, id: &str) -> Vec<PanelRow> {
     PANEL_MENUS.iter().find(|m| m.id == id).map_or_else(Vec::new, |m| (m.rows)(app))
 }
 
-/// Sets the states of every panel menu's commands, and of the Contextual Task Bar's.
+/// Sets the states of every panel menu's commands, the open library panels' included, and of the
+/// Contextual Task Bar's.
 pub(crate) fn panel_menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     for menu in PANEL_MENUS {
         (menu.states)(app, states);
     }
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    for panel in app.ui.library_panels.iter().map(|l| library_panel::panel_id(&l.kind, &l.id)).filter(|panel| layout.contains(panel)) {
+        library_panel::menu_states(app, &panel, states);
+    }
     crate::canvas::task_bar::menu_states(app, states);
+}
+
+/// Runs panel menu command `id` when a panel runs it itself; `None` otherwise.
+pub(crate) fn run_menu_command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    if id == "ui.libraryPanel.add" {
+        return Some(library_panel::run(app, id, params));
+    }
+    PANEL_MENUS.iter().find_map(|menu| (menu.run)(app, id, params))
 }
 
 pub fn libraries(app: &mut VectorcraftApp, ui: &mut Ui) {

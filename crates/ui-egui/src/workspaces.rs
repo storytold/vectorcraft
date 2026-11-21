@@ -16,11 +16,9 @@ use std::sync::atomic::Ordering;
 
 use craft::behavior::dock::{NamedWorkspace, Workspace as DockWorkspace, WorkspaceChrome, WorkspaceError, WorkspaceKeeps, WorkspaceSet};
 use craft::keymap::CommandRef;
+use craft::ui::dialog::{DialogResult, dialog_id};
 use craft::ui::patterns::dock::{HostedNewWorkspace, NewWorkspace, WorkspaceSwitcher};
-// PLAN: assumed `HostedListManager` (chrome-w6, q345) in `form_dialogs`:
-// `new(title, name_label, entries, actions)`, `renames(kind)`, `set_entries(Vec<ListManagerEntry>)`,
-// `take_choice() -> Option<ListManagerChoice>`.
-use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerEntry};
+use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry};
 use craft::ui::rails::LastUsed;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -169,16 +167,16 @@ impl Workspaces {
         let mut outcome = Outcome { intact: true, converted: false };
         let list = |key: &str| saved.get(key).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[]);
         let name_of = |v: &Value| v.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-        let mut read = |v: &Value, outcome: &mut Outcome| -> (WorkspaceRecord, Option<DockWorkspace<String>>) {
+        let read = |v: &Value, outcome: &mut Outcome| -> (WorkspaceRecord, Option<DockWorkspace<String>>) {
             let mut record = serde_json::from_value::<WorkspaceRecord>(v.clone()).unwrap_or_else(|_| {
                 outcome.intact = false;
                 WorkspaceRecord::default()
             });
             crate::layout_migration::assign_toolbar_ids(&mut record.toolbars);
-            // PLAN: assumed `legacy_layout(record: &Value, order: &[DockTab]) -> Option<Workspace<String>>` (ch.P3 gives one argument)
-            let layout = crate::layout_migration::legacy_layout(v, order);
-            outcome.converted |= layout.is_some();
-            (record, layout)
+            let (layout, converted) = crate::layout_migration::legacy_layout(v, order);
+            *outcome = outcome.and(converted);
+            // A record with nothing to convert keeps no layout of its own.
+            (record, converted.converted.then_some(layout))
         };
         for v in list("custom_workspaces") {
             let (record, layout) = read(v, &mut outcome);
@@ -281,7 +279,6 @@ pub fn builtins() -> Vec<Builtin> {
 
 /// The built-ins as the framework's named workspaces.
 fn builtin_set() -> Vec<NamedWorkspace<String>> {
-    // PLAN: assumed `default_workspace(fronts: &[&str])` (ch.P2 gives one front; Automation and Layout need two)
     builtins().into_iter().map(|b| NamedWorkspace::new(builtin_id(b.name), b.name, crate::panel_docking::default_workspace(b.fronts))).collect()
 }
 
@@ -543,7 +540,6 @@ pub fn menu_items() -> Vec<crate::menus::Node> {
 /// Manage Workspaces…; picking a workspace runs `window.workspace`.
 pub fn switcher(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let rows = ["window.workspace.reset", "window.workspace.new", "window.workspace.manage"].map(CommandRef::new).to_vec();
-    // PLAN: assumed `WorkspaceSwitcher::commands(Vec<CommandRef>)` (ch.K40, chrome-w6)
     let shown = WorkspaceSwitcher::new(&app.ui.workspaces.set).commands(rows).show(ui);
     if let Some(id) = shown.switched {
         crate::menus::invoke(app, "window.workspace", json!({"name": id}));
@@ -558,6 +554,8 @@ const BUILTIN: u32 = 0;
 const SAVED: u32 = 1;
 const NEW: &str = "new";
 const DELETE: &str = "delete";
+/// The key Manage Workspaces opens with, which names it on the dialog host.
+const MANAGE: &str = "window.workspace.manage";
 
 /// The rows of Manage Workspaces: built-ins (dim, fixed) then the user's.
 fn manage_entries(ui: &UiState) -> Vec<ListManagerEntry> {
@@ -570,49 +568,67 @@ fn manage_entries(ui: &UiState) -> Vec<ListManagerEntry> {
 
 /// Open Manage Workspaces; the dialog is left as it is when it is already open.
 fn open_manage(app: &mut VectorcraftApp) {
+    let Some(dialogs) = app.dialogs() else { return };
     let actions = vec![
         ListManagerAction::new("ok", tl!("OK"), ActionEnabled::Always),
         ListManagerAction::new(NEW, tl!("New"), ActionEnabled::Always).keeps_open(),
         ListManagerAction::new(DELETE, tl!("Delete"), ActionEnabled::Always).kind(SAVED),
     ];
-    let dialog = HostedListManager::new(tl!("Manage Workspaces"), tl!("Name:"), manage_entries(&app.ui), actions).renames(SAVED);
-    // PLAN: assumed `app.dialogs() -> &mut DialogHost` (hub-w2)
-    let _ = app.dialogs().open_unless_open(dialog);
+    let dialog = HostedListManager::new(MANAGE, tl!("Manage Workspaces"), tl!("Name:"), actions).entries(manage_entries(&app.ui)).renames(SAVED);
+    dialogs.with(|host| {
+        if host.get_by_id::<HostedListManager>(dialog_id(MANAGE)).is_none() {
+            host.open(dialog);
+        }
+    });
 }
 
 /// Open New Workspace, offering a free "Workspace N"; it is left as it is when already open.
 fn open_new(app: &mut VectorcraftApp) {
+    let Some(dialogs) = app.dialogs() else { return };
     let name = (1..).map(|i| format!("Workspace {i}")).find(|n| find(&app.ui, n).is_none()).unwrap_or_default();
     let mut value = NewWorkspace::default();
     value.name = name;
     let dialog = HostedNewWorkspace::new(&app.ui.workspaces.set).offered(WorkspaceKeeps::NONE).value(value);
-    let _ = app.dialogs().open_unless_open(dialog);
+    // One already open keeps its input.
+    let _ = dialogs.with(|host| host.open_unless_open(dialog));
 }
 
 /// Run what the workspace dialogs answered since the last pass, and keep Manage Workspaces' rows
 /// current. Called once per frame by the dialog host's `pump`.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    if let Some(answer) = app.dialogs().take::<HostedNewWorkspace<String>>().and_then(|r| r.ok())
+    let Some(dialogs) = app.dialogs() else { return };
+    if let Some(answer) = dialogs.with(|host| host.take::<HostedNewWorkspace<String>>()).and_then(DialogResult::ok)
         && let Err(e) = save_as(&mut app.ui, &answer.name)
     {
         app.status(e);
     }
+    let id = dialog_id(MANAGE);
     let entries = manage_entries(&app.ui);
-    let Some(manager) = app.dialogs().get_mut::<HostedListManager>() else { return };
-    manager.set_entries(entries);
-    let Some(choice) = manager.take_choice() else { return };
-    let entry = choice.entry.as_deref().unwrap_or_default();
-    let result = if choice.is_rename() {
-        rename(&mut app.ui, entry, &choice.name)
-    } else {
-        match choice.action.as_str() {
-            NEW => save_as(&mut app.ui, &choice.name),
-            DELETE => delete(&mut app.ui, entry),
-            _ => Ok(()),
+    // A choice that kept Manage Workspaces open waits on it; the one that closed it is its answer.
+    let choices = dialogs.with(|host| {
+        let kept = host.get_mut_by_id::<HostedListManager>(id).and_then(|manager| {
+            manager.set_entries(entries);
+            manager.take_choice()
+        });
+        [kept, host.take_by_id::<HostedListManager>(id).and_then(DialogResult::ok)]
+    });
+    for choice in choices.into_iter().flatten() {
+        if let Err(e) = run_choice(&mut app.ui, &choice) {
+            app.status(e);
         }
-    };
-    if let Err(e) = result {
-        app.status(e);
+    }
+}
+
+/// Does what a Manage Workspaces button asked: rename, save the layout as a new workspace, or delete.
+fn run_choice(ui: &mut UiState, choice: &ListManagerChoice) -> Result<(), String> {
+    let entry = choice.entry.as_deref().unwrap_or_default();
+    if choice.is_rename() {
+        return rename(ui, entry, &choice.name);
+    }
+    match choice.action.as_str() {
+        NEW => save_as(ui, &choice.name),
+        DELETE => delete(ui, entry),
+        _ => Ok(()),
     }
 }
 
@@ -700,13 +716,13 @@ mod tests {
         for panel in ["layers", "stroke"] {
             Arc::make_mut(&mut app.ui.dock_workspace).apply(Action::activate(panel.to_string()), false, |_: &String| Permissions::ALL).unwrap();
         }
-        let layout = crate::panel_docking::layout_of(&app.ui);
+        let layout = crate::panel_docking::layout_of(&app.ui).clone();
         save_as(&mut app.ui, "Mine").unwrap();
         switch(&mut app, ESSENTIALS).unwrap();
         assert!(!app.ui.control_bar);
         switch(&mut app, "Mine").unwrap();
         assert!(app.ui.control_bar);
-        assert_eq!(crate::panel_docking::layout_of(&app.ui), layout);
+        assert_eq!(crate::panel_docking::layout_of(&app.ui), &layout);
         // Survives the UiState JSON round trip.
         let back: UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
         let back = back.sanitized();

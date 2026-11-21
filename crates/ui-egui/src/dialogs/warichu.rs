@@ -58,15 +58,9 @@ pub(super) fn set_shared(fields: &mut DialogFields, key: &str, shared: Option<im
 fn rows(lengths: LengthUnits) -> Vec<Param> {
     let options = aligns().into_iter().map(|(id, label)| (id.to_owned(), label.into())).collect();
     vec![
-        Param::new(
-            KEYS[0],
-            tl!("Lines:"),
-            ParamKind::int(Some(i64::from(*WARICHU_LINES.start())), Some(i64::from(*WARICHU_LINES.end())), 2),
-        ),
+        Param::new(KEYS[0], tl!("Lines:"), ParamKind::int(Some(i64::from(*WARICHU_LINES.start())), Some(i64::from(*WARICHU_LINES.end())), 2)),
         Param::number(KEYS[1], tl!("Line Gap:"), 0.0, 1.0, 2).length(lengths).bounds(Some(0.0), Some(MAX_WARICHU_GAP)),
-        Param::number(KEYS[2], tl!("Scale:"), 50.0, 1.0, 1)
-            .bounds(Some(*WARICHU_SCALE.start()), Some(*WARICHU_SCALE.end()))
-            .unit(UnitKind::Percent),
+        Param::number(KEYS[2], tl!("Scale:"), 50.0, 1.0, 1).bounds(Some(*WARICHU_SCALE.start()), Some(*WARICHU_SCALE.end())).unit(UnitKind::Percent),
         Param::new(KEYS[3], tl!("Alignment:"), ParamKind::choice(options, Some(WarichuAlign::Auto.id().to_owned()))),
     ]
 }

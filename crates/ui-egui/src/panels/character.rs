@@ -21,7 +21,7 @@ use craft::text::ui::character::{
 use craft::text::ui::type_options::TextAntiAlias;
 use craft::ui::buttons::Link;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Lazy};
+use craft::ui::contract::{Bind, Entry, Lazy, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::Divider;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
@@ -533,7 +533,7 @@ impl Field {
 /// the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
-    if crate::panel_docking::visible(&app.ui, "character") {
+    if crate::panel_docking::visible(app, "character") {
         app.run("window.panel.activate", json!({"panel": "character"}))?;
     } else {
         crate::panel_docking::reveal_panel(app, "character")?;
@@ -984,12 +984,11 @@ fn unit_scale(unit: DocUnit) -> f64 {
 pub(crate) fn face_axes(app: &VectorcraftApp) -> Option<(Vec<FontAxis>, Vec<NamedInstance>)> {
     let (s, _) = text_style(app)?;
     let face = vectorcraft_text::FontDb::global().face_version(&s.font_family, &s.font_style, s.font_version.as_deref())?;
-    // PLAN: assumed FontFace::data() -> &[u8] and read_axes / read_named_instances returning Vecs.
-    let axes = craft::font_manager::axes::read_axes(face.data());
+    let axes = craft::font_manager::axes::read_axes(face.file_data(), face.face_index());
     if axes.iter().all(|a| a.hidden) {
         return None;
     }
-    Some((axes, craft::font_manager::axes::read_named_instances(face.data())))
+    Some((axes, craft::font_manager::axes::read_named_instances(face.file_data(), face.face_index())))
 }
 
 /// The axis settings the selection shares, and the axes whose settings differ. The first is `None`
@@ -1047,36 +1046,34 @@ pub(crate) fn values(app: &mut VectorcraftApp) -> CharacterValues {
     let (axes, mixed_axes) = axis_values(app);
     let language =
         shared(app, |s| s.language.clone()).map(|l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
-    CharacterValues {
-        family: shared(app, |s| s.font_family.clone()),
-        style: shared(app, |s| s.font_style.clone()),
-        size: single(shared_effective(app, |s| s.size)),
-        leading,
-        kerning,
-        tracking: single(shared(app, |s| s.tracking)),
-        vertical_scale: single(shared(app, |s| s.v_scale)),
-        horizontal_scale: single(shared_effective(app, |s| s.h_scale)),
-        baseline_shift: single(shared_effective(app, |s| s.baseline_shift)),
-        caps,
-        position: POSITIONS.iter().find(|(_, id)| *id == position).map(|(p, _)| *p),
-        underline: shared(app, |s| s.underline),
-        strikethrough: shared(app, |s| s.strikethrough),
-        language,
-        axes,
-        mixed_axes,
-        rotation: single(shared(app, |s| s.rotation)),
-        aki_left: single(shared(app, |s| s.aki_left)),
-        aki_right: single(shared(app, |s| s.aki_right)),
-        tsume: single(shared(app, |s| s.tsume)),
-        diacritic_x: single(shared(app, |s| s.diacritic_horizontal)),
-        diacritic_y: single(shared(app, |s| s.diacritic_vertical)),
-        auto_kerning,
-        anti_alias: shared_anti_alias(app)
-            .and_then(|m| TypeAntiAlias::ALL.iter().position(|d| *d == m))
-            .and_then(|i| ANTI_ALIAS_METHODS.get(i).copied()),
-        font_height: shared(app, |s| s.font_height_reference).and_then(|r| HEIGHTS.iter().find(|(d, ..)| *d == r).map(|(_, h, _)| *h)),
-        ..CharacterValues::default()
-    }
+    let mut values = CharacterValues::default();
+    values.family = shared(app, |s| s.font_family.clone());
+    values.style = shared(app, |s| s.font_style.clone());
+    values.size = single(shared_effective(app, |s| s.size));
+    values.leading = leading;
+    values.kerning = kerning;
+    values.tracking = single(shared(app, |s| s.tracking));
+    values.vertical_scale = single(shared(app, |s| s.v_scale));
+    values.horizontal_scale = single(shared_effective(app, |s| s.h_scale));
+    values.baseline_shift = single(shared_effective(app, |s| s.baseline_shift));
+    values.caps = caps;
+    values.position = POSITIONS.iter().find(|(_, id)| *id == position).map(|(p, _)| *p);
+    values.underline = shared(app, |s| s.underline);
+    values.strikethrough = shared(app, |s| s.strikethrough);
+    values.language = language;
+    values.axes = axes;
+    values.mixed_axes = mixed_axes;
+    values.rotation = single(shared(app, |s| s.rotation));
+    values.aki_left = single(shared(app, |s| s.aki_left));
+    values.aki_right = single(shared(app, |s| s.aki_right));
+    values.tsume = single(shared(app, |s| s.tsume));
+    values.diacritic_x = single(shared(app, |s| s.diacritic_horizontal));
+    values.diacritic_y = single(shared(app, |s| s.diacritic_vertical));
+    values.auto_kerning = auto_kerning;
+    values.anti_alias =
+        shared_anti_alias(app).and_then(|m| TypeAntiAlias::ALL.iter().position(|d| *d == m)).and_then(|i| ANTI_ALIAS_METHODS.get(i).copied());
+    values.font_height = shared(app, |s| s.font_height_reference).and_then(|r| HEIGHTS.iter().find(|(d, ..)| *d == r).map(|(_, h, _)| *h));
+    values
 }
 
 /// The row groups the panel shows. Hide Options leaves out everything below the metrics; Show East
@@ -1084,7 +1081,6 @@ pub(crate) fn values(app: &mut VectorcraftApp) -> CharacterValues {
 fn rows(app: &VectorcraftApp) -> CharacterRows {
     let shown = !app.ui.character_hide_options;
     let prefs = &app.session.prefs;
-    // PLAN: assumed CharacterRows::STYLES (ty.X22 request): the All Caps, Small Caps, Underline and Strikethrough toggles.
     CharacterRows::default()
         .with(CharacterRows::COLOR, false)
         .with(CharacterRows::FAUX, false)
@@ -1095,7 +1091,6 @@ fn rows(app: &VectorcraftApp) -> CharacterRows {
         .with(CharacterRows::ANTI_ALIAS, shown)
         .with(CharacterRows::SUPERSCRIPT, shown)
         .with(CharacterRows::STYLE_TOGGLES, shown)
-        .with(CharacterRows::STYLES, shown)
         .with(CharacterRows::FONT_HEIGHT, app.ui.character_font_height)
         .with(CharacterRows::EAST_ASIAN, shown && prefs.show_east_asian_options)
         .with(CharacterRows::MIDDLE_EASTERN, shown && prefs.show_indic_options)
@@ -1106,8 +1101,6 @@ fn apply(app: &mut VectorcraftApp, change: &CharacterChange) {
     use CharacterChange as C;
     let max_diacritic = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
     match change {
-        // The family goes through its own event (`apply_character_event`); the faux styles and OpenType rows are off.
-        C::Family(_) | C::FauxBold(_) | C::FauxItalic(_) | C::OpenType { .. } => {}
         C::Style(s) => style(app, json!({"style": s})),
         C::Size(v) => style(app, json!({"size": number(*v)})),
         C::Leading(Leading::Auto) => style(app, json!({"leading": "auto"})),
@@ -1158,6 +1151,8 @@ fn apply(app: &mut VectorcraftApp, change: &CharacterChange) {
                 axes_cmd(app, Value::Object(changed));
             }
         }
+        // The family goes through its own event (`apply_character_event`); the faux styles and OpenType rows are off.
+        _ => {}
     }
 }
 
@@ -1185,7 +1180,7 @@ pub(crate) fn controls(app: &mut VectorcraftApp, ui: &mut Ui, rows: CharacterRow
     let styles = vectorcraft_text::FontDb::global().styles(&current.font_family);
     let face = face_axes(app);
     let languages: Option<Vec<(String, String)>> =
-        rows.contains(CharacterRows::STYLES).then(|| LANGUAGES.iter().map(|(name, _, _)| (name.to_string(), name.to_string())).collect());
+        rows.contains(CharacterRows::STYLE_TOGGLES).then(|| LANGUAGES.iter().map(|(name, _, _)| (name.to_string(), name.to_string())).collect());
     let catalog = vectorcraft_text::FontDb::global().catalog();
     let before = font_menu::picker_settings(app);
     let mut settings = before.clone();
@@ -1311,12 +1306,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     }
     Divider::vertical().show(ui);
     let link = Link::new(tl!("Character:")).show(ui).response;
-    // The popover's open state lives with its opener, as the framework's own openers keep theirs.
-    let slot = ui.id().with("character-popover");
-    let mut open = ui.data(|d| d.get_temp::<bool>(slot)).unwrap_or(false);
-    open ^= link.clicked();
-    Popover::new(tl!("Character options"), Bind::bound(&mut open)).opened_by(&link).show(ui, |ui, _| show(app, ui));
-    ui.data_mut(|d| d.insert_temp(slot, open));
+    Popover::new(tl!("Character options"), Bind::kept()).overlay(|overlay| overlay.opened_by(&link, Trigger::Click)).show(ui, |ui, _| show(app, ui));
     Row::new().show(ui, |ui, _| {
         font_menu::font_fields(app, ui);
         size_field(app, ui, tl!("Font Size"));

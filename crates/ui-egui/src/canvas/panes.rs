@@ -123,61 +123,63 @@ fn render_pane(
     img
 }
 
-/// The frame window `w`'s pane renders through `cv`, the view its canvas shows; `None` when the
-/// window has no document.
-fn pane_frame(app: &mut VectorcraftApp, ui: &Ui, cv: &CanvasView, w: Win) -> Option<PaneFrame> {
-    let ctx = ui.ctx();
-    let env = Env::of(ui);
-    let ppp = ctx.pixels_per_point();
-    let space = cv.rect;
-    let v = crate::doc_windows::view(app, w).copied()?;
-    let st = app.session.documents().get(w.0)?;
-    // View › Pixel Preview, as the canvas draws it.
-    let max_side = ctx.input(|i| i.max_texture_side);
-    let pixel = (app.ui.view.pixel_preview && cv.zoom * f64::from(ppp) > 1.0).then(|| pixel_region(cv, max_side)).flatten();
-    // The pane's frame fits the largest texture side the display supports, as the canvas's does.
-    let ppp = frame_ppp(space.size(), ppp, max_side);
-    let side = |l: f32| ((l * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX));
-    let (pw, ph) = (side(space.width()), side(space.height()));
-    let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
-    let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
-    let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
-    let mut cache = cache_key(app, ui, st, env.tokens.tokens(), cv, (pw, ph, ppp), (pixel, smooth_images, plugins, placed));
-    // The current document's drag and Image Trace hold are not this document's, and this view has
-    // its own Outline or Preview.
-    (cache.dragging, cache.trace_source, cache.outline) = (false, None, v.outline);
-    cache.backdrop = backdrop(app, st, v.outline);
-    let opts = frame_options(app, &cache, st.shown_mask(), smooth_images);
-    let (fw, fh, view) = frame_view(pixel, (pw, ph), cv, ppp);
-    let on_screen = match pixel {
-        Some([x0, y0, x1, y1]) => {
-            egui::Rect::from_two_pos(cv.to_screen(Point::new(x0 as f64, y0 as f64)), cv.to_screen(Point::new(x1 as f64, y1 as f64)))
-        }
-        None => space,
-    };
-    Some(PaneFrame {
-        key: PaneKey { slot: (st.uid, w.1) },
-        revision: Revision::of(&format!("{cache:?}")),
-        cache,
-        doc: st.doc.clone(),
-        size: (fw, fh),
-        view,
-        opts,
-        display: app.display_profile.transform(app.session.prefs.monitor_profile_display),
-        cms: vectorcraft_engine::cmd::colormgmt::doc_cms(&st.doc),
-        placed: on_screen,
-    })
+impl PaneSource {
+    /// The source of window `w`'s pane picture, rendered through `cv`, the view its canvas shows;
+    /// `None` when the window has no document.
+    pub(super) fn new(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, cv: &CanvasView) -> Option<PaneSource> {
+        let env = Env::of_root(ctx);
+        let ppp = ctx.pixels_per_point();
+        let space = cv.rect;
+        let v = crate::doc_windows::view(app, w).copied()?;
+        let st = app.session.documents().get(w.0)?;
+        // View › Pixel Preview, as the canvas draws it.
+        let max_side = ctx.input(|i| i.max_texture_side);
+        let pixel = (app.ui.view.pixel_preview && cv.zoom * f64::from(ppp) > 1.0).then(|| pixel_region(cv, max_side)).flatten();
+        // The pane's frame fits the largest texture side the display supports, as the canvas's does.
+        let ppp = frame_ppp(space.size(), ppp, max_side);
+        let side = |l: f32| ((l * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX));
+        let (pw, ph) = (side(space.width()), side(space.height()));
+        let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
+        let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
+        let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
+        let mut cache = cache_key(app, ctx, st, env.tokens.tokens(), cv, (pw, ph, ppp), (pixel, smooth_images, plugins, placed));
+        // The current document's drag and Image Trace hold are not this document's, and this view has
+        // its own Outline or Preview.
+        (cache.dragging, cache.trace_source, cache.outline) = (false, None, v.outline);
+        cache.backdrop = backdrop(app, st, v.outline);
+        let opts = frame_options(app, &cache, st.shown_mask(), smooth_images);
+        let (fw, fh, view) = frame_view(pixel, (pw, ph), cv, ppp);
+        let on_screen = match pixel {
+            Some([x0, y0, x1, y1]) => {
+                egui::Rect::from_two_pos(cv.to_screen(Point::new(x0 as f64, y0 as f64)), cv.to_screen(Point::new(x1 as f64, y1 as f64)))
+            }
+            None => space,
+        };
+        let frame = PaneFrame {
+            key: PaneKey { slot: (st.uid, w.1) },
+            revision: Revision::of(&format!("{cache:?}")),
+            cache,
+            doc: st.doc.clone(),
+            size: (fw, fh),
+            view,
+            opts,
+            display: app.display_profile.transform(app.session.prefs.monitor_profile_display),
+            cms: vectorcraft_engine::cmd::colormgmt::doc_cms(&st.doc),
+            placed: on_screen,
+        };
+        Some(PaneSource { frame })
+    }
 }
 
 /// Paint window `w`'s picture over its canvas `space` from the render of its document: the
 /// previous picture shows until a new one lands.
 pub(super) fn pane_picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, w: Win) {
-    let Some(frame) = pane_frame(app, ui, &space.view, w) else { return };
-    let space = space.view.rect;
     let ctx = ui.ctx().clone();
+    let Some(source) = PaneSource::new(app, &ctx, w, &space.view) else { return };
+    let space = space.view.rect;
     let request = ThumbRequest::for_cell(space.width().max(space.height()), ctx.pixels_per_point());
-    let (key, placed) = (frame.key, frame.placed);
-    let state = thumbnails(&ctx).state(&ctx, &PaneSource { frame }, &key, &request, Priority::VISIBLE);
+    let (key, placed) = (source.frame.key, source.frame.placed);
+    let state = thumbnails(&ctx).state(&ctx, &source, &key, &request, Priority::VISIBLE);
     if let Some(texture) = state.shown() {
         ui.painter_at(space).image(texture.id, placed, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     }

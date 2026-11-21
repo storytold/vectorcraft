@@ -13,6 +13,7 @@ use vectorcraft_engine::Session;
 
 use super::*;
 use crate::dialogs::{brush_options, new_brush};
+use crate::i18n::LangExt as _;
 
 /// Where the panel sits in the trial's window, 236 pt wide as in the dock, and the drag source under it.
 const PANEL: Rect = Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: 236.0, y: 1000.0 } };

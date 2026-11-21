@@ -49,7 +49,7 @@ pub fn open(app: &mut VectorcraftApp) -> Value {
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| tool_options::set_options(app, TOOL, form::json_of(&params, &result.fields));
     let opened = app.ui_ctx.clone().and_then(|ctx| {
         let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| {
-            ParamDialog::new(KIND, title.clone(), shown.clone()).ok_label(tl!("Save")).values(Bind::bound(f))
+            ParamDialog::new(KIND, title.clone(), shown.clone()).ok_label(tl!("Save").into()).values(Bind::bound(f))
         });
         host::open_held(app, dialog, ok)
     });

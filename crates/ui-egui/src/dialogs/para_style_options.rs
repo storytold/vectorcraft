@@ -22,7 +22,9 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
 use vectorcraft_doc::{HyphenationOptions, JustificationOptions, TabAlign, TabStop, Unit};
 
-use super::char_style_options::{Values, canonical_map, drive, general_rows, reason, rows, select, style_dialog, text, to_fields, tri_state, value_of};
+use super::char_style_options::{
+    Values, canonical_map, drive, general_rows, reason, rows, select, style_dialog, text, to_fields, tri_state, value_of,
+};
 use crate::VectorcraftApp;
 
 pub const KIND: &str = "paraStyleOptions";
@@ -632,9 +634,11 @@ fn tabs_rows(fields: &DialogFields, o: &Opening) -> Vec<PropertyRow> {
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let name = r.get("align").and_then(Value::as_str).and_then(|key| TAB_ALIGNS.iter().find(|(_, k)| *k == key)).map_or("", |(a, _)| {
-                crate::panels::tabs::align_name(*a, o.vertical)
-            });
+            let name = r
+                .get("align")
+                .and_then(Value::as_str)
+                .and_then(|key| TAB_ALIGNS.iter().find(|(_, k)| *k == key))
+                .map_or("", |(a, _)| crate::panels::tabs::align_name(*a, o.vertical));
             let mut line = format!("{}    {name}", r.get("position").and_then(Value::as_str).unwrap_or_default());
             if let Some(leader) = r.get("leader").and_then(Value::as_str).filter(|l| !l.is_empty()) {
                 line += &format!("    {leader}");
@@ -749,7 +753,7 @@ pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTa
 pub(crate) fn hosted(key: &str, title: &'static str, opening: &Arc<Opening>, name: &str) -> HostedPropertiesDialog {
     let rows_of = Arc::clone(opening);
     HostedPropertiesDialog::new(key, opening.fields(name), move |values| {
-        let now = values.get().and_then(|shown| shown.same().cloned()).unwrap_or_else(DialogFields::new);
+        let now = values.value().cloned().unwrap_or_else(DialogFields::new);
         craft::ui::patterns::form_dialogs::PropertiesDialog::new(title, tabs(&now, &rows_of), values)
             .tab_layout(craft::ui::patterns::form_dialogs::TabLayout::List)
     })

@@ -1,7 +1,7 @@
 //! Help searches the tools, menu commands, and built-in tutorials.
 
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
-use craft::i18n::{Folder, Words};
+use craft::host::Host;
 use craft::keymap::{Chord, CommandRef};
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
@@ -191,13 +191,13 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
     if query.is_empty() {
         return Vec::new();
     }
-    // PLAN: assumed SearchIndex::new(&Folder, &[HelpEntry], &Synonyms) (the contract's takes an `EnvView`, which a command has no `Ui` for)
-    let folder = Folder::new(crate::i18n::current().code());
-    let synonyms = Synonyms::of(&Words::from_i18n(crate::i18n::shared(), crate::i18n::current()).set::<SearchWords>());
+    // A command runs outside a frame: the index reads the interface language from the window's host.
+    let Some(host) = app.ui_ctx.as_ref().and_then(Host::try_of_ctx) else { return Vec::new() };
+    let synonyms = Synonyms::of(&host.words().set::<SearchWords>());
     let mut hits = Vec::new();
     for section in [tool_hits(app), command_hits(app), tutorial_hits()] {
         let (entries, candidates): (Vec<HelpEntry>, Vec<Hit>) = section.into_iter().unzip();
-        let index = SearchIndex::new(&folder, &entries, &synonyms);
+        let index = SearchIndex::for_host(&host, &entries, &synonyms);
         hits.extend(rank(&index, query, &[], &|_| 0).into_iter().filter_map(|at| candidates.get(at).cloned()));
     }
     hits

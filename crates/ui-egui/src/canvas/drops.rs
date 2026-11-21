@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use craft::behavior::{CanvasView, DropOperation, Input, Metrics, Sense};
 use craft::ui::canvas::{CanvasSpace, ToolContext, ToolPointer};
-use craft::ui::contract::{Common, Component, Cx, DragPreview, DropMark, DropTarget, ListDrag, MeasureCx, Pointer as _, Props, Role, Show as _};
+use craft::ui::contract::{
+    Common, Component, Cx, DragPreview, DropMark, DropTarget, ListDrag, MeasureCx, OsFiles, Pointer as _, Props, Role, Show as _,
+};
 use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Pos2, Rect, Response, Ui, Vec2};
 use serde_json::{Value, json};
@@ -24,6 +26,7 @@ use crate::panels::brushes::BrushLibraries;
 use crate::panels::graphic_styles::StyleKey;
 use crate::panels::library_panel::{self, LibraryKey, LibraryKind as _};
 use crate::panels::symbols::{SymbolKey, SymbolLibraries};
+use crate::place::{CanvasDrop, CanvasFiles};
 
 /// Artwork a Selection move carries out of its canvas: the objects the move started with (an Alt-copy's preview copies
 /// are not carried), the press point they were grabbed at, and the source's revision when the carry began, so an edited
@@ -89,7 +92,7 @@ impl<P: ?Sized, F: Fn(&P) -> Option<Payload>> DropTarget<P> for Target<'_, F> {
 }
 
 /// The catcher of every drop the canvas takes. A pane (`BodyKind::Pane`) takes carried artwork only, as no panel
-/// payload ever dropped on a pane.
+/// payload or file ever dropped on a pane.
 #[derive(Component, Props)]
 #[component(canvas_control)]
 pub(crate) struct CanvasDrops<'a> {
@@ -100,6 +103,8 @@ pub(crate) struct CanvasDrops<'a> {
     /// `(uid, revision)` of every open document: carried art whose source is not listed unchanged is refused.
     sources: Vec<(u64, u64)>,
     out: &'a RefCell<Option<Dropped>>,
+    /// The files from the OS the canvas places, and where their drop goes.
+    files: (CanvasFiles<'a>, &'a RefCell<Option<CanvasDrop>>),
 }
 
 impl Component for CanvasDrops<'_> {
@@ -125,20 +130,25 @@ impl Component for CanvasDrops<'_> {
     }
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
-        let rect = cx.rect();
-        let sources = &self.sources;
-        let art =
-            Target { rect, view: &self.view, make: |a: &CarriedArt| sources.contains(&(a.document, a.revision)).then(|| Payload::Art(a.clone())) };
+        let rect = cx.rect;
+        let (sources, view) = (&self.sources, &self.view);
+        let art = Target { rect, view, make: |a: &CarriedArt| sources.contains(&(a.document, a.revision)).then(|| Payload::Art(a.clone())) };
         let mut dropped = cx.drop_target::<CarriedArt, _>(&art);
         if self.kind == BodyKind::Live {
-            let to = |make: fn(&_) -> Option<Payload>| Target { rect, view: &self.view, make };
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
-            let panel = cx.drop_target::<PanelDrag, _>(&to(|p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone()))));
-            let style = cx.drop_target::<ListDrag<StyleKey>, _>(&to(|d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone()))));
-            let symbol = cx.drop_target::<ListDrag<SymbolKey>, _>(&to(|d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone()))));
-            let brush = cx.drop_target::<ListDrag<BrushKey>, _>(&to(|d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone()))));
-            let library = cx.drop_target::<ListDrag<LibraryKey>, _>(&to(|d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone()))));
+            let panel = Target { rect, view, make: |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())) };
+            let style = Target { rect, view, make: |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())) };
+            let symbol = Target { rect, view, make: |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())) };
+            let brush = Target { rect, view, make: |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())) };
+            let library = Target { rect, view, make: |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())) };
+            let panel = cx.drop_target::<PanelDrag, _>(&panel);
+            let style = cx.drop_target::<ListDrag<StyleKey>, _>(&style);
+            let symbol = cx.drop_target::<ListDrag<SymbolKey>, _>(&symbol);
+            let brush = cx.drop_target::<ListDrag<BrushKey>, _>(&brush);
+            let library = cx.drop_target::<ListDrag<LibraryKey>, _>(&library);
             dropped = dropped.or(panel).or(style).or(symbol).or(brush).or(library);
+            let (files, out) = &self.files;
+            *out.borrow_mut() = cx.drop_target::<OsFiles, _>(files);
         }
         *self.out.borrow_mut() = dropped;
     }
@@ -158,8 +168,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, _space: &CanvasSpace, 
     };
     let Some(view) = view else { return };
     let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).collect();
-    let out = RefCell::new(None);
-    CanvasDrops { common: Common::new(), view, kind, sources, out: &out }.id_salt(("canvas-drops", win)).show_at(ui, rect);
+    let (out, files_out) = (RefCell::new(None), RefCell::new(None));
+    let files = (CanvasFiles::new(app, rect, &view), &files_out);
+    CanvasDrops { common: Common::new(), view, kind, sources, out: &out, files }.id_salt(("canvas-drops", win)).show_at(ui, rect);
+    if let Some(files) = files_out.take() {
+        crate::place::canvas_drop(app, ui.ctx(), files);
+    }
     let Some(drop) = out.take() else { return };
     let result = match kind {
         BodyKind::Live => apply_drop(app, &drop),
@@ -194,7 +208,7 @@ pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, poin
     }
     // The art the drag started with: an Alt-copy's copies, selected while it previews, are not carried.
     let ids = it.selection.objects.clone();
-    let Some(grab) = app.canvas.grab else { return false }; // PLAN: assumed `canvas.grab: Option<Point>`, the press point, set by the adapter (canvas-w20)
+    let Some(grab) = app.canvas.grab else { return false };
     let art = CarriedArt { document: st.uid, ids: ids.clone(), grab, revision: st.revision };
     let panel = PanelDrag::Art { document: art.document, ids };
     cx.start_drag_also(art, Arc::new(panel), DragPreview::None);
@@ -248,7 +262,7 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
         Payload::Style(key) => {
             let Some(hit) = hit() else { return Ok(()) };
             let top = top_object(app, &hit)?;
-            run(app, "graphicStyle.apply", json!({"name": key.0, "ids": [top], "add": drop.op == DropOperation::Copy}))
+            run(app, "graphicStyle.apply", json!({"name": key, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
         Payload::Panel(PanelDrag::Paint { params, paint, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()

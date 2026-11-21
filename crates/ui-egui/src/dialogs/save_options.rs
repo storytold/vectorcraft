@@ -237,7 +237,7 @@ fn for_rows(f: &Format, mut values: Map<String, Value>) -> Map<String, Value> {
 }
 
 /// A fixed menu of `(id, label)` entries.
-fn menu(entries: &[(&str, &str)]) -> ParamKind {
+fn menu(entries: &[(&str, &'static str)]) -> ParamKind {
     ParamKind::choice(entries.iter().map(|(id, name)| (id.to_string(), Label::from(*name))).collect(), None)
 }
 
@@ -268,7 +268,7 @@ fn params(f: &Format, menus: &Arc<Menus>, legacy: bool) -> Vec<Param> {
 fn option_rows(f: &Format, o: &FormatOption, menus: &Arc<Menus>, legacy: bool) -> Vec<Param> {
     let label = label(o);
     let row = |kind| Param::new(o.name, label.clone(), kind).tooltip(o.description);
-    let fixed = |entries: &[(&str, &str)]| vec![row(menu(entries))];
+    let fixed = |entries: &[(&str, &'static str)]| vec![row(menu(entries))];
     match o.name {
         "aiVersion" => return fixed(&[("pdf", tl!("PDF-compatible")), ("7", tl!("Legacy (version 7)"))]),
         "transparentImages" => return fixed(&[("flatten", tl!("Flatten")), ("omit", tl!("Omit"))]),
@@ -305,7 +305,7 @@ fn option_rows(f: &Format, o: &FormatOption, menus: &Arc<Menus>, legacy: bool) -
     }
     match o.ty {
         "boolean" => {
-            let check = Param::new(o.name, label.trim_end_matches(':'), ParamKind::bool(false)).tooltip(o.description);
+            let check = Param::new(o.name, label.trim_end_matches(':').to_string(), ParamKind::bool(false)).tooltip(o.description);
             // Versions older than compression read only plain files.
             let check = if o.name == "compress" { check.enabled_when_in("version", compressed_versions()) } else { check };
             let mut rows = vec![check];
@@ -577,16 +577,14 @@ pub(crate) fn open(app: &mut VectorcraftApp, action: &str, f: &Format, path: &st
         fields.set("boards", FieldValue::Json(json!(boards)));
     }
     let (fallback, action_name) = (f, action.to_string());
-    let build = move |fields: &mut DialogFields| {
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
         sync(fields, &menus);
         let legacy = legacy_ai(fields);
         let f = fields.text("format").and_then(fileio::format).unwrap_or(fallback);
         let title = heading(fields.bool("__pick").unwrap_or(false), &action_name, legacy, f.id);
         let ok = !legacy || picked_boards(fields, menus.names.len()).iter().any(|b| *b);
-        // PLAN: assumed `ParamDialog::ok_enabled(bool)`, the builder of the `ok_enabled` prop.
         ParamDialog::new(KIND, title, params(f, &menus, legacy)).ok_enabled(ok).values(Bind::bound(fields))
-    };
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, build);
+    });
     match export_host::open(app, Export::Save { action: action.into() }, false, dialog) {
         Some(_) => json!({ "pending": KIND }),
         None => json!({ "pending": Value::Null }),
@@ -646,12 +644,11 @@ pub(crate) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
         }
     }
     let action = action.clone();
-    // PLAN: assumed After is a boxed once-closure over the app answering the save's reply.
-    Ok(Box::new(move |app: &mut VectorcraftApp| match SaveMode::of(&action) {
+    Ok(Some(Box::new(move |app: &mut VectorcraftApp| match SaveMode::of(&action) {
         Some(mode) if own_dialog(f) => crate::io::ask_format_options(app, mode, f, &path),
         Some(mode) => crate::io::save(app, mode, &json!({ "path": path, "format": f.id, "options": options }), false),
         None => Err(format!("`{action}` is no save command")),
-    }))
+    })))
 }
 
 #[cfg(test)]

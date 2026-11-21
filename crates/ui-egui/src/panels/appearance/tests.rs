@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::LangExt as _;
 use crate::tests::panel_harness::Panel;
 
 /// A selected rectangle, for the panel's rows and footer.

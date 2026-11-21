@@ -318,7 +318,10 @@ fn gestures_on_the_panel_run_library_commands() {
         ("a group header onto a group's top half moves the group", group_header_onto_a_groups_top_half_moves_the_group),
         ("an item dragged away from the groups leaves its group", item_dragged_out_of_every_group_leaves_its_group),
         ("art onto a graphic's top half is added before it", art_onto_a_graphics_top_half_is_added_before_it_ungrouped),
-        ("art onto a grouped graphic's bottom half is added after it, in its group", art_onto_a_grouped_graphics_bottom_half_is_added_after_it_in_its_group),
+        (
+            "art onto a grouped graphic's bottom half is added after it, in its group",
+            art_onto_a_grouped_graphics_bottom_half_is_added_after_it_in_its_group,
+        ),
         ("a colour onto a group header is added to that group", a_colour_onto_a_group_header_is_added_to_that_group),
         ("art below the items is added ungrouped", art_below_the_items_is_added_ungrouped_at_the_end),
         ("an empty library takes art anywhere", an_empty_library_takes_art_anywhere),

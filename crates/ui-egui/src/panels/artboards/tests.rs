@@ -1,6 +1,7 @@
 use super::*;
 use craft::behavior::Mixed;
 use craft::ui::contract::ReorderMove;
+use craft::ui::dialog::StackDialog;
 use serde_json::Value;
 use std::sync::Arc;
 use vectorcraft_engine::Session;
@@ -11,32 +12,30 @@ use crate::dialogs::rename_artboards;
 
 // PLAN: assumed constructors for the list's non_exhaustive struct variants (document-panels-w5):
 // `PageListEvent::{rename(row, text), lock(row, locked), new_artboard(duplicate, options)}`.
-// PLAN: assumed host access (wg.S1, hub-w2): `WindowDialogs::with(|host| ..)`, `host.open_dialogs()` items with
-// `key()` and `id()`, `host.is_open::<D>()`, `host.json_fields()`, `host.set_json_field(name, value)`,
-// `host.cancel_by_id(ctx, id)`, `host.confirm_by_id(ctx, id)`.
 
 /// The key of every dialog open on the window's host.
 fn open_keys(app: &VectorcraftApp) -> Vec<String> {
-    app.dialogs().map(|d| d.with(|host| host.open_dialogs().iter().map(|o| o.key().to_string()).collect::<Vec<_>>())).unwrap_or_default()
+    app.dialogs().map(|d| d.with(|host| host.open_dialogs().into_iter().filter_map(|o| o.key).collect())).unwrap_or_default()
 }
 
 /// Whether a dialog of type `D` is open.
-fn is_open<D: 'static>(app: &VectorcraftApp) -> bool {
+fn is_open<D: StackDialog>(app: &VectorcraftApp) -> bool {
     app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<D>()))
 }
 
 /// The fields of the dialog on top.
 fn dialog_fields(app: &VectorcraftApp) -> Value {
-    app.dialogs().map(|d| d.with(|host| host.json_fields())).unwrap_or_default()
+    app.dialogs().and_then(|d| d.with(|host| host.open_dialogs().pop().and_then(|o| o.fields))).unwrap_or_default()
 }
 
 /// Cancel every open dialog.
 fn cancel_open(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let ids = app.dialogs().map(|d| d.with(|host| host.open_dialogs().iter().map(|o| o.id()).collect::<Vec<_>>())).unwrap_or_default();
-    for id in ids {
-        if let Some(d) = app.dialogs() {
-            d.with(|host| host.cancel_by_id(ctx, id));
-        }
+    if let Some(d) = app.dialogs() {
+        d.with(|host| {
+            for o in host.open_dialogs() {
+                host.cancel_by_id(ctx, o.id);
+            }
+        });
     }
 }
 
@@ -44,12 +43,11 @@ fn cancel_open(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn confirm_open(app: &mut VectorcraftApp, ctx: &egui::Context, fields: &[(&str, Value)]) {
     if let Some(d) = app.dialogs() {
         d.with(|host| {
+            let Some(id) = host.open_dialogs().pop().map(|o| o.id) else { return };
             for (name, value) in fields {
-                host.set_json_field(name, value.clone());
+                host.set_json_field(ctx, id, name, value.clone()).unwrap();
             }
-            if let Some(id) = host.open_dialogs().first().map(|o| o.id()) {
-                host.confirm_by_id(ctx, id);
-            }
+            host.confirm_by_id(ctx, id);
         });
     }
     crate::dialogs::host::pump(app, ctx);
@@ -107,7 +105,10 @@ fn list_events_and_menu_rows_reach_their_commands() {
     apply(&mut app, vec![PageListEvent::Reorder(EditEvent::set(Mixed::Same(mv(0)), mv(0), Arc::from("Move"), None))]);
     assert_eq!(undo_steps(&app), steps);
     apply(&mut app, vec![PageListEvent::Reorder(EditEvent::set(Mixed::Same(mv(0)), mv(1), Arc::from("Move Down"), None))]);
-    assert_eq!((board_names(&app), selected(&app, 3), undo_steps(&app)), (vec!["Artboard 2".into(), "Artboard 1".into(), "Artboard 3".into()], 1, steps + 1));
+    assert_eq!(
+        (board_names(&app), selected(&app, 3), undo_steps(&app)),
+        (vec!["Artboard 2".into(), "Artboard 1".into(), "Artboard 3".into()], 1, steps + 1)
+    );
 
     // The lock click locks and unlocks in one undo step each; Delete leaves a locked artboard.
     let mut app = menu_app(3);
@@ -826,22 +827,29 @@ fn menu_app(boards: usize) -> VectorcraftApp {
     app
 }
 
-// PLAN: assumed `crate::menus::Node` (menus-w6) with `label() -> &str` (empty for a separator),
-// `command() -> Option<(&str, &Value)>` and `children() -> &[Node]`; these three readers are the tests' only use of it.
-
-/// A menu node's label.
+/// A menu node's label: an item's or a submenu's, empty for the other rows.
 fn label_of(node: &crate::menus::Node) -> &str {
-    node.label()
+    match node {
+        crate::menus::Node::Item(item) => &item.label,
+        crate::menus::Node::Submenu { label, .. } => label,
+        _ => "",
+    }
 }
 
 /// A menu node's command id and params, when it runs one.
 fn command_of(node: &crate::menus::Node) -> Option<(&str, &Value)> {
-    node.command()
+    match node {
+        crate::menus::Node::Item(item) => Some((&item.command.id, &item.command.params)),
+        _ => None,
+    }
 }
 
 /// A menu node's submenu rows.
 fn children_of(node: &crate::menus::Node) -> &[crate::menus::Node] {
-    node.children()
+    match node {
+        crate::menus::Node::Submenu { children, .. } => children,
+        _ => &[],
+    }
 }
 
 /// The labels of `items`, submenus by their own label, separators left out.

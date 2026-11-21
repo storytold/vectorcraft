@@ -4,6 +4,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::i18n::LangExt as _;
 use crate::panels::swatches::SwatchLibraries;
 use crate::tests::picks::{Picker, answer_dialog, open_dialogs, scripted};
 
@@ -319,7 +320,7 @@ fn each_library_opens_in_a_panel_of_its_own() {
     app.run("window.panel.move", json!({"panel": brights, "anchor": pastels})).unwrap();
     assert!(groups(&app).contains(&vec![pastels.clone(), brights.clone()]), "{:?}", groups(&app));
     app.run("window.panel.dock", json!({"panel": styles})).unwrap();
-    assert!(docking(&app).root.as_ref().is_some_and(|docked| docked.contains(&styles)));
+    assert!(docking(&app).contains(&styles) && !docking(&app).floating.iter().any(|g| g.contains(&styles)), "docked");
     app.run("window.panel.close", json!({"panel": brights})).unwrap();
     assert!(!is_open(&app.ui, &brights) && is_open(&app.ui, &pastels));
     app.run("window.panel", json!({"panel": brights})).unwrap();
@@ -393,7 +394,7 @@ fn persistent_panels_reopen_at_startup_with_their_settings() {
     assert!(is_open(&next.ui, &pastels) && is_open(&next.ui, &brand), "{}", next.ui.status);
     assert!(!is_open(&next.ui, &brights), "a panel that isn't persistent closed with the app");
     let group = docking(&next).floating.iter().find(|g| g.contains(&pastels)).unwrap();
-    assert_eq!(group.rect[..2], [40.0, 90.0], "where it was");
+    assert_eq!(group.rect.min, Pos2::new(40.0, 90.0), "where it was");
     let s = settings(&next.ui, "swatches", "pastels").unwrap();
     assert_eq!((s.view, s.hide_find, s.persistent), (Some(View::LargeList), true, true));
     let (_, id) = parse(&brand).unwrap();
@@ -590,7 +591,7 @@ fn previous_and_next_show_the_neighbouring_library_in_the_same_panel() {
     let next = panel_id("swatches", SWATCH_IDS[5]);
     assert!(!is_open(&app.ui, &first) && is_open(&app.ui, &next), "{}", app.ui.status);
     let group = docking(&app).floating.iter().find(|g| g.contains(&next)).unwrap();
-    assert_eq!((group.panels().count(), group.rect[0], group.rect[1]), (1, 50.0, 60.0), "in its place");
+    assert_eq!((group.panels().count(), group.rect.min), (1, Pos2::new(50.0, 60.0)), "in its place");
     let s = settings(&app.ui, "swatches", SWATCH_IDS[5]).unwrap();
     assert_eq!((s.view, s.persistent), (Some(View::SmallList), true), "the panel keeps its settings");
     assert!(settings(&app.ui, "swatches", "pastels").is_none());

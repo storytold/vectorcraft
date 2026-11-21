@@ -541,14 +541,12 @@ pub fn open(app: &mut VectorcraftApp) {
         NewDocumentDialog::over(Bind::bound(options)).categories(categories.clone()).setup(setup.clone())
     })
     .saved(saved)
-    .recent(recent)
-    .held_ok();
+    .recent(recent);
     if app.session.prefs.recent_new_docs.is_empty() {
         dialog = dialog.tab("Print");
     }
-    open_held(app, dialog, |app, fields| {
-        let doc: VcNewDocument = serde_json::from_value(fields.clone()).map_err(|e| e.to_string())?;
-        let r = app.run("file.new", Value::Object(params(app, &doc)))?;
+    open_held(app, dialog, |app, answer| {
+        let r = app.run("file.new", Value::Object(params(app, &answer.options)))?;
         report_profile(app, &r);
         Ok(())
     });
@@ -566,7 +564,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let presets: Vec<PresetEdit> = events
                 .into_iter()
                 .filter_map(|event| match event {
-                    NamedPresetEvent::Create { name } => {
+                    NamedPresetEvent::Create { name, .. } => {
                         let value = d.saved_presets().items().into_iter().find(|item| item.name == name).map(|item| item.value.clone())?;
                         Some(PresetEdit::Save(name, value))
                     }
@@ -791,7 +789,8 @@ mod tests {
         set(&app, "artboardLayout", json!({"layout": "column", "columns": 2, "spacing": 25, "rightToLeft": true})).unwrap();
         let layout = fields(&app)["artboardLayout"].clone();
         assert_eq!((&layout["layout"], &layout["spacing"], &layout["rightToLeft"]), (&json!("column"), &json!(25.0), &json!(true)));
-        crate::dialogs::host::pump(&mut app, &ctx(&app));
+        let ctx = ctx(&app);
+        crate::dialogs::host::pump(&mut app, &ctx);
         assert!(app.session.documents().is_empty(), "no document was made");
     }
 

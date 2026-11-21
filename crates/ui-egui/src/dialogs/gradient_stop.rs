@@ -617,7 +617,8 @@ mod tests {
         let mut app = app();
         open_popover(&mut app);
         app.run("gradient.selectStop", json!({"index": null})).unwrap();
-        host::pump(&mut app, &ctx(&app));
+        let ctx = ctx(&app);
+        host::pump(&mut app, &ctx);
         assert!(!is_open(&app));
     }
 }

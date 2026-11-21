@@ -463,7 +463,7 @@ fn the_menu_choice_also_applies_to_rotation_and_shear() {
             let mut p = panel(app);
             p.type_into(field, "30");
             let after = {
-                let app = p.app();
+                let mut app = p.app();
                 (app.selection_box().unwrap(), tiles(&app, id))
             };
             assert_eq!(after.0 != before.0, item != 1, "{case}: the object {:?} → {:?}", before.0, after.0);
@@ -620,7 +620,7 @@ fn the_shear_field_takes_angles_from_minus_359_to_359() {
     for (typed, angle, like) in [("120", 120.0, Some(-60.0)), ("359", 359.0, None), ("-359", -359.0, None), ("45", 45.0, None)] {
         let before = shear_app().selection_box().unwrap();
         let p = type_shear(typed);
-        let app = p.app();
+        let mut app = p.app();
         assert_eq!(app.ui.status, "", "{typed}: no error");
         let got = app.selection_box().unwrap();
         assert_ne!(got, before, "{typed}: sheared");
@@ -652,7 +652,7 @@ fn the_shear_field_shows_the_error_for_an_angle_with_no_shear() {
             (app.session.active().unwrap().revision, app.session.doc().unwrap().history.undo.len())
         };
         p.type_into("Shear", typed);
-        let app = p.app();
+        let mut app = p.app();
         assert!(!app.ui.status.is_empty(), "{typed}: an error shows");
         assert_eq!(app.selection_box().unwrap(), before, "{typed}: nothing moved");
         assert_eq!(app.session.active().unwrap().revision, rev, "{typed}: unchanged");
@@ -823,13 +823,13 @@ fn align_to_pixel_grid_state_is_measured_once_per_revision() {
 fn align_new_objects_menu_item_toggles_the_active_document() {
     const ID: &str = "ui.transform.alignNewObjects";
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    assert!(!crate::menus::enabled(&app, ID, &Value::Null), "no document");
+    assert!(!crate::menus::enabled(&app, ID), "no document");
     // The command refuses with no document; the refusal is what is checked next.
     let _ = app.run(ID, json!({}));
     assert!(app.session.active().is_none());
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
     app.run("file.new", json!({"preset": "Web 1920×1080"})).unwrap();
-    assert!(crate::menus::enabled(&app, ID, &Value::Null));
+    assert!(crate::menus::enabled(&app, ID));
     let on = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.setup.align_new_objects_to_pixel_grid;
     assert_eq!((on(&app, 0), on(&app, 1)), (false, true));
     assert_eq!(checked(&app, ID), Some(true), "the Web document");
@@ -850,10 +850,10 @@ fn align_new_objects_menu_item_toggles_the_active_document() {
 fn app_without_transform_panel() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-    if crate::panel_docking::visible(&app.ui, "transform") {
+    if crate::panel_docking::visible(&app, "transform") {
         app.run("window.panel.close", json!({"panel": "transform"})).unwrap();
     }
-    assert!(!crate::panel_docking::visible(&app.ui, "transform"));
+    assert!(!crate::panel_docking::visible(&app, "transform"));
     app.session.take_shape_drawn();
     app
 }
@@ -864,7 +864,7 @@ fn app_without_transform_panel() -> VectorcraftApp {
 #[test]
 fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
     let ctx = egui::Context::default();
-    let visible = |app: &VectorcraftApp| crate::panel_docking::visible(&app.ui, "transform");
+    let visible = |app: &VectorcraftApp| crate::panel_docking::visible(&app, "transform");
     let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
 
     let mut app = app_without_transform_panel();
@@ -930,10 +930,10 @@ fn a_frame_after_a_shape_shows_the_transform_panel() {
     for on in [false, true] {
         let mut app = app_without_transform_panel();
         set_pref(&mut app, "showOnShapeCreation", on);
-        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]); // PLAN: assumed kb.C26 `key_frame(&mut app, &Context, Vec<Event>)`
-        assert!(!crate::panel_docking::visible(&app.ui, "transform"));
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+        assert!(!crate::panel_docking::visible(&app, "transform"));
         app.run("shape.rectangle", rect.clone()).unwrap();
         crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
-        assert_eq!(crate::panel_docking::visible(&app.ui, "transform"), on, "on: {on}");
+        assert_eq!(crate::panel_docking::visible(&app, "transform"), on, "on: {on}");
     }
 }

@@ -367,7 +367,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
     // PLAN: assumed the display's document space is the frame's pixels (Pixel Preview's region
     // size, else the canvas's frame size), as `RasterDisplay::painted` takes a `PixelSize`.
     let (pw, ph) = pixel.map_or((w, h), |[x0, y0, x1, y1]| ((x1 - x0) as u32, (y1 - y0) as u32));
-    let size = PixelSize { width: pw.max(1), height: ph.max(1) };
+    let size = PixelSize::new(pw.max(1), ph.max(1));
     let ctx = ui.ctx().clone();
     let paint = AppPaint::new(|cx: &ContentPainterCx<'_>, at: CanvasView| {
         fill_uncovered(app, &ctx, &cx.painter, &key, &doc, at.rect, &at);
@@ -712,7 +712,8 @@ fn edit_in_frame_shown(
     if at_shown == shown || at_shown == *key || shown.pixel.is_some() != key.pixel.is_some() {
         return;
     }
-    let v = CanvasView { center: Point::new(shown.cx, shown.cy), zoom: shown.zoom, rotation: shown.rot, ..*drawn };
+    let mut v = *drawn;
+    (v.center, v.zoom, v.rotation) = (Point::new(shown.cx, shown.cy), shown.zoom, shown.rot);
     let (w, h, view) = frame_view(at_shown.pixel, (at_shown.w, at_shown.h), &v, at_shown.ppp);
     let opts = frame_options(app, &at_shown, mask_view, smooth_images);
     if let Some(region) = changed_pixels(app, &at_shown, doc, &opts, view, w, h) {

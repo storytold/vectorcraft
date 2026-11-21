@@ -133,7 +133,7 @@ fn a_picked_color_becomes_a_shift_and_cancel_shifts_nothing() {
     crate::dialogs::host::pump(&mut app, &ctx);
     assert_eq!(app.web_export.table.get("shifted").cloned().unwrap_or(json!({})), json!({}));
     // OK: the answer arrives as a Shift event for the selected colour.
-    host(&app).with(|h| h.answer_color(id, PALETTE_COLOR_KEY, craft::theme::Srgba::from_rgb(0, 255, 0)));
+    host(&app).with(|h| h.answer_color(id, PALETTE_COLOR_KEY, craft::theme::Srgba::rgb(0.0, 1.0, 0.0)));
     crate::dialogs::host::pump(&mut app, &ctx);
     assert_eq!(app.web_export.table["shifted"], json!({"#0000ff": "#00ff00"}));
 }

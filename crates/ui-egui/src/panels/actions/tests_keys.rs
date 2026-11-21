@@ -8,7 +8,11 @@ use crate::tests_synthetic::key_frame;
 
 /// What egui reports for Ctrl, Command on macOS, as egui-winit sets it on this platform.
 fn command_key() -> egui::Modifiers {
-    if crate::keymap::platform().is_mac() { egui::Modifiers::MAC_CMD | egui::Modifiers::COMMAND } else { egui::Modifiers::CTRL | egui::Modifiers::COMMAND }
+    if crate::keymap::platform().is_mac() {
+        egui::Modifiers::MAC_CMD | egui::Modifiers::COMMAND
+    } else {
+        egui::Modifiers::CTRL | egui::Modifiers::COMMAND
+    }
 }
 
 /// A press of `key` with `modifiers` held; `repeat` for the presses a key held down repeats.

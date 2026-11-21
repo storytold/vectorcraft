@@ -12,7 +12,7 @@ use std::hash::Hash;
 use craft::automation::actions::Action;
 use craft::host::PickRequest;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
@@ -395,7 +395,11 @@ impl StackDialog for BatchDialog {
                 let mut index = None;
                 set_index(&mut index, field, &value)?;
                 let index = index.ok_or_else(rejected)?;
-                if field == "set" { self.set = index } else { self.action = index }
+                if field == "set" {
+                    self.set = index
+                } else {
+                    self.action = index
+                }
                 Ok(())
             }
             "actionName" => {

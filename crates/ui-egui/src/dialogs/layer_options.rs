@@ -235,13 +235,7 @@ impl LayerOptionsValue {
 /// The value for `n` (a layer or any other row).
 /// `xml_id`: Preferences › Units › Identify Objects By › XML ID.
 fn fields_of(n: &Node, xml_id: bool) -> LayerOptionsValue {
-    let mut v = LayerOptionsValue {
-        name: n.identify_label(xml_id),
-        visible: n.visible,
-        locked: n.locked,
-        layer: n.is_layer(),
-        ..Default::default()
-    };
+    let mut v = LayerOptionsValue { name: n.identify_label(xml_id), visible: n.visible, locked: n.locked, layer: n.is_layer(), ..Default::default() };
     if let NodeKind::Layer { color, template, printable, preview, dim_images, .. } = &n.kind {
         (v.color, v.custom) = chosen_of(*color);
         v.template = *template;
@@ -835,11 +829,7 @@ mod tests {
             }
             let f = fields(&app);
             assert!(f["template"] == json!(true) && f["locked"] == json!(true) && f["dimImages"] == json!(false), "dim first: {dim_first}");
-            assert_eq!(
-                current_params(&app),
-                json!({"template": true, "dimImages": false, "ids": [first.0, second.0]}),
-                "dim first: {dim_first}"
-            );
+            assert_eq!(current_params(&app), json!({"template": true, "dimImages": false, "ids": [first.0, second.0]}), "dim first: {dim_first}");
             ok(&mut app);
             for id in [first, second] {
                 let n = layer(&app, id);

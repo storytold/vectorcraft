@@ -639,8 +639,6 @@ impl ExportForScreensDialog {
         let caption = |at: usize| items.0.get(at).map(|(_, name)| name.clone()).unwrap_or_default();
         let paint = |at: usize, cx: &ContentPainterCx, rect: egui::Rect| {
             if let Some(a) = assets.get(at) {
-                // PLAN: object-panels-w17 gives `paint_thumb` the document's (uid, revision) key and the document in
-                // place of the `DocState` this dialog has no access to.
                 crate::panels::asset_export::paint_thumb(&cx.painter, key, doc, a, rect);
             }
         };
@@ -680,7 +678,6 @@ impl ExportForScreensDialog {
         let presets = self.presets.as_array().map_or(&[][..], Vec::as_slice);
         let mut picked = None;
         let mut menu = |ui: &mut Ui, fields: &mut Map<String, Value>| {
-            // PLAN: export-w14 adds `preset_menu_of(presets, ui, fields)`, `preset_menu` over a list (sheet export-w13, Writer note 3).
             if let Some(pick) = screen_formats::preset_menu_of(presets, ui, fields) {
                 picked = Some(pick);
             }
@@ -829,7 +826,7 @@ fn select_options(ui: &mut Ui, fields: &mut Map<String, Value>, n: usize) {
 }
 
 /// A check box over flag `key`.
-fn check(ui: &mut Ui, fields: &mut Map<String, Value>, key: &str, label: &str) {
+fn check(ui: &mut Ui, fields: &mut Map<String, Value>, key: &str, label: &'static str) {
     let mut on = flag(fields, key);
     Checkbox::new(Bind::bound(&mut on)).label(label).show(ui);
     if on != flag(fields, key) {
@@ -930,7 +927,6 @@ impl StackDialog for ExportForScreensDialog {
         if field == "exportPreset" {
             let mut next = self.fields.clone();
             next.insert(field.into(), value);
-            // PLAN: export-w14 gives `preset_set` the preset list in place of the app (sheet export-w13, Writer note 4).
             screen_formats::preset_set(self.preset_rows(), &mut next)?;
             self.fields = next;
         } else {

@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
 };
 
+use craft::ui::dialog::StackDialog as _;
 use craft::ui::testing::{Fixture, Target};
 use egui::vec2;
 use serde_json::Value;
@@ -49,8 +50,8 @@ impl ThreeD {
 
     /// Sets a field as automation does and lets the preview settle; a refusal fails the test.
     pub(crate) fn set(&mut self, field: &str, value: Value) {
-        // PLAN: assumed `HostedParamDialog::set_json_field(&mut self, &str, Value) -> Result<(), String>`
-        let done = three_d::with_fields(&mut self.app(), |d| d.set_json_field(field, value));
+        let ctx = self.fixture.ctx().clone();
+        let done = three_d::with_fields(&mut self.app(), |d| d.set_json_field(&ctx, field, value));
         if let Some(Err(e)) = done {
             panic!("{field} refused: {e}");
         }
@@ -59,14 +60,12 @@ impl ThreeD {
 
     /// A copy of the dialog's values.
     pub(crate) fn fields(&self) -> craft::ui::patterns::form_dialogs::DialogFields {
-        // PLAN: assumed path of `DialogFields`
         three_d::with_fields(&mut self.app(), |d| d.fields().clone()).unwrap_or_default()
     }
 
     /// The dialog's values as JSON, as automation lists them.
     pub(crate) fn json(&self, key: &str) -> Value {
-        // PLAN: assumed `HostedParamDialog::json_fields(&self) -> Value`
-        three_d::with_fields(&mut self.app(), |d| d.json_fields()).and_then(|v| v.get(key).cloned()).unwrap_or(Value::Null)
+        three_d::with_fields(&mut self.app(), |d| d.json_fields()).flatten().and_then(|v| v.get(key).cloned()).unwrap_or(Value::Null)
     }
 
     /// The control named `name`.
@@ -94,6 +93,6 @@ impl ThreeD {
 
     /// The surfaces Map Art lists, while its page shows.
     pub(crate) fn surfaces(&self) -> Option<std::sync::Arc<Vec<vectorcraft_effects::MapSurface>>> {
-        self.app().three_d_dialog.as_ref()?.data.read().surfaces.clone()
+        three_d::read(&self.app().three_d_dialog.as_ref()?.data).surfaces.clone()
     }
 }

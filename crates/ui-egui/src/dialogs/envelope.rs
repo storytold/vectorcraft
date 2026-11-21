@@ -146,7 +146,10 @@ pub fn open(app: &mut VectorcraftApp, id: &str) -> Result<Value, String> {
             let own = |k: &str, d: f64| if warp { num(k, d) } else { d };
             let style = if warp { info["style"].clone() } else { json!("arc") };
             let horizontal = !warp || info["horizontal"] != false;
-            (WARP, json!({"reset": envelope, "style": style, "horizontal": horizontal, "bend": own("bend", 50.0), "h": own("h", 0.0), "v": own("v", 0.0)}))
+            (
+                WARP,
+                json!({"reset": envelope, "style": style, "horizontal": horizontal, "bend": own("bend", 50.0), "h": own("h", 0.0), "v": own("v", 0.0)}),
+            )
         }
         MAKE_MESH | RESET_MESH => {
             let mesh = info["type"] == "mesh";
@@ -220,7 +223,8 @@ fn command(kind: &str, f: &Map<String, Value>) -> (&'static str, Value, &'static
     match kind {
         WARP => {
             let style = f.get("style").and_then(Value::as_str).unwrap_or("arc");
-            let p = json!({"style": style, "horizontal": flag("horizontal", true), "bend": num("bend", 50.0), "h": num("h", 0.0), "v": num("v", 0.0)});
+            let p =
+                json!({"style": style, "horizontal": flag("horizontal", true), "bend": num("bend", 50.0), "h": num("h", 0.0), "v": num("v", 0.0)});
             if reset { (RESET_WARP, p, "Reset with Warp") } else { (MAKE_WARP, p, "Make Envelope") }
         }
         MESH => {
@@ -248,9 +252,9 @@ fn command(kind: &str, f: &Map<String, Value>) -> (&'static str, Value, &'static
 /// canvas shows them. The dialog's Cancel rolls the preview back through the held record's cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.effect_dialogs.envelope.take() else { return };
-    let shown = app.dialogs().and_then(|dialogs| {
-        dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone())))
-    });
+    let shown = app
+        .dialogs()
+        .and_then(|dialogs| dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), d.fields().clone()))));
     if let Some((on, fields)) = shown {
         let (cmd, p, label) = command(open.kind, &json_of(&params(open.kind, &fields), &fields));
         // PLAN: the sheet's `LivePreview::run` has no undo label; wg.A20's contract row passes one first.

@@ -2,6 +2,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind, TextKind};
 use vectorcraft_engine::Session;
 
+use crate::addons::dialogs::tests::{cancel, confirm, ctx, dialog_id};
 use crate::{VectorcraftApp, menus};
 
 /// One item of an add-on submenu: how its dialog opens, what is set in it and what OK leaves behind.
@@ -22,6 +23,7 @@ struct Row {
 
 fn new_app(width: u32, height: u32) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": width, "height": height})).unwrap();
     app
 }
@@ -64,7 +66,6 @@ fn open_item(app: &mut VectorcraftApp, menu: &str, label: &str) {
     menus::invoke(app, &cmd, p);
 }
 
-// PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog { id, key, fields }` (host.rs:383)
 /// The open dialog's command key and its values as automation lists them.
 fn open_dialog(app: &VectorcraftApp) -> (Option<String>, Value) {
     app.dialogs()
@@ -73,21 +74,21 @@ fn open_dialog(app: &VectorcraftApp) -> (Option<String>, Value) {
         .expect("a dialog opens")
 }
 
+/// Sets a value of the open dialog as automation does.
 fn set_field(app: &VectorcraftApp, key: &str, value: Value) -> Result<(), String> {
-    let ctx = app.ui_ctx.clone();
-    app.dialogs().expect("window host").with(|host| {
-        let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-        host.set_json_field(&ctx, id, key, value)
-    })
+    let (ctx, id) = (ctx(app), dialog_id(app));
+    app.dialogs().expect("window host").with(|host| host.set_json_field(&ctx, id, key, value))
 }
 
 /// Answers the open dialog with OK or Cancel, then runs the frame's pump.
 fn answer(app: &mut VectorcraftApp, ok: bool) {
-    let ctx = app.ui_ctx.clone();
-    app.dialogs().expect("window host").with(|host| {
-        let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-        if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
-    });
+    let id = dialog_id(app);
+    if ok {
+        confirm(app, id);
+    } else {
+        cancel(app, id);
+    }
+    let ctx = ctx(app);
     crate::dialogs::host::pump(app, &ctx);
 }
 

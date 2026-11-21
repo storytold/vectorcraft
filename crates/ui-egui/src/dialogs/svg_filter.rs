@@ -19,7 +19,7 @@
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::Button;
-use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::dialog::dialog_id;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, RowInk};
@@ -33,7 +33,6 @@ use vectorcraft_engine::doc::SvgFilter;
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
 use crate::menus::Node;
-// PLAN: assumed the framework paths above (`craft::ui::contract` re-exporting the behavior types, `craft::ui::patterns::form_dialogs`) and `crate::menus::Node`.
 
 /// The dialog kind of Apply SVG Filter.
 pub const KIND: &str = "svgFilter";
@@ -148,7 +147,7 @@ impl DisplayOrder<String> for Rows {
 impl ItemSource<String> for Rows {}
 
 /// The button `label`, enabled or not; true when pressed.
-fn pressed(ui: &mut egui::Ui, label: String, enabled: bool) -> bool {
+fn pressed(ui: &mut egui::Ui, label: &'static str, enabled: bool) -> bool {
     Button::new(label).enabled(enabled).show(ui).clicks > 0
 }
 
@@ -212,7 +211,7 @@ fn list_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::p
     if let Some(a) = action {
         fields.set(ACTION, a);
     }
-    shown.response
+    shown.output
 }
 
 /// The code box with Save and Cancel, shown while a filter's code is open.
@@ -241,7 +240,7 @@ fn code_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut craft::ui::p
     if let Some(a) = action {
         fields.set(ACTION, a);
     }
-    shown.response
+    shown.output
 }
 
 /// `ui.svgFilterDialog {index?, item?}`: open Apply SVG Filter for the active document; with
@@ -285,8 +284,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     fields[LISTING] = listing(app);
     let pairs = fields.as_object().into_iter().flatten().map(|(k, v)| (k.clone(), field_value(v.clone())));
-    let ctx = app.ctx().clone();
-    // PLAN: assumed `VectorcraftApp::ctx(&self) -> &egui::Context`.
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, KIND, DialogFields::from_pairs(pairs), build);
     crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| confirm(app, &result.fields)).ok_or("no window")?;
     Ok(Value::Null)
@@ -301,7 +299,7 @@ fn build(fields: &mut DialogFields) -> ParamDialog<'_> {
         Param::custom(LIST, Label::Empty, list_row).companions([SELECTED, EDITING, MISSING, ACTION, LISTING]),
         Param::custom(CODE, Label::Empty, code_row),
     ];
-    ParamDialog::new(KIND, heading(), params).values(Bind::bound(fields)).ok_enabled(ok).ok_reason(tl!("Select an SVG filter"))
+    ParamDialog::new(KIND, heading(), params).values(Bind::bound(fields)).ok_enabled(ok).ok_reason(Label::from(tl!("Select an SVG filter")))
 }
 
 /// OK: the selected filter to the selection, or in the applied effect's place. A default the
@@ -319,35 +317,35 @@ fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result<(), String
     app.run("svgFilter.apply", p).map(|_| ())
 }
 
-/// The open dialog, when it is.
-fn dialog(app: &mut VectorcraftApp) -> Option<&mut HostedParamDialog> {
-    app.dialogs().get_mut_by_id::<HostedParamDialog>(dialog_id(KIND))
-    // PLAN: assumed `VectorcraftApp::dialogs(&mut self) -> &mut DialogHost`.
+/// Runs `f` on the open dialog; `None` when it is not open.
+fn with_dialog<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedParamDialog) -> R) -> Option<R> {
+    app.dialogs()?.with(|h| h.get_mut_by_id::<HostedParamDialog>(dialog_id(KIND)).map(f))
 }
 
 /// Sets `fields` on the open dialog.
 fn set(app: &mut VectorcraftApp, fields: &[(&str, Value)]) {
-    if let Some(d) = dialog(app) {
+    with_dialog(app, |d| {
         for (k, v) in fields {
             d.set_field(*k, field_value(v.clone()));
         }
-    }
+    });
 }
 
 /// Each frame: pushes the listed filters into the dialog (the build closure has no app) and runs the
 /// button pressed, once.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let listing = listing(app);
-    let Some(d) = dialog(app) else { return };
-    if json_field(d.fields(), LISTING).as_ref() != Some(&listing) {
-        d.set_field(LISTING, FieldValue::Json(listing));
-    }
-    let action = text(d.fields(), ACTION);
-    if action.is_empty() {
-        return;
-    }
-    let (selected, editing, code) = (text(d.fields(), SELECTED), text(d.fields(), EDITING), text(d.fields(), CODE));
-    d.set_field(ACTION, FieldValue::Text(String::new()));
+    let taken = with_dialog(app, |d| {
+        if json_field(d.fields(), LISTING).as_ref() != Some(&listing) {
+            d.set_field(LISTING, FieldValue::Json(listing));
+        }
+        let action = text(d.fields(), ACTION);
+        if !action.is_empty() {
+            d.set_field(ACTION, FieldValue::Text(String::new()));
+        }
+        (action, text(d.fields(), SELECTED), text(d.fields(), EDITING), text(d.fields(), CODE))
+    });
+    let Some((action, selected, editing, code)) = taken.filter(|(action, ..)| !action.is_empty()) else { return };
     let result: Result<(), String> = match action.as_str() {
         "new" => Ok(set(app, &[(EDITING, json!("new")), (CODE, json!(""))])),
         "edit" => {
@@ -385,9 +383,8 @@ pub(crate) fn own_names(held: &[SvgFilter]) -> Vec<String> {
 /// Effect › SVG Filters: Apply SVG Filter…, Import SVG Filter…, the default filters and then the
 /// document's other filters (`names`, from [`own_names`]), each applying itself to the selection.
 pub(crate) fn menu_items(names: &[String]) -> Vec<Node> {
-    use crate::menus::cp;
-    // PLAN: assumed `menus::cp(label: impl Into<String>, id: &'static str, params: Value) -> Node` and `Node::Separator`.
-    let apply = |n: &str| cp(n, "svgFilter.apply", json!({ "name": n }));
+    use crate::menus::{cp, named};
+    let apply = |n: &str| named(n, "svgFilter.apply", json!({ "name": n }));
     let mut v = vec![cp("Apply SVG Filter…", "ui.svgFilterDialog", Value::Null), cp("Import SVG Filter…", "ui.importSvgFilter", Value::Null)];
     v.push(Node::Separator);
     v.extend(DEFAULT_FILTERS.iter().map(|d| apply(d.name)));
@@ -438,13 +435,13 @@ fn ask_import(app: &mut VectorcraftApp) -> Value {
 mod tests {
     use super::*;
     use crate::tests::picks::{answer_dialog, open_dialogs, poll, scripted};
-    // PLAN: assumed fl.A20's helpers live in `crate::tests::picks`.
     use vectorcraft_engine::Session;
 
     const SHIFT: &str = r#"<filter id="Shift"><feOffset dx="3"/></filter>"#;
 
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app
     }
@@ -584,7 +581,7 @@ mod tests {
     fn import_adds_the_picked_files_filters() {
         let mut app = app();
         let picker = scripted(&mut app);
-        let ctx = egui::Context::default();
+        let ctx = app.ui_ctx.clone().unwrap();
         let path = std::env::temp_dir().join(format!("vc-ui-svgfilters-{}.svg", std::process::id()));
         std::fs::write(&path, format!("<svg xmlns=\"http://www.w3.org/2000/svg\"><defs>{SHIFT}</defs></svg>")).unwrap();
         open(&mut app, &json!({})).unwrap();

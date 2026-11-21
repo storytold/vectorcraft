@@ -115,7 +115,7 @@ pub(crate) fn artboard_size_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize,
 }
 
 /// A shared picker choice, applied separately to each artboard's orientation.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ArtboardSizeChoice {
     Preset(f64, f64),
     Orientation(bool),
@@ -171,7 +171,7 @@ pub(crate) fn artboard_size_controls(
     let mut fit = None;
     Field::new(tl!("Preset:")).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
-            let button = Button::new(current.as_str()).trailing_icon(DisclosureGlyph::menu_button()).show(ui);
+            let button = Button::new(current.clone()).trailing_icon(DisclosureGlyph::menu_button()).show(ui);
             Menu::new(tl!("Preset")).opened_by(&button.response, Trigger::Click).show(ui, |ui, _| {
                 if let Some(enabled) = fits {
                     for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -182,7 +182,7 @@ pub(crate) fn artboard_size_controls(
                     craft::ui::display::Divider::horizontal().show(ui);
                 }
                 for (cat, list) in &presets {
-                    Menu::submenu_row(ui, tl!(cat), |ui, _| {
+                    Menu::submenu_row(ui, tl!(cat).to_string(), |ui, _| {
                         for s in list {
                             if MenuItem::new(crate::dialogs::preset_name(&s.name)).radio_mark(same(s)).show(ui).ran {
                                 preset = Some((s.width, s.height));

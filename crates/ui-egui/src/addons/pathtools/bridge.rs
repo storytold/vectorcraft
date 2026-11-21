@@ -73,64 +73,36 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
     use serde_json::{Value, json};
     use vectorcraft_engine::Session;
 
+    use crate::addons::dialogs::tests::{confirm, dialog_id, frame, read, set};
     use crate::{VectorcraftApp, menus};
 
     fn circle(app: &mut VectorcraftApp, x: f64, r: f64) -> u64 {
         app.run("shape.ellipse", json!({"x": x - r, "y": 100.0 - r, "width": 2.0 * r, "height": 2.0 * r})).unwrap()["id"].as_u64().unwrap()
     }
 
-    /// Reads the open dialog's values.
-    fn read<R>(app: &VectorcraftApp, f: impl FnOnce(&DialogFields) -> R) -> R {
-        app.dialogs().expect("window host").with(|host| f(host.get::<HostedParamDialog>().expect("the dialog is open").fields()))
-    }
-
-    // PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog.id` (host.rs:385)
-    fn set(app: &VectorcraftApp, key: &str, value: Value) {
-        let ctx = app.ui_ctx.clone();
-        app.dialogs()
-            .expect("window host")
-            .with(|host| {
-                let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-                host.set_json_field(&ctx, id, key, value)
-            })
-            .unwrap();
-    }
-
-    fn pump(app: &mut VectorcraftApp) {
-        let ctx = app.ui_ctx.clone();
-        crate::dialogs::host::pump(app, &ctx);
-    }
-
-    fn confirm(app: &mut VectorcraftApp) {
-        let ctx = app.ui_ctx.clone();
-        app.dialogs().expect("window host").with(|host| {
-            let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
-            host.confirm_by_id(&ctx, id)
-        });
-        pump(app);
-    }
-
     #[test]
     fn constant_gap_shows_the_gap_and_bridges_many_circles_within_reach() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         // Three circles 4 apart in a row and one far off.
         let ids: Vec<u64> = [100.0, 124.0, 148.0, 300.0].iter().map(|&x| circle(&mut app, x, 10.0)).collect();
         app.run("select.set", json!({ "ids": ids })).unwrap();
         menus::invoke(&mut app, super::COMMAND, Value::Null);
-        set(&app, "constantGap", json!(true));
+        let dialog = dialog_id(&app);
+        set(&app, dialog, "constantGap", json!(true));
         // A preview leaves two objects selected (one shape and the far circle); Reach stays available for the
         // four circles the command still bridges.
-        pump(&mut app);
+        frame(&mut app);
         assert_eq!(app.session.doc().unwrap().selection.objects.len(), 2, "previewed");
-        let (many, params) = read(&app, |fields| (fields.bool("many"), (super::SPEC.params)(fields)));
+        let (many, params) = read(&app, dialog, |fields| (fields.bool("many"), (super::SPEC.params)(fields)));
         assert_eq!(many, Some(true), "Reach available for four circles");
         assert_eq!(params, json!({"gap": 4.0, "reach": 10.0, "keepOriginals": false}), "the gap, not the radius");
-        confirm(&mut app);
+        assert!(confirm(&app, dialog), "OK is on");
+        frame(&mut app);
         let top: Vec<u64> = app.session.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect();
         assert_eq!(top, [ids[2], ids[3]], "one shape in the topmost joined circle's place, and the far circle");
     }

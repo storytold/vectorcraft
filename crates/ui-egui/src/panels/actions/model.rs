@@ -170,9 +170,36 @@ fn set_with_recorded(app: &VectorcraftApp, set: &str, actions: &[Action], steps:
 /// action has, the actions and the length of the file. When the recording in progress records into
 /// the set, its steps count too.
 pub(super) fn set_sizes(app: &VectorcraftApp, set: &str, actions: &[Action]) -> [usize; 3] {
-    let recorded = recording_start(app).and_then(|start| set_with_recorded(app, set, actions, recorded_steps(app, start)));
-    let actions = recorded.as_ref().map_or(actions, |(with, _)| with.as_slice());
+    let recorded = with_recording(app, set, actions);
+    let actions = recorded.as_deref().unwrap_or(actions);
     [actions.iter().map(|a| a.steps.len()).max().unwrap_or(0), actions.len(), files::write_set(set, actions).len()]
+}
+
+/// `actions`, the members of `set`, with the steps recorded so far when the recording in progress
+/// records into the set; None when it records into another set, or nothing records.
+fn with_recording(app: &VectorcraftApp, set: &str, actions: &[Action]) -> Option<Vec<Action>> {
+    let start = recording_start(app)?;
+    set_with_recorded(app, set, actions, recorded_steps(app, start)).map(|(with, _)| with)
+}
+
+/// Err when naming the set `set` (None: a new, empty set) `name` would give it an action set file
+/// larger than Load Actions… reads, counting the steps the recording in progress adds to it. A
+/// name that leaves the file as large as it is, or makes it smaller, is not refused.
+pub(crate) fn name_keeps_set_loadable(app: &VectorcraftApp, set: Option<&str>, name: &str) -> Result<(), String> {
+    let (actions, was) = match set {
+        Some(set) => {
+            let stored = stored_actions(&app.ui.actions, set);
+            let actions = with_recording(app, set, &stored).unwrap_or(stored);
+            let was = files::write_set(set, &actions).len();
+            (actions, was)
+        }
+        None => (Vec::new(), 0),
+    };
+    let size = files::write_set(name, &actions).len();
+    if size > files::MAX_SET_FILE && size > was {
+        return Err("the action set would be larger than 8 MiB".into());
+    }
+    Ok(())
 }
 
 /// Err when `after`, in place of `before` as the members of `set`, would give an action set file
@@ -330,14 +357,8 @@ pub mod prefs {
         let steps = value.get("steps").and_then(Value::as_array).map(|a| a.iter().filter_map(step_of).collect()).unwrap_or_default();
         let mut action = Action::new(value.get("name")?.as_str()?, steps);
         action.set = Some(set.to_string());
-        action.disabled = value
-            .get("excluded_steps")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_u64)
-            .map(|n| n as usize)
-            .collect();
+        action.disabled =
+            value.get("excluded_steps").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(|n| n as usize).collect();
         action.color = value.get("color").and_then(Value::as_str).map_or(ActionColor::None, ActionColor::from_name);
         set_function_key(&mut action, value.get("key").and_then(function_key_from));
         set_automatic_align_to(&mut action, value.get("automaticAlignTo").and_then(Value::as_bool).unwrap_or(false));

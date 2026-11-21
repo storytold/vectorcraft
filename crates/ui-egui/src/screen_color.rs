@@ -124,8 +124,7 @@ fn settle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         }
     }
     if let Some(message) = app.screen_pick.take_status(&ScreenPickerWords::default()) {
-        // PLAN: assumed `Label: Display`.
-        app.status(message.text.to_string());
+        app.status(message.text.as_str().to_owned());
     }
 }
 

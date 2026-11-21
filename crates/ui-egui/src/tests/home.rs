@@ -192,10 +192,10 @@ fn home_has_a_learn_section_that_opens_the_learn_panel() {
             assert!(has(tutorial.title), "{} is shown", tutorial.title);
         }
     }
-    assert!(!learn::visible(&app.ui), "the panel is not shown before a choice");
+    assert!(!learn::visible(&app), "the panel is not shown before a choice");
     let at = text_at(&mut app, &ctx, 0.5, "Draw paths with the Pen");
     click_home_at(&mut app, &ctx, 1.0, at, 1);
-    assert!(learn::visible(&app.ui), "a tutorial shows the Learn panel");
+    assert!(learn::visible(&app), "a tutorial shows the Learn panel");
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("pen-paths") });
     assert!(app.session.documents().is_empty(), "no document is opened");
     assert!(crate::menus::home_showing(&app), "Home stays");
@@ -213,7 +213,7 @@ fn home_learn_section_over_open_documents_leaves_them_as_they_are() {
     let ctx = crate::testing::ui_context();
     let at = text_at(&mut app, &ctx, 0.0, "Add a gradient");
     click_home_at(&mut app, &ctx, 0.5, at, 1);
-    assert!(learn::visible(&app.ui));
+    assert!(learn::visible(&app));
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: Some("gradient") });
     assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)), "the documents stay as they are");
     assert!(crate::menus::home_showing(&app), "Home stays over the documents");

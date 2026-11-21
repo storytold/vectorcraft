@@ -133,9 +133,8 @@ impl LibraryKind for SwatchLibraries {
     }
     /// The browser's Find matches the shown name or the stored one (`search_name`).
     fn row(id: &str, w: &Swatch, label: &str) -> PresetRow<LibraryKey> {
-        // PLAN: assumed `PresetRow::item(key, label)`; the other fields are public.
         let key = LibraryKey { panel: library_panel::panel_id(Self::KIND, id), name: w.name.clone(), folder: false };
-        let mut row = PresetRow::item(key, label);
+        let mut row = PresetRow::item(key, label, 0);
         row.trailing = kind_icons(&w.paint, w.global, w.spot);
         row.tooltip = Some(format!("{label} ({})", describe(&w.paint, w.global, w.spot)));
         row.search_name = Some(w.name.clone());
@@ -144,7 +143,7 @@ impl LibraryKind for SwatchLibraries {
     /// A pattern library's pattern, or a loaded library's, drawn from the library.
     fn thumb(app: &VectorcraftApp, cx: &ContentPainterCx<'_>, rect: Rect, w: &Swatch) {
         let src = swatchlib::pattern_source(&app.session, w);
-        paint_swatch(&cx.painter, rect, &w.paint, (false, false), (w.global, w.spot), src.as_deref());
+        paint_swatch(cx, rect, &w.paint, false, (w.global, w.spot), src.as_deref());
     }
     fn drags() -> bool {
         true
@@ -208,10 +207,9 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 /// Other Library…: load the library (or document) at `path`, else one picked in an open dialog
 /// (on the web the picked file arrives later and opens through [`crate::io::open_bytes`]).
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
-    match library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SwatchLibraries::KIND))? {
-        Some(path) => load_library(app, json!({ "path": path })),
-        None => Ok(Value::Null),
-    }
+    library_panel::pick_library_file(app, path, library_panel::library_pick_filters(SwatchLibraries::KIND), |app, path| {
+        load_library(app, json!({ "path": path }))
+    })
 }
 
 /// The id prefix of the Window → Swatch Libraries → User Defined slots.

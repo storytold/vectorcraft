@@ -11,6 +11,7 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::file_access::{Access, AutomationRoots};
 
 use super::*;
+use crate::i18n::LangExt as _;
 use crate::tests_background::{Files, Gate, written};
 use crate::{VectorcraftApp, background};
 

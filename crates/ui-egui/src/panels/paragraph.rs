@@ -12,7 +12,7 @@ use craft::keymap::CommandRef;
 use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, TextAlign};
 use craft::ui::buttons::{IconButton, Link, PopupMark, ToggleButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, MemoProps, Trigger};
+use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::form::Field;
 use craft::ui::menu::{Menu, PanelRow};
 use craft::ui::pickers::Select;
@@ -421,7 +421,7 @@ const CONTROL_BAR_ALIGNMENTS: usize = 3;
 pub(crate) fn alignment_toggles(app: &mut VectorcraftApp, ui: &mut Ui, count: usize) {
     let shown = shown_justify(app);
     for (j, icon, tip, id) in ALIGNMENTS.into_iter().take(count) {
-        let pressed = ToggleButton::new(tl!(tip), shown == Some(j)).icon(IconId::new(icon)).icon_only().id_salt(id).show(ui);
+        let pressed = ToggleButton::new(tl!(tip), Bind::given(shown == Some(j))).icon(IconId::new(icon)).icon_only().id_salt(id).show(ui);
         if pressed.value().is_some()
             && let Err(e) = align(app, id)
         {
@@ -441,8 +441,9 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     // PLAN: the members' `Row::fit_rank` (ch.K30: toggles out before the link) belongs to chrome-w16's row; `horizontal` stands in until it lands.
     ui.horizontal(|ui| {
         let link = Link::new(tl!("Paragraph:")).tooltip(tl!("Paragraph options")).show(ui);
-        // PLAN: assumed `opened_by` toggles the popover itself while `open` is a given value.
-        Popover::new(tl!("Paragraph"), Bind::given(false)).opened_by(&link.response).show(ui, |ui, _| show(app, ui));
+        Popover::new(tl!("Paragraph"), Bind::kept())
+            .overlay(|overlay| overlay.opened_by(&link.response, Trigger::Click))
+            .show(ui, |ui, _| show(app, ui));
         alignment_toggles(app, ui, CONTROL_BAR_ALIGNMENTS);
     });
     true
@@ -643,7 +644,7 @@ fn number_entries(shown: Option<Option<NumberStyle>>) -> Vec<Entry<u32>> {
 /// A list toggle and the menu button beside it: the toggle makes the paragraphs a list of `kind`, the menu lists `entries`.
 fn list_control(ui: &mut Ui, kind: ListKind, pressed: bool, entries: &[Entry<u32>]) -> Option<ListEvent> {
     let name = kind.name();
-    let toggle = ToggleButton::new(name, pressed).icon(IconId::new(kind.icon())).icon_only().id_salt(kind.icon()).show(ui);
+    let toggle = ToggleButton::new(name, Bind::given(pressed)).icon(IconId::new(kind.icon())).icon_only().id_salt(kind.icon()).show(ui);
     let arrow = IconButton::new(IconId::new("chevron-down"))
         .label(name)
         .popup(PopupKind::Menu)

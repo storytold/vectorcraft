@@ -449,7 +449,14 @@ fn ok_sets_both_halves_of_a_discontinuous_point_in_one_step() {
     assert_eq!(creation_history(&app), history);
     app.run("ui.widthPointEdit", json!({"id": id, "index": 2})).unwrap();
     // The incoming set is linked; unlink it so each side takes its own width.
-    for (key, value) in [("linked", json!(false)), ("outLinked", json!(false)), ("side1", json!(6)), ("side2", json!(2)), ("outSide1", json!(1)), ("outSide2", json!(3))] {
+    for (key, value) in [
+        ("linked", json!(false)),
+        ("outLinked", json!(false)),
+        ("side1", json!(6)),
+        ("side2", json!(2)),
+        ("outSide1", json!(1)),
+        ("outSide2", json!(3)),
+    ] {
         set(&app, key, value);
     }
     ok(&mut app).unwrap();

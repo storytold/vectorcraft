@@ -47,12 +47,12 @@ impl Drop {
 pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
     let name = name_of(key);
     let (paint, params) = match key {
-        SwatchKey::Group(_) => (Paint::None, Value::Null),
         SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
         SwatchKey::Swatch(_) => match d.swatch(name) {
             Some(w) => (w.paint.clone(), swatch_params(d, name)),
             None => (Paint::None, Value::Null),
         },
+        _ => (Paint::None, Value::Null),
     };
     let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)) };
     PanelDrag::Paint { paint, params, rows: Some(rows), library: None }

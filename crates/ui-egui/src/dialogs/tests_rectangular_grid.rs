@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use craft::ui::dialog::{HeldOk, dialog_id};
+use craft::ui::dialog::{HeldOk, OpenDialog, dialog_id};
+use craft::ui::shell::WindowDialogs;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId, NodeKind};
 use vectorcraft_engine::{Session, ViewInfo};
@@ -16,32 +17,41 @@ use crate::VectorcraftApp;
 
 const KIND: &str = "rectangularGrid";
 
-// PLAN: assumed `WindowDialogs` (from `app.dialogs()`) methods: `is_open_by_id(DialogId) -> bool`,
-// `json_fields_by_id(DialogId) -> Option<serde_json::Map<String, Value>>`,
-// `set_json_field_by_id(DialogId, &str, Value) -> Result<(), String>`, `confirm_by_id(DialogId)`,
-// `cancel_by_id(DialogId)`, `held_state(DialogId) -> Option<HeldOk>`; and `super::host::pump(&mut VectorcraftApp)`.
+/// The window's dialog host and its context; a test app gets its window before it opens a dialog.
+fn host(app: &VectorcraftApp) -> (WindowDialogs, egui::Context) {
+    let ctx = app.ui_ctx.clone().expect("the app has a window");
+    (super::host::window_dialogs(&ctx), ctx)
+}
+
+/// The open dialog of `kind`, as the host lists it.
+fn open_dialog(app: &VectorcraftApp, kind: &str) -> Option<OpenDialog> {
+    let id = dialog_id(kind);
+    app.dialogs()?.with(|h| h.open_dialogs().into_iter().find(|d| d.id == id))
+}
 
 /// Whether the dialog of `kind` is open.
-pub(super) fn is_open(app: &mut VectorcraftApp, kind: &str) -> bool {
-    app.dialogs().is_open_by_id(dialog_id(kind))
+pub(super) fn is_open(app: &VectorcraftApp, kind: &str) -> bool {
+    open_dialog(app, kind).is_some()
 }
 
 /// The value of `key` in the open dialog of `kind` (null when it has none).
-pub(super) fn field_of(app: &mut VectorcraftApp, kind: &str, key: &str) -> Value {
-    app.dialogs().json_fields_by_id(dialog_id(kind)).and_then(|fields| fields.get(key).cloned()).unwrap_or_default()
+pub(super) fn field_of(app: &VectorcraftApp, kind: &str, key: &str) -> Value {
+    open_dialog(app, kind).and_then(|d| d.fields?.get(key).cloned()).unwrap_or_default()
 }
 
 /// Set `key` of the open dialog of `kind`, as automation does; a row refuses a value it cannot hold.
 pub(super) fn set_of(app: &mut VectorcraftApp, kind: &str, key: &str, value: Value) -> Result<(), String> {
-    app.dialogs().set_json_field_by_id(dialog_id(kind), key, value)
+    let (host, ctx) = host(app);
+    host.with(|h| h.set_json_field(&ctx, dialog_id(kind), key, value))
 }
 
 /// Press OK on the dialog of `kind` and let the app answer it; the reason when it refuses.
 pub(super) fn try_confirm(app: &mut VectorcraftApp, kind: &str) -> Result<(), String> {
     let id = dialog_id(kind);
-    app.dialogs().confirm_by_id(id);
-    super::host::pump(app);
-    match app.dialogs().held_state(id) {
+    let (host, ctx) = host(app);
+    host.with(|h| h.confirm_by_id(&ctx, id));
+    super::host::pump(app, &ctx);
+    match host.with(|h| h.held_state(id)) {
         Some(HeldOk::Refused(reason)) => Err(reason.as_str().to_owned()),
         _ => Ok(()),
     }
@@ -49,12 +59,14 @@ pub(super) fn try_confirm(app: &mut VectorcraftApp, kind: &str) -> Result<(), St
 
 /// Press Cancel on the dialog of `kind`.
 fn cancel_of(app: &mut VectorcraftApp, kind: &str) {
-    app.dialogs().cancel_by_id(dialog_id(kind));
-    super::host::pump(app);
+    let (host, ctx) = host(app);
+    host.with(|h| h.cancel_by_id(&ctx, dialog_id(kind)));
+    super::host::pump(app, &ctx);
 }
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
     app.select_tool(KIND);
     // Pointer-up persists tool settings even for a click. Seed them so opening/cancelling can
@@ -347,13 +359,27 @@ fn a_grid_dialog_sends_its_skews_switch_and_fill() {
             (
                 json!({"rowSkew": 100, "frame": false}),
                 [("rowSkew", json!(100.0)), ("columnSkew", json!(0.0)), ("frame", json!(false)), ("fill", json!(false))],
-                [("width", json!(100)), ("height", json!(100)), ("rows", json!(3)), ("columns", json!(1)), ("columnSkew", json!(-250)), ("fill", json!(true))],
+                [
+                    ("width", json!(100)),
+                    ("height", json!(100)),
+                    ("rows", json!(3)),
+                    ("columns", json!(1)),
+                    ("columnSkew", json!(-250)),
+                    ("fill", json!(true)),
+                ],
             )
         } else {
             (
                 json!({"concentric": 3, "radial": 4, "radialSkew": 500}),
                 [("concentricSkew", json!(0.0)), ("radialSkew", json!(500.0)), ("compound", json!(false)), ("fill", json!(false))],
-                [("concentricSkew", json!(100)), ("compound", json!(true)), ("fill", json!(true)), ("width", json!(100)), ("height", json!(100)), ("reference", json!(0))],
+                [
+                    ("concentricSkew", json!(100)),
+                    ("compound", json!(true)),
+                    ("fill", json!(true)),
+                    ("width", json!(100)),
+                    ("height", json!(100)),
+                    ("reference", json!(0)),
+                ],
             )
         };
         app.run("tool.setOption", json!({"tool": kind, "values": options})).unwrap();
@@ -399,11 +425,19 @@ fn a_grid_dialog_sends_its_skews_switch_and_fill() {
                 assert!((b.x - a.x - 290.0).abs() < 1e-9 && (b.y - a.y - 280.0).abs() < 1e-9, "{a:?} {b:?}");
             }
             assert!(
-                doc.node(dragged).unwrap().children().unwrap().iter().all(|n| n.appearance.fill().is_some_and(|f| f.paint != vectorcraft_color::Paint::None))
+                doc.node(dragged)
+                    .unwrap()
+                    .children()
+                    .unwrap()
+                    .iter()
+                    .all(|n| n.appearance.fill().is_some_and(|f| f.paint != vectorcraft_color::Paint::None))
             );
         } else {
             // Two rings under four radial dividers.
-            assert_eq!(children.iter().map(|n| matches!(n.kind, NodeKind::Compound { .. })).collect::<Vec<_>>(), [true, true, false, false, false, false]);
+            assert_eq!(
+                children.iter().map(|n| matches!(n.kind, NodeKind::Compound { .. })).collect::<Vec<_>>(),
+                [true, true, false, false, false, false]
+            );
             let widths: Vec<f64> = children[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap().width()).collect();
             assert!((widths[0] - 100.0).abs() < 1e-6 && (widths[1] - 93.75).abs() < 1e-6, "outward: {widths:?}");
             let tips: Vec<f64> = children[3..].iter().map(|n| n.path_data().unwrap().subpaths[0].anchors[1].p.x).collect();

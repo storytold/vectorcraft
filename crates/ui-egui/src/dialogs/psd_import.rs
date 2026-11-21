@@ -44,7 +44,7 @@ struct Source {
 
 /// The rows of the dialog, over the `summary` line of the file's size and layer count.
 fn params(summary: &str) -> Vec<Param> {
-    let option = |id: &str, label: &str| (id.to_string(), label.into());
+    let option = |id: &str, label: &'static str| (id.to_string(), label.into());
     vec![
         Param::read_only_text("summary", "", summary.to_string()).full_width(),
         Param::new(
@@ -220,9 +220,8 @@ mod tests {
     }
 
     /// The options of a Place dialog that places without Link or with it.
-    // PLAN: assumed `PlaceOptions { link, template, show_import_options }` and `place::confirm(app, Vec<Value>, PlaceOptions)` (files-w14).
     fn place_options(link: bool, show_import_options: bool) -> crate::place::PlaceOptions {
-        crate::place::PlaceOptions { link, template: false, show_import_options }
+        crate::place::PlaceOptions { link, template: false, replace: false, show_import_options }
     }
 
     #[test]

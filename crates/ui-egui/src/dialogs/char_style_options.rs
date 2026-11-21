@@ -580,7 +580,12 @@ pub(crate) fn edited_attrs(fields: &DialogFields, opening: &Opening) -> Result<M
 /// Write the Character Color fields of `d` into `attrs`: an unset paint, weight or checkbox
 /// leaves its attribute unset, and a field still as it opened keeps the original value, a
 /// gradient or pattern paint included.
-fn color_attrs(d: &Values, original: &Map<String, Value>, original_fields: &Map<String, Value>, attrs: &mut Map<String, Value>) -> Result<(), String> {
+fn color_attrs(
+    d: &Values,
+    original: &Map<String, Value>,
+    original_fields: &Map<String, Value>,
+    attrs: &mut Map<String, Value>,
+) -> Result<(), String> {
     let reset = d.reset("color");
     for key in COLOR {
         attrs.remove(*key);
@@ -737,12 +742,7 @@ fn advanced_attrs(
 
 /// The swatches of a [`swatch_choices`] value as (name, paint).
 fn swatch_pairs(swatches: &Value) -> Vec<(String, Value)> {
-    swatches
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|pair| Some((pair.get(0)?.as_str()?.to_string(), pair.get(1)?.clone())))
-        .collect()
+    swatches.as_array().into_iter().flatten().filter_map(|pair| Some((pair.get(0)?.as_str()?.to_string(), pair.get(1)?.clone()))).collect()
 }
 
 /// Keeps the flags the tint and weight rows read in step with the paints: whether each paint links to a swatch
@@ -936,7 +936,8 @@ fn opentype_rows() -> Vec<PropertyRow> {
 /// The five tabs of Character Style Options and New Character Style over the dialog's current values. Every tab
 /// but General has a Reset Panel.
 pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTab> {
-    let titles = [tl!("General"), tl!("Basic Character Formats"), tl!("Advanced Character Formats"), tl!("Character Color"), tl!("OpenType Features")];
+    let titles =
+        [tl!("General"), tl!("Basic Character Formats"), tl!("Advanced Character Formats"), tl!("Character Color"), tl!("OpenType Features")];
     let bodies = [general_rows(edited_attrs(fields, opening)), basic_rows(), advanced_rows(), color_rows(opening), opentype_rows()];
     SECTIONS
         .into_iter()
@@ -953,7 +954,7 @@ pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTa
 pub(crate) fn hosted(key: &str, title: &'static str, opening: &Arc<Opening>, name: &str) -> HostedPropertiesDialog {
     let rows_of = Arc::clone(opening);
     HostedPropertiesDialog::new(key, opening.fields(name), move |values| {
-        let now = values.get().and_then(|shown| shown.same().cloned()).unwrap_or_else(DialogFields::new);
+        let now = values.value().cloned().unwrap_or_else(DialogFields::new);
         PropertiesDialog::new(title, tabs(&now, &rows_of), values).tab_layout(TabLayout::List)
     })
     .held_ok()
@@ -1022,11 +1023,7 @@ macro_rules! style_dialog {
                 craft::ui::dialog::StackDialog::id(&self.inner)
             }
 
-            fn show(
-                &mut self,
-                ui: &mut egui::Ui,
-                stack: &craft::ui::dialog::DialogStack,
-            ) -> Option<craft::ui::dialog::DialogResult<Self::Result>> {
+            fn show(&mut self, ui: &mut egui::Ui, stack: &craft::ui::dialog::DialogStack) -> Option<craft::ui::dialog::DialogResult<Self::Result>> {
                 craft::ui::dialog::StackDialog::show(&mut self.inner, ui, stack)
             }
 

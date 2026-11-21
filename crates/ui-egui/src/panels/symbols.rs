@@ -11,11 +11,15 @@ use std::sync::{Arc, Weak};
 use craft::behavior::{IconId, Selection, SelectionModel as _};
 use craft::keymap::Mods;
 use craft::ui::buttons::{Button, IconButton};
-use craft::ui::contract::{Bind, DropAt, DropPlace, Entry, ListDrag, PopupKind, Props as _, SelectMode, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{
+    Bind, DropAt, DropPlace, Entry, ListDrag, MemoProps, PopupKind, Props as _, SelectMode, Show as _, ShowContainer as _, Trigger,
+};
 use craft::ui::display::Divider;
 use craft::ui::form::Field;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
-use craft::ui::patterns::presets::{PresetBrowser, PresetDrop, PresetEvent, PresetRow, PresetRowMenu, PresetState, PresetView, ThumbInfo};
+use craft::ui::patterns::presets::{
+    PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetView,
+};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::textures::{Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
 use craft::ui::primitives::{ContentPainterCx, IconSpec};
@@ -50,7 +54,7 @@ fn thumb_px(size: f32, pixels_per_point: f32) -> u32 {
 /// A symbol in the Symbols panel: the uid of the document it belongs to and its name. It keys the
 /// panel's rows and is what a symbol dragged out of the panel carries (`ListDrag<SymbolKey>`), so a
 /// drop knows the document the symbol came from.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, MemoProps)]
 pub(crate) struct SymbolKey {
     /// The uid of the document whose Symbols panel showed the symbol.
     pub doc: u64,
@@ -484,6 +488,26 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     true
 }
 
+/// What the panel's rows and thumbnails read: the symbols of one version of a document.
+#[derive(MemoProps)]
+struct SymbolSource<'a> {
+    uid: u64,
+    revision: u64,
+    #[memo_props(covered_by = "revision", reason = "a document version's symbols are fixed")]
+    doc: &'a Document,
+    #[memo_props(covered_by = "revision", reason = "worked out once from the document version")]
+    keys: &'a Thumbs,
+}
+
+/// The panel's presets: a row per symbol of the document, in its order, each with its thumbnail.
+fn symbol_source(inputs: SymbolSource<'_>) -> PresetSource<'_, SymbolKey> {
+    let fns = PresetFns::<SymbolSource<'_>, SymbolKey>::new(|s, _| {
+        s.doc.symbols.iter().map(|sym| PresetRow::item(SymbolKey { doc: s.uid, name: sym.name.clone() }, sym.name.clone(), 0)).collect()
+    })
+    .thumb(|s, cx, rect, info| paint_symbol(cx, rect, s.doc, s.keys, &info.key.name));
+    PresetSource::new(inputs, fns)
+}
+
 /// The footer's actions, by their index in the order [`show`] gives them: the first [`AT_START`]
 /// sit at the start edge (Library, Place, Break Link, Options), then Delete at the end edge with
 /// New before it.
@@ -511,7 +535,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let inst = has_instances_selected(app);
     let linked = linked_symbols(app);
     let key = |name: &str| SymbolKey { doc: uid, name: name.to_string() };
-    let rows: Vec<PresetRow<SymbolKey>> = doc.symbols.iter().map(|s| PresetRow::item(key(&s.name), s.name.clone(), 0)).collect();
+    let source = symbol_source(SymbolSource { uid, revision, doc: &doc, keys: &keys });
     // The symbols drawn selected: the ones Select All Unused picked, which further picks change,
     // else the current one.
     let (mut selection, select) = if marked.is_empty() {
@@ -549,7 +573,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             DropAction::<PanelDrag>::new(move |drag| art_of(drag, uid).is_some()).show(ui, |ui, _| {
                 let mut state = PresetState::new();
                 state.zoom = zoom;
-                PresetBrowser::new(tl!("Symbols"), Bind::bound(&mut state), &rows)
+                PresetBrowser::new(tl!("Symbols"), Bind::bound(&mut state), &source)
                     .browser_id(browser_id)
                     .selection(Bind::given(selection.clone()))
                     .select(select)
@@ -557,9 +581,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .drags(true)
                     .row_menu(PresetRowMenu::Host)
                     .row_items(|key: &SymbolKey| item_rows(&linked, &key.name))
-                    .thumb(|cx: &ContentPainterCx<'_>, rect: Rect, info: ThumbInfo<'_, SymbolKey>| {
-                        paint_symbol(cx, rect, &doc, &keys, &info.key.name)
-                    })
                     .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |drag: &PanelDrag, _: &DropAt<SymbolKey>| {
                         art_of(drag, uid).is_some()
                     }))
@@ -858,8 +879,6 @@ impl View {
 /// another document is active.
 fn marked(app: &VectorcraftApp) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
-    // PLAN: assumed `UiState::symbol_picks: (u64, Vec<String>)` (hub-w1, ap.AS17): the uid of the
-    // document and the names picked in it.
     let (of, picks) = &app.ui.symbol_picks;
     if *of != st.uid {
         return vec![];

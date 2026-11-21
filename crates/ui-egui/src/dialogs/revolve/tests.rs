@@ -4,101 +4,9 @@ use serde_json::{Value, json};
 use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, INFLATE, REVOLVE, ROTATE, ROTATION_PRESETS, merged_params};
 use vectorcraft_engine::Session;
 
-use std::{
-    cell::{RefCell, RefMut},
-    rc::Rc,
-};
-
-use craft::ui::testing::{Fixture, Target};
-
-use super::super::{effect, three_d};
+use super::super::effect;
+use super::super::three_d::tests_support::ThreeD;
 use crate::VectorcraftApp;
-
-/// Drives the 3D dialog through the app's host: each frame pumps the session and the dialog host, and every
-/// control is reached by its accessible name.
-struct ThreeD {
-    app: Rc<RefCell<VectorcraftApp>>,
-    fixture: Fixture,
-}
-
-impl ThreeD {
-    fn new(app: VectorcraftApp) -> Self {
-        let app = Rc::new(RefCell::new(app));
-        let shown = app.clone();
-        let fixture = Fixture::new(move |ui| {
-            let mut app = shown.borrow_mut();
-            three_d::pump(&mut app, ui.ctx());
-            // PLAN: assumed `DialogHost::pump(&mut self, &egui::Context)` as the host's own per-frame pump
-            app.dialogs().pump(ui.ctx());
-        });
-        Self { app, fixture }
-    }
-
-    fn app(&self) -> RefMut<'_, VectorcraftApp> {
-        self.app.borrow_mut()
-    }
-
-    fn open(&mut self, params: Value) {
-        // PLAN: assumed `effect::open(&mut VectorcraftApp, &Value)`; the result is ignored, a failed open shows as a missing dialog below
-        let _ = effect::open(&mut self.app(), &params);
-        self.fixture.settle();
-        assert!(self.app().three_d_dialog.is_some(), "the dialog opened");
-    }
-
-    /// Sets a key the shown page offers, as a command-driven edit does.
-    fn set(&mut self, key: &str, value: Value) {
-        // PLAN: assumed `HostedParamDialog::set_json_field(&str, Value)`
-        three_d::with_fields(&mut self.app(), |d| {
-            let _ = d.set_json_field(key, value);
-        });
-        self.fixture.settle();
-    }
-
-    fn fields(&self) -> craft::ui::patterns::form_dialogs::DialogFields {
-        // PLAN: assumed `DialogFields: Clone`
-        three_d::with_fields(&mut self.app(), |d| d.fields().clone())
-    }
-
-    fn json(&self, key: &str) -> Value {
-        three_d::with_fields(&mut self.app(), |d| d.json_fields().and_then(|f| f.get(key).cloned())).flatten().unwrap_or(Value::Null)
-    }
-
-    /// The surfaces of the object the Map Art page shows.
-    fn surfaces(&self) -> Option<std::sync::Arc<Vec<vectorcraft_effects::MapSurface>>> {
-        self.app().three_d_dialog.as_ref().and_then(|s| s.data.read().unwrap().surfaces.clone())
-    }
-
-    fn target(&self, name: &str) -> Target {
-        self.fixture.by_label(name).unwrap_or_else(|| panic!("no control named {name}"))
-    }
-
-    fn press(&mut self, name: &str) {
-        let target = self.target(name);
-        self.fixture.click(&target);
-        self.fixture.settle();
-    }
-
-    fn ok(&mut self) {
-        self.finish(true);
-    }
-
-    fn cancel(&mut self) {
-        self.finish(false);
-    }
-
-    fn finish(&mut self, confirm: bool) {
-        let ctx = self.fixture.ctx().clone();
-        let mut app = self.app();
-        let Some(id) = app.three_d_dialog.as_ref().map(|s| s.id) else { return };
-        if confirm {
-            app.dialogs().confirm_by_id(&ctx, id);
-        } else {
-            app.dialogs().cancel_by_id(&ctx, id);
-        }
-        drop(app);
-        self.fixture.settle();
-    }
-}
 
 const SQUARE: &str = "M100 100 L200 100 L200 200 L100 200 Z";
 
@@ -110,11 +18,27 @@ fn app_with(d: &str) -> VectorcraftApp {
     app
 }
 
+/// The dialog `effect.dialog` opens with `p` over `app`'s document.
+fn opened(app: VectorcraftApp, p: Value) -> ThreeD {
+    let mut h = ThreeD::new(app);
+    // The first frames give the app its window.
+    h.fixture.settle();
+    reopen(&mut h, p);
+    h
+}
+
+/// Opens the dialog again with `p`, as `effect.dialog` does.
+fn reopen(h: &mut ThreeD, p: Value) {
+    if let Err(e) = effect::open(&mut h.app(), &p) {
+        panic!("the dialog did not open: {e}");
+    }
+    h.fixture.settle();
+    assert!(h.app().three_d_dialog.is_some(), "the dialog opened");
+}
+
 /// The dialog of `effect` over a path drawn from `d`.
 fn drawn(d: &str, effect: &str) -> ThreeD {
-    let mut h = ThreeD::new(app_with(d));
-    h.open(json!({"effect": effect, "item": null}));
-    h
+    opened(app_with(d), json!({"effect": effect, "item": null}))
 }
 
 /// An app with a one-surface symbol "Mark" and a path drawn from `d`, selected.
@@ -127,7 +51,7 @@ fn with_symbol(d: &str) -> VectorcraftApp {
     app
 }
 
-fn doc(h: &ThreeD) -> vectorcraft_doc::Document {
+fn doc(h: &ThreeD) -> std::sync::Arc<vectorcraft_doc::Document> {
     h.app().session.doc().unwrap().doc.clone()
 }
 
@@ -204,9 +128,7 @@ fn a_3d_row_sets_its_param_previews_and_applies_in_one_step() {
 
 #[test]
 fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
-    let app = with_symbol("M50 50L150 50L150 150L50 150Z");
-    let mut h = ThreeD::new(app);
-    h.open(json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    let mut h = opened(with_symbol("M50 50L150 50L150 150L50 150Z"), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
     h.set("__page", json!("mapArt"));
     let count = h.surfaces().map_or(0, |s| s.len());
     assert!(count >= 6, "a square's solid has at least six surfaces: {count}");
@@ -239,8 +161,7 @@ fn map_art_maps_no_more_surfaces_than_an_object_takes() {
             format!("{:.2} {:.2}", 150.0 + 100.0 * a.cos(), 150.0 + 100.0 * a.sin())
         })
         .collect();
-    let mut h = ThreeD::new(with_symbol(&format!("M{}Z", corners.join(" L"))));
-    h.open(json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    let mut h = opened(with_symbol(&format!("M{}Z", corners.join(" L"))), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
     h.set("__page", json!("mapArt"));
     assert!(h.surfaces().map_or(0, |s| s.len()) > max);
     // Every map the object takes is used, and the surface shown has none.
@@ -266,8 +187,7 @@ fn map_art_surfaces_follow_the_active_document() {
         let st = app.session.active().unwrap();
         (st.selection.objects.first().copied(), st.revision)
     };
-    let mut h = ThreeD::new(app);
-    h.open(json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    let mut h = opened(app, json!({"effect":CLASSIC_EXTRUDE,"item":null}));
     h.set("__page", json!("mapArt"));
     let second = h.surfaces().unwrap();
     let at_second = key(&h);
@@ -548,7 +468,7 @@ fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
         .run("effect.setParams", json!({"index":0,"item":null,"params":{"ambient":19,"lights":[{"color":"#ff8040"},{"color":"#4080ff"}]}}))
         .unwrap();
     let before = doc(&h);
-    h.open(json!({"effect":REVOLVE,"index":0,"item":null}));
+    reopen(&mut h, json!({"effect":REVOLVE,"index":0,"item":null}));
     h.set("__page", json!("lighting"));
     h.press("Custom");
     h.press("Right");

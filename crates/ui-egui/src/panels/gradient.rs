@@ -349,7 +349,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         Stack::new().show(ui, |ui, _| {
             Row::new().show(ui, |ui, _| {
                 angle_field(app, ui, &g, placed);
-                let reverse = IconButton::new(IconId::new("dc-reverse")).label(tl!("Reverse Gradient")).tooltip(tl!("Reverse Gradient")).enabled(is_grad).show(ui);
+                let reverse = IconButton::new(IconId::new("dc-reverse"))
+                    .label(tl!("Reverse Gradient"))
+                    .tooltip(tl!("Reverse Gradient"))
+                    .enabled(is_grad)
+                    .show(ui);
                 if reverse.clicked() {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
@@ -422,7 +426,8 @@ fn aspect_field(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, placed
         let mirror = g.geom.map_or(1.0, |x| if x.is_mirrored() && kind == GradientKind::Conic { -1.0 } else { 1.0 });
         let asp = g.geom.map_or(100.0, |x| (x.aspect.abs() * 1000.0).round() / 10.0);
         let presets = number_presets(&ASPECT_PRESETS, "%");
-        let field = NumberField::new(tl!("Aspect Ratio"), Bind::given(Some(asp))).unit("%").range(0.5..=f64::MAX).presets(&presets).enabled(radial).show(ui);
+        let field =
+            NumberField::new(tl!("Aspect Ratio"), Bind::given(Some(asp))).unit("%").range(0.5..=f64::MAX).presets(&presets).enabled(radial).show(ui);
         apply_number(app, &field.edit, |app, a, phase| edit(app, json!({"aspect": a * mirror}), phase));
     });
 }
@@ -452,8 +457,8 @@ fn method_select(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_gr
 /// stops (Pad, Repeat or Reflect), and how many times Repeat and Reflect run the stops along the
 /// vector (1 to [`MAX_REPEATS`]; dimmed with Pad).
 fn spread_select(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: bool) {
-    let spreads =
-        [(GradientSpread::Pad, tl!("Pad")), (GradientSpread::Repeat, tl!("Repeat")), (GradientSpread::Reflect, tl!("Reflect"))].map(|(s, label)| Entry::new(s, label));
+    let spreads = [(GradientSpread::Pad, tl!("Pad")), (GradientSpread::Repeat, tl!("Repeat")), (GradientSpread::Reflect, tl!("Reflect"))]
+        .map(|(s, label)| Entry::new(s, label));
     let current = g.gradient.spread;
     let presets = number_presets(&REPEAT_PRESETS, "");
     Row::new().show(ui, |ui, _| {
@@ -514,7 +519,9 @@ fn preset_rows(app: &VectorcraftApp) -> Vec<PresetRow<PresetKey>> {
             rows.push(PresetRow::group(PresetKey::Library(e.library), e.library.map_or(tl!("Saved"), |l| tl!(l)), 0));
         }
         let paint = Paint::Gradient(Box::new(GradientPaint::new(e.gradient)));
-        rows.push(PresetRow::item(PresetKey::Preset(e.name.clone()), e.name, 1).preview(ThumbAspect::SQUARE, move |cx, rect| paint_rect(cx, rect, &paint)));
+        rows.push(
+            PresetRow::item(PresetKey::Preset(e.name.clone()), e.name, 1).preview(ThumbAspect::SQUARE, move |cx, rect| paint_rect(cx, rect, &paint)),
+        );
     }
     rows
 }

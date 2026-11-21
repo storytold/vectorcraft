@@ -179,7 +179,7 @@ fn raw_input(events: Vec<egui::Event>, hovered_files: Vec<egui::HoveredFile>, dr
 
 fn pass(app: &mut VectorcraftApp, ctx: &egui::Context, raw: egui::RawInput) {
     let mut out = ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();
@@ -463,8 +463,7 @@ fn a_file_read_after_another_document_became_active_lands_where_it_was_dropped()
         DropTarget::Place(d) => d,
         t => panic!("{t:?}"),
     };
-    let arrive =
-        |name: &str, drop| inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop: Some(drop) });
+    let arrive = |name: &str, drop| inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop });
     // Dropped on A; another document opens while the file is read.
     let on_a = drop_on_active(&app);
     app.run("file.new", json!({"width": 600, "height": 500})).unwrap();
@@ -948,7 +947,7 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
     app.now_override = Some(time);
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(time), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| {
-        app.logic(ui.ctx());
+        app.tick(ui.ctx());
         app.ui(ui);
     });
     out.textures_delta.clear();

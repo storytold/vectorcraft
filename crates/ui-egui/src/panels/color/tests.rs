@@ -57,7 +57,6 @@ fn create_new_swatch_keeps_the_shown_colors_model_in_a_cmyk_document() {
     let mut app = app();
     app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
     app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 60, "y": 90, "k": 0}, "spot": true})).unwrap();
-    let ctx = egui::Context::default();
     let newest = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
     let ink = app.session.doc().unwrap().doc.swatch("Ink").and_then(|w| w.paint.color()).unwrap();
     for (fill, model) in [
@@ -71,7 +70,7 @@ fn create_new_swatch_keeps_the_shown_colors_model_in_a_cmyk_document() {
         assert_eq!(shown.model(), model, "{fill}");
         let count = app.session.doc().unwrap().doc.swatches.len();
         let tgt = target_now(&app);
-        carry_out(&mut app, &ctx, &tgt, ColorPanelAction::NewSwatch);
+        carry_out(&mut app, &tgt, ColorPanelAction::NewSwatch);
         assert_eq!(app.session.doc().unwrap().doc.swatches.len(), count + 1, "{fill}: one new swatch");
         let w = newest(&app);
         assert_eq!(w.paint.color(), Some(shown), "{fill}: the swatch has the shown color, {}", w.name);

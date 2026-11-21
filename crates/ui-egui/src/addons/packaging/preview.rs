@@ -15,9 +15,10 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use craft::behavior::{Metrics, NavMove, PointerButton, PressPhase, Sense};
-use craft::egui::{ColorImage, Key, Pos2, Rect, Response, Ui, Vec2, pos2};
+use craft::egui::{ColorImage, Pos2, Rect, Response, Ui, Vec2, pos2};
 use craft::host::queue::{JobQueue, Priority, QueueOptions};
 use craft::host::{Wake, default_jobs};
+use craft::keymap::Key;
 use craft::platform::clock::monotonic_ms;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;

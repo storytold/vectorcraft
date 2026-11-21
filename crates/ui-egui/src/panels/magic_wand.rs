@@ -17,7 +17,6 @@ use vectorcraft_engine::cmd::wand::color_tolerance_max;
 
 use super::{part_hidden, set_part_hidden};
 use crate::VectorcraftApp;
-// PLAN: assumed `canvas::stroke_lengths(app) -> LengthUnits` beside `general_lengths` (cv.B5b)
 use crate::canvas::stroke_lengths;
 
 const STROKE_KEY: &str = "wand-hide-stroke";
@@ -36,8 +35,9 @@ fn tolerance(o: &Value, key: &str) -> NumberField<'static> {
     NumberField::new(tl!("Tolerance:"), Bind::given(Some(o[key].as_f64().unwrap_or(0.0)))).id_salt(key)
 }
 
-/// One row: checkbox + tolerance field. The tolerance is editable while the checkbox is on.
-fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str, tol: Option<(&str, NumberField<'static>)>) {
+/// One row: checkbox + tolerance field (the key and what builds the field). The tolerance is editable while the
+/// checkbox is on.
+fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &'static str, flag: &str, tol: Option<(&str, &dyn Fn() -> NumberField<'static>)>) {
     let on = o[flag].as_bool().unwrap_or(false);
     Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
         if let Some(now) = Checkbox::new(Bind::given(on)).label(label).id_salt(flag).show(ui).value().copied() {
@@ -45,7 +45,7 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str
         }
         if let Some((key, field)) = tol {
             Field::new(tl!("Tolerance:")).id_salt(key).enabled(on).show(ui, |ui, _| {
-                if let Some(n) = field.enabled(on).show(ui).value().copied().flatten() {
+                if let Some(n) = field().enabled(on).show(ui).value().copied().flatten() {
                     app.run("magicWand.set", json!({ key: n })).ok();
                 }
             });
@@ -61,18 +61,21 @@ fn color_max(app: &VectorcraftApp) -> f64 {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(app);
     let cmax = color_max(app);
-    row(app, ui, &o, tl!("Fill Color"), "fillColor", Some(("fillTolerance", tolerance(&o, "fillTolerance").range(0.0..=cmax))));
+    row(app, ui, &o, tl!("Fill Color"), "fillColor", Some(("fillTolerance", &|| tolerance(&o, "fillTolerance").range(0.0..=cmax))));
     if !part_hidden(app, STROKE_KEY) {
         Divider::horizontal().show(ui);
-        row(app, ui, &o, tl!("Stroke Color"), "strokeColor", Some(("strokeTolerance", tolerance(&o, "strokeTolerance").range(0.0..=cmax))));
-        let weight = NumberField::length(tl!("Tolerance:"), Bind::given(Some(o["weightTolerance"].as_f64().unwrap_or(0.0))), stroke_lengths(app))
-            .id_salt("weightTolerance")
-            .range(0.0..=1000.0);
-        row(app, ui, &o, tl!("Stroke Weight"), "strokeWeight", Some(("weightTolerance", weight)));
+        row(app, ui, &o, tl!("Stroke Color"), "strokeColor", Some(("strokeTolerance", &|| tolerance(&o, "strokeTolerance").range(0.0..=cmax))));
+        let lengths = stroke_lengths(app);
+        let weight = || {
+            NumberField::length(tl!("Tolerance:"), Bind::given(Some(o["weightTolerance"].as_f64().unwrap_or(0.0))), lengths)
+                .id_salt("weightTolerance")
+                .range(0.0..=1000.0)
+        };
+        row(app, ui, &o, tl!("Stroke Weight"), "strokeWeight", Some(("weightTolerance", &weight)));
     }
     if !part_hidden(app, TRANSPARENCY_KEY) {
         Divider::horizontal().show(ui);
-        row(app, ui, &o, tl!("Opacity"), "opacity", Some(("opacityTolerance", tolerance(&o, "opacityTolerance").range(0.0..=100.0).unit("%"))));
+        row(app, ui, &o, tl!("Opacity"), "opacity", Some(("opacityTolerance", &|| tolerance(&o, "opacityTolerance").range(0.0..=100.0).unit("%"))));
         row(app, ui, &o, tl!("Blending Mode"), "blendingMode", None);
     }
 }

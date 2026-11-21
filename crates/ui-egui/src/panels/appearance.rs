@@ -27,7 +27,7 @@ use craft::ui::buttons::{Button, ButtonOutput, Link};
 use craft::ui::choice::{Swatch, SwatchOutput};
 use craft::ui::contract::overlay::{Anchor, Place};
 use craft::ui::contract::{
-    Bind, CollectionEvent, CollectionResponse, ColumnSpec, ItemCx, ListDrag, PopupKind, Props as _, ReorderMove, ReorderRule, Show as _,
+    Bind, CollectionEvent, CollectionResponse, ColumnSpec, ItemCx, ListDrag, MemoProps, PopupKind, Props as _, ReorderMove, ReorderRule, Show as _,
     ShowCollection as _, ShowContainer as _, ToggleColumn, Trigger, clicked,
 };
 use craft::ui::display::{Picture, Shade, Text};
@@ -35,7 +35,9 @@ use craft::ui::layout_components::Stack;
 use craft::ui::list::{List, ListRow, RowDragSpot, RowEvent, RowInk, ThumbAspect, ThumbSize, ThumbTarget, ToggleCell};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamRows};
-use craft::ui::patterns::presets::{PresetBrowser, PresetEvent, PresetRow, PresetRowMenu, PresetState, PresetTiles, PresetView};
+use craft::ui::patterns::presets::{
+    PresetBrowser, PresetEvent, PresetFns, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetTiles, PresetView,
+};
 use craft::ui::popover::Popover;
 use craft::ui::primitives::{FacePaint, IconSpec};
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
@@ -45,7 +47,7 @@ use craft::ui::text::NumberOutput;
 use egui::{Rect, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Effect, Node, NodeId};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId};
 
 use super::stroke::{self, WeightTarget};
 // PLAN: hub-w2 declares `mod effect_params` private to `dialogs`; Appearance's inline editor (ef.C3: "built one way for the dialog, the gallery catalog and Appearance A3") needs `pub(crate) mod effect_params`.
@@ -1352,21 +1354,35 @@ enum Painted {
     NewArt { fill: bool },
 }
 
+/// The swatches of one version of a document: the swatch picker's presets.
+#[derive(MemoProps)]
+struct DocSwatches<'a> {
+    uid: u64,
+    revision: u64,
+    #[memo_props(covered_by = "revision", reason = "a document version's swatches are fixed")]
+    doc: &'a Document,
+}
+
+/// The document's swatches (its own, then its groups') with their paints.
+fn doc_swatches(doc: &Document) -> impl Iterator<Item = (&String, &Paint)> {
+    doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| &g.swatches)).map(|s| (&s.name, &s.paint))
+}
+
 /// The document's swatches (its own, then its groups') as chips; a pick paints `target`. Whether a
 /// swatch was picked.
 fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) -> bool {
     let Some(st) = app.session.active() else { return false };
-    let all: Vec<(String, Paint)> =
-        st.doc.swatches.iter().chain(st.doc.swatch_groups.iter().flat_map(|g| &g.swatches)).map(|s| (s.name.clone(), s.paint.clone())).collect();
-    let rows: Vec<PresetRow<String>> = all
-        .iter()
-        .map(|(name, paint)| {
-            let paint = paint.clone();
-            PresetRow::item(name.clone(), name.clone(), 0)
-                .preview(ThumbAspect::SQUARE, move |painter, rect| paint_preview::paint_rect(painter, rect, &paint))
-        })
-        .collect();
-    let out = PresetBrowser::new(tl!("Swatches"), Bind::given(PresetState::default()), &rows)
+    let fns = PresetFns::<DocSwatches<'_>, String>::new(|s, _| {
+        doc_swatches(s.doc)
+            .map(|(name, paint)| {
+                let paint = paint.clone();
+                PresetRow::item(name.clone(), name.clone(), 0)
+                    .preview(ThumbAspect::SQUARE, move |painter, rect| paint_preview::paint_rect(painter, rect, &paint))
+            })
+            .collect()
+    });
+    let source = PresetSource::new(DocSwatches { uid: st.uid, revision: st.revision, doc: &st.doc }, fns);
+    let out = PresetBrowser::new(tl!("Swatches"), Bind::given(PresetState::default()), &source)
         .tiles(PresetTiles::Chips)
         .view_lock(PresetView::Grid)
         .row_menu(PresetRowMenu::Off)
@@ -1377,7 +1393,7 @@ fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) -> bool
         _ => None,
     });
     let Some(name) = picked else { return false };
-    let none = all.iter().any(|(n, p)| *n == name && p.is_none());
+    let none = doc_swatches(&st.doc).any(|(n, p)| *n == name && p.is_none());
     let paint = if none { json!({"none": true}) } else { json!({ "swatch": name }) };
     let (cmd, mut params) = match target {
         Painted::Item(index) => ("appearance.setItem", json!({ "index": index })),

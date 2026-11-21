@@ -17,7 +17,11 @@ pub fn open(app: &mut VectorcraftApp) -> Result<(), String> {
         return Err("No saved views (View → New View…)".into());
     }
     // PLAN: saved_names translates title/list (SavedNames fields are &'static str; production used tl!)
-    saved_names::open(app, SavedNames { kind: KIND, title: "Edit Views", list: "Saved Views", command: "view.saved.edit", max: SavedView::MAX }, names)
+    saved_names::open(
+        app,
+        SavedNames { kind: KIND, title: "Edit Views", list: "Saved Views", command: "view.saved.edit", max: SavedView::MAX },
+        names,
+    )
 }
 
 #[cfg(test)]

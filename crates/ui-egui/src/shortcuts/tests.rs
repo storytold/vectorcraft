@@ -904,8 +904,7 @@ fn typing_chords_run_type_commands_not_object_commands() {
 
 /// The nudge of `dir` with `mods` on the selection.
 fn nudge(app: &mut VectorcraftApp, dir: egui::Vec2, mods: Modifiers) {
-    // PLAN: assumed `shortcuts::nudge(&mut VectorcraftApp, egui::Vec2, Modifiers, bool)` of kb.C23.
-    let _ = super::nudge(app, dir, mods, false);
+    super::nudge(app, dir, craft::keymap::Mods::from_egui(&mods, crate::keymap::platform()), false);
 }
 
 const UP: egui::Vec2 = egui::vec2(0.0, -1.0);
@@ -1444,8 +1443,7 @@ fn copy_and_paste_events_use_the_system_clipboard() {
     let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
     // Copy publishes SVG to the system clipboard.
     key_frame(&mut app, &ctx, vec![egui::Event::Copy]);
-    // PLAN: assumed `app.clipboard.read_text() -> Option<String>` (shell-w14).
-    let svg = app.clipboard.read_text().expect("copy publishes SVG");
+    let svg = app.clipboard.read_text().ok().flatten().expect("copy publishes SVG");
     assert!(svg.contains("<svg"));
     // Pasting our own SVG back uses the internal clipboard; foreign SVG replaces it.
     key_frame(&mut app, &ctx, vec![egui::Event::Paste(svg)]);
@@ -1611,7 +1609,7 @@ fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
 /// item. A filter plug-in's name stays as the plug-in gives it, even when it reads like a command.
 #[test]
 fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
-    let zh = crate::i18n::Lang::from_code("zh-hant").unwrap();
+    let zh = <crate::i18n::Lang as crate::i18n::LangExt>::from_code("zh-hant").unwrap();
     crate::i18n::set_current(zh);
     let entry = |key: &str| crate::shortcut_editor::Entry {
         key: key.into(),

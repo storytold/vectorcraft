@@ -6,16 +6,15 @@
 use std::sync::{Arc, RwLock};
 
 use craft::behavior::{DisplayOrder, ItemSource, SelectionChange};
-// PLAN: assumed paths of the framework items for the app crate.
 use craft::theme::Srgba;
-use craft::ui::contract::{Bind, CollectionEvent, Show as _, ShowCollection as _, clicked};
 use craft::ui::buttons::Button;
 use craft::ui::contract::Entry;
+use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, clicked};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind, ParamRows};
 use craft::ui::pickers::Select;
+use craft::ui::runtime::env::LengthUnits;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
-use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind, ParamRows};
-use craft::ui::runtime::env::LengthUnits;
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
@@ -82,11 +81,11 @@ impl ItemSource<usize> for Titles {}
 fn page_row(pages: Vec<(&'static str, &'static str)>) -> Param {
     Param::custom("__page", "", move |ui, fields, _| {
         let titles = Titles(pages.iter().map(|(_, t)| (*t).to_string()).collect());
-        let out = TabStrip::new(tl!("Page"))
-            .id_salt("three-d-page")
-            .kind(TabKind::Text)
-            .shown(page_at(fields, &pages))
-            .show_items(ui, &titles, &mut |k, _| Tab::new(titles.0[*k].clone()).id_salt(("tab", *k)));
+        let out = TabStrip::new(tl!("Page")).id_salt("three-d-page").kind(TabKind::Text).shown(page_at(fields, &pages)).show_items(
+            ui,
+            &titles,
+            &mut |k, _| Tab::new(titles.0[*k].clone()).id_salt(("tab", *k)),
+        );
         let picked = out.response.events.into_iter().find_map(|e| match e {
             CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.last().copied(),
             _ => None,
@@ -179,8 +178,9 @@ impl Rows<'_> {
 
     /// A length in points, shown in the general unit.
     fn length(&self, key: &str, label: &'static str, range: (f64, f64)) -> Param {
-        // PLAN: assumed `LengthUnits::new(suffix, points per unit)`.
-        self.range(key, label, range, 1, UnitKind::Pixels).length(LengthUnits::new(self.unit.suffix().trim(), self.unit.to_pt(1.0)))
+        // Stored in points; a pixel is a point, as the rulers count it.
+        let lengths = LengthUnits::new(UnitKind::Points, crate::canvas::rulers::unit_kind(self.unit), 72.0);
+        self.range(key, label, range, 1, UnitKind::Pixels).length(lengths)
     }
 
     fn flag(&self, key: &str, label: &'static str) -> Param {
@@ -262,7 +262,7 @@ fn object_rows(data: &Data, rows: &Rows, effect: &str, place: Place) -> Vec<Para
 fn pressed(ui: &mut egui::Ui, label: &str, enabled: bool, tip: Option<&str>) -> bool {
     let mut button = Button::new(label.to_owned()).enabled(enabled);
     if let Some(tip) = tip {
-        button = button.tooltip(tip);
+        button = button.tooltip(tip.to_owned());
     }
     clicked(&button.show(ui))
 }
@@ -492,7 +492,8 @@ fn lighting_rows(data: &Data, fields: &DialogFields, rows: &Rows, place: Place, 
 
 /// The lighting presets by name, then Custom for settings none of them has; a pick writes the preset's patch.
 fn lighting_presets_row(effect: &str) -> Param {
-    let keys: Vec<String> = vectorcraft_effects::default_params(effect).and_then(|p| p.as_object().map(|m| m.keys().cloned().collect())).unwrap_or_default();
+    let keys: Vec<String> =
+        vectorcraft_effects::default_params(effect).and_then(|p| p.as_object().map(|m| m.keys().cloned().collect())).unwrap_or_default();
     Param::custom("__lightingPreset", tl!("Presets"), move |ui, fields, _| {
         let names = [tl!("Standard"), tl!("Diffuse"), tl!("Top Left"), tl!("Right")];
         let params: serde_json::Map<String, Value> = keys.iter().filter_map(|k| value_of(fields, k).map(|v| (k.clone(), v))).collect();
@@ -646,10 +647,22 @@ fn light_color_row() -> Param {
 pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
     let settings = [
         light_color_row(),
-        Param::new("lightIntensity", tl!("Intensity"), ParamKind::range(0.0, 100.0, 100.0, SliderScale::Linear)).decimals(1).unit(UnitKind::Percent).resettable(),
-        Param::new("lightRotation", tl!("Rotation"), ParamKind::range(-180.0, 180.0, 0.0, SliderScale::Linear)).decimals(1).unit(UnitKind::Degrees).resettable(),
-        Param::new("lightHeight", tl!("Height"), ParamKind::range(0.0, 90.0, 90.0, SliderScale::Linear)).decimals(1).unit(UnitKind::Degrees).resettable(),
-        Param::new("lightSoftness", tl!("Softness"), ParamKind::range(0.0, 100.0, 0.0, SliderScale::Linear)).decimals(1).unit(UnitKind::Percent).resettable(),
+        Param::new("lightIntensity", tl!("Intensity"), ParamKind::range(0.0, 100.0, 100.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Percent)
+            .resettable(),
+        Param::new("lightRotation", tl!("Rotation"), ParamKind::range(-180.0, 180.0, 0.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Degrees)
+            .resettable(),
+        Param::new("lightHeight", tl!("Height"), ParamKind::range(0.0, 90.0, 90.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Degrees)
+            .resettable(),
+        Param::new("lightSoftness", tl!("Softness"), ParamKind::range(0.0, 100.0, 0.0, SliderScale::Linear))
+            .decimals(1)
+            .unit(UnitKind::Percent)
+            .resettable(),
         Param::new("lightBehind", tl!("Light behind the object"), ParamKind::bool(false)).resettable(),
     ];
     // The classic effects' lights have no colour.
@@ -696,7 +709,7 @@ pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
             let mut selected = selected_light(fields);
             let before = light_record(&selected);
             let out = ParamRows::new(tl!("Light Settings"), &settings, Bind::bound(&mut selected)).show(ui);
-            cx.gesture(&out.events); // PLAN: assumed `ParamRowsOutput::events`
+            cx.gesture(&out.events);
             if light_record(&selected) != before {
                 store_selected(fields, &selected);
             }

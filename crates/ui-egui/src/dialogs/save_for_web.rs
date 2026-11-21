@@ -62,10 +62,11 @@ fn reduction_of(table: ColorTable) -> Reduction {
     match table {
         ColorTable::Perceptual => Reduction::Perceptual,
         ColorTable::Selective => Reduction::Selective,
-        ColorTable::Adaptive | ColorTable::Exact => Reduction::Adaptive,
         ColorTable::Restrictive => Reduction::Web,
         ColorTable::BlackWhite => Reduction::BlackWhite,
         ColorTable::Grayscale => Reduction::Gray,
+        // Exact, and a table the engine has no reduction of its own for, take the adaptive palette.
+        _ => Reduction::Adaptive,
     }
 }
 
@@ -161,7 +162,6 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         dialog = dialog.slices(slices);
     }
     if io::is_web(app) {
-        // PLAN: assumed `HostedSaveForWeb::ok_label(impl Into<Label>)` (ex.W5): the web downloads.
         dialog = dialog.ok_label(tl!("Download"));
     }
     host.with(|h| h.open(dialog));
@@ -214,18 +214,19 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
         return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
     let ext = if s.output == WebOutput::Html { "html" } else { s.format.ext() };
-    let path = io::target_path(app, path, ext)?;
-    if let Some(o) = p.as_object_mut() {
-        o.insert("path".into(), json!(path));
-    }
-    let r = app.run("document.exportForWeb", p)?;
-    let n = r["files"].as_array().map_or(0, Vec::len);
-    if n > 1 && !has_warnings(&r) {
-        app.status(format!("Saved {n} files beside {path}"));
-    } else {
-        io::report_saved(app, &path, &r);
-    }
-    Ok(r)
+    io::target_path(app, path, ext, move |app, path| {
+        if let Some(o) = p.as_object_mut() {
+            o.insert("path".into(), json!(path));
+        }
+        let r = app.run("document.exportForWeb", p)?;
+        let n = r["files"].as_array().map_or(0, Vec::len);
+        if n > 1 && !has_warnings(&r) {
+            app.status(format!("Saved {n} files beside {path}"));
+        } else {
+            io::report_saved(app, &path, &r);
+        }
+        Ok(r)
+    })
 }
 
 /// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
@@ -383,7 +384,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(host) = app.dialogs() else { return };
     match host.with(|h| h.take::<HostedSaveForWeb>()) {
         Some(DialogResult::Ok(result)) => return finish(app, result),
-        Some(DialogResult::Cancel) => {
+        Some(_) => {
             app.web_export = WebExport::default();
             return;
         }
@@ -475,7 +476,6 @@ fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::s
     };
     let mut deleted = false;
     for event in &asked.tables {
-        // PLAN: assumed `color_table::apply` returns `Result<(), String>` (a refused Delete Color says why).
         match color_table::apply(&mut app.web_export.table, event, &shown) {
             Ok(()) => deleted |= matches!(event.edit, ColorTableEdit::Delete),
             Err(e) => app.status(e),
@@ -500,6 +500,7 @@ fn store_presets(app: &mut VectorcraftApp, events: Vec<WebPresetEvent>) {
             // The reference app's list has no rename: it is a save under the new name and a delete of the old.
             WebPresetEvent::Renamed { from, to, .. } => rename_preset(app, &from, &to),
             WebPresetEvent::Deleted(name) => app.run("webExport.presets.delete", json!({ "name": name })),
+            _ => continue,
         };
         if let Err(e) = r {
             app.status(e);
@@ -552,13 +553,13 @@ fn optimize_start(app: &mut VectorcraftApp, options: &SaveForWebOptions) -> Opti
 /// dialog's, and the result is kept with the art it measured.
 fn run_optimize(app: &mut VectorcraftApp, req: &OptimizeRequest) -> Result<OptimizeAnswer, String> {
     let start = match req.start {
-        OptimizeStart::Current => "current",
         OptimizeStart::Auto => "auto",
+        _ => "current",
     };
     let scope = match req.scope {
-        OptimizeScope::AllSlices => "allSlices",
         OptimizeScope::EachSlice => "eachSlice",
         OptimizeScope::CurrentSlice => "currentSlice",
+        _ => "allSlices",
     };
     let p = optimize_params(app, &req.options, req.desired_k, Some(start), scope);
     let r = app.run("webExport.optimizeToFileSize", p)?;

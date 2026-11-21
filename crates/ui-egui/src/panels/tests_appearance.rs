@@ -1,6 +1,6 @@
 //! Headless frames of the Appearance panel and the panels that follow its active item.
 
-use craft::ui::dialog::{DialogId, PromptChoice, StandardPrompt};
+use craft::ui::dialog::{DialogHost, DialogId, PromptChoice, StandardPrompt};
 // PLAN: assumed path of the hosted dialog type (`craft-ui-patterns` is not a dependency of this crate in the tree yet)
 use craft::ui::patterns::form_dialogs::HostedParamDialog;
 use serde_json::{Value, json};
@@ -85,29 +85,34 @@ pub(super) fn dialog_open(app: &VectorcraftApp) -> bool {
     app.effect_dialogs.effect.is_some()
 }
 
+/// Runs `f` on the window's dialog host with the window's context.
+pub(super) fn with_host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost, &egui::Context) -> R) -> R {
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    app.dialogs().expect("the window's dialog host").with(|host| f(host, &ctx))
+}
+
 /// The number the open effect dialog holds for `key` (0 when it holds none).
 pub(super) fn dialog_number(app: &mut VectorcraftApp, key: &str) -> f64 {
     let id = effect_dialog_id(app);
-    // PLAN: assumed `app.dialogs() -> &mut DialogHost`
-    app.dialogs().get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().number(key)).unwrap_or(0.0)
+    with_host(app, |host, _| host.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().number(key))).unwrap_or(0.0)
 }
 
 /// The value the open effect dialog holds for `key`, as JSON.
 pub(super) fn dialog_json(app: &mut VectorcraftApp, key: &str) -> Option<Value> {
     let id = effect_dialog_id(app);
-    app.dialogs().get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().get(key)).and_then(|v| serde_json::to_value(v).ok())
+    with_host(app, |host, _| host.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().get(key)).and_then(|v| serde_json::to_value(v).ok()))
 }
 
 /// Sets `key` of the open effect dialog as the user editing that field would.
 pub(super) fn set_dialog(app: &mut VectorcraftApp, key: &str, value: Value) {
     let id = effect_dialog_id(app);
-    app.dialogs().set_json_field(&egui::Context::default(), id, key, value).unwrap_or_else(|e| panic!("{key}: {e}"));
+    with_host(app, |host, ctx| host.set_json_field(ctx, id, key, value)).unwrap_or_else(|e| panic!("{key}: {e}"));
 }
 
 /// Presses OK on the open effect dialog and runs the frames that answer its held OK.
 pub(super) fn confirm_dialog(app: &mut VectorcraftApp) {
     let id = effect_dialog_id(app);
-    app.dialogs().confirm_by_id(&egui::Context::default(), id);
+    with_host(app, |host, ctx| host.confirm_by_id(ctx, id));
     app_frame(app);
     app_frame(app);
 }
@@ -115,17 +120,19 @@ pub(super) fn confirm_dialog(app: &mut VectorcraftApp) {
 /// Cancels the open effect dialog and runs the frame that ends its preview.
 pub(super) fn cancel_dialog(app: &mut VectorcraftApp) {
     let id = effect_dialog_id(app);
-    app.dialogs().cancel_by_id(&egui::Context::default(), id);
+    with_host(app, |host, ctx| host.cancel_by_id(ctx, id));
     app_frame(app);
 }
 
 /// Answers the open Edit-or-Add-New question with `choice` (Edit is `Proceed`, Add New `Alternate`).
 pub(super) fn answer_prompt(app: &mut VectorcraftApp, choice: PromptChoice) {
-    let id = app.dialogs().stack().top().expect("the Edit or Add New question is open");
-    if let Some(prompt) = app.dialogs().get_mut_by_id::<StandardPrompt>(id) {
-        prompt.set_choice(choice);
-    }
-    app.dialogs().confirm_by_id(&egui::Context::default(), id);
+    with_host(app, |host, ctx| {
+        let id = host.stack().top().expect("the Edit or Add New question is open");
+        if let Some(prompt) = host.get_mut_by_id::<StandardPrompt>(id) {
+            prompt.set_choice(choice);
+        }
+        host.confirm_by_id(ctx, id);
+    });
     app_frame(app);
 }
 
@@ -1044,26 +1051,19 @@ fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
         ("Appearance", Panel::new(app_with_rect(), appearance::show)),
         ("Transparency", Panel::new(app_with_rect(), transparency::show)),
     ];
-    let mut shows = |want: &str, not: &str| {
+    // Runs `id` in every panel's app, then checks each panel shows `want` and not `not`.
+    let mut edit_shows = |id: &str, p: Value, want: &str, not: &str| {
         for (name, panel) in &mut panels {
+            run(&mut panel.app(), id, p.clone());
             panel.frame();
-            // PLAN: assumed the opacity control's accessible name in each of the three panels
             let shown = panel.value("Opacity").unwrap_or_default();
             assert!(shown.contains(want), "{name} shows {want}: {shown}");
             assert!(!shown.contains(not), "{name} no longer shows {not}: {shown}");
         }
     };
-    let mut edit = |id: &str, p: Value| {
-        for (_, panel) in &mut panels {
-            run(&mut panel.app(), id, p.clone());
-        }
-    };
-    edit("transparency.set", json!({"opacity": 60}));
-    shows("60%", "35%");
-    edit("transparency.set", json!({"opacity": 35}));
-    shows("35%", "60%");
-    edit("edit.undo", json!({}));
-    shows("60%", "35%");
+    edit_shows("transparency.set", json!({"opacity": 60}), "60%", "35%");
+    edit_shows("transparency.set", json!({"opacity": 35}), "35%", "60%");
+    edit_shows("edit.undo", json!({}), "60%", "35%");
 }
 
 /// Right-clicking a stroke row, on its label, picks it and opens its menu: Duplicate, Delete and Hide Stroke.

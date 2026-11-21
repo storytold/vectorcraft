@@ -9,7 +9,7 @@
 //! open; [`pump`] applies the dialog's choices to it and shows it back.
 
 // PLAN: assumed paths of the framework crates in this app's dependencies.
-use craft::ui::dialog::{DialogId, DialogResult, dialog_id};
+use craft::ui::dialog::{DialogId, dialog_id};
 use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry, ListManagerWords};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::spelling::custom_word;
@@ -136,11 +136,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     // `app.run` must not run inside the host's lock, so each answer is taken first.
     while let Some(result) = dialogs.with(|host| host.take_by_id::<HostedListManager>(id())) {
-        match result {
-            DialogResult::Ok(choice) => apply(app, ctx, &choice),
-            DialogResult::Cancel => {
-                ctx.data_mut(|data| data.remove_temp::<Vec<String>>(state_id()));
-            }
+        match result.ok() {
+            Some(choice) => apply(app, ctx, &choice),
+            None => ctx.data_mut(|data| data.remove_temp::<Vec<String>>(state_id())),
         }
     }
 }
@@ -199,22 +197,25 @@ mod tests {
         forget(&mut app, &[A, B, C]);
         app.run("text.spelling.addWord", json!({ "word": A })).unwrap();
         let mut p = Panel::new(app, draw);
-        super::open(p.app()).unwrap();
+        super::open(&mut p.app()).unwrap();
         // Add: the Entry field's word (kept in lower case) joins the list.
         p.type_into("Entry", " ZqvDictB ");
         p.click("Add");
-        assert_eq!(words(p.app(), &[A, B, C]), [A, B]);
-        assert!(!has(p.app(), B), "not until Done");
+        assert_eq!(words(&p.app(), &[A, B, C]), [A, B]);
+        assert!(!has(&mut p.app(), B), "not until Done");
         // Delete the word picked.
         p.click(A);
         p.click("Delete");
-        assert_eq!(words(p.app(), &[A, B, C]), [B]);
+        assert_eq!(words(&p.app(), &[A, B, C]), [B]);
         // Cancel: the dictionary is as it was.
         p.click("Cancel");
-        assert!(!is_open(p.app()));
-        assert!(has(p.app(), A) && !has(p.app(), B));
+        assert!(!is_open(&p.app()));
+        {
+            let mut app = p.app();
+            assert!(has(&mut app, A) && !has(&mut app, B));
+        }
         // Again, then Done.
-        super::open(p.app()).unwrap();
+        super::open(&mut p.app()).unwrap();
         p.click(A);
         p.click("Delete");
         p.type_into("Entry", B);
@@ -222,9 +223,10 @@ mod tests {
         p.type_into("Entry", C);
         p.click("Add");
         p.click("Done");
-        assert!(!is_open(p.app()), "Done closes it");
-        assert!(!has(p.app(), A) && has(p.app(), B) && has(p.app(), C));
-        forget(p.app(), &[A, B, C]);
+        assert!(!is_open(&p.app()), "Done closes it");
+        let mut app = p.app();
+        assert!(!has(&mut app, A) && has(&mut app, B) && has(&mut app, C));
+        forget(&mut app, &[A, B, C]);
     }
 
     /// Done that can't be saved keeps none of the edits: the dialog stays open and Cancel leaves the
@@ -241,14 +243,14 @@ mod tests {
         let mut failing = self::app();
         failing.session.attach_custom_dictionary(folder);
         let mut p = Panel::new(failing, draw);
-        super::open(p.app()).unwrap();
+        super::open(&mut p.app()).unwrap();
         p.click(P);
         p.click("Delete");
         p.type_into("Entry", Q);
         p.click("Add");
-        assert_eq!(words(p.app(), &[P, Q]), [Q]);
+        assert_eq!(words(&p.app(), &[P, Q]), [Q]);
         p.click("Done");
-        assert!(is_open(p.app()), "the dialog stays open with the error");
+        assert!(is_open(&p.app()), "the dialog stays open with the error");
         assert!(has(&mut app, P) && !has(&mut app, Q), "neither the delete nor the add is kept");
         p.click("Cancel");
         assert!(has(&mut app, P) && !has(&mut app, Q));

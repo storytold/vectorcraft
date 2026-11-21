@@ -15,15 +15,15 @@ use std::borrow::Cow;
 
 use craft::behavior::{DisplayOrder, ItemSource};
 use craft::host::{Host, PickId, PickRequest};
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
-use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::contract::SelectMode;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
 use craft::ui::form::Field;
 use craft::ui::list::{List, ListRow};
-use craft::ui::contract::SelectMode;
 use craft::ui::patterns::form_dialogs::{FormDialog, ResetFooter, ResetPick};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::Label;
+use craft::ui::runtime::overlay::CloseReason;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -33,7 +33,7 @@ const CMD: &str = "links.relink";
 /// The Replace choices, in the order the select lists them.
 const SCOPES: [&str; 4] = ["each", "selected", "all", "missingInFolder"];
 /// The rows the link list shows before it scrolls.
-const LIST_ROWS: usize = 6;
+const LIST_ROWS: u16 = 6;
 
 fn scope_label(scope: &str) -> Label {
     match scope {
@@ -374,7 +374,7 @@ mod tests {
         let dialogs = app.dialogs().expect("a window");
         for _ in 0..2 {
             let _ = ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui)));
-            crate::dialogs::host::pump(app);
+            crate::dialogs::host::pump(app, &ctx);
         }
     }
 

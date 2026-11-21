@@ -4,6 +4,7 @@ use craft::behavior::IconId;
 use craft::ui::bars::{Bar, BarKind};
 use craft::ui::contract::{Show as _, ShowContainer as _};
 use craft::ui::display::{Elide, Icon, Text};
+use craft::ui::primitives::IconSpec;
 use craft::ui::style::Span;
 
 // PLAN: assumed `SlotKey` is a `&'static str` alias exported by the framework's layout module (hub-w1's slots).
@@ -257,16 +258,15 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     };
     Bar::new(tl!("Help Bar"), BarKind::Status).show(ui, |ui, _| {
-        // PLAN: assumed Icon::new(IconId) and the framework icon "help" (document-panels-w1).
-        Icon::new(IconId::new("help")).show(ui);
-        // PLAN: assumed Text::runs(Vec<Span<'_>>) -> Self (chrome-w5).
+        // PLAN: assumed the framework icon "help" (document-panels-w1).
+        Icon::new(IconSpec::svg(IconId::new("help"))).show(ui);
         let spans = segments
             .iter()
             .map(|(text, bold)| {
-                let span = Span::new(text.as_ref());
+                let span = Span::new(text.clone());
                 if *bold { span.strong() } else { span }
             })
             .collect();
-        Text::runs(spans).elide(Elide::End).show(ui);
+        Text::styled(spans).elide(Elide::End).show(ui);
     });
 }

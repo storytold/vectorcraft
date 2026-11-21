@@ -11,6 +11,7 @@ use super::library_panel::tests::{click, confirm_save, context, menu_library_ids
 use super::library_panel::{self, LibraryKind, LibraryPanel, last_open};
 use super::symbols::SymbolLibraries;
 use crate::VectorcraftApp;
+use crate::i18n::LangExt as _;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -73,7 +74,6 @@ fn clicking_a_library_symbol_adds_it_to_the_documents_symbols_in_one_step() {
     app.run("window.symbolLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());
 }
-
 
 #[test]
 fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {

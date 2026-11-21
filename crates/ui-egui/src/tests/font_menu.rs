@@ -1,9 +1,7 @@
 //! The font picker's glue: previews, picks, recents and the saved preferences.
 
+use craft::behavior::{EditEvent, GestureId, Mixed, Preview};
 use serde_json::json;
-// PLAN: assumed `craft::ui::contract::{EditEvent, GestureId, Mixed, Preview}` re-export craft_behavior's value types
-use craft::behavior::{EditEvent, GestureId, Mixed};
-use craft::ui::patterns::presets::Preview;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 use vectorcraft_text::FontDb;
@@ -73,8 +71,8 @@ fn samples_show_the_text_in_the_family_or_a_generic_sample() {
     });
     fixture.settle();
     let texts = fixture.texts();
-    assert!(!texts.iter().any(|t| t == "雅楽"), "no glyphs from another font: {texts:?}");
-    assert_eq!(texts.iter().filter(|t| *t == "Sample").count(), 2, "both runs are the generic sample: {texts:?}");
+    assert!(!texts.iter().any(|t| t.text == "雅楽"), "no glyphs from another font: {texts:?}");
+    assert_eq!(texts.iter().filter(|t| t.text == "Sample").count(), 2, "both runs are the generic sample: {texts:?}");
 }
 
 #[test]
@@ -149,7 +147,7 @@ fn the_wheel_over_the_family_field_steps_the_selected_type_through_the_families(
     // Other tests add fonts to the process-wide database meanwhile: the two families below Inter as listed now.
     let list = FontDb::global().menu_family_list();
     let at = list.iter().position(|f| f == "Inter").expect("Inter is listed");
-    let [one, two] = list.iter().skip(at + 1).take(2).cloned().collect::<Vec<_>>()[..] else { panic!("two families below Inter") };
+    let [one, two]: [String; 2] = list.iter().skip(at + 1).take(2).cloned().collect::<Vec<_>>().try_into().expect("two families below Inter");
     let before = steps(&app);
     let gesture = GestureId::new(1);
     apply_family(&mut app, EditEvent::begin(gesture, Mixed::Same("Inter".into()), "Font Family".into(), None), None);
@@ -206,12 +204,15 @@ fn menus_that_only_pick_a_font_leave_the_document_alone() {
     panel.type_into("Font", "Source Serif 4");
     let pick = panel.ctx().data_mut(|d| d.remove_temp::<(String, Option<String>)>(picked_id()));
     assert_eq!(pick.map(|(family, _)| family).as_deref(), Some("Source Serif 4"), "the pick comes back");
-    assert_eq!((font_of(panel.app(), id), steps(panel.app())), ("Inter".to_string(), before), "nothing previewed or applied on the text");
+    {
+        let app = panel.app();
+        assert_eq!((font_of(&app, id), steps(&app)), ("Inter".to_string(), before), "nothing previewed or applied on the text");
+    }
     assert!(panel.app().ui.favorite_fonts.is_empty());
     panel.click("Font");
     panel.click("Favorite Source Serif 4");
     assert_eq!(panel.app().ui.favorite_fonts, ["Source Serif 4"], "a star is still toggled");
-    assert_eq!(steps(panel.app()), before);
+    assert_eq!(steps(&panel.app()), before);
 }
 
 /// Show samples on white is a Type preference, off by default, saved with the other preferences

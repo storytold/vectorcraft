@@ -8,7 +8,9 @@
 //! Divide Slices (`divideSlices`): `rows` and `columns` (a count or, with `rowsBy` or `columnsBy`
 //! `"size"`, a length in points; `null` while the axis is off). OK runs `object.slice.divide`.
 
-use craft::draw::ui::slice::{DivideBy, DivideSlices, DivideSlicesDialog, SliceBackground, SliceCellAlign, SliceCellVAlign, SliceKind, SliceOptions, SliceOptionsDialog};
+use craft::draw::ui::slice::{
+    DivideBy, DivideSlices, DivideSlicesDialog, SliceBackground, SliceCellAlign, SliceCellVAlign, SliceKind, SliceOptions, SliceOptionsDialog,
+};
 use craft::theme::Srgba;
 use craft::ui::dialog::DialogResult;
 use serde_json::{Map, Value, json};

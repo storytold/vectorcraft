@@ -118,7 +118,7 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>
     let count = app.session.active().map_or(0, |st| st.doc.artboards.len());
     let web = io::is_web(app);
     let initial = fields_of(&dialog_params(mode, selection, count, false), &fields);
-    let build = move |fields: &mut DialogFields| {
+    let dialog = HostedParamDialog::new(&ctx, KIND, initial, move |fields| {
         let tiny = fields.text("profile") == Some("tiny12");
         // SVG Tiny has presentation attributes alone; the other styles are shown disabled.
         if tiny && fields.text("styling") != Some("presentation") {
@@ -131,15 +131,14 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>
         ParamDialog::new(KIND, tl!("SVG Options"), dialog_params(mode, selection, count, tiny))
             .values(Bind::bound(fields))
             .extra_buttons(vec![(BROWSER_ACTION.into(), browser)])
-    };
-    let dialog = HostedParamDialog::new(&ctx, KIND, initial, build);
+    });
     export_host::open(app, Export::Svg { mode }, selection, dialog);
 }
 
 /// A choice row over `(value, label)` pairs.
-fn pairs(key: &str, label: &str, choices: &[(&str, &str)]) -> Param {
+fn pairs(key: &str, label: &'static str, choices: &[(&str, &'static str)]) -> Param {
     let ids: Vec<&str> = choices.iter().map(|(v, _)| *v).collect();
-    let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
+    let labels: Vec<&'static str> = choices.iter().map(|(_, l)| *l).collect();
     choice(key, label, &ids, &labels)
 }
 

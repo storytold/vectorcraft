@@ -661,7 +661,8 @@ fn save_changes_answers_for_its_own_document() {
     let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
     app.run("file.closeAll", json!({})).unwrap();
     // Save: A's Save panel shows, and X closes meanwhile.
-    answer_dialog(&mut app, top(&app), &[], true);
+    let id = top(&app);
+    answer_dialog(&mut app, id, &[], true);
     assert_eq!(picker.requests().iter().map(|r| r.kind).collect::<Vec<_>>(), [PickKind::Save]);
     app.run("file.close", json!({"index": 0})).unwrap();
     picker.answer_saved("/art/a.vectorcraft", None);
@@ -685,7 +686,8 @@ fn save_changes_answered_by_a_save_dialog_keeps_the_front_document() {
     app.session.set_active(0);
     let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
     app.run("file.close", json!({"index": 1})).unwrap();
-    answer_dialog(&mut app, top(&app), &[], true);
+    let id = top(&app);
+    answer_dialog(&mut app, id, &[], true);
     assert_eq!(picker.requests().iter().map(|r| r.kind).collect::<Vec<_>>(), [PickKind::Save]);
     picker.answer_saved("/art/b.vectorcraft", None);
     settle(&mut app);

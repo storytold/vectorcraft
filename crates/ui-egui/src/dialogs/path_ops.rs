@@ -5,10 +5,10 @@
 
 // PLAN: the framework import paths below are assumed from the contract rows (craft-ui-patterns re-exports contract and
 // runtime; the form-dialog items live under `patterns::form_dialogs`; `Field` and `NumberField` under craft-ui-widgets).
-use craft::ui::contract::{Bind, FieldLabelRole, SideLabel};
+use craft::ui::contract::{Bind, FieldLabelRole, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::DialogId;
 use craft::ui::form::Field;
-use craft::ui::patterns::form_dialogs::{BelowRows, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
 use craft::ui::text::{NumberField, NumberOutput};
@@ -282,14 +282,12 @@ pub(crate) fn simplify_dialog(tolerance: f64) -> DialogFields {
 }
 
 /// The anchor counts line under Simplify's rows.
-fn counts_row() -> BelowRows<'static> {
-    BelowRows::new(|ui, f| {
-        if let Some(FieldValue::Json(c)) = f.get(COUNTS)
-            && let (Some(before), Some(after)) = (c["before"].as_u64(), c["after"].as_u64())
-        {
-            ui.label(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points"))));
-        }
-    })
+fn counts_row(ui: &mut egui::Ui, f: &DialogFields) {
+    if let Some(FieldValue::Json(c)) = f.get(COUNTS)
+        && let (Some(before), Some(after)) = (c["before"].as_u64(), c["after"].as_u64())
+    {
+        ui.label(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points"))));
+    }
 }
 
 /// The record of the open dialog of `op`, taken out of the app.
@@ -301,7 +299,7 @@ fn take_open(app: &mut VectorcraftApp, op: PathOp) -> Option<Open> {
 /// Whether Object › Path › Simplify opens its dialog (the user kept its settings) instead of the slider.
 pub(crate) fn retained_simplify(app: &VectorcraftApp) -> bool {
     let Some(ctx) = app.ui_ctx.as_ref() else { return false };
-    saved_value::<Option<DialogFields>>(ctx, &SIMPLIFY_KEY).flatten().is_some()
+    saved_value::<Option<DialogFields>>(ctx, &SIMPLIFY_KEY).is_some()
 }
 
 /// Opens the dialog of `op` on its remembered values (Simplify: the ones kept for next time).
@@ -329,7 +327,6 @@ pub(crate) fn open_simplify(app: &mut VectorcraftApp, tolerance: f64) {
 }
 
 fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remember: Option<SaveKey>) {
-    // PLAN: `app.ui_ctx` is assumed to be `Option<egui::Context>` (wg.S1 reads it as the window's context).
     let Some(ctx) = app.ui_ctx.clone() else {
         app.status("There is no window to show the dialog in.");
         return;
@@ -343,9 +340,9 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
             d = d.remember(k);
         }
         if op.previews() {
-            d = d.previews();
+            d = d.previews(true);
         }
-        if op == PathOp::Simplify { d.below(counts_row()) } else { d }
+        if op == PathOp::Simplify { d.below(counts_row) } else { d }
     });
     let ok = move |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
         let (cmd, params) = command(op, &result.fields);
@@ -404,7 +401,7 @@ pub(crate) fn open_split(app: &mut VectorcraftApp) {
         app.session.active().and_then(|st| st.doc.bounds_of(&st.selection.objects, false)).map_or((0.0, 0.0), |b| (b.width(), b.height()));
     let lengths = crate::canvas::general_lengths(app);
     let dialog = HostedParamDialog::new(&ctx, SPLIT_COMMAND, split_fields(width, height), move |f| {
-        ParamDialog::new(SPLIT_COMMAND, tl!("Split Into Grid"), split_rows(lengths)).values(Bind::bound(f)).previews()
+        ParamDialog::new(SPLIT_COMMAND, tl!("Split Into Grid"), split_rows(lengths)).values(Bind::bound(f)).previews(true)
     });
     let ok = |app: &mut VectorcraftApp, result: &craft::ui::patterns::form_dialogs::ParamResult| {
         let params = split_params(&result.fields);

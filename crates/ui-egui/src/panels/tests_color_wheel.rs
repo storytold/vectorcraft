@@ -106,5 +106,5 @@ fn near(a: [f32; 3], b: [f32; 3], tol: [f32; 3]) -> bool {
 }
 
 fn undo_len(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrCHECK
+    app.session.doc().unwrap().history.undo.len()
 }

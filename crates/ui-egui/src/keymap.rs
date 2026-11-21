@@ -340,11 +340,8 @@ pub(crate) mod stored {
         let with = |k: &str| if prefix.is_empty() { k.to_string() } else { format!("{prefix}+{k}") };
         let chord = match key {
             "+" | "=" => {
-                let mods = if prefix.is_empty() {
-                    Mods { cmd: false, ctrl: false, alt: false, shift: false }
-                } else {
-                    Chord::parse(&with("A")).ok()?.mods
-                };
+                let mods =
+                    if prefix.is_empty() { Mods { cmd: false, ctrl: false, alt: false, shift: false } } else { Chord::parse(&with("A")).ok()?.mods };
                 Chord::new(mods, Key::Equals)
             }
             "~" => Chord::parse(&with("`")).ok()?,
@@ -462,13 +459,13 @@ mod tests {
     /// A hand-edited value that is not text drops that entry, not every preference.
     #[test]
     fn a_bad_override_value_keeps_the_other_preferences() {
-        let mut raw = serde_json::to_value(UiState { toolbar: false, ..Default::default() }).unwrap();
+        let mut raw = serde_json::to_value(UiState { control_bar: true, ..Default::default() }).unwrap();
         if let Some(o) = raw.as_object_mut() {
             o.remove("shortcut_sets");
         }
         raw["shortcut_overrides"] = json!({"x": 5, "tool:pen": "Shift+9"});
         let ui: UiState = serde_json::from_value(raw).unwrap();
-        assert!(!ui.toolbar);
+        assert!(ui.control_bar);
         assert!(active(&ui).get("x").is_none());
         assert_eq!(texts(active(&ui), "tool:pen"), Some(vec!["Shift+9"]));
     }
@@ -499,7 +496,7 @@ mod tests {
             assert_eq!(km.conflicts(), vec![], "{p:?}");
             assert_eq!(km.problems(), vec![], "{p:?}");
             assert_eq!(km.catalog().len(), snapshot.entries.len(), "{p:?}: every entry is bindable");
-            for e in &snapshot.entries {
+            for e in snapshot.entries.iter() {
                 // A default that no longer reads would show in the menus but never run.
                 assert!(shortcut_editor::default_on(&e.key, p).is_none_or(|d| stored::parse_vc(d).is_some()), "{p:?} {}", e.key);
                 let want = defaults_of(&e.key, p);
@@ -524,7 +521,8 @@ mod tests {
         for p in [Platform::Windows, Platform::Linux, Platform::Mac] {
             for (alias, edit, primary) in [("F2", "edit.cut", "Cmd+X"), ("F3", "edit.copy", "Cmd+C"), ("F4", "edit.paste", "Cmd+V")] {
                 let keymap = |sets: &craft::keymap::Profiles| {
-                    Keymap::new(catalog_defs(p, &snapshot), Scopes::new(), p).with_overrides(sets.active_overrides(&shortcut_editor::BUILTINS).clone())
+                    Keymap::new(catalog_defs(p, &snapshot), Scopes::new(), p)
+                        .with_overrides(sets.active_overrides(&shortcut_editor::BUILTINS).clone())
                 };
                 let kept = keymap(&stored::legacy_on(&json!({}), None, &Value::Null, p));
                 assert_eq!(run(&kept, alias), (!p.is_mac()).then(|| command_of(edit)), "{p:?} {alias} default");

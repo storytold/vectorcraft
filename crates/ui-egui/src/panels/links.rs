@@ -729,7 +729,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let row_ids: Vec<u64> = rows.iter().filter_map(|r| r["id"].as_u64()).collect();
     // `lookup` gives the objects outside the layer tree.
     let thumbs = super::layers::link_thumbnails(ui.ctx());
-    let nodes = super::layers::NodeThumbs::new(&doc, |id| cache.nested_node(id).cloned());
+    let nodes = super::layers::NodeThumbs::new(&doc, |id| cache.nested_node(id.0).cloned());
     let (thumbs, nodes) = (&thumbs, &nodes);
     let ppp = ui.ctx().pixels_per_point();
 
@@ -754,11 +754,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let tip = status_tip(r, mask_name(view, &doc, &cache, r));
                 let node = NodeId(*id);
                 let mut row = ListRow::new(name.to_string()).thumb(o.thumb, move |cx, rect| {
-                    // PLAN: assumed `state(..).shown()` gives the texture to paint, if ready.
                     let request = craft::ui::primitives::ThumbRequest::for_cell(rect.width(), ppp);
                     let shown = thumbs
                         .state(
-                            cx.ctx(),
+                            cx.painter.ctx(),
                             nodes,
                             &super::layers::NodeThumb { uid: uid.unwrap_or_default(), node },
                             &request,
@@ -766,8 +765,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         )
                         .shown();
                     if let Some(texture) = shown {
-                        let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                        cx.painter().image(texture, rect, uv, egui::Color32::WHITE);
+                        cx.picture(texture.id, rect, texture.uv(), 0.0);
                     }
                 });
                 if let Some(page) = r["page"].as_u64() {
@@ -904,9 +902,9 @@ pub(crate) fn date_label(ms: u64) -> String {
 }
 
 /// One line of Link Info: a labelled field whose text is its value.
-fn info_row(ui: &mut Ui, label: &str, value: String) {
+fn info_row(ui: &mut Ui, label: &'static str, value: String) {
     Field::new(label).value(value.clone()).show(ui, |ui, _| {
-        Text::new(value).show(ui);
+        Text::new(value.clone()).show(ui);
     });
 }
 

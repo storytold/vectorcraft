@@ -136,12 +136,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut params = Vec::new();
     if safe_mode::active() {
         params.push(
-            Param::read_only_text(
-                "note",
-                "",
-                tl!("VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.").to_string(),
-            )
-            .full_width(),
+            Param::read_only_text("note", "", tl!("VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.").to_string())
+                .full_width(),
         );
     }
     params.push(Param::section(tl!("Disabled plug-ins").to_string()));

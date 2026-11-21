@@ -235,13 +235,7 @@ pub(crate) fn main_rows(ui: &mut Ui, params: &mut Value, data: &RowsData, host: 
 /// The Advanced settings: fidelity, method, Create, snapping, shapes, grouping, gradients and Ignore Color, with an
 /// eyedropper for Ignore Color when the host passes a `sampler`. `_data` and `_host` are the arguments of
 /// [`main_rows`], so a host passes the same set to both.
-pub(crate) fn advanced_rows(
-    ui: &mut Ui,
-    params: &mut Value,
-    _data: &RowsData,
-    _host: RowsHost,
-    sampler: Option<Sampler>,
-) -> RowsOutput {
+pub(crate) fn advanced_rows(ui: &mut Ui, params: &mut Value, _data: &RowsData, _host: RowsHost, sampler: Option<Sampler>) -> RowsOutput {
     let mut out = RowsOutput::default();
     let mode = text(params, "mode", "blackAndWhite");
     for spec in [

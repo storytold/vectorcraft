@@ -4,6 +4,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 
 use super::{CHECK, ID, SET_ROLE, follow_role, last_check, rows, run_check, select_issue};
+use crate::i18n::LangExt as _;
 use crate::{VectorcraftApp, menus};
 
 /// An app with two rectangles, nothing selected → (app, their ids).
