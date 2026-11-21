@@ -40,7 +40,7 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
             let mut titles = Vec::with_capacity(tree.len());
             for (title, items) in tree.iter() {
                 let cue = root_rows.iter().find(|r| r.label == crate::i18n::t(title)).and_then(|r| r.cue.as_ref()).filter(|_| show_cues);
-                let text = keyboard::text(ui, crate::i18n::t(title), "", cue, Some(13.0));
+                let text = keyboard::text(ui, crate::i18n::t(title), None, cue, Some(13.0));
                 let resp = ui.push_id(("menu-bar-root", *title), |ui| ui.add(egui::Button::new(text))).inner;
                 crate::palette::note_spot(ui, resp.rect, || crate::palette::SpotAt::Menu((*title).to_string()));
                 keyboard::bind_root(&ctx, title, &resp);
@@ -164,7 +164,12 @@ fn render_items_scoped(
     if let Some(path) = path {
         keyboard::note_level(ui.ctx(), path);
     }
-    for e in items.iter().filter_map(|it| entry(app, it)) {
+    let entries: Vec<Entry> = items.iter().filter_map(|it| entry(app, it)).collect();
+    // A menu that shows check marks keeps one check column for all of its rows, as native menus
+    // do: every label starts at the same x, checked or not, and on submenus and plain commands too.
+    let column = checks && entries.iter().any(|e| matches!(e, Entry::Item(r) if r.checked.is_some()));
+    let room = column.then_some("");
+    for e in entries {
         match e {
             Entry::Sep => {
                 ui.separator();
@@ -176,7 +181,7 @@ fn render_items_scoped(
                 if let Some(access) = rows.next() {
                     ui.push_id(access.key.salt(), |ui| {
                         let cue = access.cue.as_ref().filter(|_| keyboard::cues(ui.ctx()));
-                        let text = keyboard::text(ui, label, "", cue, None);
+                        let text = keyboard::text(ui, label, room, cue, None);
                         if !ui.is_sizing_pass() {
                             keyboard::prepare_submenu(ui.ctx(), access, ui.next_auto_id());
                         }
@@ -198,7 +203,8 @@ fn render_items_scoped(
                         }
                     });
                 } else {
-                    ui.menu_button(label, |ui| {
+                    let text = keyboard::text(ui, label, room, None, None);
+                    ui.menu_button(text, |ui| {
                         widgets::menu_scroll(ui, |ui| {
                             widgets::menu_min_width(ui, 200.0);
                             render_items(app, ui, children, checks || shows_marks(app, children), clicked);
@@ -206,7 +212,7 @@ fn render_items_scoped(
                     });
                 }
             }
-            Entry::Item(row) => render_row(app, ui, &row, checks, rows.next(), clicked),
+            Entry::Item(row) => render_row(app, ui, &row, column, rows.next(), clicked),
         }
     }
 }
@@ -224,27 +230,27 @@ fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
     rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))
 }
 
-/// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
-/// and Type › Font's samples.
-fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, access: Option<&AccessRow>, clicked: &mut Option<(String, Value)>) {
+/// One menu item: its label (after a check mark or the room for one, under `column`: the menu
+/// keeps a check column), its shortcut, and Type › Font's samples.
+fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, column: bool, access: Option<&AccessRow>, clicked: &mut Option<(String, Value)>) {
     let sc = row.shortcut.map(shown_shortcut).unwrap_or_default();
     let Some((id, p)) = row.command else {
         ui.add_enabled_ui(false, |ui| {
             let cue = access.and_then(|r| r.cue.as_ref()).filter(|_| keyboard::cues(ui.ctx()));
-            let text = keyboard::text(ui, row.label.as_ref(), "", cue, None);
+            let text = keyboard::text(ui, row.label.as_ref(), column.then_some(""), cue, None);
             ui.add(egui::Button::new(text).shortcut_text(sc));
         })
         .response
         .on_disabled_hover_text(tl!("Coming soon — tracked in the parity plan"));
         return;
     };
-    let prefix = match row.checked.filter(|_| checks) {
+    let mark = column.then_some(match row.checked {
         Some(true) => "✓  ",
         Some(false) => "     ",
         None => "",
-    };
+    });
     let cue = access.and_then(|r| r.cue.as_ref()).filter(|_| keyboard::cues(ui.ctx()));
-    let text = keyboard::text(ui, row.label.as_ref(), prefix, cue, None);
+    let text = keyboard::text(ui, row.label.as_ref(), mark, cue, None);
     // Type → Font: each family's sample after its name (Enable in-menu font previews).
     let sampled = p.get("font").and_then(Value::as_str).filter(|_| id == "text.setStyle" && app.session.prefs.font_preview);
     let draw = |ui: &mut egui::Ui| match sampled {

@@ -2040,3 +2040,59 @@ fn the_double_triangle_on_the_tab_strip_cycles_the_display_sizes() {
     assert!(h.app.ui.color_hide_options);
     assert!(cycle_button(&h, "swatches").is_none());
 }
+
+/// Right-click `panel`'s tab and return each text drawn with the x of its first glyph that is not
+/// a space or a check mark, on the screen and within the text.
+fn tab_menu_texts(h: &mut Harness, panel: &str) -> Vec<(String, f32, f32)> {
+    let tab = h.tab(panel).expect("the tab is drawn").center();
+    let secondary = |pressed| Event::PointerButton { pos: tab, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+    h.frame(vec![Event::PointerMoved(tab), secondary(true)]);
+    h.frame(vec![secondary(false)]);
+    let mut shown: Vec<(String, f32, f32)> = vec![];
+    for _ in 0..3 {
+        h.time += 0.05;
+        let input = egui::RawInput { time: Some(h.time), screen_rect: Some(SCREEN), ..Default::default() };
+        let app = &mut h.app;
+        let mut out = h.ctx.run_ui(input, |ui| {
+            app.logic(ui.ctx());
+            app.ui(ui);
+        });
+        out.textures_delta.clear();
+        fn texts(s: &egui::Shape, out: &mut Vec<(String, f32, f32)>) {
+            match s {
+                egui::Shape::Text(t) => {
+                    let start = t.galley.rows.first().and_then(|r| Some(r.pos.x + r.row.glyphs.iter().find(|g| g.chr != ' ' && g.chr != '✓')?.pos.x));
+                    if let Some(x) = start {
+                        out.push((t.galley.text().trim_start_matches(['✓', ' ']).to_string(), t.pos.x + x, x));
+                    }
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        shown.clear();
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    }
+    h.press(egui::Key::Escape, Default::default());
+    shown
+}
+
+#[test]
+fn a_tab_menus_stock_items_start_at_the_panel_items_check_column() {
+    let mut h = Harness::new();
+    crate::theme::install_fonts(&h.ctx);
+    h.frame(vec![]);
+    let shown = tab_menu_texts(&mut h, "layers");
+    let find = |shown: &[(String, f32, f32)], label: &str| {
+        shown.iter().find(|(t, ..)| t == label).map(|(_, x, within)| (*x, *within)).unwrap_or_else(|| panic!("{label} missing from {shown:?}"))
+    };
+    let (panel_item, stock) = (find(&shown, "New Layer…").0, find(&shown, "Float Panel").0);
+    assert!((panel_item - stock).abs() < 0.5, "\"Float Panel\" starts at {stock}, the panel's \"New Layer…\" at {panel_item}");
+    // With no document the Layers menu has no rows of its own, so nothing is indented.
+    h.app.run("file.close", json!({})).unwrap();
+    h.frame(vec![]);
+    let shown = tab_menu_texts(&mut h, "layers");
+    assert!(!shown.iter().any(|(t, ..)| t == "New Layer…"), "no Layers rows without a document");
+    let within = find(&shown, "Float Panel").1;
+    assert!(within < 0.5, "\"Float Panel\" starts {within} into its text with no rows before it");
+}
