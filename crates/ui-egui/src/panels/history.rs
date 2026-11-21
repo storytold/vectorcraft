@@ -45,14 +45,29 @@ pub(crate) fn shown(h: &vectorcraft_engine::HistoryEntry) -> String {
     entry_name(crate::i18n::current(), h).unwrap_or_else(|| h.label.clone())
 }
 
+#[derive(Clone)]
+struct ContextState {
+    document: u64,
+    snapshot: Arc<vectorcraft_doc::Document>,
+    popup: egui::Id,
+    keyboard: bool,
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let context_state_id = ui.scope_id().with("history-context-state");
+    let document = app.session.active().map(|st| st.uid);
+    if let Some(state) = ui.ctx().data(|d| d.get_temp::<ContextState>(context_state_id))
+        && document != Some(state.document)
+    {
+        egui::Popup::close_id(ui.ctx(), state.popup);
+        ui.ctx().data_mut(|d| d.remove::<ContextState>(context_state_id));
+    }
     let Some(st) = app.session.active() else {
-        ui.ctx().data_mut(|d| d.remove::<Arc<vectorcraft_doc::Document>>(context_state_id));
         super::empty_state(ui, "history", tl!("No document"), tl!("Open a document to see its history."));
         return;
     };
+    let document = st.uid;
     let mut rows: Vec<(String, bool)> = vec![(tl!("Open").to_string(), false)];
     rows.extend(st.history.undo.iter().map(|h| (shown(h), false)));
     let current = rows.len() - 1;
@@ -79,22 +94,40 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 );
                 let col = if *future { t.text_disabled } else { t.text };
                 ui.painter().text(r.left_center() + vec2(30.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), col);
+                if resp.has_focus() {
+                    ui.painter().rect_stroke(r.shrink(1.0), 0.0, ui.visuals().selection.stroke, egui::StrokeKind::Inside);
+                }
                 if resp.clicked() && i != current {
                     target = app.session.active().and_then(|st| st.history.state(&st.doc, i)).cloned();
                 }
-                if resp.secondary_clicked()
+                let keyboard = resp.has_focus() && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10));
+                if (resp.secondary_clicked() || keyboard)
                     && let Some(snapshot) = app.session.active().and_then(|st| st.history.state(&st.doc, i)).cloned()
                 {
-                    ui.ctx().data_mut(|d| d.insert_temp(context_state_id, snapshot));
+                    let state = ContextState { document, snapshot, popup: egui::Popup::default_response_id(&resp), keyboard };
+                    ui.ctx().data_mut(|d| d.insert_temp(context_state_id, state));
                 }
-                resp.context_menu(|ui| {
-                    let snapshot = ui.ctx().data(|d| d.get_temp::<Arc<vectorcraft_doc::Document>>(context_state_id));
-                    if menu_item(
+                let mut popup = egui::Popup::context_menu(&resp);
+                if ui.ctx().data(|d| d.get_temp::<ContextState>(context_state_id)).is_some_and(|s| s.keyboard && s.popup == popup.get_id()) {
+                    popup = popup.at_position(r.left_bottom());
+                }
+                if keyboard {
+                    popup = popup.open_memory(egui::SetOpenCommand::Bool(true));
+                }
+                let was_open = popup.is_open();
+                popup.show(|ui| {
+                    let snapshot = ui.ctx().data(|d| d.get_temp::<ContextState>(context_state_id)).map(|s| s.snapshot);
+                    let new_document = widgets::menu_item_response(
                         ui,
                         tl!("New Document from State"),
                         snapshot.is_some() && crate::menus::enabled(app, "edit.newDocumentFromState"),
                         false,
-                    ) && let Some(snapshot) = snapshot.clone()
+                    );
+                    if keyboard {
+                        new_document.request_focus();
+                    }
+                    if new_document.clicked()
+                        && let Some(snapshot) = snapshot.clone()
                         && let Some(row) = resolve_state(app, snapshot, false)
                     {
                         crate::menus::invoke(app, "edit.newDocumentFromState", json!({ "index": row }));
@@ -108,12 +141,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         crate::menus::invoke(app, "edit.clearHistory", json!({}));
                     }
                 });
+                if was_open && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    resp.request_focus();
+                }
                 context_open |= resp.context_menu_opened();
             }
         });
     });
     if !context_open {
-        ui.ctx().data_mut(|d| d.remove::<Arc<vectorcraft_doc::Document>>(context_state_id));
+        ui.ctx().data_mut(|d| d.remove::<ContextState>(context_state_id));
     }
     if let Some(target) = target {
         step_to_state(app, target);
@@ -426,14 +462,21 @@ mod tests {
         assert!(d.fields.contains_key("historyStates"), "{:?}", d.fields.keys());
     }
 
-    fn row_menu_harness(app: VectorcraftApp, row: usize) -> egui_kittest::Harness<'static, VectorcraftApp> {
-        use egui_kittest::kittest::Queryable;
+    fn history_harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
         crate::i18n::set_current(crate::i18n::Lang::EN);
         let mut h = egui_kittest::Harness::builder()
             .with_size(vec2(260.0, 400.0))
+            // This isolated panel has no installed SVG loader; its decorative icon placeholders
+            // have no names. Tests query the named rows and menu controls directly.
             .with_accessibility_check(false)
             .build_ui_state(|ui, app| show(app, ui), app);
         h.run_steps(2);
+        h
+    }
+
+    fn row_menu_harness(app: VectorcraftApp, row: usize) -> egui_kittest::Harness<'static, VectorcraftApp> {
+        use egui_kittest::kittest::Queryable;
+        let mut h = history_harness(app);
         let pos = h.get_all_by_role(egui::accesskit::Role::ListItem).nth(row).expect("history row").rect().center();
         h.event(egui::Event::PointerMoved(pos));
         for pressed in [true, false] {
@@ -441,6 +484,63 @@ mod tests {
         }
         h.run_steps(2);
         h
+    }
+
+    #[test]
+    fn switching_documents_dismisses_the_row_menu_without_clearing_either_history() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = app_with_two_rectangles();
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+        for x in [10, 60] {
+            app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap();
+        }
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+        let mut h = row_menu_harness(app, 1);
+        h.get_by_label("   Clear History");
+        h.state_mut().session.execute("document.activate", &json!({"index": 1})).unwrap();
+        h.run_steps(2);
+        assert!(h.query_by_label("   Clear History").is_none(), "the other document must not inherit the popup");
+        h.state_mut().session.execute("document.activate", &json!({"index": 0})).unwrap();
+        h.run_steps(2);
+        assert!(h.query_by_label("   Clear History").is_none(), "switching back must not revive the popup");
+        for st in h.state().session.documents() {
+            assert_eq!((st.history.undo.len(), st.history.redo.len()), (1, 1));
+        }
+    }
+
+    #[test]
+    fn keyboard_opens_dismisses_and_activates_the_focused_rows_menu() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let app = app_with_two_rectangles();
+        let source = app.session.active().unwrap().doc.clone();
+        let wanted = app.session.active().unwrap().history.undo[1].doc.clone();
+        let mut h = history_harness(app);
+        for _ in 0..4 {
+            h.key_press(egui::Key::Tab);
+            h.run_steps(1);
+            if h.get_all_by_role(egui::accesskit::Role::ListItem).nth(1).unwrap().accesskit_node().is_focused() {
+                break;
+            }
+        }
+        assert!(h.get_all_by_role(egui::accesskit::Role::ListItem).nth(1).unwrap().accesskit_node().is_focused());
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
+        h.run_steps(2);
+        assert!(h.get_by_label("   New Document from State").accesskit_node().is_focused());
+        assert_eq!(depth(h.state()), (2, 0), "opening does not step");
+        h.key_press(egui::Key::Escape);
+        h.run_steps(2);
+        assert!(h.query_by_label("   New Document from State").is_none());
+        assert!(h.get_all_by_role(egui::accesskit::Role::ListItem).nth(1).unwrap().accesskit_node().is_focused());
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F10);
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert_eq!(h.state().session.documents().len(), 2);
+        assert_eq!(h.state().session.active().unwrap().doc.layers, wanted.layers);
+        assert!(Arc::ptr_eq(&h.state().session.documents()[0].doc, &source));
+        assert_eq!(h.state().session.documents()[0].history.undo.len(), 2);
     }
 
     #[test]
