@@ -20,13 +20,14 @@ impl MirrorAxis {
     /// A single editable mirror repeat selected whole. Multi-selection keeps ordinary transforms.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
         let NodeKind::Repeat(spec) = &n.kind else { return None };
         let RepeatKind::Mirror { angle, center } = spec.kind else { return None };
-        if !angle.is_finite() || !finite(center) {
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !angle.is_finite() || !finite(center) || !doc.is_editable(*id) {
             return None;
         }
         let bounds = n.geometric_bounds_with(&doc.symbol_boxes())?;

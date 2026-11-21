@@ -957,7 +957,8 @@ link, and `graphicStyle.apply` with `add` unlinks the group. With `appearance.tr
 target group's paths keeps its look on a move, and a `source` that is the group's only path is an error.
 `graphicStyle.redefine` gives the style to the paths directly in a series group linked to it, whether or not the group
 has rows of its own, links them, and clears and unlinks the group; the source and the paths linked to the style whose
-look was edited keep their look. Read as a source, by `graphicStyle.new`, `graphicStyle.redefine` or
+look was edited keep their look, and a path in the group linked to another style keeps its look and its link. Read as a
+source, by `graphicStyle.new`, `graphicStyle.redefine` or
 `appearance.transfer`, a series group that has no fill, stroke, effect, opacity, blend mode, isolation, knockout or
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
@@ -7582,16 +7583,22 @@ or breaks these rules, opens with the image placed by its transform. A drag is o
 the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
-Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Relink (`links.relink`),
-Embed (`links.embed`), Unembed (`links.unembed`), Create Object Mosaic (`object.createObjectMosaic`) and Place with
-Replace (`file.place` with `replace`) of anything but a text file refuse a distorted image with an error that names the
-distortion; Place with Replace does not refuse a clipping group that holds a distorted image of a DCS file's plates. Relink and Unembed refuse a named or selected distorted image before they search a folder or write a file.
-Create Gradient Mesh (`object.mesh.create`) converts the other objects it is given and lists each distorted image it
-leaves as it is in `skipped`, with its `id` and the error as `reason`; with nothing else to convert, it returns that
-error. Update Links (`links.update`) puts a changed file's pixels between a distorted
-image's corners, without applying its Placement Options. Mask (`object.maskImage`) draws its clipping path through the
-image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
-result. These rules are VectorCraft's own.
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
+(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of anything but a text file refuse a
+distorted image with an error that names the distortion; Place with Replace does not refuse a clipping group that holds
+a distorted image of a DCS file's plates. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
+given and lists each distorted image it leaves as it is in `skipped`, with its `id` and the error as `reason`; with
+nothing else to convert, it returns that error. Update Links (`links.update`) and Relink
+(`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
+Relink's `preserve`. When `preserve` is given, Relink adds a `warnings` entry naming those images; without it, Relink
+adds none for them. The clipping path a PSD, PSB or DCS
+file names is drawn through the corners: the clip group of the old file's clipping path gets the new file's clipping
+path, or becomes a plain group when the new file names none. Embed (`links.embed`) and Unembed (`links.unembed`) keep
+the corners, each in one undo step. Unembed of a distorted image from a PSD or PSB file, written as stored (PNG, or
+TIFF for a CMYK file), keeps the clip group of that file's clipping path, and so do Relink and Update Links to the
+file it wrote; a path that converts the image writes no clipping path, and the clip group becomes a plain group. Mask
+(`object.maskImage`) draws its clipping path through the image's corners. Rasterize (`object.rasterize`) draws the
+image between its corners and makes a plain image of the result. These rules are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}
@@ -14560,8 +14567,8 @@ Tools:
   outside it with a point on it (within a millionth of its radius); it never crosses the first segment, and it
   touches the two segments at different points. The circle is a new ellipse with the current paint, drawn through
   three of its points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one
-  undo step. A circle too small or too large for its three points to give it back in floating point counts as no
-  circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
+  undo step. A circle too small or too large for its three points to give it back in floating point, or one that
+  would reach past the canvas (4,000,000 pt from the origin), counts as no circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
   nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
   segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, another document, or a
   change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
