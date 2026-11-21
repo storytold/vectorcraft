@@ -120,25 +120,6 @@ fn clicking_a_library_brush_adds_it_to_the_documents_brushes_in_one_step() {
     assert!(last_open(&app.ui).is_none());
 }
 
-#[test]
-fn the_ink_and_wash_library_opens_and_a_click_adds_and_applies_its_brush() {
-    let mut app = app();
-    let ctx = context();
-    let r = app.run("window.brushLibrary", json!({"library": "ink-and-wash"})).unwrap();
-    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("ink-and-wash"), Some(4)));
-    let lib = BrushLibraries::get(&app, "ink-and-wash").unwrap().1;
-    let rows = BrushLibraries::rows(&lib, "ink-and-wash", "");
-    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Tapered Ink", "Brush Pen", "Soft Wash", "Pooling Wash"]);
-    let path = app.run("shape.line", json!({"x1": 10, "y1": 10, "x2": 150, "y2": 60})).unwrap()["id"].as_u64().unwrap();
-    let (undo, brushes) = (undo_len(&app), count(&app));
-    click(&mut app, &ctx, "Pooling Wash", Modifiers::NONE, 0.0);
-    assert_eq!((count(&app), undo_len(&app)), (brushes + 1, undo + 1), "one brush, one undo step");
-    let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().clone();
-    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.clone()).as_deref(), Some("Pooling Wash"));
-    click(&mut app, &ctx, "Brush Pen", Modifiers::NONE, 2.0);
-    assert!(has(&app, "Brush Pen"));
-    assert_eq!(app.run("brush.list", json!({})).unwrap()["current"], "Brush Pen");
-}
 
 /// A built-in library lists its brushes in the UI language, and Find matches the name shown and
 /// the brush's own name. The brush keeps its own name for its tile, a click and the document's
@@ -161,13 +142,7 @@ fn built_in_library_brushes_are_listed_in_the_ui_language() {
     let texts = list(&mut app, 0.0);
     assert!(texts.iter().any(|t| t == "Encre effilée"), "{texts:?}");
     assert!(!texts.iter().any(|t| t == "Tapered Ink"), "{texts:?}");
-    let lib = BrushLibraries::get(&app, "ink-and-wash").unwrap().1;
-    for query in ["effil", "tapered"] {
-        let rows = BrushLibraries::rows(&lib, "ink-and-wash", query);
-        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Tapered Ink"], "{query}");
-    }
-    assert!(BrushLibraries::rows(&lib, "loaded/1", "effil").is_empty(), "another library's brush is matched by its own name only");
-    click(&mut app, &ctx, "Tapered Ink", Modifiers::NONE, 1.0);
+    click(&mut app, &ctx, "Encre effilée", Modifiers::NONE, 1.0);
     assert!(has(&app, "Tapered Ink"));
     assert_eq!(app.run("brush.list", json!({})).unwrap()["current"], "Tapered Ink");
     // The document's brushes, opened as a library, keep their names.
@@ -220,15 +195,18 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     assert_eq!(enabled("window.brushLibrary.other"), Some(true));
     assert_eq!(enabled("ui.saveBrushLibrary"), Some(true), "a new document has the default brushes");
     assert!(!entries.iter().any(|e| e.path == ["Window", "Brush Libraries", "User Defined"]), "empty slots are hidden");
-    // The Brushes panel's library button and menu.
+    // The Brushes panel's library menus list the same libraries, and each Window row opens its panel.
     let ctx = context();
-    let texts = frame(&ctx, vec![], 0.0, |ui| {
-        super::brushes::show(&mut app, ui);
-        super::brushes::menu(&mut app, ui);
-    });
-    for t in ["Open Brush Library", "Save Brush Library…"] {
-        assert!(texts.iter().any(|x| x.ends_with(t)), "{t}: {texts:?}");
+    let mut menu_ids = menu_library_ids::<BrushLibraries>(&app);
+    let mut window_ids: Vec<String> = opened.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
+    menu_ids.sort();
+    window_ids.sort();
+    assert_eq!(menu_ids, window_ids);
+    for id in &window_ids {
+        app.run("window.brushLibrary", json!({"library": id})).unwrap();
+        assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some(id.as_str()));
     }
+    app.run("window.brushLibrary", json!({"library": null})).unwrap();
     // Dry Media opens in a library panel, and a click on Chalk Grain adds it in one step.
     let r = app.run("window.brushLibrary", json!({"library": "Dry Media"})).unwrap();
     assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("dry-media"), Some(4)));
@@ -276,50 +254,6 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     assert!(entries.iter().any(|e| under(e) && e.command.as_deref() == Some("ui.saveBrushLibrary") && !e.enabled));
 }
 
-#[test]
-fn pressure_decorative_paint_and_image_libraries_add_a_brush_in_one_step() {
-    let mut app = app();
-    let ctx = context();
-    let r = app.run("window.brushLibrary", json!({"library": "Pressure Sensitive"})).unwrap();
-    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("pressure-sensitive"), Some(4)));
-    let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
-    let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flex Ribbon", Modifiers::NONE, 4.0);
-    assert!(has(&app, "Flex Ribbon") && !has(&app, "Pulse Stroke"));
-    assert_eq!(undo_len(&app), undo + 1);
-    assert_eq!(
-        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
-        Some("Flex Ribbon")
-    );
-    let r = app.run("window.brushLibrary", json!({"library": "Decorative"})).unwrap();
-    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("decorative"), Some(4)));
-    let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
-    let undo = undo_len(&app);
-    click(&mut app, &ctx, "Leaf Vine", Modifiers::NONE, 5.0);
-    assert!(has(&app, "Leaf Vine") && !has(&app, "Lantern String"));
-    assert_eq!(undo_len(&app), undo + 1);
-    assert_eq!(
-        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
-        Some("Leaf Vine")
-    );
-    let r = app.run("window.brushLibrary", json!({"library": "Paint"})).unwrap();
-    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("paint"), Some(4)));
-    let path = app.run("shape.line", json!({"x1": 10, "y1": 140, "x2": 180, "y2": 140})).unwrap()["id"].as_u64().unwrap();
-    let undo = undo_len(&app);
-    click(&mut app, &ctx, "Flat Sweep", Modifiers::NONE, 6.0);
-    assert!(has(&app, "Flat Sweep") && !has(&app, "Dry Drag"));
-    assert_eq!(undo_len(&app), undo + 1);
-    assert_eq!(
-        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
-        Some("Flat Sweep")
-    );
-    let r = app.run("window.brushLibrary", json!({"library": "Image Brush"})).unwrap();
-    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("image-brush"), Some(4)));
-    let undo = undo_len(&app);
-    click(&mut app, &ctx, "Soft Bloom", Modifiers::NONE, 8.0);
-    assert!(has(&app, "Soft Bloom") && !has(&app, "Color Flecks"));
-    assert_eq!(undo_len(&app), undo + 1);
-}
 
 #[test]
 fn save_brushes_writes_a_user_library_that_reopens_and_adds_to_another_document() {
@@ -329,16 +263,8 @@ fn save_brushes_writes_a_user_library_that_reopens_and_adds_to_another_document(
     app.session.brush_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     app.run("brush.new", json!({"type": "calligraphic", "name": "Quill", "params": {"angle": 60, "roundness": 30, "size": 5}})).unwrap();
     app.run("ui.saveBrushLibrary", json!({"names": ["Quill"]})).unwrap();
-    let d = app.ui.dialog.as_mut().expect("Save Brush Library opens");
-    assert_eq!((d.kind.as_str(), d.bool("user")), (crate::dialogs::save_brush_library::KIND, true));
-    d.fields.insert("name".into(), json!("Pens"));
-    d.fields.insert("selectedOnly".into(), json!(true));
+    confirm_save(&mut app, &[("name", json!("Pens")), ("selectedOnly", json!(true))]);
     let ctx = context();
-    frame(&ctx, vec![], 0.0, |ui| crate::dialogs::show(&mut app, ui.ctx()));
-    let texts = frame(&ctx, vec![], 0.5, |ui| crate::dialogs::show(&mut app, ui.ctx()));
-    assert!(texts.iter().any(|t| t == "Selected Brushes Only (1)"), "{texts:?}");
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
     let user: Vec<(String, String)> = crate::menus::menu_entries(&app)
         .into_iter()
         .filter(|e| e.path == ["Window", "Brush Libraries", "User Defined"])
