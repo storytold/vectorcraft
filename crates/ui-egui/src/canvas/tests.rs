@@ -211,6 +211,70 @@ fn a_line_dashed_in_pieces_dashes_as_the_whole_line_does() {
     }
 }
 
+/// A dashed [`Overlay::Line`] much longer than the canvas draws only the dashes on the canvas,
+/// where the whole line dashed in one go has them, and a line off the canvas or with an end at
+/// infinity draws none.
+#[test]
+fn a_long_dashed_overlay_line_draws_only_the_dashes_on_the_canvas() {
+    let s = Stroke::new(1.0, Color32::WHITE);
+    let clip = egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
+    // The stretches of x the dashes cover inside `lo..hi`, each dash as one stretch.
+    let spans = |shapes: &[Shape], lo: f32, hi: f32| -> Vec<(f32, f32)> {
+        let mut out: Vec<(f32, f32)> = shapes
+            .iter()
+            .map(|s| match s {
+                Shape::LineSegment { points: [a, b], .. } => (a.x.min(b.x).max(lo), a.x.max(b.x).min(hi)),
+                other => panic!("{other:?}"),
+            })
+            .filter(|(a, b)| b > a)
+            .collect();
+        out.sort_by(|a, b| a.0.total_cmp(&b.0));
+        out
+    };
+    // A line from 1,000 px left of the canvas to 1,500 px right of it, along y = 150.
+    let (a, b) = (pos2(-1000.0, 150.0), pos2(1900.0, 150.0));
+    let mut drawn = vec![];
+    overlays::dashed_line_in(clip, Point::new(-1000.0, 150.0), Point::new(1900.0, 150.0), s, &mut drawn);
+    let (lo, hi) = (clip.left() - 1.0, clip.right() + 1.0);
+    let (want, got) = (spans(&Shape::dashed_line(&[a, b], s, 4.0, 3.0), lo, hi), spans(&drawn, lo, hi));
+    assert_eq!(want.len(), got.len(), "{want:?} {got:?}");
+    assert!(want.iter().zip(&got).all(|(w, g)| (w.0 - g.0).abs() < 1e-2 && (w.1 - g.1).abs() < 1e-2), "{want:?} {got:?}");
+    assert!(drawn.len() <= 60, "only the dashes on the canvas: {}", drawn.len());
+    // Ends 10,000,000,000 px away on both sides still keep the part on the canvas.
+    let mut far = vec![];
+    overlays::dashed_line_in(clip, Point::new(-1e10, 150.0), Point::new(1e10, 150.0), s, &mut far);
+    let far = spans(&far, lo, hi);
+    assert!(far.len() >= 50 && far.len() <= 60, "{far:?}");
+    assert!(far.iter().all(|(a, b)| b - a <= 4.0 + 1e-3), "{far:?}");
+    // Drawn through the overlays at a view where the line is 2,000,000 px long.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, crate::theme::Brightness::MediumDark);
+    let prefs = vectorcraft_engine::Prefs::default();
+    let segments = |line: Overlay| {
+        let raw = egui::RawInput { screen_rect: Some(clip), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let t = Tokens::get(ui.ctx());
+            let xf = Xf { rect: ui.max_rect(), zoom: 1.0, center: Point::new(200.0, 150.0), rot: 0.3 };
+            overlays::draw_overlays(
+                ui.painter(),
+                &xf,
+                std::slice::from_ref(&line),
+                &t,
+                overlays::HandleLook::of(&prefs),
+                &mut overlays::SharedPaths::default(),
+            );
+        });
+        out.textures_delta.clear();
+        out.shapes.iter().filter(|c| matches!(c.shape, Shape::LineSegment { .. })).count()
+    };
+    let line = |a: Point, b: Point| Overlay::Line { a, b, color: [0xff, 0, 0], dashed: true };
+    let n = segments(line(Point::new(-1e6, 150.0), Point::new(1e6, 150.0)));
+    assert!(n > 0 && n <= 80, "{n} dashes");
+    assert_eq!(segments(line(Point::new(-1e6, 5000.0), Point::new(1e6, 5000.0))), 0, "a line off the canvas");
+    assert_eq!(segments(line(Point::new(0.0, 150.0), Point::new(f64::INFINITY, 150.0))), 0, "an end at infinity");
+}
+
 #[test]
 fn subpixel_dock_layout_does_not_change_pointer_document_coordinates() {
     let mut observed = Vec::new();
