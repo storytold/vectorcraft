@@ -3618,6 +3618,14 @@ theme	Appearance	Wygląd
 	Delete Color	Usuń kolor
 	Restore Generated Table	Przywróć wygenerowaną tablicę
 	Unshift All Colors	Cofnij przesunięcie wszystkich kolorów
+	Load Color Table…	Wczytaj tablicę kolorów…
+	Load Color Table	Wczytaj tablicę kolorów
+	Save Color Table…	Zapisz tablicę kolorów…
+	Save Color Table	Zapisz tablicę kolorów
+@msg	`{format}` has no color table: use gif or png8	`{format}` nie ma tablicy kolorów: użyj gif lub png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	to nie jest tablica kolorów: plik .act ma 768 lub 772 bajty i używa od 1 do 256 kolorów
+@msg	give exactly one of `path` and `dataBase64`	podaj dokładnie jedno z: `path` i `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` to numer plasterka z `slice.list`
 	Delete Symbol	Usuń symbol
 	Delete the selected symbol?	Usunąć zaznaczony symbol?
 	Delete the selected symbols?	Usunąć zaznaczone symbole?

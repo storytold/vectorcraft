@@ -855,6 +855,14 @@ font-technology	Variable	Вариативные
 	Delete Color	Удалить цвет
 	Restore Generated Table	Восстановить созданную таблицу
 	Unshift All Colors	Отменить сдвиг всех цветов
+	Load Color Table…	Загрузить цветовую таблицу…
+	Load Color Table	Загрузить цветовую таблицу
+	Save Color Table…	Сохранить цветовую таблицу…
+	Save Color Table	Сохранить цветовую таблицу
+@msg	`{format}` has no color table: use gif or png8	у `{format}` нет цветовой таблицы: используйте gif или png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	это не цветовая таблица: файл .act имеет длину 768 или 772 байта и использует от 1 до 256 цветов
+@msg	give exactly one of `path` and `dataBase64`	укажите ровно одно из: `path` и `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` задаёт номер фрагмента из `slice.list`
 	Delete Character Style	Удалить стиль символа
 	Delete Empty Artboards	Удалить пустые монтажные области
 	Delete Freeform Point	Удалить произвольную точку

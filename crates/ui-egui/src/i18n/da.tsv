@@ -6219,6 +6219,14 @@ theme	Appearance	Udseende
 	Delete Color	Slet farve
 	Restore Generated Table	Gendan genereret tabel
 	Unshift All Colors	Fjern skift af alle farver
+	Load Color Table…	Indlæs farvetabel…
+	Load Color Table	Indlæs farvetabel
+	Save Color Table…	Gem farvetabel…
+	Save Color Table	Gem farvetabel
+@msg	`{format}` has no color table: use gif or png8	`{format}` har ingen farvetabel: brug gif eller png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	ikke en farvetabel: en .act-fil er 768 eller 772 byte lang og bruger 1 til 256 farver
+@msg	give exactly one of `path` and `dataBase64`	angiv præcis én af `path` og `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` er et udsnitsnummer fra `slice.list`
 	Delete Symbol	Slet symbol
 	Delete the selected symbol?	Vil du slette det markerede symbol?
 	Delete the selected symbols?	Vil du slette de markerede symboler?

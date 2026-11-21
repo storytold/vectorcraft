@@ -1216,6 +1216,14 @@ arrowhead	Target	Diana
 	Delete Color	Suprimeix el color
 	Restore Generated Table	Restaura la taula generada
 	Unshift All Colors	Desfés el desplaçament de tots els colors
+	Load Color Table…	Carrega la taula de colors…
+	Load Color Table	Carrega la taula de colors
+	Save Color Table…	Desa la taula de colors…
+	Save Color Table	Desa la taula de colors
+@msg	`{format}` has no color table: use gif or png8	`{format}` no té taula de colors: utilitza gif o png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	no és una taula de colors: un fitxer .act té 768 o 772 bytes i fa servir entre 1 i 256 colors
+@msg	give exactly one of `path` and `dataBase64`	indica exactament un de `path` i `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` és un número de tall de `slice.list`
 	Delete Character Style	Suprimeix l’estil de caràcter
 	Delete Data Set	Suprimeix el conjunt de dades
 	Delete Data Sets	Suprimeix els conjunts de dades

@@ -840,6 +840,14 @@ font-technology	Variable	Variabla
 	Delete Color	Radera färg
 	Restore Generated Table	Återställ genererad tabell
 	Unshift All Colors	Ta bort förskjutning av alla färger
+	Load Color Table…	Läs in färgtabell…
+	Load Color Table	Läs in färgtabell
+	Save Color Table…	Spara färgtabell…
+	Save Color Table	Spara färgtabell
+@msg	`{format}` has no color table: use gif or png8	`{format}` har ingen färgtabell: använd gif eller png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	inte en färgtabell: en .act-fil är 768 eller 772 byte lång och använder 1 till 256 färger
+@msg	give exactly one of `path` and `dataBase64`	ange exakt en av `path` och `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` är ett skivnummer från `slice.list`
 	Delete Character Style	Radera teckenstil
 	Delete Empty Artboards	Radera tomma ritytor
 	Delete Freeform Point	Radera fri punkt

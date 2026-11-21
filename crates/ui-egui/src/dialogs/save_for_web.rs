@@ -4,8 +4,8 @@
 //! PNG-24), colour reduction, colours, dither, transparency and matte, interlacing, web snap,
 //! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color,
 //! Restore Generated Table, a double-click that shifts a color to one picked in the Color Picker,
-//! and Unshift All Colors), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
-//! slices and HTML output, and presets.
+//! Unshift All Colors, and Load Color Table… and Save Color Table… for `.act` files), image size
+//! and anti-aliasing, Clip to Artboard, sRGB, metadata, slices and HTML output, and presets.
 //!
 //! Fields are the `document.exportForWeb` settings (`webExport.settings` gives them; set one with
 //! `ui.dialog.set`, or `preset` to load a preset), plus the dialog's own: `__view` (`original`,
@@ -17,8 +17,9 @@
 //! preset) and `__hasSlices`. Optimize to File Size… (`__optimizeOpen: true`) shows `__optimizeK` (the desired size in K),
 //! `__optimizeStart` (`current`, `auto`) and with slices `__optimizeUse` (`allSlices`,
 //! `eachSlice`, `currentSlice`); `__optimizeGo: true` runs `webExport.optimizeToFileSize` and
-//! takes the settings it finds, and `__optimized` holds its result. Save… remembers
-//! the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
+//! takes the settings it finds, and `__optimized` holds its result. `__loadColorTable: true` and
+//! `__saveColorTable: true` run the color table menu's Load Color Table… and Save Color Table….
+//! Save… remembers the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
 //! Browser opens the HTML page (`file.saveForWeb.browser`). While Alt (Option on macOS) is held,
 //! Cancel reads Reset, which puts the remembered settings back and leaves the dialog open
 //! (`ui.dialogReset`). The previews are what Save writes:
@@ -568,6 +569,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     {
         app.status(e);
     }
+    // The color table menu's Load and Save, whose file dialogs answer later on some systems.
+    for (key, f) in [("__loadColorTable", load_color_table as ColorTableAction), ("__saveColorTable", save_color_table)] {
+        if d.fields.remove(key).is_some_and(|v| v == json!(true))
+            && let Err(e) = crate::picks::in_dialog(app, d, f)
+            && e != "cancelled"
+        {
+            app.status(e);
+        }
+    }
     take_shift(d);
     let settings = settings_of(app, d);
     let mut browser = false;
@@ -844,7 +854,7 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
         choice(ui, d, "metadata", tl!("Metadata:"), &pairs(&WebMetadata::ALL, WebMetadata::key, WebMetadata::label));
         if format.palette() {
             widgets::divider(ui);
-            if let Err(e) = color_table(ui, d, s) {
+            if let Err(e) = color_table(ui, d, s, io::is_web(app)) {
                 app.status(e);
             }
         }
@@ -1130,9 +1140,10 @@ fn matte_row(ui: &mut egui::Ui, d: &mut Dialog) {
 /// selects one color, a Shift-click the colors from the anchor, and a Ctrl-click
 /// (Command-click on macOS) adds or removes one; a double-click on an opaque color asks for the
 /// Color Picker (`__editColor`), and a color shifted by hand shows its source color at the upper
-/// left and its new color at the lower right. Returns an error for a deletion that would leave
-/// no color.
-fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Result<(), String> {
+/// left and its new color at the lower right. The menu's Load Color Table… and Save Color Table…
+/// set `__loadColorTable` and `__saveColorTable` (Load is off on the `web`). Returns an error for a
+/// deletion that would leave no color.
+fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, web: bool) -> Result<(), String> {
     let t = Tokens::get(ui.ctx());
     let cache: Option<Cache> = ui.ctx().data(|m| m.get_temp(cache_id()));
     let key = s.map(|s| s.to_json().to_string());
@@ -1291,6 +1302,14 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
             }
             if widgets::menu_item(ui, tl!("Unshift All Colors"), !table.shifted.is_empty() || !table.web_shift.is_empty(), false) {
                 unshift_all = true;
+                ui.close();
+            }
+            if widgets::menu_item(ui, tl!("Load Color Table…"), !web, false) {
+                d.fields.insert("__loadColorTable".into(), json!(true));
+                ui.close();
+            }
+            if widgets::menu_item(ui, tl!("Save Color Table…"), !shot.colors.is_empty(), false) {
+                d.fields.insert("__saveColorTable".into(), json!(true));
                 ui.close();
             }
         });
@@ -1493,6 +1512,37 @@ pub(super) fn unshift(d: &mut Dialog, source: &str) {
 pub(super) fn unshift_all_colors(d: &mut Dialog) {
     set_table(d, "shifted", json!({}));
     set_table(d, "webShift", json!([]));
+}
+
+/// A color table menu action that asks for a file.
+type ColorTableAction = fn(&mut VectorcraftApp, &mut Dialog) -> Result<(), String>;
+
+/// The dialog's settings without the image's `path`.
+pub(super) fn table_params(d: &Dialog) -> Value {
+    let mut p = params(d);
+    if let Some(o) = p.as_object_mut() {
+        o.remove("path");
+    }
+    p
+}
+
+/// Save Color Table…: the color table the preview shows, written to a picked `.act` file
+/// (`document.exportForWeb.saveColorTable`; the web downloads it). The dialog does not change.
+pub(super) fn save_color_table(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    io::save_command_output(app, "document.exportForWeb.saveColorTable", webexport::COLOR_TABLE_EXT, table_params(d)).map(|_| ())
+}
+
+/// Load Color Table…: a picked `.act` file becomes the table's fixed palette, with its color count
+/// (`webExport.loadColorTable`).
+pub(super) fn load_color_table(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Color tables", &[webexport::COLOR_TABLE_EXT])], ..Default::default() };
+    let path = crate::picks::open(app, &pick).ok_or("cancelled")?;
+    let mut p = table_params(d);
+    p["path"] = json!(path);
+    let r = app.run("webExport.loadColorTable", p)?;
+    let settings: WebSettings = serde_json::from_value(r["settings"].clone()).map_err(|e| e.to_string())?;
+    d.fields.extend(settings_fields(&settings));
+    Ok(())
 }
 
 /// Add `color` to the colour table's `list`, or take it out.

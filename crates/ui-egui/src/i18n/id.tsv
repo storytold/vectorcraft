@@ -4087,6 +4087,14 @@ theme	Appearance	Tampilan
 	Delete Color	Hapus warna
 	Restore Generated Table	Pulihkan tabel yang dibuat
 	Unshift All Colors	Batalkan pergeseran semua warna
+	Load Color Table…	Muat tabel warna…
+	Load Color Table	Muat tabel warna
+	Save Color Table…	Simpan tabel warna…
+	Save Color Table	Simpan tabel warna
+@msg	`{format}` has no color table: use gif or png8	`{format}` tidak memiliki tabel warna: gunakan gif atau png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	bukan tabel warna: file .act berukuran 768 atau 772 byte dan memakai 1 sampai 256 warna
+@msg	give exactly one of `path` and `dataBase64`	berikan tepat satu dari `path` dan `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` adalah nomor slice dari `slice.list`
 	Delete Symbol	Hapus simbol
 	Delete the selected symbol?	Hapus simbol yang dipilih?
 	Delete the selected symbols?	Hapus simbol yang dipilih?

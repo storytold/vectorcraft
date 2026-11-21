@@ -1620,6 +1620,14 @@ antiAlias	Sharp	날카롭게
 	Delete Color	색상 삭제
 	Restore Generated Table	생성된 표 복원
 	Unshift All Colors	모든 색상 이동 취소
+	Load Color Table…	색상 표 불러오기…
+	Load Color Table	색상 표 불러오기
+	Save Color Table…	색상 표 저장…
+	Save Color Table	색상 표 저장
+@msg	`{format}` has no color table: use gif or png8	`{format}`에는 색상 표가 없습니다: gif 또는 png8을 사용하세요
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	색상 표가 아닙니다: .act 파일은 768 또는 772바이트이며 1개에서 256개까지의 색상을 사용합니다
+@msg	give exactly one of `path` and `dataBase64`	`path`, `dataBase64` 중 정확히 하나를 지정하세요
+@msg	`slice` is a slice number from `slice.list`	`slice`는 `slice.list`의 분할 번호입니다
 	Delete Character Style	문자 스타일 삭제
 	Delete Empty Artboards	빈 아트보드 삭제
 	Delete Freeform Point	자유 형태 포인트 삭제

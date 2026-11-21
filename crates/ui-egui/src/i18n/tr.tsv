@@ -836,6 +836,14 @@ font-technology	Variable	Değişken
 	Delete Color	Rengi Sil
 	Restore Generated Table	Oluşturulan Tabloyu Geri Yükle
 	Unshift All Colors	Tüm Renklerin Kaydırmasını Kaldır
+	Load Color Table…	Renk Tablosunu Yükle…
+	Load Color Table	Renk Tablosunu Yükle
+	Save Color Table…	Renk Tablosunu Kaydet…
+	Save Color Table	Renk Tablosunu Kaydet
+@msg	`{format}` has no color table: use gif or png8	`{format}` biçiminin renk tablosu yok: gif veya png8 kullanın
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	renk tablosu değil: bir .act dosyası 768 veya 772 bayt uzunluğundadır ve 1 ile 256 arasında renk kullanır
+@msg	give exactly one of `path` and `dataBase64`	`path` ve `dataBase64` değerlerinden tam olarak birini verin
+@msg	`slice` is a slice number from `slice.list`	`slice`, `slice.list` içindeki bir dilim numarasıdır
 	Delete Character Style	Karakter Stilini Sil
 	Delete Empty Artboards	Boş Çalışma Yüzeylerini Sil
 	Delete Freeform Point	Serbest Biçim Noktasını Sil

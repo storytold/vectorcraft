@@ -1002,6 +1002,14 @@ font-technology	Variable	Biến thiên
 	Delete Color	Xóa màu
 	Restore Generated Table	Khôi phục bảng đã tạo
 	Unshift All Colors	Bỏ dịch chuyển tất cả màu
+	Load Color Table…	Tải bảng màu…
+	Load Color Table	Tải bảng màu
+	Save Color Table…	Lưu bảng màu…
+	Save Color Table	Lưu bảng màu
+@msg	`{format}` has no color table: use gif or png8	`{format}` không có bảng màu: hãy dùng gif hoặc png8
+@msg	not a color table: an .act file is 768 or 772 bytes long and uses 1 to 256 colors	không phải bảng màu: tệp .act dài 768 hoặc 772 byte và dùng từ 1 đến 256 màu
+@msg	give exactly one of `path` and `dataBase64`	hãy cho đúng một trong `path` và `dataBase64`
+@msg	`slice` is a slice number from `slice.list`	`slice` là số lát cắt từ `slice.list`
 	Delete Character Style	Xóa kiểu ký tự
 	Delete Data Set	Xóa tập dữ liệu
 	Delete Design	Xóa thiết kế

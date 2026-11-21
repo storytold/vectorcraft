@@ -3638,6 +3638,10 @@ theme	Appearance	Izgled
 	Delete Color	Izbriši boju
 	Restore Generated Table	Vrati generisanu tabelu
 	Unshift All Colors	Poništi pomak svih boja
+	Load Color Table…	Učitaj tabelu boja…
+	Load Color Table	Učitaj tabelu boja
+	Save Color Table…	Sačuvaj tabelu boja…
+	Save Color Table	Sačuvaj tabelu boja
 	Delete Symbol	Izbriši simbol
 	Delete the selected symbol?	Izbrisati odabrani simbol?
 	Delete the selected symbols?	Izbrisati odabrane simbole?
