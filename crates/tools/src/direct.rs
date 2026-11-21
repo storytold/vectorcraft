@@ -823,7 +823,7 @@ impl Tool for DirectSelectionTool {
     fn options(&self) -> Value {
         self.mesh.options()
     }
-    /// Direct Selection picks the gradient mesh points the Eyedropper held (`meshPoints`); Group
+    /// Direct Selection picks the gradient mesh points the tool chosen before held (`meshPoints`); Group
     /// Selection, which selects whole objects, does not.
     /// The session sets `lentByCmd` on the tool Cmd/Ctrl lends for one gesture
     /// ([`DirectSelectionTool::mirrors`]).

@@ -157,8 +157,8 @@ pub(super) struct AreaPreview {
     sq: Vec<Point>,
     /// The last point taken, on the page.
     last: Point,
-    /// The tip at the last point taken, when the tip varies along the drag.
-    last_tip: Option<Tip>,
+    /// The tip halfway along the last segment taken, when the tip varies along the drag.
+    last_middle: Option<Tip>,
     /// The tip's radius along each segment, where its tip is round. It is also as far as the
     /// segment's area reaches from the segment in the grid's space.
     radius: Vec<f64>,
@@ -196,7 +196,7 @@ impl AreaPreview {
             side: widest.max(MIN_BRUSH_SIZE),
             sq: vec![],
             last: first,
-            last_tip: None,
+            last_middle: None,
             radius: vec![],
             to_round: vec![],
             pieces: vec![],
@@ -240,20 +240,22 @@ impl AreaPreview {
     }
 
     /// Take the points of the drag `pts` added since the last call and check outlines, within this
-    /// call's limits. When the tip varies along the drag, `tip(i)` gives the tip at point `i`, and
-    /// segment `j` takes `middle(j)`, the tip halfway along it. A last point whose tip changed since
-    /// it was taken (a pen turned or tilted in place) gives its segment the new tip.
-    pub(super) fn step(&mut self, pts: &[Point], tip: &dyn Fn(usize) -> Tip, middle: &dyn Fn(usize) -> Tip) {
+    /// call's limits. When the tip varies along the drag, segment `j` takes `middle(j)`, the tip
+    /// halfway along it. A last segment whose tip halfway along it changed since it was taken (a pen
+    /// turned or tilted in place at its end) takes the new tip, also where the tip at its end stays
+    /// the same (a size held at its least).
+    pub(super) fn step(&mut self, pts: &[Point], middle: &dyn Fn(usize) -> Tip) {
         self.work = AreaWork::default();
         let mut changed = BTreeSet::new();
         if self.key.varies
             && let Some(j) = self.sq.len().checked_sub(2)
-            && self.last_tip.is_some_and(|t| t != tip(j + 1))
+            && self.last_middle.is_some_and(|t| t != middle(j))
         {
             let k = self.piece_of(j);
             let old = self.radius[j];
-            self.set_tip(j, middle(j));
-            self.last_tip = Some(tip(j + 1));
+            let tip = middle(j);
+            self.set_tip(j, tip);
+            self.last_middle = Some(tip);
             changed.insert(k);
             // The pieces near the old tip or the new one are checked again.
             let new = self.radius[j];
@@ -266,13 +268,12 @@ impl AreaPreview {
             self.sq.push(self.squash * pts[i]);
             self.last = pts[i];
             self.work.points += 1;
-            if self.key.varies {
-                self.last_tip = Some(tip(i));
-            }
             let Some(j) = i.checked_sub(1) else { continue };
             if self.key.varies {
                 self.radius.push(0.0);
-                self.set_tip(j, middle(j));
+                let tip = middle(j);
+                self.set_tip(j, tip);
+                self.last_middle = Some(tip);
             } else {
                 self.radius.push(self.key.size / 2.0);
             }
