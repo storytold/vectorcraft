@@ -623,9 +623,8 @@ impl SwatchChoices {
             Some(v) => Ok(Self { all: one(v)?, by_name: BTreeMap::new() }),
         }
     }
-    /// Add for every conflict, as a library pattern is added to a document: each global or spot
-    /// color of its art whose name the document gives another color comes in under a numbered
-    /// name, or as the document's numbered copy of that name with the same color.
+    /// Add for every conflict: each pasted swatch whose name the document gives another color
+    /// comes in renamed.
     pub(crate) fn add_all() -> Self {
         Self { all: SwatchChoice::Add, by_name: BTreeMap::new() }
     }

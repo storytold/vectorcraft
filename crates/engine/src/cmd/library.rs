@@ -20,7 +20,6 @@ use serde_json::{Map, Value, json};
 use vectorcraft_color::{Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node, NodeId, TextStyleDef};
 
-use super::clipboard::SwatchChoices;
 use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index_opt, ok, point_param, str_param};
 use crate::Clipboard;
 
@@ -1353,32 +1352,13 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     if clip.nodes.is_empty() {
         return Err(damaged());
     }
-    // A global or spot color the pattern's art links to keeps the library's color: when the
-    // document gives its name another color, it comes in under a numbered name ("Ink 2"), as
-    // Add to Swatches brings a library pattern's colors.
-    let mut choices = SwatchChoices::add_all();
-    // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
+    // The pattern's name in the document, worked out on a copy: nothing to add is no edit. A global
+    // or spot color the pattern's art links to keeps the library's color, as Add to Swatches brings
+    // a library pattern's colors.
     let current = s.doc()?.doc.clone();
-    let mut probe = (*current).clone();
-    let mut imported = clip.import_into(&mut probe, &choices, false)?;
-    let pattern_of = |i: &super::clipboard::resources::Imported| {
-        i.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str()).unwrap_or(&name).to_string()
-    };
-    // A pattern used before a color of its art kept the library's color has its art linked to the
-    // document's own color of that name: when merging those colors reuses a pattern of the document
-    // that keeping them would add again, they merge.
-    if current.pattern(&pattern_of(&imported)).is_none()
-        && imported.renamed.iter().any(|r| r["kind"] == "swatch")
-        && super::patternlib::has_candidate(&current, &doc, &name)
-    {
-        let mut merged = (*current).clone();
-        let found = clip.import_into(&mut merged, &SwatchChoices::default(), false)?;
-        if current.pattern(&pattern_of(&found)).is_some() {
-            (choices, probe, imported) = (SwatchChoices::default(), merged, found);
-        }
-    }
+    let (choices, probe, imported) = super::patternlib::probe_import(&current, &doc, &name, &clip)?;
     drop(current);
-    let target = pattern_of(&imported);
+    let target = super::patternlib::imported_name(&imported, &name);
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);
     // A pattern the document holds without a swatch (an imported SVG's) gets one.
     let has_swatch =
