@@ -493,6 +493,14 @@ impl DrawSnap {
         t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
     }
 
+    /// Whether a point at `p` leaving `from` lands on one of the targets the last hover or press
+    /// gathered ([`Targets::snap_hit`]), whether or not its guides show. False with Smart Guides
+    /// off, with no targets, and while pixels or the grid snap instead.
+    pub(crate) fn lands_on_target(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return false };
+        cx.smart_guides && !cx.snaps_to_pixel(*op) && !cx.snap_to_grid && t.snap_hit(p, from, cx.tol(*tol)).2
+    }
+
     /// The guides of the last snap.
     pub fn guides(&self) -> &[Overlay] {
         &self.guides
