@@ -2724,6 +2724,46 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
   art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
   `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
+- A `Document` also has `swatches`, `spots`, `swatchGroups`, `symbols`, `symbolItems`, `graphicStyles` and `brushes`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/, https://ai-scripting.docsforadobe.dev/jsobjref/Spots/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/SwatchGroups/, https://ai-scripting.docsforadobe.dev/jsobjref/Symbols/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/SymbolItems/, https://ai-scripting.docsforadobe.dev/jsobjref/GraphicStyles/
+  and https://ai-scripting.docsforadobe.dev/jsobjref/Brushes/). Each has `length`, `parent`, `[i]`, `index(key)` and
+  `getByName(name)`; all but `brushes` have `removeAll()`. `swatches.add()` and `spots.add()` run `swatch.new`,
+  `swatchGroups.add()` runs `swatch.newGroup`, `symbols.add(sourceArt, registrationPoint?)` runs `symbol.new` with
+  `keepArt: true` (the default point is `SymbolRegistrationPoint.SYMBOLCENTERPOINT`), and `symbolItems.add(symbol)`
+  runs `symbol.place`. `swatches.getSelected()` gives `[]`. A `Swatch` (https://ai-scripting.docsforadobe.dev/jsobjref/Swatch/)
+  has `name` and `color` (`swatch.edit`) and `remove()` (`swatch.delete`); a spot swatch's `color` reads as a
+  `SpotColor` with its `spot` and a `tint` of 100, and a tint of a spot as that `spot` at its `tint`. A `Spot` (https://ai-scripting.docsforadobe.dev/jsobjref/Spot/) has
+  `name`, `color`, `colorType`, `spotKind`, `getInternalColor()` and `remove()`. A `SwatchGroup`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/SwatchGroup/) has `name` (`swatch.renameGroup`), `addSwatch(swatch)`
+  and `addSpot(spot)` (`swatch.move`), `getAllSwatches()`, `remove()` and `removeAll()`. A `Symbol`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Symbol/) has `name` (`symbol.options`), `duplicate()`
+  (`symbol.duplicate`) and `remove()` (`symbol.delete`), and a `SymbolItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/SymbolItem/) adds `symbol` to the page item members, which
+  `symbol.replace` changes. A `GraphicStyle` (https://ai-scripting.docsforadobe.dev/jsobjref/GraphicStyle/) has `name`
+  (`graphicStyle.rename`), `applyTo(item)` and `mergeTo(item)` (`graphicStyle.apply`, with `add: true` for `mergeTo`)
+  and `remove()` (`graphicStyle.delete`). A `Brush` (https://ai-scripting.docsforadobe.dev/jsobjref/Brush/) has a
+  read-only `name` and `applyTo(item)` (`brush.apply`). The enumerations `SymbolRegistrationPoint`, `ColorModel` and
+  `SpotColorKind` hold strings such as `"ColorModel.SPOT"`.
+  VectorCraft's own rules: `swatches` lists None, Registration, the other ungrouped swatches and then each color
+  group's, and `swatchGroups` lists the color groups. `swatches.add()` saves the current fill (a color, gradient or
+  pattern) or black when the fill is None, and `spots.add()` the current fill, converted to the document's color
+  space unless it is Lab, or black when it is not a solid color. None and Registration cannot change or be removed,
+  and `removeAll()` keeps them; the Default Graphic Style cannot be renamed or removed, and
+  `graphicStyles.removeAll()` keeps it. A color group takes solid
+  colors only; `SwatchGroup.remove()` deletes the group with its swatches, and its `removeAll()` deletes the swatches
+  and keeps the group. A spot's color is in the document's color space or Lab, its `colorType` takes only
+  `ColorModel.SPOT`, a gray spot's `spotKind` is `SpotColorKind.SPOTCMYK`, and `getInternalColor()` gives the
+  components on the color classes' scales. `symbols.add` leaves the source art as it is, and removing a symbol turns
+  its instances into plain art. `applyTo` and `mergeTo` take one page item of the same document that can be edited,
+  and `Brush.applyTo` a path that is not a guide, a clipping path or a path in a compound path; applying the brush a
+  path already draws runs no command. A name is 1 to 1,024 bytes, not blank, with no control characters, and a name a
+  swatch, spot or color group already has throws for any of the three. Renaming a resource through these objects keeps the object; after it is
+  removed, or renamed or deleted with `vc.run`, every member throws `Stale Swatch` (`Stale Spot`, `Stale SwatchGroup`,
+  `Stale Symbol`, `Stale GraphicStyle`, `Stale Brush`). A run holds at most 100,000 of these objects. An object of
+  another document throws `Cross-document placement is not available`. `Document.gradients`, `Document.patterns` and
+  assigning a `SpotColor` to art are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

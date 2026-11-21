@@ -40,6 +40,7 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 mod colors;
 mod paths;
+mod resources;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -96,6 +97,8 @@ pub(super) struct State {
     items: RefCell<Option<ItemList>>,
     /// The last list of a document's paths ([`paths`]), kept while that document is unchanged.
     paths: RefCell<Option<ItemList>>,
+    /// The swatches, symbols, styles and brushes the run's objects name ([`resources`]).
+    resources: RefCell<resources::Table>,
     saving: Cell<bool>,
 }
 
@@ -124,6 +127,12 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
         return Err(HostError::Abort(HISTORY_LOST.to_string()));
     }
     r
+}
+
+/// Makes the run's swatch, symbol, style and brush objects whose resource a `vc.run` command
+/// removed or renamed stale, so a new resource that takes the name later is not theirs.
+pub(super) fn forget_removed(h: &Host) {
+    resources::forget_removed(h);
 }
 
 /// A document's uid, the document as it was, and the ids of its page items then.
@@ -1750,10 +1759,9 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, doc_selection, doc_set_selection)),
         ("pathItems", get(l, paths::doc_path_items)),
     ]);
+    document.extend(resources::document_members(l));
     document.extend(
-        ["layers", "artboards", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
-            .into_iter()
-            .map(|m| later(l, "Document", m)),
+        ["layers", "artboards", "groupItems", "textFrames", "views", "activeLayer", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)),
     );
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -1818,12 +1826,19 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(
-        ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), if *c == "PathItem" { paths::path_item_members(l) } else { Vec::new() }, None)),
-    );
+    classes.extend(ITEM_CLASSES.iter().map(|c| {
+        let members = match *c {
+            "PathItem" => paths::path_item_members(l),
+            "SymbolItem" => resources::symbol_item_members(l),
+            _ => Vec::new(),
+        };
+        class(c, Some("PageItem"), members, None)
+    }));
     classes.extend(paths::classes(l));
     classes.extend(colors::classes(l));
+    classes.extend(resources::classes(l));
     paths::install_enums(realm)?;
+    resources::install_enums(realm)?;
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
 }

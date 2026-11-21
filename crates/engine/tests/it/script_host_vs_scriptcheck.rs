@@ -73,10 +73,11 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPresetType \
-         DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits StrokeCap \
-         StrokeJoin Transformation ZOrderMethod",
+        "app Application Brush Brushes ColorModel CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
+         DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement \
+         GraphicStyle GraphicStyles Layer PageItem PageItems PathItem PathItems PathPoint PathPointSelection PathPoints \
+         PointType PolarityValues RulerUnits Spot SpotColorKind Spots StrokeCap StrokeJoin Swatch SwatchGroup SwatchGroups \
+         Swatches Symbol SymbolItem SymbolItems SymbolRegistrationPoint Symbols Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -89,10 +90,10 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
-         views views= width",
+        "activeLayer activeLayer= artboards artboards= brushes close close= constructor convertCoordinate \
+         documentColorSpace gradients gradients= graphicStyles groupItems groupItems= height layers layers= name pageItems \
+         parent pathItems patterns patterns= rulerOrigin rulerOrigin= rulerUnits saveAs saveAs= selection selection= spots \
+         swatchGroups swatches symbolItems symbols textFrames textFrames= typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name typename"),
@@ -127,6 +128,35 @@ const INSIDE: &[(&str, &str)] = &[
         "anchor anchor= constructor leftDirection leftDirection= parent pointType pointType= remove rightDirection \
          rightDirection= selected selected= typename",
     ),
+    ("Swatches.", "prototype"),
+    ("Swatches.prototype.", "add constructor getByName getSelected index length parent removeAll typename"),
+    ("Swatch.", "prototype"),
+    ("Swatch.prototype.", "color color= constructor name name= parent remove typename"),
+    ("Spots.", "prototype"),
+    ("Spots.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Spot.", "prototype"),
+    ("Spot.prototype.", "color color= colorType colorType= constructor getInternalColor name name= parent remove spotKind typename"),
+    ("SwatchGroups.", "prototype"),
+    ("SwatchGroups.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("SwatchGroup.", "prototype"),
+    ("SwatchGroup.prototype.", "addSpot addSwatch constructor getAllSwatches name name= parent remove removeAll typename"),
+    ("Symbols.", "prototype"),
+    ("Symbols.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Symbol.", "prototype"),
+    ("Symbol.prototype.", "constructor duplicate name name= parent remove typename"),
+    ("SymbolItems.", "prototype"),
+    ("SymbolItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("SymbolItem.", "prototype"),
+    ("SymbolItem.prototype.", "constructor symbol symbol="),
+    ("GraphicStyles.", "prototype"),
+    ("GraphicStyles.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("GraphicStyle.", "prototype"),
+    ("GraphicStyle.prototype.", "applyTo constructor mergeTo name name= parent remove typename"),
+    ("Brushes.", "prototype"),
+    ("Brushes.prototype.", "constructor getByName index length parent typename"),
+    ("Brush.", "prototype"),
+    ("Brush.prototype.", "applyTo constructor name parent typename"),
+    ("ColorModel.", "PROCESS REGISTRATION SPOT"),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),
@@ -143,17 +173,23 @@ const INSIDE: &[(&str, &str)] = &[
     ("PointType.", "CORNER SMOOTH"),
     ("PolarityValues.", "NEGATIVE POSITIVE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("SpotColorKind.", "SPOTCMYK SPOTLAB SPOTRGB"),
     ("StrokeCap.", "BUTTENDCAP PROJECTINGENDCAP ROUNDENDCAP"),
     ("StrokeJoin.", "BEVELENDJOIN MITERENDJOIN ROUNDENDJOIN"),
+    (
+        "SymbolRegistrationPoint.",
+        "SYMBOLBOTTOMLEFTPOINT SYMBOLBOTTOMMIDDLEPOINT SYMBOLBOTTOMRIGHTPOINT SYMBOLCENTERPOINT SYMBOLMIDDLELEFTPOINT \
+         SYMBOLMIDDLERIGHTPOINT SYMBOLTOPLEFTPOINT SYMBOLTOPMIDDLEPOINT SYMBOLTOPRIGHTPOINT",
+    ),
     ("Transformation.", "BOTTOM BOTTOMLEFT BOTTOMRIGHT CENTER DOCUMENTORIGIN LEFT RIGHT TOP TOPLEFT TOPRIGHT"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`,
-/// the page item types other than `PathItem`, and the color classes.
+/// the page item types other than `PathItem` and `SymbolItem`, and the color classes.
 const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem DocumentPreset EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
      IntertwineItem LabColor MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor \
-     SymbolItem TextFrame cmykColor";
+     TextFrame cmykColor";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
