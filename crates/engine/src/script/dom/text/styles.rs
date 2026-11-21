@@ -101,6 +101,41 @@ pub(in crate::script) fn after_command(h: &Host) {
     }
 }
 
+/// The style objects' state when a savepoint was taken: each slot's name and whether it was
+/// live, and the style lists last checked.
+pub(in crate::script) struct Mark {
+    slots: Vec<(String, bool)>,
+    seen: Vec<Seen>,
+}
+
+/// The style objects' state now, for [`put_back`] when the savepoint taken with it is restored.
+pub(in crate::script) fn mark(h: &Host) -> Mark {
+    let styles = &h.dom.text.styles;
+    let slots = styles.slots.borrow().iter().map(|s| (s.name.clone(), s.live)).collect();
+    Mark { slots, seen: styles.seen.borrow().clone() }
+}
+
+/// Puts the style objects back as they were at `mark`, after the documents were put back to the
+/// savepoint taken with it. A slot added since then stays live only while its document has the
+/// style and no older live slot names it.
+pub(in crate::script) fn put_back(h: &Host, mark: Mark) {
+    let styles = &h.dom.text.styles;
+    let mut slots = styles.slots.borrow_mut();
+    let kept = mark.slots.len();
+    for (slot, (name, live)) in slots.iter_mut().zip(mark.slots) {
+        slot.name = name;
+        slot.live = live;
+    }
+    let s = h.session.borrow();
+    for i in kept..slots.len() {
+        let (older, newer) = slots.split_at_mut(i);
+        let Some(slot) = newer.first_mut() else { break };
+        let named = older.iter().any(|o| o.live && o.uid == slot.uid && o.para == slot.para && o.name == slot.name);
+        slot.live = !named && s.documents().iter().any(|st| st.uid == slot.uid && has_style(st, slot.para, &slot.name));
+    }
+    *styles.seen.borrow_mut() = mark.seen;
+}
+
 fn normal(para: bool) -> &'static str {
     if para { NORMAL_PARA } else { NORMAL_CHAR }
 }

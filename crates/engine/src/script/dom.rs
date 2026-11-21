@@ -113,15 +113,22 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
         return f(h);
     }
     let save = Savepoint::take(&mut h.session.borrow_mut(), "edit.duplicate");
+    let styles = text::styles::mark(h);
     h.dom.saving.set(true);
     let r = f(h);
     h.dom.saving.set(false);
-    let mut s = h.session.borrow_mut();
-    if r.is_ok() {
-        save.keep(&mut s);
-    } else if !save.restore(&mut s) {
-        return Err(HostError::Abort(HISTORY_LOST.to_string()));
+    {
+        let mut s = h.session.borrow_mut();
+        if r.is_ok() {
+            save.keep(&mut s);
+            return r;
+        }
+        if !save.restore(&mut s) {
+            return Err(HostError::Abort(HISTORY_LOST.to_string()));
+        }
     }
+    // Style objects are put back with the documents.
+    text::styles::put_back(h, styles);
     r
 }
 

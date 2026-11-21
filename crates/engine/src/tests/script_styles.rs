@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{TextObject, TextStyleDef};
 
 use crate::cmd::textstyles::{NORMAL_CHAR, NORMAL_PARA};
+use crate::script::TEST_RESULT_BYTES;
 use crate::*;
 
 fn run(s: &mut Session, source: &str) -> Result<Value> {
@@ -177,6 +178,29 @@ fn a_renamed_style_keeps_its_object_and_a_removed_style_is_stale() {
     assert_eq!(runs(&s, id)[0].2, 40.0);
 }
 
+/// A removal or rename whose result cannot cross to the script is put back, and the style's object
+/// still names the style after it.
+#[test]
+fn a_style_change_that_is_put_back_keeps_the_style_object() {
+    let (mut s, _) = doc_with("Hello");
+    s.execute("charStyle.new", &json!({"name": "B", "attrs": {}})).unwrap();
+    TEST_RESULT_BYTES.with(|b| b.set(Some(1)));
+    let r = run(
+        &mut s,
+        &format!(
+            "{DOC} var a = cs.getByName('B');\
+             try {{ a.remove(); }} catch (e) {{ vc.log(e.name); }}\
+             try {{ vc.run('charStyle.delete', {{name: 'B'}}); }} catch (e) {{ vc.log(e.name); }}\
+             try {{ a.name = 'C'; }} catch (e) {{ vc.log(e.name); }}\
+             vc.log([a.name, a === cs.getByName('B'), cs.length]);"
+        ),
+    );
+    TEST_RESULT_BYTES.with(|b| b.set(None));
+    let r = r.unwrap();
+    assert_eq!(r["log"], json!(["RangeError", "RangeError", "RangeError", ["B", true, 2]]), "{r}");
+    assert!(char_names(&s).contains(&"B".to_string()), "{:?}", char_names(&s));
+}
+
 /// A character style styles exactly the range; without clearing overrides the range keeps its
 /// own underline, and with them it goes back to the Normal style first.
 #[test]
@@ -239,7 +263,10 @@ fn style_attributes_redefine_the_text_in_the_style() {
     assert_eq!(out, [json!([true, true, true, "CharacterAttributes"]), json!([24, true, true])]);
     assert_eq!(runs(&s, id), [("ab ".into(), Some("X".into()), 24.0, true), ("cd".into(), Some("X".into()), 9.0, true)]);
     // Turning auto leading off keeps the leading auto leading gave the style's size.
-    let out = log(&mut s, &format!("{DOC} var a = cs.getByName('X').characterAttributes; a.autoLeading = false; vc.log([a.autoLeading, Math.round(a.leading * 10)]);"));
+    let out = log(
+        &mut s,
+        &format!("{DOC} var a = cs.getByName('X').characterAttributes; a.autoLeading = false; vc.log([a.autoLeading, Math.round(a.leading * 10)]);"),
+    );
     assert_eq!(out, [json!([false, 288])]);
     let e = failure(&mut s, &format!("{DOC} cs.getByName('X').characterAttributes.size = 0;"));
     assert!(e.contains("0.1 to 1296"), "{e}");

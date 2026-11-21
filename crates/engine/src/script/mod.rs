@@ -1317,9 +1317,6 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         let mut s = session.borrow_mut();
         step(&mut s, host, &id, &params)
     };
-    if r.is_ok() {
-        dom::after_command(host);
-    }
     // Only commands that exist are timed, so the table holds at most one row per command.
     if let (Some(started), Some(spec)) = (started, crate::find_command(&id)) {
         let nanos = started.elapsed().as_nanos();
@@ -1348,6 +1345,10 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         } else if !save.restore(&mut s) {
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
+    }
+    // Style objects follow only a command that is kept.
+    if crossed.is_ok() {
+        dom::after_command(host);
     }
     crossed.map(|data| (data, value))
 }
