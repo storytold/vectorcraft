@@ -1,4 +1,5 @@
 use egui::{Event, Modifiers, PointerButton};
+use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
 
 use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
@@ -415,6 +416,32 @@ fn a_selected_diamond_shows_and_sets_its_midpoint_in_location() {
     let texts = p.click(&mut app, stop.center());
     assert_eq!(app.session.selected_stop(), Some(0));
     assert!(texts.iter().any(|(t, _)| t == "0%"));
+}
+
+/// A diamond picked on the selected object's gradient is not selected on another gradient the
+/// panel shows with that object still selected: the Live Paint Bucket's, or the stroke's after the
+/// proxy toggles. Going back to the object's fill selects it again.
+#[test]
+fn a_picked_diamond_stays_with_the_gradient_it_was_picked_on() {
+    let stops = json!([{"offset": 0, "color": "#ffffff", "midpoint": 0.3}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("paint.setStroke", json!({"gradient": {"kind": "radial"}})).unwrap();
+    app.session.fill_active = true;
+    let mut p = Panel::new();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    let diamond = p.widget(("grad-mid", 0_usize));
+    p.click(&mut app, diamond.center());
+    assert_eq!(selected_mid(&app, &p.ctx, 2), Some(0), "the diamond is picked");
+    app.select_tool("livePaintBucket");
+    app.run("paint.setFill", json!({"gradient": {"kind": "radial"}})).unwrap();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    assert_eq!(selected_mid(&app, &p.ctx, 2), None, "the bucket's gradient");
+    app.select_tool("selection");
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    assert_eq!(selected_mid(&app, &p.ctx, 2), Some(0), "the object's fill again");
+    app.session.fill_active = false;
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    assert_eq!(selected_mid(&app, &p.ctx, 2), None, "the object's stroke");
 }
 
 /// A mirrored conic's Aspect Ratio field shows the extent's size, and a typed value keeps the

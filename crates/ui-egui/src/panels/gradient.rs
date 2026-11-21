@@ -31,7 +31,8 @@ use vectorcraft_color::gradient::{
     MAX_REPEATS, MIN_STOPS, duplicate_stop, insert_stop, midpoint_from_pos, midpoint_pos, move_stop, remove_stop, set_midpoint, swap_stop_colors,
 };
 use vectorcraft_color::{Color, Freeform, FreeformMode, Gradient, GradientKind, GradientMethod, GradientPaint, GradientSpread, GradientStop, Paint};
-use vectorcraft_doc::{NodeId, StrokeGradientMode};
+use vectorcraft_doc::StrokeGradientMode;
+use vectorcraft_engine::StopOwner;
 
 use super::{active_paint, live_run, pstate, set_pstate};
 use crate::state::Dialog;
@@ -231,15 +232,11 @@ fn gradient_swatches(app: &VectorcraftApp) -> Vec<(String, GradientPaint)> {
         .collect()
 }
 
-/// The selected midpoint diamond: kept for the object it was picked on, and given up when a stop
-/// is selected.
+/// The selected midpoint diamond: kept for the gradient it was picked on, as a selected stop is
+/// ([`vectorcraft_engine::Session::gradient_owner`]), and given up when a stop is selected.
 fn selected_mid(app: &VectorcraftApp, ctx: &egui::Context, stops: usize) -> Option<usize> {
-    let (i, owner) = pstate::<Option<(usize, Option<NodeId>)>>(ctx, MID_SELECTED)?;
-    (app.session.selected_stop().is_none() && i + 1 < stops && owner == first_id(app)).then_some(i)
-}
-
-fn first_id(app: &VectorcraftApp) -> Option<NodeId> {
-    app.session.active().and_then(|d| d.selection.objects.first().copied())
+    let (i, owner) = pstate::<Option<(usize, StopOwner)>>(ctx, MID_SELECTED)?;
+    (app.session.selected_stop().is_none() && i + 1 < stops && owner == app.session.gradient_owner()).then_some(i)
 }
 
 // ---------- UI ----------
@@ -935,12 +932,12 @@ fn apply_ramp_edit(
     popover: Option<(usize, Pos2)>,
 ) {
     if let Some(i) = pick_mid {
-        set_pstate(ui.ctx(), MID_SELECTED, Some((i, first_id(app))));
+        set_pstate(ui.ctx(), MID_SELECTED, Some((i, app.session.gradient_owner())));
         if sel.is_some() {
             select_stop(app, None);
         }
     } else if select.is_some() {
-        set_pstate(ui.ctx(), MID_SELECTED, None::<(usize, Option<NodeId>)>);
+        set_pstate(ui.ctx(), MID_SELECTED, None::<(usize, StopOwner)>);
     }
     match changed {
         // Stops added, moved or dropped on the ramp carry colors the gradient or a swatch has, or

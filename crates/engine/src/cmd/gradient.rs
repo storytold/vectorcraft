@@ -87,9 +87,10 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 /// front, the Appearance panel's active item and whether the Live Paint Bucket is the active tool
 /// (its proxies show the default paint). Selecting other art, picking a part of the instance,
 /// toggling the proxy, picking another item or choosing the bucket or leaving it leaves no stop
-/// selected.
+/// selected. The Gradient panel keys its selected midpoint diamond by it as well
+/// ([`Session::gradient_owner`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct StopOwner {
+pub struct StopOwner {
     doc: Option<usize>,
     object: Option<NodeId>,
     /// The object whose paint the active proxy shows: a Live Paint group without faces (or edges)
@@ -133,6 +134,11 @@ impl Session {
     /// can remove stops).
     pub fn selected_stop(&self) -> Option<usize> {
         self.gradient_stop.filter(|(_, owner)| *owner == StopOwner::of(self)).map(|(i, _)| i)
+    }
+
+    /// Whose gradient the active proxy shows now, as a selected stop keeps it ([`StopOwner`]).
+    pub fn gradient_owner(&self) -> StopOwner {
+        StopOwner::of(self)
     }
 }
 
