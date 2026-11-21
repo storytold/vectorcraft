@@ -97,7 +97,10 @@ fn turn_deg(a: &Seg, b: &Seg) -> f64 {
     d.acos().to_degrees()
 }
 
-/// Least-squares Bézier refit of every subpath, keeping corners sharper than the threshold.
+/// Least-squares Bézier refit of every subpath, keeping corners sharper than the threshold. A closed
+/// subpath starts where it did: at its first anchor when the refit keeps an anchor there, otherwise
+/// at a new anchor split into the refit at its point nearest there when the refit still has fewer
+/// anchors than the subpath with that one, and otherwise at the refit's anchor nearest there.
 pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
     let mut out = Vec::new();
     for sp in &path.subpaths {
@@ -108,15 +111,132 @@ pub fn simplify_with(path: &PathData, opts: &SimplifyOptions) -> PathData {
     PathData::new(out)
 }
 
-/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it. A closed subpath
-/// whose refit is one segment, or lines that enclose no area, is refitted in two parts, cut at the
-/// point farthest from its start, or in three when two still give that. When three parts still give
-/// no area, straight lines follow the subpath within the tolerance, and without straight lines it
+/// [`simplify_with`] for one subpath; `None` when the refit leaves nothing of it. A closed refit
+/// starts where the subpath started ([`keep_start`]).
+fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
+    refit_subpath(sp, opts).map(|fit| keep_start(fit, sp).0)
+}
+
+/// Distance (points) from an anchor within which a closed path restarted by [`start_nearest`]
+/// starts at that anchor instead of at a new one split in beside it.
+pub const START_SNAP: f64 = 1e-3;
+
+/// Distance (points) within which two points of a closed path count as equally near its old start.
+const START_TIE: f64 = 1e-6;
+
+/// Where `p` lies along the closed `orig` from its first anchor: the segment index and parameter of
+/// the point of `orig` nearest `p`, the first such point in its order. Sorts after every finite place
+/// when there is none.
+fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
+    let mut best: Option<(f64, usize, f64)> = None;
+    for j in 0..orig.anchors.len() {
+        let hit = orig.segment(j).nearest(p, 1e-9);
+        if hit.distance_sq.is_finite() && hit.t.is_finite() && best.is_none_or(|(d, ..)| hit.distance_sq < d) {
+            best = Some((hit.distance_sq, j, hit.t));
+        }
+    }
+    best.map_or((usize::MAX, f64::INFINITY), |(_, j, t)| (j, t))
+}
+
+/// Of the candidates (distance, point, value), the value of the nearest, with a finite distance:
+/// of those within [`START_TIE`] of each other, the one whose point is earliest along `orig` from
+/// its first anchor, then the first given.
+fn earliest_nearest<T>(candidates: impl IntoIterator<Item = (f64, Point, T)>, orig: &SubPath) -> Option<T> {
+    // (distance, place along `orig` once a tie needs it, point, value)
+    type Best<T> = (f64, Option<(usize, f64)>, Point, T);
+    let mut best: Option<Best<T>> = None;
+    for (d, p, x) in candidates {
+        if !d.is_finite() {
+            continue;
+        }
+        match &mut best {
+            None => best = Some((d, None, p, x)),
+            Some((bd, bplace, bp, _)) if (d - *bd).abs() <= START_TIE => {
+                let held = *bplace.get_or_insert_with(|| place_along(orig, *bp));
+                let place = place_along(orig, p);
+                if place.0 < held.0 || (place.0 == held.0 && place.1 < held.1) {
+                    best = Some((d, Some(place), p, x));
+                }
+            }
+            Some((bd, ..)) if d < *bd => best = Some((d, None, p, x)),
+            Some(_) => {}
+        }
+    }
+    best.map(|(.., x)| x)
+}
+
+/// The closed `sp` started at the point on it nearest `start`: at the anchor there, or at a new
+/// anchor split into the segment there, which leaves the outline as it is. Of points equally near
+/// `start`, the one earliest along `orig` (the path before it was refitted) from its first anchor is
+/// used, then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest
+/// point, is returned as it is.
+pub fn start_nearest(sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
+    start_near(sp, start, orig, true).0
+}
+
+/// [`start_nearest`], splitting a segment only when `split` is set; otherwise, when no anchor lies
+/// at the nearest point, the path starts at its anchor nearest `start`, with the same tie rule. →
+/// (the path, the segment split when one was, where the new start was before the anchors turned).
+fn start_near(mut sp: SubPath, start: Point, orig: &SubPath, split: bool) -> (SubPath, Option<usize>, usize) {
+    let n = sp.anchors.len();
+    if !sp.closed || n < 2 {
+        return (sp, None, 0);
+    }
+    let hits = (0..n).map(|i| {
+        let c = sp.segment(i);
+        let hit = c.nearest(start, 1e-9);
+        let d = if hit.distance_sq.is_finite() && hit.t.is_finite() { hit.distance_sq.sqrt() } else { f64::NAN };
+        (d, c.eval(hit.t), (i, hit.t))
+    });
+    let Some((i, t)) = earliest_nearest(hits, orig) else { return (sp, None, 0) };
+    let c = sp.segment(i);
+    let at = c.eval(t);
+    let (first, cut) = if at.distance(c.p0) <= START_SNAP {
+        (i, None)
+    } else if at.distance(c.p3) <= START_SNAP {
+        ((i + 1) % n, None)
+    } else if split {
+        let mid = if sp.segment_is_line(i) {
+            Anchor::corner(at)
+        } else {
+            let (l, r) = (c.subsegment(0.0..t), c.subsegment(t..1.0));
+            sp.anchors[i].h_out = l.p1;
+            sp.anchors[(i + 1) % n].h_in = r.p2;
+            Anchor::with_handles(at, l.p2, r.p1)
+        };
+        sp.anchors.insert(i + 1, mid);
+        (i + 1, Some(i))
+    } else {
+        let near = sp.anchors.iter().enumerate().map(|(j, a)| (a.p.distance(start), a.p, j));
+        (earliest_nearest(near, orig).unwrap_or(0), None)
+    };
+    sp.anchors.rotate_left(first);
+    (sp, cut, first)
+}
+
+/// The closed refit `fit` of the closed `orig` started where `orig` starts: at its anchor at
+/// `orig`'s first anchor, or at a new anchor split in at its point nearest there when it still has
+/// fewer anchors than `orig` with that one, or else at its anchor nearest there ([`start_near`]). An
+/// open `orig` keeps `fit` as it is.
+fn keep_start(fit: SubPath, orig: &SubPath) -> (SubPath, Option<usize>, usize) {
+    match orig.anchors.first() {
+        Some(a) if orig.closed => {
+            let split = fit.anchors.len() + 1 < orig.anchors.len();
+            start_near(fit, a.p, orig, split)
+        }
+        _ => (fit, None, 0),
+    }
+}
+
+/// [`simplify_subpath`] before the start is put back: a closed subpath whose refit is one segment,
+/// or lines that enclose no area, is refitted in two parts, cut at the point farthest from its
+/// start, or in three when two still give that. When three parts still give no area, straight lines
+/// follow the subpath within the tolerance, and without straight lines it
 /// stays as it is, as does one of a single segment. When no lines within the limits on pieces enclose
 /// an area, it stays as it is, or with straight lines follows the lines between samples of each
 /// curved segment when the limits leave room for lines within the tolerance; one that is all in line
 /// keeps the refit.
-fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
+fn refit_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     let mut segs = subpath_segs(sp);
     let n = segs.len();
     if n == 0 || sp.closed && n < 2 {
@@ -694,7 +814,8 @@ pub struct SimplifiedPart {
 /// two end anchors, which stay where they are with their handles on the side away from the run.
 /// The other segments and anchors stay exactly as they are. A subpath whose every segment is in
 /// `segments` is simplified whole, as [`simplify_with`] does. A run whose refit would have more
-/// segments than it had is left as it is (except with Convert to Straight Lines).
+/// segments than it had is left as it is (except with Convert to Straight Lines). A closed subpath
+/// starts where it did, as [`simplify_with`] starts one ([`keep_start`]).
 pub fn simplify_part(path: &PathData, segments: &BTreeSet<(usize, usize)>, opts: &SimplifyOptions) -> SimplifiedPart {
     let opts = &SimplifyOptions { free_start: false, free_end: false, ..*opts };
     let (mut runs, mut anchors) = (BTreeSet::new(), BTreeMap::new());
@@ -782,7 +903,17 @@ fn simplify_runs(sp: &SubPath, picked: &[bool], opts: &SimplifyOptions) -> (SubP
         }
         k += len;
     }
-    (SubPath::new(anchors, sp.closed), runs, kept)
+    // A closed subpath starts where it did ([`keep_start`]), with the runs and anchors kept renumbered.
+    let (out, cut, first) = keep_start(SubPath::new(anchors, sp.closed), sp);
+    let len = out.anchors.len();
+    if (cut, first) == (None, 0) || len == 0 {
+        return (out, runs, kept);
+    }
+    let turned = |i: usize| (i + len - first) % len;
+    let after_cut = |i: usize| i + usize::from(cut.is_some_and(|c| i > c));
+    let runs = runs.into_iter().flat_map(|s| if cut == Some(s) { vec![s, s + 1] } else { vec![after_cut(s)] }).map(turned).collect();
+    let kept = kept.into_iter().map(|(old, new)| (old, turned(after_cut(new)))).collect();
+    (out, runs, kept)
 }
 
 /// `a` with its out (`out`) or in handle at `h` and the other as it is: still smooth when it was
