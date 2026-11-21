@@ -1360,6 +1360,11 @@ arrowhead	Target	Diana
 	Distribute Spacing:	Distribueix l’espaiat:
 	Dither	Tramatge
 	Dither:	Tramatge:
+	Transparency Dither	Tramatge de transparència
+	No Transparency Dither	Sense tramatge de transparència
+	Diffusion Transparency Dither	Tramatge de transparència per difusió
+	Pattern Transparency Dither	Tramatge de transparència per motiu
+	Noise Transparency Dither	Tramatge de transparència per soroll
 	Divide	Divideix
 	Divide and Outline Will Remove Unpainted Artwork	Divideix i contorneja eliminarà l’art no pintat
 	Divide Horizontally Into	Divideix horitzontalment en

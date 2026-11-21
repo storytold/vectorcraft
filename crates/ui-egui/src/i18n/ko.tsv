@@ -1712,6 +1712,11 @@ antiAlias	Sharp	날카롭게
 	Distribute Spacing	간격 분포
 	Distribute Spacing:	간격 분포:
 	Dither:	디더:
+	Transparency Dither	투명도 디더
+	No Transparency Dither	투명도 디더 없음
+	Diffusion Transparency Dither	확산 투명도 디더
+	Pattern Transparency Dither	패턴 투명도 디더
+	Noise Transparency Dither	노이즈 투명도 디더
 	Divide Horizontally Into	가로로 나누기
 	Divide Slices	슬라이스 나누기
 	Divide Vertically Into	세로로 나누기

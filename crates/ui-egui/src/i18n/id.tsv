@@ -3658,6 +3658,11 @@ antiAlias	Sharp	Tajam
 	Convert to sRGB	Konversi ke sRGB
 	Delete this saved preset	Hapus preset tersimpan ini
 	Dither:	Dither:
+	Transparency Dither	Dither transparansi
+	No Transparency Dither	Tanpa dither transparansi
+	Diffusion Transparency Dither	Dither transparansi difusi
+	Pattern Transparency Dither	Dither transparansi pola
+	Noise Transparency Dither	Dither transparansi derau
 	Fit in View	Sesuaikan ke tampilan
 	Format:	Format:
 	WebP	WebP

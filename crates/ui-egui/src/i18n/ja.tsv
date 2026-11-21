@@ -1722,6 +1722,11 @@ antiAlias	Sharp	シャープ
 	Distribute Spacing	等間隔に分布
 	Distribute Spacing:	間隔の分布:
 	Dither:	ディザ:
+	Transparency Dither	透明部分のディザ
+	No Transparency Dither	透明部分のディザなし
+	Diffusion Transparency Dither	拡散の透明部分のディザ
+	Pattern Transparency Dither	パターンの透明部分のディザ
+	Noise Transparency Dither	ノイズの透明部分のディザ
 	Divide Horizontally Into	水平方向に分割
 	Divide Slices	スライスを分割
 	Divide Vertically Into	垂直方向に分割

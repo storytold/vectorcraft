@@ -1128,6 +1128,18 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Save for Web's Transparency Dither label and its choices (drawn translated by the dropdown, not
+/// through `tl!`).
+#[test]
+fn transparency_dither_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let cat = lang.catalog();
+        for label in std::iter::once("Transparency Dither").chain(crate::dialogs::save_for_web::TRANSPARENCY_DITHERS.map(|(_, l)| l)) {
+            assert!(cat.plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each row in the `search` context, which adds a language's words to a group of words with the same
 /// meaning for the command palette, names a group and adds single words of no other group, and no
 /// two rows of a catalog add one word to different groups. No catalog has to have these rows.

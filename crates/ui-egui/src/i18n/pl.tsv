@@ -3165,6 +3165,11 @@ antiAlias	Sharp	Ostre
 	Convert to sRGB	Konwertuj na sRGB
 	Delete this saved preset	Usuń to zapisane ustawienie
 	Dither:	Rozpraszanie:
+	Transparency Dither	Rozpraszanie przezroczystości
+	No Transparency Dither	Bez rozpraszania przezroczystości
+	Diffusion Transparency Dither	Dyfuzyjne rozpraszanie przezroczystości
+	Pattern Transparency Dither	Rozpraszanie przezroczystości wzorkiem
+	Noise Transparency Dither	Rozpraszanie przezroczystości szumem
 	Fit in View	Dopasuj do widoku
 	Format:	Format:
 	High	Wysoka

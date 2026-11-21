@@ -3174,6 +3174,11 @@ antiAlias	Sharp	Oštro
 	Convert to sRGB	Pretvori u sRGB
 	Delete this saved preset	Izbriši ovaj sačuvani predložak
 	Dither:	Dithering:
+	Transparency Dither	Dithering prozirnosti
+	No Transparency Dither	Bez ditheringa prozirnosti
+	Diffusion Transparency Dither	Difuzijski dithering prozirnosti
+	Pattern Transparency Dither	Dithering prozirnosti uzorkom
+	Noise Transparency Dither	Dithering prozirnosti šumom
 	Fit in View	Uklopi u prikaz
 	Format:	Format:
 	WebP	WebP

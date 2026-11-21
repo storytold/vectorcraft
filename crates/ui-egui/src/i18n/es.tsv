@@ -950,6 +950,11 @@ font-technology	Variable	Variables
 	Distribute Spacing	Distribuir espaciado
 	Distribute Spacing:	Distribuir espaciado:
 	Dither:	Tramado:
+	Transparency Dither	Tramado de transparencia
+	No Transparency Dither	Sin tramado de transparencia
+	Diffusion Transparency Dither	Tramado de transparencia por difusión
+	Pattern Transparency Dither	Tramado de transparencia por motivo
+	Noise Transparency Dither	Tramado de transparencia por ruido
 	Divide	Dividir
 	Divide Horizontally Into	Dividir horizontalmente en
 	Divide Objects Below	Dividir objetos inferiores

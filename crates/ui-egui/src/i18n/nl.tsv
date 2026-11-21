@@ -3652,6 +3652,11 @@ antiAlias	Sharp	Scherp
 	Convert to sRGB	Converteren naar sRGB
 	Delete this saved preset	Deze opgeslagen voorinstelling verwijderen
 	Dither:	Dither:
+	Transparency Dither	Transparantiedithering
+	No Transparency Dither	Geen transparantiedithering
+	Diffusion Transparency Dither	Transparantiedithering met diffusie
+	Pattern Transparency Dither	Transparantiedithering met patroon
+	Noise Transparency Dither	Transparantiedithering met ruis
 	Fit in View	In beeld passen
 	Format:	Indeling:
 	WebP	WebP

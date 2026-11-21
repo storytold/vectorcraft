@@ -955,6 +955,11 @@ font-technology	Variable	Варіативні
 	Distribute Spacing	Розподілити інтервали
 	Distribute Spacing:	Розподіл інтервалів:
 	Dither:	Дизеринг:
+	Transparency Dither	Дизеринг прозорості
+	No Transparency Dither	Без дизерингу прозорості
+	Diffusion Transparency Dither	Дифузійний дизеринг прозорості
+	Pattern Transparency Dither	Дизеринг прозорості візерунком
+	Noise Transparency Dither	Шумовий дизеринг прозорості
 	Divide	Розділити
 	Divide Horizontally Into	Розділити по горизонталі на
 	Divide Objects Below	Розділити об’єкти нижче
