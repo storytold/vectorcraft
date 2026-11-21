@@ -149,6 +149,54 @@ fn malformed_and_oversized_modules_are_refused() {
     assert!(matches!(e, Error::Abi(_)), "{e}");
 }
 
+/// The WebAssembly proposals `docs/plugins.md` lets a plug-in use, each with module fields that
+/// use it.
+const ACCEPTED_PROPOSALS: &[(&str, &str)] = &[
+    ("mutable globals", r#"(global (export "counter") (mut i32) (i32.const 0))"#),
+    ("sign extension", "(func (param i32) (result i32) (i32.extend8_s (local.get 0)))"),
+    ("saturating conversions", "(func (param f32) (result i32) (i32.trunc_sat_f32_s (local.get 0)))"),
+    ("multi-value", "(func (result i32 i32) (i32.const 1) (i32.const 2))"),
+    ("bulk memory", "(func (memory.fill (i32.const 0) (i32.const 0) (i32.const 0)))"),
+    ("reference types", "(func (result externref) (ref.null extern))"),
+    ("tail calls", "(func $again (param i32) (return_call $again (local.get 0)))"),
+    ("extended constant expressions", "(global i32 (i32.add (i32.const 1) (i32.const 2)))"),
+];
+
+/// Modules that use a WebAssembly proposal plug-ins may not use, each with the words its error
+/// names it by.
+const REFUSED_PROPOSALS: &[(&str, &str)] = &[
+    ("(module (func (result v128) (v128.const i32x4 0 0 0 0)))", "SIMD"),
+    ("(module (func (result v128) (i32x4.relaxed_trunc_f32x4_s (v128.const i32x4 0 0 0 0))))", "SIMD"),
+    ("(module (memory i64 1))", "memory64"),
+    ("(module (memory 1) (memory 1))", "multiple memories"),
+    ("(module (memory 1 (pagesize 1)))", "custom page sizes"),
+    (
+        "(module (func (param i64 i64 i64 i64) (result i64 i64) (i64.add128 (local.get 0) (local.get 1) (local.get 2) (local.get 3))))",
+        "wide arithmetic",
+    ),
+    ("(module (memory 1 1 shared))", "threads"),
+    ("(module (tag))", "exceptions"),
+    ("(module (func try catch_all end))", "legacy exceptions"),
+    ("(module (type $t (func)) (func (param (ref $t))))", "function references"),
+    ("(module (type (struct)))", "gc feature"),
+];
+
+#[test]
+fn a_plugin_may_use_the_listed_webassembly_proposals_and_no_others() {
+    for (name, fields) in ACCEPTED_PROPOSALS {
+        let bytes = module(MANIFEST, tpl::ECHO, fields);
+        let out = Plugin::load(&bytes, Limits::default()).and_then(|p| p.run(INPUT.as_bytes(), b"{}"));
+        assert!(out.is_ok(), "{name}: {out:?}");
+    }
+    for (src, name) in REFUSED_PROPOSALS {
+        match Plugin::load(&build(src), Limits::default()) {
+            Err(Error::Module(m)) => assert!(m.to_lowercase().contains(&name.to_lowercase()), "{name}: the error doesn't name it: {m}"),
+            Err(e) => panic!("{name}: refused with another kind of error: {e}"),
+            Ok(_) => panic!("{name}: a module that uses it must be refused"),
+        }
+    }
+}
+
 #[test]
 fn budgets_stop_runaway_plugins() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");

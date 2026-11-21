@@ -811,3 +811,146 @@ fn a_failed_3d_export_stops_the_picture_export() {
     assert!(log.borrow().is_empty(), "{:?}", log.borrow().iter().map(|f| &f.0).collect::<Vec<_>>());
     assert!(p.app().ui.status.contains("Box"), "{}", p.app().ui.status);
 }
+
+/// The panel over `app`'s assets, with the tiles `picked` picked by clicks (Cmd adding after the first).
+fn picking(app: VectorcraftApp, picked: &[&str]) -> Panel {
+    let mut p = panel(app);
+    for (i, name) in picked.iter().enumerate() {
+        p.click_with(name, if i == 0 { egui::Modifiers::NONE } else { egui::Modifiers::COMMAND });
+    }
+    p
+}
+
+/// The assets picked in the panel, in id order.
+fn picked(p: &Panel) -> Vec<u64> {
+    let mut ids = super::asset_export::selected(&p.app());
+    ids.sort_unstable();
+    ids
+}
+
+fn asset_ids(app: &mut VectorcraftApp) -> Vec<u64> {
+    assets(app).iter().map(|v| v["id"].as_u64().unwrap()).collect()
+}
+
+/// A right-click on a tile outside the picked assets picks it alone; on a picked tile it keeps every picked asset,
+/// which the menu's Export and Remove then name. Opening the menu leaves the canvas selection alone.
+#[test]
+fn right_click_selects_an_unselected_tile_and_preserves_a_multi_selection() {
+    for selected_tile in [false, true] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a, b]})).unwrap();
+        let ids = asset_ids(&mut app);
+        let mut p = picking(app, if selected_tile { &["Asset 1", "Asset 2"][..] } else { &["Asset 2"][..] });
+        let canvas = p.app().session.active().unwrap().selection.objects.clone();
+        p.secondary_click("Asset 1");
+        assert_eq!(picked(&p), if selected_tile { ids.clone() } else { vec![ids[0]] });
+        assert!(p.shows(if selected_tile { "Export 2 Assets…" } else { "Export Asset…" }));
+        assert!(p.shows(if selected_tile { "Remove 2 Assets" } else { "Remove Asset" }));
+        for name in ["Rename", "Select Artwork on Canvas", "Add Selected Artwork as One Asset", "Add Selected Artwork as Multiple Assets"] {
+            assert!(p.shows(name), "the menu has {name}");
+        }
+        assert_eq!(p.app().session.active().unwrap().selection.objects, canvas, "opening a menu leaves canvas art alone");
+    }
+}
+
+/// The menu's Remove removes the tile's asset, or every picked one, in one undo step, and keeps the artwork.
+#[test]
+fn tile_menu_remove_uses_one_undo_step_for_one_or_multiple_assets() {
+    for multiple in [false, true] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a, b]})).unwrap();
+        let before = assets(&mut app);
+        let mut p = picking(app, if multiple { &["Asset 1", "Asset 2"][..] } else { &[] });
+        p.secondary_click("Asset 1");
+        p.click(if multiple { "Remove 2 Assets" } else { "Remove Asset" });
+        let remaining = assets(&mut p.app());
+        assert_eq!(remaining.len(), if multiple { 0 } else { 1 });
+        if !multiple {
+            assert_eq!(remaining[0]["name"], "Asset 2");
+        }
+        assert!(!p.shows("Asset 1"));
+        assert!(picked(&p).is_empty());
+        assert!(p.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(a)).is_some(), "removing an asset keeps the artwork");
+        run(&p, "edit.undo", json!({}));
+        assert_eq!(assets(&mut p.app()), before, "one undo restores every removed asset");
+        run(&p, "edit.redo", json!({}));
+        assert_eq!(assets(&mut p.app()), remaining);
+    }
+}
+
+/// Select Artwork on Canvas selects the tile's asset's objects only, and keeps the picked assets.
+#[test]
+fn tile_menu_select_artwork_selects_only_the_clicked_assets_nodes() {
+    let (mut app, _, [a, b]) = app(true);
+    let c = app.run("shape.rectangle", json!({"x": 50, "y": 60, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("assets.add", json!({"ids": [a, b], "multiple": false, "name": "Pair"})).unwrap();
+    app.run("assets.add", json!({"ids": [c], "name": "Other"})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    let ids = asset_ids(&mut app);
+    let mut p = picking(app, &["Pair", "Other"]);
+    p.secondary_click("Pair");
+    p.click("Select Artwork on Canvas");
+    let mut selection: Vec<u64> = p.app().session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    selection.sort_unstable();
+    assert_eq!(selection, vec![a, b]);
+    assert_eq!(picked(&p), ids, "the canvas selection leaves the picked assets alone");
+}
+
+/// The menu's Export writes the tile's asset, or every picked one, and nothing else.
+#[test]
+fn tile_menu_exports_only_its_targets() {
+    for multiple in [false, true] {
+        let (mut app, log, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+        app.run("assets.add", json!({"ids": [b], "name": "Other"})).unwrap();
+        let mut p = picking(app, if multiple { &["Badge", "Other"][..] } else { &[] });
+        p.secondary_click("Badge");
+        p.click(if multiple { "Export 2 Assets…" } else { "Export Asset…" });
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("expected one download: {}", p.app().ui.status) };
+        if multiple {
+            assert!(name.ends_with(".zip"));
+            assert!(bytes.windows(9).any(|w| w == b"Badge.png"));
+            assert!(bytes.windows(9).any(|w| w == b"Other.png"));
+        } else {
+            assert_eq!(name, "Badge.png");
+        }
+    }
+}
+
+/// The menu's Rename opens the tile's name field.
+#[test]
+fn tile_menu_rename_opens_the_clicked_assets_inline_field() {
+    let (mut app, _, [a, _]) = app(true);
+    app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+    let mut p = panel(app);
+    p.secondary_click("Badge");
+    p.click("Rename");
+    p.key(egui::Key::A, egui::Modifiers::COMMAND);
+    p.type_text("Renamed");
+    p.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert_eq!(assets(&mut p.app())[0]["name"], "Renamed");
+}
+
+/// The menu adds the selected artwork as one asset or one per object (an object that is an asset already keeps its
+/// asset), and is off with no artwork selected.
+#[test]
+fn tile_menu_collects_canvas_art_as_one_or_multiple_assets_and_disables_empty_selection() {
+    for (selected, single) in [(true, true), (true, false), (false, true), (false, false)] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a], "name": "Existing"})).unwrap();
+        app.run("select.set", json!({"ids": if selected { vec![a, b] } else { vec![] }})).unwrap();
+        let mut p = panel(app);
+        p.secondary_click("Existing");
+        let label = if single { "Add Selected Artwork as One Asset" } else { "Add Selected Artwork as Multiple Assets" };
+        assert_eq!(p.enabled(label), selected, "{label}");
+        if !selected {
+            continue;
+        }
+        p.click(label);
+        let list = assets(&mut p.app());
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[1]["nodes"], if single { json!([a, b]) } else { json!([b]) });
+        assert_eq!(picked(&p).len(), if single { 1 } else { 2 });
+    }
+}

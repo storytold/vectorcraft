@@ -32,7 +32,7 @@ impl TraceDivider {
     /// The divider of the one Image Trace object selected whole, when it shows the Split view.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
@@ -41,6 +41,10 @@ impl TraceDivider {
         }
         let NodeKind::Group { children, clip: false } = &n.kind else { return None };
         let NodeKind::Image(im) = &children.first()?.kind else { return None };
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !doc.is_editable(*id) {
+            return None;
+        }
         let (width, height) = (f64::from(im.width), f64::from(im.height));
         let det = im.xf.determinant();
         if width <= 0.0 || height <= 0.0 || !det.is_finite() || det.abs() < 1e-12 || !im.xf.as_coeffs().iter().all(|c| c.is_finite()) {

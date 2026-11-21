@@ -127,6 +127,11 @@ impl Layout {
         self.items.push(Item { widget, index, hit, cursor, priority });
     }
 
+    /// Whether `widget` has a part to press.
+    fn shows(&self, widget: Widget) -> bool {
+        self.items.iter().any(|item| item.widget == widget)
+    }
+
     /// The widgets `show` allows, placed through `view`, with the parts the tool would let take a press.
     pub(super) fn of(cx: &ToolContext, view: &CanvasView, show: Show) -> Self {
         let mut l = Layout::default();
@@ -454,6 +459,14 @@ impl Drag {
     }
 }
 
+/// A press that took a widget: the widget, the module's drag, and where the press last held the pointer.
+#[derive(Clone, Debug)]
+pub(super) struct Held {
+    widget: Widget,
+    drag: Drag,
+    at: Point,
+}
+
 /// One step of a press on a widget, in document points.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Gesture {
@@ -461,33 +474,48 @@ pub(super) enum Gesture {
     Press(Point),
     /// The pointer moved past the slop.
     Move(Point),
-    /// The button went up after a drag or a hold.
-    Release,
+    /// The button went up at the point after a drag or a hold.
+    Release(Point),
     /// The button went up where it went down: the Shaper widget's click.
     Click(Point),
     /// The press ended without a release (Escape, a lost pointer).
     Cancel,
 }
 
-/// The actions `g` gives for the press on `widget` whose drag is `drag`, which this updates.
-pub(super) fn plan(app: &mut VectorcraftApp, drag: &mut Option<Drag>, widget: Widget, g: Gesture, mods: Mods) -> Vec<Action> {
+/// The actions `g` gives for the press on `widget` that `held` holds, which this updates.
+pub(super) fn plan(app: &mut VectorcraftApp, held: &mut Option<Held>, widget: Widget, g: Gesture, mods: Mods) -> Vec<Action> {
     let view = app.view_info();
     // PLAN: assumed `Session::with_tool_context<R: Default>(&mut self, view: ViewInfo, f: impl FnOnce(&ToolContext) -> R) -> R` (canvas-w25, tooling.rs).
     app.session.with_tool_context(view, |cx| match g {
         Gesture::Press(p) => {
-            *drag = Drag::hit(widget, cx, p, mods);
+            *held = Drag::hit(widget, cx, p, mods).map(|drag| Held { widget, drag, at: p });
             vec![]
         }
-        Gesture::Move(p) => drag.as_mut().map(|d| d.drag(cx, p, mods)).unwrap_or_default(),
-        Gesture::Release => drag.take().map(Drag::finish).unwrap_or_default(),
-        Gesture::Cancel => drag.take().map(Drag::cancel).unwrap_or_default(),
+        Gesture::Move(p) => held
+            .as_mut()
+            .map(|h| {
+                h.at = p;
+                h.drag.drag(cx, p, mods)
+            })
+            .unwrap_or_default(),
+        // Released away from where the press last held the pointer, the drag goes there first: the release keeps
+        // what a drag to that point shows.
+        Gesture::Release(p) => held
+            .take()
+            .map(|mut h| {
+                let mut out = if h.at == p { vec![] } else { h.drag.drag(cx, p, mods) };
+                out.extend(h.drag.finish());
+                out
+            })
+            .unwrap_or_default(),
+        Gesture::Cancel => held.take().map(|h| h.drag.cancel()).unwrap_or_default(),
         Gesture::Click(p) => shaperwidget::click(cx, p).into_iter().collect(),
     })
 }
 
 /// [`plan`], with the actions applied to the session.
-pub(super) fn advance(app: &mut VectorcraftApp, drag: &mut Option<Drag>, widget: Widget, g: Gesture, mods: Mods) {
-    let actions = plan(app, drag, widget, g, mods);
+pub(super) fn advance(app: &mut VectorcraftApp, held: &mut Option<Held>, widget: Widget, g: Gesture, mods: Mods) {
+    let actions = plan(app, held, widget, g, mods);
     if !actions.is_empty() {
         // PLAN: assumed `canvas::drag::apply_requests(app, Result<Vec<UiRequest>>)` survives the cutover.
         let result = app.session.apply_actions(actions);
@@ -499,21 +527,36 @@ fn tool_mods(m: craft::keymap::Mods) -> Mods {
     Mods { cmd: m.cmd, ctrl: m.ctrl, alt: m.alt, shift: m.shift }
 }
 
+/// Ends the drag `held` holds, as Escape does, when `layout` no longer shows its widget (another tool chosen, Edges or
+/// the bounding box hidden): its value goes back.
+pub(super) fn end_hidden(app: &mut VectorcraftApp, held: &mut Option<Held>, layout: &Layout) {
+    if let Some(widget) = held.as_ref().map(|h| h.widget)
+        && !layout.shows(widget)
+    {
+        advance(app, held, widget, Gesture::Cancel, Mods::default());
+    }
+}
+
+/// Which widgets the app's tool and view show.
+pub(super) fn shown(app: &VectorcraftApp) -> Show {
+    let tool = app.session.tool_id();
+    let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
+    let selecting = tool == "selection" && app.ui.view.edges && !revolve_edit;
+    Show { nine: true, selecting, shaper: matches!(tool, "shaper" | "selection") && !revolve_edit, trace: selecting && !app.outline_view() }
+}
+
 /// Shows the widgets over the document and runs the presses on them. Runs before the tool host, so a press on a part
 /// never reaches the tool.
 pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, win: super::Win, kind: BodyKind) {
     if kind != BodyKind::Live || app.ui.screen_mode == 3 {
         return;
     }
-    let tool = app.session.tool_id();
-    let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
-    let selecting = tool == "selection" && app.ui.view.edges && !revolve_edit;
-    let visible = Show { nine: true, selecting, shaper: matches!(tool, "shaper" | "selection") && !revolve_edit, trace: selecting && !app.outline_view() };
-    let info = app.view_info();
+    let (visible, info) = (shown(app), app.view_info());
     let layout = app.session.with_tool_context(info, |cx| Layout::of(cx, &space.view, visible));
-    let out = SelectionWidgets::new(layout).show(ui);
     let id = super::canvas_id(win).with("selection_widget_drag");
-    let mut drag: Option<Drag> = ui.data(|d| d.get_temp::<Option<Drag>>(id)).flatten();
+    let mut held: Option<Held> = ui.data(|d| d.get_temp::<Option<Held>>(id)).flatten();
+    end_hidden(app, &mut held, &layout);
+    let out = SelectionWidgets::new(layout).show(ui);
     for (widget, press) in out.presses {
         if !press.phase.start().is_some_and(|s| s.button == PointerButton::Primary) {
             continue;
@@ -522,11 +565,11 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
             PressPhase::Down { start } => Gesture::Press(space.view.to_doc(start.origin)),
             PressPhase::DragStart { pos, .. } | PressPhase::Drag { pos, .. } => Gesture::Move(space.view.to_doc(pos)),
             PressPhase::Release { pos, click, .. } if widget == Widget::Shaper && click => Gesture::Click(space.view.to_doc(pos)),
-            PressPhase::Release { .. } => Gesture::Release,
+            PressPhase::Release { pos, .. } => Gesture::Release(space.view.to_doc(pos)),
             PressPhase::Cancel { .. } => Gesture::Cancel,
             _ => continue,
         };
-        advance(app, &mut drag, widget, g, tool_mods(press.mods));
+        advance(app, &mut held, widget, g, tool_mods(press.mods));
     }
-    ui.data_mut(|d| d.insert_temp(id, drag));
+    ui.data_mut(|d| d.insert_temp(id, held));
 }

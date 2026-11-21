@@ -1,6 +1,7 @@
 //! The cells at a row's trailing end: the target circle and the selection square.
 //!
-//! - The target circle targets its layer, group or object; dragging it carries the appearance
+//! - The target circle targets its layer, group or object, with a row click's modifier rules
+//!   ([`rows::target_click`](super::rows::target_click)); dragging it carries the appearance
 //!   ([`PanelDrag::Appearance`]) onto another row's circle (Alt copies it) or the trash. A circle
 //!   lights up while another row's appearance is held over it.
 //! - The selection square selects the row's art (Shift adds or removes); a row whose art is
@@ -11,6 +12,7 @@
 //! blend is selected.
 
 use craft::behavior::{DropOperation, Metrics, PointerButton, PressPhase, Sense};
+use craft::keymap::Mods;
 use craft::layers::ui::panel::LayerPosition;
 use craft::layers::ui::tree::LayerInfo;
 use craft::ui::contract::{Common, Component, Cx, DragPreview, DropMark, DropTarget, MeasureCx, NoValue, Outcome, PaintUi, Pointer as _, Props, Role};
@@ -36,8 +38,8 @@ pub(super) struct ArtDrag(pub(super) Vec<NodeId>);
 /// What a cell reports.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum CellPick {
-    /// The circle was clicked: target the row (Shift adds).
-    Target { add: bool },
+    /// The circle was clicked with these modifiers.
+    Target(Mods),
     /// The square was clicked: select the row's art (Shift adds or removes).
     SelectArt { add: bool },
     /// Another row's appearance was dropped on the circle (Alt copies it).
@@ -156,7 +158,7 @@ impl Component for TargetCircle {
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         if let Some(activation) = cx.activation() {
-            self.pick = Some(CellPick::Target { add: activation.mods.shift });
+            self.pick = Some(CellPick::Target(activation.mods));
         }
         if primary_drag_start(cx) {
             cx.start_drag(PanelDrag::Appearance(self.id), DragPreview::None);
@@ -367,15 +369,19 @@ pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cell
     }
 }
 
-/// The commands of what row `row`'s cells reported, added to `out`: `layer.target`,
-/// `layer.selectAll` and `appearance.transfer` on the row's node.
-pub(super) fn output(out: &mut Vec<(String, Value)>, row: &RowId, shown: CellsOutput) {
+/// What row `row`'s cells reported: the commands `layer.selectAll` and `appearance.transfer` on the row's node, added to
+/// `out`, and a click on its target circle with its modifiers, which the panel resolves once it knows its rows.
+pub(super) fn output(out: &mut Vec<(String, Value)>, target: &mut Option<(NodeId, Mods)>, row: &RowId, shown: CellsOutput) {
     let RowId::Node(id) = *row else { return };
-    out.extend(shown.picks.into_iter().map(|pick| match pick {
-        CellPick::Target { add } => ("layer.target".to_string(), json!({"id": id.0, "add": add})),
-        CellPick::SelectArt { add } => ("layer.selectAll".to_string(), json!({"id": id.0, "add": add})),
-        CellPick::TakeAppearance { source, copy } => ("appearance.transfer".to_string(), json!({"source": source.0, "target": id.0, "copy": copy})),
-    }));
+    for pick in shown.picks {
+        match pick {
+            CellPick::Target(mods) => *target = Some((id, mods)),
+            CellPick::SelectArt { add } => out.push(("layer.selectAll".to_string(), json!({"id": id.0, "add": add}))),
+            CellPick::TakeAppearance { source, copy } => {
+                out.push(("appearance.transfer".to_string(), json!({"source": source.0, "target": id.0, "copy": copy})));
+            }
+        }
+    }
 }
 
 /// Whether a row takes the selected art carried by a selection square ([`ArtDrag`]): only into a

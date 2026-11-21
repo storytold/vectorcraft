@@ -1065,3 +1065,102 @@ fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
     edit("edit.undo", json!({}));
     shows("60%", "35%");
 }
+
+/// Right-clicking a stroke row, on its label, picks it and opens its menu: Duplicate, Delete and Hide Stroke.
+#[test]
+fn right_clicking_a_stroke_row_selects_it_and_exposes_context_menu() {
+    let mut panel = appearance_panel(app_with_rect(), &[]);
+    assert_eq!(panel.app().session.appearance_item(), None);
+    panel.secondary_click("Stroke:");
+    assert_eq!(panel.app().session.appearance_item(), Some(1), "right-clicking the stroke row picked it");
+    for name in ["Duplicate Stroke", "Delete Stroke", "Hide Stroke"] {
+        assert!(panel.shows(name), "the menu has {name}");
+    }
+}
+
+/// The menu's Duplicate Stroke copies the stroke in one undo step.
+#[test]
+fn clicking_duplicate_stroke_duplicates_the_stroke_with_one_undo_step() {
+    let mut panel = appearance_panel(app_with_rect(), &[]);
+    let before = stack_items(&panel.app());
+    panel.secondary_click("Stroke:");
+    panel.click("Duplicate Stroke");
+    let items = stack_items(&panel.app());
+    assert_eq!(items.len(), before.len() + 1, "{items:?}");
+    assert_eq!(items.iter().filter(|(fill, _)| !*fill).count(), 2, "two strokes: {items:?}");
+    run(&mut panel.app(), "edit.undo", json!({}));
+    assert_eq!(stack_items(&panel.app()), before, "one undo step");
+}
+
+/// Right-clicking an effect row, on its label, opens Edit Effect…, Duplicate, Delete and Hide Effect; Delete Effect
+/// removes it in one undo step.
+#[test]
+fn clicking_delete_effect_removes_the_effect_from_appearance() {
+    let mut app = app_with_rect();
+    run(&mut app, "effect.apply", json!({"effect": "stylize.dropShadow"}));
+    let mut panel = appearance_panel(app, &[]);
+    panel.secondary_click("Drop Shadow");
+    for name in ["Edit Effect…", "Duplicate Effect", "Delete Effect", "Hide Effect"] {
+        assert!(panel.shows(name), "the menu has {name}");
+    }
+    panel.click("Delete Effect");
+    assert!(object_effects(&panel.app()).is_empty());
+    run(&mut panel.app(), "edit.undo", json!({}));
+    assert_eq!(object_effects(&panel.app()), ["stylize.dropShadow"], "one undo step");
+}
+
+/// Right-clicking the object row picks it, so no fill or stroke stays active, and opens Clear Appearance and Reduce
+/// to Basic Appearance; Clear Appearance clears it in one undo step.
+#[test]
+fn right_clicking_root_object_row_exposes_clear_and_reduce_appearance() {
+    let mut app = app_with_rect();
+    appearance::select_row(&mut app, appearance::Sel::Item(1));
+    assert_eq!(app.session.appearance_item(), Some(1));
+    let mut panel = appearance_panel(app, &[]);
+    panel.secondary_click("Rectangle");
+    assert_eq!(panel.app().session.appearance_item(), None, "the object row is picked");
+    assert!(panel.shows("Clear Appearance") && panel.shows("Reduce to Basic Appearance"));
+    panel.click("Clear Appearance");
+    let cleared = vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0);
+    assert_eq!(first_selected(&panel.app()).unwrap().appearance, cleared);
+    run(&mut panel.app(), "edit.undo", json!({}));
+    assert_ne!(first_selected(&panel.app()).unwrap().appearance, cleared, "one undo step");
+}
+
+/// Reduce to Basic Appearance is on when any selected object has more than a basic appearance, and reduces each of
+/// them.
+#[test]
+fn reduce_to_basic_enabled_when_any_selected_subject_needs_reduction() {
+    let mut app = app_with_rect();
+    let basic = first_selected(&app).unwrap().id.0;
+    let extra = run(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut app, "appearance.addStroke", json!({}));
+    run(&mut app, "select.set", json!({"ids": [basic]}));
+    let mut panel = appearance_panel(app, &[]);
+    panel.secondary_click("Rectangle");
+    assert!(panel.shows("Reduce to Basic Appearance") && !panel.enabled("Reduce to Basic Appearance"), "off with only a basic object");
+    panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+    run(&mut panel.app(), "select.set", json!({"ids": [basic, extra]}));
+    panel.secondary_click("Rectangle");
+    assert!(panel.enabled("Reduce to Basic Appearance"), "on with an object to reduce");
+    panel.click("Reduce to Basic Appearance");
+    let app = panel.app();
+    let doc = &app.session.active().unwrap().doc;
+    for id in [basic, extra] {
+        assert!(doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.is_basic(), "{id} is basic");
+    }
+}
+
+/// With two fills/strokes picked, the menu's Duplicate Items copies both in one undo step.
+#[test]
+fn right_clicking_multi_selected_items_shows_plural_duplicate_and_delete() {
+    let mut panel = appearance_panel(app_with_rect(), &[]);
+    panel.click_with("Stroke:", egui::Modifiers::NONE);
+    panel.click_with("Fill:", egui::Modifiers::COMMAND);
+    panel.secondary_click("Stroke:");
+    assert!(panel.shows("Duplicate Items") && panel.shows("Delete Items"));
+    panel.click("Duplicate Items");
+    assert_eq!(stack_items(&panel.app()).len(), 4, "both rows copied");
+    run(&mut panel.app(), "edit.undo", json!({}));
+    assert_eq!(stack_items(&panel.app()).len(), 2, "one undo step");
+}

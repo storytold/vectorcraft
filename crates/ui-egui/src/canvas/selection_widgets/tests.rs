@@ -34,14 +34,51 @@ fn node(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::Node {
 }
 
 /// Presses at screen point `from`, drags to `to` in two moves and releases.
-fn drag_through(app: &mut VectorcraftApp, widget: Widget, from: Pos2, to: Pos2) -> Option<Drag> {
+fn drag_through(app: &mut VectorcraftApp, widget: Widget, from: Pos2, to: Pos2) -> Option<Held> {
     let v = view(app);
-    let mut drag = None;
+    let mut held = None;
     let mid = from + (to - from) * 0.5;
-    for g in [Gesture::Press(v.to_doc(from)), Gesture::Move(v.to_doc(mid)), Gesture::Move(v.to_doc(to)), Gesture::Release] {
-        advance(app, &mut drag, widget, g, Mods::default());
+    for g in [Gesture::Press(v.to_doc(from)), Gesture::Move(v.to_doc(mid)), Gesture::Move(v.to_doc(to)), Gesture::Release(v.to_doc(to))] {
+        advance(app, &mut held, widget, g, Mods::default());
     }
-    drag
+    held
+}
+
+/// A press on `widget` at screen point `at`, dragged to `q` and released at `r`, is dragged to `r` before it ends: the
+/// release keeps what a drag to `r` shows.
+fn check_release_away(app: &mut VectorcraftApp, widget: Widget, at: Pos2, q: Pos2, r: Pos2) {
+    let v = view(app);
+    let (at, q, r) = (v.to_doc(at), v.to_doc(q), v.to_doc(r));
+    let pressed = |app: &mut VectorcraftApp| {
+        let mut held = None;
+        plan(app, &mut held, widget, Gesture::Press(at), Mods::default());
+        assert!(!plan(app, &mut held, widget, Gesture::Move(q), Mods::default()).is_empty(), "the drag to {q:?} changes the widget");
+        held
+    };
+    let mut held = pressed(app);
+    let mut want = plan(app, &mut held, widget, Gesture::Move(r), Mods::default());
+    assert!(!want.is_empty(), "the drag to {r:?} changes the widget");
+    want.push(Action::Commit);
+    let mut held = pressed(app);
+    assert_eq!(plan(app, &mut held, widget, Gesture::Release(r), Mods::default()), want, "released at {r:?}");
+}
+
+/// A drag of `widget` from screen point `at` to `q` is cancelled by a switch to another tool: what it changed goes
+/// back, and the release after it commits nothing.
+fn check_tool_switch_cancels(app: &mut VectorcraftApp, widget: Widget, at: Pos2, q: Pos2) {
+    let v = view(app);
+    let before = app.session.active().unwrap().doc.clone();
+    let mut held = None;
+    advance(app, &mut held, widget, Gesture::Press(v.to_doc(at)), Mods::default());
+    advance(app, &mut held, widget, Gesture::Move(v.to_doc(q)), Mods::default());
+    assert_ne!(*app.session.active().unwrap().doc, *before, "the drag previews");
+    app.select_tool("direct");
+    let visible = shown(app);
+    let l = layout(app, visible);
+    end_hidden(app, &mut held, &l);
+    assert!(held.is_none(), "a tool switch cancels the drag");
+    assert_eq!(*app.session.active().unwrap().doc, *before, "its value goes back");
+    assert!(plan(app, &mut held, widget, Gesture::Release(v.to_doc(q)), Mods::default()).is_empty(), "the release commits nothing");
 }
 
 fn first_at(l: &Layout, w: Widget) -> Pos2 {
@@ -201,12 +238,14 @@ fn radial_repeat_splitter_hides_instances_in_one_undo_step() {
     advance(&mut app, &mut drag, Widget::Radial, Gesture::Press(v.to_doc(splitter)), Mods::default());
     // Back round the circle in 30 degree moves: past two of the six instances.
     let from = splitter - centre;
+    let mut last = v.to_doc(splitter);
     for k in 1..=4 {
         let a = (-30.0_f32 * k as f32).to_radians();
         let turned = Vec2::new(from.x * a.cos() - from.y * a.sin(), from.x * a.sin() + from.y * a.cos());
-        advance(&mut app, &mut drag, Widget::Radial, Gesture::Move(v.to_doc(centre + turned)), Mods::default());
+        last = v.to_doc(centre + turned);
+        advance(&mut app, &mut drag, Widget::Radial, Gesture::Move(last), Mods::default());
     }
-    advance(&mut app, &mut drag, Widget::Radial, Gesture::Release, Mods::default());
+    advance(&mut app, &mut drag, Widget::Radial, Gesture::Release(last), Mods::default());
     assert_eq!(radial_of(&app, id).0, 4);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(radial_of(&app, id).0, 6, "the split was one step");
@@ -240,7 +279,8 @@ fn a_press_cancel_mid_drag_gives_one_cancel_and_no_undo_step() {
     let v = view(&app);
     let mut drag = None;
     let mut steps = vec![];
-    for g in [Gesture::Press(v.to_doc(centre)), Gesture::Move(v.to_doc(centre + Vec2::new(40.0, 0.0))), Gesture::Cancel, Gesture::Release] {
+    let to = v.to_doc(centre + Vec2::new(40.0, 0.0));
+    for g in [Gesture::Press(v.to_doc(centre)), Gesture::Move(to), Gesture::Cancel, Gesture::Release(to)] {
         let actions = plan(&mut app, &mut drag, Widget::Mirror, g, Mods::default());
         steps.push(actions.clone());
         app.session.apply_actions(actions).unwrap();
@@ -249,6 +289,48 @@ fn a_press_cancel_mid_drag_gives_one_cancel_and_no_undo_step() {
     assert!(steps[3].is_empty(), "the release after a cancel does nothing");
     assert!(drag.is_none());
     assert_eq!(node(&app, id), before);
+}
+
+#[test]
+fn a_mirror_axis_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let (mut app, _) = mirror_app();
+    let (_, centre) = layout(&mut app, ALL).mirror.unwrap();
+    check_release_away(&mut app, Widget::Mirror, centre, centre + Vec2::new(20.0, 0.0), centre + Vec2::new(40.0, 0.0));
+    check_tool_switch_cancels(&mut app, Widget::Mirror, centre, centre + Vec2::new(20.0, 0.0));
+}
+
+#[test]
+fn a_grid_repeat_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 40, "height": 40})).unwrap();
+    app.run("object.repeat.grid", json!({"hSpacing": 10, "vSpacing": 10})).unwrap();
+    let rows_handle = layout(&mut app, ALL).grid[0].at;
+    let step = 50.0 * view(&app).zoom as f32;
+    let (q, r) = (rows_handle + Vec2::new(0.0, 2.0 * step), rows_handle + Vec2::new(0.0, 4.0 * step));
+    check_release_away(&mut app, Widget::Grid, rows_handle, q, r);
+    check_tool_switch_cancels(&mut app, Widget::Grid, rows_handle, q);
+}
+
+#[test]
+fn a_radial_repeat_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let mut app = app_with_radial();
+    let instances = layout(&mut app, ALL).radial.unwrap().handles[0].0;
+    let step = repeat_radial::INSTANCE_STEP as f32;
+    let (q, r) = (instances + Vec2::new(0.0, 2.0 * step), instances + Vec2::new(0.0, 4.0 * step));
+    check_release_away(&mut app, Widget::Radial, instances, q, r);
+    check_tool_switch_cancels(&mut app, Widget::Radial, instances, q);
+}
+
+/// The guides are the canvas's, not the Selection tool's: they stay with any tool, and so does their drag.
+#[test]
+fn a_nine_slice_guide_drag_reads_its_release() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
+    let l = layout(&mut app, ALL);
+    let from = l.nine[0][0] + (l.nine[0][1] - l.nine[0][0]) * 0.5;
+    let unit = view(&app).zoom as f32;
+    check_release_away(&mut app, Widget::Nine, from, from - Vec2::new(10.0 * unit, 0.0), from - Vec2::new(20.0 * unit, 0.0));
 }
 
 #[test]

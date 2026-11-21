@@ -957,7 +957,8 @@ link, and `graphicStyle.apply` with `add` unlinks the group. With `appearance.tr
 target group's paths keeps its look on a move, and a `source` that is the group's only path is an error.
 `graphicStyle.redefine` gives the style to the paths directly in a series group linked to it, whether or not the group
 has rows of its own, links them, and clears and unlinks the group; the source and the paths linked to the style whose
-look was edited keep their look. Read as a source, by `graphicStyle.new`, `graphicStyle.redefine` or
+look was edited keep their look, and a path in the group linked to another style keeps its look and its link. Read as a
+source, by `graphicStyle.new`, `graphicStyle.redefine` or
 `appearance.transfer`, a series group that has no fill, stroke, effect, opacity, blend mode, isolation, knockout or
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
@@ -2556,10 +2557,10 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 - `menuCommands.strings` lists the string literals the script passes to `executeMenuCommand`
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
-- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used),
-  `filesOpened` (files opened in other apps), `network`, `nativeCode`, `otherApps` (messages to other apps),
-  `environment` (environment variables), `unseenCode` (`eval`, `new Function` and `$.evalFile`) and
-  `preferences` (the reference app's preferences changed).
+- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
+  File object's `length`, `hidden` or `readonly` counts too), `filesOpened` (files opened in other apps), `network`,
+  `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
+  `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
   template literals and XML literals that aren't closed, brackets that don't match, syntax newer than ES3 and
   unknown directives) and notes on its text (bytes that aren't valid UTF-8, mixed line endings, and nesting deeper
@@ -3885,7 +3886,10 @@ already walks Image Trace. Short agent entry points:
   art, where it is, snaps the art again after it is edited, and does not count
   instances in `select.object.notAlignedToPixelGrid`; `alignToPixelGrid` alone with the value the symbol already has
   adds no undo step),
-  `symbol.place {name?, x?, y?}`, `symbol.placeFromDocument {sourceDocument, name, x?, y?}` (an instance of a symbol
+  `symbol.place {name?, x?, y?}` (on top of the current layer; in Draw Behind directly below the bottommost selected
+  object, beside the compound path that holds it, or at the bottom of the current layer with nothing selected, above
+  a clipping path; `symbol.placeFromDocument` and `symbol.addFromLibrary` with `place` stack the instance the same
+  way), `symbol.placeFromDocument {sourceDocument, name, x?, y?}` (an instance of a symbol
   of another open document, as a symbol dragged from that document's Symbols panel onto the canvas places it: the
   symbol, the symbols it nests and the resources they use are added as `edit.dropSelection` adds them, in the same
   undo step, and a symbol with the same name but other art or Symbol Options is added under a free name; an error
@@ -5147,7 +5151,7 @@ art", and a loaded file draws the source path, as it does for a solid past its l
 documentation names the controls and their ranges
 ([3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)).
 The settings are saved in the native file; SVG and PDF exports draw the shadow, and `effect.expandAppearance` keeps
-it as a path. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow. See [three-d.md](three-d.md#shadows).
+a hard shadow as a path and turns a blurred one into an image. Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic) have no shadow. See [three-d.md](three-d.md#shadows).
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"shadow":true,"shadowPosition":"below","shadowDistance":10,"shadowBounds":150}}}}
@@ -5702,11 +5706,15 @@ fills and strokes above it paint over the members (characters), those below unde
 `appearance.contents_index`. The `appearance.*`, `effect.*` and `graphicStyle.apply` commands edit the selected
 objects themselves (a group's own stack; layers through `ids`) or, with `target: "contents"`, the objects inside the
 groups and layers. In a Live Paint group those are its faces and edges, not its hidden source paths.
-`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only; a selected group left with only its hidden source paths is returned without a change. A
+`appearance.addFill` adds a fill to the faces only, and `appearance.addStroke` adds a stroke to the edges only. On a
+selected group left with only its hidden source paths, either command changes nothing. A
 fill or stroke command with an `item` and `target: "contents"` (such as `paint.setFill`, `stroke.set`,
 `paint.invert`, `paint.setGradientGeom` and `object.setOverprint`) changes the faces for a fill row and the edges for
 a stroke row. The row commands (`appearance.setItem`, `appearance.removeItem` and the others) find their rows on each
-face and edge as on any other object in the contents.
+face and edge as on any other object in the contents. `graphicStyle.apply` gives each face only the style's fills and
+each edge only its strokes, with or without `add`, and links neither to the style. `appearance.clear` leaves a face
+one empty fill and an edge one empty stroke, and `appearance.reduceToBasic` keeps only a face's fill and only an
+edge's stroke.
 `appearance.targetContents` selects a group's members (double-clicking the Contents row).
 SVG and PDF export bake a group's own fills, strokes and geometry effects into paths; its raster effects stay a
 filter on the whole group in SVG and become an image of the whole group in PDF.
@@ -6218,7 +6226,8 @@ Each Effect › Pathfinder effect (`pathfinder.add` … `pathfinder.softMix`, no
 in its params: `precision` (a number, 0.001–10 pt), `removeRedundantPoints` and `removeUnpainted` (true or false), which
 mean what they mean for the panel's operations; the other operations ignore `removeUnpainted`. With `removeUnpainted`
 on, a compound shape's area counts as filled when the shape has a visible fill of its own, and Divide keeps every piece
-when the group or compound shape has one. Outline strokes a compound shape's area in the shape's own fill. `effect.apply`
+when the group or compound shape has one. Outline strokes a compound shape's area in the shape's own fill, and gives
+the edges no paint when the shape has no fill (the shape's own strokes still draw over the result). `effect.apply`
 fills the ones `params` leave out from the current Pathfinder Options, and the values join its journal entry. An effect
 saved without them evaluates with precision 0.01 and both switches off, as before effects kept them. `effect.setParams
 {index, params: {precision?, removeRedundantPoints?, removeUnpainted?}}` edits them as one undo step; values the
@@ -7554,7 +7563,7 @@ and the weed box of Weed Box and Lines (`addon.cutting.weed`) read the image whe
 corners make a parallelogram, the image is placed by its transform as before. Otherwise the native file saves them in
 the image's `image_quad` field (top left, top right, bottom right and bottom left of its pixels, in page
 coordinates); files without the field open as before. The canvas, printing and every export except DXF, WMF and HP-GL
-(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. In
+(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. The `.ai` writers write the nearest parallelogram instead at their nesting limit (below). In
 printing and exports the mesh takes as many cells as it needs for the pieces to stay within 0.05 pt of the exact
 perspective at the points it checks, with cells at least 2 pt long on the corners' longest side, and each piece reaches
 0.5 pt into its neighbors. The canvas cuts the mesh for the zoom, by the view's largest stretch: within a quarter of a
@@ -7562,7 +7571,11 @@ screen pixel at the points it checks, with cells at least 4 pixels long, and eac
 neighbors. Either way the mesh takes no more than 64 by 64 cells, and no more cells across than the image has pixels on
 its longer side (or 8, if that is more). A stronger perspective, or a smaller image, is drawn with the cells it is
 allowed. In EMF each piece stores only the pixels inside its clip, with a pixel more on each side. DXF and WMF cannot
-clip, so they write the image as the parallelogram nearest its corners and warn. Corners that would fold the image over
+clip, so they write the image as the parallelogram nearest its corners and warn. The editing data a `.ai` file carries
+writes an image nested 8 deep in opacity masks, symbols, live objects and pattern tiles the same way, and a legacy
+`.ai` (version 7) does so for an image nested 8 deep in symbols and live objects; each warns that the image was
+written as the nearest parallelogram. Ordinary groups and layers do not count toward that depth. Neither writer
+writes an image nested deeper. Corners that would fold the image over
 itself, put three corners on one line, join two corners, cross the warp's horizon or lie too close together for a
 perspective map are an error, and nothing changes. A transform that squeezes the corners past what a perspective map
 can place leaves the image at the parallelogram nearest them. A file whose `image_quad` holds other than four points,
@@ -7570,16 +7583,22 @@ or breaks these rules, opens with the image placed by its transform. A drag is o
 the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
-Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Relink (`links.relink`),
-Embed (`links.embed`), Unembed (`links.unembed`), Create Object Mosaic (`object.createObjectMosaic`) and Place with
-Replace (`file.place` with `replace`) of anything but a text file refuse a distorted image with an error that names the
-distortion; Place with Replace does not refuse a clipping group that holds a distorted image of a DCS file's plates. Relink and Unembed refuse a named or selected distorted image before they search a folder or write a file.
-Create Gradient Mesh (`object.mesh.create`) converts the other objects it is given and lists each distorted image it
-leaves as it is in `skipped`, with its `id` and the error as `reason`; with nothing else to convert, it returns that
-error. Update Links (`links.update`) puts a changed file's pixels between a distorted
-image's corners, without applying its Placement Options. Mask (`object.maskImage`) draws its clipping path through the
-image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
-result. These rules are VectorCraft's own.
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
+(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of anything but a text file refuse a
+distorted image with an error that names the distortion; Place with Replace does not refuse a clipping group that holds
+a distorted image of a DCS file's plates. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
+given and lists each distorted image it leaves as it is in `skipped`, with its `id` and the error as `reason`; with
+nothing else to convert, it returns that error. Update Links (`links.update`) and Relink
+(`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
+Relink's `preserve`. When `preserve` is given, Relink adds a `warnings` entry naming those images; without it, Relink
+adds none for them. The clipping path a PSD, PSB or DCS
+file names is drawn through the corners: the clip group of the old file's clipping path gets the new file's clipping
+path, or becomes a plain group when the new file names none. Embed (`links.embed`) and Unembed (`links.unembed`) keep
+the corners, each in one undo step. Unembed of a distorted image from a PSD or PSB file, written as stored (PNG, or
+TIFF for a CMYK file), keeps the clip group of that file's clipping path, and so do Relink and Update Links to the
+file it wrote; a path that converts the image writes no clipping path, and the clip group becomes a plain group. Mask
+(`object.maskImage`) draws its clipping path through the image's corners. Rasterize (`object.rasterize`) draws the
+image between its corners and makes a plain image of the result. These rules are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}
@@ -9132,7 +9151,8 @@ undo step. When a matched layer, or a layer around it, is hidden or locked, the 
 Drawing modes (`view.drawMode`) apply
 too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put the objects inside the
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
-`edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection. `edit.pasteInFront` and
+`edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection, and a placed symbol instance
+(`symbol.place`) goes just below the selection too. `edit.pasteInFront` and
 `edit.pasteInBack` ignore the drawing mode. When the object drawn into is the one isolation mode isolates (`object.isolate`,
 or a double-click on it with the Selection tool), art drawn or pasted inside it takes isolation mode into its clip group,
 so the new art can be picked and isn't dimmed; `edit.undo` or `edit.redo` that removes the isolated object ends
@@ -11422,6 +11442,47 @@ hidden state and stay live on the group; none of them is copied onto the glyph p
 glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
+`type.retype` (Type › Retype) turns outlined glyphs back into point text. By default a shape must be exactly a glyph of
+an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes the
+glyph it is closest to when its leftover distance from that glyph, relative to the shape's outline spread (the root
+mean square distance of its sampled outline points from their center), is at most the
+tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
+and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
+and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
+a near match. The line also splits before a near-matched glyph, or a glyph of a line whose first glyph is one, that
+the type would draw further from its shape than the tolerance by the same measure (its own leftover distance together
+with the change of size and turn) or with its center further away than its origin may be. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
+at a leftover distance of 0.05. A compound path that holds several
+glyphs, such as a word made into one compound path, is split into groups of contours (a contour with the contours
+inside it) in path order, and runs of up to three groups are matched, the longest first among those after which the
+remaining groups can still all be matched, so an i's stem and dot become one i. A group whose contours run the other
+way round, as Make Compound Path leaves some of them, still matches exactly. Exact matches of the whole shape come
+first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
+compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
+`unmatched` when another shape of the selection becomes type, and the command returns an error when no shape does. A
+glyph also has to paint the area the shape paints under the shape's fill rule: a compound filled by the nonzero rule
+whose inner contour runs the same way as its outer one paints its center, so a ring glyph does not replace it. A shape with a counter narrower than three times the
+outline tolerance across in some direction, turned or not, cannot be checked this way and stays an outline: at `tolerance` 0.05, a
+counter 10 units wide in a 100 by 100 shape, or a 60 by 10 one turned 45 degrees. So does a shape whose outline is too large to check. The glyphs of a compound path that splits into several are set one beside
+another, so a split whose parts overlap where the shape's fill rule leaves the overlap unpainted (two o's on each
+other under the even-odd rule) stays an outline. A split whose parts overlap at all also stays an outline when the
+compound has an opacity below 100%, a blend mode other than Normal, a gradient or pattern fill or a stroke, since the
+glyphs may become separate objects that paint the overlap twice. When the split with the longest runs fails that check, the split with the
+shortest runs is checked, then the other complete splits in order, up to 32 splits per shape for exact matches and 32
+for near matches; when none passes, the shape stays an outline. Glyphs fused into one contour are not split, and a compound path of more than 256 groups, 512 contours
+or 65,536 path elements is matched whole only. One command groups at most 16,384 contours, in selection order; the shapes after them are
+matched whole only. Near matching compares a shape with at most the 256 glyphs closest to it in proportion, in at
+most 50 million point comparisons per shape and 2 billion per command, ranking a glyph by proportion counting as one
+comparison per contour and one more; past them, the glyphs not yet ranked or compared are left out. It looks glyphs up for at most 1,024 distinct shapes and runs per command: every selected shape first, in
+selection order, then the runs of groups of the compound paths. Glyphs close only to the shapes and runs past that
+limit are not looked up. At most 262,144 glyphs are drawn to check whether they could near match, and at most 32,768
+are indexed for it, each face taking an equal share of both; of a face's glyphs, those closest to the selected shapes
+in proportion are indexed.
+
+```json
+{"name":"run_command","arguments":{"command":"type.retype","params":{"tolerance":0.02}}}
+```
+
 `type.createOutlines` (Type › Create Outlines) and `effect.expandAppearance` (when it outlines type, as Expand
 Appearance describes) take an outlined frame of threaded text out of its thread with the text it shows, and the other
 frames keep the text they hold. When the thread's last frame is outlined, the text it has no room for, which its
@@ -12578,7 +12639,7 @@ on an open path that are not drawn because they fall before the path's start can
 ## Retype tracking
 
 `type.retype {fonts?}` turns selected outlined text back into point text when its shapes are glyphs of a font the app
-has. A line of three or more glyphs gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
+has. A line of three or more exactly matched glyphs (none a near match, see `tolerance`) gets the spacing that most of its gaps share as its tracking, in 1/1000 em. Retype
 tries the value rounded to a whole number first when it is within 0.05 of one, then the value as measured. The font's
 advances and pair kerning are left out of the measure, and word spaces are counted after the tracking. The tracking is
 kept when the tracked type draws the whole line in place, or more of it from its start than untracked type does. When
@@ -12598,7 +12659,7 @@ tracking their own gaps give. These rules are VectorCraft's own. Each entry of t
 
 ## Retype several lines
 
-`type.retype` joins lines that follow each other in paint order, with the same group, paint, font, size, turn and
+`type.retype` joins lines that follow each other in paint order (lines split from one compound path do), with the same group, paint, font, size, turn and
 tracking (an untracked line of one or two glyphs takes the tracking of the others), into one type object when each
 line's baseline is the same distance below the one before (between 0.25 and 3 times the size) and the lines line up at their starts, ends or centers. The object is area type with Convert To Area
 Type's frame, its lines separated by line breaks, with left, right or center alignment, checked in that order. Its
@@ -12620,7 +12681,8 @@ the result's `texts` list holds an object's lines joined by `\n`, and each entry
 
 `type.retypeFonts {count?}` lists the fonts whose glyphs match the selected outlined text. It compares each selected path
 and compound path, inside groups too, with the glyphs of up to 96 loaded fonts, those of the document's live type
-first, by the matching `type.retype` uses, and it counts only exact matches. When two versions of a font are loaded,
+first, by the matching `type.retype` uses, and it counts only exact matches of whole shapes: it does not split a
+compound path into glyphs or take near matches. When two versions of a font are loaded,
 only the version its family and style name gives is compared, which is the version that choosing the font sets. The
 fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style
 name. `count` is a whole number from 1 to 96 (default 10); any other value is an error. The reply is
@@ -13212,7 +13274,8 @@ session and refuses `--connect`. In Safe Mode no plug-in loads or
 runs: `plugin.install`, `plugin.run`, `plugin.reload` and exporters return an error, and a live-effect plug-in draws its
 object's geometry unchanged while the object keeps the effect: `effect.list` gives that effect `skipped: true`, and the
 Appearance panel shows "(Safe Mode)" after its name and the plug-in's id in its tooltip. `effect.expandAppearance` returns an
-error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. `vectorcraft` rejects an option it does not know (such as
+error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. That includes a
+plain symbol instance in a group or layer with a raster effect, since the group's image draws the symbol's art. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
 pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
@@ -14191,8 +14254,11 @@ away); its click on a gradient mesh's line picks the line's two
 ends, and a click inside a patch picks the four points around it. The picked points show filled. Dragging one of them
 moves them all as one undo step (`object.mesh.movePoints`), a click on one of several picked points picks it alone,
 and the arrow keys nudge them by the keyboard increment. The active tool lists them in its options
-(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching to the Eyedropper keeps them picked, its
-options list them too, and the Mesh tool, Direct Selection or a Lasso chosen next picks them again. While a selected, editable mesh has
+(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching between the Mesh tool, Direct Selection,
+the Lasso, the Polygonal Lasso and the Eyedropper keeps them picked, and so does a Cmd/Ctrl-click with the selection
+tool one of them lends; any other tool, Group Selection included, drops them. A plain Lasso click away from the art
+(`select.none`) unpicks them. The Eyedropper's options list them too.
+While a selected, editable mesh has
 points picked, an Eyedropper click or Shift-click on an image or other art samples the color under the pointer into
 those points alone as `paint.sampleColor {color, stroke: false, ids}` with the meshes that have points picked: one undo
 step, none when the color is unchanged. Other selected objects keep their paint. A click on one of those meshes, and
@@ -14493,11 +14559,13 @@ Tools:
   outside it with a point on it (within a millionth of its radius); it never crosses the first segment, and it
   touches the two segments at different points. The circle is a new ellipse with the current paint, drawn through
   three of its points with `shape.circleThroughPoints` so that Align New Objects to Pixel Grid leaves it in place, one
-  undo step. A circle too small or too large for its three points to give it back in floating point counts as no
-  circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
+  undo step. A circle too small or too large for its three points to give it back in floating point, or one that
+  would reach past the canvas (4,000,000 pt from the origin), counts as no circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
   nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
-  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, or another document forgets
-  the first segment.
+  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, another document, or a
+  change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
+  segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
+  canceled preview does not leave a circle worked out on the previewed paths.
   Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
   gives an error for a value outside that range or one that is not a number, and for any other option.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,

@@ -50,8 +50,6 @@ const SPREAD_CAPPED: &str =
     "gradients that repeat or reflect are written with at most 256 runs of their stops (at most 16384 stops); they pad past those";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGE_COUNT: usize = 360;
-/// Decimals of a smooth shading's stitching function bounds (stop offsets, 0 to 1).
-const BOUNDS_PLACES: u32 = 7;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
@@ -63,8 +61,6 @@ const MAX_BODY: usize = 256 << 20;
 /// Most compressed bytes in one string of an image's samples at Level 2 (under PostScript's
 /// 65,535-byte string limit).
 const IMAGE_CHUNK: usize = 48 << 10;
-/// The start of the procedure that reads an image's data from the lines after it.
-const INLINE_SOURCE: &str = "{ /VCsrc currentfile /ASCII85Decode filter def\n";
 
 /// An image as written: what sets up its color, its image dictionary and its compressed samples.
 /// Placed once, it is written where it is drawn, its data following the operators that read it.
@@ -108,33 +104,20 @@ impl ImageCode {
 
     /// The operators and data that draw the image where it is placed.
     fn push_inline(&self, s: &mut String) {
-        s.push_str(&self.prelude);
-        s.push_str(INLINE_SOURCE);
-        s.push_str(&self.dict);
-        s.push_str(&self.inline_read());
-        s.push_str(&self.ascii);
-    }
-
-    /// The end of the procedure [`ImageCode::push_inline`] writes. The procedure is read whole
-    /// before it runs: the image data follows it, and flushing the ASCII85 filter afterwards reads
-    /// past its end marker.
-    fn inline_read(&self) -> String {
-        format!("\n/DataSource VCsrc {} filter >> {}\nVCsrc flushfile }} exec\n", self.filter, self.op)
+        ps::push_inline_image(s, "VCsrc", &self.prelude, &self.dict, self.filter, self.op, &self.ascii);
     }
 
     /// The operators that draw the image `VCim<i>` holds, for an image placed more than once.
     fn reference(&self, i: usize, level: Level) -> String {
+        let mut s = String::new();
+        let name = format!("VCim{i}");
         match level {
             // The stream is read again from its start.
-            Level::Three => {
-                format!("{}VCim{i} resetfile\n{}\n/DataSource VCim{i} {} filter >> {}\n", self.prelude, self.dict, self.filter, self.op)
-            }
+            Level::Three => ps::push_reusable_image_ref(&mut s, &name, &self.prelude, &self.dict, self.filter, self.op),
             // A procedure gives the strings in turn, then an empty string: the end of the data.
-            Level::Two => format!(
-                "{}/VCi 0 def\n{}\n/DataSource {{VCi VCim{i} length lt {{VCim{i} VCi get /VCi VCi 1 add def}} {{()}} ifelse}} {} filter >> {}\n",
-                self.prelude, self.dict, self.filter, self.op
-            ),
+            Level::Two => ps::push_image_array_ref(&mut s, "VCi", &name, &self.prelude, &self.dict, self.filter, self.op),
         }
+        s
     }
 
     /// The setup's definition of `VCim<i>`: the image's compressed samples, once.
@@ -145,11 +128,7 @@ impl ImageCode {
                 // The stream reads all of its data when it is made, so the data follows the
                 // procedure that makes it.
                 let intent = if self.op == "imagemask" { 1 } else { 0 };
-                let _ = writeln!(
-                    s,
-                    "{{ /VCsrc currentfile /ASCII85Decode filter def\n/VCim{i} VCsrc << /Intent {intent} /AsyncRead false /CloseSource false >> /ReusableStreamDecode filter def\nVCsrc flushfile }} exec"
-                );
-                s.push_str(&self.ascii);
+                ps::push_reusable_image_resource(&mut s, "VCsrc", &format!("VCim{i}"), intent, &self.ascii);
             }
             Level::Two => {
                 let _ = writeln!(s, "/VCim{i} [");
@@ -1489,44 +1468,12 @@ impl<'a> Scene<'a> {
 
     /// A Level 3 smooth shading of `kind` (2 axial, 3 radial) at `coords`, extended both ways.
     fn shading(&mut self, kind: u8, space: &GradientSpace, coords: &[f64], stops: &[(f64, Vec<f32>)]) {
-        let n = space.n();
-        let comps = |c: &[f32]| -> String {
-            let mut s = String::from("[");
-            push_nums(&mut s, &c.iter().take(n).map(|v| f64::from(*v)).collect::<Vec<_>>());
-            s.pop();
-            s.push(']');
-            s
-        };
-        let segments: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
-        let interp = |w: &&[(f64, Vec<f32>)]| format!("<< /FunctionType 2 /Domain [0 1] /C0 {} /C1 {} /N 1 >>", comps(&w[0].1), comps(&w[1].1));
-        let function = match segments.as_slice() {
-            [one] => interp(one),
-            many => {
-                let mut f = String::from("<< /FunctionType 3 /Domain [0 1] /Functions [\n");
-                for w in many {
-                    f.push_str(&interp(w));
-                    f.push('\n');
-                }
-                f.push_str("] /Bounds [");
-                // Seven decimals: a gradient's stops repeated hundreds or thousands of times
-                // (`Gradient::padded_over`) keep their places in each run.
-                for w in many.iter().skip(1) {
-                    ps::push_num_places(&mut f, w[0].0, BOUNDS_PLACES);
-                    f.push(' ');
-                }
-                f.push_str("] /Encode [");
-                f.push_str(&"0 1 ".repeat(many.len()));
-                f.push_str("] >>");
-                f
-            }
-        };
+        let kind = if kind == 3 { ps::ShadingKind::Radial } else { ps::ShadingKind::Axial };
         let name = match space {
             GradientSpace::Process(s) => s.name(),
             GradientSpace::Inks(name, _) => name,
         };
-        let _ = write!(self.body, "<< /ShadingType {kind} /ColorSpace {name} /Coords [");
-        push_nums(&mut self.body, coords);
-        let _ = writeln!(self.body, "] /Extend [true true]\n/Function {function} >> shfill");
+        ps::push_shading(&mut self.body, kind, name, coords, space.n(), stops);
     }
 
     /// The bands of each stretch between stops: how many, for colours `a` to `b` over `length`
@@ -2090,7 +2037,9 @@ impl<'a> Scene<'a> {
 /// `data`, not yet placed.
 fn image_code(prelude: String, dict: String, filter: &'static str, op: &'static str, data: Vec<u8>) -> ImageCode {
     let mut code = ImageCode { prelude, dict, filter, op, ascii: ps::ascii85(&data), data, uses: 0, inline_len: 0, ref_len: 0 };
-    code.inline_len = code.prelude.len() + INLINE_SOURCE.len() + code.dict.len() + code.inline_read().len() + code.ascii.len();
+    let mut inline = String::new();
+    ps::push_inline_image(&mut inline, "VCsrc", &code.prelude, &code.dict, code.filter, code.op, "");
+    code.inline_len = inline.len() + code.ascii.len();
     code
 }
 

@@ -58,6 +58,14 @@ use crate::sidewidget::{self, SideDrag};
 use crate::typewidget;
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
+/// The release of the widget drag `d`: released away from the last press or drag (`away`), it is
+/// dragged there first (`drag`); then it ends (`finish`).
+fn released<D>(mut d: D, away: bool, drag: impl FnOnce(&mut D) -> Vec<Action>, finish: impl FnOnce(D) -> Vec<Action>) -> Vec<Action> {
+    let mut out = if away { drag(&mut d) } else { vec![] };
+    out.extend(finish(d));
+    out
+}
+
 /// Direction is read on screen, even in a turned view. Within three pixels of the press's
 /// horizontal position, retain the previous rule so hand jitter does not flip it.
 fn marquee_direction(cx: &ToolContext, start: Point, cur: Point, previous: bool) -> bool {
@@ -203,6 +211,9 @@ pub struct SelectionTool {
     loaded_at_press: Option<(NodeId, bool)>,
     /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
     bracket_hover: Option<Point>,
+    /// Where the pointer was at the last press or drag: a widget drag released anywhere else is
+    /// dragged there before it ends.
+    held_at: Option<Point>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -596,8 +607,14 @@ pub fn shown_centers(cx: &ToolContext) -> Vec<(NodeId, Point)> {
         .objects
         .iter()
         .copied()
-        .filter(|id| editable(*id) && crate::direct::in_scope(cx.doc, cx.isolation, *id))
-        .filter_map(|id| Some((id, cx.doc.node(id).filter(|n| n.shows_center())?.geometric_bounds_with(&symbols)?.center())))
+        .filter_map(|id| {
+            let n = cx.doc.node(id).filter(|n| n.shows_center())?;
+            // After the center: on a locked artboard it measures the art of the layer object holding `id`.
+            if !crate::direct::in_scope(cx.doc, cx.isolation, id) || !editable(id) {
+                return None;
+            }
+            Some((id, n.geometric_bounds_with(&symbols)?.center()))
+        })
         .collect()
 }
 
@@ -787,6 +804,16 @@ impl SelectionTool {
         }
     }
 
+    /// Notes where a press or a drag last held the pointer, and says whether a release lands
+    /// somewhere else.
+    fn note_held_at(&mut self, ev: &PointerEvent) -> bool {
+        let released_away = ev.kind == PointerKind::Up && self.held_at != Some(ev.pos);
+        if matches!(ev.kind, PointerKind::Down | PointerKind::Drag) {
+            self.held_at = Some(ev.pos);
+        }
+        released_away
+    }
+
     /// The pointer loaded with the text of area type or type on a path `from` ([`State::Loaded`]):
     /// a press starts placing it, and its release threads it (`text.thread.add`), into a frame put
     /// `before` `from` or after it. None when `from` can no longer thread: the press is an
@@ -925,15 +952,27 @@ impl Tool for SelectionTool {
         out
     }
 
-    /// Switching tools during a drag of a blend widget, a corner widget, a pie widget or a
-    /// polygon's side widget cancels it, as Escape does: its value goes back.
+    /// Switching tools during a drag of a widget (a blend, corner, pie or side widget, an Objects on
+    /// Path widget or a bracket of type on a path) cancels it, as Escape does: its value goes back.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         match std::mem::take(&mut self.state) {
             State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
             State::Corner(c) if c.adjusting() => vec![Action::Cancel],
             State::Pie(d) if d.adjusting() => vec![Action::Cancel],
+            State::RotateAll(d) if d.adjusting() => vec![Action::Cancel],
+            State::Space(d) if d.adjusting() => vec![Action::Cancel],
+            State::MoveAll(d) if d.adjusting() => vec![Action::Cancel],
+            State::Member(d) if d.adjusting() => vec![Action::Cancel],
+            State::Bracket(b) if b.adjusting() => vec![Action::Cancel],
             State::Sides(d) => d.cancel(),
-            State::BlendWidget(_) | State::Corner(_) | State::Pie(_) => vec![],
+            State::BlendWidget(_)
+            | State::Corner(_)
+            | State::Pie(_)
+            | State::RotateAll(_)
+            | State::Space(_)
+            | State::MoveAll(_)
+            | State::Member(_)
+            | State::Bracket(_) => vec![],
             other => {
                 self.state = other;
                 vec![]
@@ -996,6 +1035,7 @@ impl Tool for SelectionTool {
     /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
+        let released_away = self.note_held_at(ev);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.bracket_hover = hovering.then_some(ev.pos);
         self.alt_hover = hovering && ev.mods.alt;
@@ -1142,7 +1182,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Corner(c)) => {
                 self.state = State::Idle;
-                c.finish()
+                released(c, released_away, |c| c.drag(cx, p), CornerDrag::finish)
             }
             (PointerKind::Drag, State::Pie(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1151,7 +1191,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Pie(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), PieDrag::finish)
             }
             (PointerKind::Drag, State::Sides(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1171,7 +1211,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::BlendWidget(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), BlendWidgetDrag::finish)
             }
             (PointerKind::Drag, State::RotateAll(mut d)) => {
                 let out = d.drag(cx, p, m.shift);
@@ -1180,7 +1220,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::RotateAll(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p, m.shift), RotateAllDrag::finish)
             }
             (PointerKind::Drag, State::Space(mut d)) => {
                 let out = d.drag(cx, p, m.alt);
@@ -1189,7 +1229,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Space(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p, m.alt), SpaceDrag::finish)
             }
             (PointerKind::Drag, State::MoveAll(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1198,7 +1238,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::MoveAll(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), MoveAllDrag::finish)
             }
             (PointerKind::Drag, State::Member(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1207,7 +1247,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Member(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), MemberDrag::finish)
             }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
@@ -1216,7 +1256,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Bracket(b)) => {
                 self.state = State::Idle;
-                b.finish()
+                released(b, released_away, |b| b.drag(cx, p, m.cmd), BracketDrag::finish)
             }
             (PointerKind::Up, State::Moving { began, deselect, key, exclude, .. }) => {
                 self.release_move(cx, ev.backquote, began, deselect, key, exclude)

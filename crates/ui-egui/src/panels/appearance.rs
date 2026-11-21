@@ -193,6 +193,8 @@ pub(crate) struct AppearancePanel {
     pub(crate) popup_row: Option<RowKey>,
     /// The fill/stroke row whose swatch shows the document's swatches.
     pub(crate) swatches_for: Option<RowKey>,
+    /// The row whose context menu the list last asked for.
+    pub(crate) menu: Option<RowKey>,
 }
 
 /// The selected row of `node` (the first selected object): a selected effect row while that
@@ -457,7 +459,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     let pass = pass.into_inner();
     if let Some(list) = shown.inner {
+        let opener = list.response.clone();
         apply_list(app, node.as_deref(), &order, selection, list);
+        if let (Some(key), Some(n)) = (app.ui.appearance_panel.menu, node.as_deref()) {
+            row_menu(app, ui, &opener, n, key);
+        }
     }
     apply_parts(app, node.as_deref(), pass.acts);
     if let Some(out) = footer.into_inner() {
@@ -563,6 +569,7 @@ fn apply_list(
                 }
             }
             CollectionEvent::Activate(key) => activated.push(key),
+            CollectionEvent::ContextMenu(request) => app.ui.appearance_panel.menu = Some(request.key),
             CollectionEvent::Delete(_) => deleted = true,
             CollectionEvent::Reorder(EditEvent::Set { after, .. } | EditEvent::Commit { after, .. }) => moved = Some(after),
             _ => {}
@@ -587,6 +594,98 @@ fn apply_list(
     if let Some(mv) = moved {
         reorder(app, n, order, &mv);
     }
+}
+
+/// What a row's context menu runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RowAct {
+    Clear,
+    Reduce,
+    EditEffect,
+    Duplicate,
+    Delete,
+    /// Hide or show the row's fill/stroke or effect.
+    Eye(bool),
+}
+
+/// The context menu of row `key` of `n`, hanging from the list, which picked the row unless it was picked already:
+/// Clear Appearance and Reduce to Basic Appearance on the object row; Duplicate, Delete and Hide or Show on a
+/// fill/stroke row, and Edit Effect…, Duplicate, Delete and Hide or Show on an effect row, Duplicate and Delete for
+/// every picked row of its kind. The other rows have none.
+fn row_menu(app: &mut VectorcraftApp, ui: &mut Ui, opener: &egui::Response, n: &Node, key: RowKey) {
+    let sel = current_sel(app, Some(n));
+    let rows: Vec<(RowAct, &str, bool)> = match key {
+        RowKey::Object => vec![
+            (RowAct::Clear, tl!("Clear Appearance"), true),
+            (RowAct::Reduce, tl!("Reduce to Basic Appearance"), any_subject_needs_reduction(app)),
+        ],
+        RowKey::Item(i) => {
+            let Some(it) = n.appearance.items.get(i) else { return };
+            let stroke = matches!(it, AppearanceItem::Stroke(_));
+            let (duplicate, delete) = match (selected_items(app, n, sel).len() > 1, stroke) {
+                (true, _) => (tl!("Duplicate Items"), tl!("Delete Items")),
+                (false, true) => (tl!("Duplicate Stroke"), tl!("Delete Stroke")),
+                (false, false) => (tl!("Duplicate Fill"), tl!("Delete Fill")),
+            };
+            let eye = match (it.visible(), stroke) {
+                (true, true) => tl!("Hide Stroke"),
+                (false, true) => tl!("Show Stroke"),
+                (true, false) => tl!("Hide Fill"),
+                (false, false) => tl!("Show Fill"),
+            };
+            vec![(RowAct::Duplicate, duplicate, true), (RowAct::Delete, delete, true), (RowAct::Eye(!it.visible()), eye, true)]
+        }
+        RowKey::Effect(_) | RowKey::ItemEffect(..) => {
+            let Some((item, k)) = key.effect() else { return };
+            let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
+            let many = selected_effects(app, n, sel).is_some_and(|(list, ks)| list == item && ks.len() > 1);
+            let (duplicate, delete) =
+                if many { (tl!("Duplicate Effects"), tl!("Delete Effects")) } else { (tl!("Duplicate Effect"), tl!("Delete Effect")) };
+            let eye = if e.visible { tl!("Hide Effect") } else { tl!("Show Effect") };
+            vec![
+                (RowAct::EditEffect, tl!("Edit Effect…"), true),
+                (RowAct::Duplicate, duplicate, true),
+                (RowAct::Delete, delete, true),
+                (RowAct::Eye(!e.visible), eye, true),
+            ]
+        }
+        _ => return,
+    };
+    let shown = Menu::context(tl!("Appearance"), opener).show(ui, |ui, _| {
+        let mut ran = None;
+        for (act, label, enabled) in &rows {
+            if MenuItem::new(*label).enabled(*enabled).show(ui).ran {
+                ran = Some(*act);
+            }
+        }
+        ran
+    });
+    match shown.inner.flatten() {
+        Some(RowAct::Clear) => {
+            app.run("appearance.clear", json!({})).ok();
+        }
+        Some(RowAct::Reduce) => {
+            app.run("appearance.reduceToBasic", json!({})).ok();
+        }
+        Some(RowAct::EditEffect) => edit_effect(app, n, key),
+        Some(RowAct::Duplicate) => {
+            duplicate_selected(app, Some(n), sel).ok();
+        }
+        Some(RowAct::Delete) => {
+            delete_selected(app, Some(n), sel).ok();
+        }
+        Some(RowAct::Eye(on)) => toggle_eye(app, key, on),
+        None => {}
+    }
+}
+
+/// Whether a selected object, or the compound path holding it, has more than a basic appearance to reduce.
+fn any_subject_needs_reduction(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    st.selection.subjects().iter().any(|id| {
+        let compound = st.doc.parent_of(*id).and_then(|p| st.doc.node(p)).filter(|p| matches!(p.kind, vectorcraft_doc::NodeKind::Compound { .. }));
+        compound.or_else(|| st.doc.node(*id)).is_some_and(|n| !n.appearance.is_basic())
+    })
 }
 
 /// Applies what the rows' parts did: links, swatches, weights and inline editor edits.
@@ -1700,7 +1799,7 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     states.set(DUPLICATE_ITEM, enabled(has && sel.editable()));
     states.set(REMOVE_ITEM, enabled(has && sel.deletable()));
     states.set("appearance.clear", enabled(has));
-    states.set("appearance.reduceToBasic", enabled(node.as_ref().is_some_and(|n| !n.appearance.is_basic())));
+    states.set("appearance.reduceToBasic", enabled(any_subject_needs_reduction(app)));
     states.set(new_art_basic(app), enabled(true).checked(app.session.prefs.new_art_basic));
     let thumbnail = if app.ui.appearance_panel.hide_thumb { tl!("Show Thumbnail") } else { tl!("Hide Thumbnail") };
     states.set(THUMBNAIL, enabled(true).title(thumbnail));
