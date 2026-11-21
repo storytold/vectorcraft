@@ -2556,10 +2556,10 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 - `menuCommands.strings` lists the string literals the script passes to `executeMenuCommand`
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
-- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used),
-  `filesOpened` (files opened in other apps), `network`, `nativeCode`, `otherApps` (messages to other apps),
-  `environment` (environment variables), `unseenCode` (`eval`, `new Function` and `$.evalFile`) and
-  `preferences` (the reference app's preferences changed).
+- `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
+  File object's `length`, `hidden` or `readonly` counts too), `filesOpened` (files opened in other apps), `network`,
+  `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
+  `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
   template literals and XML literals that aren't closed, brackets that don't match, syntax newer than ES3 and
   unknown directives) and notes on its text (bytes that aren't valid UTF-8, mixed line endings, and nesting deeper
@@ -3885,7 +3885,10 @@ already walks Image Trace. Short agent entry points:
   art, where it is, snaps the art again after it is edited, and does not count
   instances in `select.object.notAlignedToPixelGrid`; `alignToPixelGrid` alone with the value the symbol already has
   adds no undo step),
-  `symbol.place {name?, x?, y?}`, `symbol.placeFromDocument {sourceDocument, name, x?, y?}` (an instance of a symbol
+  `symbol.place {name?, x?, y?}` (on top of the current layer; in Draw Behind directly below the bottommost selected
+  object, beside the compound path that holds it, or at the bottom of the current layer with nothing selected, above
+  a clipping path; `symbol.placeFromDocument` and `symbol.addFromLibrary` with `place` stack the instance the same
+  way), `symbol.placeFromDocument {sourceDocument, name, x?, y?}` (an instance of a symbol
   of another open document, as a symbol dragged from that document's Symbols panel onto the canvas places it: the
   symbol, the symbols it nests and the resources they use are added as `edit.dropSelection` adds them, in the same
   undo step, and a symbol with the same name but other art or Symbol Options is added under a free name; an error
@@ -6218,7 +6221,8 @@ Each Effect › Pathfinder effect (`pathfinder.add` … `pathfinder.softMix`, no
 in its params: `precision` (a number, 0.001–10 pt), `removeRedundantPoints` and `removeUnpainted` (true or false), which
 mean what they mean for the panel's operations; the other operations ignore `removeUnpainted`. With `removeUnpainted`
 on, a compound shape's area counts as filled when the shape has a visible fill of its own, and Divide keeps every piece
-when the group or compound shape has one. Outline strokes a compound shape's area in the shape's own fill. `effect.apply`
+when the group or compound shape has one. Outline strokes a compound shape's area in the shape's own fill, and gives
+the edges no paint when the shape has no fill (the shape's own strokes still draw over the result). `effect.apply`
 fills the ones `params` leave out from the current Pathfinder Options, and the values join its journal entry. An effect
 saved without them evaluates with precision 0.01 and both switches off, as before effects kept them. `effect.setParams
 {index, params: {precision?, removeRedundantPoints?, removeUnpainted?}}` edits them as one undo step; values the
@@ -7554,7 +7558,7 @@ and the weed box of Weed Box and Lines (`addon.cutting.weed`) read the image whe
 corners make a parallelogram, the image is placed by its transform as before. Otherwise the native file saves them in
 the image's `image_quad` field (top left, top right, bottom right and bottom left of its pixels, in page
 coordinates); files without the field open as before. The canvas, printing and every export except DXF, WMF and HP-GL
-(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. In
+(an HP-GL plot leaves images out) draw a distorted image as a mesh of affine image pieces, clipped by the corners; no warped copy of the pixels is stored. The `.ai` writers write the nearest parallelogram instead at their nesting limit (below). In
 printing and exports the mesh takes as many cells as it needs for the pieces to stay within 0.05 pt of the exact
 perspective at the points it checks, with cells at least 2 pt long on the corners' longest side, and each piece reaches
 0.5 pt into its neighbors. The canvas cuts the mesh for the zoom, by the view's largest stretch: within a quarter of a
@@ -7562,7 +7566,11 @@ screen pixel at the points it checks, with cells at least 4 pixels long, and eac
 neighbors. Either way the mesh takes no more than 64 by 64 cells, and no more cells across than the image has pixels on
 its longer side (or 8, if that is more). A stronger perspective, or a smaller image, is drawn with the cells it is
 allowed. In EMF each piece stores only the pixels inside its clip, with a pixel more on each side. DXF and WMF cannot
-clip, so they write the image as the parallelogram nearest its corners and warn. Corners that would fold the image over
+clip, so they write the image as the parallelogram nearest its corners and warn. The editing data a `.ai` file carries
+writes an image nested 8 deep in opacity masks, symbols, live objects and pattern tiles the same way, and a legacy
+`.ai` (version 7) does so for an image nested 8 deep in symbols and live objects; each warns that the image was
+written as the nearest parallelogram. Ordinary groups and layers do not count toward that depth. Neither writer
+writes an image nested deeper. Corners that would fold the image over
 itself, put three corners on one line, join two corners, cross the warp's horizon or lie too close together for a
 perspective map are an error, and nothing changes. A transform that squeezes the corners past what a perspective map
 can place leaves the image at the parallelogram nearest them. A file whose `image_quad` holds other than four points,
@@ -9132,7 +9140,8 @@ undo step. When a matched layer, or a layer around it, is hidden or locked, the 
 Drawing modes (`view.drawMode`) apply
 too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put the objects inside the
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
-`edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection. `edit.pasteInFront` and
+`edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection, and a placed symbol instance
+(`symbol.place`) goes just below the selection too. `edit.pasteInFront` and
 `edit.pasteInBack` ignore the drawing mode. When the object drawn into is the one isolation mode isolates (`object.isolate`,
 or a double-click on it with the Selection tool), art drawn or pasted inside it takes isolation mode into its clip group,
 so the new art can be picked and isn't dimmed; `edit.undo` or `edit.redo` that removes the isolated object ends
@@ -13212,7 +13221,8 @@ session and refuses `--connect`. In Safe Mode no plug-in loads or
 runs: `plugin.install`, `plugin.run`, `plugin.reload` and exporters return an error, and a live-effect plug-in draws its
 object's geometry unchanged while the object keeps the effect: `effect.list` gives that effect `skipped: true`, and the
 Appearance panel shows "(Safe Mode)" after its name and the plug-in's id in its tooltip. `effect.expandAppearance` returns an
-error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. `vectorcraft` rejects an option it does not know (such as
+error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. That includes a
+plain symbol instance in a group or layer with a raster effect, since the group's image draws the symbol's art. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
 pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
@@ -14191,8 +14201,11 @@ away); its click on a gradient mesh's line picks the line's two
 ends, and a click inside a patch picks the four points around it. The picked points show filled. Dragging one of them
 moves them all as one undo step (`object.mesh.movePoints`), a click on one of several picked points picks it alone,
 and the arrow keys nudge them by the keyboard increment. The active tool lists them in its options
-(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching to the Eyedropper keeps them picked, its
-options list them too, and the Mesh tool, Direct Selection or a Lasso chosen next picks them again. While a selected, editable mesh has
+(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching between the Mesh tool, Direct Selection,
+the Lasso, the Polygonal Lasso and the Eyedropper keeps them picked, and so does a Cmd/Ctrl-click with the selection
+tool one of them lends; any other tool, Group Selection included, drops them. A plain Lasso click away from the art
+(`select.none`) unpicks them. The Eyedropper's options list them too.
+While a selected, editable mesh has
 points picked, an Eyedropper click or Shift-click on an image or other art samples the color under the pointer into
 those points alone as `paint.sampleColor {color, stroke: false, ids}` with the meshes that have points picked: one undo
 step, none when the color is unchanged. Other selected objects keep their paint. A click on one of those meshes, and
@@ -14496,8 +14509,10 @@ Tools:
   undo step. A circle too small or too large for its three points to give it back in floating point counts as no
   circle. Shift pressed or let go during a click counts at the release. With no circle the note shows, a click draws
   nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
-  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, or another document forgets
-  the first segment.
+  segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, another document, or a
+  change to the first segment that makes no undo step (a live preview, or one that was canceled) forgets the first
+  segment. The circle is looked for again whenever either segment no longer has the shape it was found on, so a
+  canceled preview does not leave a circle worked out on the previewed paths.
   Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
   gives an error for a value outside that range or one that is not a number, and for any other option.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
