@@ -4747,7 +4747,8 @@ already walks Image Trace. Short agent entry points:
   ```
 
   In the app, `ui.conceptVector` opens the Concept to Vector panel, which runs the same commands; Generate shows a progress bar
-  and Cancel. On the desktop it runs off the UI thread; the web build runs it on the UI thread one part a frame, and
+  and Cancel. On the desktop it runs off the UI thread unless `VECTORCRAFT_SYNC_OPEN` is set, in which case it runs at
+  once on the UI thread; the web build runs it on the UI thread one part a frame, and
   Cancel takes effect before the next part. `ui.conceptVector.generate` does what Generate does and returns
   `{running: true}` while the styles are made, else `{running: false, job}`; `ui.conceptVector.cancel` does what Cancel
   does. A Generate after a Cancel starts once the canceled run's thread has ended. The panel shows a job's results only
