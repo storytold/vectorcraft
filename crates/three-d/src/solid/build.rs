@@ -41,6 +41,11 @@ impl Camera {
         let f = perspective_scale(self.eye, v.2);
         Point::new(self.origin.x + v.0 * f, self.origin.y + v.1 * f)
     }
+    /// The view-space point at depth `z` that [`Camera::project`] takes to `p`.
+    pub(super) fn unproject(&self, p: Point, z: f64) -> V3 {
+        let f = perspective_scale(self.eye, z);
+        V3((p.x - self.origin.x) / f, (p.y - self.origin.y) / f, z)
+    }
     /// The cosine between a face's outward unit normal `n` and the direction from `at` (both in
     /// view space) to the eye: positive when the face is turned towards the viewer.
     pub(super) fn facing(&self, at: V3, n: V3) -> f64 {
@@ -303,15 +308,24 @@ impl<'a> Builder<'a> {
             let places = curves.as_ref().map_or([None, None], |w| w.places);
             // Where the edge's curve is at share `s` of it.
             let t = |s: f64| span.map_or(0.0, |span| span.t0 + (span.t1 - span.t0) * s);
-            // A cut corner on a ring that follows a curve lies on the curve, so the pieces' edges
-            // follow the same curve as the cap's edge they meet.
+            // A cut corner on a ring that follows a curve lies on the curve, moved by the offsets of
+            // the edge's corners from it (a bevel's miters), eased across the edge as the cap's edge
+            // eases them, so the pieces' edges follow the same curve as the cap's edge they meet. The
+            // offsets are eased as drawn, and the corner keeps the depth they give it in view space.
+            let camera = self.camera;
             let corner = |p: V3, q: V3, s: f64, ring: usize| match (span, places.get(ring).copied().flatten()) {
                 (Some(span), Some(place)) if s > 0.0 && s < 1.0 => {
-                    let v = place(&span, t(s));
+                    let (c, c0, c1) = (place(&span, t(s)), place(&span, span.t0), place(&span, span.t1));
+                    let (ep, eq) = (outline::fade(s), outline::fade(1.0 - s));
+                    let (dp, dq) = (p.sub(c0), q.sub(c1));
+                    let z = c.2 + dp.2 * ep + dq.2 * eq;
+                    let (dp, dq) = (camera.project(p) - camera.project(c0), camera.project(q) - camera.project(c1));
+                    let v = camera.unproject(camera.project(c) + dp * ep + dq * eq, z);
                     if v.0.is_finite() && v.1.is_finite() && v.2.is_finite() { v } else { lerp(p, q, s) }
                 }
                 _ => lerp(p, q, s),
             };
+            let ends = [[self.camera.project(a[i]), self.camera.project(a[j])], [self.camera.project(b[i]), self.camera.project(b[j])]];
             for k in 0..pieces {
                 let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
                 let quad = vec![corner(a[i], a[j], s0, 0), corner(a[i], a[j], s1, 0), corner(b[i], b[j], s1, 1), corner(b[i], b[j], s0, 1)];
@@ -359,7 +373,7 @@ impl<'a> Builder<'a> {
                     // stays straight.
                     let near = w.near.filter(|_| pieces == 1 || w.places[0].is_some());
                     let far = w.far.filter(|_| pieces == 1 || w.places[1].is_some());
-                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, (t(s0), t(s1)), quad, near, far, w.budget)));
+                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, (t(s0), t(s1)), ends, quad, near, far, w.budget)));
                 }
             }
         }

@@ -162,6 +162,50 @@ fn a_twisted_wall_keeps_curves_where_a_twist_cuts_it() {
     }
 }
 
+/// A half disc: a straight diameter and a round arc, meeting it at right angles.
+fn half_disc() -> BezPath {
+    let k = 0.552_284_749_830_793_6 * 50.0;
+    let mut b = BezPath::new();
+    b.move_to((0.0, 50.0));
+    b.line_to((100.0, 50.0));
+    b.curve_to((100.0, 50.0 - k), (50.0 + k, 0.0), (50.0, 0.0));
+    b.curve_to((50.0 - k, 0.0), (0.0, 50.0 - k), (0.0, 50.0));
+    b.close_path();
+    b
+}
+
+/// With a bevel, the cap is inset, and its corners where the arc meets the diameter at a right
+/// angle lie off the curve's inset by the miter. A twist cuts the band next to the cap into pieces:
+/// the pieces that start or end at one of the cap's corners draw the cap's edge, within the cap's
+/// sampling tolerance of its curves, with no gap where they meet it.
+#[test]
+fn twisted_bevel_pieces_meet_the_cap_at_sharp_joins() {
+    let (p, b) = shape(&half_disc());
+    let bevel = Bevel { inside: true, width: 4.0, height: 1.0, ..Bevel::default() };
+    let o = Extrude { depth: 4.0, twist: 30.0, bevel: Some(bevel), ..Extrude::default() };
+    let turned = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    for view in [turned, View { perspective: 60.0, ..turned }] {
+        let f = extrude(&p, FillRule::EvenOdd, b, o, view).unwrap();
+        let cap = f.iter().find(|f| f.depth == f64::MAX).unwrap();
+        let corners: Vec<Point> = cap.contours.iter().flatten().copied().collect();
+        let cap = fine(&cap.path().to_bezpath(), |q| q);
+        let mut pieces = 0;
+        for side in f.iter().filter(|f| f.side) {
+            for c in curves(&side.path()) {
+                let at_corner = |q: Point| corners.iter().any(|v| v.distance(q) < 1e-6);
+                // One end at a corner of the cap, the other where the twist cuts the edge.
+                if at_corner(c.p0) == at_corner(c.p3) {
+                    continue;
+                }
+                pieces += 1;
+                let far = farthest(&c, &cap);
+                assert!(far <= 2.0 * 0.05 + 1e-6, "{far}: {c:?}");
+            }
+        }
+        assert!(pieces > 10, "{pieces}");
+    }
+}
+
 /// Inflate keeps the art's curves where its faces meet the outline: the flat back is the art
 /// turned, one cubic for each of its curves within 0.001 pt; every side facet has both its edges
 /// curved; and the front's cells along the outline are curved there, within the sampling
@@ -228,7 +272,9 @@ fn straight_tiny_and_twisted_solids_keep_their_curves_bounded() {
         ),
         inflate(&tiny, FillRule::NonZero, b, Inflate { depth: 0.02, twist: 360.0, taper: 0.01, both_sides: true, ..Inflate::default() }, view),
     ] {
-        for f in f.unwrap() {
+        let f = f.unwrap();
+        assert!(f.iter().any(|f| !curves(&f.path()).is_empty()), "no curve on a tiny circle");
+        for f in f {
             for c in curves(&f.path()) {
                 assert!([c.p0, c.p1, c.p2, c.p3].iter().all(|q| q.x.is_finite() && q.y.is_finite()), "{c:?}");
             }
