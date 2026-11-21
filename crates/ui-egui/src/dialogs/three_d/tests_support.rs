@@ -1,0 +1,95 @@
+//! The test driver of the 3D dialog: the whole app frame in a framework fixture, so the dialog host and the
+//! canvas run once per frame after the shell pass, as in the app.
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
+
+use craft::ui::testing::{Fixture, Target};
+use egui::vec2;
+use serde_json::Value;
+
+use super::super::three_d;
+use crate::VectorcraftApp;
+
+/// An app whose 3D dialog a test drives by the controls' names, as a user would.
+pub(crate) struct ThreeD {
+    /// The frame driver: clicks, drags and keys go through it.
+    pub(crate) fixture: Fixture,
+    app: Rc<RefCell<VectorcraftApp>>,
+}
+
+impl ThreeD {
+    /// Shows `app`'s whole frame in a 1440 × 900 room.
+    pub(crate) fn new(app: VectorcraftApp) -> Self {
+        let app = Rc::new(RefCell::new(app));
+        let shown = app.clone();
+        // PLAN: assumed `crate::shell::show(&mut VectorcraftApp, &mut Ui)`, the app frame entry of hub-w1's smoke trial
+        let mut fixture = Fixture::new(move |ui| crate::shell::show(&mut shown.borrow_mut(), ui));
+        fixture.room(vec2(1440.0, 900.0));
+        Self { fixture, app }
+    }
+
+    /// The app, for commands and reads between frames.
+    pub(crate) fn app(&self) -> RefMut<'_, VectorcraftApp> {
+        self.app.borrow_mut()
+    }
+
+    /// Opens the 3D dialog with the `effect.dialog` params `p` and lets it settle.
+    pub(crate) fn open(&mut self, p: Value) {
+        if let Err(e) = three_d::open(&mut self.app(), &p) {
+            panic!("the dialog did not open: {e}");
+        }
+        self.fixture.settle();
+    }
+
+    /// Sets a field as automation does and lets the preview settle; a refusal fails the test.
+    pub(crate) fn set(&mut self, field: &str, value: Value) {
+        // PLAN: assumed `HostedParamDialog::set_json_field(&mut self, &str, Value) -> Result<(), String>`
+        let done = three_d::with_fields(&mut self.app(), |d| d.set_json_field(field, value));
+        if let Some(Err(e)) = done {
+            panic!("{field} refused: {e}");
+        }
+        self.fixture.settle();
+    }
+
+    /// A copy of the dialog's values.
+    pub(crate) fn fields(&self) -> craft::ui::patterns::form_dialogs::DialogFields {
+        // PLAN: assumed path of `DialogFields`
+        three_d::with_fields(&mut self.app(), |d| d.fields().clone()).unwrap_or_default()
+    }
+
+    /// The dialog's values as JSON, as automation lists them.
+    pub(crate) fn json(&self, key: &str) -> Value {
+        // PLAN: assumed `HostedParamDialog::json_fields(&self) -> Value`
+        three_d::with_fields(&mut self.app(), |d| d.json_fields()).and_then(|v| v.get(key).cloned()).unwrap_or(Value::Null)
+    }
+
+    /// The control named `name`.
+    pub(crate) fn target(&self, name: &str) -> Target {
+        self.fixture.by_label(name).unwrap_or_else(|| panic!("no control named {name:?}"))
+    }
+
+    /// Presses the control named `name`.
+    pub(crate) fn press(&mut self, name: &str) {
+        let target = self.target(name);
+        self.fixture.click(&target);
+    }
+
+    /// Presses OK and lets the held answer finish.
+    pub(crate) fn ok(&mut self) {
+        self.press("OK");
+        self.fixture.settle();
+    }
+
+    /// Presses Cancel.
+    pub(crate) fn cancel(&mut self) {
+        self.press("Cancel");
+        self.fixture.settle();
+    }
+
+    /// The surfaces Map Art lists, while its page shows.
+    pub(crate) fn surfaces(&self) -> Option<std::sync::Arc<Vec<vectorcraft_effects::MapSurface>>> {
+        self.app().three_d_dialog.as_ref()?.data.read().surfaces.clone()
+    }
+}
