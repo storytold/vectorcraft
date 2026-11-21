@@ -573,14 +573,16 @@ impl Index {
         let mut near: Vec<(usize, usize)> = vec![];
         for (t, at) in self.terms.iter().enumerate() {
             let text = self.text(at);
-            if text.chars().count().abs_diff(word.len()) > bound || text.chars().any(spaceless) {
+            // A word of no label or menu path is skipped before the edits are counted.
+            if text.chars().count().abs_diff(word.len()) > bound
+                || text.chars().any(spaceless)
+                || !self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH))
+            {
                 continue;
             }
             term.clear();
             term.extend(text.chars());
-            if let Some(edits) = edits_within(&word, &term, bound)
-                && self.postings_of(t).iter().any(|p| matches!(p.field, LABEL | PATH))
-            {
+            if let Some(edits) = edits_within(&word, &term, bound) {
                 near.push((edits, t));
             }
         }
@@ -611,7 +613,13 @@ impl Index {
     /// The text of the first word of `near` that is a word of result `i` in one of `fields` (its
     /// label or its menu path, and their stem forms).
     fn nearest_of(&self, near: &[usize], i: usize, fields: &[u8]) -> Option<&str> {
-        let t = near.iter().find(|&&t| self.postings_of(t).iter().any(|p| usize::from(p.entry) == i && fields.contains(&p.field)))?;
+        let t = near.iter().find(|&&t| {
+            // A word's postings are sorted by result ([`Index::build`]), so a binary search finds
+            // result `i`'s first one.
+            let postings = self.postings_of(t);
+            let from = postings.partition_point(|p| usize::from(p.entry) < i);
+            postings.get(from..).unwrap_or_default().iter().take_while(|p| usize::from(p.entry) == i).any(|p| fields.contains(&p.field))
+        })?;
         self.terms.get(*t).map(|at| self.text(at))
     }
 
@@ -1441,6 +1449,25 @@ mod tests {
         // holds the query word itself.
         let c = synthetic(vec![entry("Zz Color", "tool:zz"), entry("Color", "panel:color"), entry("Zz Colour", "c.three")]);
         assert_eq!(ranked(&c, "colour"), ["c.three", "panel:color", "tool:zz"]);
+    }
+
+    /// The word a typo stands for is found for each result whose label holds it, first, last or
+    /// between other results that hold it, and only in the fields asked for. A word only an id or a
+    /// description holds is no typo's word.
+    #[test]
+    fn the_word_a_typo_stands_for_is_found_for_each_result_that_holds_it() {
+        let c = described(
+            vec![entry("Zz Shadow", "a.one"), entry("Zz Other", "b.two"), entry("Zz Shadow Two", "c.three"), entry("Zz Last Shadow", "d.four")],
+            &["", "{} soft shadowz", "", ""],
+        );
+        let near = c.index.typos("shdaow");
+        assert_eq!(near.iter().filter_map(|&t| c.index.terms.get(t)).map(|at| c.index.text(at)).collect::<Vec<_>>(), ["shadow"]);
+        for i in [0, 2, 3] {
+            assert_eq!(c.index.nearest_of(&near, i, &[LABEL]), Some("shadow"), "{i}");
+            assert_eq!(c.index.nearest_of(&near, i, &[PATH]), None, "{i}");
+        }
+        assert_eq!(c.index.nearest_of(&near, 1, &[LABEL]), None);
+        assert!(c.index.typos("shadowz").iter().all(|&t| c.index.terms.get(t).map(|at| c.index.text(at)) != Some("shadowz")));
     }
 
     /// A word that is text inside a word of the result combines with a word matched through a word

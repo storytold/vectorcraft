@@ -1147,6 +1147,14 @@ fn recent_places(entries: &[Entry], ids: &[String]) -> Vec<usize> {
         .collect()
 }
 
+/// The results the palette lists for the search `query`: for an empty search, or one of spaces
+/// only, the recent picks (`recent`), most recent first, so Enter runs the last pick again; for
+/// any other search, its matches, with the picks of the ids `recent_ids` first among those that
+/// match as well, and commands picked often (`uses`) ranking first among equal matches.
+fn results<'a>(catalog: &'a Catalog, recent: &[&'a Entry], recent_ids: &[String], uses: &CommandUses, query: &str) -> Vec<&'a Entry> {
+    if query.trim().is_empty() { recent.to_vec() } else { matching(catalog, &query.to_lowercase(), recent_ids, uses) }
+}
+
 /// How many command ids [`CommandUses`] counts at most.
 const MAX_COUNTED_COMMANDS: usize = 200;
 
@@ -1350,9 +1358,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries_in(ctx, crate::i18n::current(), app.services.native_menu.is_some());
     let recent = recent(&entries.list, &app.ui.recent_commands);
-    // An empty search lists the recent picks, most recent first, so Enter runs the last pick again.
     let empty = app.ui.palette_query.trim().is_empty();
-    let mut matches = if empty { recent.clone() } else { matching(&entries, &q, &app.ui.recent_commands, &app.ui.command_uses) };
+    let mut matches = results(&entries, &recent, &app.ui.recent_commands, &app.ui.command_uses, &app.ui.palette_query);
     let total = matches.len();
     // The highlighted result (#1757): Up and Down move it (wrapping), Page Up and Page Down move it
     // by a page, the pointer over a result takes it, and a new query starts again from the first.
