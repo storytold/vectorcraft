@@ -251,11 +251,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     // A row whose characters differ shows a dash, and a click turns the feature on for all of them.
+    // A secondary click keeps the text selection and opens that row's menu.
     for (label, flag) in rows() {
         let shown = shown_flag(app, flag);
-        if widgets::check3(ui, label, shown, true) {
+        let (clicked, resp) = widgets::check3_response(ui, label, shown, true);
+        if clicked {
             change = Some(Change::Toggle(flag, shown != Some(true)));
         }
+        resp.context_menu(|ui| feature_row_menu(app, ui, flag, shown));
     }
     let sets = set_entries(app, &st);
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
@@ -275,6 +278,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some(c) = change {
         edit(app, c);
+    }
+}
+
+/// The menu a secondary click on one feature row opens. Turn Off when the row is on
+/// (`shown` is `Some(true)`); Turn On when it is off or mixed, through the same toggle a click
+/// uses, so a mixed row turns the feature on for every character the panel acts on. Reset
+/// OpenType Features applies the panel menu's default and is enabled on the same condition.
+fn feature_row_menu(app: &mut VectorcraftApp, ui: &mut Ui, flag: Flag, shown: Option<bool>) {
+    let on = shown == Some(true);
+    if menu_item(ui, if on { tl!("Turn Off") } else { tl!("Turn On") }, true, false) {
+        edit(app, Change::Toggle(flag, !on));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Reset OpenType Features"), text_style(app).is_some(), false) {
+        set(app, OtFeatures::default());
+        ui.close();
     }
 }
 
@@ -956,5 +975,109 @@ mod tests {
             let runs = run_features(&mut app, &json!(c), story.len());
             assert!(runs.iter().all(|(_, f)| !f.as_array().is_some_and(|f| f.iter().any(|x| x == tag))), "{label}: {runs:?}");
         }
+    }
+
+    fn selected_ids(app: &VectorcraftApp) -> Vec<vectorcraft_doc::NodeId> {
+        app.session.active().unwrap().selection.objects.clone()
+    }
+
+    fn row_flag(label: &str) -> Flag {
+        rows().into_iter().find(|(l, _)| *l == label).map(|(_, flag)| flag).unwrap_or_else(|| panic!("no {label} row"))
+    }
+
+    /// A secondary click on `label`'s row, then the texts drawn while its menu is open.
+    fn open_row_menu(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> Vec<(String, egui::Rect)> {
+        let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], show);
+        let at = super::super::tests_appearance::text_rect(&texts, label).center();
+        super::super::tests_appearance::right_click(ctx, app, at, show);
+        super::super::tests_appearance::frame_events(ctx, app, vec![], show)
+    }
+
+    /// A secondary click on Standard Ligatures keeps the text selection and offers Turn Off while
+    /// the feature is on, and Turn On while it is off. The click itself does not change the features.
+    #[test]
+    fn right_clicking_an_opentype_row_offers_turn_on_or_turn_off() {
+        let mut app = selected_text();
+        let liga = row_flag("Standard Ligatures");
+        assert_eq!(shown_flag(&app, liga), Some(true));
+        let ids = selected_ids(&app);
+        let before = text_style(&app).unwrap().0.features.clone();
+        let undo = undo_steps(&app);
+        let ctx = egui::Context::default();
+        let texts = open_row_menu(&mut app, &ctx, "Standard Ligatures");
+        assert!(texts.iter().any(|(t, _)| t == "   Turn Off"), "on: {texts:?}");
+        assert!(!texts.iter().any(|(t, _)| t.contains("Turn On")), "on: {texts:?}");
+        assert!(texts.iter().any(|(t, _)| t == "   Reset OpenType Features"), "on: {texts:?}");
+        assert_eq!(selected_ids(&app), ids, "the text selection stays");
+        assert_eq!(text_style(&app).unwrap().0.features, before);
+        assert_eq!(undo_steps(&app), undo, "a secondary click is not a toggle");
+
+        edit(&mut app, Change::Toggle(liga, false));
+        assert_eq!(shown_flag(&app, liga), Some(false));
+        let ids = selected_ids(&app);
+        let ctx = egui::Context::default();
+        let texts = open_row_menu(&mut app, &ctx, "Standard Ligatures");
+        assert!(texts.iter().any(|(t, _)| t == "   Turn On"), "off: {texts:?}");
+        assert!(!texts.iter().any(|(t, _)| t.contains("Turn Off")), "off: {texts:?}");
+        assert_eq!(selected_ids(&app), ids, "the text selection stays");
+    }
+
+    /// Turn On sets Standard Ligatures the way a click on its checkbox does, in one undo step,
+    /// and undo puts the features back.
+    #[test]
+    fn clicking_turn_on_sets_that_feature_in_one_undo_step() {
+        let off = OtFeatures { ligatures: false, swash: true, ..OtFeatures::default() };
+        let mut by_check = selected_text();
+        let mut by_menu = selected_text();
+        set(&mut by_check, off);
+        set(&mut by_menu, off);
+        let ctx = egui::Context::default();
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut by_check, vec![], show);
+        let at = super::super::tests_appearance::text_rect(&texts, "Standard Ligatures").center();
+        super::super::tests_appearance::click(&ctx, &mut by_check, at, show);
+        let want = text_style(&by_check).unwrap().0.features.clone();
+
+        let before = text_style(&by_menu).unwrap().0.features.clone();
+        let undo = undo_steps(&by_menu);
+        let ctx = egui::Context::default();
+        let texts = open_row_menu(&mut by_menu, &ctx, "Standard Ligatures");
+        let at = super::super::tests_appearance::text_rect(&texts, "   Turn On").center();
+        super::super::tests_appearance::click(&ctx, &mut by_menu, at, show);
+        assert_eq!(undo_steps(&by_menu), undo + 1, "one undo step");
+        assert_eq!(text_style(&by_menu).unwrap().0.features, want, "the same feature a checkbox click sets");
+        by_menu.run("edit.undo", json!({})).unwrap();
+        assert_eq!(text_style(&by_menu).unwrap().0.features, before, "undo restores the features");
+    }
+
+    /// Reset OpenType Features on a row's menu applies the same default as the panel menu's item,
+    /// in one undo step, and undo restores the features.
+    #[test]
+    fn clicking_reset_opentype_features_clears_the_rows() {
+        let custom = OtFeatures { ligatures: false, fractions: true, swash: true, ..OtFeatures::default() };
+        let mut by_flyout = selected_text();
+        let mut by_row = selected_text();
+        set(&mut by_flyout, custom);
+        set(&mut by_row, custom);
+        let ctx = egui::Context::default();
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut by_flyout, vec![], menu);
+        let Some((_, at)) = texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == "Reset OpenType Features") else {
+            panic!("flyout reset missing: {texts:?}");
+        };
+        super::super::tests_appearance::click(&ctx, &mut by_flyout, at.center(), menu);
+        let want = text_style(&by_flyout).unwrap().0.features.clone();
+
+        let before = text_style(&by_row).unwrap().0.features.clone();
+        let undo = undo_steps(&by_row);
+        let ctx = egui::Context::default();
+        let texts = open_row_menu(&mut by_row, &ctx, "Fractions");
+        let at = super::super::tests_appearance::text_rect(&texts, "   Reset OpenType Features").center();
+        super::super::tests_appearance::click(&ctx, &mut by_row, at, show);
+        assert_eq!(undo_steps(&by_row), undo + 1, "one undo step");
+        assert_eq!(text_style(&by_row).unwrap().0.features, want, "the default the flyout applies");
+        assert_eq!(shown_flag(&by_row, row_flag("Standard Ligatures")), Some(true));
+        assert_eq!(shown_flag(&by_row, row_flag("Fractions")), Some(false));
+        assert_eq!(shown_flag(&by_row, row_flag("Swash")), Some(false));
+        by_row.run("edit.undo", json!({})).unwrap();
+        assert_eq!(text_style(&by_row).unwrap().0.features, before, "undo restores the features");
     }
 }

@@ -81,8 +81,8 @@ pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
 };
-pub(crate) use toggles::choice_width;
 pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
+pub(crate) use toggles::{check3_response, choice_width};
 #[cfg(test)]
 pub(crate) use wheel_stream::WHEEL_STREAM_GAP;
 pub(crate) use wheel_stream::{ArmedWheelField, WheelStream, WheelStreamOwner, taken_from_raw_id};
