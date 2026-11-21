@@ -7439,6 +7439,22 @@ fn render_site_labels_fall_back_to_english() {
     }
 }
 
+/// Every file type the save panel shows for a file that is not a document format has a
+/// file-filter or plain row in each complete catalog. CSS and PostScript are format names and
+/// stay in English.
+#[test]
+fn save_panel_file_types_are_in_complete_catalogs() {
+    let mut missing = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for (label, _) in crate::io::FILE_TYPES.iter().filter(|(label, _)| !["CSS", "PostScript"].contains(label)) {
+            if lang.catalog().contextual("file-filter", label).is_none() && lang.catalog().plain(label).is_none() {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
 /// (context, English source) of the labels [`untranslated_report`] lists for a language without
 /// their rows: the file dialogs' filter names, the status bar's timings, New Document's preset
 /// name, the contributor tooltips, the gradient kind in a swatch's description, the printer mark
@@ -7450,6 +7466,9 @@ const RENDER_SITE_ROWS: &[(&str, &str)] = &[
     ("file-filter", "Flattener presets"),
     ("file-filter", "PDF presets"),
     ("file-filter", "Print presets"),
+    ("file-filter", "Tracing presets"),
+    ("file-filter", "Action sets"),
+    ("file-filter", "Composite fonts"),
     ("file-filter", "Export presets"),
     ("file-filter", "SVG Compressed"),
     ("file-filter", "PDF-compatible .ai"),
