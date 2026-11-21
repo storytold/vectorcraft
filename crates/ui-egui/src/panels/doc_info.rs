@@ -3,6 +3,8 @@
 //! linked and embedded images, repeat objects), for the whole document or the selection only. The flyout picks one category (or all)
 //! and saves the text report (`docInfo.save`, the report File → Package writes too).
 
+use std::sync::Arc;
+
 use egui::Ui;
 use serde_json::{Value, json};
 
@@ -33,27 +35,30 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
 }
 
 /// `document.info` with its categories, fetched again only when the document, the scope or the
-/// artboards the Artboard tool has selected change.
-fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
+/// artboards the Artboard tool has selected change. A frame that fetches nothing returns the stored
+/// cache without copying it and stores nothing; a failed fetch leaves the stored cache as it was.
+fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Arc<Cache>> {
     let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
     let key = Some((st.uid, st.revision, sel_only, artboard_tool));
-    let mut c: Cache = pstate(ctx, "docinfo-cache");
-    if c.key != key {
-        c.info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
-        c.key = key;
-        set_pstate(ctx, "docinfo-cache", c.clone());
+    let c: Arc<Cache> = pstate(ctx, "docinfo-cache");
+    if c.key == key {
+        return Some(c);
     }
-    Some(c.info)
+    let info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
+    let c = Arc::new(Cache { key, info });
+    set_pstate(ctx, "docinfo-cache", c.clone());
+    Some(c)
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sel_only: bool = pstate(ui.ctx(), "docinfo-sel");
     let category: String = pstate(ui.ctx(), "docinfo-category");
-    let Some(i) = info(app, ui.ctx(), sel_only) else {
+    let Some(cache) = info(app, ui.ctx(), sel_only) else {
         widgets::dim_label(ui, tl!("No document"));
         return;
     };
+    let i = &cache.info;
     egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
@@ -82,7 +87,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if value.is_empty() {
                     widgets::dim_name(ui, super::label_or_name(label, !named.contains(&k)));
                 } else {
-                    let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
+                    let shown = shown_value(i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
                     row(ui, super::label_or_name(label, !named.contains(&k)), shown);
                 }
             }
@@ -319,8 +324,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("All Categories"), true, category.is_empty()) {
         set_pstate(ui.ctx(), "docinfo-category", String::new());
     }
-    let info = info(app, ui.ctx(), sel).unwrap_or_default();
-    for s in info["sections"].as_array().into_iter().flatten() {
+    let cache = info(app, ui.ctx(), sel);
+    for s in cache.as_ref().and_then(|c| c.info["sections"].as_array()).into_iter().flatten() {
         let (id, title) = (s["id"].as_str().unwrap_or_default(), s["title"].as_str().unwrap_or_default());
         if menu_item(ui, title, true, category == id) {
             set_pstate(ui.ctx(), "docinfo-category", id.to_string());
@@ -661,8 +666,8 @@ mod tests {
         app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
         let ctx = egui::Context::default();
         let document = |app: &mut VectorcraftApp| {
-            let info = info(app, &ctx, false).unwrap();
-            shown_rows(&info, "document")
+            let cache = info(app, &ctx, false).unwrap();
+            shown_rows(&cache.info, "document")
         };
         let value = |rows: &[(String, String)], label: &str| rows.iter().find(|(l, _)| l == label).map(|(_, v)| v.clone());
         let english = document(&mut app);
@@ -700,6 +705,155 @@ mod tests {
         let custom = value(&document(&mut app), "Grid Colors");
         crate::i18n::set_current(crate::i18n::Lang::EN);
         assert_eq!(custom.as_deref(), Some("#ff0000, #00ff00"));
+    }
+
+    /// `document.info` read as the panel read it before its cache was shared: the stored cache
+    /// copied out by value on every call, under its own key so it does not touch the panel's.
+    fn copied_info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
+        let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
+        let st = app.session.active()?;
+        let key = Some((st.uid, st.revision, sel_only, artboard_tool));
+        let mut c: Cache = pstate(ctx, "docinfo-cache-copied");
+        if c.key != key {
+            c.info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
+            c.key = key;
+            set_pstate(ctx, "docinfo-cache-copied", c.clone());
+        }
+        Some(c.info)
+    }
+
+    /// A frame that fetches nothing keeps the stored `document.info` result without a copy, for
+    /// the panel and its menu, and shows the same rows; another document (at the same revision), an
+    /// edit, Selection Only and the Artboard tool's options each store a new one, and a category
+    /// does not. With no document nothing is fetched and the stored result stays as it was.
+    #[test]
+    fn frames_that_fetch_nothing_reuse_the_cached_rows() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let old = egui::Context::default();
+        let frame = |app: &mut VectorcraftApp| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                show(app, ui);
+                menu(app, ui);
+            });
+            out.textures_delta.clear();
+            let cache: Arc<Cache> = pstate(&ctx, "docinfo-cache");
+            // The rows are the ones the by-value read gives for the same state.
+            let (sel, has_doc): (bool, bool) = (pstate(&ctx, "docinfo-sel"), app.session.active().is_some());
+            assert_eq!(has_doc.then_some(&cache.info), copied_info(app, &old, sel).as_ref(), "the same rows as before");
+            (cache, crate::tests_labels::shapes_text(&out))
+        };
+        let (first, text) = frame(&mut app);
+        assert!(text.contains("Color Mode") && text.contains("Artboard 1") && text.contains("Save…"), "{text}");
+        let (same, again) = frame(&mut app);
+        assert!(Arc::ptr_eq(&first, &same), "a frame that fetches nothing stores no new cache");
+        assert!(Arc::ptr_eq(&info(&mut app, &ctx, false).unwrap(), &same), "the stored result is returned without a copy");
+        assert_eq!(text, again);
+        // Another document at the same revision.
+        let revision = |app: &VectorcraftApp| app.session.active().map(|st| st.revision);
+        let at = revision(&app);
+        app.session.execute("document.activate", &json!({"index": 0})).unwrap();
+        assert_eq!(revision(&app), at, "both documents are at the same revision");
+        let (other, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&same, &other), "another document stores a new cache");
+        assert_ne!(other.key.as_ref().map(|k| k.0), same.key.as_ref().map(|k| k.0));
+        app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let (edited, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&other, &edited), "an edit stores a new cache");
+        assert!(shown_rows(&edited.info, "objects").contains(&("Paths".into(), "1".into())), "{:?}", shown_rows(&edited.info, "objects"));
+        set_pstate(&ctx, "docinfo-sel", true);
+        let (selection, text) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&edited, &selection), "Selection Only stores a new cache");
+        assert!(text.contains("(selection)"), "{text}");
+        set_pstate(&ctx, "docinfo-sel", false);
+        set_pstate(&ctx, "docinfo-category", "objects".to_string());
+        let (all, _) = frame(&mut app);
+        let (category, _) = frame(&mut app);
+        assert!(Arc::ptr_eq(&all, &category), "a category filters the stored result");
+        set_pstate(&ctx, "docinfo-category", String::new());
+        app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        let (two, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&category, &two), "a new artboard stores a new cache");
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([0]));
+        let (tool, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&two, &tool), "the Artboard tool stores a new cache");
+        let artboard_rows = |c: &Cache| shown_rows(&c.info, "document").iter().filter(|(l, _)| l == "Artboard").count();
+        assert_eq!(artboard_rows(&tool), 1);
+        app.session.set_tool_option("selected", &json!([0, 1]));
+        let (picked, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&tool, &picked), "the Artboard tool's options store a new cache");
+        assert_eq!(artboard_rows(&picked), 2);
+        let (kept, _) = frame(&mut app);
+        assert!(Arc::ptr_eq(&picked, &kept));
+        app.select_tool("selection");
+        let (away, _) = frame(&mut app);
+        assert!(!Arc::ptr_eq(&kept, &away), "another tool stores a new cache");
+        assert_eq!(away.key.as_ref().map(|k| &k.3), Some(&Value::Null));
+        // With no document the panel shows its empty state and keeps the stored result.
+        app.session.execute("file.close", &json!({})).unwrap();
+        app.session.execute("file.close", &json!({})).unwrap();
+        let (closed, text) = frame(&mut app);
+        assert!(Arc::ptr_eq(&away, &closed), "nothing is fetched or stored without a document");
+        assert!(text.contains("No document"), "{text}");
+    }
+
+    /// Time a frame's read of Document Info's result for a document with 5,000 objects painted
+    /// with a gradient (a row each): by the by-value read before the cache was shared
+    /// ([`copied_info`]) and by [`info`]. Per run each side reads 2,000 times; the two sides
+    /// alternate, and the median time per read of 7 runs is printed, as this thread's CPU time
+    /// where the system reports it (Linux), else wall-clock time.
+    /// Run with `cargo test --release -p vectorcraft-ui-egui --lib doc_info::tests::cached_rows_read_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; performance depends on machine load"]
+    fn cached_rows_read_timing() {
+        const OBJECTS: usize = 5_000;
+        const READS: u32 = 2_000;
+        fn thread_cpu_ns() -> Option<u128> {
+            std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+        }
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
+        let mut ids = vec![];
+        for i in 0..OBJECTS {
+            let r = json!({"x": i % 100 * 20, "y": i / 100 * 20, "width": 10, "height": 10});
+            ids.push(app.session.execute("shape.rectangle", &r).unwrap()["id"].clone());
+        }
+        let ramp = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        app.session.execute("paint.setFill", &json!({"ids": ids, "gradient": ramp})).unwrap();
+        let (ctx, old) = (egui::Context::default(), egui::Context::default());
+        let rows = info(&mut app, &ctx, false).unwrap().info["sections"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|s| s["rows"].as_array().map_or(0, Vec::len))
+            .sum::<usize>();
+        assert_eq!(copied_info(&mut app, &old, false).as_ref(), Some(&info(&mut app, &ctx, false).unwrap().info));
+        let mut time = |f: &mut dyn FnMut(&mut VectorcraftApp) -> usize| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..READS {
+                assert!(f(&mut app) > 0);
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(READS) / 1000.0
+        };
+        let sections = |i: &Value| i["sections"].as_array().map_or(0, Vec::len);
+        let (mut copied, mut shared) = (vec![], vec![]);
+        for _ in 0..7 {
+            copied.push(time(&mut |app| copied_info(app, &old, false).map_or(0, |i| sections(&i))));
+            shared.push(time(&mut |app| info(app, &ctx, false).map_or(0, |c| sections(&c.info))));
+        }
+        let median = |v: &mut Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        };
+        let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+        eprintln!("{OBJECTS} objects, {rows} rows; {clock} per read, median of 7 runs");
+        eprintln!("copied ({READS} reads a run): {:>10.3} us  {copied:.3?}", median(&mut copied));
+        eprintln!("shared ({READS} reads a run): {:>10.3} us  {shared:.3?}", median(&mut shared));
     }
 
     /// A Repeat object's counts take each language's plural forms, and a grid that draws fewer
