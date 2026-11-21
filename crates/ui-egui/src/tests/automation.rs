@@ -9,7 +9,8 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::file_access::AutomationRoots;
 
 use crate::background::SharedWriteFn;
-use crate::control::ControlRequest;
+use craft_automation::{ControlRequest, Reply};
+
 use crate::state::Dialog;
 use crate::{Services, VectorcraftApp};
 
@@ -46,11 +47,19 @@ fn s(p: PathBuf) -> String {
     p.to_string_lossy().into_owned()
 }
 
-/// One request through the control channel, as the app's frame drains it.
+/// One request through the control channel, as the app's frame runs it, on a context of its own. A
+/// reply that waits for injected input comes once passes of that context have taken it.
 fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, method: &str, params: Value) -> Value {
+    let ctx = egui::Context::default();
     let (req, reply) = ControlRequest::new(method, params);
     tx.send(req).unwrap();
-    app.drain_control(&egui::Context::default());
+    for _ in 0..8 {
+        app.run_control(&ctx);
+        if let Ok(r) = reply.try_recv() {
+            return r;
+        }
+        ctx.run_ui(egui::RawInput::default(), |_| {});
+    }
     reply.try_recv().unwrap()
 }
 
@@ -533,21 +542,43 @@ fn control_render_draws_the_trace_view_with_trace_views() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A pass that carries injected input runs inside the automation roots, whatever else it holds: a
+/// file the person drops outside them is refused in it, and opened in the passes after.
 #[test]
-fn frames_with_injected_input_are_confined() {
+fn a_pass_with_injected_input_runs_inside_the_roots() {
+    #[derive(Debug)]
+    struct Dropped(PathBuf);
+    impl egui::DroppedFile for Dropped {
+        fn path(&self) -> &Path {
+            &self.0
+        }
+        fn bytes(&self) -> Result<Vec<u8>, String> {
+            std::fs::read(&self.0).map_err(|e| e.to_string())
+        }
+    }
     let (mut app, tx, base) = confined("synthetic");
-    let r = request(&mut app, &tx, "ui.key", json!({"key": "Escape"}));
-    assert_eq!(r["ok"], true, "{r}");
     let ctx = egui::Context::default();
-    let mut raw = egui::RawInput::default();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(app.synthetic_frame, "the frame carrying the key");
-    // The batch is acknowledged only after a settled UI pass took it (one step per pass).
-    let mut out = ctx.run_ui(raw, |_| {});
-    out.textures_delta.clear();
-    let mut raw = egui::RawInput::default();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(!app.synthetic_frame, "the frames after it are the person's");
+    let (req, _reply) = ControlRequest::new("ui.key", json!({"key": "Escape"}));
+    tx.send(req).unwrap();
+    app.run_control(&ctx);
+    let outside = base.join("outside/b.svg");
+    let pass = |app: &mut VectorcraftApp, dropped: bool| {
+        let mut raw = egui::RawInput::default();
+        if dropped {
+            raw.dropped_files.push(std::sync::Arc::new(Dropped(outside.clone())));
+        }
+        app.begin_host_iteration();
+        ctx.run_ui(raw, |ui| {
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
+        app.session.documents().len()
+    };
+    assert_eq!(pass(&mut app, true), 0, "the pass carrying the key is confined");
+    for _ in 0..4 {
+        pass(&mut app, false);
+    }
+    assert_eq!(pass(&mut app, true), 1, "the person's pass is not");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -631,7 +662,11 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
         "fontsFolder": inside, "templatesFolder": outside, "recoveryFolder": outside, "scratchPrimary": "Startup",
         "scratchSecondary": "../private", "pluginsFolder": "",
     });
-    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({"fontsFolder": inside, "templatesFolder": outside})));
+    crate::prefs_dialog::open(&mut app, None);
+    // The person types the folders: their request is not confined.
+    let (fill, _) = ControlRequest::new("ui.dialog.set", json!({"fields": [{"field": "fontsFolder", "value": inside}, {"field": "templatesFolder", "value": outside}]}));
+    let Reply::Done(filled) = crate::control::handle(&mut app, &egui::Context::default(), &fill) else { panic!("deferred") };
+    assert_eq!(filled["ok"], true, "{filled}");
 
     // The person sees every path.
     let ctx = egui::Context::default();
@@ -1457,74 +1492,6 @@ fn ui_inspect_shows_full_library_ids_without_a_read_root() {
     assert!(ui["docking_hidden"].as_object().unwrap().contains_key(&format!("library:swatches:{theirs}")), "{r}");
 }
 
-/// Hidden logic-only ticks between the injection and its UI pass must not drain another step:
-/// one step per settled pass, not per hidden tick.
-#[test]
-fn hidden_ticks_without_a_ui_pass_do_not_drain_more_injected_steps() {
-    let (mut app, tx, base) = confined("gate");
-    let r = request(&mut app, &tx, "ui.key", json!({"key": "A", "text": "x"}));
-    assert_eq!(r["ok"], true, "{r}");
-    let ctx = egui::Context::default();
-    let mut raw = egui::RawInput::default();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(!raw.events.is_empty(), "the first step is in the host's input");
-    let queued = app.synthetic.len();
-    for _ in 0..3 {
-        let mut raw = egui::RawInput::default();
-        app.raw_input_hook(&ctx, &mut raw);
-        assert!(raw.events.is_empty(), "no new step while the previous batch is unapplied");
-    }
-    assert_eq!(app.synthetic.len(), queued, "the hidden ticks drained nothing");
-    let _ = std::fs::remove_dir_all(base);
-}
-
-/// A UI pass that changes the document before taking an injected batch drops exactly that batch,
-/// including the synthetic modifier latch it set: a later real event keeps the host's modifiers.
-#[test]
-fn a_stale_injected_batch_is_dropped_with_its_modifier_latch() {
-    let (mut app, tx, base) = confined("discard");
-    let r = request(&mut app, &tx, "ui.key", json!({"key": "A", "text": "x", "cmd": true}));
-    assert_eq!(r["ok"], true, "{r}");
-    let ctx = egui::Context::default();
-    let mut raw = egui::RawInput::default();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(app.synthetic_modifiers, "the batch carries Cmd");
-    assert!(!raw.events.is_empty());
-    // The document changed after injection (a control request or a click switching documents):
-    // the batch no longer belongs to what the UI pass would act on.
-    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(raw.events.is_empty(), "the stale events are removed from the host's input");
-    assert!(!app.synthetic_frame && !app.synthetic_injected, "the batch is not applied");
-    assert!(!app.synthetic_modifiers, "its modifier latch is cleared too");
-    assert!(app.synthetic.is_empty(), "nothing further was queued");
-    let _ = std::fs::remove_dir_all(base);
-}
-
-/// If the host's raw input no longer contains the synthetic batch exactly (another handler
-/// rewrote or interleaved events), the app cannot separate stale synthetic clicks/text from the
-/// person's input. It delivers nothing that pass and cancels the rest of the sequence.
-#[test]
-fn an_unidentifiable_stale_injected_batch_fails_closed() {
-    let (mut app, tx, base) = confined("discard-unknown");
-    let r = request(&mut app, &tx, "ui.key", json!({"key": "A", "text": "x", "cmd": true}));
-    assert_eq!(r["ok"], true, "{r}");
-    let ctx = egui::Context::default();
-    let mut raw = egui::RawInput::default();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(raw.events.len() > 1, "the batch has a modifier companion and the key");
-    // Rewrite one event so the exact subsequence can no longer be found.
-    let last = raw.events.len() - 1;
-    raw.events[last] = egui::Event::Text("host".into());
-    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-    app.raw_input_hook(&ctx, &mut raw);
-    assert!(raw.events.is_empty(), "unidentifiable stale input is never delivered");
-    assert!(!app.synthetic_frame && !app.synthetic_injected, "the stale batch is not applied");
-    assert!(!app.synthetic_modifiers, "its modifier latch is cleared too");
-    assert!(app.synthetic.is_empty(), "the rest of the stale synthetic sequence is cancelled");
-    let _ = std::fs::remove_dir_all(base);
-}
-
 /// A plug-in's permissions are approved only by a person who asked for the install. A control
 /// request (or MCP, which comes through it) can't pass `grant`, can't answer the approval dialog or
 /// rewrite what it installs, and a frame of synthetic input can't press its OK. The person can't
@@ -1566,10 +1533,6 @@ fn automation_cannot_approve_a_plugin_install() {
     super::plugins::show_approval(&mut app);
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
     refused(&r, ASKED);
-    app.synthetic_frame = true;
-    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED));
-    assert!(vectorcraft_plugins::registry::get(id).is_none());
-    app.synthetic_frame = false;
     assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains(ASKED), "a person's OK on automation's question");
     assert!(app.ui.dialog.is_some() && vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
 
@@ -1777,7 +1740,7 @@ fn dialog_set_allows_hidden_controls() {
     crate::prefs_dialog::open(&mut app, None);
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__search", "value": "grid"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__search")), Some("grid".to_string()));
+    assert_eq!(r["result"]["fields"]["__search"], "grid", "{r}");
 }
 
 /// Save PDF's and Print's OK save a preset while Save Preset… asks for its name: `ui.dialog.set`
@@ -2075,19 +2038,20 @@ fn automation_cannot_approve_replacing_a_plugin() {
 
 type DialogHarness = egui_kittest::Harness<'static, VectorcraftApp>;
 
-/// Runs one UI pass of `h` for each batch of synthetic input the control path queued, each taken
-/// through the host's raw-input hook, until none is left and the last batch is acknowledged.
-fn take_injected(h: &mut DialogHarness) {
+/// [`request`] for an app the harness draws: its passes take the injected input, and the reply
+/// comes once they have.
+fn request_drawn(h: &mut DialogHarness, tx: &std::sync::mpsc::Sender<ControlRequest>, method: &str, params: Value) -> Value {
     let ctx = h.ctx.clone();
-    loop {
-        let mut raw = egui::RawInput::default();
-        h.state_mut().raw_input_hook(&ctx, &mut raw);
-        if raw.events.is_empty() && h.state().synthetic.is_empty() {
-            break;
+    let (req, reply) = ControlRequest::new(method, params);
+    tx.send(req).unwrap();
+    for _ in 0..64 {
+        h.state_mut().run_control(&ctx);
+        if let Ok(r) = reply.try_recv() {
+            return r;
         }
-        h.input_mut().events.extend(raw.events);
         h.step();
     }
+    reply.try_recv().unwrap()
 }
 
 /// The open install approval, with nothing installed or granted for `id`.
@@ -2130,9 +2094,8 @@ fn injected_keys_and_pointer_input_cannot_approve_a_plugin_install() {
     for key in ["Enter", "Space"] {
         assert!(!h.get_by_label("OK").accesskit_node().is_focused(), "no button has the focus yet");
         h.state_mut().ui.status.clear();
-        let r = request(h.state_mut(), &tx, "ui.key", json!({"key": key}));
+        let r = request_drawn(&mut h, &tx, "ui.key", json!({"key": key}));
         assert_eq!(r["ok"], true, "{r}");
-        take_injected(&mut h);
         assert!(still_waiting(&h, id), "{key}");
         assert_eq!(h.state().ui.status, "", "{key} presses nothing");
     }
@@ -2142,25 +2105,22 @@ fn injected_keys_and_pointer_input_cannot_approve_a_plugin_install() {
         h.run_steps(2);
         assert!(h.get_by_label("OK").accesskit_node().is_focused());
         h.state_mut().ui.status.clear();
-        let r = request(h.state_mut(), &tx, "ui.key", json!({"key": key}));
+        let r = request_drawn(&mut h, &tx, "ui.key", json!({"key": key}));
         assert_eq!(r["ok"], true, "{r}");
-        take_injected(&mut h);
         assert!(still_waiting(&h, id), "{key} on a focused OK");
         assert!(h.state().ui.status.contains(refusal), "{key} pressed OK and was refused: {:?}", h.state().ui.status);
     }
 
     let at = h.get_by_label("OK").rect().center();
     h.state_mut().ui.status.clear();
-    let r = request(h.state_mut(), &tx, "ui.click", json!({"x": at.x, "y": at.y}));
+    let r = request_drawn(&mut h, &tx, "ui.click", json!({"x": at.x, "y": at.y}));
     assert_eq!(r["ok"], true, "{r}");
-    take_injected(&mut h);
     assert!(still_waiting(&h, id), "ui.click");
     assert!(h.state().ui.status.contains(refusal), "ui.click pressed OK and was refused: {:?}", h.state().ui.status);
 
     let events = json!([{"kind": "down", "x": at.x, "y": at.y}, {"kind": "up", "x": at.x, "y": at.y}]);
-    let r = request(h.state_mut(), &tx, "ui.pointer", json!({"events": events}));
+    let r = request_drawn(&mut h, &tx, "ui.pointer", json!({"events": events}));
     assert_eq!(r["ok"], true, "{r}");
-    take_injected(&mut h);
     assert!(still_waiting(&h, id), "ui.pointer");
 
     h.get_by_label("OK").click();
