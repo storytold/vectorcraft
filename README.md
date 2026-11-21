@@ -184,6 +184,7 @@ cargo run --release -p vectorcraft-cli -- run --in examples/ribbons.vectorcraft 
 cargo run --release -p vectorcraft-cli -- bench examples/neon-drive.vectorcraft                   # render timing
 cargo xtask bundle                                        # dist/VectorCraft.app (macOS)
 cd apps/vectorcraft-web && trunk build --release            # web build → dist/web
+docker compose up --build -d                            # self-host web app on http://localhost:8080
 cargo xtask ci                                            # fmt, clippy, tests, layering, wasm, vendor names
 ```
 

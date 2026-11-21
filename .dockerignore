@@ -1,0 +1,6 @@
+# Rust build output and generated web/package distributions
+/target/
+/dist/
+
+# Git metadata is not needed by the Docker build
+/.git/

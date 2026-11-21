@@ -1,0 +1,9 @@
+services:
+  vectorcraft-web:
+    build:
+      context: .
+    image: vectorcraft-web:local
+    container_name: vectorcraft-web
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
