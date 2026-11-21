@@ -353,10 +353,13 @@ each time it is drawn, and a paint linked to a global swatch is drawn in that sw
 
 ## ABI v1
 
-A plug-in is a core WebAssembly module (MVP + the usual post-MVP features: bulk memory, sign extension, multi-value,
-saturating conversions; no SIMD, no memory64) with these exports and no imports other than the [host
-imports](#host-imports-api-level-2) of API level 2. Integers are `i32` unless noted; pointers are offsets into the
-module's memory.
+A plug-in is a core WebAssembly module (MVP + these post-MVP features: mutable globals, sign extension, saturating
+conversions, multi-value, bulk memory, reference types, tail calls and extended constant expressions) with one memory,
+these exports and no imports other than the [host imports](#host-imports-api-level-2) of API level 2. Before wasmi reads
+a module, the host validates it with only these features on, and refuses a module that uses any other feature. The error
+names the feature for SIMD, relaxed SIMD, memory64, multi-memory, custom page sizes, wide arithmetic, threads,
+exceptions, function references and garbage collection. Integers are `i32` unless noted;
+pointers are offsets into the module's memory.
 
 | Export | Signature | Meaning |
 |---|---|---|
