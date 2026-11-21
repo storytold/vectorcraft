@@ -375,12 +375,15 @@ is made, and approvals last for the session only, as when the key store can't be
 
 The key store also keeps a generation for each `Plug-ins` folder, as an 8-byte secret of the account `generation-v1-`
 followed by the SHA-256 of the folder's resolved path in hexadecimal, in the same service. A key store that holds no
-generation for a folder counts as generation 0. Each time VectorCraft writes a signed `grants.json`, in the folder's
-turn (`disabled.lock`), it writes the file at the next generation and then keeps that generation. When it removes a
-signed `grants.json`, it keeps the next generation first, and puts the earlier one back when the file can't be removed;
+generation for a folder counts as generation 0. VectorCraft reads the generation from the key store only, never from
+`grants.json`. Each time VectorCraft writes a signed `grants.json`, in the folder's turn (`disabled.lock`), it first
+raises the kept generation by two, then writes the file at the generation after the raised one, and then keeps that
+generation; when the file can't be written, it puts the earlier generation back. When it removes a signed
+`grants.json`, it raises the generation by two first, and puts the earlier one back when the file can't be removed;
 when the key store can't put it back either, the file grants nothing.
 When the key store can't keep the generation of a write, the file just written grants nothing, and the write reports a
-failure.
+failure. That file is one generation past the kept one, so the next raise by two moves past it. When raising the
+generation by two would pass the largest 64-bit value, VectorCraft logs a warning and changes nothing.
 
 VectorCraft compares the MAC in constant time. A `grants.json` without the MAC of its generation, its grants and its
 folder, or at another generation than the one the key store keeps for the folder, grants nothing, and each plug-in it
@@ -390,13 +393,12 @@ another `Plug-ins` folder or another computer, an earlier copy of the file put b
 file was removed, a write whose generation the key store didn't keep, and a file whose key is no longer in the key
 store. The next approval replaces such a file with a signed file that holds that grant alone, making a key first when
 the key store has none. When a grant is forgotten without an approval (`plugin.remove`, installing a module that lists
-no permissions under that id, or a folder load that forgets the grant), VectorCraft keeps the next generation, then
+no permissions under that id, or a folder load that forgets the grant), VectorCraft raises the generation by two, then
 takes that entry out of such a file and leaves the rest unsigned, so no earlier signed copy brings the entry back. It
-also keeps the next generation when a grant is forgotten while there is no `grants.json`, or while the file in its place
-grants nothing (no valid MAC, too large, or neither a grants object nor a JSON list) and has no entry to take out,
-whenever the key store holds a key. Each time it keeps the next generation for a file that grants nothing and
-stays in place, the new generation is also past the one that file carries. When the key store can't keep that
-generation, VectorCraft logs a warning.
+also raises the generation by two when a grant is forgotten while there is no `grants.json`, or while the file in its
+place grants nothing (no valid MAC, too large, or neither a grants object nor a JSON list) and has no entry to take out,
+whenever the key store holds a key. A `generation` written into such a file has no effect on the raise. When the key
+store can't raise the generation, VectorCraft logs a warning.
 
 When the key store can't be reached (it is locked, or a headless Linux session has no Secret Service), no
 `grants.json` grants anything and VectorCraft writes none: an approval lasts for the session only, the module stored

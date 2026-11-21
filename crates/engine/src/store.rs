@@ -726,17 +726,18 @@ impl Session {
 
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
     /// other grants as they are; with none left, remove the file. Entries this version can't use
-    /// are written back as they were, except one for `id`. The file is written at the folder's next
-    /// generation with the MAC of its grants for this folder ([`grant_keys`]), making the key when
-    /// the key store holds none, and the key store then keeps that generation ([`put_grants`]); a
-    /// signed file left empty is removed after raising the generation ([`take_signed_grants`]). A file
-    /// VectorCraft didn't write for this folder ([`Trust::Unsigned`]) grants nothing: a grant
-    /// replaces it with a file that holds that grant alone, and removing one raises the generation
-    /// ([`raise_generation`]), then takes out the entry for `id` and leaves the rest unsigned. Removing
-    /// a grant when there is no file, or when the file grants nothing (unsigned, too large or not a
-    /// list) and has no entry to take out, also raises the generation when the key store holds a key
-    /// ([`retire_signed_copies`]), so that a signed copy put back doesn't grant it again; when the
-    /// generation can't be raised, nothing is recorded. When the key store can't be reached ([`Trust::Unknown`], or
+    /// are written back as they were, except one for `id`. The generation is raised, and the file is
+    /// written at the generation after the raised one with the MAC of its grants for this folder
+    /// ([`grant_keys`]), making the key when the key store holds none; the key store then keeps that
+    /// generation ([`put_grants`]). A signed file left empty is removed after raising the generation
+    /// ([`take_signed_grants`]). A file VectorCraft didn't write for this folder ([`Trust::Unsigned`])
+    /// grants nothing: a grant replaces it with a file that holds that grant alone, and removing one
+    /// raises the generation ([`raise_generation`]), then takes out the entry for `id` and leaves the
+    /// rest unsigned. Removing a grant when there is no file, or when the file grants nothing
+    /// (unsigned, too large or not a list) and has no entry to take out, also raises the generation
+    /// when the key store holds a key ([`retire_signed_copies`]), so that a signed copy put back
+    /// doesn't grant it again. The generation is never read from the file; when it can't be raised,
+    /// nothing is recorded. When the key store can't be reached ([`Trust::Unknown`], or
     /// a key can't be made or kept), the file is left as it is and nothing is recorded, and an entry
     /// for `id` stays. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
@@ -801,7 +802,7 @@ impl Session {
                 // A file that is too large or doesn't hold a list grants nothing and is left as it
                 // is, but a signed copy made before it must not grant `id` again once it is put back.
                 if grant.is_none() && !e.unread {
-                    retire_signed_copies(dir, None);
+                    retire_signed_copies(dir);
                 }
                 return false;
             }
@@ -837,8 +838,9 @@ impl Session {
             // around as a copy at the kept generation: a removal raises the generation so that the
             // copy doesn't grant `id` again once it is put back. A signed file that doesn't name `id`
             // is the latest, so every copy that does is at an earlier generation already. The new
-            // generation is past the one the file carries, so the file left in place grants nothing.
-            return !removing || (file.present && file.trust == Trust::Signed) || retire_signed_copies(dir, file.generation);
+            // generation is past every one a file was signed at, so the file left in place grants
+            // nothing either.
+            return !removing || (file.present && file.trust == Trust::Signed) || retire_signed_copies(dir);
         }
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
@@ -847,7 +849,7 @@ impl Session {
         }
         // An unsigned file loses an entry: the generation is raised first, so that no signed copy
         // made before brings the entry back, nor the file itself when it can't be rewritten.
-        if raise_generation(dir, file.generation).is_none() {
+        if raise_generation(dir).is_none() {
             return false;
         }
         if entries.is_empty() { take(dir, GRANTS_FILE) } else { put_grants(dir, entries, false) }
@@ -1515,8 +1517,6 @@ struct GrantsFile {
     /// Whether there is a grants file: `false` when there is none, and the file is then empty and
     /// [`Trust::Signed`].
     present: bool,
-    /// The generation the file carries, as this version writes it ([`SignedGrants::generation`]).
-    generation: Option<u64>,
 }
 
 impl GrantsFile {
@@ -1607,39 +1607,59 @@ fn trust_of(dir: &Path, signed: &SignedGrants) -> Trust {
 
 /// Write `entries` as the grants file of the plug-in store `dir`, pretty-printed, or compact when
 /// that is larger than [`MAX_GRANTS_FILE`] → whether it went there; the file is not written when the
-/// key or the generation can't be had or it is too large either way. When `signed`, the file is at
-/// the next generation for `dir` with its MAC, and that generation is kept after the file is written;
-/// when it can't be kept, the file is at a generation the key store doesn't hold, so it grants
-/// nothing, and the write reports a failure. Call it in the store's turn ([`StoreTurn`]).
+/// key or the generation can't be had or it is too large either way. When `signed`, the generation
+/// is raised first ([`raise_generation`]), the file is written at the generation after the raised one
+/// with its MAC, and the key store keeps that generation once the file is written. Every signed write
+/// is then at a generation no file was signed at before, a write whose generation wasn't kept
+/// included, since that one is at most one past the generation the key store kept. When the file
+/// isn't written, the generation kept before is put back. When the file's generation can't be kept,
+/// the file is at a generation the key store doesn't hold, so it grants nothing, and the write
+/// reports a failure. Call it in the store's turn ([`StoreTurn`]).
 fn put_grants(dir: &Path, entries: Vec<serde_json::Value>, signed: bool) -> bool {
     let path = dir.join(GRANTS_FILE);
     let folder = plugin_store_key(dir);
-    let (file, next) = if signed {
-        let signing = grant_keys::signing_key().and_then(|key| Ok((key, grant_keys::current_generation(&folder)?)));
-        let (key, generation) = match signing {
-            Ok(signing) => signing,
-            Err(e) => {
-                log::warn!("not updating the stored plug-in grants {}: {e}", path.display());
-                return false;
+    if !signed {
+        return match grants_bytes(serde_json::to_value(entries).ok()) {
+            Some(bytes) => put(dir, GRANTS_FILE, &bytes),
+            None => {
+                log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
+                false
             }
         };
-        let Some(next) = generation.checked_add(1) else { return false };
-        let mac = serde_json::to_vec(&entries).ok().and_then(|grants| grant_keys::sign(&key, &folder, next, &grants));
-        let Some(mac) = mac else { return false };
-        (serde_json::to_value(SignedGrants { version: GRANTS_VERSION, generation: Some(next), grants: entries, mac: Some(mac) }), Some(next))
-    } else {
-        (serde_json::to_value(entries), None)
-    };
-    // The file is read back only up to its cap: written compactly when pretty-printed is larger,
-    // and not at all when that is too.
-    let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
-    match file.ok().and_then(|file| serde_json::to_vec_pretty(&file).ok().filter(fits).or_else(|| serde_json::to_vec(&file).ok().filter(fits))) {
-        Some(bytes) => put(dir, GRANTS_FILE, &bytes) && next.is_none_or(|next| keep_generation(dir, &folder, next)),
-        None => {
-            log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
-            false
-        }
     }
+    let key = match grant_keys::signing_key() {
+        Ok(key) => key,
+        Err(e) => {
+            log::warn!("not updating the stored plug-in grants {}: {e}", path.display());
+            return false;
+        }
+    };
+    let Some((before, raised)) = raise_generation(dir) else { return false };
+    let Some(next) = raised.checked_add(1) else {
+        log::warn!("not updating the stored plug-in grants {}: the generation can't be raised", path.display());
+        keep_generation(dir, &folder, before);
+        return false;
+    };
+    let mac = serde_json::to_vec(&entries).ok().and_then(|grants| grant_keys::sign(&key, &folder, next, &grants));
+    let file = mac
+        .and_then(|mac| serde_json::to_value(SignedGrants { version: GRANTS_VERSION, generation: Some(next), grants: entries, mac: Some(mac) }).ok());
+    let Some(bytes) = grants_bytes(file) else {
+        log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
+        keep_generation(dir, &folder, before);
+        return false;
+    };
+    if !put(dir, GRANTS_FILE, &bytes) {
+        keep_generation(dir, &folder, before);
+        return false;
+    }
+    keep_generation(dir, &folder, next)
+}
+
+/// `file` written as the bytes of a grants file: pretty-printed, or compact when that is larger than
+/// [`MAX_GRANTS_FILE`]; `None` when that is too, since the file is read back only up to its cap.
+fn grants_bytes(file: Option<serde_json::Value>) -> Option<Vec<u8>> {
+    let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
+    file.and_then(|file| serde_json::to_vec_pretty(&file).ok().filter(fits).or_else(|| serde_json::to_vec(&file).ok().filter(fits)))
 }
 
 /// Keep `generation` for the grants file of the plug-in store `dir` (whose folder is `folder`) →
@@ -1660,28 +1680,29 @@ fn keep_generation(dir: &Path, folder: &Path, generation: u64) -> bool {
 /// either, the file grants nothing. The file holds no grant but the one being removed. Nothing is
 /// removed when the generation can't be raised. Call it in the store's turn ([`StoreTurn`]).
 fn take_signed_grants(dir: &Path) -> bool {
-    let Some(generation) = raise_generation(dir, None) else { return false };
+    let Some((before, _)) = raise_generation(dir) else { return false };
     if take(dir, GRANTS_FILE) {
         return true;
     }
-    keep_generation(dir, &plugin_store_key(dir), generation);
+    keep_generation(dir, &plugin_store_key(dir), before);
     false
 }
 
-/// Keep the next generation for the grants file of the plug-in store `dir`, so that no signed copy
-/// of the file made before grants anything → the generation kept before; `None`, with a log record,
-/// when the key store can't read or keep it. `carried` is the generation the file in `dir` carries
-/// when it grants nothing ([`GrantsFile::generation`]): the new generation is past it too, so that a
-/// signed write whose generation wasn't kept doesn't start to grant when the file stays.
-fn raise_generation(dir: &Path, carried: Option<u64>) -> Option<u64> {
+/// Keep a generation two past the one kept for the grants file of the plug-in store `dir`, so that
+/// no signed copy of the file made before grants anything → the generation kept before and the one
+/// kept now; `None`, with a log record, when the key store can't read or keep it or the generation
+/// is too large to raise. A signed write whose generation wasn't kept is at the generation after the
+/// kept one ([`put_grants`]), so the new generation is past it too. The generation comes from the key
+/// store alone, never from a file, which anyone can edit.
+fn raise_generation(dir: &Path) -> Option<(u64, u64)> {
     let folder = plugin_store_key(dir);
     let raised = grant_keys::current_generation(&folder).and_then(|generation| {
-        let next = generation.max(carried.unwrap_or(0)).checked_add(1);
+        let next = generation.checked_add(2);
         let next = next.ok_or_else(|| grant_keys::KeyStoreError("the generation can't be raised".into()))?;
-        grant_keys::set_current_generation(&folder, next).map(|()| generation)
+        grant_keys::set_current_generation(&folder, next).map(|()| (generation, next))
     });
     match raised {
-        Ok(generation) => Some(generation),
+        Ok(generations) => Some(generations),
         Err(e) => {
             log::warn!("not changing the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
             None
@@ -1691,13 +1712,12 @@ fn raise_generation(dir: &Path, carried: Option<u64>) -> Option<u64> {
 
 /// Make sure no signed copy of an earlier grants file of the plug-in store `dir` grants anything →
 /// whether none can: the generation is raised ([`raise_generation`]) when the key store holds a key,
-/// and left as it is when it holds none, since no file is then signed. `carried` is as for
-/// [`raise_generation`]. `false`, with a log record, when the key store can't read or keep it. Call
-/// it in the store's turn ([`StoreTurn`]).
-fn retire_signed_copies(dir: &Path, carried: Option<u64>) -> bool {
+/// and left as it is when it holds none, since no file is then signed. `false`, with a log record,
+/// when the key store can't read or keep it. Call it in the store's turn ([`StoreTurn`]).
+fn retire_signed_copies(dir: &Path) -> bool {
     match grant_keys::current_key() {
         Ok(None) => true,
-        Ok(Some(_)) => raise_generation(dir, carried).is_some(),
+        Ok(Some(_)) => raise_generation(dir).is_some(),
         Err(e) => {
             log::warn!("not changing the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
             false
@@ -1730,12 +1750,12 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
         return Err(GrantsError { unread: false, why: too_large(MAX_GRANTS_FILE) });
     }
     let not_a_list = |why: String| GrantsError { unread: false, why };
-    let (entries, trust, generation) = match serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|e| not_a_list(e.to_string()))? {
-        serde_json::Value::Array(entries) => (entries, Trust::Unsigned, None),
+    let (entries, trust) = match serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|e| not_a_list(e.to_string()))? {
+        serde_json::Value::Array(entries) => (entries, Trust::Unsigned),
         serde_json::Value::Object(_) => {
             let signed = serde_json::from_slice::<SignedGrants>(&bytes).map_err(|e| not_a_list(e.to_string()))?;
             let trust = trust_of(dir, &signed);
-            (signed.grants, trust, signed.generation)
+            (signed.grants, trust)
         }
         _ => return Err(not_a_list("not a list of grants".into())),
     };
@@ -1745,7 +1765,7 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
             path.display()
         );
     }
-    let mut file = GrantsFile { trust, present: true, generation, ..GrantsFile::default() };
+    let mut file = GrantsFile { trust, present: true, ..GrantsFile::default() };
     let mut first_error = None;
     for entry in entries {
         let why = match serde_json::from_value::<vectorcraft_plugins::permissions::Grant>(entry.clone()) {

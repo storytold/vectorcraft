@@ -4225,16 +4225,16 @@ impl crate::store::grant_keys::GrantKeyStore for UnreachableKeys {
     }
 }
 
-/// A memory key store the test keeps a handle on; it fails to keep a generation while
-/// `generation_writes_fail` is set.
+/// A memory key store the test keeps a handle on. While `file_generations_fail` is set, it fails to
+/// keep the generation that the grants file in the folder is at, and keeps every other one.
 struct SharedKeys {
     keys: std::sync::Arc<crate::store::grant_keys::MemoryGrantKeys>,
-    generation_writes_fail: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    file_generations_fail: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SharedKeys {
     fn new(keys: &std::sync::Arc<crate::store::grant_keys::MemoryGrantKeys>) -> Self {
-        SharedKeys { keys: keys.clone(), generation_writes_fail: std::sync::Arc::default() }
+        SharedKeys { keys: keys.clone(), file_generations_fail: std::sync::Arc::default() }
     }
 }
 
@@ -4252,7 +4252,9 @@ impl crate::store::grant_keys::GrantKeyStore for SharedKeys {
     }
 
     fn set_generation(&self, folder: &std::path::Path, generation: u64) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
-        if self.generation_writes_fail.load(std::sync::atomic::Ordering::SeqCst) {
+        if self.file_generations_fail.load(std::sync::atomic::Ordering::SeqCst)
+            && std::fs::read(folder.join("grants.json")).ok().and_then(|bytes| generation_of(&bytes)) == Some(generation)
+        {
             return Err(crate::store::grant_keys::KeyStoreError("the key store can't keep it".into()));
         }
         crate::store::grant_keys::GrantKeyStore::set_generation(self.keys.as_ref(), folder, generation)
@@ -4582,9 +4584,9 @@ fn a_grant_revoked_without_a_signed_file_doesnt_come_back_with_one() {
     assert_eq!(kept(&folder.0), None, "without a key nothing is signed, so no generation is kept");
     run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
     let signed = std::fs::read(&grants).unwrap();
-    assert_eq!(kept(&folder.0), Some(1));
+    assert_eq!(kept(&folder.0), Some(3));
     assert!(s.store_grant(other, None));
-    assert_eq!(kept(&folder.0), Some(1), "the signed file names no grant for it, so nothing is raised");
+    assert_eq!(kept(&folder.0), Some(3), "the signed file names no grant for it, so nothing is raised");
     assert_eq!(starts_from(&folder.0, id, &data), (true, false));
 
     // The file is gone when the grant is revoked.
@@ -4592,7 +4594,7 @@ fn a_grant_revoked_without_a_signed_file_doesnt_come_back_with_one() {
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     assert!(s.store_grant(id, None));
-    assert_eq!(kept(&folder.0), Some(2));
+    assert_eq!(kept(&folder.0), Some(5));
     std::fs::write(&grants, &signed).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked while the file was gone doesn't come back");
 
@@ -4619,8 +4621,9 @@ fn a_grant_revoked_without_a_signed_file_doesnt_come_back_with_one() {
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked over a file without a list doesn't come back");
 }
 
-/// Every signed write of the grants file is at the next generation, which the key store then keeps,
-/// and the file stays signed; removing the last grant raises the generation too.
+/// Every signed write of the grants file raises the generation by two and is at the generation after
+/// that, which the key store then keeps, and the file stays signed; removing the last grant raises
+/// the generation too.
 #[test]
 fn a_signed_grants_write_raises_the_generation_and_stays_signed() {
     let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
@@ -4635,20 +4638,20 @@ fn a_signed_grants_write_raises_the_generation_and_stays_signed() {
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
-    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(1), Some(1)));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(3), Some(3)));
     assert_eq!(starts_from(&folder.0, id, &data), (true, false));
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
-    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(2), Some(2)));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(6), Some(6)));
     run(&mut s, "plugin.remove", json!({"id": other}));
-    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(3), Some(3)));
+    assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(9), Some(9)));
     assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file stays signed");
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert!(!grants.exists());
-    assert_eq!(kept(&folder.0), Some(4), "removing the file raises the generation");
+    assert_eq!(kept(&folder.0), Some(11), "removing the file raises the generation");
 }
 
 /// Each plug-in folder has a generation of its own.
@@ -4668,7 +4671,7 @@ fn two_plugin_folders_keep_their_own_generations() {
     let mut b = session();
     b.attach_plugin_store(second.0.clone());
     run(&mut b, "plugin.install", json!({"dataBase64": data[2], "grant": ["doc.read"]}));
-    assert_eq!((kept(&first.0), kept(&second.0)), (Some(2), Some(1)));
+    assert_eq!((kept(&first.0), kept(&second.0)), (Some(6), Some(3)));
     assert_eq!(starts_from(&first.0, ids[0], &data[0]), (true, false));
     assert_eq!(starts_from(&second.0, ids[2], &data[2]), (true, false));
     let (mut a, mut b) = (session(), session());
@@ -4680,7 +4683,7 @@ fn two_plugin_folders_keep_their_own_generations() {
 }
 
 /// A key store that holds a key and no generation for the folder, as one does the first time this
-/// version runs, reads generation 0: a file signed at 0 keeps its grants, and the next write is at 1.
+/// version runs, reads generation 0: a file signed at 0 keeps its grants, and the next write is at 3.
 #[test]
 fn a_key_without_a_generation_reads_generation_zero() {
     use vectorcraft_plugins::permissions::sha256_hex;
@@ -4702,7 +4705,7 @@ fn a_key_without_a_generation_reads_generation_zero() {
     s.attach_plugin_store(folder.0.clone());
     let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
     run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
-    assert_eq!(generation_of(&std::fs::read(&grants).unwrap()), Some(1));
+    assert_eq!(generation_of(&std::fs::read(&grants).unwrap()), Some(3));
     assert_eq!(starts_from(&folder.0, id, &data), (true, false));
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
@@ -4728,20 +4731,19 @@ fn a_grant_revoked_while_a_generation_zero_file_is_gone_doesnt_come_back() {
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     assert!(s.store_grant(id, None));
-    assert_eq!(kept_generation(&keys, &folder.0), Some(1));
+    assert_eq!(kept_generation(&keys, &folder.0), Some(2));
     std::fs::write(&grants, &file).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the file at generation 0 grants nothing");
 }
 
 /// When the key store can't keep the generation of a write, the file written is one generation ahead
-/// of the kept one and grants nothing, so its plug-ins ask again; so does a file one generation
-/// behind the kept one, as a write that kept its generation and then failed to write the file would
-/// leave it.
+/// of the kept one and grants nothing, so its plug-ins ask again; so does the earlier file, since
+/// the generation was raised past it before the write, and a file behind the kept generation.
 #[test]
 fn a_grants_file_whose_generation_was_not_kept_grants_nothing() {
     let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
     let shared = SharedKeys::new(&keys);
-    let fail = shared.generation_writes_fail.clone();
+    let fail = shared.file_generations_fail.clone();
     let _keys = ThreadKeys::using(shared);
     let folder = crate::tests_links::Folder::new("plugin-store-generation-unkept");
     let store = crate::store::plugin_store_key(&folder.0);
@@ -4760,13 +4762,15 @@ fn a_grants_file_whose_generation_was_not_kept_grants_nothing() {
     fail.store(false, std::sync::atomic::Ordering::SeqCst);
     let ahead = std::fs::read(&grants).unwrap();
     let kept = crate::store::grant_keys::GrantKeyStore::generation(keys.as_ref(), &store).unwrap();
-    assert_eq!((generation_of(&ahead), kept), (Some(2), Some(1)), "the file is one generation ahead");
+    assert_eq!((generation_of(&ahead), kept), (Some(6), Some(5)), "the file is one generation ahead");
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "and grants nothing");
     assert_eq!(starts_from(&folder.0, other, &other_data), (false, true));
 
     std::fs::write(&grants, &written).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the earlier file grants nothing");
+    crate::store::grant_keys::GrantKeyStore::set_generation(keys.as_ref(), &store, 3).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file at the kept generation keeps its grant");
-    crate::store::grant_keys::GrantKeyStore::set_generation(keys.as_ref(), &store, 2).unwrap();
+    crate::store::grant_keys::GrantKeyStore::set_generation(keys.as_ref(), &store, 4).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "a file one generation behind grants nothing");
 }
 
@@ -4776,7 +4780,7 @@ fn a_grants_file_whose_generation_was_not_kept_grants_nothing() {
 fn a_revoke_over_a_file_ahead_of_its_generation_leaves_it_granting_nothing() {
     let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
     let shared = SharedKeys::new(&keys);
-    let fail = shared.generation_writes_fail.clone();
+    let fail = shared.file_generations_fail.clone();
     let _keys = ThreadKeys::using(shared);
     let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
     let folder = crate::tests_links::Folder::new("plugin-store-revoke-ahead");
@@ -4792,15 +4796,146 @@ fn a_revoke_over_a_file_ahead_of_its_generation_leaves_it_granting_nothing() {
     _ = s.execute("plugin.install", &json!({"dataBase64": other_data, "grant": ["doc.read"]}));
     fail.store(false, std::sync::atomic::Ordering::SeqCst);
     let ahead = std::fs::read(&grants).unwrap();
-    assert_eq!((generation_of(&ahead), kept(&folder.0)), (Some(2), Some(1)));
+    assert_eq!((generation_of(&ahead), kept(&folder.0)), (Some(6), Some(5)));
 
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     assert!(s.store_grant("test.engine.permissions.revokeaheadnone", None));
     assert_eq!(std::fs::read(&grants).unwrap(), ahead, "the file is left as it is");
-    assert_eq!(kept(&folder.0), Some(3), "the generation is past the file's");
+    assert_eq!(kept(&folder.0), Some(7), "the generation is past the file's");
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the file still grants nothing");
     assert_eq!(starts_from(&folder.0, other, &other_data), (false, true));
+}
+
+/// A signed write raises the generation before it writes the file, so a signed write whose generation
+/// wasn't kept also leaves the earlier file granting nothing; a revoke over that earlier file put back
+/// is then not at the generation of the unkept write, and a copy of that write put back after the
+/// revoke grants nothing.
+#[test]
+fn a_revoke_after_a_write_whose_generation_wasnt_kept_keeps_that_write_granting_nothing() {
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let shared = SharedKeys::new(&keys);
+    let fail = shared.file_generations_fail.clone();
+    let _keys = ThreadKeys::using(shared);
+    let folder = crate::tests_links::Folder::new("plugin-store-revoke-after-unkept");
+    let ids = ["test.engine.permissions.afterunkept", "test.engine.permissions.afterunkeptother", "test.engine.permissions.afterunkeptthird"];
+    let data: Vec<String> = ids.iter().map(|id| vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, &json!({"objects": []})))).collect();
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data[0], "grant": ["doc.read"]}));
+    run(&mut s, "plugin.install", json!({"dataBase64": data[1], "grant": ["doc.read"]}));
+    let earlier = std::fs::read(&grants).unwrap();
+    fail.store(true, std::sync::atomic::Ordering::SeqCst);
+    _ = s.execute("plugin.install", &json!({"dataBase64": data[2], "grant": ["doc.read"]}));
+    fail.store(false, std::sync::atomic::Ordering::SeqCst);
+    let unkept = std::fs::read(&grants).unwrap();
+
+    std::fs::write(&grants, &earlier).unwrap();
+    assert_eq!(starts_from(&folder.0, ids[0], &data[0]), (false, true), "the earlier file grants nothing");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.store_grant(ids[1], None));
+    std::fs::write(&grants, &unkept).unwrap();
+    assert_eq!(starts_from(&folder.0, ids[1], &data[1]), (false, true), "the revoked grant doesn't come back");
+    assert_eq!(starts_from(&folder.0, ids[2], &data[2]), (false, true), "the unkept write grants nothing");
+    std::fs::remove_file(&grants).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    for id in ids {
+        _ = s.execute("plugin.remove", &json!({"id": id}));
+    }
+}
+
+/// A grants file edited to carry the largest generations doesn't stop a revoke and doesn't move the
+/// generation the key store keeps near the limit, so later grants are still kept: the generation
+/// comes from the key store alone.
+#[test]
+fn a_grants_file_at_the_largest_generations_doesnt_stop_a_revoke() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    for carried in [u64::MAX, u64::MAX - 1] {
+        let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+        let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+        let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+        let folder = crate::tests_links::Folder::new(&format!("plugin-store-largest-generation-{}", u64::MAX - carried));
+        let id = "test.engine.permissions.largestgeneration";
+        let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+        let data = vectorcraft_format::base64_encode(&wasm);
+        let grants = folder.0.join("grants.json");
+        let edited = |entries: Value| json!({"version": 1, "generation": carried, "grants": entries, "mac": "0".repeat(64)}).to_string();
+        let mut s = session();
+        s.attach_plugin_store(folder.0.clone());
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+        assert_eq!(kept(&folder.0), Some(3));
+
+        // The edited file names the grant, which the revoke takes out.
+        std::fs::write(&grants, edited(json!([{"id": id, "hash": sha256_hex(&wasm), "permissions": ["doc.read"]}]))).unwrap();
+        run(&mut s, "plugin.remove", json!({"id": id}));
+        assert!(!grants.exists(), "generation {carried}: the entry is taken out");
+        assert_eq!(kept(&folder.0), Some(5), "generation {carried}: the kept generation is raised from its own value");
+
+        // The edited file names no grant for it.
+        std::fs::write(&grants, edited(json!([]))).unwrap();
+        assert!(s.store_grant(id, None), "generation {carried}: the revoke is recorded");
+        assert_eq!(kept(&folder.0), Some(7), "generation {carried}: the kept generation is raised from its own value");
+
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+        assert_eq!((generation_of(&std::fs::read(&grants).unwrap()), kept(&folder.0)), (Some(10), Some(10)), "generation {carried}");
+        assert_eq!(starts_from(&folder.0, id, &data), (true, false), "generation {carried}: a later grant is kept");
+        let mut s = session();
+        s.attach_plugin_store(folder.0.clone());
+        run(&mut s, "plugin.remove", json!({"id": id}));
+    }
+}
+
+/// A signed write whose generation wasn't kept leaves a file one generation past the kept one. A
+/// revoke raises the generation past that file too, so a copy of it put back grants nothing: a revoke
+/// from a file without a MAC, one while the file is gone, one over a file that doesn't hold a list,
+/// and one that removes the last grant of a signed file.
+#[test]
+fn a_write_whose_generation_wasnt_kept_grants_nothing_after_a_revoke() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    for path in ["unsigned", "gone", "not-a-list", "signed"] {
+        let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+        let shared = SharedKeys::new(&keys);
+        let fail = shared.file_generations_fail.clone();
+        let _keys = ThreadKeys::using(shared);
+        let kept = |dir: &std::path::Path| kept_generation(&keys, dir);
+        let folder = crate::tests_links::Folder::new(&format!("plugin-store-unkept-copy-{path}"));
+        let id = "test.engine.permissions.unkeptcopy";
+        let other = "test.engine.permissions.unkeptcopyother";
+        let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+        let other_wasm = asking(other, r#"["doc.read"]"#, &json!({"objects": []}));
+        let (data, other_data) = (vectorcraft_format::base64_encode(&wasm), vectorcraft_format::base64_encode(&other_wasm));
+        let grants = folder.0.join("grants.json");
+        let mut s = session();
+        s.attach_plugin_store(folder.0.clone());
+        run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+        fail.store(true, std::sync::atomic::Ordering::SeqCst);
+        _ = s.execute("plugin.install", &json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+        fail.store(false, std::sync::atomic::Ordering::SeqCst);
+        let unkept = std::fs::read(&grants).unwrap();
+        let before = kept(&folder.0).unwrap();
+        assert_eq!(generation_of(&unkept), Some(before + 1), "{path}: the file is one generation past the kept one");
+
+        let other_grant = json!([{"id": other, "hash": sha256_hex(&other_wasm), "permissions": ["doc.read"]}]).to_string();
+        match path {
+            "unsigned" => std::fs::write(&grants, &other_grant).unwrap(),
+            "gone" => std::fs::remove_file(&grants).unwrap(),
+            "not-a-list" => std::fs::write(&grants, br#""not a list""#).unwrap(),
+            _ => std::fs::write(&grants, crate::store::signed_grants_file(&folder.0, &other_grant)).unwrap(),
+        }
+        assert_eq!(s.store_grant(other, None), path != "not-a-list", "{path}");
+        std::fs::write(&grants, &unkept).unwrap();
+        assert_eq!(starts_from(&folder.0, other, &other_data), (false, true), "{path}: the revoked grant doesn't come back");
+        assert_eq!(starts_from(&folder.0, id, &data), (false, true), "{path}: the copy grants nothing");
+        assert_eq!(kept(&folder.0), Some(before + 2), "{path}: the generation is past the file whose generation wasn't kept");
+        std::fs::remove_file(&grants).unwrap();
+        let mut s = session();
+        s.attach_plugin_store(folder.0.clone());
+        _ = s.execute("plugin.remove", &json!({"id": id}));
+        _ = s.execute("plugin.remove", &json!({"id": other}));
+    }
 }
 
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next
