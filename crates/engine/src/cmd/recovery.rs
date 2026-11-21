@@ -858,6 +858,9 @@ struct Meta {
     /// the restored document's file stays one scripts only read.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     path_from_script: bool,
+    /// The path scripts write the document's file through (`DocState::person_path`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    person_path: Option<String>,
     /// The format Save writes for it ([`SAVE_FORMATS`]).
     format: String,
     /// A document's own native PDF choice before the recovery copy omits its PDF. None keeps
@@ -1188,6 +1191,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             title: title.clone(),
             path: st.path.clone(),
             path_from_script: st.path_from_script,
+            person_path: st.person_path.clone(),
             format: st.format.to_string(),
             native_pdf_compatible: if matches!(st.format, "vectorcraft" | "template") {
                 st.save_options.get("pdfCompatible").and_then(Value::as_bool)
@@ -1519,6 +1523,7 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     let st = s.doc_mut()?;
     st.recovered = true;
     st.path_from_script = meta.path_from_script;
+    st.person_path = meta.person_path.clone();
     st.links_from = links_from;
     st.imported_from = meta.imported_from.clone();
     st.import_losses = meta.import_losses.clone();

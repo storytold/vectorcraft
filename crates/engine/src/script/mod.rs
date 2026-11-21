@@ -1242,16 +1242,27 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     // it writes a document's file only when the person gave the document that file.
     let paths: Vec<(u64, Option<String>)> = s.docs.iter().map(|d| (d.uid, d.path.clone())).collect();
     let documents = s.docs.iter().filter_map(|d| d.path.clone()).collect();
-    let writable = s.docs.iter().filter(|d| !d.path_from_script).filter_map(|d| d.path.clone()).collect();
+    let writable = s.docs.iter().filter(|d| !d.path_from_script).filter_map(|d| d.person_path.clone().or_else(|| d.path.clone())).collect();
     let gate = host.disk.borrow().gate(documents, writable);
     let r = crate::file_access::with_script_gate(gate, || s.execute(id, params));
     // A document the command opened from a file, or gave another file, has that file from the script.
-    // Another spelling of the path of the file it had is the same file.
+    // Another spelling of the path of the file the person gave it is the same file: commands go on
+    // writing that file through the person's path, never through the script's spelling.
     for st in &mut s.docs {
         let Some(now) = st.path.as_deref() else { continue };
-        let kept = paths.iter().any(|(uid, was)| *uid == st.uid && was.as_deref().is_some_and(|was| crate::file_access::same_file(was, now)));
-        if !kept {
+        let Some((_, Some(was))) = paths.iter().find(|(uid, _)| *uid == st.uid) else {
             st.path_from_script = true;
+            continue;
+        };
+        if was.as_str() == now {
+            continue;
+        }
+        let given = st.person_path.clone().unwrap_or_else(|| was.clone());
+        if !st.path_from_script && crate::file_access::same_file(&given, now) {
+            st.person_path = (given != now).then_some(given);
+        } else {
+            st.path_from_script = true;
+            st.person_path = None;
         }
     }
     // A file a command wrote before it failed is on disk all the same.

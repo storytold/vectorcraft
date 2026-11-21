@@ -551,6 +551,51 @@ fn a_persons_document_saved_by_a_script_under_another_spelling_of_its_path_stays
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// After a script's command saves the person's document through a link to its file, a later run
+/// writes the document only to that file: once the link is pointed at another file, a save through
+/// the link is refused and the other file stays as it was, and a save to the file's own path works.
+#[test]
+fn a_persons_document_saved_by_a_script_through_a_link_is_written_only_to_its_own_file() {
+    let dir = fresh_folder("gate-same-file-link");
+    let (file, link, other) = (dir.join("a.svg"), dir.join("link.svg"), dir.join("other.svg"));
+    let mut s = two_docs();
+    s.execute("document.save", &json!({"path": file.to_string_lossy(), "format": "svg"})).unwrap();
+    std::fs::write(&other, b"other").unwrap();
+    #[cfg(unix)]
+    let made = |target: &std::path::Path, link: &std::path::Path| std::os::unix::fs::symlink(target, link).is_ok();
+    #[cfg(windows)]
+    let made = |target: &std::path::Path, link: &std::path::Path| std::os::windows::fs::symlink_file(target, link).is_ok();
+    #[cfg(not(any(unix, windows)))]
+    let made = |_: &std::path::Path, _: &std::path::Path| false;
+    // Windows needs Developer Mode or elevation to make a link to a file.
+    if !made(&file, &link) {
+        eprintln!("skipped: links to files can't be made here");
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
+    let tried = |what: String| {
+        format!(
+            "try {{ {what}; vc.log('ok'); }} catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let through = link.to_string_lossy().into_owned();
+    let r = run(&mut s, &tried(format!("vc.run('document.save', {{path: {through:?}}})"))).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "{r}");
+    std::fs::remove_file(&link).unwrap();
+    assert!(made(&other, &link));
+    let bytes = std::fs::read(&file).unwrap();
+    let r = run(&mut s, &tried("vc.run('document.save', {})".into())).unwrap();
+    assert_eq!(r["log"], json!(["denied"]), "a later run's save through the link: {r}");
+    assert_eq!(std::fs::read(&other).unwrap(), b"other", "the file the link now leads to is as it was");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes);
+    let own = file.to_string_lossy().into_owned();
+    let r = run(&mut s, &tried(format!("vc.run('document.save', {{path: {own:?}}})"))).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "a save to its own file: {r}");
+    let r = run(&mut s, &tried("vc.run('document.save', {})".into())).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A command a script runs does not save into the app's own libraries; the same command run
 /// outside a script does.
 #[test]

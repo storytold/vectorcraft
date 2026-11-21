@@ -1149,7 +1149,7 @@ impl SaveJob {
     /// title, format, options, and the snapshot as the saved state (edits made since the job was
     /// made keep the document modified; changes that are not edits to save don't,
     /// [`DocState::same_content`]). Saved outside a command a script runs, the file is the
-    /// person's (`DocState::path_from_script`).
+    /// person's (`DocState::path_from_script`, `DocState::person_path`).
     pub fn finish(self, st: &mut DocState) {
         let retargets = self.plan.retargets();
         if let (true, Some(path)) = (retargets, self.plan.path) {
@@ -1164,6 +1164,7 @@ impl SaveJob {
             st.recovered = false;
             if !crate::file_access::in_script_command() {
                 st.path_from_script = false;
+                st.person_path = None;
             }
             if let Some(at) = self.stamped {
                 if Arc::ptr_eq(&st.doc, &self.source) {

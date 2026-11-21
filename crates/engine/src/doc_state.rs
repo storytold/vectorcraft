@@ -133,6 +133,11 @@ pub struct DocState {
     /// where the script itself may ([`file_access::ScriptGate`]), until the person saves the
     /// document. Not saved.
     pub(crate) path_from_script: bool,
+    /// The path of the file the person gave the document, when a command a script ran has since
+    /// saved it to another spelling of that file's path (`path`): the commands scripts run write the
+    /// document's file through this path only ([`file_access::ScriptGate`]), until the person saves
+    /// the document. Not saved.
+    pub(crate) person_path: Option<String>,
     /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
     /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
     pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
@@ -366,6 +371,7 @@ impl DocState {
             last_perspective: None,
             opened_by: file_access::current(),
             path_from_script: false,
+            person_path: None,
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),

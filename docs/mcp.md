@@ -3023,7 +3023,9 @@ VectorCraft writes files by these rules of its own:
   A document's file that a script's command gave it, by opening the document from that file or saving it there, is only
   read this way: a script's command writes it (Save, an export or a save over it) only where the script's `File` and
   `Folder` objects may write, in that run and in later runs, until the person saves the document. A document opened
-  from a file the script may only read therefore stays read-only for scripts.
+  from a file the script may only read therefore stays read-only for scripts. When a script's command saves the person's
+  document to another path of the same file (one with a `./` component, or a link to it), later script writes go to the
+  file at the person's path only: a save through that other path after it leads elsewhere is refused.
   A pick inside the folder that holds the settings gives `null` and sets `error` to `Script file access to the app's
   own folders is not allowed`.
 - A run with nobody to ask, as over MCP or the command line, gives `null` from every file dialog and sets `error` to
