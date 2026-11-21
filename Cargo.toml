@@ -33,7 +33,7 @@ craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "9b28b56bc7
 craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0", features = ["tree"] }
 craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
-craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
+craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
 craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
