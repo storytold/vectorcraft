@@ -188,6 +188,13 @@ fn an_embedded_image_cannot_take_an_image_variable() {
     let e = failure(&mut s, "var d = app.activeDocument; vc.log(d.pageItems[0].typename); d.pageItems[0].contentVariable = d.variables[0];");
     assert!(e.contains("embedded image"), "{e}");
     assert!(s.active().unwrap().doc.variables.bindings.is_empty());
+    // Its visibility still takes a visibility variable.
+    s.execute("variable.define", &json!({"name": "shown", "kind": "visibility"})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument; d.pageItems[0].visibilityVariable = d.variables.getByName('shown'); vc.log(d.pageItems[0].visibilityVariable.name);",
+    );
+    assert_eq!(out, vec![json!("shown")]);
 }
 
 #[test]
@@ -256,6 +263,18 @@ fn a_data_set_object_goes_stale_when_an_import_replaces_the_rows() {
     s.execute("variable.bind", &json!({"variable": "title", "ids": [t.0]})).unwrap();
     s.execute("dataset.capture", &json!({})).unwrap();
     let e = failure(&mut s, "var x = app.activeDocument.dataSets[0]; vc.run('dataset.import', {csv: 'title\\nNew'}); x.name;");
+    assert!(e.contains("Stale data set"), "{e}");
+}
+
+#[test]
+fn an_import_that_leaves_the_data_sets_as_they_were_keeps_the_data_set_objects() {
+    let (mut s, t, _) = doc();
+    s.execute("variable.define", &json!({"name": "title", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "title", "ids": [t.0]})).unwrap();
+    s.execute("dataset.import", &json!({"csv": "title\nNew"})).unwrap();
+    let out = log(&mut s, "var x = app.activeDocument.dataSets[0]; vc.run('dataset.import', {csv: 'title\\nNew'}); vc.log(x.name);");
+    assert_eq!(out.len(), 1, "{out:?}");
+    let e = failure(&mut s, "var x = app.activeDocument.dataSets[0]; vc.run('dataset.import', {csv: 'title\\nOther'}); x.name;");
     assert!(e.contains("Stale data set"), "{e}");
 }
 

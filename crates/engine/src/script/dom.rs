@@ -42,9 +42,15 @@ mod variables;
 
 pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
 
+/// What [`after_command`] compares with, taken before each command a script runs
+/// ([`variables::before_command`]).
+pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<crate::doc::DataSet>)> {
+    variables::before_command(h, id)
+}
+
 /// After each command a script runs ([`variables::after_command`]).
-pub(super) fn after_command(h: &Host, id: &str) {
-    variables::after_command(h, id);
+pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<crate::doc::DataSet>)>) {
+    variables::after_command(h, before);
 }
 
 /// The error for a member read or called with no document open.

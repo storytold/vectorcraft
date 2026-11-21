@@ -500,7 +500,7 @@ fn set_binding(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("variable `{name}` is a {} variable, and this slot takes a {} variable", have.label(), kind.label())));
         }
         check_bindable(doc, &[id], kind, C)?;
-        if matches!(doc.node(id).map(|n| &n.kind), Some(NodeKind::Image(im)) if im.link.is_none()) {
+        if kind == VariableKind::Image && matches!(doc.node(id).map(|n| &n.kind), Some(NodeKind::Image(im)) if im.link.is_none()) {
             return Err(bad(C, format!("node {} is an embedded image, and an image variable drives only a linked image", id.0)));
         }
     }

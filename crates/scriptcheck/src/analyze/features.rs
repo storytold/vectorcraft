@@ -301,7 +301,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
                 self.acc.feature(FeatureId::FileRead, line);
-            } else if file && catalog::FILE_WRITES.contains(&n) {
+            } else if (file && catalog::FILE_WRITES.contains(&n)) || catalog::DOM_FILE_WRITES.contains(&n) {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
             } else if n == catalog::EXECUTE {

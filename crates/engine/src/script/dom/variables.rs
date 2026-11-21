@@ -46,7 +46,7 @@ use super::{
     Answer, Doc, Host, Link, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, arg, class, command, doc_of, doc_ref, edit_item, find_doc, float, function, get,
     handle_of, item_of, item_ref, method, named, num, on_doc, property, text, typename, whole, with_doc,
 };
-use crate::doc::{Node, Variable, VariableKind};
+use crate::doc::{DataSet, Node, Variable, VariableKind};
 use crate::file_access::Access;
 
 /// The error for a `Variable` whose variable left the document, or that came from an earlier run.
@@ -138,16 +138,28 @@ pub(super) struct Handles {
     seen: RefCell<Vec<(u64, u64)>>,
 }
 
+/// The data sets of the active document before a command that may replace them (an import), while
+/// the run holds a `Dataset`; `None` for any other command.
+pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<DataSet>)> {
+    if !matches!(id, "dataset.import" | "variable.loadLibrary" | "variable.import") || h.dom.vars.sets.borrow().live.is_empty() {
+        return None;
+    }
+    let s = h.session.try_borrow().ok()?;
+    s.active().map(|st| (st.uid, st.doc.variables.datasets.clone()))
+}
+
 /// After each command a script runs: the objects whose variable or data set it removed stop
-/// working, so one made again under the same name does not bring them back. A command that replaces
-/// the data sets (an import) stops every `Dataset` of its document.
-pub(super) fn after_command(h: &Host, id: &str) {
+/// working, so one made again under the same name does not bring them back. An import that leaves
+/// its document with other data sets than `before` ([`before_command`]) holds stops every `Dataset`
+/// of that document, also when the new data sets reuse the names; an import that failed, was put
+/// back or left the data sets as they were stops none.
+pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<DataSet>)>) {
     let hs = &h.dom.vars;
     if hs.vars.borrow().live.is_empty() && hs.sets.borrow().live.is_empty() {
         return;
     }
     let Ok(s) = h.session.try_borrow() else { return };
-    let replaced = matches!(id, "dataset.import" | "variable.loadLibrary" | "variable.import").then(|| s.active().map(|st| st.uid)).flatten();
+    let replaced = before.and_then(|(uid, sets)| s.documents().iter().find(|d| d.uid == uid && d.doc.variables.datasets != sets).map(|d| d.uid));
     let now: Vec<(u64, u64)> = s.documents().iter().map(|d| (d.uid, d.revision)).collect();
     let changed: HashSet<u64> = {
         let seen = hs.seen.borrow();

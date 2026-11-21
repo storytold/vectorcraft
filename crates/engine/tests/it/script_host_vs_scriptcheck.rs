@@ -37,6 +37,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Document.prototype.exportVariables", "app.activeDocument.exportVariables(f);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -70,6 +71,23 @@ const INSIDE: &[(&str, &str)] = &[
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
          getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
     ),
+    // Variables and data sets. `importVariables` reads the library file it is given.
+    ("", "Dataset Datasets Variable VariableKind Variables"),
+    ("VariableKind.", "GRAPH IMAGE TEXTUAL Unknown VISIBILITY"),
+    ("Variables.", "prototype"),
+    ("Variables.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Variable.", "prototype"),
+    ("Variable.prototype.", "constructor kind kind= name name= pageItems parent remove typename"),
+    ("Datasets.", "prototype"),
+    ("Datasets.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Dataset.", "prototype"),
+    ("Dataset.prototype.", "constructor display name name= parent remove typename update"),
+    ("Document.prototype.", "activeDataset activeDataset= dataSets importVariables variables variablesLocked variablesLocked="),
+    ("PageItem.prototype.", "visibilityVariable visibilityVariable="),
+    ("GraphItem.prototype.", "contentVariable contentVariable="),
+    ("PlacedItem.prototype.", "contentVariable contentVariable="),
+    ("RasterItem.prototype.", "contentVariable contentVariable="),
+    ("TextFrame.prototype.", "contentVariable contentVariable="),
 ];
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
