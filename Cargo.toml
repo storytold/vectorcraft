@@ -30,7 +30,7 @@ craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "d7c96
 # Bounded CDR (v1-v27) and CMX (32-bit) reader (craft-libs#778).
 craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "9b28b56bc7207ef7ce806f37df72cb94c0ad5c37" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
-craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0", features = ["tree"] }
+craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3", features = ["tree"] }
 craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
 craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e" }
