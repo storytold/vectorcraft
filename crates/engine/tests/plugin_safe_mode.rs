@@ -59,11 +59,13 @@ fn installed(id: &str) -> bool {
     vectorcraft_plugins::registry::get(id).is_some()
 }
 
-/// A new launch: nothing installed, the plug-in folder `dir` attached.
+/// A new launch: nothing installed, the plug-in folder `dir` attached, its grants' key kept in
+/// memory.
 fn launch(dir: &std::path::Path) -> Session {
     for p in vectorcraft_plugins::registry::list() {
         vectorcraft_plugins::registry::remove(p.id());
     }
+    vectorcraft_engine::store::grant_keys::keep_grant_keys_in_memory();
     let mut s = Session::new();
     s.attach_plugin_store(dir.to_path_buf());
     s

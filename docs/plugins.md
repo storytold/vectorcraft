@@ -261,8 +261,10 @@ capability model proposed for PhotoCraft plug-ins
   `grants.json`, and installs a module that lists permissions only under a grant recorded for this very module,
   also when it loads the Additional Plug-ins Folder. The approval does not protect against native code linked into
   VectorCraft or against another program running as the same user, which can change the files in the `Plug-ins`
-  folder. `grants.json` is not signed, so such a program can add a grant to it. `--allow-plugin-grants` is a choice
-  the person starting a headless session makes.
+  folder. `grants.json` carries a MAC made with a key kept in the system key store ([grants file
+  integrity](#grants-file-integrity)), so a program that only edits the file can't add a grant to it; one running as
+  the same user can still read the key or change VectorCraft. `--allow-plugin-grants` is a choice the person starting
+  a headless session makes.
 - **Replacing asks first.** When the file is another module than the plug-in installed with its id, or, with none
   installed, its id has settings and a cache in the `Plug-ins` folder, Install Plug-in… and File › Open show its id
   and SHA-256 and ask whether to install it in place of that plug-in, which gives it the settings and cache kept for
@@ -300,8 +302,8 @@ capability model proposed for PhotoCraft plug-ins
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
   removed and the module already stored can't be read back or written back, the new module stays in the folder, and
   the grant stops counting. The grant also stops counting when the folder held no module for that id. A
-  `grants.json` larger than 1 MiB, or one that is not a JSON list, grants nothing: the new module stays in the folder,
-  and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
+  `grants.json` larger than 1 MiB, or one that is neither a grants object nor a JSON list, grants nothing: the new
+  module stays in the folder, and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
   permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
   including for the next load, which tries the removal again. A grant that stops counting in either of these cases
@@ -315,8 +317,8 @@ capability model proposed for PhotoCraft plug-ins
   covers. An entry of `grants.json` that this version can't use (a permission it doesn't know, an invalid id) is
   skipped and stays in the file until its plug-in is granted again, replaced by a module that lists no permissions, or
   removed. When such an entry can't be removed from the file, `plugin.install` and `plugin.remove` treat it as a grant
-  that can't be removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written
-  larger than 1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept in it count for
+  that can't be removed. A `grants.json` that is neither a grants object nor a JSON list is never overwritten, and
+  the file is never written larger than 1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept in it count for
   `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup, a stored plug-in
   is skipped when no grant covers its bytes and the permissions it lists. The Additional Plug-ins Folder and
   `plugin.reload` install only plug-ins that such a grant covers, and report the others. A module without a
@@ -353,6 +355,39 @@ Drawing evaluates effects often, so live-effect results are cached by plug-in in
 geometry, fill rule, reference box and the paints the effect is given: a plug-in runs again only when one of them
 changes. Failures are cached too. The swatches and patterns a painted result names are checked against the document
 each time it is drawn, and a paint linked to a global swatch is drawn in that swatch's current color at its own tint.
+
+#### Grants file integrity
+
+`grants.json` holds the grants in a JSON object, `{"version": 1, "grants": [...], "mac": "..."}`. `mac` is an
+HMAC-SHA-256 ([RFC 2104](https://www.rfc-editor.org/rfc/rfc2104)), in lower-case hexadecimal, of the `grants` list
+written as compact JSON and of the folder the file is in. The key is 32 random bytes that VectorCraft makes when it
+records the first grant. VectorCraft keeps the key in the system key store, as the secret of the account
+`hmac-sha256-v1` of the service `org.storytold.vectorcraft.plugin-grants`, and never in a file:
+
+- On macOS the key is in the user's Keychain.
+- On Windows the key is a generic credential in Credential Manager.
+- On Linux and the BSDs the key is in the Secret Service, for example GNOME Keyring. When its collection is locked,
+  the desktop may ask to unlock it.
+
+VectorCraft makes the key while it holds `vectorcraft-plugin-grant-key.lock` in the temporary folder on Windows and
+macOS, and in `$XDG_RUNTIME_DIR` elsewhere. When that file can't be locked, or `$XDG_RUNTIME_DIR` is not set, no key
+is made, and approvals last for the session only, as when the key store can't be reached.
+
+VectorCraft compares the MAC in constant time. A `grants.json` without the MAC of its grants and its folder grants
+nothing, and each plug-in it names that lists permissions asks for approval again. This covers a file that an earlier
+version wrote (a plain JSON list), a grant that another program edited or added, a file whose `mac` was removed or
+changed, a file copied from another `Plug-ins` folder or another computer, and a file whose key is no longer in the key
+store. The next approval replaces such a file with a signed file that holds that grant alone, making a key first when
+the key store has none. When a grant is forgotten without an approval (`plugin.remove`, installing a module that lists
+no permissions under that id, or a folder load that forgets the grant), VectorCraft takes that entry out of such a file
+and leaves the rest unsigned.
+
+When the key store can't be reached (it is locked, or a headless Linux session has no Secret Service), no
+`grants.json` grants anything and VectorCraft writes none: an approval lasts for the session only, the module stored
+for the id is not replaced, and `plugin.remove` of a plug-in that the file names returns an error, as for a grant that
+can't be removed. With `VECTORCRAFT_NO_PREFS` set there is no plug-in store, and the web build keeps no grants file. The
+MAC does not protect against another program running as the same user, which can read the key from the key store or
+change VectorCraft itself.
 
 ## ABI v1
 

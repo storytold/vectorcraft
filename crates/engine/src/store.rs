@@ -20,7 +20,9 @@
 //!   disabled, which `disabled.json` in the same folder lists (`plugin.setEnabled`). The Additional
 //!   Plug-ins Folder preference is not copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
 //!   stored there that list permissions (id, module hash, permissions); a stored plug-in whose
-//!   permissions it doesn't grant is skipped with a log record, and stays in the folder.
+//!   permissions it doesn't grant is skipped with a log record, and stays in the folder. The file
+//!   carries a MAC of its grants and its folder, made with a key the user's key store keeps
+//!   ([`grant_keys`]); a file without that MAC grants nothing.
 //! * **Plug-in settings and caches**: `storage/id-<id>/` in the plug-in store, the id written as
 //!   [`case_safe`] writes it, holds what a plug-in
 //!   keeps with the `settings` and `cache` permissions ([`PluginStorage`]): `settings.json` and a
@@ -49,6 +51,8 @@ use vectorcraft_plugins::storage::{self, Meter, Storage, StorageError};
 
 use crate::Session;
 use crate::cmd::pdfcmds::{PRESET_FORMAT, PresetFile};
+
+pub mod grant_keys;
 
 /// Files read from one store folder, at most (the rest are ignored).
 pub const MAX_STORE_FILES: usize = 1000;
@@ -721,7 +725,13 @@ impl Session {
 
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
     /// other grants as they are; with none left, remove the file. Entries this version can't use
-    /// are written back as they were, except one for `id`. A grants file that is too large, can't
+    /// are written back as they were, except one for `id`. The file is written with the MAC of its
+    /// grants for this folder ([`grant_keys`]), making the key when the key store holds none. A file
+    /// VectorCraft didn't write for this folder ([`Trust::Unsigned`]) grants nothing: a grant
+    /// replaces it with a file that holds that grant alone, and removing one takes out the entry for
+    /// `id` and leaves the rest unsigned. When the key store can't be reached ([`Trust::Unknown`], or
+    /// a key can't be made or kept), the file is left as it is and nothing is recorded, and an entry
+    /// for `id` stays. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
     /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. The file is read and
     /// written in `turn`. → whether the store now holds what was asked (`false` without a folder,
@@ -788,6 +798,21 @@ impl Session {
         if let Some(between) = AFTER_GRANTS_READ.take() {
             between();
         }
+        match (file.trust, &grant) {
+            // Nothing in the file can be checked, so nothing in it is rewritten: a grant holds for
+            // the session only, and one the file may still hold for `id` can't be removed.
+            (Trust::Unknown, Some(_)) => return false,
+            (Trust::Unknown, None) => return !file.names(id),
+            // The file grants nothing. A new grant replaces it with a signed file that holds that
+            // grant alone; removing one takes its entry out and leaves the rest unsigned.
+            (Trust::Unsigned, Some(_)) => {
+                log::warn!("replacing the stored plug-in grants {}: VectorCraft didn't write them for this folder", dir.join(GRANTS_FILE).display());
+                file.grants.clear();
+                file.other.clear();
+            }
+            (Trust::Unsigned | Trust::Signed, _) => {}
+        }
+        let signed = file.trust == Trust::Signed || grant.is_some();
         let others = file.other.len();
         file.other.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id));
         let changed = match grant {
@@ -802,16 +827,7 @@ impl Session {
         if entries.is_empty() {
             return take(dir, GRANTS_FILE);
         }
-        // The file is read back only up to its cap: written compactly when pretty-printed is larger,
-        // and not at all when that is too.
-        let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
-        match serde_json::to_vec_pretty(&entries).ok().filter(fits).or_else(|| serde_json::to_vec(&entries).ok().filter(fits)) {
-            Some(bytes) => put(dir, GRANTS_FILE, &bytes),
-            None => {
-                log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE));
-                false
-            }
-        }
+        put_grants(dir, entries, signed)
     }
 
     /// Whether the store holds, or may hold, an entry for the plug-in `id`, including one this
@@ -1466,16 +1482,116 @@ impl Storage for PluginStorage {
 /// What the grants file of a plug-in store holds.
 #[derive(Default)]
 struct GrantsFile {
-    /// The grants this version can use, by plug-in id.
+    /// The grants this version can use, by plug-in id. They grant something only when the file is
+    /// [`Trust::Signed`].
     grants: BTreeMap<String, vectorcraft_plugins::permissions::Grant>,
     /// The entries it can't use (a permission it doesn't know, an invalid id), as they were.
     other: Vec<serde_json::Value>,
+    /// Whether VectorCraft wrote the grants for this folder.
+    trust: Trust,
 }
 
 impl GrantsFile {
     /// Whether the file has an entry for the plug-in `id`, usable by this version or not.
     fn names(&self, id: &str) -> bool {
         self.grants.contains_key(id) || self.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id))
+    }
+}
+
+/// Whether a grants file was written by VectorCraft for its folder ([`grant_keys`]).
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+enum Trust {
+    /// There is no file, or it carries the MAC of its grants and folder made with the user's key.
+    #[default]
+    Signed,
+    /// It doesn't: an older version wrote it, another program wrote or changed it, it was copied
+    /// from another folder or machine, or the key store holds no key. It grants nothing.
+    Unsigned,
+    /// The key store can't be reached, so it is not known which. It grants nothing, and is left as
+    /// it is.
+    Unknown,
+}
+
+/// The version of the grants file this version writes ([`SignedGrants::version`]).
+const GRANTS_VERSION: u64 = 1;
+
+/// The grants file as this version writes it: the grants, and their MAC ([`grant_keys::sign`]) over
+/// the list written as compact JSON.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SignedGrants {
+    version: u64,
+    grants: Vec<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mac: Option<String>,
+}
+
+/// Tests: a grants file for the plug-in store `dir` that holds `grants` (a JSON list, written as it
+/// is) with their MAC made with the key in use, as VectorCraft writes one.
+#[cfg(test)]
+pub(crate) fn signed_grants_file(dir: &Path, grants: &str) -> Vec<u8> {
+    let entries: Vec<serde_json::Value> = serde_json::from_str(grants).unwrap_or_default();
+    let key = grant_keys::signing_key().unwrap_or_else(|e| panic!("no key: {e}"));
+    let canonical = serde_json::to_vec(&entries).unwrap_or_default();
+    let mac = grant_keys::sign(&key, &plugin_store_key(dir), &canonical).unwrap_or_default();
+    format!(r#"{{"version":{GRANTS_VERSION},"grants":{grants},"mac":"{mac}"}}"#).into_bytes()
+}
+
+/// Tests: the entries of the grants file `bytes`, signed or not.
+#[cfg(test)]
+pub(crate) fn grant_entries(bytes: &[u8]) -> Vec<serde_json::Value> {
+    match serde_json::from_slice::<serde_json::Value>(bytes) {
+        Ok(serde_json::Value::Array(entries)) => entries,
+        Ok(serde_json::Value::Object(mut file)) => match file.remove("grants") {
+            Some(serde_json::Value::Array(entries)) => entries,
+            _ => vec![],
+        },
+        _ => vec![],
+    }
+}
+
+/// Whether `signed`, read from the grants file of the plug-in store `dir`, carries the MAC of its
+/// grants and of `dir` made with the user's key.
+fn trust_of(dir: &Path, signed: &SignedGrants) -> Trust {
+    let (Some(tag), true) = (&signed.mac, signed.version == GRANTS_VERSION) else { return Trust::Unsigned };
+    let Ok(grants) = serde_json::to_vec(&signed.grants) else { return Trust::Unsigned };
+    match grant_keys::current_key() {
+        Ok(Some(key)) if grant_keys::verify(&key, &plugin_store_key(dir), &grants, tag) => Trust::Signed,
+        Ok(_) => Trust::Unsigned,
+        Err(e) => {
+            log::warn!("can't check the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            Trust::Unknown
+        }
+    }
+}
+
+/// Write `entries` as the grants file of the plug-in store `dir`, with their MAC for `dir` when
+/// `signed`, pretty-printed, or compact when that is larger than [`MAX_GRANTS_FILE`] → whether it went
+/// there; the file is not written when the key can't be had or it is too large either way.
+fn put_grants(dir: &Path, entries: Vec<serde_json::Value>, signed: bool) -> bool {
+    let path = dir.join(GRANTS_FILE);
+    let file = if signed {
+        let key = match grant_keys::signing_key() {
+            Ok(key) => key,
+            Err(e) => {
+                log::warn!("not updating the stored plug-in grants {}: {e}", path.display());
+                return false;
+            }
+        };
+        let mac = serde_json::to_vec(&entries).ok().and_then(|grants| grant_keys::sign(&key, &plugin_store_key(dir), &grants));
+        let Some(mac) = mac else { return false };
+        serde_json::to_value(SignedGrants { version: GRANTS_VERSION, grants: entries, mac: Some(mac) })
+    } else {
+        serde_json::to_value(entries)
+    };
+    // The file is read back only up to its cap: written compactly when pretty-printed is larger,
+    // and not at all when that is too.
+    let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
+    match file.ok().and_then(|file| serde_json::to_vec_pretty(&file).ok().filter(fits).or_else(|| serde_json::to_vec(&file).ok().filter(fits))) {
+        Some(bytes) => put(dir, GRANTS_FILE, &bytes),
+        None => {
+            log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
+            false
+        }
     }
 }
 
@@ -1489,8 +1605,10 @@ struct GrantsError {
 }
 
 /// The grants file of the plug-in store `dir`: empty when there is none, an error when it is too
-/// large, can't be read or doesn't hold a list. An entry that doesn't parse as a grant, or names an
-/// invalid id, is kept in [`GrantsFile::other`] with a log record.
+/// large, can't be read or doesn't hold a list. A list without a MAC (as an older version wrote it),
+/// or with one the user's key didn't make for `dir`, is [`Trust::Unsigned`] ([`trust_of`]). An
+/// entry that doesn't parse as a grant, or names an invalid id, is kept in [`GrantsFile::other`]
+/// with a log record.
 fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
     let path = dir.join(GRANTS_FILE);
     let bytes = match read_past_cap(&path, MAX_GRANTS_FILE) {
@@ -1501,8 +1619,23 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
     if bytes.len() as u64 > MAX_GRANTS_FILE {
         return Err(GrantsError { unread: false, why: too_large(MAX_GRANTS_FILE) });
     }
-    let entries = serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| GrantsError { unread: false, why: e.to_string() })?;
-    let mut file = GrantsFile::default();
+    let not_a_list = |why: String| GrantsError { unread: false, why };
+    let (entries, trust) = match serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|e| not_a_list(e.to_string()))? {
+        serde_json::Value::Array(entries) => (entries, Trust::Unsigned),
+        serde_json::Value::Object(_) => {
+            let signed = serde_json::from_slice::<SignedGrants>(&bytes).map_err(|e| not_a_list(e.to_string()))?;
+            let trust = trust_of(dir, &signed);
+            (signed.grants, trust)
+        }
+        _ => return Err(not_a_list("not a list of grants".into())),
+    };
+    if trust == Trust::Unsigned {
+        log::warn!(
+            "the stored plug-in grants {} were not written by VectorCraft for this folder: the plug-ins that list permissions ask for them again",
+            path.display()
+        );
+    }
+    let mut file = GrantsFile { trust, ..GrantsFile::default() };
     let mut first_error = None;
     for entry in entries {
         let why = match serde_json::from_value::<vectorcraft_plugins::permissions::Grant>(entry.clone()) {
@@ -1523,11 +1656,13 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
 }
 
 /// The grants kept in the plug-in store `dir` that this version can use, by plug-in id: none when
-/// there is no grants file, and none, with a log record, when it is too large, can't be read or
-/// doesn't hold a list.
+/// there is no grants file, when VectorCraft didn't write it for `dir` or that can't be checked
+/// ([`Trust`]), and none, with a log record, when it is too large, can't be read or doesn't hold a
+/// list.
 fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
     match read_grants(dir) {
-        Ok(file) => file.grants,
+        Ok(file) if file.trust == Trust::Signed => file.grants,
+        Ok(_) => BTreeMap::new(),
         Err(e) => {
             log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
             BTreeMap::new()

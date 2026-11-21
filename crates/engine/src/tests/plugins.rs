@@ -2217,11 +2217,7 @@ fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
     let other_wasm = asking(other, r#"["doc.read"]"#, &empty);
     let grants = folder.0.join("grants.json");
     let ids = || -> Vec<String> {
-        serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap())
-            .unwrap()
-            .iter()
-            .map(|e| e["id"].as_str().unwrap().to_string())
-            .collect()
+        crate::store::grant_entries(&std::fs::read(&grants).unwrap()).iter().map(|e| e["id"].as_str().unwrap().to_string()).collect()
     };
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
@@ -2241,7 +2237,7 @@ fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
     // A grant the store already holds for an id whose stored module lists no permissions.
     let entry = json!({"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]});
     let other_entry = json!({"id": other, "hash": sha256_hex(&other_wasm), "permissions": ["doc.read"]});
-    std::fs::write(&grants, serde_json::to_vec(&json!([entry, other_entry])).unwrap()).unwrap();
+    std::fs::write(&grants, crate::store::signed_grants_file(&folder.0, &json!([entry, other_entry]).to_string())).unwrap();
     vectorcraft_plugins::registry::remove(id);
     let mut third = session();
     third.attach_plugin_store(folder.0.clone());
@@ -2251,7 +2247,7 @@ fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
 
     // So does an entry this version can't read, and a grant held only by the process.
     let future = json!({"id": id, "hash": "00", "permissions": ["doc.read", "ui.panel"]});
-    std::fs::write(&grants, serde_json::to_vec(&json!([future, other_entry])).unwrap()).unwrap();
+    std::fs::write(&grants, crate::store::signed_grants_file(&folder.0, &json!([future, other_entry]).to_string())).unwrap();
     vectorcraft_plugins::registry::remove(id);
     vectorcraft_plugins::registry::grant(GrantToken::after_engine_approval(Grant {
         id: id.into(),
@@ -2311,8 +2307,8 @@ fn a_grant_that_cannot_be_removed_keeps_the_stored_module() {
     let file = s.stored_plugin_file(id).unwrap();
     // An entry this version can't use is written back as it was read: `1e9` as `1000000000.0`, which
     // makes the rewritten file larger than the 1 MiB that is read.
-    let entry = serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap().remove(0);
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let entry = crate::store::grant_entries(&std::fs::read(&grants).unwrap()).remove(0);
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
 
     run(&mut s, "plugin.install", replace.clone());
@@ -2359,8 +2355,8 @@ fn a_grant_left_behind_when_its_module_cannot_go_back_stops_counting() {
     run(&mut s, "plugin.install", json!({"dataBase64": approved_data, "grant": ["doc.read"]}));
     let file = s.stored_plugin_file(id).unwrap();
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let entry = serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap().remove(0);
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let entry = crate::store::grant_entries(&std::fs::read(&grants).unwrap()).remove(0);
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
 
     crate::store::PUT_BACK_FAILS.set(true);
@@ -2392,7 +2388,7 @@ fn an_unusable_entry_that_cannot_be_removed_stops_plugin_remove() {
     let file = s.stored_plugin_file(id).unwrap();
     let entry = json!({"id": id, "hash": "0".repeat(64), "permissions": ["no.such.permission"]});
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
 
     let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
@@ -2425,8 +2421,8 @@ fn a_grant_that_cannot_be_removed_and_has_no_stored_module_stops_counting() {
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.install", json!({"dataBase64": approved_data, "grant": ["doc.read"]}));
     let file = s.stored_plugin_file(id).unwrap();
-    let entry = serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap().remove(0);
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let entry = crate::store::grant_entries(&std::fs::read(&grants).unwrap()).remove(0);
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
     std::fs::remove_file(&file).unwrap();
 
@@ -2455,13 +2451,14 @@ fn a_grant_the_load_cannot_remove_stops_counting_in_the_process() {
     let needs_approval = json!({"dataBase64": approved_data});
     let grants = folder.0.join("grants.json");
     let entry = json!({"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]});
-    let recorded = serde_json::to_vec(&json!([entry])).unwrap();
+    let list = json!([entry]).to_string();
+    let recorded = |dir: &std::path::Path| crate::store::signed_grants_file(dir, &list);
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain)}));
 
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
     vectorcraft_plugins::registry::remove(id);
     let mut next = session();
@@ -2471,12 +2468,12 @@ fn a_grant_the_load_cannot_remove_stops_counting_in_the_process() {
     let refused = next.execute("plugin.install", &json!({"dataBase64": approved_data, "replace": true})).unwrap_err().to_string();
     assert!(refused.contains("doc.read"), "{refused}");
 
-    std::fs::write(elsewhere.0.join("grants.json"), &recorded).unwrap();
+    std::fs::write(elsewhere.0.join("grants.json"), recorded(&elsewhere.0)).unwrap();
     next.attach_plugin_store(elsewhere.0.clone());
     assert_eq!(run(&mut next, "plugin.inspect", needs_approval.clone())["needsApproval"], false, "that store's grant counts");
 
     // A load that can rewrite the file forgets the grant, and the store has nothing ignored again.
-    std::fs::write(&grants, &recorded).unwrap();
+    std::fs::write(&grants, recorded(&folder.0)).unwrap();
     next.attach_plugin_store(folder.0.clone());
     assert!(!grants.exists(), "the load removes the grant");
 
@@ -2486,7 +2483,7 @@ fn a_grant_the_load_cannot_remove_stops_counting_in_the_process() {
     let mut third = session();
     third.attach_plugin_store(folder.0.clone());
     std::fs::remove_dir(&grants).unwrap();
-    std::fs::write(&grants, &recorded).unwrap();
+    std::fs::write(&grants, recorded(&folder.0)).unwrap();
     assert_eq!(run(&mut third, "plugin.inspect", needs_approval.clone())["needsApproval"], true, "the file reads again, and the grant doesn't count");
 
     // Attaching the same store again, with no stored module to try the removal for, keeps it out.
@@ -2523,8 +2520,9 @@ fn an_ignored_stored_grant_is_shared_by_sessions_on_the_same_folder() {
     let needs_approval = json!({"dataBase64": approved_data});
     let grants = folder.0.join("grants.json");
     let entry = json!({"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]});
-    let recorded = serde_json::to_vec(&json!([entry])).unwrap();
-    std::fs::write(&grants, &recorded).unwrap();
+    let list = json!([entry]).to_string();
+    let recorded = |dir: &std::path::Path| crate::store::signed_grants_file(dir, &list);
+    std::fs::write(&grants, recorded(&folder.0)).unwrap();
     let mut first = session();
     first.attach_plugin_store(folder.0.clone());
     let inside = folder.0.join("inside");
@@ -2534,7 +2532,7 @@ fn an_ignored_stored_grant_is_shared_by_sessions_on_the_same_folder() {
     assert_eq!(run(&mut other, "plugin.inspect", needs_approval.clone())["needsApproval"], false, "the recorded grant counts");
 
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
     run(&mut first, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain)}));
     let file = first.stored_plugin_file(id).unwrap();
@@ -2554,13 +2552,13 @@ fn an_ignored_stored_grant_is_shared_by_sessions_on_the_same_folder() {
     later.attach_plugin_store(folder.0.clone());
     assert_eq!(run(&mut later, "plugin.inspect", needs_approval.clone())["needsApproval"], true, "a session attached later doesn't count it");
 
-    std::fs::write(elsewhere.0.join("grants.json"), &recorded).unwrap();
+    std::fs::write(elsewhere.0.join("grants.json"), recorded(&elsewhere.0)).unwrap();
     other.attach_plugin_store(elsewhere.0.clone());
     assert_eq!(run(&mut other, "plugin.inspect", needs_approval.clone())["needsApproval"], false, "that store's grant counts");
     other.attach_plugin_store(folder.0.clone());
     assert_eq!(run(&mut other, "plugin.inspect", needs_approval.clone())["needsApproval"], true, "back on the folder, it doesn't");
 
-    std::fs::write(&grants, &recorded).unwrap();
+    std::fs::write(&grants, recorded(&folder.0)).unwrap();
     assert!(later.store_grant(id, Some(serde_json::from_value(entry).unwrap())), "the file can be written");
     for s in [&mut first, &mut other, &mut later] {
         assert_eq!(run(s, "plugin.inspect", needs_approval.clone())["needsApproval"], false, "it counts again");
@@ -2618,7 +2616,7 @@ fn sessions_attached_before_the_folder_exists_share_its_ignored_grants() {
     let mut other = session();
     other.attach_plugin_store(alias);
     std::fs::create_dir(&dir).unwrap();
-    std::fs::write(dir.join("grants.json"), serde_json::to_vec(&json!([entry])).unwrap()).unwrap();
+    std::fs::write(dir.join("grants.json"), crate::store::signed_grants_file(&dir, &json!([entry]).to_string())).unwrap();
     assert_eq!(run(&mut other, "plugin.inspect", needs_approval.clone())["needsApproval"], false, "the recorded grant counts");
 
     first.ignore_stored_grant(id, first.grant_writes());
@@ -2659,11 +2657,10 @@ fn a_linked_plugin_folder_uses_the_ignored_grants_of_where_the_link_leads() {
     let approved = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
     let needs_approval = json!({"dataBase64": vectorcraft_format::base64_encode(&approved)});
     let entry = json!({"id": id, "hash": sha256_hex(&approved), "permissions": ["doc.read"]});
-    let recorded = serde_json::to_vec(&json!([entry])).unwrap();
     let (old, new, link) = (folder.0.join("old"), folder.0.join("new"), folder.0.join("Plug-ins"));
     for dir in [&old, &new] {
         std::fs::create_dir(dir).unwrap();
-        std::fs::write(dir.join("grants.json"), &recorded).unwrap();
+        std::fs::write(dir.join("grants.json"), crate::store::signed_grants_file(dir, &json!([entry]).to_string())).unwrap();
     }
     std::os::unix::fs::symlink(&old, &link).unwrap();
     let mut linked = session();
@@ -2730,8 +2727,8 @@ fn a_grant_that_cannot_be_removed_stops_plugin_remove() {
     let file = s.stored_plugin_file(id).unwrap();
     let recorded = std::fs::read(&grants).unwrap();
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let entry = serde_json::from_slice::<Vec<Value>>(&recorded).unwrap().remove(0);
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let entry = crate::store::grant_entries(&recorded).remove(0);
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
     let data = crate::store::plugin_data_dir(&folder.0, id);
     std::fs::create_dir_all(&data).unwrap();
@@ -2789,8 +2786,8 @@ fn settings_that_cannot_be_moved_back_are_reported_and_moved_back_later() {
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
     let recorded = std::fs::read(&grants).unwrap();
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let entry = serde_json::from_slice::<Vec<Value>>(&recorded).unwrap().remove(0);
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let entry = crate::store::grant_entries(&recorded).remove(0);
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
     let data = crate::store::plugin_data_dir(&folder.0, id);
     let settings = br#"{"zoom":"aGVsbG8="}"#;
@@ -3031,7 +3028,11 @@ fn a_stored_grant_covers_only_the_stored_module_it_recorded() {
     // A malformed hash is no wildcard, even for the module on disk.
     let upper = sha256_hex(&first).to_uppercase();
     for hash in ["", "00", upper.as_str()] {
-        std::fs::write(&grants, serde_json::to_vec(&json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}])).unwrap()).unwrap();
+        std::fs::write(
+            &grants,
+            crate::store::signed_grants_file(&folder.0, &json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}]).to_string()),
+        )
+        .unwrap();
         assert!(!starts(), "hash {hash:?}");
     }
 
@@ -3091,11 +3092,11 @@ fn a_failed_store_write_keeps_the_stored_module_with_its_grant() {
 
     // The grants file is full: the new grant, which is longer, doesn't fit.
     let cap = 1 << 20;
-    let mut entries: Vec<Value> = serde_json::from_slice(&recorded).unwrap();
+    let mut entries: Vec<Value> = crate::store::grant_entries(&recorded);
     entries.push(json!({"id": "", "pad": ""}));
-    let room = cap - serde_json::to_vec(&entries).unwrap().len();
+    let room = cap - crate::store::signed_grants_file(&folder.0, &serde_json::to_string(&entries).unwrap()).len();
     *entries.last_mut().unwrap() = json!({"id": "", "pad": "x".repeat(room)});
-    let full = serde_json::to_vec(&entries).unwrap();
+    let full = crate::store::signed_grants_file(&folder.0, &serde_json::to_string(&entries).unwrap());
     assert_eq!(full.len(), cap);
     std::fs::write(&grants, &full).unwrap();
     run(&mut s, "plugin.install", update.clone());
@@ -3335,7 +3336,7 @@ fn tell_when_waiting(waiting: std::sync::mpsc::Sender<&'static str>) {
 
 /// The ids `grants.json` in `dir` holds grants for, and the hash of each.
 fn stored_grant_hashes(dir: &std::path::Path) -> std::collections::BTreeMap<String, String> {
-    let entries: Vec<Value> = serde_json::from_slice(&std::fs::read(dir.join("grants.json")).unwrap()).unwrap();
+    let entries = crate::store::grant_entries(&std::fs::read(dir.join("grants.json")).unwrap());
     entries.iter().map(|e| (e["id"].as_str().unwrap().to_string(), e["hash"].as_str().unwrap().to_string())).collect()
 }
 
@@ -3637,8 +3638,8 @@ fn a_plain_update_put_back_that_fails_after_writing_keeps_a_disabled_plugin_off(
     assert!(!disabled.is_empty());
     let file = s.stored_plugin_file(id).unwrap();
     // `1e9` is written back as `1000000000.0`, which makes the rewritten file larger than the 1 MiB that is read.
-    let entry = serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap().remove(0);
-    let full = format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")).into_bytes();
+    let entry = crate::store::grant_entries(&std::fs::read(&grants).unwrap()).remove(0);
+    let full = crate::store::signed_grants_file(&folder.0, &format!(r#"[{entry},{{"n":[{}]}}]"#, vec!["1e9"; 200_000].join(",")));
     std::fs::write(&grants, &full).unwrap();
 
     crate::store::PUT_BACK_FAILS_AFTER_WRITE.set(true);
@@ -4099,7 +4100,7 @@ fn a_grant_covers_only_the_module_it_was_given_to() {
     // A kept grant that records no hash, or an empty one, covers no module: the stored module isn't
     // installed at the next start and `plugin.inspect` asks for approval.
     for entry in [json!({"id": id, "permissions": ["settings", "cache"]}), json!({"id": id, "hash": "", "permissions": ["settings", "cache"]})] {
-        std::fs::write(folder.0.join("grants.json"), serde_json::to_vec(&json!([entry])).unwrap()).unwrap();
+        std::fs::write(folder.0.join("grants.json"), crate::store::signed_grants_file(&folder.0, &json!([entry]).to_string())).unwrap();
         vectorcraft_plugins::registry::remove(id);
         vectorcraft_plugins::registry::revoke(id);
         let mut again = session();
@@ -4130,9 +4131,9 @@ fn grants_this_version_cant_read_are_kept() {
     let invalid = json!({"id": "bad id/", "hash": "00", "permissions": ["doc.read"]});
     let grant = json!({"id": kept, "hash": vectorcraft_plugins::permissions::sha256_hex(&kept_wasm), "permissions": ["doc.read"]});
     let grants = folder.0.join("grants.json");
-    std::fs::write(&grants, serde_json::to_vec(&json!([future, grant, invalid])).unwrap()).unwrap();
+    std::fs::write(&grants, crate::store::signed_grants_file(&folder.0, &json!([future, grant, invalid]).to_string())).unwrap();
     std::fs::write(folder.0.join("kept.wasm"), &kept_wasm).unwrap();
-    let entries = || serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap();
+    let entries = || crate::store::grant_entries(&std::fs::read(&grants).unwrap());
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     assert!(vectorcraft_plugins::registry::get(kept).is_some(), "the entries this version can't read don't drop the grant next to them");
@@ -4166,7 +4167,7 @@ fn grants_this_version_cant_read_are_kept() {
     // and left as it is when even compact would.
     let cap = 1 << 20;
     let many: Vec<Value> = (0..14_000).map(|i| json!({"id": format!("x.{i}"), "hash": "00", "permissions": ["ui.panel"]})).collect();
-    let compact = serde_json::to_vec(&many).unwrap();
+    let compact = crate::store::signed_grants_file(&folder.0, &serde_json::to_string(&many).unwrap());
     assert!(compact.len() < cap && serde_json::to_vec_pretty(&many).unwrap().len() > cap);
     std::fs::write(&grants, &compact).unwrap();
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm), "grant": ["doc.read"]}));
@@ -4176,11 +4177,288 @@ fn grants_this_version_cant_read_are_kept() {
     let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm)}));
     assert_eq!(inspected["needsApproval"], json!(false), "the compact file is read back");
     run(&mut s, "plugin.remove", json!({"id": added}));
-    let full = serde_json::to_vec(&json!([{"id": "x.full", "hash": "0".repeat(cap - 100), "permissions": ["ui.panel"]}])).unwrap();
+    let full = crate::store::signed_grants_file(
+        &folder.0,
+        &json!([{"id": "x.full", "hash": "0".repeat(cap - 250), "permissions": ["ui.panel"]}]).to_string(),
+    );
+    assert!(full.len() < cap);
     std::fs::write(&grants, &full).unwrap();
     run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm), "grant": ["doc.read"]}));
     assert_eq!(std::fs::read(&grants).unwrap(), full, "not written past the cap");
     run(&mut s, "plugin.remove", json!({"id": added}));
+}
+
+/// Tests: the key store `store` on this thread until the guard is dropped.
+struct ThreadKeys;
+
+impl ThreadKeys {
+    fn using(store: impl crate::store::grant_keys::GrantKeyStore + 'static) -> Self {
+        crate::store::grant_keys::THREAD_STORE.set(Some(std::sync::Arc::new(store)));
+        ThreadKeys
+    }
+}
+
+impl Drop for ThreadKeys {
+    fn drop(&mut self) {
+        crate::store::grant_keys::THREAD_STORE.set(None);
+    }
+}
+
+/// A key store that is locked or can't be reached.
+struct UnreachableKeys;
+
+impl crate::store::grant_keys::GrantKeyStore for UnreachableKeys {
+    fn key(&self) -> std::result::Result<Option<crate::store::grant_keys::GrantKey>, crate::store::grant_keys::KeyStoreError> {
+        Err(crate::store::grant_keys::KeyStoreError("the key store is locked".into()))
+    }
+
+    fn set_key(&self, _: &crate::store::grant_keys::GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+        Err(crate::store::grant_keys::KeyStoreError("the key store is locked".into()))
+    }
+}
+
+/// Whether the stored plug-in `id` loads from the plug-in store `dir` at a new start, and whether
+/// `plugin.inspect` of `data` (its module) then asks for approval.
+fn starts_from(dir: &std::path::Path, id: &str, data: &str) -> (bool, bool) {
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(dir.to_path_buf());
+    let asks = run(&mut next, "plugin.inspect", json!({"dataBase64": data}))["needsApproval"] == json!(true);
+    (vectorcraft_plugins::registry::get(id).is_some(), asks)
+}
+
+/// The grants file as VectorCraft wrote it keeps its grants; once it is changed outside VectorCraft
+/// it grants nothing, and its plug-ins ask again: a grant given more permissions, a grant added, the
+/// MAC taken out or cut short, a MAC made with another key, the file cut short, and the file copied
+/// into another plug-in folder.
+#[test]
+fn a_grants_file_changed_outside_vectorcraft_grants_nothing() {
+    use crate::store::grant_keys::{GrantKey, MemoryGrantKeys};
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-signed");
+    let copy = crate::tests_links::Folder::new("plugin-store-signed-copy");
+    let id = "test.engine.permissions.signed";
+    let added = "test.engine.permissions.signedadded";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let added_wasm = asking(added, r#"["doc.read"]"#, &json!({"objects": []}));
+    let (data, added_data) = (vectorcraft_format::base64_encode(&wasm), vectorcraft_format::base64_encode(&added_wasm));
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let added_file = folder.0.join(format!("{}.wasm", crate::store::file_stem(added)));
+    std::fs::write(&added_file, &added_wasm).unwrap();
+    let written = std::fs::read(&grants).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file as written keeps its grant");
+
+    let file: Value = serde_json::from_slice(&written).unwrap();
+    let with = |change: &dyn Fn(&mut Value)| {
+        let mut file = file.clone();
+        change(&mut file);
+        serde_json::to_vec(&file).unwrap()
+    };
+    let other_key = {
+        let _other = ThreadKeys::using(MemoryGrantKeys::with_key(GrantKey::from_bytes([7; 32])));
+        crate::store::signed_grants_file(&folder.0, &file["grants"].to_string())
+    };
+    let tag = file["mac"].as_str().unwrap().to_string();
+    let changed: [(&str, Vec<u8>); 6] = [
+        ("a permission added", with(&|f| f["grants"][0]["permissions"] = json!(["doc.read", "doc.write"]))),
+        (
+            "a grant added",
+            with(&|f| f["grants"].as_array_mut().unwrap().push(json!({"id": added, "hash": sha256_hex(&added_wasm), "permissions": ["doc.read"]}))),
+        ),
+        ("the MAC taken out", with(&|f| _ = f.as_object_mut().unwrap().remove("mac"))),
+        ("the MAC cut short", with(&|f| f["mac"] = json!(tag[..32]))),
+        ("a MAC made with another key", other_key),
+        ("the file cut short", written[..written.len() - 2].to_vec()),
+    ];
+    for (what, bytes) in changed {
+        std::fs::write(&grants, &bytes).unwrap();
+        assert_eq!(starts_from(&folder.0, id, &data), (false, true), "{what}");
+        assert_eq!(starts_from(&folder.0, added, &added_data), (false, true), "{what}");
+        assert_eq!(std::fs::read(&grants).unwrap(), bytes, "{what}: the file is left as it is");
+    }
+
+    std::fs::write(&grants, &written).unwrap();
+    std::fs::write(copy.0.join("copied.wasm"), &wasm).unwrap();
+    std::fs::write(copy.0.join("grants.json"), &written).unwrap();
+    assert_eq!(starts_from(&copy.0, id, &data), (false, true), "copied into another folder");
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file left as written keeps its grant");
+    std::fs::remove_file(&added_file).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A grants file in the form an older version wrote, a plain list, grants nothing. Approving a
+/// plug-in again replaces it with a signed file that holds that grant alone; removing a plug-in takes
+/// its entry out and leaves the rest unsigned.
+#[test]
+fn an_unsigned_grants_file_is_replaced_by_the_next_approval() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-unsigned");
+    let id = "test.engine.permissions.unsigned";
+    let other = "test.engine.permissions.unsignedother";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let other_wasm = asking(other, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    let entry = |id: &str, wasm: &[u8]| json!({"id": id, "hash": sha256_hex(wasm), "permissions": ["doc.read"]});
+    let unsigned = serde_json::to_vec(&json!([entry(id, &wasm), entry(other, &other_wasm)])).unwrap();
+    std::fs::write(&grants, &unsigned).unwrap();
+    std::fs::write(folder.0.join(format!("{}.wasm", crate::store::file_stem(id))), &wasm).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "an unsigned list grants nothing");
+    assert_eq!(std::fs::read(&grants).unwrap(), unsigned, "and is left as it is");
+
+    // `other` isn't installed, so the removal reports it as not found after removing its entry.
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(s.execute("plugin.remove", &json!({"id": other})).is_err());
+    assert_eq!(crate::store::grant_entries(&std::fs::read(&grants).unwrap()), vec![entry(id, &wasm)], "the removal takes its entry out");
+    assert!(std::fs::read(&grants).unwrap().starts_with(b"["), "and leaves the rest unsigned");
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true));
+
+    std::fs::write(&grants, &unsigned).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"], "replace": true}));
+    assert_eq!(crate::store::grant_entries(&std::fs::read(&grants).unwrap()), vec![entry(id, &wasm)], "only the new grant is kept");
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the approval counts at the next start");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!grants.exists());
+}
+
+/// With no key in the key store, a signed grants file grants nothing; the next approval makes a key
+/// and signs a file that holds that grant alone.
+#[test]
+fn a_grants_file_without_its_key_is_replaced_by_the_next_approval() {
+    use crate::store::grant_keys::{GrantKey, GrantKeyStore, MemoryGrantKeys};
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-no-key");
+    let id = "test.engine.permissions.nokey";
+    let other = "test.engine.permissions.nokeyother";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    let list = json!([{"id": id, "hash": sha256_hex(&wasm), "permissions": ["doc.read"]}, {"id": other, "hash": "0".repeat(64), "permissions": ["doc.read"]}]);
+    let signed = {
+        let _old = ThreadKeys::using(MemoryGrantKeys::with_key(GrantKey::from_bytes([3; 32])));
+        crate::store::signed_grants_file(&folder.0, &list.to_string())
+    };
+    std::fs::write(&grants, &signed).unwrap();
+    std::fs::write(folder.0.join(format!("{}.wasm", crate::store::file_stem(id))), &wasm).unwrap();
+    let keys = std::sync::Arc::new(MemoryGrantKeys::default());
+    struct Shared(std::sync::Arc<MemoryGrantKeys>);
+    impl GrantKeyStore for Shared {
+        fn key(&self) -> std::result::Result<Option<GrantKey>, crate::store::grant_keys::KeyStoreError> {
+            self.0.key()
+        }
+        fn set_key(&self, key: &GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+            self.0.set_key(key)
+        }
+    }
+    let _keys = ThreadKeys::using(Shared(keys.clone()));
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "no key, no grant");
+    assert!(keys.key().unwrap().is_none(), "reading makes no key");
+    assert_eq!(std::fs::read(&grants).unwrap(), signed, "the file is left as it is");
+
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"], "replace": true}));
+    assert!(keys.key().unwrap().is_some(), "the approval makes a key");
+    let ids: Vec<Value> = crate::store::grant_entries(&std::fs::read(&grants).unwrap()).iter().map(|e| e["id"].clone()).collect();
+    assert_eq!(ids, vec![json!(id)], "only the new grant is kept");
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// When the key store can't be reached, no grants file grants anything and none is written: an
+/// approval holds for the session only, the stored module isn't replaced, and a grant the file may
+/// hold can't be removed.
+#[test]
+fn an_unreachable_key_store_keeps_approvals_in_the_session() {
+    let folder = crate::tests_links::Folder::new("plugin-store-unreachable-keys");
+    let id = "test.engine.permissions.unreachable";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let written = std::fs::read(&grants).unwrap();
+    let module = std::path::PathBuf::from(s.stored_plugin_file(id).unwrap());
+
+    let locked = ThreadKeys::using(UnreachableKeys);
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the stored grant can't be checked");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let changed = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&changed), "grant": ["doc.read"], "replace": true}));
+    assert_eq!(
+        vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()),
+        Some(vectorcraft_plugins::permissions::sha256_hex(&changed)),
+        "it runs in this session"
+    );
+    assert_eq!(std::fs::read(&grants).unwrap(), written, "the grants file is left as it is");
+    assert_eq!(std::fs::read(&module).unwrap(), wasm, "the store keeps the module its grant covers");
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "{refused}");
+    assert_eq!(std::fs::read(&grants).unwrap(), written);
+
+    drop(locked);
+    assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the grant counts once the key store can be reached");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(!grants.exists());
+}
+
+/// A MAC is made over the grants and the folder, and only the whole MAC of the same key, grants and
+/// folder verifies. A key's bytes are never printed.
+#[test]
+fn a_grants_mac_verifies_only_for_its_key_grants_and_folder() {
+    use crate::store::grant_keys::{GrantKey, sign, verify};
+    let (key, other) = (GrantKey::from_bytes([1; 32]), GrantKey::from_bytes([2; 32]));
+    let folder = std::path::Path::new("/plug-ins");
+    let tag = sign(&key, folder, b"[]").unwrap();
+    assert_eq!(tag.len(), 64);
+    assert!(verify(&key, folder, b"[]", &tag));
+    assert!(!verify(&other, folder, b"[]", &tag), "another key");
+    assert!(!verify(&key, std::path::Path::new("/other"), b"[]", &tag), "another folder");
+    assert!(!verify(&key, folder, b"[ ]", &tag), "other grants");
+    assert!(!verify(&key, folder, b"[]", &tag[..62]), "a MAC cut short");
+    assert!(!verify(&key, folder, b"[]", &tag.to_uppercase()), "upper case");
+    assert!(!verify(&key, folder, b"[]", ""));
+    assert_eq!(format!("{key:?}"), "GrantKey(..)");
+}
+
+/// A key store where another process keeps its key between this one's read and its write, and
+/// that write does not replace it.
+struct KeptFirstElsewhere {
+    reads: std::sync::Mutex<u32>,
+}
+
+impl crate::store::grant_keys::GrantKeyStore for KeptFirstElsewhere {
+    fn key(&self) -> std::result::Result<Option<crate::store::grant_keys::GrantKey>, crate::store::grant_keys::KeyStoreError> {
+        let mut reads = self.reads.lock().unwrap();
+        *reads += 1;
+        // signing_key and create_key each read once before the write.
+        Ok((*reads > 2).then(|| crate::store::grant_keys::GrantKey::from_bytes([7; 32])))
+    }
+
+    fn set_key(&self, _: &crate::store::grant_keys::GrantKey) -> std::result::Result<(), crate::store::grant_keys::KeyStoreError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn a_new_grants_key_is_the_one_the_key_store_kept() {
+    use crate::store::grant_keys::{GrantKey, sign, verify};
+    let _keys = ThreadKeys::using(KeptFirstElsewhere { reads: std::sync::Mutex::new(0) });
+    let key = crate::store::grant_keys::signing_key().unwrap();
+    assert_eq!(key, GrantKey::from_bytes([7; 32]), "the key kept first signs");
+    let folder = std::path::Path::new("/plug-ins");
+    assert!(verify(&GrantKey::from_bytes([7; 32]), folder, b"[]", &sign(&key, folder, b"[]").unwrap()));
 }
 
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next

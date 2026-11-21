@@ -39,6 +39,7 @@ fn clearing_every_cache_empties_each_plugins_cache_and_keeps_its_settings() {
     let _ = std::fs::remove_dir_all(&folder);
     std::fs::create_dir_all(&folder).unwrap();
     let ids = ["test.clearcache.a", "test.clearcache.b"];
+    vectorcraft_engine::store::grant_keys::keep_grant_keys_in_memory();
     let mut s = Session::new();
     s.allow_plugin_grants_from_requests();
     s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();

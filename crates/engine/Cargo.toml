@@ -84,6 +84,13 @@ same-file = "1.0.6"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 heic-rs = { version = "=0.1.4", default-features = false, features = ["std", "parallel"], optional = true }
 rayon = { version = "1.12", optional = true }
+# The MAC that `grants.json` carries (grant_keys.rs) and the random key it is made with, which the
+# user's key store keeps: Keychain on macOS, Credential Manager on Windows, the Secret Service on
+# Linux. All MIT OR Apache-2.0.
+hmac = "0.12.1"
+sha2 = { version = "0.10", default-features = false }
+getrandom = "0.4"
+keyring = "4.2"
 
 [dev-dependencies]
 # JPEG XL files for the `.jxl` open and place tests.
