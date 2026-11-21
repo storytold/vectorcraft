@@ -1156,13 +1156,14 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 let bytes = (row as u64).saturating_mul(rows as u64);
                 if bytes > self.room() {
                     return Ok(false);
-                } else {
-                    self.spend(bytes)?;
-                    match layer_channel(data, rows, row, self.h.psb, depth) {
-                        Ok(plane) => (0..rows)
-                            .all(|y| plane.get(y * row..(y + 1) * row).is_some_and(|r| (0..w).all(|x| byte(sample(r, x, depth, false)) == 0))),
-                        Err(_) => false,
+                }
+                // Not counted against the import's allowance: the transparency is read again, and
+                // counted, where the layer is drawn.
+                match layer_channel(data, rows, row, self.h.psb, depth) {
+                    Ok(plane) => {
+                        (0..rows).all(|y| plane.get(y * row..(y + 1) * row).is_some_and(|r| (0..w).all(|x| byte(sample(r, x, depth, false)) == 0)))
                     }
+                    Err(_) => false,
                 }
             }
             _ => false,

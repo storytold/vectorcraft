@@ -2247,6 +2247,12 @@ fn damaged_layers_never_panic() {
     assert!(psdlayers::import(&file(8, 8, &many[..16], 8, false, false), false, 512, cms).unwrap().is_some());
     let e = psdlayers::import(&file(8, 8, &many, 8, false, false), false, 512, cms).err();
     assert!(e.as_deref().is_some_and(|e| e.contains("take more memory to read than allowed")), "{e:?}");
+    // Looking through those layers' transparency for pixels that draw, below an adjustment layer,
+    // takes nothing from the allowance.
+    let mut clear: Vec<L> = (0..16).map(|_| layer("x", [0, 0, 8, 8], [1, 2, 3, 0])).collect();
+    clear.push(adjustment("Invert", b"nvrt", &[]));
+    let opened = psdlayers::import(&file(8, 8, &clear, 8, false, false), false, 512, cms);
+    assert!(opened.as_ref().is_ok_and(Option::is_some), "{:?}", opened.err());
 }
 
 /// A layer in a mode VectorCraft lacks above a pass-through group merges with the group's layers
