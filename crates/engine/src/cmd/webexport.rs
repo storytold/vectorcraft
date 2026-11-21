@@ -340,10 +340,15 @@ pub struct ColorTable {
 type Shift = ([u8; 3], [u8; 3]);
 
 /// The most colours a colour table list holds.
-const MAX_TABLE: usize = 256;
+pub const MAX_TABLE: usize = 256;
 
 /// The error for a deletion that would leave the color table no color for the pixels.
 pub const KEEP_ONE: &str = "colorTable.deleted: at least one color has to stay in the color table";
+
+/// The error for a colour table list `what` (`colorTable.<what>`) with more than [`MAX_TABLE`] colours.
+pub fn too_many(what: &str) -> String {
+    format!("colorTable.{what}: at most {MAX_TABLE} colours")
+}
 
 impl ColorTable {
     /// Whether the table is a Custom one: a color was deleted or the palette is fixed.
@@ -353,7 +358,7 @@ impl ColorTable {
 
     fn colors(list: &[String], what: &str) -> std::result::Result<Vec<[u8; 3]>, String> {
         if list.len() > MAX_TABLE {
-            return Err(format!("colorTable.{what}: at most {MAX_TABLE} colours"));
+            return Err(too_many(what));
         }
         list.iter().map(|h| Self::rgb(h).ok_or_else(|| format!("colorTable.{what}: `{h}` is not a colour such as \"#ff8800\""))).collect()
     }

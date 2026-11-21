@@ -824,24 +824,56 @@ fn delete_color_skips_selected_colors_the_table_does_not_show() {
 fn colour_table_shift_unshift_and_unshift_all() {
     let mut d = Dialog::new(save_for_web::KIND, json!({}));
     save_for_web::toggle(&mut d, "webShift", "#123456", true);
-    save_for_web::shift_color(&mut d, "#123456", "#FF8800");
+    save_for_web::shift_color(&mut d, "#123456", "#FF8800").unwrap();
     assert_eq!(d.fields["colorTable"], json!({"webShift": [], "shifted": {"#123456": "#ff8800"}}));
     assert_eq!(save_for_web::selection(&d), ["#123456"]);
     // Not a color: nothing changes.
     let before = d.fields.clone();
-    save_for_web::shift_color(&mut d, "nope", "#000000");
-    save_for_web::shift_color(&mut d, "#123456", "nope");
+    save_for_web::shift_color(&mut d, "nope", "#000000").unwrap();
+    save_for_web::shift_color(&mut d, "#123456", "nope").unwrap();
     assert_eq!(d.fields, before);
-    save_for_web::shift_color(&mut d, "#ABCDEF", "#00ff00");
-    save_for_web::shift_color(&mut d, "#123456", "#123456");
+    save_for_web::shift_color(&mut d, "#ABCDEF", "#00ff00").unwrap();
+    save_for_web::shift_color(&mut d, "#123456", "#123456").unwrap();
     assert_eq!(d.fields["colorTable"]["shifted"], json!({"#abcdef": "#00ff00"}));
     save_for_web::toggle(&mut d, "webShift", "#222222", true);
     save_for_web::unshift_all_colors(&mut d);
     assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["webShift"]), (&json!({}), &json!([])));
     let order: Vec<String> = ["#000000", "#222222"].map(String::from).to_vec();
-    save_for_web::shift_color(&mut d, "#222222", "#ffffff");
+    save_for_web::shift_color(&mut d, "#222222", "#ffffff").unwrap();
     save_for_web::delete_colors(&mut d, &order).unwrap();
     assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["deleted"]), (&json!({}), &json!(["#222222"])));
+}
+
+/// A key or list entry written another way (`#F00`, upper case) still names its color: a new shift
+/// of that color replaces it, taking the shift away removes it, and a web shift of it is taken away.
+#[test]
+fn colour_table_shift_matches_a_color_written_another_way() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({"colorTable": {"shifted": {"#F00": "#00ff00", "nope": "#000000"}, "webShift": ["#0000FF"]}}));
+    save_for_web::shift_color(&mut d, "#ff0000", "#123456").unwrap();
+    assert_eq!(d.fields["colorTable"]["shifted"], json!({"#ff0000": "#123456", "nope": "#000000"}));
+    save_for_web::shift_color(&mut d, "#0000ff", "#654321").unwrap();
+    assert_eq!(d.fields["colorTable"]["webShift"], json!([]));
+    save_for_web::unshift(&mut d, "#FF0000");
+    assert_eq!(d.fields["colorTable"]["shifted"], json!({"#0000ff": "#654321", "nope": "#000000"}));
+}
+
+/// With 256 colors shifted, shifting another color is refused and changes nothing; a shifted color
+/// can still be shifted again or have its shift taken away.
+#[test]
+fn colour_table_shift_holds_at_most_256_colors() {
+    let full: serde_json::Map<String, serde_json::Value> = (0..256).map(|i| (format!("#{i:06x}"), json!("#ffffff"))).collect();
+    let mut d = Dialog::new(save_for_web::KIND, json!({"colorTable": {"shifted": full}, "__color": "#000001", "__colors": ["#000001"]}));
+    let before = d.fields.clone();
+    let e = save_for_web::shift_color(&mut d, "#123456", "#000000").unwrap_err();
+    assert_eq!((e.as_str(), &d.fields), ("colorTable.shifted: at most 256 colours", &before));
+    save_for_web::shift_color(&mut d, "#000005", "#000000").unwrap();
+    assert_eq!(
+        (d.fields["colorTable"]["shifted"]["#000005"].as_str(), d.fields["colorTable"]["shifted"].as_object().map(|m| m.len())),
+        (Some("#000000"), Some(256))
+    );
+    save_for_web::shift_color(&mut d, "#000005", "#000005").unwrap();
+    save_for_web::shift_color(&mut d, "#123456", "#000000").unwrap();
+    assert_eq!(d.fields["colorTable"]["shifted"]["#123456"], "#000000");
 }
 
 /// One frame of `app` in `ctx`, 50 ms after the last.
@@ -941,6 +973,28 @@ fn dialog_set_edit_color_opens_the_color_picker() {
     tick(&mut app, &ctx, vec![]);
     let shifted = app.ui.dialog.as_ref().map(|d| d.fields["colorTable"]["shifted"].clone());
     assert_eq!((kind(&app), shifted), (Some(save_for_web::KIND), Some(json!({"#0000ff": "#00ff00"}))));
+}
+
+/// Done right after the Color Picker's OK, before the dialog draws again, remembers the shift.
+#[test]
+fn done_right_after_the_color_picker_remembers_the_shift() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-shift-done");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("gif"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set(&mut app, "__editColor", json!("#0000ff"));
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    set(&mut app, "discard", json!(true));
+    confirm(&mut app).unwrap();
+    let remembered = app.session.last_web_settings().color_table;
+    assert_eq!(remembered.shifted.get("#0000ff").map(String::as_str), Some("#00ff00"));
 }
 
 /// Lock, Transparent and Web Shift are off while the selected color (`__color`) is one the table
