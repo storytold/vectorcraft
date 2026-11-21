@@ -1915,7 +1915,7 @@ fn undo_scan() -> UndoScan {
         }
         for t in &files {
             let named = t.match_indices(NAMED_MARKER).filter_map(|(at, _)| arguments(&t[at + NAMED_MARKER.len()..]).first().copied());
-            templates.extend(named.filter_map(|a| a.strip_prefix('"').and_then(string_literal)));
+            templates.extend(named.filter_map(leading_text));
         }
     }
     UndoScan { labels: out, templates, formatted }
@@ -1998,8 +1998,7 @@ fn quoted_end(text: &str, at: usize) -> Option<usize> {
         }
         return it.next().filter(|(_, c)| *c == '\'').map(|(n, _)| at + 1 + n + 1);
     }
-    let hashes = text[..at].chars().rev().take_while(|c| *c == '#').count();
-    if text[..at - hashes].ends_with('r') {
+    if let Some(hashes) = raw_hashes(text, at) {
         let close = format!("\"{}", "#".repeat(hashes));
         return rest.find(&close).map(|n| at + 1 + n + close.len());
     }
@@ -2014,6 +2013,46 @@ fn quoted_end(text: &str, at: usize) -> Option<usize> {
         }
     }
     None
+}
+
+/// The number of `#` around the raw string literal whose opening `"` is at `text[quote]` (`r"…"`,
+/// `r#"…"#`, `br#"…"#`); `None` when the literal is not raw.
+fn raw_hashes(text: &str, quote: usize) -> Option<usize> {
+    let hashes = quote - text[..quote].trim_end_matches('#').len();
+    text[..quote - hashes].ends_with('r').then_some(hashes)
+}
+
+/// The string literal whose opening `"` is at `text[quote]`: where it starts, its prefix (`r`,
+/// `r#`, `b`, `br`, `c`, `cr`) included, where it ends, and its text when it is a `&str` literal:
+/// a `"…"` literal with its escapes resolved (see [`string_literal`]), or a raw `r"…"` or `r#"…"#`
+/// literal as written, backslashes included (https://doc.rust-lang.org/reference/tokens.html#raw-string-literals).
+/// A byte string or a C string has no text; `None` when the literal is not closed.
+fn literal_at(text: &str, quote: usize) -> Option<(usize, usize, Option<String>)> {
+    let end = quoted_end(text, quote)?;
+    let raw = raw_hashes(text, quote);
+    let mut start = quote - raw.map_or(0, |hashes| hashes + 1);
+    let not_text = text[..start].ends_with(['b', 'c']) && !text[..start - 1].ends_with(|c: char| c.is_alphanumeric() || c == '_');
+    if not_text {
+        start -= 1;
+        return Some((start, end, None));
+    }
+    let lit = match raw {
+        Some(hashes) => Some(text[quote + 1..end - 1 - hashes].to_string()),
+        None => string_literal(&text[quote + 1..]),
+    };
+    Some((start, end, lit))
+}
+
+/// The text of the `&str` literal `s` starts with (`"…"`, `r"…"`, `r#"…"#`), as [`literal_at`]
+/// reads it; `None` when `s` does not start with one.
+fn leading_text(s: &str) -> Option<String> {
+    let quote = s.find('"')?;
+    let prefix = &s[..quote];
+    let raw_prefix = prefix.strip_prefix('r').is_some_and(|hashes| hashes.chars().all(|c| c == '#'));
+    if !prefix.is_empty() && !raw_prefix {
+        return None;
+    }
+    literal_at(s, quote)?.2
 }
 
 /// In `s` (the text after an opening bracket), the offset of each top-level `,`, and where the
@@ -2140,7 +2179,7 @@ fn label_literals(
 ) {
     let mut e = bare(e);
     if let Some(args) = e.strip_prefix("format!(") {
-        formatted.extend(args.trim_start().strip_prefix('"').and_then(string_literal));
+        formatted.extend(leading_text(args.trim_start()));
         return;
     }
     if let Some(body) = e.strip_prefix('|').and_then(|r| r.find('|').map(|n| &r[n + 1..])) {
@@ -2167,18 +2206,23 @@ fn label_literals(
     }
 }
 
-/// The string literals in `e` that `keep` accepts, given the text before and after each.
+/// The text of each `&str` literal in `e` (`"…"`, `r"…"`, `r#"…"#`, see [`literal_at`]) that `keep`
+/// accepts, given the text before the literal and its prefix and the text after it. Byte strings and
+/// C strings are not read.
 fn string_literals(e: &str, keep: impl Fn(&str, &str) -> bool) -> Vec<String> {
     let mut out = vec![];
     let mut i = 0;
     while let Some(c) = e[i..].chars().next() {
-        if let Some(end) = (c == '"' || c == '\'').then(|| quoted_end(e, i)).flatten() {
-            if c == '"'
-                && let Some(lit) = string_literal(&e[i + 1..])
-                && keep(&e[..i], &e[end..])
+        if c == '"'
+            && let Some((start, end, lit)) = literal_at(e, i)
+        {
+            if let Some(lit) = lit
+                && keep(&e[..start], &e[end..])
             {
                 out.push(lit);
             }
+            i = end;
+        } else if let Some(end) = (c == '\'').then(|| quoted_end(e, i)).flatten() {
             i = end;
         } else {
             i += c.len_utf8();
@@ -4653,6 +4697,173 @@ fn message_scan_joins_a_literal_continued_on_the_next_line() {
     }
 }
 
+/// The scan reads each of Rust's character escapes in a message as the character Rust gives it
+/// (https://doc.rust-lang.org/reference/tokens.html#character-escapes), and stops at the literal's
+/// own closing quote, not at an escaped one.
+#[test]
+fn message_scan_decodes_rust_character_escapes() {
+    let cases = [
+        (r#"a\rb" tail"#, "a\rb"),
+        (r#"a\0b""#, "a\0b"),
+        (r#"\x41\x7f\x7F""#, "A\x7f\x7f"),
+        (r#"caf\u{e9}""#, "café"),
+        (r#"caf\u{E_9}""#, "café"),
+        (r#"\u{1F600}\u{10_FFFF}\u{0}""#, "\u{1F600}\u{10FFFF}\0"),
+        (r#"a\\b""#, "a\\b"),
+        (r#"say \"hi\"" tail"#, "say \"hi\""),
+        (r#"it\'s""#, "it's"),
+        (r#"\n\t""#, "\n\t"),
+    ];
+    let wrong: Vec<_> = cases.iter().filter(|(body, text)| string_literal(body).as_deref() != Some(*text)).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+    let found = source_messages(r#"fn run() { let _ = Err("bad \x41 value \u{e9}"); }"#, &[], &Default::default());
+    assert_eq!(found, ["bad A value é"]);
+}
+
+/// A literal with an escape Rust does not accept is not read as a message: an unknown letter, `\x`
+/// with fewer than two hex digits or above `7F`, and `\u` without braces, without digits, with a
+/// leading underscore, with more than six digits, or naming a surrogate or a value above `10FFFF`.
+#[test]
+fn message_scan_rejects_invalid_rust_escapes() {
+    let bodies = [
+        r#"bad \q""#,
+        r#"bad \x4""#,
+        r#"bad \x4g""#,
+        r#"bad \x80""#,
+        r#"bad \x+1""#,
+        concat!(r"bad \u", "00e9\""),
+        r#"bad \u{""#,
+        r#"bad \u{}""#,
+        r#"bad \u{_e9}""#,
+        r#"bad \u{e9""#,
+        r#"bad \u{D800}""#,
+        r#"bad \u{110000}""#,
+        r#"bad \u{1234567}""#,
+    ];
+    let read: Vec<_> = bodies.iter().filter(|body| string_literal(body).is_some()).collect();
+    assert!(read.is_empty(), "{read:?}");
+    let code = r#"fn run() { let _ = Err("bad \q value"); let _ = Err("bad \u{D800} value"); let _ = Err("good value"); }"#;
+    assert_eq!(source_messages(code, &[], &Default::default()), ["good value"]);
+}
+
+/// The undo scan reads a step name or a `format!` template written as a raw string (`r"…"`,
+/// `r#"…"#`, `r##"…"##`) as Rust reads it: up to the quote followed by the literal's own number of
+/// `#`, with its backslashes kept (https://doc.rust-lang.org/reference/tokens.html#raw-string-literals).
+/// `Session::edit_named` templates are read the same way.
+#[test]
+fn undo_scan_reads_raw_step_names() {
+    let (mut names, mut formatted) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
+    for e in [
+        r#"r"Move path""#,
+        r##"r#"Move "named" path"#"##,
+        r###"r##"Move "#tag" path"##"###,
+        r#"r"Move\npath""#,
+        r##"if copy { r#"Copy "it""# } else { "Move it" }"##,
+        r##"format!(r#"Move "named" {n}"#, n = 2)"##,
+    ] {
+        label_literals(e, 0, &[], &mut names, &mut formatted);
+    }
+    let want = ["Copy \"it\"", "Move \"#tag\" path", "Move \"named\" path", "Move it", "Move path", "Move\\npath"];
+    assert_eq!(names.iter().collect::<Vec<_>>(), want);
+    assert_eq!(formatted.iter().collect::<Vec<_>>(), ["Move \"named\" {n}"]);
+    assert_eq!(leading_text(r##"r#"Move "{0}" layers"#, count)"##).as_deref(), Some("Move \"{0}\" layers"));
+    assert_eq!(leading_text(r#""Move {0} layers", count)"#).as_deref(), Some("Move {0} layers"));
+    assert_eq!(leading_text(r#"br"Move", count)"#), None);
+}
+
+/// The message scan reads a raw string where it reads a message: after `Err(`, as an error
+/// variant's message and in `#[error(…)]`, as an error helper's argument, as a `&str` constant's
+/// value, and as the `format!` string a `.map_err` closure returns. Its quotes and backslashes stay
+/// as written, and only the `format!` string's `{e}` is a placeholder.
+#[test]
+fn message_scan_reads_raw_strings() {
+    let code = r####"
+fn run() -> Result<()> {
+    let _ = Err(r"the file is missing");
+    let _ = Err(r"the C:\temp folder is missing");
+    let _ = Error::Manifest(r#"the "named" file is missing"#);
+    let _ = bad(cmd, r#"the file is missing, {really}"#);
+    let _ = Err(LOST);
+    let _ = Err(QUOTED);
+    load().map_err(|e| format!(r##"the "#tag" file failed: {e}"##))?;
+    Ok(())
+}
+#[derive(Error)]
+enum Failure {
+    #[error(r#"the "named" file is lost: {0}"#)]
+    Lost(String),
+}
+"####;
+    let declared = r##"const LOST: &str = r"the file is lost"; const QUOTED: &'static str = r#"the "named" file is lost"#;"##;
+    let consts = str_consts(declared);
+    let want = [("LOST", "the file is lost"), ("QUOTED", "the \"named\" file is lost")];
+    assert_eq!(consts.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect::<Vec<_>>(), want);
+    let consts = std::collections::BTreeMap::from_iter(consts.into_iter().map(|(name, value)| (name, vec![value])));
+    let found: std::collections::BTreeSet<String> = source_messages(code, &[("bad(", 1)], &consts).into_iter().collect();
+    let want = [
+        "the \"#tag\" file failed: {e}",
+        "the \"named\" file is lost",
+        "the \"named\" file is lost: {0}",
+        "the \"named\" file is missing",
+        "the C:\\temp folder is missing",
+        "the file is lost",
+        "the file is missing",
+        "the file is missing, {{really}}",
+    ];
+    assert_eq!(found.iter().collect::<Vec<_>>(), want);
+}
+
+/// Byte strings and C strings, raw or not, are not text: the scan reads none of them as a message
+/// or a step name.
+#[test]
+fn message_scan_skips_byte_and_c_strings() {
+    let e = r##"(b"byte error", br#"byte "error""#, c"C error", cr"C error", "text error")"##;
+    assert_eq!(string_literals(e, |_, _| true), ["text error"]);
+    let code = r##"fn run() { let _ = Err(b"byte error"); let _ = Err(br#"byte "error""#); let _ = Err(c"C error"); }"##;
+    assert!(source_messages(code, &[], &Default::default()).is_empty());
+    let (mut names, mut formatted) = (std::collections::BTreeSet::new(), std::collections::BTreeSet::new());
+    for e in [r#"b"Move""#, r##"br#"Move"#"##, r#"c"Move""#, r#"format!(b"Move {n}")"#] {
+        label_literals(e, 0, &[], &mut names, &mut formatted);
+    }
+    assert!(names.is_empty() && formatted.is_empty(), "{names:?} {formatted:?}");
+}
+
+/// A comma, bracket, semicolon, quote, `return` or backslash inside a raw string is text, not
+/// syntax: an error helper's message is the argument after the raw one, a statement ends at the
+/// `;` after a raw string, a closure's raw string holds no `return`, and the raw string is emptied
+/// whole before the scan looks for a local's name.
+#[test]
+fn message_scan_reads_past_raw_strings() {
+    let code = r###"fn run() { let _ = bad(r#"command ", other"#, r"the second argument is the error"); }"###;
+    assert_eq!(source_messages(code, &[("bad(", 1)], &Default::default()), ["the second argument is the error"]);
+    assert_eq!(statement(r##"r#"note "; still text"#; tail"##), r##"r#"note "; still text"#"##);
+    assert_eq!(statement(r#"(';', ")") ; tail"#), r#"(';', ")") "#);
+    let code = r###"
+fn run() -> Result<()> {
+    let fail = |e| { let note = r#"note "; still text"#; format!("the file failed: {e}") };
+    load().map_err(fail)?;
+    open().map_err(|e| {
+        let note = r##"name"; return "fake" {x}"##;
+        format!("the file could not be opened: {e}")
+    })?;
+    Ok(())
+}
+"###;
+    let found: std::collections::BTreeSet<String> = source_messages(code, &[], &Default::default()).into_iter().collect();
+    assert_eq!(found.iter().collect::<Vec<_>>(), ["the file could not be opened: {e}", "the file failed: {e}"]);
+    assert_eq!(without_strings(r###"let note = r#"a "used_name" {x}"#; note"###), r##"let note = r#""#; note"##);
+    assert_eq!(without_strings(r###"x(r#"a\"#, "b\"c", y)"###), r##"x(r#""#, "", y)"##);
+    assert_eq!(without_strings(r#"f('"', "a")"#), r#"f('"', "")"#);
+}
+
+/// A bracket in a character literal among a `format!`'s arguments does not end them: the scan
+/// removes the arguments up to the `format!`'s own closing parenthesis.
+#[test]
+fn format_args_end_at_the_closing_parenthesis() {
+    assert_eq!(without_format_args(r#"format!("", ')', x) + why"#), "format!() + why");
+    assert_eq!(without_format_args(r#"format!("", f(x)[0]) + why"#), "format!() + why");
+}
+
 /// The scan reads the message of each of the plug-in host's [`ERROR_HELPERS`]: a literal, a
 /// `format!` string with or without a `&` before it, after the location of `out_err` (a
 /// `format!` string too), the number and range of `in_range`, the number and location of `unit`,
@@ -7011,8 +7222,8 @@ fn scoped_consts<'a>(
     std::borrow::Cow::Owned(consts)
 }
 
-/// The `&str` constants `code` declares outside its comments (`const NAME: &str = "…";`), with
-/// their text, escapes resolved.
+/// The `&str` constants `code` declares outside its comments (`const NAME: &str = "…";`, or a raw
+/// `r#"…"#` value), with their text as [`leading_text`] reads it.
 fn str_consts(code: &str) -> Vec<(String, String)> {
     let code = &without_comments(code);
     code.match_indices("const ")
@@ -7022,7 +7233,7 @@ fn str_consts(code: &str) -> Vec<(String, String)> {
             let (name, rest) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_')?);
             let rest = rest.trim_start().strip_prefix(':')?.trim_start();
             let rest = rest.strip_prefix("&'static str").or_else(|| rest.strip_prefix("&str"))?.trim_start();
-            let value = string_literal(rest.strip_prefix('=')?.trim_start().strip_prefix('"')?)?;
+            let value = leading_text(rest.strip_prefix('=')?.trim_start())?;
             Some((name.to_string(), value))
         })
         .collect()
@@ -7048,7 +7259,7 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 /// the messages a `.map_err` closure returns (`.map_err(|e| format!("…: {e}"))`, see
 /// [`closure_returns`]) or the handler a `.map_err(name)` names returns (see [`handler_returns`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
-/// its message), a literal, a `format!` string or the name of one of `consts` (see
+/// its message), a literal (raw ones included), a `format!` string or the name of one of `consts` (see
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
 /// is not a message. A `format!` string and an `#[error(…)]` string are format strings (see
 /// [`as_template`]); in any other literal or constant every brace is literal (see
@@ -7099,8 +7310,8 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
         let formatted = rest.strip_prefix("format!(").map(str::trim_start);
         let format = takes_format || formatted.is_some();
         let rest = formatted.unwrap_or(rest);
-        let lits = match rest.strip_prefix('"') {
-            Some(quoted) => string_literal(quoted).into_iter().collect(),
+        let lits = match leading_text(rest) {
+            Some(lit) => vec![lit],
             None => named_const(rest, consts).to_vec(),
         };
         for lit in lits {
@@ -7115,35 +7326,14 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
 }
 
 /// The arguments of a call whose opening parenthesis was just read, past the first `n` of them;
-/// `None` when `n` is 1 or more and the call has `n` arguments or fewer.
+/// `None` when `n` is 1 or more and the call has `n` arguments or fewer. A comma or bracket inside a
+/// string literal, raw ones included, or a character literal does not count (see [`top_level`]).
 fn skip_args(args: &str, n: usize) -> Option<&str> {
     if n == 0 {
         return Some(args);
     }
-    let (mut left, mut depth, mut chars) = (n, 0usize, args.char_indices());
-    while let Some((at, c)) = chars.next() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.checked_sub(1)?,
-            '"' => loop {
-                match chars.next()?.1 {
-                    '\\' => {
-                        chars.next()?;
-                    }
-                    '"' => break,
-                    _ => {}
-                }
-            },
-            ',' if depth == 0 => {
-                left -= 1;
-                if left == 0 {
-                    return Some(&args[at + 1..]);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+    let comma = *top_level(args).0.get(n - 1)?;
+    Some(&args[comma + 1..])
 }
 
 /// Where each value the error handler `name` of a `.map_err(name)` in `code` can return starts:
@@ -7170,30 +7360,11 @@ fn handler_returns<'a>(code: &'a str, name: &str) -> Vec<&'a str> {
     out
 }
 
-/// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in.
+/// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in;
+/// a `;` or bracket inside a string literal, raw ones included, or a character literal does not
+/// end it (see [`top_level`]).
 fn statement(code: &str) -> &str {
-    let (mut depth, mut chars) = (0usize, code.char_indices());
-    while let Some((at, c)) = chars.next() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => match depth.checked_sub(1) {
-                Some(d) => depth = d,
-                None => return &code[..at],
-            },
-            ';' if depth == 0 => return &code[..at],
-            '"' => loop {
-                match chars.next() {
-                    Some((_, '\\')) => {
-                        chars.next();
-                    }
-                    Some((_, '"')) | None => break,
-                    _ => {}
-                }
-            },
-            _ => {}
-        }
-    }
-    code
+    &code[..top_level(code).1]
 }
 
 /// Where each value a closure can return starts, `body` being the text after its parameters: the
@@ -7220,10 +7391,15 @@ fn closure_returns(body: &str) -> Vec<&str> {
     // For each open bracket, the `quiet` and `in_let` of the text around it: `quiet` names the
     // `let` that a value inside the bracket belongs to, `in_let` the `let` the statement is.
     let mut outer = vec![];
-    let (mut quiet, mut in_let, mut chars) = (None, let_at(0), body.char_indices());
+    let (mut quiet, mut in_let) = (None, let_at(0));
     // Where the innermost closure in the body that a `return` would leave ends.
     let mut inner_closure_end = 0;
-    while let Some((at, c)) = chars.next() {
+    // Where the string or character literal last read ends: nothing inside one is syntax.
+    let mut literal_end = 0;
+    for (at, c) in body.char_indices() {
+        if at < literal_end {
+            continue;
+        }
         match c {
             '|' if at >= inner_closure_end => {
                 let before = body[..at].trim_end();
@@ -7264,15 +7440,8 @@ fn closure_returns(body: &str) -> Vec<&str> {
             {
                 found.push((&body[at + "return".len()..], None, true));
             }
-            '"' => loop {
-                match chars.next() {
-                    Some((_, '\\')) => {
-                        chars.next();
-                    }
-                    Some((_, '"')) | None => break,
-                    _ => {}
-                }
-            },
+            '"' => literal_end = quoted_end(body, at).unwrap_or(body.len()),
+            '\'' => literal_end = quoted_end(body, at).unwrap_or(at),
             _ => {}
         }
     }
@@ -7291,52 +7460,38 @@ fn closure_returns(body: &str) -> Vec<&str> {
 }
 
 /// `code`, its string literals already emptied, with the arguments of each `format!(…)` removed:
-/// a value written into a format string is part of a message, not one of its own.
+/// a value written into a format string is part of a message, not one of its own. A bracket in a
+/// character literal (`')'`) does not end the arguments (see [`top_level`]).
 fn without_format_args(code: &str) -> String {
     let (mut out, mut rest) = (String::new(), code);
     while let Some(at) = rest.find("format!(") {
         out.push_str(&rest[..at + "format!(".len()]);
         rest = &rest[at + "format!(".len()..];
-        let mut depth = 0usize;
-        let end = rest.char_indices().find_map(|(i, c)| match c {
-            '(' | '[' | '{' => {
-                depth += 1;
-                None
-            }
-            ')' | ']' | '}' => match depth.checked_sub(1) {
-                Some(d) => {
-                    depth = d;
-                    None
-                }
-                None => Some(i),
-            },
-            _ => None,
-        });
-        rest = &rest[end.unwrap_or(rest.len())..];
+        let (_, end) = top_level(rest);
+        rest = &rest[end..];
     }
     out.push_str(rest);
     out
 }
 
-/// `code` with the text of its string literals removed, the quotes kept.
+/// `code` with the text of its string literals removed, the quotes kept: a raw literal keeps its
+/// prefix and its `#`s (`r#""#`). Character literals stay as they are.
 fn without_strings(code: &str) -> String {
-    let (mut out, mut chars) = (String::new(), code.chars());
-    while let Some(c) = chars.next() {
-        out.push(c);
+    let (mut out, mut i) = (String::new(), 0);
+    while let Some(c) = code[i..].chars().next() {
         if c == '"' {
-            loop {
-                match chars.next() {
-                    Some('\\') => {
-                        chars.next();
-                    }
-                    Some('"') => {
-                        out.push('"');
-                        break;
-                    }
-                    Some(_) => {}
-                    None => break,
-                }
-            }
+            let Some(end) = quoted_end(code, i) else {
+                out.push('"');
+                break;
+            };
+            let close = 1 + raw_hashes(code, i).unwrap_or(0);
+            out.push('"');
+            out.push_str(&code[end - close..end]);
+            i = end;
+        } else {
+            let end = (c == '\'').then(|| quoted_end(code, i)).flatten().unwrap_or(i + c.len_utf8());
+            out.push_str(&code[i..end]);
+            i = end;
         }
     }
     out
@@ -7362,8 +7517,12 @@ fn without_test_module(text: &str) -> &str {
     text
 }
 
-/// The text of a string literal whose opening quote was just read, escapes resolved. A `\` at the
-/// end of a line drops the line break and the whitespace that starts the next line, as Rust does.
+/// The text of a string literal whose opening quote was just read, escapes resolved as Rust resolves
+/// them (https://doc.rust-lang.org/reference/tokens.html#character-escapes): `\n`, `\r`, `\t`, `\0`,
+/// `\\`, `\'`, `\"`, `\x` with two hex digits up to `7F`, and `\u{…}` with one to six hex digits
+/// (underscores allowed after the first) naming a Unicode scalar value. A `\` at the end of a line
+/// drops the line break and the whitespace that starts the next line. A literal with any other
+/// escape, or one left unclosed, is `None`.
 fn string_literal(s: &str) -> Option<String> {
     let mut out = String::new();
     let mut it = s.chars();
@@ -7372,9 +7531,36 @@ fn string_literal(s: &str) -> Option<String> {
             '"' => return Some(out),
             '\\' => match it.next()? {
                 'n' => out.push('\n'),
+                'r' => out.push('\r'),
                 't' => out.push('\t'),
+                '0' => out.push('\0'),
+                c @ ('\\' | '\'' | '"') => out.push(c),
+                'x' => {
+                    let (high, low) = (it.next()?.to_digit(16)?, it.next()?.to_digit(16)?);
+                    out.push(char::from_u32(high * 16 + low).filter(char::is_ascii)?);
+                }
+                'u' => {
+                    if it.next()? != '{' {
+                        return None;
+                    }
+                    let (mut value, mut digits) = (0u32, 0);
+                    loop {
+                        match it.next()? {
+                            '}' if digits > 0 => break,
+                            '_' if digits > 0 => {}
+                            c => {
+                                value = value * 16 + c.to_digit(16)?;
+                                digits += 1;
+                                if digits > 6 {
+                                    return None;
+                                }
+                            }
+                        }
+                    }
+                    out.push(char::from_u32(value)?);
+                }
                 '\n' | '\r' => it = it.as_str().trim_start_matches([' ', '\t', '\n', '\r']).chars(),
-                c => out.push(c),
+                _ => return None,
             },
             c => out.push(c),
         }
