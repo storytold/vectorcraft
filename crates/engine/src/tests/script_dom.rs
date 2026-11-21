@@ -62,6 +62,9 @@ fn app_documents_track_active_tab_and_new_document() {
     assert!(failure(&mut s, "app.documents.add(DocumentColorSpace.RGB, -5);").contains("width"));
     assert!(failure(&mut s, "app.documents.add('RGB');").contains("colorSpace"));
     assert!(failure(&mut s, "app.documents.add(undefined, 10, 10, 101);").contains("numArtBoards"));
+    // The spacing is refused at file.new's limit, with the script's own name for it.
+    let spacing = "app.documents.add(undefined, 10, 10, 2, DocumentArtboardLayout.Row, 100001);";
+    assert!(failure(&mut s, spacing).contains("artboardSpacing must be from 0 to 100000 points"));
     assert!(failure(&mut s, "app.documents.index('none');").contains("Not found"));
     assert_eq!(s.documents().len(), 3);
 }
@@ -113,6 +116,27 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
     assert_eq!(out[2], json!([10, 280, 30, 40]));
     assert_eq!(out[3], json!([10, 20]));
     assert_eq!(out[4], json!([20, 250, 80, 210]));
+}
+
+#[test]
+fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let other = format!("{:?}", s.active().unwrap().doc.node(b));
+    let out = log(
+        &mut s,
+        "var i = app.activeDocument.selection[0], h = i.height;\
+         i.width = 80; vc.log([i.width, i.height - h]);\
+         i.height = 90; vc.log([i.width, i.height]);\
+         var g = i.geometricBounds; vc.log([g[2] - g[0], g[1] - g[3]]);",
+    );
+    let pairs: Vec<[f64; 2]> = out.iter().map(|v| [v[0].as_f64().unwrap(), v[1].as_f64().unwrap()]).collect();
+    for (got, want) in pairs.iter().zip([[80.0, 0.0], [80.0, 90.0], [80.0, 90.0]]) {
+        assert!((got[0] - want[0]).abs() < 1e-6 && (got[1] - want[1]).abs() < 1e-6, "{out:?}");
+    }
+    assert_eq!(pairs.len(), 3, "{out:?}");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.node(b)), other, "the other object stays as it was");
 }
 
 #[test]
@@ -846,6 +870,31 @@ fn remove_all_refuses_locked_art_before_deleting_anything() {
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p.removeAll(); vc.log(p.length);");
     assert_eq!(out, vec![json!(0)]);
+}
+
+#[test]
+fn remove_refuses_hidden_or_locked_art_as_remove_all_does() {
+    let (mut s, a, b) = doc();
+    for (on, off) in [
+        (json!({"ids": [b.0], "locked": true}), json!({"ids": [b.0], "locked": false})),
+        (json!({"ids": [b.0], "visible": false}), json!({"ids": [b.0], "visible": true})),
+    ] {
+        s.execute("object.setProps", &on).unwrap();
+        let e = failure(&mut s, "app.activeDocument.pageItems[1].remove();");
+        assert!(e.contains(&format!("cannot delete hidden or locked objects: {}", b.0)), "{on}: {e}");
+        assert!(s.active().unwrap().doc.node(b).is_some(), "{on}");
+        s.execute("object.setProps", &off).unwrap();
+    }
+    // A group that holds a locked object is refused too.
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
+    let e = failure(&mut s, "app.activeDocument.pageItems[0].remove();");
+    assert!(e.contains(&g.to_string()), "{e}");
+    assert!(s.active().unwrap().doc.node(b).is_some());
+    s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems[0].remove();");
+    assert!(s.active().unwrap().doc.node(b).is_none());
 }
 
 #[test]

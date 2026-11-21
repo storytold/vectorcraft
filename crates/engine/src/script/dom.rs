@@ -502,17 +502,17 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
     // inside the isolated group, or a symbol's object is now hidden) changes nothing, and the
     // objects are selected as below.
     if let Some(t) = before.target.filter(keep)
-        && command(h, "layer.target", &json!({"id": t.0})).is_ok()
+        && done_unless_refused(command(h, "layer.target", &json!({"id": t.0})))?
     {
         return Ok(());
     }
     if let Some(p) = before.symbol_part.as_ref().filter(|p| keep(&p.instance))
-        && command(h, "symbol.instance.selectPart", &json!({"id": p.instance.0, "path": p.path})).is_ok()
+        && done_unless_refused(command(h, "symbol.instance.selectPart", &json!({"id": p.instance.0, "path": p.path})))?
     {
         return Ok(());
     }
     if let Some(m) = before.on_path_member.filter(keep)
-        && command(h, "object.objectsOnPath.selectMember", &json!({"member": m.0})).is_ok()
+        && done_unless_refused(command(h, "object.objectsOnPath.selectMember", &json!({"member": m.0})))?
     {
         return Ok(());
     }
@@ -547,7 +547,7 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
     // Guides that are locked now, and a key that no longer qualifies (the objects beside it are
     // gone), stay unselected: those commands refuse them and change nothing.
     if !picked.is_empty() {
-        let _ = command(h, "guide.select", &json!({"indexes": picked, "toggle": true}));
+        done_unless_refused(command(h, "guide.select", &json!({"indexes": picked, "toggle": true})))?;
     }
     let key = if let Some((id, (p, k))) = before.key_anchor.filter(|(id, _)| keep(id)) {
         Some(json!({"id": id.0, "anchor": [p, k]}))
@@ -557,9 +557,20 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
         before.key_guide.as_ref().and_then(index).map(|g| json!({"guide": g}))
     };
     if let Some(key) = key {
-        let _ = command(h, "select.key", &key);
+        done_unless_refused(command(h, "select.key", &key))?;
     }
     Ok(())
+}
+
+/// The result `r` of a selection command that [`restore_selection`] runs: `true` when it ran and
+/// `false` when it refused (an `Error`, which changes nothing). Any other error, such as an
+/// internal failure or a request to stop, is returned, so the run ends with it.
+fn done_unless_refused(r: std::result::Result<Data, HostError>) -> std::result::Result<bool, HostError> {
+    match r {
+        Ok(_) => Ok(true),
+        Err(HostError::Error(_)) => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 /// Runs `f` with the document `uid` active, and makes the document that was active before active
@@ -795,8 +806,8 @@ impl NewDoc<'_> {
         }
         if let Some(d) = self.spacing {
             let v = number(d, "artboardSpacing")?;
-            if !(0.0..=MAX_SIZE).contains(&v) {
-                return Err(HostError::Range("artboardSpacing must be from 0 to 3999856 points".into()));
+            if !(0.0..=crate::cmd::newdoc::MAX_SPACING).contains(&v) {
+                return Err(HostError::Range("artboardSpacing must be from 0 to 100000 points".into()));
             }
             layout.insert("spacing".into(), json!(v));
         }
@@ -1424,7 +1435,9 @@ fn item_set_top(h: &Host, a: &[Data]) -> Answer {
     move_to(h, a, None, Some(y))
 }
 
-/// Scales the item about its top-left corner to `size` points wide (`width`) or tall.
+/// Scales the item about its top-left corner along the page's axes to `size` points wide (`width`)
+/// or tall, so the page-aligned bounds that `width` and `height` read have that size, rotated
+/// objects included.
 fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
     let what = if width { "width" } else { "height" };
     let size = number(arg(a, 1), what)?;
@@ -1467,8 +1480,14 @@ fn item_z_order_position(h: &Host, a: &[Data]) -> Answer {
     at.map(|i| num(float(i as u64 + 1))).ok_or_else(|| HostError::Error(STALE_ITEM.into()))
 }
 
+/// `remove()`: deletes the object. A hidden or locked object, one in a hidden or locked layer or
+/// group, or a group holding one is refused, as [`items_remove_all`] refuses it.
 fn item_remove(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
+    let whole = with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable));
+    if !whole {
+        return Err(HostError::Error(format!("cannot delete hidden or locked objects: {}", item.id.0)));
+    }
     edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0]}))?;
     Ok(Data::Undefined)
 }
@@ -1861,4 +1880,18 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     paths::install_enums(realm)?;
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restoring_the_selection_falls_back_only_on_a_refusal() {
+        assert_eq!(done_unless_refused(Ok(Data::Undefined)), Ok(true));
+        assert_eq!(done_unless_refused(Err(HostError::Error("refused".into()))), Ok(false));
+        // An internal failure or a stop ends the run instead of being taken for a refusal.
+        assert_eq!(done_unless_refused(Err(HostError::Abort("canceled".into()))), Err(HostError::Abort("canceled".into())));
+        assert_eq!(done_unless_refused(Err(HostError::Range("too large".into()))), Err(HostError::Range("too large".into())));
+    }
 }
