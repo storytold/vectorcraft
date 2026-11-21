@@ -92,6 +92,8 @@ fn a_batch_that_switches_documents_during_a_side_widget_drag_keeps_its_steps() {
         {"command": "document.activate", "params": {"index": 0}}
     ]});
     h.call("engine.execute", json!({"command": "command.batch", "params": batch})).unwrap();
+    assert_eq!(h.session.active_index(), Some(0), "the batch activates document 0");
+    assert_ne!(h.session.doc().unwrap().uid, uid, "the batch leaves the polygon's document");
     let st = h.session.documents().iter().find(|d| d.uid == uid).expect("the polygon's document");
     let vectorcraft_doc::NodeKind::Path { live, .. } = &st.doc.node(id).unwrap().kind else { panic!("not a path") };
     assert!(matches!(live.as_deref(), Some(vectorcraft_doc::LiveShape::Polygon { sides: 7, .. })), "the settled drag: {live:?}");
