@@ -1610,6 +1610,76 @@ fn selection_squares_show_and_select_a_rows_art() {
     let _ = (layer, sub, b);
 }
 
+/// A layer or sublayer whose selectable art is all selected shows the full-sized square; one
+/// holding some of its art, or a group's member instead of the group, shows the small one.
+#[test]
+fn a_layer_with_all_its_art_selected_shows_the_full_square() {
+    let (mut app, [_, _, g, b, a, c]) = nested();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let square = |i: usize| circles[i] + vec2(TARGET_X - SQUARE_X, 0.0);
+    app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(squares(&mut app, &ctx), (1, 2), "the rectangle's square, small ones on the sublayer and the layer");
+    app.session.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert_eq!(squares(&mut app, &ctx), (2, 3), "a group's member is not the group: the sublayer's square stays small");
+    click_with(&mut app, &ctx, square(1), egui::Modifiers::NONE);
+    assert_eq!(squares(&mut app, &ctx), (3, 1), "the sublayer, its group and rectangle full, the layer small");
+    click_with(&mut app, &ctx, square(0), egui::Modifiers::NONE);
+    assert_eq!(squares(&mut app, &ctx), (5, 0), "the layer and the sublayer full, with each row's art");
+    click_with(&mut app, &ctx, square(4), egui::Modifiers::SHIFT);
+    assert_eq!(squares(&mut app, &ctx), (2, 2), "one rectangle let go: the layer and the sublayer small again");
+    // Locked art cannot be selected, so it does not keep the layer's square small.
+    app.session.execute("layer.setProps", &json!({"ids": [c.0], "locked": true})).unwrap();
+    click_with(&mut app, &ctx, square(1), egui::Modifiers::NONE);
+    assert_eq!(squares(&mut app, &ctx), (4, 0), "the layer, the sublayer, the group and the rectangle");
+    // Hidden art neither.
+    app.session.execute("layer.setProps", &json!({"ids": [c.0], "locked": false, "visible": false})).unwrap();
+    app.session.execute("select.set", &json!({"ids": [a.0, g.0]})).unwrap();
+    assert_eq!(squares(&mut app, &ctx), (4, 0), "hidden art is left out");
+}
+
+/// A layer with no selectable art shows no square, whatever else is selected.
+#[test]
+fn a_layer_without_art_shows_no_square() {
+    let (mut app, [_, _, g, _, a, c]) = nested();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    app.session.execute("select.set", &json!({"ids": [c.0, a.0, g.0]})).unwrap();
+    assert_eq!(squares(&mut app, &ctx), (5, 0), "the first layer's rows; the new, empty layer's none");
+}
+
+/// The panel's set of full layers is the layers and sublayers whose `layer_art(true)` is not empty
+/// and all selected, for every selection of the document's objects, hidden and locked ones included.
+#[test]
+fn full_layers_are_the_layers_with_all_their_art_selected() {
+    let (mut app, [_, _, _, _, _, c]) = nested();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let id = |v: serde_json::Value| NodeId(v["id"].as_u64().unwrap());
+    let hidden = id(run(&mut app, "layer.newSublayer", json!({"name": "Hidden"})));
+    run(&mut app, "shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20}));
+    run(&mut app, "layer.setProps", json!({"ids": [hidden.0], "visible": false}));
+    run(&mut app, "layer.setProps", json!({"ids": [c.0], "locked": true}));
+    run(&mut app, "layer.new", json!({}));
+    let doc = app.session.active().unwrap().doc.clone();
+    let (mut layers, mut objects) = (vec![], vec![]);
+    for l in &doc.layers {
+        l.walk(&mut |n| if n.is_layer() { layers.push(n) } else { objects.push(n.id) });
+    }
+    assert_eq!((layers.len(), objects.len()), (4, 5), "the layers, the sublayers and the objects");
+    for bits in 0u32..(1 << objects.len()) {
+        let sel: HashSet<NodeId> = objects.iter().enumerate().filter(|(i, _)| (bits >> i) & 1 == 1).map(|(_, id)| *id).collect();
+        let want: HashSet<NodeId> = layers
+            .iter()
+            .filter(|l| {
+                let art = l.layer_art(true);
+                !art.is_empty() && art.iter().all(|i| sel.contains(i))
+            })
+            .map(|l| l.id)
+            .collect();
+        assert_eq!(rows::full_layers(&doc, &sel), want, "selection {bits:b}");
+    }
+}
+
 /// Alt-click on a layer's or sublayer's name makes it current, as a plain click does, and selects
 /// its art, as its selection square does. On another row, beside the name or with Shift or Ctrl/Cmd
 /// held too, it is the click without Alt.

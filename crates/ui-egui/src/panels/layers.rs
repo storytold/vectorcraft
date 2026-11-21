@@ -162,6 +162,9 @@ struct View<'a> {
     /// Where the row thumbnails come from.
     thumbs: ThumbSource<'a>,
     sel: HashSet<NodeId>,
+    /// The layers and sublayers whose visible, unlocked art ([`Node::layer_art`]) is all selected
+    /// and not empty.
+    full_layers: HashSet<NodeId>,
     /// The selected ruler guides, as indexes into [`Self::ruler_guides`].
     guides: Vec<usize>,
     /// The document's ruler guides ([`Document::ruler_guides`]).
@@ -320,10 +323,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let reveal = renamed.or(located).or(reveal);
     let Some(st) = app.session.active() else { return };
     let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query, &app.ui.layers_filter);
+    let sel: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
     let view = View {
         doc: &doc,
         thumbs: ThumbSource::of(app, st, &doc),
-        sel: st.selection.objects.iter().copied().collect(),
+        full_layers: rows::full_layers(&doc, &sel),
+        sel,
         guides: vectorcraft_engine::cmd::guide_indexes(&doc, &st.selection.guides),
         ruler_guides: doc.ruler_guides(),
         target: st.selection.target,
