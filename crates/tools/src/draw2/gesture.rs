@@ -1353,16 +1353,19 @@ impl GestureTool {
     /// value on a mode that follows the pen goes from the value less its Variation to the value
     /// plus it as the pen reads now (the pressure once the pen has pressed less than fully, the
     /// tilt, rotation and wheel of the last point, and the bearing of the last point the pen leaned 1° or
-    /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed and a
-    /// pen that gives no reading, the values themselves. The Blob Brush's size follows the pen the
+    /// more at), as `path.eraseRegion` reads the stroke; before a press, and for Random, Fixed, a
+    /// pen that gives no reading and a reading the release does not send (a mode set during the
+    /// drag), the values themselves. The Blob Brush's size follows the pen the
     /// same way while it paints, as `path.blob` reads the stroke, and its angle and roundness are
     /// its own values (a roundness of 0 included).
     fn tip_now(&self) -> [f64; 3] {
         if !matches!(self.id, "eraser" | "blobBrush") || !self.active {
             return [self.angle, self.roundness, self.size];
         }
-        let pressure = if self.light { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
-        let tip = self.tip_for(pressure, self.poses.last().copied().flatten(), self.bearing);
+        // What the release does not read ([`Self::reads_pressures`], [`Self::reads_poses`]) reads ½.
+        let pressure = if self.reads_pressures() { self.pressures.last().map_or(0.5, |p| f64::from(*p)) } else { 0.5 };
+        let (pose, bearing) = if self.reads_poses() { (self.poses.last().copied().flatten(), self.bearing) } else { (None, None) };
+        let tip = self.tip_for(pressure, pose, bearing);
         if self.id == "blobBrush" {
             return [self.angle, self.roundness, tip[2]];
         }

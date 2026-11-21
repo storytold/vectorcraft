@@ -761,6 +761,13 @@ fn blob_brush_size_follows_the_stylus_wheel() {
     let wide = blob(&mut s, with(&tip, json!({"points": [[100, 500, null, null, null, null, 1]]})));
     let thin = blob(&mut s, with(&tip, json!({"points": [[300, 500, null, null, null, null, 0]]})));
     assert!(inside(&s, wide, 100.0, 508.0) && !inside(&s, thin, 300.0, 503.0), "a dab follows the wheel");
+    // A stroke whose samples all lie at one point paints a dab sized from its first reading, with
+    // the wheel and with pressure.
+    let still = blob(&mut s, with(&tip, json!({"points": [[500, 500, null, null, null, null, 1], [500, 500, null, null, null, null, 0]]})));
+    let pressed_still = blob(&mut s, with(&tip, json!({"sizeMode": "pressure", "points": [[700, 500, 1], [700, 500, 0]]})));
+    for (id, x) in [(still, 500.0), (pressed_still, 700.0)] {
+        assert!(inside(&s, id, x, 508.0) && !inside(&s, id, x, 510.0), "a dab from the first reading at x {x}");
+    }
     // A 25% round tip lying level: about 0.5 pt tall at the left end to 4.5 pt at the right.
     let flat = blob(&mut s, with(&tip, json!({"roundness": 25, "points": wheeled(600.0, &|w| json!(w))})));
     assert!(inside(&s, flat, 290.0, 601.9) && !inside(&s, flat, 110.0, 601.0), "a flat tip follows the wheel");

@@ -3310,6 +3310,21 @@ fn the_blob_brush_size_follows_the_stylus_wheel() {
     let flat = tip(&t);
     assert!((flat.width() - 28.0).abs() < 0.01 && flat.height() < 0.1, "{flat:?}");
     t.pointer(&cx, &PointerEvent { pen: wheel(Some(1.0)), ..PointerEvent::new(PointerKind::Up, 200.0, 50.0) });
+    // Size set from Fixed to Stylus Wheel or Pressure during a drag: the release reads no wheel or
+    // pressure for the points before it, so the tip keeps the Size, as the release paints.
+    t.set_option("roundness", &json!(50));
+    for (mode, pressure) in [("stylusWheel", 1.0), ("pressure", 0.25)] {
+        t.set_option("sizeMode", &json!("fixed"));
+        let ev = |kind, x| PointerEvent { pen: wheel(Some(1.0)), pressure, ..PointerEvent::new(kind, x, 50.0) };
+        t.pointer(&cx, &ev(PointerKind::Down, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 200.0));
+        t.set_option("sizeMode", &json!(mode));
+        t.pointer(&cx, &ev(PointerKind::Drag, 300.0));
+        near(tip(&t), (290.0, 45.0, 310.0, 55.0));
+        let acts = t.pointer(&cx, &ev(PointerKind::Up, 300.0));
+        let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(v["points"], json!([[100.0, 50.0], [200.0, 50.0], [300.0, 50.0]]), "{mode}");
+    }
 }
 
 /// An Eraser value on Stylus Wheel follows the wheel the pen recorded, in the tip outline while it

@@ -7032,8 +7032,11 @@ variation where the pen presses lightest to the size plus it where the pen press
 size less the variation at 0 to the size plus it at 1 of an airbrush pen's finger wheel, the seventh value of each
 point; a point without a wheel counts as 0.5, the size itself, and a stroke with no wheel reading, such as a mouse
 drag, paints at the size. Which way the wheel runs and the size itself without a reading are VectorCraft's own rules.
+With Pressure or Stylus Wheel, a stroke whose points all lie at one place paints one dab sized from its first point's
+reading, as a single point does.
 The command refuses another mode with an error that names `sizeMode`, and the document does not change. In the
-desktop app the Blob Brush's tip outline at the pointer takes the size the pen gives while it paints.
+desktop app the Blob Brush's tip outline at the pointer takes the size the pen gives while it paints, and keeps the
+size when Size is set to Pressure or Stylus Wheel during the drag, which the release then paints at.
 `tool.setOption {tool: "blobBrush"}` takes `sizeMode` and `sizeVariation` too.
 
 `path.eraseRegion {rect: [x, y, width, height]}` takes a rectangle in place of `points` and erases everything inside

@@ -556,9 +556,12 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(tol) => Some(pressure_region(&spine(Some(tol)), size, *variation, prof)?).filter(|r| !r.is_empty()),
                 None => None,
             };
+            let dab = || brush_region(&mapped_pts[..1], vectorcraft_tools::draw2::pressure_size(size, *variation, prof.at(0.0)));
             match fitted {
                 Some(r) => r,
-                None => pressure_region(&spine(None), size, *variation, prof)?,
+                // Samples that all lie at one point give a spine with no length: one dab from the
+                // first reading, as a click paints.
+                None => Some(pressure_region(&spine(None), size, *variation, prof)?).filter(|r| !r.is_empty()).unwrap_or_else(dab),
             }
         }
         // A click: one dab as wide as the pen pressed or the wheel was set.
