@@ -692,7 +692,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.taskBar.actions",
         "Bar Actions",
         "",
-        "{action: \"imageTrace\"|\"cropImage\"|\"removeBackground\"|\"removeAnchorPoints\"|\"join\"|\"cutPath\"|\"convertToCorner\"|\"convertToSmooth\"|\"group\"|\"makeClippingMask\"|\"unite\"|\"expand\"|\"editClippingPath\"|\"releaseClippingMask\"|\"ungroup\"|\"isolate\"|\"editPath\"|\"releaseCompoundPath\"|\"createOutlines\"|\"convertToPointType\"|\"convertToAreaType\"|\"typeOnPathOptions\"|\"centerOnTop\"|\"centerOnBottom\"|\"dynamicText\"|\"offsetPath\"|\"simplify\"|\"smooth\"|\"duplicate\"|\"drawPencil\"|\"placeImage\"|\"fidelity\"|\"smoothToolOptions\"|\"resizeArtboard\"|\"duplicateArtboards\"|\"rearrangeArtboards\"|\"exportArtboards\"|\"fill\"|\"stroke\"|\"recolor\"|\"lock\"|\"shapeProperties\", visible?: bool} show (true), hide (false) or toggle (omitted or null) one of the Contextual Task Bar's actions or chips, as the bar's More Options › Bar Actions does; an action that is off stays out of the bar and out of More Options, and turning one off changes only the bar; `join` is both Connect and Join; every action starts on; kept with the preferences and with the workspace; another action, or a `visible` that is not true, false or null, is an error and changes nothing; returns {action, visible}",
+        "{action: \"imageTrace\"|\"cropImage\"|\"removeBackground\"|\"conceptToVector\"|\"removeAnchorPoints\"|\"join\"|\"cutPath\"|\"convertToCorner\"|\"convertToSmooth\"|\"group\"|\"makeClippingMask\"|\"unite\"|\"expand\"|\"editClippingPath\"|\"releaseClippingMask\"|\"ungroup\"|\"isolate\"|\"editPath\"|\"releaseCompoundPath\"|\"createOutlines\"|\"convertToPointType\"|\"convertToAreaType\"|\"typeOnPathOptions\"|\"centerOnTop\"|\"centerOnBottom\"|\"dynamicText\"|\"offsetPath\"|\"simplify\"|\"smooth\"|\"duplicate\"|\"drawPencil\"|\"placeImage\"|\"fidelity\"|\"smoothToolOptions\"|\"resizeArtboard\"|\"duplicateArtboards\"|\"rearrangeArtboards\"|\"exportArtboards\"|\"fill\"|\"stroke\"|\"recolor\"|\"lock\"|\"shapeProperties\", visible?: bool} show (true), hide (false) or toggle (omitted or null) one of the Contextual Task Bar's actions or chips, as the bar's More Options › Bar Actions does; an action that is off stays out of the bar and out of More Options, and turning one off changes only the bar; `join` is both Connect and Join; every action starts on; kept with the preferences and with the workspace; another action, or a `visible` that is not true, false or null, is an error and changes nothing; returns {action, visible}",
     ),
     (
         "window.taskBar.resetActions",
@@ -997,6 +997,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Recolor Artwork…",
         "",
         "{colors?: n (an n-colour job: n rows, Scale Tints) | [colour] (new colours to assign, in order; with no art selected and no group they are the rows, and OK saves them as a new colour group, field `groupName`: the Color Guide's Edit or Apply Colors), library?: id or name; or \"document\" (Limit to Library; \"\" the first library), group?: colour group (Edit or Apply Color Group: OK rewrites the group with the new colours and recolours the selected art, if any)} open Recolor Artwork (dialog `recolor`; engine: recolor.reduce / recolor.apply)",
+    ),
+    (
+        "ui.conceptVector",
+        "Concept to Vector…",
+        "",
+        "{} open the Concept to Vector panel for the selected image or unexpanded Image Trace object; an error when the selection is not one such object, unlocked and shown (engine: conceptVector.generate / conceptVector.insert)",
+    ),
+    (
+        "ui.conceptVector.generate",
+        "Generate Concept to Vector Styles",
+        "",
+        "{} make the styles ticked in the Concept to Vector panel of the selected image or unexpanded Image Trace object, with the panel's Detail (the panel's Generate; engine: conceptVector.generate), and show them in the panel; off the UI thread in the app unless VECTORCRAFT_SYNC_OPEN is set, one part a frame on the web; a run going is canceled first, and the new one starts once its thread has ended → {running: true} while they are made, else {running: false, job}",
+    ),
+    (
+        "ui.conceptVector.cancel",
+        "Cancel Concept to Vector",
+        "",
+        "{} stop the styles the Concept to Vector panel is making off the UI thread (the panel's Cancel; on the web, before the next part): nothing is kept or shown → {canceled: 0 or 1}",
     ),
     (
         "ui.recolorUndo",

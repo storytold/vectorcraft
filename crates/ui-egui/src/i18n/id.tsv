@@ -8579,6 +8579,53 @@ breakText	Glyphs	Glif
 	Box	Kotak
 	Swatch	Sampel warna
 	Direction	Arah
+	Concept to Vector	Konsep ke vektor
+	Concept to Vector…	Konsep ke vektor…
+	Cancel Concept to Vector Job	Batalkan tugas konsep ke vektor
+	Cancel Concept to Vector	Batalkan konsep ke vektor
+	Concept to Vector Providers	Penyedia konsep ke vektor
+	Concept to Vector Results	Hasil konsep ke vektor
+	Generate Concept to Vector Styles	Buat gaya konsep ke vektor
+	Insert Concept to Vector Styles	Sisipkan gaya konsep ke vektor
+	Offline Image Trace styles, made on this computer	Gaya Image Trace luring, dibuat di komputer ini
+	Offline styles do not use prompts	Gaya luring tidak memakai prompt
+	Styles	Gaya
+	Ink Lines	Garis tinta
+	Flat Color	Warna datar
+	Detailed Color	Warna detail
+	Gray Tones	Nada abu-abu
+	Generate	Buat
+	Insert Selected	Sisipkan yang dipilih
+	The preview leaves out part of this style	Pratinjau tidak menampilkan sebagian gaya ini
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Konsep ke vektor berhenti: thread-nya berakhir tanpa hasil (harap laporkan bug ini)
+@msg	`detail` must be a whole number from 0 to 100	`detail` harus berupa bilangan bulat dari 0 sampai 100
+@msg	`job` must be a job number from conceptVector.generate	`job` harus berupa nomor tugas dari conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` harus berisi 1 sampai 8 id gaya `{pid}` yang berbeda (lihat conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` harus berisi id gaya yang berbeda dari tugas {job}
+@msg	a provider with the id `{id}` is registered already	penyedia dengan id `{id}` sudah terdaftar
+@msg	job {job} has no results to insert: it was canceled	tugas {job} tidak memiliki hasil untuk disisipkan: tugas itu dibatalkan
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	tugas {job} tidak berlaku lagi: dokumen, gambar, atau penempatan gambarnya berubah, jadi buat lagi
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Tugas konsep ke vektor tidak disimpan, jadi sisipan atau pembatalan yang direkam tidak diputar lagi: buat lagi
+@msg	missing `provider` (see conceptVector.providers)	`provider` tidak ada (lihat conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	tidak ada tugas konsep ke vektor {job}: tugas itu tidak pernah dibuat atau sudah dihapus (lihat conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	tidak ada penyedia konsep ke vektor `{name}` (lihat conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	pilih satu gambar atau objek Image Trace yang belum diperluas
+@msg	the image is locked or hidden	gambar terkunci atau tersembunyi
+@msg	the provider stopped with an internal error: {0}	penyedia berhenti karena kesalahan internal: {0}
+@msg	the provider's results do not match the request or are malformed	hasil penyedia tidak cocok dengan permintaan atau rusak
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	hasilnya akan memiliki lebih dari {0} titik jangkar: turunkan Detail atau pilih lebih sedikit gaya
+@msg	there is no room for the results to the right of the image	tidak ada ruang untuk hasil di sebelah kanan gambar
+@msg	the image is on a layer with a clipping mask, which would hide the results	gambar berada di lapisan dengan masker kliping, yang akan menyembunyikan hasil
+@msg	the image is on a layer with an opacity mask, which would hide the results	gambar berada di lapisan dengan mask opasitas, yang akan menyembunyikan hasil
+@msg	the image is on a layer with effects of its own, which would apply to the results	gambar berada di lapisan yang memiliki efeknya sendiri, yang juga akan diterapkan pada hasil
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	gambar atau grup di sekitarnya memiliki efek yang memindahkan atau mengubah bentuknya, sehingga hasil tidak akan berada di sampingnya
+@msg	`output` must be "vector"	`output` harus "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` tidak menerima prompt dan hanya membuat karya vektor
+@msg	`{pid}` takes no prompt	`{pid}` tidak menerima prompt
+@msg	`{pid}` does not take an image	`{pid}` tidak menerima gambar
+@msg	`{pid}` does not make vector art	`{pid}` tidak membuat karya vektor
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	gambar berada di lapisan yang memiliki isian atau stroke sendiri, yang juga akan diterapkan pada hasil
+@msg	Making the Concept to Vector styles	Membuat gaya konsep ke vektor
 	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
 	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk
 	Hem	Lipatan

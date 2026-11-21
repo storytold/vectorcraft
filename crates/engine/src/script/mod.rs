@@ -473,6 +473,9 @@ struct World {
     pending_paint: Option<crate::Paint>,
     choices: Choices,
     journal: Journal,
+    /// The Concept to Vector jobs, and the number of the first job made after the run started.
+    concept_jobs: std::collections::VecDeque<cmd::conceptvector::Job>,
+    concept_from: u64,
     /// The preferences when the run started.
     start_prefs: crate::Prefs,
     /// The Caps Lock state when the run started.
@@ -581,6 +584,8 @@ impl World {
             pending_paint: s.pending_paint.clone(),
             choices: Choices::of(s),
             journal: Journal::default(),
+            concept_jobs: s.concept_jobs_snapshot(),
+            concept_from: s.next_concept_job(),
             start_prefs: s.prefs.clone(),
             start_caps_lock: s.caps_lock,
         }
@@ -604,6 +609,7 @@ impl World {
         swap(&mut self.pending_paint, &mut s.pending_paint);
         self.choices.swap(s);
         swap(&mut self.journal, &mut s.journal);
+        s.swap_concept_jobs(&mut self.concept_jobs);
     }
 }
 
@@ -642,6 +648,7 @@ pub(crate) struct Savepoint {
     pending_paint: Option<crate::Paint>,
     choices: Choices,
     journal: usize,
+    concept_jobs: std::collections::VecDeque<cmd::conceptvector::Job>,
 }
 
 impl Savepoint {
@@ -676,6 +683,7 @@ impl Savepoint {
             pending_paint: s.pending_paint.clone(),
             choices: Choices::of(s),
             journal: s.journal.len(),
+            concept_jobs: s.concept_jobs_snapshot(),
         }
     }
 
@@ -728,6 +736,7 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        s.restore_concept_jobs(self.concept_jobs);
         s.sync_front_profiles();
         exact
     }
@@ -2239,6 +2248,9 @@ impl Session {
         for st in start.iter().filter(|b| !job.start_uids.contains(&b.uid)) {
             self.docs.push(st.clone());
         }
+        // So do the Concept to Vector jobs the app made while the run went on.
+        let others = std::mem::take(&mut job.world.concept_jobs);
+        self.merge_concept_jobs(others, job.world.concept_from);
         // A document the script closed is gone now, with its recovery copy.
         for b in start.iter().filter(|b| job.start_uids.contains(&b.uid) && !self.docs.iter().any(|d| d.uid == b.uid)) {
             cmd::recovery::forget_closed(self, b);
