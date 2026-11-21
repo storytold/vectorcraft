@@ -1563,16 +1563,21 @@ fn item_move(h: &Host, a: &[Data]) -> Answer {
 /// The error of `duplicate` on a path inside a compound path.
 pub const COMPOUND_MEMBER: &str = "Duplicating a path inside a compound path is not available yet";
 
+/// The error of `zOrder` on a path inside a compound path.
+pub const COMPOUND_MEMBER_ORDER: &str = "Reordering a path inside a compound path is not available yet";
+
+/// Whether `item` is a path inside a compound path.
+fn in_compound(h: &Host, item: Item) -> bool {
+    with_doc(h, item.doc, |_, st| st.doc.parent_of(item.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. })))
+}
+
 /// `duplicate(relativeObject?, insertionLocation?)`: a copy of the item, directly above it as
 /// Edit › Duplicate makes one, or into or beside `relativeObject` as `move` puts it. → the copy.
 /// When `node.move` refuses the place, the copy and every change it made are put back, and the
 /// error is thrown.
 fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    let in_compound = with_doc(h, item.doc, |_, st| {
-        st.doc.parent_of(item.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }))
-    });
-    if in_compound {
+    if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER.into()));
     }
     let to = match arg(a, 1) {
@@ -1597,7 +1602,8 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
     Ok(item_ref(h, st, NodeId(id)))
 }
 
-/// `zOrder(method)`: one of the four Object › Arrange commands for the item.
+/// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
+/// compound path is refused.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -1607,6 +1613,9 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
         _ => return Err(HostError::Type("zOrder needs a ZOrderMethod value".into())),
     };
     let item = this_item(h, a)?;
+    if in_compound(h, item) {
+        return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
+    }
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);

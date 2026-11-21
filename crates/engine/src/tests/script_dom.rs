@@ -359,6 +359,42 @@ fn a_path_inside_a_compound_path_is_not_duplicated() {
 }
 
 #[test]
+fn a_path_inside_a_compound_path_is_not_reordered() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, m = [], out = [];\
+         for (var i = 0; i < p.length; i++) if (p[i].parent.typename == 'CompoundPathItem') m.push(p[i]);\
+         var ways = [ZOrderMethod.BRINGTOFRONT, ZOrderMethod.BRINGFORWARD, ZOrderMethod.SENDBACKWARD, ZOrderMethod.SENDTOBACK];\
+         for (var j = 0; j < m.length; j++) for (var k = 0; k < ways.length; k++) {\
+           try { m[j].zOrder(ways[k]); out.push('ran'); } catch (e) { out.push(e.message); }\
+         }\
+         vc.log(m.length); vc.log(out);",
+    );
+    assert_eq!(out[0], json!(2));
+    let messages = out[1].as_array().cloned().unwrap_or_default();
+    assert_eq!(messages.len(), 8, "{out:?}");
+    for m in &messages {
+        assert!(m.as_str().is_some_and(|m| m.contains("Reordering a path inside a compound path is not available yet")), "{out:?}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    // The compound path itself still moves.
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, c;\
+         for (var i = 0; i < p.length; i++) if (p[i].typename == 'CompoundPathItem') c = p[i];\
+         var at = c.zOrderPosition; c.zOrder(ZOrderMethod.BRINGTOFRONT); vc.log([at, c.zOrderPosition]);",
+    );
+    assert_eq!(out, vec![json!([1, 2])]);
+}
+
+#[test]
 fn a_copy_of_an_object_with_a_large_id_is_the_copy() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
