@@ -188,9 +188,15 @@ mod tests {
         assert_eq!(listed(&mut app)[rows.len() - 6..rows.len() - 4], ["Apply Body", "Apply {name}"]);
     }
 
-    /// A step name with no catalog row has no translation.
+    /// A step that applies no effect, named like a menu item (Object › Path › Clean Up…), takes its
+    /// plain row, else the menu item's row without the ellipsis; a name with no row has none.
     #[test]
-    fn unknown_steps_have_no_name() {
+    fn plain_steps_read_the_menu_row_and_unknown_steps_have_no_name() {
+        for lang in crate::i18n::Lang::all() {
+            let menu_row = crate::i18n::has(lang, "Clean Up…").then(|| crate::i18n::tr(lang, "Clean Up…").trim_end_matches('…').to_string());
+            let plain_row = crate::i18n::has(lang, "Clean Up").then(|| crate::i18n::tr(lang, "Clean Up").to_string());
+            assert_eq!(step_name(lang, "Clean Up"), plain_row.or(menu_row), "{}", lang.code());
+        }
         let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
         assert_eq!(step_name(ja, "No Such Step"), None);
     }
