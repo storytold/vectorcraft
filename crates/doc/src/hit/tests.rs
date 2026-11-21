@@ -3128,6 +3128,32 @@ fn a_part_pick_walks_nested_reshaped_symbol_instances_within_one_limit() {
     assert_eq!(with_art_limit(300, || symbol_part_at(&d, n, Point::new(2.0, 2.0), opt)).0, Some(vec![29]), "the clipped art");
 }
 
+/// The outline of a part of a dynamic symbol's instance leaves out the hidden objects in the art of
+/// an instance nested in the part whose fill's effects reshape it, as a part pick passes over them.
+#[test]
+fn a_parts_outline_leaves_out_hidden_art_of_nested_reshaped_symbol_instances() {
+    use vectorcraft_geom::kurbo::Shape;
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+    let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(50.0, 50.0, 60.0, 60.0)), Appearance::default_art());
+    hidden.visible = false;
+    group_symbol(&mut d, "Painted hidden", vec![Arc::new(shown), Arc::new(hidden)]);
+    let member = painted_instance_of(&mut d, "Painted hidden");
+    group_symbol(&mut d, "Hides", vec![member]);
+    let inst = instance_of(&mut d, "Hides");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let n = d.node(id).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(55.0, 55.0), HitOptions::default()), None, "the hidden square is not picked");
+    let outline = symbol_part_outline(&d, n, &[0]).unwrap();
+    let squares = outline.elements().iter().filter(|e| matches!(e, vectorcraft_geom::kurbo::PathEl::MoveTo(_))).count();
+    assert_eq!(squares, 1, "only the shown square is outlined");
+    assert!(outline.bounding_box().x1 <= 1.0, "the outline reaches {:?}", outline.bounding_box());
+}
+
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than
 /// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
 /// canvas draws nothing of it. At the art's natural size the same art is picked.

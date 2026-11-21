@@ -2231,10 +2231,10 @@ fn limit_within(clip: &Node, limit: Option<Rect>, outline: bool) -> Option<Optio
 /// stroke effects reshape its art as that art drawn with them ([`InstanceArt::drawn`]), as
 /// [`FindPart`] tests them, except with `outline` and while a [`DrawnOff`] guard lives. Each object
 /// visited takes one object of the [`ArtWalk`] limit, and nothing more is outlined once the limit
-/// is used up.
+/// is used up. A hidden object and what it holds are not outlined, as [`FindPart`] passes over them.
 fn outline_within(n: &Node, symbols: &SymbolBoxes, limit: Option<Rect>, outline: bool, out: &mut BezPath) {
     use vectorcraft_geom::kurbo::Shape;
-    if !ArtWalk::take(1) {
+    if !n.visible || !ArtWalk::take(1) {
         return;
     }
     if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
