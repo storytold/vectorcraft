@@ -91,11 +91,11 @@ fn headers(ui: &mut Ui, sort: VariableSort) -> Option<VariableSort> {
 
 /// Draw one variable row across the three columns: its kind's icon, its name and the object it
 /// drives. Each column clips its text to its own width.
-fn variable_row(ui: &mut Ui, row: &VarRow, selected: bool) -> Response {
+fn variable_row(ui: &mut Ui, row: &VarRow, selected: bool, doc_uid: u64) -> Response {
     let t = Tokens::get(ui.ctx());
     let h = ui.spacing().interact_size.y;
     let (_, rect) = ui.allocate_space(vec2(ui.available_width(), h));
-    let r = ui.interact(rect, ui.scope_id().with(("variable-row", &row.name)), Sense::click());
+    let r = ui.interact(rect, ui.scope_id().with(("variable-row", doc_uid, &row.name)), Sense::click());
     if selected {
         ui.painter().rect_filled(rect, 0.0, t.row_selected);
     } else if r.hovered() {
@@ -282,7 +282,7 @@ struct Picked {
     has_selection: bool,
     /// Unbind needs a bound object under the selection, not just any selection.
     selection_bound: bool,
-    /// Make Text Dynamic needs exactly one type object: a text variable only drives type.
+    /// Make Text Dynamic needs one type object without an existing text variable.
     single_type: bool,
     /// Make Image Dynamic needs exactly one image object.
     single_image: bool,
@@ -293,7 +293,15 @@ struct Picked {
 fn picked(st: &vectorcraft_engine::DocState) -> Picked {
     let selected: Vec<u64> = st.selection.objects.iter().map(|i| i.0).collect();
     let selection_bound = selected.iter().any(|id| st.doc.variables.bindings.contains_key(&NodeId(*id)));
-    let single_type = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))));
+    let single_type = match selected.as_slice() {
+        [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) => st
+            .doc
+            .variables
+            .bindings
+            .get(&NodeId(*one))
+            .is_none_or(|bound| !st.doc.variables.variables.iter().any(|v| v.kind == VariableKind::Text && bound.contains(&v.name))),
+        _ => false,
+    };
     let single_image = matches!(selected.as_slice(), [one] if st.doc.node(NodeId(*one)).is_some_and(|n| matches!(n.kind, NodeKind::Image(_))));
     let selection_graph = !selected.is_empty() && selected.iter().all(|id| st.doc.node(NodeId(*id)).is_some_and(|n| n.extras().graph.is_some()));
     Picked { has_selection: !selected.is_empty(), selected, selection_bound, single_type, single_image, selection_graph }
@@ -337,6 +345,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Lock Variables: no variable is defined, deleted or renamed until they are unlocked.
     let locked = st.doc.variables.locked;
     let sort = st.variables_sort;
+    let doc_uid = st.uid;
 
     // The current data set across the top: its name in a box that renames it, the list that
     // chooses another, and the arrows that step through them.
@@ -384,7 +393,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("None"));
     }
     for row in vars {
-        let r = variable_row(ui, row, highlighted.as_deref() == Some(row.name.as_str()));
+        let r = variable_row(ui, row, highlighted.as_deref() == Some(row.name.as_str()), doc_uid);
         // A click highlights the row and selects what it drives; a double click opens
         // Variable Options for it.
         if r.clicked() {
@@ -877,6 +886,69 @@ mod tests {
         assert_eq!(app.session.active().unwrap().doc.variables.objects_of("Name"), vec![text]);
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.active().unwrap().doc.variables.objects_of("Visible").len(), 2);
+    }
+
+    #[test]
+    fn context_menu_cannot_act_on_same_named_variable_in_another_document() {
+        use egui::accesskit::{Action, ActionRequest, TreeId};
+        for label in ["Delete Variable", "Unbind Variable"] {
+            let mut app = app_with_data();
+            let original = app.session.active().unwrap().doc.variables.clone();
+            app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+            let text = app.run("text.create", json!({"x": 10, "y": 40, "text": "Alice"})).unwrap()["id"].clone();
+            app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+            app.run("variable.bind", json!({"variable": "Name", "ids": [text]})).unwrap();
+            let other = app.session.active().unwrap().doc.variables.clone();
+            assert!(app.session.set_active(0));
+            let mut d = Driver::new();
+            let nodes = open_row_menu(&mut d, &mut app, "Name · Alice");
+            let action = menu_button(&nodes, label);
+            let target_node = d
+                .nodes(&mut app)
+                .into_iter()
+                .find(|(_, n)| n.role() == egui::accesskit::Role::Button && n.label() == action.label())
+                .expect("the open menu action")
+                .0;
+            assert!(app.session.set_active(1));
+            assert!(!d.nodes(&mut app).iter().any(|(id, _)| *id == target_node), "{label}: the old menu carried over");
+            // A queued accessibility click must not dispatch the old menu action in the new document.
+            d.frame(
+                &mut app,
+                vec![egui::Event::AccessKitActionRequest(ActionRequest {
+                    action: Action::Click,
+                    target_node,
+                    target_tree: TreeId::ROOT,
+                    data: None,
+                })],
+            );
+            assert_eq!(app.session.active().unwrap().doc.variables, other, "{label}: changed the second document");
+            assert!(app.session.set_active(0));
+            assert_eq!(app.session.active().unwrap().doc.variables, original, "{label}: changed the first document");
+        }
+    }
+
+    #[test]
+    fn context_menu_make_text_dynamic_requires_text_without_a_text_binding() {
+        let mut app = app_with_data();
+        let text = app.session.active().unwrap().doc.variables.objects_of("Name")[0];
+        app.run("select.set", json!({"ids": [text.0]})).unwrap();
+        let mut d = Driver::new();
+        let nodes = open_row_menu(&mut d, &mut app, "Name · Alice");
+        assert!(menu_button(&nodes, "Make Text Dynamic").is_disabled());
+        assert!(!menu_button(&nodes, "Make Visibility Dynamic").is_disabled());
+        egui::Popup::close_all(&d.ctx);
+        app.run("variable.unbind", json!({"ids": [text.0], "variable": "Name"})).unwrap();
+        app.run("variable.define", json!({"name": "Visible", "kind": "visibility"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Visible", "ids": [text.0]})).unwrap();
+        let nodes = open_row_menu(&mut d, &mut app, "Name");
+        assert!(!menu_button(&nodes, "Make Text Dynamic").is_disabled(), "visibility bindings do not prevent a text variable");
+        let before = undo_steps(&app);
+        d.click(&mut app, &menu_button(&nodes, "Make Text Dynamic"));
+        let vars = &app.session.active().unwrap().doc.variables;
+        let bound = vars.bindings.get(&text).unwrap();
+        assert!(bound.contains("Visible"));
+        assert_eq!(vars.variables.iter().filter(|v| v.kind == VariableKind::Text && bound.contains(&v.name)).count(), 1);
+        assert_eq!(undo_steps(&app), before + 1);
     }
 
     #[test]
