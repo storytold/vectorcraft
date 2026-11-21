@@ -39,8 +39,7 @@ const WRAPPED: &[(&str, &str)] = &[
 /// every preference, Forget Import Matches forgets every saved match, Begin Undo Group and End
 /// Undo Group begin and end a group, the six Save … Preset commands save a new preset (Save
 /// Gradient Preset the selection's gradient), Delete Gradient Preset deletes the saved preset the
-/// selection's gradient matches, Pixel Snapping Options…
-/// opens its dialog, the three Asset Export commands open the Asset Export panel (#4864), New
+/// selection's gradient matches, the three Asset Export commands open the Asset Export panel (#4864), New
 /// Symbol makes a symbol of the selection, Gradient Vector gives the selection the default
 /// gradient, Define Perspective Grid makes the document's grid, Select Slice deselects the
 /// slices, and Find Next goes on from the last Find and Replace search or opens its dialog, as
@@ -60,7 +59,6 @@ const PICK_RUNS: &[&str] = &[
     "perspective.presets.save",
     "gradient.presets.save",
     "gradient.presets.delete",
-    "view.snapToPixel.options",
     "assets.export",
     "assets.export3D",
     "assets.settings.set",
@@ -1987,6 +1985,7 @@ mod tests {
             ("type.smartPunctuation", crate::dialogs::smart_punctuation::KIND),
             ("edit.findReplace", crate::dialogs::find_replace::KIND),
             ("object.path.smooth", crate::dialogs::smooth_slider::KIND),
+            ("view.snapToPixel.options", crate::dialogs::pixel_snap_options::KIND),
         ];
         for (id, kind) in expected {
             assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
