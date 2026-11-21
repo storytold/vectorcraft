@@ -48,6 +48,7 @@
 //! that holds the run's host only while the run goes on. An error, a limit or a stop puts the
 //! documents back and keeps the engine's globals; an internal error drops the engine.
 
+pub mod actions;
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
@@ -202,6 +203,8 @@ pub(crate) struct Request {
     pub locale: String,
     /// The answers to the dialogs of a run with nobody to ask, in order.
     pub answers: Vec<DialogAnswer>,
+    /// The actions `app.doScript` can play.
+    pub actions: Vec<actions::Playable>,
 }
 
 thread_local! {
@@ -802,6 +805,11 @@ struct Host {
     args: RefCell<(Data, u64)>,
     /// The run's state of the script object model (`app`).
     dom: dom::State,
+    /// The actions `app.doScript` can play.
+    actions: Vec<actions::Playable>,
+    /// The index of each open document's active artboard as the run starts, by document uid. The
+    /// view keeps that index while the run goes on, so the steps `app.doScript` plays act on it.
+    active_artboards: Vec<(u64, usize)>,
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -2065,6 +2073,8 @@ impl Session {
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
             dom: dom::State::default(),
+            actions: request.actions,
+            active_artboards: self.docs.iter().map(|d| (d.uid, dom::active_artboard(d))).collect(),
         });
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {

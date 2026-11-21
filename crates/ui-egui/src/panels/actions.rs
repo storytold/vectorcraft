@@ -585,6 +585,64 @@ pub(crate) fn has_stop(commands: &[Value]) -> bool {
     commands.iter().any(is_stop)
 }
 
+/// For command `id` `script.run`: gives its `params` the panel's actions as `actions`, which the
+/// script's `app.doScript` plays, unless the caller gave them: every action of every set, in panel
+/// order, with its steps as playback runs them ([`Action::playback_steps`]) and each step's place in
+/// the action. An action that `actions` cannot hold (a step that is not a command, a name that is
+/// too long, or one past the limits of [`vectorcraft_engine::script::actions`]) is left out.
+pub(crate) fn add_script_actions(app: &VectorcraftApp, id: &str, params: &mut Value) {
+    use vectorcraft_engine::script::actions::{MAX_ACTIONS, MAX_ACTIONS_BYTES, MAX_ALL_STEPS, parse};
+    let Some(p) = params.as_object_mut().filter(|_| id == "script.run") else { return };
+    if p.contains_key("actions") {
+        return;
+    }
+    let (mut list, mut steps, mut bytes) = (Vec::new(), 0usize, 2usize);
+    for (set, a) in app.ui.action_sets.iter().flat_map(|set| set.actions.iter().map(move |a| (set, a))) {
+        if list.len() >= MAX_ACTIONS {
+            break;
+        }
+        // The commands of a recorded `command.batch` step go back into one batch step, so that an
+        // error names a failing command by the batch's place and its own (`3.2`).
+        let mut played: Vec<Value> = Vec::new();
+        for s in a.playback_steps() {
+            let params = match s.command.get("params") {
+                None | Some(Value::Null) => json!({}),
+                Some(p) => p.clone(),
+            };
+            let one = json!({"command": s.command.get("command").cloned().unwrap_or(Value::Null), "params": params});
+            let place = s.row + 1;
+            if a.steps.get(s.row).is_none_or(|(id, _)| id != "command.batch") {
+                let mut one = one;
+                one["step"] = json!(place);
+                played.push(one);
+                continue;
+            }
+            match played.last_mut() {
+                Some(last) if last["command"] == "command.batch" && last["step"] == place => {
+                    if let Some(Value::Array(inner)) = last.pointer_mut("/params/commands") {
+                        inner.push(one);
+                    }
+                }
+                _ => played.push(json!({"command": "command.batch", "params": {"commands": [one]}, "step": place})),
+            }
+        }
+        let entry = json!({"set": set.name, "name": a.name, "steps": played});
+        let one = Value::Array(vec![entry]);
+        let Ok(parsed) = parse(Some(&one)) else { continue };
+        let count = parsed.first().map_or(0, vectorcraft_engine::script::actions::Playable::len);
+        let size = serde_json::to_vec(&one).map_or(usize::MAX, |b| b.len());
+        if steps + count > MAX_ALL_STEPS || bytes.saturating_add(size) > MAX_ACTIONS_BYTES {
+            continue;
+        }
+        steps += count;
+        bytes += size;
+        if let Value::Array(mut one) = one {
+            list.append(&mut one);
+        }
+    }
+    p.insert("actions".into(), Value::Array(list));
+}
+
 /// The message and Allow Continue setting in a stop's params; each may be left out. A saved stop
 /// with no params reads as null here. A value of another type, or params that are neither null
 /// nor an object, is an error.
@@ -7447,6 +7505,65 @@ mod tests {
             crate::script_runs::poll(app);
         }
         panic!("the script did not end");
+    }
+
+    /// A script's `app.doScript` plays the panel's actions with their included steps; an action whose
+    /// step `script.run`'s `actions` cannot hold is left out, and a caller's own list is kept.
+    #[test]
+    fn a_script_plays_the_panels_actions() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let rect = |x: i64| ("shape.rectangle".to_string(), json!({"x": x, "y": 10, "width": 10, "height": 10}));
+        let mut draw = Action::new("Draw", vec![rect(0), rect(20), rect(40)]);
+        draw.excluded_steps.insert(1);
+        let odd = Action::new("Odd", vec![rect(0), ("select.none".to_string(), json!(5))]);
+        let bad = json!({"command": "object.move", "params": {"ids": [999_999], "dx": 1, "dy": 1}});
+        let batch = ("command.batch".to_string(), json!({"commands": [{"command": "select.none"}, bad]}));
+        let batched = Action::new("Batched", vec![("select.none".to_string(), json!({})), batch]);
+        app.ui.action_sets.push(ActionSet::new("Mine", vec![draw, odd, batched]));
+        let objects =
+            |app: &VectorcraftApp| app.session.active().map_or(0, |d| d.doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>());
+        let undo = app.session.active().map_or(0, |d| d.history.undo.len());
+        app.session.script_frames = false;
+        let source = "app.doScript('Draw', 'Mine'); try { app.doScript('Odd', 'Mine'); } catch (e) { vc.log(e.message); }";
+        let r = app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+        assert_eq!(r["log"], json!(["the set “Mine” has no action “Odd”"]));
+        assert_eq!(objects(&app), 2, "the excluded step does not run");
+        assert_eq!(app.session.active().map_or(0, |d| d.history.undo.len()), undo + 1);
+        // A failing command of a recorded batch is named by the batch's place and its own.
+        let source = "try { app.doScript('Batched', 'Mine'); } catch (e) { vc.log(e.message); }";
+        let r = app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+        let m = r["log"][0].as_str().unwrap_or_default();
+        assert!(m.starts_with("action step 2.2 of “Batched” (`object.move`) failed:"), "{m}");
+        let r = app
+            .run("script.run", json!({"source": "try { app.doScript('Draw', 'Mine'); } catch (e) { vc.log(e.message); }", "actions": []}))
+            .unwrap();
+        assert_eq!(r["log"], json!(["there is no action set “Mine”"]));
+        assert_eq!(objects(&app), 2);
+    }
+
+    /// The steps a script's `app.doScript` plays act on the view's active artboard, as the panel's
+    /// playback does: Align to Artboard in a recorded batch, and Fit to Selected Art.
+    #[test]
+    fn a_script_plays_the_actions_on_the_active_artboard() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let align = json!({"command": "object.align", "params": {"horizontal": "left", "to": "artboard"}});
+        let batch = ("command.batch".to_string(), json!({"commands": [align]}));
+        let fit = ("artboard.fitToSelection".to_string(), json!({}));
+        app.ui.action_sets.push(ActionSet::new("Mine", vec![Action::new("Align", vec![batch]), Action::new("Fit", vec![fit])]));
+        let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+        let was = boards(&app);
+        app.view_mut().unwrap().artboard = 1;
+        app.session.script_frames = false;
+        let source = "app.doScript('Align', 'Mine'); app.doScript('Fit', 'Mine');";
+        app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+        let art = app.session.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap();
+        assert_eq!(art.x0, was[1].x0, "aligned to artboard 2, the active one");
+        assert_eq!(boards(&app), [was[0], art], "Fit to Selected Art resizes artboard 2 and leaves artboard 1");
     }
 
     /// Begin Recording with `filler` steps already recorded.

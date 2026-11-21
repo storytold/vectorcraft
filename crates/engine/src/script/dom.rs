@@ -152,7 +152,7 @@ fn method(link: &Link, f: Member) -> HostMember {
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
 /// the check that a document or page item `this` is still there.
-fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
+pub(super) fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
     let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -397,7 +397,7 @@ struct Frame {
 }
 
 /// The index of the active artboard of `st`, as the view keeps it.
-fn active_artboard(st: &DocState) -> usize {
+pub(super) fn active_artboard(st: &DocState) -> usize {
     let index_of = |id: u32| st.doc.artboards.iter().position(|a| a.id == id);
     st.active_artboard.and_then(index_of).or_else(|| st.doc.opened_artboard.and_then(index_of)).unwrap_or(0)
 }
@@ -1721,6 +1721,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("getIsFileOpen", method(l, app_is_open)),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(super::actions::app_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |a: Vec<Data>| {
