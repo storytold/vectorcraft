@@ -713,6 +713,19 @@ fn align_to_commands_with_the_artboard_tool() {
     assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "the key stays");
 }
 
+/// With the Artboard tool chosen and one object selected with no anchor points, Align to Selection
+/// returns `"selection"`, the stored choice, not `"artboard"`.
+#[test]
+fn align_to_selection_with_one_object_and_the_artboard_tool_returns_selection() {
+    let (mut app, back, _) = back_and_front();
+    app.run("select.set", json!({"ids": [back]})).unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.select_tool("artboard");
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
+}
+
 /// Align to Key Object is off and fails when the topmost selected object can't be the key: a group
 /// selected with an object inside it.
 #[test]
