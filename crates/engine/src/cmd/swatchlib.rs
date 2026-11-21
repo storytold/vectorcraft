@@ -1168,20 +1168,64 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             .into_iter()
             .any(|n| !links.contains_key(n) && by_name.contains_key(n) && lib_by_name.get(n).is_some_and(|b| b.global || b.spot))
     };
-    // `paint` is `w`'s paint with the colors it links to as `links` has them in the document.
-    let there = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| match (&w.paint, &patterns) {
-        (Paint::Pattern { pattern, .. }, Some(src)) => {
-            patternlib::present_pattern(d, src, pattern).and_then(|target| library_pattern_swatch(d, w, &target))
+    let picked_names: HashSet<&str> = picked.iter().map(|(_, w)| w.name.as_str()).collect();
+    // Whether the document's swatch `x` of the name of library swatch `w` is `w` with its colors
+    // linked to swatches of the document → the library's global and spot colors to bring back.
+    // `x` shows `w`'s paint with each color linked to: the name `links` gives it; its own name when
+    // that is the document's color of the library color's paint and kind; or, for a library color
+    // the document has under no name, that color's own name, which then comes in under it.
+    // Registration and colors the library does not have keep their names.
+    let fit = |x: &Swatch, w: &Swatch, links: &HashMap<String, String>| -> Option<Vec<String>> {
+        let (ours, theirs) = (linked_names(&w.paint), linked_names(&x.paint));
+        if ours.len() != theirs.len() {
+            return None;
         }
-        _ if misplaced(&w.paint, links) => None,
-        _ => match by_name.get(w.name.as_str()) {
-            Some(x) if x.paint == *paint && same_color_kind(x, w) => Some(w.name.clone()),
+        let map: HashMap<String, String> = ours.iter().zip(&theirs).map(|(l, t)| (l.to_string(), t.to_string())).collect();
+        if relinked(&w.paint, &map) != x.paint {
+            return None;
+        }
+        let mut restore = vec![];
+        for (&l, &t) in ours.iter().zip(&theirs) {
+            let ok = match (links.get(l), lib_by_name.get(l).filter(|b| b.global || b.spot)) {
+                (Some(to), _) => to == t,
+                (None, None) => l == t,
+                (None, Some(b)) => match by_name.get(t) {
+                    Some(y) => l == t && y.paint == b.paint && same_kind(y, b),
+                    None if l == t && !group_names.contains(t) => {
+                        if !picked_names.contains(l) {
+                            restore.push(l.to_string());
+                        }
+                        true
+                    }
+                    None => false,
+                },
+            };
+            if !ok {
+                return None;
+            }
+        }
+        Some(restore)
+    };
+    // `paint` is `w`'s paint with the colors it links to as `links` has them in the document → the
+    // name of the document's swatch, and the library colors to bring back for it ([`fit`]).
+    let there = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| -> Option<(String, Vec<String>)> {
+        if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
+            let target = patternlib::present_pattern(d, src, pattern)?;
+            return library_pattern_swatch(d, w, &target).map(|n| (n, vec![]));
+        }
+        if let Some(restore) = by_name.get(w.name.as_str()).filter(|x| same_color_kind(x, w)).and_then(|x| fit(x, w, links)) {
+            return Some((w.name.clone(), restore));
+        }
+        if misplaced(&w.paint, links) {
+            return None;
+        }
+        let found = match by_name.get(w.name.as_str()) {
             Some(_) => numbered(w, paint, links),
             None if group_names.contains(w.name.as_str()) => numbered(w, paint, links),
             None => (w.name == REGISTRATION && d.swatch(&w.name).is_some_and(|x| x.paint == *paint)).then(|| w.name.clone()),
-        },
+        };
+        found.map(|n| (n, vec![]))
     };
-    let picked_names: HashSet<&str> = picked.iter().map(|(_, w)| w.name.as_str()).collect();
     // The global or spot color of the document that library color `b` is: its own name, or the
     // numbered copy of it that adding `b` would find. While no color or color group has its name,
     // a numbered copy is looked for only when this call does not add `b` under its own name.
@@ -1206,14 +1250,47 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
+    // A color that the art of a picked pattern the document holds takes under another name (a
+    // numbered copy that the library also names) is the one the picked tints and gradients link
+    // to, as when the pattern came in, unless this call adds the color itself. The colors the art
+    // takes are those of an import into a copy of the document, which adds nothing.
+    if let Some(src) = &patterns
+        && looked_up.iter().any(|n| !base_names.contains_key(*n))
+    {
+        for (_, w) in &picked {
+            let Paint::Pattern { pattern, .. } = &w.paint else { continue };
+            if patternlib::present_pattern(d, src, pattern).is_none() {
+                continue;
+            }
+            let mut probe: vectorcraft_doc::Document = (**d).clone();
+            let Ok((_, _, took)) = patternlib::import(&mut probe, src, pattern) else { continue };
+            for (from, to) in took {
+                let fits = |b: &&Swatch| by_name.get(to.as_str()).is_some_and(|x| (x.global || x.spot) && x.paint == b.paint && same_kind(x, b));
+                if looked_up.contains(from.as_str()) && !picked_names.contains(from.as_str()) && lib_by_name.get(from.as_str()).is_some_and(fits) {
+                    base_names.entry(from).or_insert(to);
+                }
+            }
+        }
+    }
     // Library name → the name of the document's swatch.
     let mut existing: Vec<(String, String)> = vec![];
     let mut fresh = vec![];
+    // The library colors that the document's tints and gradients found here link to by name while
+    // the document has no swatch of that name (one deleted without unlinking them): they come back
+    // under their own names.
+    let mut restore: Vec<String> = vec![];
     for &(group, w) in &picked {
         // A tint or gradient is compared with its colors linked to the names they have here.
         let paint = relinked(&w.paint, &base_names);
         match there(w, &paint, &base_names) {
-            Some(name) => existing.push((w.name.clone(), name)),
+            Some((name, back)) => {
+                existing.push((w.name.clone(), name));
+                for n in back {
+                    if !restore.contains(&n) {
+                        restore.push(n);
+                    }
+                }
+            }
             None => fresh.push((group, w)),
         }
     }
@@ -1230,7 +1307,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut links: HashMap<String, String> = existing.iter().filter(|(l, n)| base_of(l, n)).cloned().collect();
     links.extend(base_names);
-    let added: Vec<(String, String)> = if fresh.is_empty() {
+    let added: Vec<(String, String)> = if fresh.is_empty() && restore.is_empty() {
         vec![]
     } else {
         let (added, reused, brought) = s.edit("Add to Swatches", |d, _| {
@@ -1245,6 +1322,15 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             // The swatches the patterns imported in this call brought with their art: (library
             // name, document name).
             let mut brought: Vec<(String, String)> = vec![];
+            // The colors to bring back come first, under their own names, which no swatch or color
+            // group of the document has; the tints and gradients added here link to them too.
+            for n in &restore {
+                let Some(b) = lib_by_name.get(n.as_str()) else { continue };
+                let name = free_in(&mut taken, &b.name);
+                d.swatches.push(Swatch { name: name.clone(), ..(*b).clone() });
+                links.insert(n.clone(), name.clone());
+                brought.push((n.clone(), name));
+            }
             // The swatches added here with a link `links` did not name yet: (document name, library
             // swatch).
             let mut pending: Vec<(String, &Swatch)> = vec![];

@@ -5809,8 +5809,13 @@ is used as it is. A library tint or gradient whose global or spot color comes in
 document as such a numbered copy, links to that copy, whether the color is picked before or after it, was added
 earlier or came with a pattern's art. A library global color is not the document's process color of the same name and
 paint: it comes in numbered. A global or spot color that a library tint or gradient links to and the document lacks
-comes in with the tint or gradient, under a numbered name when the document gives its name another swatch. `added`
-lists the colors the pattern's art, a tint or a gradient brings too. A document with
+comes in with the tint or gradient, under a numbered name when the document gives its name another swatch. The
+document's tint or gradient of the library one's name is that swatch when it links to the copy of the color that the
+art of a pattern picked with it takes; a numbered copy that the library also names stands for that library swatch
+otherwise. When the document's tint or gradient links to a color the document no longer has (deleted without
+unlinking), that color comes back under its own name. A pattern is found again when it was pasted with Add or Merge for all of its colors; one pasted
+with Merge for some colors and Add for others is added again as a copy. `added` lists the colors the pattern's art, a
+tint or a gradient brings too. A document with
 no swatches, and a `.ai`, `.eps` or PostScript file whose swatches are only the default ones, are refused with
 "`<file>` has no swatches of its own", unless the document has graph designs: it then loads with no swatches. The
 Swatch Libraries filter of Other Library… lists `.ai`, `.ait` and `.eps` (`.epsf`) files as well as the library files.
