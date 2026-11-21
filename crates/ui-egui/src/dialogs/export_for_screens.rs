@@ -195,7 +195,8 @@ pub fn open(app: &mut VectorcraftApp) {
 fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
     let mut o = match (id, fileio::format(id)) {
         ("svg", _) => svg_options::first_use(),
-        ("pdf", _) => Map::from_iter([("preset".to_string(), json!(pdf::DEFAULT_PRESET))]),
+        // PLAN: assumed `vectorcraft_pdf::default_preset_name(APP) -> &str` (ex.P3, export-w4)
+        ("pdf", _) => Map::from_iter([("preset".to_string(), json!(vectorcraft_pdf::default_preset_name(vectorcraft_pdf::APP)))]),
         (_, Some(f)) => png_options::defaults(app, f),
         _ => Map::new(),
     };
