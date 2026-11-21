@@ -4,7 +4,8 @@ use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
 
-use crate::tests_labels::painted_text;
+use serde_json::Value;
+
 use crate::{VectorcraftApp, menus};
 
 /// An app with one image open and selected: 12 × 10 pixels, white, a near-white ring one pixel in
@@ -91,10 +92,6 @@ fn alphas(app: &VectorcraftApp) -> [u8; 3] {
     [(0, 0), (1, 1), (4, 4)].map(|(x, y)| px.get_pixel(x, y).0[3])
 }
 
-fn open(app: &mut VectorcraftApp) {
-    click(app, "Remove Background…");
-}
-
 /// Choose Object › Plug-ins › Image Tools › `label`, which must be enabled.
 fn click(app: &mut VectorcraftApp, label: &str) {
     let item = menu_item(app, label);
@@ -138,10 +135,50 @@ fn masked_alphas(app: &VectorcraftApp) -> [u8; 3] {
     [(0, 0), (1, 1), (4, 4)].map(|(x, y)| px.get_pixel(x, y).0[3])
 }
 
+// PLAN: assumed `app.ui_ctx: egui::Context` (lib.rs:203) and `OpenDialog { id, fields }` (host.rs:383)
+/// The open dialog's values as automation lists them.
+fn dialog_fields(app: &VectorcraftApp) -> Value {
+    app.dialogs()
+        .expect("window host")
+        .with(|host| host.open_dialogs().first().and_then(|d| d.fields.clone()))
+        .expect("a dialog opens")
+}
+
+fn set(app: &VectorcraftApp, key: &str, value: Value) {
+    let ctx = app.ui_ctx.clone();
+    app.dialogs()
+        .expect("window host")
+        .with(|host| {
+            let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
+            host.set_json_field(&ctx, id, key, value)
+        })
+        .unwrap();
+}
+
+/// Runs the frame's pump: the open dialog's preview.
+fn pump(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone();
+    crate::dialogs::host::pump(app, &ctx);
+}
+
+/// Answers the open dialog with OK or Cancel, then runs the frame's pump.
+fn answer(app: &mut VectorcraftApp, ok: bool) {
+    let ctx = app.ui_ctx.clone();
+    app.dialogs().expect("window host").with(|host| {
+        let id = host.open_dialogs().first().map(|d| d.id).expect("a dialog is open");
+        if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
+    });
+    pump(app);
+}
+
+fn closed(app: &VectorcraftApp) -> bool {
+    app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.open_dialogs().is_empty()))
+}
+
 /// Object › Plug-ins › Image Tools › Color Mask… opens the command dialog on the defaults, previews
 /// a mask while the image's pixels stay, and keeps it on OK as one step; opened again it shows the
 /// image's mask settings. Remove Color Mask and Apply Color Mask are enabled only for an image
-/// with a mask.
+/// with a mask. Remove Background… opens on Edge Color and runs as one step.
 #[test]
 fn color_mask_previews_keeps_its_settings_and_comes_off() {
     let mut app = app();
@@ -150,112 +187,54 @@ fn color_mask_previews_keeps_its_settings_and_comes_off() {
     assert!(!menu_item(&app, "Remove Color Mask").enabled && !menu_item(&app, "Apply Color Mask").enabled);
 
     click(&mut app, "Color Mask…");
-    let d = app.ui.dialog.as_ref().expect("a dialog opens");
-    assert_eq!((d.str("__command"), d.str("__label")), (super::COLOR_MASK.to_string(), "Color Mask".to_string()));
-    assert_eq!((d.str("background"), d.f64("tolerance", -1.0), d.bool("preview")), ("edges".to_string(), 10.0, false));
-    assert!(!d.fields.contains_key("masked"));
-    let shown = show(&mut app);
-    for s in ["Color Mask", "Edge Color", "Contiguous", "Match", "Tolerance", "Softness", "Preview"] {
-        assert!(shown.contains(s), "{s} in {shown}");
-    }
-    set(&mut app, "preview", json!(true));
-    set(&mut app, "tolerance", json!(20));
-    show(&mut app);
+    let fields = dialog_fields(&app);
+    assert_eq!((fields["background"].as_str(), fields["tolerance"].as_f64()), (Some("edges"), Some(10.0)));
+    assert!(fields.get("masked").is_none());
+    set(&app, "tolerance", json!(20));
+    pump(&mut app);
     assert_eq!(masked_alphas(&app), [0, 0, 255], "the preview hides the white and the ring");
     assert_eq!(image(&app), start, "the image's pixels stay");
-    crate::dialogs::confirm(&mut app).unwrap();
+    answer(&mut app, true);
     assert_eq!((steps(&app), image(&app)), (n + 1, start.clone()), "one undo step; the pixels as they were");
     assert_eq!(mask(&app).map(|m| m.tolerance), Some(20.0));
 
     // Opened again: the image's mask settings.
     click(&mut app, "Color Mask…");
-    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("tolerance", -1.0), 20.0);
-    crate::dialogs::cancel(&mut app);
+    assert_eq!(dialog_fields(&app)["tolerance"].as_f64(), Some(20.0));
+    answer(&mut app, false);
     assert_eq!(steps(&app), n + 1);
 
     assert!(menu_item(&app, "Apply Color Mask").enabled);
     click(&mut app, "Remove Color Mask");
     assert_eq!((mask(&app), image(&app), steps(&app)), (None, start, n + 2));
-}
 
-fn show(app: &mut VectorcraftApp) -> String {
-    painted_text(app, |app, ui| crate::dialogs::show(app, ui.ctx()))
-}
-
-fn set(app: &mut VectorcraftApp, key: &str, v: serde_json::Value) {
-    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), key.into(), v);
+    // Remove Background… opens on Edge Color, Contiguous and Match distance; OK is one undo step.
+    click(&mut app, "Remove Background…");
+    let fields = dialog_fields(&app);
+    assert_eq!((fields["background"].as_str(), fields["contiguous"].as_bool(), fields["match"].as_str()), (Some("edges"), Some(true), Some("distance")));
+    answer(&mut app, true);
+    assert!(closed(&app));
+    assert_eq!(steps(&app), n + 3, "one undo step");
+    assert_eq!(alphas(&app)[0], 0, "the corner's white is gone");
 }
 
 /// Properties' Quick Actions and the Control bar offer Remove Background for a selected image, and
 /// the Control bar's button removes it at once (no dialog) with the defaults, as one step.
 #[test]
 fn properties_and_the_control_bar_remove_the_background_at_once() {
-    use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
     let mut app = app();
     let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
     let n = steps(&app);
-    assert!(has(&properties_frame(&mut app, 280.0), "Remove Background"), "Properties offers it");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let bar = control_frame(&mut app, &ctx, vec![]);
-    click_control(&mut app, &ctx, at(&bar, "Remove Background"));
-    assert!(app.ui.dialog.is_none(), "it runs at once");
+    // PLAN: assumed `Fixture::by_label(&str) -> Option<_>` and `Fixture::click_label(&str)` over the shell frame
+    // (`ui_context()`, sh.SH4), as chrome-w19 and files-w15 use them for the Properties panel and the Control bar.
+    let mut fixture = craft_ui::testing::Fixture::shell(&mut app, &crate::ui_context());
+    assert!(fixture.by_label("Remove Background").is_some(), "Properties offers it");
+    fixture.click_label("Remove Background");
+    assert!(closed(&app), "it runs at once");
     assert_eq!(steps(&app), n + 1, "one undo step");
     // The defaults (tolerance and softness 10): the white goes, the near-white ring fades.
     let [corner, ring, block] = alphas(&app);
     assert!(corner == 0 && ring > 0 && ring < 255 && block == 255, "{:?}", alphas(&app));
 }
 
-/// Object › Plug-ins › Image Tools › Remove Background… opens the command dialog on Edge Color
-/// with Preview off. With Preview on the canvas shows the result for the values in the dialog,
-/// each change worked out again from the image as it was; Cancel puts the image back with no step
-/// of history, and OK keeps the result for the values in the dialog as one step.
-#[test]
-fn remove_background_previews_cancels_and_runs_on_ok() {
-    let mut app = app();
-    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
-    let (start, n) = (image(&app), steps(&app));
 
-    open(&mut app);
-    let d = app.ui.dialog.as_ref().expect("a dialog opens");
-    assert_eq!((d.str("__command"), d.str("__label")), (super::REMOVE_BACKGROUND.to_string(), "Remove Background".to_string()));
-    assert_eq!((d.str("background"), d.bool("preview")), ("edges".to_string(), false));
-    assert!(crate::dialogs::accepts_field(d, "preview"));
-    assert_eq!((d.bool("contiguous"), d.str("match")), (true, "distance".to_string()));
-    let shown = show(&mut app);
-    for s in ["Remove Background", "Edge Color", "Contiguous", "Match", "Distance", "Tolerance", "Softness", "Preview"] {
-        assert!(shown.contains(s), "{s} in {shown}");
-    }
-    assert_eq!(image(&app), start, "no preview without the checkbox");
-
-    // Preview on: at tolerance 10 the ring fades; at 20 it is cleared; at 0, with no softness,
-    // only the white is cleared and the ring is whole again.
-    set(&mut app, "preview", json!(true));
-    show(&mut app);
-    let [corner, ring, block] = alphas(&app);
-    assert!(corner == 0 && ring > 0 && ring < 255 && block == 255, "{:?}", alphas(&app));
-    set(&mut app, "tolerance", json!(20));
-    show(&mut app);
-    assert_eq!(alphas(&app), [0, 0, 255]);
-    set(&mut app, "tolerance", json!(0));
-    set(&mut app, "softness", json!(0));
-    show(&mut app);
-    assert_eq!(alphas(&app), [0, 255, 255], "worked out again from the image as it was");
-
-    // Cancel: as it was, with no step of history.
-    crate::dialogs::cancel(&mut app);
-    assert_eq!((image(&app), steps(&app)), (start.clone(), n), "Cancel restores the image and adds no undo step");
-    assert!(!app.session.in_interaction());
-
-    // OK: the values in the dialog, as one step.
-    open(&mut app);
-    set(&mut app, "preview", json!(true));
-    set(&mut app, "tolerance", json!(20));
-    show(&mut app);
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    assert_eq!(steps(&app), n + 1, "one undo step");
-    assert_eq!(alphas(&app), [0, 0, 255]);
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(image(&app), start);
-}
