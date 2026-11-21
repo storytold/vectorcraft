@@ -11983,6 +11983,65 @@ fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
     }
 }
 
+/// The web build's pen comes as touch events with its pressure as their force, and its feed keeps
+/// a wheel for each move: [`frame_moves`] keeps the touch's force and pairs each move with its own
+/// pose from the end, and the last move's pose comes second.
+#[test]
+fn frame_moves_pair_a_web_pens_touches_with_the_feeds_poses() {
+    let ctx = egui::Context::default();
+    let (a, b, c) = (pos2(10.0, 20.0), pos2(20.0, 30.0), pos2(30.0, 40.0));
+    let events = [pen(egui::TouchPhase::Move, a, 0.2), pen(egui::TouchPhase::Move, b, 0.8), pen(egui::TouchPhase::Move, c, 0.6)].concat();
+    let feed = StylusFeed::default();
+    let wheel = |w: f32| PenPose { wheel: Some(w), ..PenPose::default() };
+    for (p, w) in [(0.9, 0.0), (0.2, 0.25), (0.8, 0.5), (0.6, 0.75)] {
+        feed.set_move(crate::stylus::PenSample { pressure: p, pose: wheel(w), ..Default::default() });
+    }
+    let (mut moves, mut last) = (vec![], None);
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| (moves, last) = frame_moves(ui, Some(&feed), None));
+    out.textures_delta.clear();
+    assert_eq!(moves, [(a, Some(0.2), Some(wheel(0.25))), (b, Some(0.8), Some(wheel(0.5)))], "an older move's sample is left over");
+    assert_eq!(last, Some(wheel(0.75)));
+}
+
+/// A web pen's stroke reaches the Paintbrush with each move's pressure, from its touch, and each
+/// move's finger wheel, from the feed.
+#[test]
+fn a_web_pens_wheel_reaches_the_paintbrush_with_each_move() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let feed = StylusFeed::default();
+    app.services.stylus = Some(feed.clone());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("paintbrush");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
+    let moved = |pressure: f32, wheel: f32| {
+        feed.set_move(crate::stylus::PenSample { pressure, pose: PenPose { wheel: Some(wheel), ..PenPose::default() }, ..Default::default() })
+    };
+    moved(0.5, 0.0);
+    frame(&mut app, &ctx, pen(egui::TouchPhase::Start, at(300.0), 0.5));
+    let mut events = vec![];
+    for (x, pressure, wheel) in [(340.0, 0.3, 0.25), (380.0, 0.7, 0.5), (420.0, 0.9, 0.75), (460.0, 0.4, 1.0)] {
+        moved(pressure, wheel);
+        events.extend(pen(egui::TouchPhase::Move, at(x), pressure));
+    }
+    frame(&mut app, &ctx, events);
+    frame(&mut app, &ctx, pen(egui::TouchPhase::End, at(460.0), 0.4));
+    let (cmd, p) = app.session.journal.last().unwrap().clone();
+    assert_eq!(cmd, "path.freehand");
+    let points = p["points"].as_array().unwrap();
+    let column = |i: usize| -> Vec<f64> { points.iter().filter_map(|s| s.get(i).and_then(serde_json::Value::as_f64)).collect() };
+    let (pressures, wheels) = (column(2), column(6));
+    for (pressure, wheel) in [(0.3, 0.25), (0.7, 0.5), (0.9, 0.75)] {
+        let paired = points.iter().any(|s| {
+            let near = |i: usize, v: f64| s.get(i).and_then(serde_json::Value::as_f64).is_some_and(|got| (got - v).abs() < 0.01);
+            near(2, pressure) && near(6, wheel)
+        });
+        assert!(paired, "{pressure} with {wheel}: {pressures:?} {wheels:?}");
+    }
+}
+
 /// The last move of a frame reaches the Paintbrush with the tilt the host's feed kept for that
 /// move, not with a later pen sample that came without a move.
 #[test]
