@@ -1577,6 +1577,116 @@ fn a_refused_x_leaves_the_ruler_as_it_was() {
     assert_eq!(committed, before);
 }
 
+/// Click the position field to the right of the label `label` ("X:" or "Y:"), which is blank
+/// while the paragraph has no stops, type `typed` and press Enter → the texts painted next.
+fn type_into_blank_position(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, typed: &str) -> Vec<(String, egui::Rect)> {
+    let texts = panel_frame(ctx, app, vec![]);
+    let rect_of = |name: &str| texts.iter().find(|(t, _)| t == name).unwrap_or_else(|| panic!("{name} in {texts:?}")).1;
+    // The fields' column starts after the widest label, "Align On:".
+    let at = egui::pos2(rect_of("Align On:").right() + 6.0 + 45.0, rect_of(label).center().y);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    panel_frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true)]);
+    panel_frame(ctx, app, vec![button(false)]);
+    panel_frame(ctx, app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)]);
+    panel_frame(ctx, app, vec![egui::Event::Text(typed.into())]);
+    panel_frame(ctx, app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+    panel_frame(ctx, app, vec![])
+}
+
+/// A position typed in the X field of a paragraph with no stops adds a stop there with the chosen
+/// alignment, keeps its hundredths of a point, selects it, and is one undo step.
+#[test]
+fn typing_x_into_a_paragraph_without_stops_adds_and_selects_a_stop() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 100}})).unwrap();
+    assert!(current(&app).unwrap().1.is_empty());
+    let ctx = egui::Context::default();
+    set_pstate(&ctx, "tabs-align", 2usize);
+    let before = app.session.active().unwrap().history.undo.len();
+    let texts = type_into_blank_position(&ctx, &mut app, "X:", "36.47");
+    let stops = current(&app).unwrap().1;
+    assert_eq!(stops.iter().map(|s| (s.position, s.align)).collect::<Vec<_>>(), [(36.47, TabAlign::Right)]);
+    assert_eq!(pstate::<usize>(&ctx, "tabs-sel"), 0);
+    assert!(texts.iter().any(|(t, _)| t == "36.47 pt"), "36.47 pt in {texts:?}");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(current(&app).unwrap().1.is_empty());
+}
+
+/// In vertical type the position field is Y, and a position typed there for a paragraph with no
+/// stops adds a stop.
+#[test]
+fn typing_y_into_vertical_type_without_stops_adds_a_stop() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "vertical": true})).unwrap();
+    let ctx = egui::Context::default();
+    type_into_blank_position(&ctx, &mut app, "Y:", "48");
+    let stops = current(&app).unwrap().1;
+    assert_eq!(stops.iter().map(|s| (s.position, s.align)).collect::<Vec<_>>(), [(48.0, TabAlign::Left)]);
+}
+
+/// A first stop typed with a unit other than the document's lands at that distance in points, and
+/// one typed without a unit is in the document's unit.
+#[test]
+fn a_first_stop_typed_in_another_unit_keeps_its_point_position() {
+    for typed in ["1 in", "25.4"] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("document.setUnits", json!({"units": "mm"})).unwrap();
+        app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 100}})).unwrap();
+        let ctx = egui::Context::default();
+        type_into_blank_position(&ctx, &mut app, "X:", typed);
+        let positions = current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+        assert_eq!(positions.len(), 1, "{typed}: {positions:?}");
+        assert!((positions[0] - 72.0).abs() < 1e-9, "{typed}: {positions:?}");
+    }
+}
+
+/// A first stop past 100,000 pt or text that is not a number adds no stop and records no undo
+/// step. A negative position adds the stop at 0 pt.
+#[test]
+fn a_refused_first_stop_adds_nothing_and_records_no_undo() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 100}})).unwrap();
+    let ctx = egui::Context::default();
+    let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let before = steps(&app);
+    for typed in ["200000", "abc"] {
+        type_into_blank_position(&ctx, &mut app, "X:", typed);
+        assert!(current(&app).unwrap().1.is_empty(), "{typed}");
+        assert_eq!(steps(&app), before, "{typed}");
+    }
+    type_into_blank_position(&ctx, &mut app, "X:", "-5");
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [0.0]);
+    assert_eq!(steps(&app), before + 1);
+}
+
+/// With the Selection tool on two texts, a first stop typed for the shown text, which has no
+/// stops, becomes every selected text's stops in one undo step, replacing the other text's stop.
+#[test]
+fn typing_the_first_stop_over_mixed_paragraphs_uses_the_displayed_list() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let a = id(app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 60}})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 10, "y": 100, "text": "c\td", "area": {"width": 250, "height": 60}})).unwrap());
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("text.tabs.set", json!({"stops": [{"position": 90}]})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(current(&app).unwrap().0.id.0, a);
+    let ctx = egui::Context::default();
+    let before = app.session.active().unwrap().history.undo.len();
+    type_into_blank_position(&ctx, &mut app, "X:", "25");
+    for text in [a, b] {
+        assert_eq!(text_of(&app, text).para_at(0).tabs.iter().map(|s| s.position).collect::<Vec<_>>(), [25.0], "text {text}");
+    }
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+}
+
 /// One frame of the panel menu with `events` → the rows' texts and where they are painted.
 fn menu_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 400.0));
