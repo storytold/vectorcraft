@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint links to its color under the name that color has in the document. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document, the colors patterns brought included], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, and the pattern links to it → {library, added: [names in the document, the colors patterns brought included], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -1024,22 +1024,36 @@ fn free_copy_in(taken: &mut HashSet<String>, base: &str, reserved: impl Fn(&str)
 }
 
 /// Link the swatches of `d` that `pending` names (document name, library swatch) to their colors
-/// under the names `links` gives them, for each whose colors `links` names now, in one pass over
-/// the document's swatches.
-fn settle(d: &mut vectorcraft_doc::Document, pending: &mut Vec<(String, &Swatch)>, links: &std::collections::HashMap<String, String>) {
-    let mut done: std::collections::HashMap<String, Paint> = std::collections::HashMap::new();
+/// under the names `links` gives them, for each whose colors `links` names now. Those leave
+/// `pending` and are returned.
+fn settle<'a>(
+    d: &mut vectorcraft_doc::Document,
+    pending: &mut Vec<(String, &'a Swatch)>,
+    links: &HashMap<String, String>,
+) -> Vec<(String, &'a Swatch)> {
+    let mut done = vec![];
     pending.retain(|(name, w)| {
         let all = all_linked(&w.paint, links);
         if all {
-            done.insert(name.clone(), relinked(&w.paint, links));
+            done.push((name.clone(), *w));
         }
         !all
     });
-    if !done.is_empty() {
-        for x in d.swatches_iter_mut() {
-            if let Some(paint) = done.get(&x.name) {
-                x.paint = paint.clone();
-            }
+    relink_in(d, &done, links);
+    done
+}
+
+/// Give the swatches of `d` that `list` names (document name, library swatch) the library swatch's
+/// paint with its colors linked to the names `links` gives them, in one pass over the document's
+/// swatches.
+fn relink_in(d: &mut vectorcraft_doc::Document, list: &[(String, &Swatch)], links: &HashMap<String, String>) {
+    if list.is_empty() {
+        return;
+    }
+    let paints: HashMap<&str, Paint> = list.iter().map(|(name, w)| (name.as_str(), relinked(&w.paint, links))).collect();
+    for x in d.swatches_iter_mut() {
+        if let Some(paint) = paints.get(x.name.as_str()) {
+            x.paint = paint.clone();
         }
     }
 }
@@ -1073,7 +1087,7 @@ fn linked_names(p: &Paint) -> Vec<&str> {
 }
 
 /// Paint `p` with each link to a swatch that `links` names changed to the name it maps to.
-fn relinked(p: &Paint, links: &std::collections::HashMap<String, String>) -> Paint {
+fn relinked(p: &Paint, links: &HashMap<String, String>) -> Paint {
     let mut out = p.clone();
     let swap = |name: &mut String| {
         if let Some(to) = links.get(name.as_str()) {
@@ -1090,7 +1104,7 @@ fn relinked(p: &Paint, links: &std::collections::HashMap<String, String>) -> Pai
 
 /// Whether `links` names every swatch the colors of paint `p` link to, the built-in Registration
 /// swatch aside (every document has it under its own name).
-fn all_linked(p: &Paint, links: &std::collections::HashMap<String, String>) -> bool {
+fn all_linked(p: &Paint, links: &HashMap<String, String>) -> bool {
     linked_names(p).iter().all(|n| *n == REGISTRATION || links.contains_key(*n))
 }
 
@@ -1114,7 +1128,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // up once so that a large palette takes linear time.
     let mut by_name: std::collections::HashMap<&str, &Swatch> = std::collections::HashMap::new();
     // The document's numbered copies ("Ink 2") by the name they are numbered after, in order.
-    let mut copies: std::collections::HashMap<&str, Vec<&Swatch>> = std::collections::HashMap::new();
+    let mut copies: HashMap<&str, Vec<&Swatch>> = HashMap::new();
     for w in d.swatches_iter() {
         let std::collections::hash_map::Entry::Vacant(e) = by_name.entry(w.name.as_str()) else { continue };
         e.insert(w);
@@ -1126,7 +1140,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     // The library's swatches by name (the first of a name wins), looked up once.
-    let mut lib_by_name: std::collections::HashMap<&str, &Swatch> = std::collections::HashMap::new();
+    let mut lib_by_name: HashMap<&str, &Swatch> = HashMap::new();
     for w in lib.swatches.iter().chain(lib.groups.iter().flat_map(|g| &g.swatches)) {
         lib_by_name.entry(w.name.as_str()).or_insert(w);
     }
@@ -1137,15 +1151,15 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // alone, as adding that swatch finds it under its own name. Paints are compared with their
     // colors linked as `links` says ([`relinked`]).
     let same_kind = |x: &Swatch, w: &Swatch| x.global == w.global && x.spot == w.spot;
-    let numbered = |w: &Swatch, paint: &Paint, links: &std::collections::HashMap<String, String>| {
+    let numbered = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| {
         let c = copies.get(w.name.as_str())?;
         let own = |x: &Swatch| lib_by_name.get(x.name.as_str()).is_some_and(|l| relinked(&l.paint, links) == x.paint);
         let found = c.iter().find(|x| !own(x) && x.paint == *paint && same_kind(x, w));
         found.map(|x| x.name.clone())
     };
-    let unlinked = std::collections::HashMap::new();
+    let unlinked = HashMap::new();
     // `paint` is `w`'s paint with the colors it links to as `links` has them in the document.
-    let there = |w: &Swatch, paint: &Paint, links: &std::collections::HashMap<String, String>| match (&w.paint, &patterns) {
+    let there = |w: &Swatch, paint: &Paint, links: &HashMap<String, String>| match (&w.paint, &patterns) {
         (Paint::Pattern { pattern, .. }, Some(src)) => {
             patternlib::present_pattern(d, src, pattern).and_then(|target| library_pattern_swatch(d, w, &target))
         }
@@ -1169,7 +1183,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     // The library's global and spot colors that the picked tints and gradients link to, with the
     // name each has in the document: library name → document name. Each is looked up for itself,
     // whether or not this call picks it, once.
-    let mut base_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut base_names: HashMap<String, String> = HashMap::new();
     let mut looked_up: HashSet<&str> = HashSet::new();
     for (_, w) in &picked {
         for base in linked_names(&w.paint) {
@@ -1203,7 +1217,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         let (Some(w), Some(x)) = (lib_by_name.get(l), by_name.get(n)) else { return false };
         (x.global || x.spot) && same_kind(x, w)
     };
-    let mut links: std::collections::HashMap<String, String> = existing.iter().filter(|(l, n)| base_of(l, n)).cloned().collect();
+    let mut links: HashMap<String, String> = existing.iter().filter(|(l, n)| base_of(l, n)).cloned().collect();
     links.extend(base_names);
     let added: Vec<(String, String)> = if fresh.is_empty() {
         vec![]
@@ -1233,26 +1247,55 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     // is named by importing the pattern into a copy first.
                     let brings = if pending.is_empty() { Default::default() } else { patternlib::brought_names(src, pattern) };
                     let waited = |n: &&str| !links.contains_key(*n) && brings.contains(*n);
+                    // A global or spot color the pattern brought, or took from the document under
+                    // a numbered name: library name → document name. A color this call picks is
+                    // added under its own name instead of the one the pattern took.
+                    let colors_of = |d: &vectorcraft_doc::Document, colors: &[(String, String)], took: &[(String, String)]| {
+                        let mut out: HashMap<String, String> = HashMap::new();
+                        for (from, to) in colors.iter().chain(took.iter().filter(|(from, _)| !picked_names.contains(from.as_str()))) {
+                            if d.swatch(to).is_some_and(|x| x.global || x.spot) {
+                                out.entry(from.clone()).or_insert_with(|| to.clone());
+                            }
+                        }
+                        out
+                    };
+                    // The names learned from the copy, which the import into the document confirms.
+                    let mut learned = vec![];
                     if pending.iter().any(|(_, w)| linked_names(&w.paint).iter().any(waited)) {
                         let mut probe = d.clone();
                         let (_, colors, took) = patternlib::import(&mut probe, src, pattern)?;
-                        for (from, to) in colors.iter().chain(took.iter().filter(|(from, _)| !picked_names.contains(from.as_str()))) {
-                            if probe.swatch(to).is_some_and(|x| x.global || x.spot) {
-                                links.entry(from.clone()).or_insert_with(|| to.clone());
+                        for (from, to) in colors_of(&probe, &colors, &took) {
+                            if let std::collections::hash_map::Entry::Vacant(e) = links.entry(from.clone()) {
+                                e.insert(to);
+                                learned.push(from);
                             }
                         }
                     }
-                    settle(d, &mut pending, &links);
+                    let settled = settle(d, &mut pending, &links);
                     let had = taken_names(d);
                     let (target, colors, took) = patternlib::import(d, src, pattern)?;
-                    // A global or spot color the pattern brought, or took from the document under
-                    // a numbered name, is the one the library's tints of it link to, unless the
-                    // document already has one for it. A color this call picks is added under
-                    // its own name instead of the one the pattern took.
-                    for (from, to) in colors.iter().chain(took.iter().filter(|(from, _)| !picked_names.contains(from.as_str()))) {
-                        if d.swatch(to).is_some_and(|x| x.global || x.spot) {
-                            links.entry(from.clone()).or_insert_with(|| to.clone());
+                    // Those colors are the ones the library's tints of them link to, unless the
+                    // document already has one for them. A name the copy gave that the import
+                    // into the document did not give is replaced, and the tints linked to it are
+                    // linked again.
+                    let mut found = colors_of(d, &colors, &took);
+                    let mut changed = false;
+                    for from in learned {
+                        let real = found.remove(&from);
+                        if real.as_ref() != links.get(&from) {
+                            changed = true;
+                            match real {
+                                Some(to) => links.insert(from, to),
+                                None => links.remove(&from),
+                            };
                         }
+                    }
+                    for (from, to) in found {
+                        links.entry(from).or_insert(to);
+                    }
+                    if changed {
+                        relink_in(d, &settled, &links);
+                        pending.extend(settled.into_iter().filter(|(_, w)| !all_linked(&w.paint, &links)));
                     }
                     brought.extend(colors);
                     if let Some(name) = library_pattern_swatch(d, w, &target).filter(|n| had.contains(n)) {
@@ -1339,14 +1382,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 out.push((w.name.clone(), name));
             }
-            let later: std::collections::HashMap<String, Paint> = pending.into_iter().map(|(name, w)| (name, relinked(&w.paint, &links))).collect();
-            if !later.is_empty() {
-                for x in d.swatches_iter_mut() {
-                    if let Some(paint) = later.get(&x.name) {
-                        x.paint = paint.clone();
-                    }
-                }
-            }
+            relink_in(d, &pending, &links);
             Ok((out, reused, brought))
         })?;
         existing.extend(reused);

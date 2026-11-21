@@ -194,9 +194,8 @@ pub(crate) fn probe_import(d: &Document, lib: &Document, name: &str, gathered: &
     let added = gathered.import_into(&mut with_add, &SwatchChoices::add_all(), false)?;
     if !reused(&added) && added.renamed.iter().any(|r| r["kind"] == "swatch") && has_candidate(d, lib, name) {
         let mut merged = d.clone();
-        if let Ok(found) = gathered.import_into(&mut merged, &SwatchChoices::default(), false)
-            && reused(&found)
-        {
+        let found = gathered.import_into(&mut merged, &SwatchChoices::default(), false)?;
+        if reused(&found) {
             return Ok((SwatchChoices::default(), merged, found));
         }
     }
