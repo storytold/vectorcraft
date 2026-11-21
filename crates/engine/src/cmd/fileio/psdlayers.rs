@@ -1592,9 +1592,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
 
     /// The records of the adjustment layers kept in `out` at `level` (in a pass-through group, to
     /// change what is below the group), those kept in the visible pass-through groups of `out`
-    /// included, except groups whose layer mask hides all of them.
+    /// included: from the first one with nothing that draws below it in `out`, as [`Self::leading`]
+    /// keeps them. A group whose layer mask hides all of it keeps none.
     fn pending(&self, out: &[Unit<'_>], level: Level) -> Result<Vec<usize>, String> {
-        let mut records = vec![];
+        let (mut records, mut draws) = (vec![], false);
         if level != Level::Pass {
             return Ok(records);
         }
@@ -1602,13 +1603,39 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         for u in out.iter().filter(|u| u.visible && u.opacity > 0.0) {
             if self.adjustment(&u.body)?.is_some() {
                 records.push(u.record);
-            } else if let (Body::Group(_, items), Blend::Pass) = (&u.body, u.blend)
+                continue;
+            }
+            if let (Body::Group(_, items), Blend::Pass) = (&u.body, u.blend)
+                && (!draws || !records.is_empty())
                 && !u.mask_of.map(|g| self.masked_out(g, true)).transpose()?.unwrap_or(false)
             {
-                records.extend(self.leading(items)?.0);
+                let (inner, inner_draws) = self.leading(items)?;
+                records.extend(inner);
+                draws |= inner_draws;
+                continue;
             }
+            draws = draws || self.unit_draws(u)?;
         }
         Ok(records)
+    }
+
+    /// Does unit `u` draw? An adjustment layer, a layer that draws nothing or whose pixels are all
+    /// transparent, a group of such layers, and a unit whose layer mask hides all of it, don't.
+    fn unit_draws(&self, u: &Unit<'_>) -> Result<bool, String> {
+        let draws = match &u.body {
+            Body::Layer(i) => !self.record(*i)?.draws_nothing() && !self.clear(*i)?,
+            Body::Group(_, items) => self.draws(items)?,
+            // Clipped layers merged with a base that has no pixels have none either.
+            Body::Merged(c) => c.px.iter().any(|p| p[3] > 0.0),
+        };
+        // A base merged with the layers clipped to it isn't checked: its canvas may reach past the
+        // base's own pixels.
+        let hidden = |m: usize| match &u.body {
+            Body::Layer(_) => self.masked_out(m, false),
+            Body::Group(..) => self.masked_out(m, true),
+            Body::Merged(_) => Ok(false),
+        };
+        Ok(draws && !u.mask_of.map(hidden).transpose()?.unwrap_or(false))
     }
 
     /// The adjustment layers the import applies that a pass-through group with the layers `items`
@@ -1899,24 +1926,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         if u.opacity <= 0.0 {
             return Ok(());
         }
+        // A unit that draws nothing has nothing to change.
         let mut below = false;
         for b in out.iter().filter(|b| b.visible && b.opacity > 0.0) {
-            let draws = match &b.body {
-                // An adjustment layer, a layer that draws nothing or whose pixels are all
-                // transparent, or a group of such layers, has nothing to change.
-                Body::Layer(i) => !self.record(*i)?.draws_nothing() && !self.clear(*i)?,
-                Body::Group(_, items) => self.draws(items)?,
-                // Clipped layers merged with a base that has no pixels have none either.
-                Body::Merged(c) => c.px.iter().any(|p| p[3] > 0.0),
-            };
-            // One whose layer mask hides all of it has nothing to change either. A base merged with
-            // the layers clipped to it isn't checked: its canvas may reach past the base's own pixels.
-            let hidden = |m: usize| match &b.body {
-                Body::Layer(_) => self.masked_out(m, false),
-                Body::Group(..) => self.masked_out(m, true),
-                Body::Merged(_) => Ok(false),
-            };
-            below = below || (draws && !b.mask_of.map(hidden).transpose()?.unwrap_or(false));
+            below = below || self.unit_draws(b)?;
         }
         // Kept below it in the group, or in a pass-through group below it there.
         let pending = !self.pending(out, level)?.is_empty();

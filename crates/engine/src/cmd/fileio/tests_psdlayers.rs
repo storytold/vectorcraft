@@ -1785,6 +1785,27 @@ fn an_adjustment_layer_above_a_group_whose_kept_ones_merged_is_applied() {
     }
 }
 
+/// An adjustment layer in a pass-through group, over a layer drawn below that group in an outer
+/// pass-through group, isn't kept to change what is below the outer group: a layer merged above
+/// them for its mode merges it applied, and the import doesn't count it as not applied. The gray
+/// 100 inverts to 155.
+#[test]
+fn an_adjustment_layer_in_a_group_over_a_drawn_layer_merges_applied() {
+    let layers = [
+        group_end(),
+        layer("Photo", [0, 0, 1, 1], [100, 100, 100, 255]),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        L { blend: b"lddg", ..layer("Top", [0, 0, 1, 1], [0, 0, 0, 255]) },
+        group("Folder", b"pass"),
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(row_of(&s, sublayer(&d.layers[0], "Top")), [[155, 155, 155, 255]], "{r}");
+    assert!(!r["warnings"].to_string().contains("adjustment"), "{r}");
+}
+
 /// A layer whose pixels are all transparent draws nothing: an adjustment layer above it in a
 /// pass-through group, directly or in a pass-through group inside it, still changes what is below
 /// the group.
