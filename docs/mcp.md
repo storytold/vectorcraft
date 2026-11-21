@@ -10540,8 +10540,9 @@ ignored. Deleting every opaque color is an error, and the settings, preview and 
 entry of transparent pixels cannot be deleted. `colorTable.customPalette: ["#rrggbb"…]` is a fixed palette (a Custom
 table) used instead of the reduction's own, at most `colors` entries with the transparent one included, so a color it
 lacks is not made again. Its colors in `transparent` all become the transparent entry and take one of the `colors`
-slots together (when no pixel is transparent and no pixel takes one of them, that slot goes to its next color); its
-other colors fill the remaining slots in order. The dialog's Delete Color sets it to the table's colors on the first deletion. Both lists hold
+slots together (with transparent pixels they share those pixels' slot; when no pixel is transparent and no pixel takes
+one of them, that slot goes to its next color), and the preview's `mappedToTransparent` lists each of them a pixel
+took; its other colors fill the remaining slots, its shifted colors first, then its locked ones, then the rest in order. The dialog's Delete Color sets it to the table's colors on the first deletion. Both lists hold
 at most 256 colors, and `#rrggbbaa` is refused. A `reduction` change without `colorTable` in the same params clears
 both lists. JPEG and PNG-24 have no color table and do not read them. Presets and `webExport.settings` keep them. In
 the dialog a click selects one color, Shift-click selects the colors between it and the last one clicked, and
