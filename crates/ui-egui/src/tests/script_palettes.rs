@@ -87,6 +87,37 @@ fn a_click_waiting_behind_a_run_at_its_dialog_asks_for_no_frames() {
 }
 
 #[test]
+fn a_click_waiting_for_an_open_undo_group_asks_for_no_frames_and_runs_after_it() {
+    let mut app = app();
+    let source = "#targetengine tools\nvar p = new Window('palette', 'Tools'); var go = p.add('button', undefined, 'Go'); \
+                  go.onClick = function () { vc.log('clicked'); }; p.show();";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
+    run_to_end(&mut app);
+    let id = app.session.script_palettes()[0].id;
+    app.run("edit.undoGroup.begin", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, vec![UiEvent::Click(1)]));
+    assert_eq!(app.session.script_palette_events_waiting(), 1);
+    let mut asks = true;
+    for _ in 0..5 {
+        app.begin_host_iteration();
+        asks = frame(&ctx, |ui| app.tick(ui.ctx()));
+        if !asks {
+            break;
+        }
+    }
+    assert!(!asks, "the waiting click asks for no frames while the undo group is open");
+    assert_eq!(app.session.script_palette_events_waiting(), 1, "the click still waits");
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    app.begin_host_iteration();
+    frame(&ctx, |ui| app.tick(ui.ctx()));
+    assert_eq!(app.session.script_palette_events_waiting(), 0, "with the group ended the next frame starts the click's run");
+    run_to_end(&mut app);
+    assert_eq!(app.session.script_report().unwrap()["log"], json!(["clicked"]));
+    assert_eq!(app.session.script_palette_events_waiting(), 0);
+}
+
+#[test]
 fn a_typed_text_stays_in_its_field_when_a_run_adds_a_control_before_it() {
     let mut app = app();
     let source = "#targetengine places\nvar p = new Window('palette'); var g = p.add('group'); g.add('button', undefined, 'First'); \

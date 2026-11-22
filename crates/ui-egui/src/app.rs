@@ -369,9 +369,12 @@ impl VectorcraftApp {
         crate::scripts_menu::poll(self, ctx);
         crate::dialogs::proof_setup::poll(self, ctx);
         // A palette event whose run starts on the next frame. While a run goes on, the block below
-        // asks for its frames, and a run that waits for the person goes on at their next input.
-        if self.session.script_palette_events_waiting() > 0 && !self.session.script_running() {
+        // asks for its frames, and a run that waits for the person goes on at their next input. An
+        // event that waits for an open undo group to end looks again four times a second.
+        if self.session.script_palette_can_start() {
             ctx.request_repaint();
+        } else if self.session.script_palette_events_waiting() > 0 && !self.session.script_running() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         if self.session.script_running()
             && !self.session.script_waiting()

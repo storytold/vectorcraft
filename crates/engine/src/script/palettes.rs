@@ -329,6 +329,16 @@ impl Session {
         self.script_palettes.waiting.len()
     }
 
+    /// Whether [`Session::script_palette_start`] can start a waiting event's run now: an event
+    /// waits, no run is going, and no undo group is open, which a run cannot start in. A drag in
+    /// progress is not counted, since starting the run settles it.
+    pub fn script_palette_can_start(&self) -> bool {
+        !self.script_palettes.waiting.is_empty()
+            && !self.script_running()
+            && self.explicit_undo_group.is_none()
+            && self.docs.iter().all(|d| d.undo_group.is_none())
+    }
+
     /// Puts `event` for the shown palette `id` in line, to run in its engine once no run is going
     /// ([`Session::script_palette_start`]). → an error when there is no such shown palette, it
     /// cannot take the event ([`scriptui::check_event`]), or [`MAX_WAITING`] events already wait.
