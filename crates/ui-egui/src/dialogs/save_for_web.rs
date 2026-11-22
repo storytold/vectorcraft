@@ -451,7 +451,6 @@ fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::
     };
     if let Some(texture) = fresh {
         app.web_export.original = Some(texture.clone());
-        // PLAN: assumed `HostedSaveForWeb::set_original(SizedTexture)`: the Original pane follows the rendering.
         on_dialog(host, |d| d.set_original(texture));
     }
     on_dialog(host, |d| answers.into_iter().for_each(|v| d.set_variant(v)));

@@ -97,7 +97,6 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
         let at = |row: Option<usize>| row.and_then(|r| active.iter().position(|&i| i == r));
         let look = if segmented { DiscLook::Segmented } else { DiscLook::Smooth };
         let words = Env::of(ui).words::<HarmonyWords>();
-        // PLAN: widgets-w5 — `HarmonyWheel::base` and `HarmonyWheelOutput::{clicked, context}` (Open question 3 of sheets-color-5) are not on harmony.rs yet.
         let out = HarmonyWheel::new(words.harmony.clone(), &colors).selected_marker(at(sel)).base(at(base)).look(look).radius(axes).show(ui);
         // A right-click on the disc: a marker's menu, or Add New Color at the point, tied to the spoke it is on.
         if let Some(hit) = out.context {

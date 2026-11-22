@@ -66,7 +66,6 @@ impl VectorcraftApp {
         let known = session.documents().iter().map(|d| d.uid).collect();
         let rich_clipboard = services.clipboard.is_some();
         // Without a host clipboard (tests, the web before its host sets one) copies stay inside the app.
-        // PLAN: `Clipboard::new` takes `impl ClipboardBackend`; a `Box<dyn ClipboardBackend>` needs the framework's `impl ClipboardBackend for Box<dyn ClipboardBackend>` (platform clipboard, shell-w14).
         let clipboard = match services.clipboard.take() {
             Some(backend) => Clipboard::new(backend),
             None => Clipboard::new(EventClipboard::new(|| 0, |_| Ok(0))),

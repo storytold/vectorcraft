@@ -1,7 +1,7 @@
 //! The Properties panel's Character and Paragraph sections for the selected text.
 
 use craft::text::ui::character::CharacterRows;
-use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Show as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::sections::Section;

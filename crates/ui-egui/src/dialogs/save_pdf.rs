@@ -227,7 +227,6 @@ struct Filed {
     events: Vec<PdfPresetEvent>,
     custom: bool,
     summary: Option<String>,
-    // PLAN: assumed `HostedPdfExport::take_ok(&mut self) -> Option<PdfExportAnswer>`, the held OK as the other hosted dialogs have it.
     ok: Option<PdfExportAnswer>,
 }
 

@@ -555,8 +555,7 @@ mod tests {
             let mut states = CommandStates::new();
             menu_states(app, &mut states);
             ["transparency.togglePageKnockoutGroup", "transparency.togglePageIsolatedBlending"]
-                // PLAN: assumed `CommandState::is_checked() -> bool`.
-                .map(|id| states.get(&CommandRef::new(id)).is_some_and(CommandState::is_checked))
+                .map(|id| states.get(&CommandRef::new(id)).and_then(CommandState::is_checked) == Some(true))
         };
         assert_eq!(page(&app), [false, false]);
         run_cmd(&mut app, "transparency.togglePageKnockoutGroup", json!({}));

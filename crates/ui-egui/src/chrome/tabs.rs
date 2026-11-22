@@ -81,7 +81,6 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             let tab = if Some(w) == shown {
                 DocumentTab::new(w, whole)
             } else {
-                // PLAN: assumed DocumentTab::tooltip(impl Into<Label>) -> Self (canvas-w3)
                 DocumentTab::new(w, view_tab_name(d, doc_windows::label(app, w))).tooltip(whole)
             };
             Some(tab.modified(d.is_dirty()))

@@ -1,8 +1,9 @@
 //! Headless frames of the Stroke panel's reach: Units > Stroke in the panel, the Control bar and
 //! the Properties panel, mixed values shown blank, Align Stroke for open paths and type (also
 //! while the Type tool edits it), and the weight presets.
-// PLAN: the step arrows' part keys (`NumberField`'s `STEP_UP`, `STEP_DOWN`) are private; `step` names them once they are public (SG-57).
 
+use craft::behavior::PartKey;
+use craft::ui::text::NumberField;
 use egui::Modifiers;
 use serde_json::json;
 
@@ -19,10 +20,9 @@ fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     let mm = vectorcraft_doc::Unit::Millimeters.format(1.0);
     assert_eq!(mm, "0.3528 mm");
     let surfaces: [Show; 3] = [stroke::show, properties::show, crate::chrome::control_bar];
-    let mut panel = Panel::new(app, stroke::show);
+    let panel = Panel::new(app, stroke::show);
     for show in surfaces {
-        let mut p =
-            Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
+        let p = Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
         assert_eq!(p.value("Weight").as_deref(), Some(mm.as_str()));
         *panel.app() = std::mem::replace(&mut *p.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
     }
@@ -129,7 +129,7 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
 }
 
 /// A click on the weight's step arrow in `show`'s surface: the stroke's weight afterwards.
-fn step(app: VectorcraftApp, show: Show, part: &str) -> f64 {
+fn step(app: VectorcraftApp, show: Show, part: PartKey) -> f64 {
     let mut panel = Panel::new(app, show);
     panel.frame();
     panel.click_part("Weight", part, Modifiers::NONE);
@@ -144,10 +144,10 @@ fn every_weight_spinner_steps_to_the_next_preset() {
     let surfaces: [(&str, Show); 3] =
         [("Stroke panel", stroke::show), ("Control bar", crate::chrome::control_bar), ("Properties panel", properties::show)];
     for (surface, show) in surfaces {
-        for (part, after) in [("step down", 0.5), ("step up", 0.75)] {
+        for (part, after) in [(NumberField::STEP_DOWN, 0.5), (NumberField::STEP_UP, 0.75)] {
             let mut app = app_with_rect();
             run(&mut app, "stroke.set", json!({"weight": 0.52}));
-            assert_eq!(step(app, show, part), after, "{surface}, {part}");
+            assert_eq!(step(app, show, part), after, "{surface}, {}", part.name());
         }
     }
 }
@@ -159,7 +159,7 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "picas".into();
     run(&mut app, "stroke.set", json!({"weight": 2.004}));
-    assert_eq!(step(app, stroke::show, "step down"), 1.0);
+    assert_eq!(step(app, stroke::show, NumberField::STEP_DOWN), 1.0);
 }
 
 /// With objects of different weights selected the Weight field is blank, and its spinner steps
@@ -167,9 +167,12 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
 /// Units > Stroke.
 #[test]
 fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
-    for (unit, part, after) in
-        [("points", "step up", 0.5), ("points", "step down", 0.0), ("millimeters", "step up", 0.5), ("millimeters", "step down", 0.0)]
-    {
+    for (unit, part, after) in [
+        ("points", NumberField::STEP_UP, 0.5),
+        ("points", NumberField::STEP_DOWN, 0.0),
+        ("millimeters", NumberField::STEP_UP, 0.5),
+        ("millimeters", NumberField::STEP_DOWN, 0.0),
+    ] {
         let mut app = app_with_rect();
         app.session.prefs.units_stroke = unit.into();
         let a = app.session.active().unwrap().selection.objects[0];
@@ -181,7 +184,7 @@ fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
         panel.click_part("Weight", part, Modifiers::NONE);
         for id in [a.0, b] {
             run(&mut panel.app(), "select.set", json!({ "ids": [id] }));
-            assert_eq!(panel.app().session.shown_stroke().unwrap().width, after, "object {id}, {part}, {unit}");
+            assert_eq!(panel.app().session.shown_stroke().unwrap().width, after, "object {id}, {}, {unit}", part.name());
         }
     }
 }

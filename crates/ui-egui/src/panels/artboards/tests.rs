@@ -10,9 +10,6 @@ use crate::dialogs::artboard_options::ArtboardOptionsDialog;
 use crate::dialogs::rearrange_artboards::RearrangeArtboardsDialog;
 use crate::dialogs::rename_artboards;
 
-// PLAN: assumed constructors for the list's non_exhaustive struct variants (document-panels-w5):
-// `PageListEvent::{rename(row, text), lock(row, locked), new_artboard(duplicate, options)}`.
-
 /// The key of every dialog open on the window's host.
 fn open_keys(app: &VectorcraftApp) -> Vec<String> {
     app.dialogs().map(|d| d.with(|host| host.open_dialogs().into_iter().filter_map(|o| o.key).collect())).unwrap_or_default()
@@ -126,11 +123,11 @@ fn list_events_and_menu_rows_reach_their_commands() {
 
     // New adds one and makes it active; a dropped row duplicates its artboard; Alt asks for options first.
     let mut app = menu_app(3);
-    apply(&mut app, vec![PageListEvent::new_artboard(None, false)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, false)]);
     assert_eq!((board_names(&app).len(), selected(&app, 4)), (4, 3));
-    apply(&mut app, vec![PageListEvent::new_artboard(Some(0), false)]);
+    apply(&mut app, vec![PageListEvent::new_row(Some(0), false)]);
     assert!(board_names(&app).contains(&"Artboard 1 copy".to_string()));
-    apply(&mut app, vec![PageListEvent::new_artboard(None, true)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, true)]);
     assert_eq!(board_names(&app).len(), 5, "no artboard is added before OK");
     assert!(is_open::<ArtboardOptionsDialog>(&app));
     cancel_open(&mut app, &egui::Context::default());
@@ -604,11 +601,11 @@ fn dragging_a_row_onto_new_artboard_duplicates_it() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    apply(&mut app, vec![PageListEvent::new_artboard(Some(0), false)]);
+    apply(&mut app, vec![PageListEvent::new_row(Some(0), false)]);
     let d = &app.session.active().unwrap().doc;
     assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (2, 2), "the artboard and its art");
     assert_eq!(app.view().unwrap().artboard, 1);
-    apply(&mut app, vec![PageListEvent::new_artboard(None, false)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, false)]);
     let d = &app.session.active().unwrap().doc;
     assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (3, 2), "a plain New adds no art");
 }
@@ -723,7 +720,7 @@ fn alt_clicking_new_artboard_opens_artboard_options_for_the_new_artboard() {
     let ctx = egui::Context::default();
     let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.len();
     // Alt: the dialog for Artboard 3, 20 pt right of Artboard 2 and as large; no artboard yet.
-    apply(&mut app, vec![PageListEvent::new_artboard(None, true)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, true)]);
     assert!(is_open::<ArtboardOptionsDialog>(&app));
     let fields = dialog_fields(&app);
     assert_eq!(fields["name"].as_str(), Some("Artboard 3"));
@@ -731,18 +728,18 @@ fn alt_clicking_new_artboard_opens_artboard_options_for_the_new_artboard() {
     assert_eq!(count(&app), 2, "no artboard is added before OK");
     // A plain New adds the artboard the dialog showed, with no dialog.
     cancel_open(&mut app, &ctx);
-    apply(&mut app, vec![PageListEvent::new_artboard(None, false)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, false)]);
     let ab = app.session.active().unwrap().doc.artboards[2].clone();
     assert_eq!((ab.name.as_str(), ab.rect), ("Artboard 3", vectorcraft_geom::Rect::new(520.0, 300.0, 620.0, 350.0)));
     assert!(open_keys(&app).is_empty());
     app.run("edit.undo", json!({})).unwrap();
     select(&mut app, 0);
     // Cancel adds nothing.
-    apply(&mut app, vec![PageListEvent::new_artboard(None, true)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, true)]);
     cancel_open(&mut app, &ctx);
     assert_eq!((count(&app), app.view().unwrap().artboard), (2, 0));
     // OK adds it with the fields, in one undo step, and makes it the active artboard.
-    apply(&mut app, vec![PageListEvent::new_artboard(None, true)]);
+    apply(&mut app, vec![PageListEvent::new_row(None, true)]);
     let undo = app.session.doc().unwrap().history.undo.len();
     confirm_open(&mut app, &ctx, &[("name", json!("Cover")), ("width", json!(300))]);
     let ab = app.session.active().unwrap().doc.artboards[2].clone();

@@ -72,7 +72,6 @@ fn saved_preset(p: &Panel, name: &str) -> Value {
 fn check(p: &Panel, id: &str, params: Value) -> Option<bool> {
     let mut states = CommandStates::new();
     menu_states(&p.app(), &mut states);
-    // PLAN: assumed CommandState::is_checked() -> Option<bool>
     states.get(&CommandRef::with_params(id, params)).and_then(|s| s.is_checked())
 }
 

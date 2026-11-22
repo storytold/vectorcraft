@@ -38,7 +38,6 @@ fn state(app: &VectorcraftApp, command: &CommandRef) -> (bool, bool) {
     let mut states = CommandStates::new();
     menu_states(app, &mut states);
     let s = states.get(command).unwrap_or_else(|| panic!("no state for {}", command.key()));
-    // PLAN: assumed CommandState::is_checked(&self) -> Option<bool>
     (s.is_enabled(), s.is_checked() == Some(true))
 }
 
