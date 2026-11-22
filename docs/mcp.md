@@ -2697,8 +2697,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   stored with the preferences under `scriptPreferences`, with the type they were set as, and are kept across runs and restarts; a run that fails or is stopped puts them back.
   VectorCraft's own rules: a key that was never set reads as `false`, `0`, `0` or `""`; a getter of another type
   converts the value as `Boolean`, `Number` and `String` do, and `getIntegerPreference` drops the fraction and gives
-  `0` for a value that is not a number. A key has 1 to 256 characters and no control characters, a string value at
-  most 65,536 bytes, and the store at most 4,096 keys and 1,048,576 bytes (each value that is not a string counts 8);
+  `0` for a value that is not a number. A key has a `length` of 1 to 256 UTF-16 code units (a character outside
+  the Basic Multilingual Plane, such as an emoji, counts 2) and no control characters, a string value at most
+  65,536 bytes, and the store at most 4,096 keys and 1,048,576 bytes (each value that is not a string counts 8);
   `setIntegerPreference` takes a whole number within ±2^53 and `setRealPreference` a finite number. A value of the
   wrong type or past a limit throws an error and stores nothing, and removing a key that is not stored does nothing.
 - `app.getIdentityMatrix()`, `getTranslationMatrix(deltaX?, deltaY?)` (points), `getScaleMatrix(scaleX?, scaleY?)`

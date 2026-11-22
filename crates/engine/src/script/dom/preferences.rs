@@ -90,7 +90,9 @@ fn key_of(a: &[Data]) -> std::result::Result<&str, HostError> {
     }
     let Data::String(key) = arg(a, 1) else { return Err(HostError::Type("a preference's key must be a string".into())) };
     if key.is_empty() || key.encode_utf16().count() > MAX_KEY_UNITS {
-        return Err(HostError::Range(format!("a preference's key must have 1 to {MAX_KEY_UNITS} characters")));
+        return Err(HostError::Range(format!(
+            "a preference's key must have a length of 1 to {MAX_KEY_UNITS} (UTF-16 code units, as `length` counts)"
+        )));
     }
     if key.chars().any(char::is_control) {
         return Err(HostError::Error("a preference's key cannot hold control characters".into()));

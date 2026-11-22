@@ -226,6 +226,8 @@ fn bad_arguments_throw_and_store_nothing() {
         ("app.preferences.getBooleanPreference();", "key must be a string"),
         ("app.preferences.setStringPreference('', 'v');", "1 to 256"),
         ("app.preferences.setStringPreference(new Array(258).join('k'), 'v');", "1 to 256"),
+        // 129 characters outside the Basic Multilingual Plane are 258 UTF-16 code units.
+        ("app.preferences.setStringPreference(new Array(130).join('\\uD83D\\uDE00'), 'v');", "1 to 256"),
         ("app.preferences.setStringPreference('a\\u0000b', 'v');", "control characters"),
         ("app.preferences.setStringPreference('k', new Array(65538).join('v'));", "at most 65536 bytes"),
         ("var f = app.preferences.getBooleanPreference; f.call({}, 'k');", "not a Preferences"),
@@ -238,9 +240,11 @@ fn bad_arguments_throw_and_store_nothing() {
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
     assert!(s.prefs.script_preferences.is_empty());
-    // A key of exactly 256 characters and a value of exactly the limit are taken.
+    // A key of exactly 256 code units and a value of exactly the limit are taken.
     log(&mut s, "app.preferences.setStringPreference(new Array(257).join('k'), new Array(65537).join('v'));");
     assert_eq!(stored(&s, &"k".repeat(256)), Some(ScriptPreference::String("v".repeat(MAX_STRING_BYTES))));
+    log(&mut s, "app.preferences.setStringPreference(new Array(129).join('\\uD83D\\uDE00'), 'v');");
+    assert_eq!(stored(&s, &"\u{1F600}".repeat(128)), Some(ScriptPreference::String("v".into())));
 }
 
 #[test]

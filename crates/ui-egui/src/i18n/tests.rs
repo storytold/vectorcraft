@@ -717,6 +717,17 @@ fn compound_shape_no_area_warning_is_translated() {
     }
 }
 
+/// The confirm a run shows before a script turns off the external script warning, which the message
+/// scan doesn't read, is translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn script_warning_off_question_is_translated() {
+    let question = vectorcraft_engine::script::dom::preferences::WARNING_OFF_QUESTION;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, question), question, "{code}");
+    }
+}
+
 /// The Save PDF dialog's Save Summary… button and `ui.pdfSummary.save`'s error when no such
 /// dialog is open.
 #[test]
