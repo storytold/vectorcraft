@@ -476,7 +476,7 @@ fn artboard_history_delete_after_undo(key: Key, duplicate: bool) {
         (st.doc.clone(), st.selection.clone(), st.history.undo.len())
     };
     let mut panel = artboards_panel(app);
-    let ctx = crate::testing::ui_context();
+    let ctx = panel.ctx().clone();
     add_board(&mut panel, duplicate);
     assert_eq!(undo_depth(&panel.app()), undo + 1);
     artboard_history_key(&mut panel, &ctx, Key::Z, Modifiers::COMMAND);
@@ -569,7 +569,7 @@ fn artboard_history_undo_prunes_only_removed_indices() {
             (st.doc.clone(), st.selection.clone(), st.history.undo.len())
         };
         let mut panel = artboards_panel(app);
-        let ctx = crate::testing::ui_context();
+        let ctx = panel.ctx().clone();
         artboard_history_new(&mut panel);
         let created = panel.app().session.doc().unwrap().doc.clone();
         for (at, i) in order.into_iter().enumerate() {
@@ -606,7 +606,7 @@ fn artboard_history_valid_multiselection_survives_undo_redo() {
     app.session.set_tool_option("moveArt", &json!(false));
     app.session.set_tool_option("scaleArt", &json!(true));
     let mut panel = artboards_panel(app);
-    let ctx = crate::testing::ui_context();
+    let ctx = panel.ctx().clone();
     select_artboard_rows(&mut panel, &[0, 1]);
     let (options, view, before, selection, undo) = {
         let mut app = panel.app();
@@ -1261,7 +1261,7 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     panel.frame();
     assert!(!matches!(panel.value("Rotate").as_deref(), Some("30°" | "45°")), "Rotate is blank");
     let depth = undo_depth(&panel.app());
-    panel.click("Bottom Right");
+    panel.click("Bottom right");
     assert_eq!(
         {
             let app = panel.app();
@@ -1512,19 +1512,20 @@ fn character_section_shows_the_type_tool_selections_style() {
     app.run("text.setRangeStyle", json!({"id": id, "start": 8, "end": 13, "style": "Bold"})).unwrap();
     app.run("text.setRangeStyle", json!({"id": id, "start": 13, "end": 22, "style": "Condensed"})).unwrap();
     let mut panel = Panel::new(app, type_sections);
+    // The style the Style picker shows.
     let shown = |panel: &mut Panel| {
         panel.frame();
-        ["Regular", "Bold", "Condensed"].into_iter().filter(|style| panel.shows(style)).collect::<Vec<_>>()
+        panel.value("Style")
     };
     for (start, end, want) in [(8, 12, "Bold"), (13, 22, "Condensed"), (0, 7, "Regular"), (15, 15, "Condensed"), (13, 13, "Bold")] {
         panel.app().session.set_tool_option("select", &json!({"start": start, "end": end}));
         assert_eq!(crate::panels::character::text_editing(&panel.app()).map(|(_, a, b)| (a, b)), Some((start, end)));
-        assert_eq!(shown(&mut panel), [want], "{start}..{end}");
+        assert_eq!(shown(&mut panel).as_deref(), Some(want), "{start}..{end}");
     }
     panel.app().session.select_tool("selection", Default::default()).unwrap();
     panel.app().run("select.set", json!({"ids": [id]})).unwrap();
     assert_eq!(crate::panels::character::text_editing(&panel.app()), None);
-    assert_eq!(shown(&mut panel), ["Regular"], "the Selection tool shows the first run's style");
+    assert_eq!(shown(&mut panel).as_deref(), Some("Regular"), "the Selection tool shows the first run's style");
 }
 
 /// With type selected, Quick Actions offers Create Outlines, Retype and Find and Replace… (G12): Create Outlines

@@ -95,7 +95,7 @@ fn a_click_on_a_color_sets_the_fill() {
     app.run("select.set", json!({"ids": [reds[0], blue]})).unwrap();
     let undo = undo_len(&app);
     let mut p = Panel::new(app);
-    p.click(&label("#0000ff", 1));
+    p.point(&label("#0000ff", 1));
     assert_eq!(undo_len(&p.app()), undo + 1);
     let mut app = p.app_mut();
     assert_eq!(fill_of(&mut app, &reds[0]), "#0000ff");
@@ -112,7 +112,7 @@ fn a_click_keeps_a_swatch_link_and_its_tint() {
     app.run("select.set", json!({"ids": [ink, blue]})).unwrap();
     let hex = used_hex(&mut app, "Ink");
     let mut p = Panel::new(app);
-    p.click(&label(&hex, 1));
+    p.point(&label(&hex, 1));
     let app = p.app();
     let st = app.session.doc().unwrap();
     let fill = st.doc.node(vectorcraft_doc::NodeId(blue.as_u64().unwrap())).unwrap().appearance.fill_paint().clone();
@@ -134,7 +134,7 @@ fn a_click_recolors_the_selected_gradient_stop() {
     app.run("ui.colorWheel", json!({"documentColors": true})).unwrap();
     let hex = used_hex(&mut app, "Ink");
     let mut p = Panel::new(app);
-    p.click(&label(&hex, 1));
+    p.point(&label(&hex, 1));
     let Paint::Gradient(g) = crate::panels::current_paints(&p.app()).0 else { panic!("still a gradient") };
     let stop = &g.gradient.stops[1];
     assert_eq!((stop.color.to_hex(), stop.swatch.as_deref()), (hex, Some("Ink")));
@@ -156,7 +156,7 @@ fn a_click_gives_a_freeform_point_the_color_alone() {
     app.run("ui.colorWheel", json!({"documentColors": true})).unwrap();
     let hex = used_hex(&mut app, "Ink");
     let mut p = Panel::new(app);
-    p.click(&label(&hex, 1));
+    p.point(&label(&hex, 1));
     let Paint::Gradient(g) = crate::panels::current_paints(&p.app()).0 else { panic!("still a gradient") };
     let points = g.freeform.expect("still freeform").points;
     assert_eq!(points[1].color.to_hex(), hex);

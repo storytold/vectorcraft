@@ -238,6 +238,13 @@ mod tests {
         assert_eq!((b.x0, b.y0, b.x1, b.y1), (5.0, 5.0, 65.0, 65.0), "the stroke's outer edge");
     }
 
+    /// Whether the panel menu's Trap… row is enabled, as the panel menu shows it.
+    fn trap_enabled(app: &VectorcraftApp) -> bool {
+        let mut states = CommandStates::new();
+        menu_states(app, &mut states);
+        states.get(&CommandRef::new("ui.pathfinder.trap")).is_some_and(CommandState::is_enabled)
+    }
+
     /// The panel menu's compound shape items: Make with two or more objects selected, Release and
     /// Expand with a compound shape (or a member of one); the Expand button follows Expand, and
     /// with a member selected its Shape Mode button is lit.
@@ -378,16 +385,10 @@ mod tests {
         host(app).with(|h| h.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())).expect("an open parameter dialog")
     }
 
-    /// Sets `fields` of the open dialog `id`, presses its OK and lets the app apply the answer.
+    /// Sets `fields` of the open dialog `id`, presses its OK and lets the app apply the answer; the dialog holds its OK
+    /// until the app takes the answer.
     fn confirm_dialog(app: &mut VectorcraftApp, id: egui::Id, fields: &[(&str, Value)]) {
-        let ctx = app.ui_ctx.clone().expect("a window");
-        host(app).with(|h| {
-            for (key, value) in fields {
-                h.set_json_field(&ctx, id, key, value.clone()).unwrap();
-            }
-            assert!(h.confirm_by_id(&ctx, id), "OK is enabled");
-        });
-        crate::dialogs::host::pump(app, &ctx);
+        crate::tests::picks::answer_dialog(app, id, fields, true);
     }
 
     /// The panel menu's Trap… is enabled for two objects and opens the Trap options; OK adds the
@@ -402,9 +403,9 @@ mod tests {
         };
         let (a, b) = (rect(10.0, "#ffff00"), rect(60.0, "#0000ff"));
         app.run("select.set", json!({"ids": [a]})).unwrap();
-        assert!(!crate::menus::enabled(&app, "ui.pathfinder.trap"), "one object has nothing to trap with");
+        assert!(!trap_enabled(&app), "one object has nothing to trap with");
         app.run("select.set", json!({"ids": [a, b]})).unwrap();
-        assert!(crate::menus::enabled(&app, "ui.pathfinder.trap"));
+        assert!(trap_enabled(&app));
         app.run("ui.pathfinder.trap", json!({})).unwrap();
         let id = open_dialog(&mut app);
         let fields = dialog_fields(&app, id);

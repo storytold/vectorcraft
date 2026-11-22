@@ -295,8 +295,8 @@ fn item_effect_rows_toggle_their_eye() {
     run(&mut app, "effect.apply", json!({"effect": "distort.roughen", "item": 1}));
     // The stroke row's disclosure is open: its Opacity sub-row and its effect show under it.
     let mut panel = appearance_panel(app, &[appearance::RowKey::Item(1)]);
-    // PLAN: assumed accessible name of a row's eye cell
-    let eye = "Visible: Roughen";
+    // A row's eye cell is named for what it shows and hides.
+    let eye = "Visibility Roughen";
     let visible = |panel: &Panel| current_stroke_effects(&panel.app())[0].visible;
     panel.click(eye);
     assert!(!visible(&panel));

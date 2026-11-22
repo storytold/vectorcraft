@@ -357,8 +357,8 @@ fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_grou
     // The colour group the swatch goes into is the dialog's own: OK below puts it into Brights.
     assert_eq!(dialog_field(&app, key, "name"), json!("R=255 G=128 B=0"));
     assert_eq!(
-        (dialog_field(&app, key, "spot"), dialog_field(&app, key, "global")),
-        (json!(true), json!(true)),
+        (dialog_field(&app, key, "type"), dialog_field(&app, key, "global")),
+        (json!("spot"), json!(true)),
         "Cmd/Ctrl-click makes a spot colour"
     );
     dialog_frame(&mut app, &ctx);
@@ -1050,12 +1050,14 @@ fn color_group_options_opens_on_a_sole_selected_group() {
 fn color_group_options_without_a_group_opens_on_the_selected_group() {
     let mut app = app();
     let key = crate::dialogs::color_group_options::KIND;
+    // The panel has shown the document, as it has before a click selects a row in it.
+    let ctx = context(&app);
+    frame(&mut app, &ctx, 0.0);
     select_rows(&mut app, &["Grays"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
     assert_eq!(dialog_field(&app, key, "name"), json!("Grays"));
     cancel(&mut app, key);
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let ctx = context(&app);
     frame(&mut app, &ctx, 0.0);
     assert!(app.run("ui.colorGroupOptions", json!({})).is_err() && !dialog_open(&app, key), "another document");
 }

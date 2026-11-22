@@ -891,6 +891,8 @@ mod tests {
             }
         }
         let t = app.session.doc().unwrap().doc.variables.objects_of("Name")[0].0;
+        // The text just made is selected.
+        app.run("select.none", json!({})).unwrap();
         let nothing_picked =
             [("variable.makeTextDynamic", false), (UNBIND, false), (DELETE_VARIABLE, false), (SELECT_BOUND, false), (SELECT_ALL_BOUND, true)];
         check(&app, &nothing_picked, "with nothing selected or highlighted");

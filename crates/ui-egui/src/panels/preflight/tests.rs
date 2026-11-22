@@ -18,6 +18,17 @@ fn row(app: &mut VectorcraftApp, code: &str) -> String {
     format!("{}, {}, Warning", finding["name"].as_str().unwrap(), reason(code))
 }
 
+/// Whole-app frames in a window wide enough for a canvas that zooms in on the art, where the canvas, once laid out,
+/// takes the view request a zoom to the selection made.
+fn app_frame(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.get_or_insert_with(crate::testing::ui_context).clone();
+    for _ in 0..2 {
+        let time = ctx.input(|i| i.time) + 0.05;
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 1600.0)));
+        crate::testing::app_frame(app, &ctx, egui::RawInput { screen_rect, time: Some(time), focused: true, ..Default::default() });
+    }
+}
+
 fn big_canvas(app: &mut VectorcraftApp) {
     app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
 }
@@ -49,6 +60,7 @@ fn clicking_a_preflight_finding_selects_and_zooms_to_its_artwork() {
     let mut panel = Panel::new(app, show);
     panel.frame();
     panel.click(&overflow);
+    app_frame(&mut panel.app());
     let app = panel.app();
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id.as_u64().unwrap())]);
     assert!(app.view().unwrap().fitted);
@@ -77,6 +89,7 @@ fn clicking_a_preflight_finding_on_a_locked_artboard_reports_the_problem() {
     }
     panel.app().run("artboard.setProps", json!({ "index": 0, "locked": false })).unwrap();
     locate(&mut panel.app(), &json!({ "ids": [id] }));
+    app_frame(&mut panel.app());
     let app = panel.app();
     assert!(app.ui.status.is_empty(), "successful navigation clears its previous warning: {}", app.ui.status);
     assert!(app.view().unwrap().fitted);
@@ -94,6 +107,7 @@ fn preflight_navigation_reports_partial_selection_and_zooms_to_selectable_artwor
     let finding = report["findings"].as_array().unwrap().iter().find(|f| f["code"] == "missingFont").unwrap();
     assert!(finding["ids"].as_array().unwrap().contains(&locked));
     locate(&mut app, finding);
+    app_frame(&mut app);
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(free.as_u64().unwrap())]);
     assert!(app.view().unwrap().fitted);
     assert!(app.view().unwrap().zoom > 1.0);

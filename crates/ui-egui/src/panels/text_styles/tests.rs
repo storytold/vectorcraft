@@ -1,6 +1,6 @@
 use super::*;
 use crate::testing::ui_context;
-use crate::tests::picks::{answer_dialog, open_dialogs, poll, scripted};
+use crate::tests::picks::{answer_dialog, cancel_dialog, open_dialogs, poll, scripted};
 use crate::tests::synthetic::key_frame;
 use vectorcraft_doc::{NodeId, NodeKind};
 
@@ -72,6 +72,9 @@ fn is_open(app: &VectorcraftApp, key: &str) -> bool {
 fn answer(app: &mut VectorcraftApp, key: &str, fields: &[(&str, Value)], ok: bool) {
     let id = open_dialogs(app).into_iter().find(|d| d.key.as_deref() == Some(key)).map(|d| d.id).expect("the dialog is open");
     answer_dialog(app, id, fields, ok);
+    if !ok {
+        cancel_dialog(app, id);
+    }
 }
 
 /// Names the style in the open New Style dialog and confirms it. A refused name leaves the dialog open.
@@ -274,9 +277,10 @@ fn character_style_options_menu_opens_format_sections() {
     let body = style_id(&mut app, Kind::Char, "Body");
     act(&mut app, Kind::Char, TextStyleAction::Options(body));
     let fields = fields_of(&app, "charStyleOptions").expect("Options opens Character Style Options");
-    assert_eq!(fields["style"], "Body");
+    assert_eq!(fields["name"], "Body");
     assert_eq!(fields["tab"], "general");
-    assert_eq!(fields["size"].as_f64(), Some(24.0));
+    // The dialog holds opened numbers as their text.
+    assert_eq!(fields["size"].as_f64().or_else(|| fields["size"].as_str()?.parse().ok()), Some(24.0), "{}", fields["size"]);
     assert_eq!(fields["preview"], true);
 }
 

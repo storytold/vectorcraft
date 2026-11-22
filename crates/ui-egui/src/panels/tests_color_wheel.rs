@@ -75,4 +75,10 @@ impl Panel {
         let t = self.node(label);
         self.fx.access(AccessActionKind::Click, &t).idle(2);
     }
+
+    /// Clicks the node named `label` with the pointer.
+    pub(super) fn point(&mut self, label: &str) {
+        let t = self.node(label);
+        self.fx.click(&t).idle(2);
+    }
 }
