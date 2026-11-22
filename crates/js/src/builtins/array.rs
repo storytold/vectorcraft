@@ -96,15 +96,23 @@ fn numeric_index(k: &[u16]) -> Option<u64> {
     Some(n)
 }
 
-/// The objects of the prototype chain from `obj`, with how many properties (and String object
-/// indices) each holds.
+/// The indices a String object or a typed array holds without properties for them.
+fn index_count(class: &Class) -> usize {
+    match class {
+        Class::String(s) => s.len(),
+        Class::TypedArray(view) => view.length,
+        _ => 0,
+    }
+}
+
+/// The objects of the prototype chain from `obj`, with how many properties (and String object or
+/// typed array indices) each holds.
 fn chain(interp: &Interp, obj: ObjId) -> Vec<(ObjId, usize)> {
     let mut out = Vec::new();
     let mut cur = Some(obj);
     while let Some(id) = cur {
         let Some(o) = interp.heap.object(id) else { break };
-        let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
-        out.push((id, o.props.len().saturating_add(string_len)));
+        out.push((id, o.props.len().saturating_add(index_count(&o.class))));
         cur = o.proto;
     }
     out
@@ -141,8 +149,7 @@ impl Indices {
             }
             interp.reserve_heap(n.saturating_mul(8).saturating_mul(self.maps.len() + 1))?;
             let Some(o) = interp.heap.object(id) else { continue };
-            let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
-            let present = (0..string_len as u64).chain(o.props.iter().filter_map(|(k, _)| numeric_index(k)));
+            let present = (0..index_count(&o.class) as u64).chain(o.props.iter().filter_map(|(k, _)| numeric_index(k)));
             for p in present {
                 for map in &self.maps {
                     let p = p as i64;
@@ -335,13 +342,13 @@ fn locale_item(interp: &mut Interp, v: Value) -> JsResult<Option<Str>> {
 }
 
 /// `Array.prototype.join` (section 15.4.4.5).
-fn join(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn join(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let separator = arg(args, 0);
     with_this(interp, &this, |interp, o| join_with(interp, o, &separator, join_item))
 }
 
 /// `Array.prototype.toLocaleString` (section 15.4.4.3).
-fn to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     with_this(interp, &this, |interp, o| join_with(interp, o, &Value::Undefined, locale_item))
 }
 
@@ -413,7 +420,7 @@ fn push(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<V
 }
 
 /// `Array.prototype.reverse` (section 15.4.4.8).
-fn reverse(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn reverse(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     with_this(interp, &this, |interp, o| {
         let len = u64::from(length_of(interp, o)?);
         let middle = len / 2;
@@ -692,7 +699,7 @@ fn sort_elements(interp: &mut Interp, o: ObjId, len: u64, compare: &Value) -> Js
 // ---- searching ----
 
 /// `Array.prototype.indexOf` (section 15.4.4.14).
-fn index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     with_this(interp, &this, |interp, o| {
         let len = f64::from(length_of(interp, o)?);
         if len == 0.0 {
@@ -717,7 +724,7 @@ fn index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResu
 }
 
 /// `Array.prototype.lastIndexOf` (section 15.4.4.15).
-fn last_index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn last_index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     with_this(interp, &this, |interp, o| {
         let len = f64::from(length_of(interp, o)?);
         if len == 0.0 {
@@ -794,15 +801,15 @@ fn iterate(interp: &mut Interp, this: Value, args: &[Value], kind: Each) -> JsRe
     })
 }
 
-fn every(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn every(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     iterate(interp, this, args, Each::Every)
 }
 
-fn some(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn some(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     iterate(interp, this, args, Each::Some)
 }
 
-fn for_each(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn for_each(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     iterate(interp, this, args, Each::Visit)
 }
 
@@ -852,10 +859,10 @@ fn fold(interp: &mut Interp, this: Value, args: &[Value], right: bool) -> JsResu
     })
 }
 
-fn reduce(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn reduce(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     fold(interp, this, args, false)
 }
 
-fn reduce_right(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+pub(super) fn reduce_right(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     fold(interp, this, args, true)
 }

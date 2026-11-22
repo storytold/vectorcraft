@@ -46,6 +46,18 @@
 //! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
 //! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
 //! node.
+//!
+//! With [`Options::es2015`], the realm also provides these ECMAScript 2015 built-ins
+//! (<https://262.ecma-international.org/6.0/>): `Map` and `Set` (sections 23.1 and 23.2), whose
+//! keys compare with SameValueZero and keep the order they were added in, with `forEach` visiting
+//! entries added while it runs; `WeakMap` and `WeakSet` (23.3 and 23.4), whose entries the
+//! collector removes once their keys are unreachable; and `ArrayBuffer`, `DataView` and the nine
+//! typed arrays (24.1, 24.2 and 22.2). `keys`, `values` and `entries` give iterator objects with
+//! a `next` method. Until the language has iterators, the collection constructors and
+//! `%TypedArray%.from` read an array, a string (by code point) or an object with a `length`, by
+//! index. A typed array constructor reads an array or an object with a `length` the same way, and
+//! converts a first argument that is not an object to a length. A buffer longer than the heap
+//! limit is a `RangeError`, and its bytes are checked against the heap before they are allocated.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -100,11 +112,15 @@ pub struct Options {
     pub max_source_units: usize,
     /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
     pub e4x: bool,
+    /// Give a realm the ECMAScript 2015 built-ins this engine has: `Map`, `Set`, `WeakMap`,
+    /// `WeakSet`, `ArrayBuffer`, `DataView` and the typed arrays. Off, a realm has the ES5.1
+    /// built-ins only, as ExtendScript scripts expect.
+    pub es2015: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false }
+        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false, es2015: false }
     }
 }
 
@@ -202,6 +218,8 @@ impl LineTable {
 
 #[cfg(test)]
 mod builtins_tests;
+#[cfg(test)]
+mod collections_tests;
 #[cfg(test)]
 mod extension_tests;
 #[cfg(test)]

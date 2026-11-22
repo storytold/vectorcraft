@@ -3,13 +3,16 @@
 //! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
 //! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
 //! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
-//! their own modules.
+//! their own modules. A realm with [`crate::Options::es2015`] also has `Map`, `Set`, `WeakMap` and
+//! `WeakSet` (in `collections`) and `ArrayBuffer`, `DataView` and the typed arrays (in `binary`).
 //!
 //! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
 //! or property it makes is checked against the heap limit before it is made, so no built-in can
 //! run past [`crate::Limits`].
 
 mod array;
+pub(crate) mod binary;
+pub(crate) mod collections;
 pub(crate) mod extensions;
 mod global;
 mod json;
@@ -145,6 +148,10 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     if interp.options.e4x {
         crate::xml_builtins::install(interp)?;
     }
+    if interp.options.es2015 {
+        collections::install(interp)?;
+        binary::install(interp)?;
+    }
     Ok(())
 }
 
@@ -165,8 +172,16 @@ fn key_of(n: f64) -> Key {
     number_to_str(n).flat()
 }
 
-/// ToUint32 of an object's `length`.
+/// ToUint32 of an object's `length`. While a `%TypedArray%.prototype` method runs the array
+/// method it shares, the typed array's length is its element count, whatever its `length`
+/// property says (ECMA-262 6.0 section 22.2.3).
 fn length_of(interp: &mut Interp, o: ObjId) -> JsResult<u32> {
+    if interp.typed_length == Some(o) {
+        interp.typed_length = None;
+        if let Some(Class::TypedArray(view)) = interp.heap.object(o).map(|obj| &obj.class) {
+            return Ok(u32::try_from(view.length).unwrap_or(u32::MAX));
+        }
+    }
     let len = interp.get_from(o, &key("length"), &Value::Object(o))?;
     Ok(to_uint32(interp.to_number(&len)?))
 }

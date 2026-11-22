@@ -2616,8 +2616,10 @@ https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-act
 describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
-`ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
-app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
+`ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. An ES5.1 script does not
+have `Map`, `Set`, `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView` or the typed arrays; the JavaScript engine's
+ECMAScript 2015 mode (`Options::es2015` in `vectorcraft-js`) adds them, as `docs/target-app-parity.md` describes. The
+script reaches the app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
