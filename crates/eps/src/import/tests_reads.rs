@@ -357,3 +357,10 @@ fn one_pass_reads_timed() {
     let lines: Vec<u8> = (0..200_000).flat_map(|i| format!("{:<39}\n", format!("line {i}")).into_bytes()).collect();
     compare("readline", &program(Form::Current(b"\n"), &lines), line_one_pass, line_by_bytes, 80, 200_000);
 }
+
+#[test]
+fn currentfile_at_eof_without_trailing_newline_stops_cleanly() {
+    line_case(b"partial-eof", 32, b"partial-eof", true, b"");
+    line_case(b"partial-eof", 7, b"partial", false, b"-eof");
+    hex_case(b"deadbeef", 16, &[0xde, 0xad, 0xbe, 0xef], b"");
+}

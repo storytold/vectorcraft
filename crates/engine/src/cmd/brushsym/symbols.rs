@@ -33,6 +33,40 @@ pub(crate) fn place_xf(at: Point, (w, h): (f64, f64), reg: SymbolRegistration) -
     Affine::translate(c.to_vec2()) * Affine::scale_non_uniform(w / (2.0 * HALF), h / (2.0 * HALF))
 }
 
+/// Where a placed symbol instance goes in the active document, worked out before the edit from
+/// the drawing mode, the selection and the layer new art goes into.
+pub(crate) struct Placement {
+    parent: Option<NodeId>,
+    behind: bool,
+    anchor: Option<NodeId>,
+}
+
+impl Placement {
+    /// On top of the layer new art goes into; in Draw Behind, directly below the bottommost
+    /// selected object (beside the compound path that holds it), or at the bottom of that layer
+    /// when nothing is selected. An error when that layer is locked or hidden.
+    pub(crate) fn of(s: &Session) -> Result<Self> {
+        let st = s.doc()?;
+        let parent = st.target_parent()?;
+        let behind = s.draw_mode == crate::DrawMode::Behind;
+        let compound_of = |id: NodeId| st.doc.parent_of(id).filter(|p| st.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
+        let anchor = behind.then(|| st.selection.in_paint_order(&st.doc).first().copied()).flatten().map(|id| compound_of(id).unwrap_or(id));
+        Ok(Self { parent, behind, anchor })
+    }
+
+    /// Inserts instance `n` where this placement puts it. In a clip group or a clipping layer the
+    /// clipping path stays at the bottom.
+    pub(crate) fn insert(&self, d: &mut Document, n: Node) -> Result<NodeId> {
+        let (parent, index) = match (self.behind, self.anchor.and_then(|a| d.position(a))) {
+            (false, _) => return Ok(d.insert(self.parent, usize::MAX, n)?),
+            (true, Some((par, i, _))) => (par, i),
+            (true, None) => (self.parent, 0),
+        };
+        let floor = usize::from(parent.and_then(|p| d.node(p)).is_some_and(Node::clips));
+        Ok(d.insert(parent, index.max(floor), n)?)
+    }
+}
+
 fn registration_param(p: &Value, cmd: &str) -> Result<Option<SymbolRegistration>> {
     match p.get("registration") {
         None => Ok(None),
@@ -437,10 +471,10 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
     let at = Point::new(number_or(p, "x", centre.x, "symbol.place")?, number_or(p, "y", centre.y, "symbol.place")?);
     let size = natural_size(d, &name);
     let reg = d.symbol_registration(&name);
-    let parent = s.doc()?.target_parent()?;
+    let spot = Placement::of(s)?;
     let id = s.edit("Place Symbol Instance", |d, sel| {
         let id = d.alloc_id();
-        d.insert(parent, usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(at, size, reg) }))?;
+        spot.insert(d, Node::new(id, NodeKind::SymbolInstance { symbol: name.clone(), xf: place_xf(at, size, reg) }))?;
         sel.set([id]);
         Ok(id)
     })?;
