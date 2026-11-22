@@ -512,7 +512,11 @@ fn native_version_is_a_menu_of_the_versions_vectorcraft_writes() {
 fn a_refused_save_says_so_in_an_alert() {
     let (mut app, written, _) = desktop("art.vectorcraft");
     assert_eq!(save_as(&mut app, "file.saveAs").as_deref(), Some(KIND));
-    set(&mut app, "version", json!("55"));
+    // The Version row lists only the versions there are: automation's "55" is refused as it is set. The save's own
+    // refusal is reached with the value put in the dialog directly, as a remembered version gone since would be.
+    let (ctx, id) = (app.ui_ctx.clone().unwrap(), top(&mut app));
+    assert!(host(&app, |h| h.set_json_field(&ctx, id, "version", json!("55"))).is_err());
+    host(&app, |h| h.get_mut_by_id::<HostedParamDialog>(id).map(|d| d.set_field("version", FieldValue::from("55")))).expect("a parameter dialog");
     frame(&mut app);
     ok(&mut app);
     // The alert opens over the options and names the reason.

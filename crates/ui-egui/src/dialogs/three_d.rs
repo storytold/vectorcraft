@@ -112,11 +112,18 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let build_data = Arc::clone(&shared);
     let title = label.clone();
+    let footer_effect = effect.clone();
     // The canvas of the current window: the gizmo and the droppers work there while the dialog is open.
     let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
     let dialog = HostedParamDialog::new(&ctx, "effect.dialog", fields, move |f| {
         let rows = revolve::params(&read(&build_data), f, Place::Dialog);
+        let reset = revolve::reset_all_button(&footer_effect, f);
+        let hint = hint_for(&footer_effect, f.bool("preview").unwrap_or(false), f);
         let dialog = ParamDialog::new("effect.dialog", title.clone(), rows).values(Bind::bound(f)).previews(true).layout(ParamLayout::Stacked);
+        let dialog = match reset {
+            Some(reset) => dialog.extra_buttons(vec![reset]).footer_note(hint),
+            None => dialog,
+        };
         match canvas {
             Some(canvas) => dialog.canvas(canvas),
             None => dialog,
@@ -242,7 +249,12 @@ fn surfaces(app: &mut VectorcraftApp, s: &Session, fields: &DialogFields, params
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut s) = app.three_d_dialog.take() else { return };
     // A dialog that closed is finished by the held drain (OK or Cancel), which owns the session's end.
-    let Some((fields, previewing)) = dialog_of(app, s.id, |d| (d.fields().clone(), d.is_previewing())) else {
+    let Some((fields, previewing)) = dialog_of(app, s.id, |d| {
+        if d.take_footer_action().as_deref() == Some(revolve::RESET_ALL) {
+            revolve::reset_all(d, &s.effect);
+        }
+        (d.fields().clone(), d.is_previewing())
+    }) else {
         app.three_d_dialog = Some(s);
         return;
     };

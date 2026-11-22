@@ -162,8 +162,10 @@ impl Recolor {
         self
     }
 
-    /// Two clicks on the control named `label` within the double-click time.
+    /// Two clicks on the control named `label` within the double-click time, after it: clicks before them are not
+    /// counted with them.
     pub(crate) fn double_click(&mut self, label: &str) -> &mut Self {
+        self.fixture.advance(1.0);
         let at = self.target(label).center();
         let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
         self.fixture.frame(vec![Event::PointerMoved(at)]);
@@ -194,7 +196,8 @@ impl Recolor {
 
     /// The rects of the graphics objects inside `area` (a bar's parts), left to right.
     pub(crate) fn graphics_in(&self, area: Rect) -> Vec<Rect> {
-        let mut rects: Vec<Rect> = self.fixture.by_role(Role::GRAPHICS_OBJECT).into_iter().map(|t| t.rect).filter(|r| area.contains_rect(*r)).collect();
+        let mut rects: Vec<Rect> =
+            self.fixture.by_role(Role::GRAPHICS_OBJECT).into_iter().map(|t| t.rect).filter(|r| area.contains_rect(*r)).collect();
         rects.sort_by(|a, b| a.left().total_cmp(&b.left()));
         rects
     }

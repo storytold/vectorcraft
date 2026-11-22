@@ -501,14 +501,15 @@ mod tests {
         let fx = effects(&app, id);
         assert_eq!((fx.len(), fx[0].params["name"].as_str()), (1, Some("Other")), "in its place, not added");
         // A default the document holds no copy of is selected.
-        app.session.execute("svgFilter.apply", &json!({"name": "Thin", "index": 0})).unwrap();
+        // The fill row stays active: `item: null` names the object's own effect, as the dialog does.
+        app.session.execute("svgFilter.apply", &json!({"name": "Thin", "index": 0, "item": null})).unwrap();
         app.session.execute("svgFilter.delete", &json!({"name": "Thin"})).unwrap();
         reopen(&mut app);
         assert_eq!((fields(&app)[SELECTED].as_str(), fields(&app)[EDITING].as_str()), (Some("Thin"), Some("")));
         answer_dialog(&mut app, dialog, &[(SELECTED, json!("Other"))], false);
         // Deleted: shown as missing, nothing selected, OK off.
         app.session.execute("svgFilter.delete", &json!({"name": "Other"})).unwrap();
-        app.session.execute("svgFilter.apply", &json!({"name": "Other", "index": 0, "xml": ""})).ok();
+        app.session.execute("svgFilter.apply", &json!({"name": "Other", "index": 0, "item": null, "xml": ""})).ok();
         let gone = vectorcraft_doc::Effect { id: "svg.filter".into(), params: json!({"name": "Gone"}), visible: true };
         app.session
             .edit("Plant", |d, _| {

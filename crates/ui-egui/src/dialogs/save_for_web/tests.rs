@@ -251,7 +251,11 @@ fn a_remembered_artboard_missing_from_another_document_falls_back_to_its_first()
     assert_eq!(fields(&app)["artboard"], json!(0));
     frame(&mut app);
     save(&mut app);
-    let image = pixels(dir.join("Untitled-1.png"));
+    // The file the save wrote, named after the second document.
+    let written: Vec<_> =
+        std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "png")).collect();
+    assert_eq!(written.len(), 1, "{written:?}");
+    let image = pixels(&written[0]);
     assert_eq!(image.dimensions(), (20, 12));
     assert_eq!(image.get_pixel(8, 8).0, [0, 255, 0, 255]);
 }

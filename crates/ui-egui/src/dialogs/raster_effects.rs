@@ -160,8 +160,11 @@ mod tests {
         assert_eq!(r["ok"], true, "{field}: {r}");
     }
 
+    /// OK as the button does it, the pump that answers the held OK, and the close the accepted answer waits for.
     fn ok(app: &mut VectorcraftApp, id: DialogId) {
         let ctx = app.ui_ctx.clone().unwrap();
+        app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
+        pump(app);
         app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
         pump(app);
     }
@@ -172,14 +175,16 @@ mod tests {
         crate::menus::invoke(&mut app, "document.rasterEffectsSettings", json!({}));
         let id = app.effect_dialogs.raster.as_ref().unwrap().id;
         assert_eq!(text(&app, id, "colorModel").as_deref(), Some("rgb"));
+        // `ui.dialog.set` names the dialog by the id `ui.inspect` lists.
+        let listed = id.value().to_string();
         for (k, v) in
             [("resolutionPreset", json!("300")), ("background", json!("white")), ("addAround", json!(36)), ("colorModel", json!("grayscale"))]
         {
-            set(&mut app, Some(super::CMD), k, v);
+            set(&mut app, Some(&listed), k, v);
         }
         // Other resolutions show their own field.
-        set(&mut app, Some(super::CMD), "resolutionPreset", json!("other"));
-        set(&mut app, Some(super::CMD), "resolution", json!(200));
+        set(&mut app, Some(&listed), "resolutionPreset", json!("other"));
+        set(&mut app, Some(&listed), "resolution", json!(200));
         ok(&mut app, id);
         assert!(app.effect_dialogs.raster.is_none());
         let st = app.session.active().unwrap();

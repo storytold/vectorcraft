@@ -10,10 +10,11 @@ use craft::theme::Srgba;
 use craft::ui::buttons::Button;
 use craft::ui::contract::Entry;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, clicked};
-use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind, ParamRows};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamKind, ParamRows};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::LengthUnits;
 use craft::ui::runtime::env::UnitKind;
+use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
@@ -106,16 +107,24 @@ fn value_of(fields: &DialogFields, key: &str) -> Option<Value> {
     }
 }
 
+/// The value a row keeps for JSON `value`; none for `null`.
+fn field_value(value: &Value) -> Option<FieldValue> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Bool(b) => FieldValue::from(*b),
+        Value::Number(n) => FieldValue::from(n.as_f64().unwrap_or_default()),
+        Value::String(s) => FieldValue::from(s.clone()),
+        other => FieldValue::Json(other.clone()),
+    })
+}
+
 /// Stores JSON `value` under `key` the way a row keeps it; `null` removes the key.
 fn set_value(fields: &mut DialogFields, key: &str, value: &Value) {
-    match value {
-        Value::Null => {
+    match field_value(value) {
+        Some(v) => fields.set(key, v),
+        None => {
             fields.remove(key);
         }
-        Value::Bool(b) => fields.set(key, *b),
-        Value::Number(n) => fields.set(key, n.as_f64().unwrap_or_default()),
-        Value::String(s) => fields.set(key, s.clone()),
-        other => fields.set(key, FieldValue::Json(other.clone())),
     }
 }
 
@@ -193,7 +202,7 @@ impl Rows<'_> {
     }
 }
 
-/// The rows of `data.effect` for `fields["__page"]`: the page tabs, the page's rows and, in the dialog, Reset all.
+/// The rows of `data.effect` for `fields["__page"]`: the page tabs and the page's rows.
 pub(crate) fn params(data: &Data, fields: &DialogFields, place: Place) -> Vec<Param> {
     let Some(effect) = data.effect.as_deref() else { return vec![] };
     let classic = vectorcraft_effects::is_classic_three_d(effect);
@@ -205,7 +214,7 @@ pub(crate) fn params(data: &Data, fields: &DialogFields, place: Place) -> Vec<Pa
         return super::three_d_classic::map_art_params(data, fields, effect);
     }
     let page = pages.get(page_at(fields, &pages)).map_or("rotation", |p| p.0);
-    let mut out = vec![page_row(pages)];
+    let mut out = vec![];
     match page {
         "object" => out.extend(object_rows(data, &rows, effect, place)),
         "materials" => out.push(super::three_d_materials::row(Arc::new(RwLock::new(data.clone())))),
@@ -214,9 +223,20 @@ pub(crate) fn params(data: &Data, fields: &DialogFields, place: Place) -> Vec<Pa
         _ if effect == REVOLVE => out.extend(revolve_rows(&rows, effect, place)),
         _ => out.extend(view_rows(&rows, effect, classic)),
     }
-    if place == Place::Dialog {
-        out.push(reset_all_row(effect, &defaults));
-    }
+    // In the dialog automation sets every setting Reset all puts back: the page's rows keep the keys they take, the
+    // tabs take the others.
+    let tabs = match place {
+        Place::Dialog => {
+            let free: Vec<String> = reset_defaults(effect)
+                .into_iter()
+                .filter(|(k, v)| !out.iter().any(|row| row.key == *k || field_value(v).is_some_and(|v| row.accepts(k, &v))))
+                .map(|(k, _)| k)
+                .collect();
+            page_row(pages).companions(free)
+        }
+        Place::Panel => page_row(pages),
+    };
+    out.insert(0, tabs);
     out
 }
 
@@ -512,10 +532,13 @@ fn lighting_presets_row(effect: &str) -> Param {
     .companions(["__light"])
 }
 
-/// The Reset all row: the hint, and a button that puts the shape, view and light back to their defaults. The mapped
-/// graphics, Map Art with its options and the render settings stay.
-fn reset_all_row(effect: &str, defaults: &Value) -> Param {
-    let mut kept = defaults.as_object().cloned().unwrap_or_default();
+/// The id of the footer's Reset all button.
+pub(crate) const RESET_ALL: &str = "resetAll";
+
+/// What Reset all puts back: the effect's defaults but the mapped graphics, Map Art with its options and the render
+/// settings, which stay.
+fn reset_defaults(effect: &str) -> serde_json::Map<String, Value> {
+    let mut kept = vectorcraft_effects::default_params(effect).and_then(|d| d.as_object().cloned()).unwrap_or_default();
     for key in [
         vectorcraft_effects::GRAPHICS,
         vectorcraft_effects::RENDER,
@@ -525,24 +548,33 @@ fn reset_all_row(effect: &str, defaults: &Value) -> Param {
     ] {
         kept.remove(key);
     }
-    let keys: Vec<String> = kept.keys().cloned().collect();
-    let effect = effect.to_owned();
-    let tip = if effect == REVOLVE { tl!("Reset all Revolve settings to their defaults.") } else { tl!("Reset all 3D settings to their defaults.") };
-    Param::custom("__resetAll", tl!("Reset all"), move |ui, fields, _| {
-        ui.horizontal(|ui| {
-            let hint = super::three_d::hint_for(&effect, fields.bool("preview").unwrap_or(false), fields);
-            ui.add(egui::Label::new(egui::RichText::new(hint).weak()).wrap());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if pressed(ui, tl!("Reset all"), differs_from(fields, &kept), Some(tip)) {
-                    kept.iter().for_each(|(k, v)| set_value(fields, k, v));
-                    fields.set("__light", 0i64);
-                }
-            });
-        })
-        .response
+    kept
+}
+
+/// The dialog's Reset all, in its footer beside the page's hint as production placed it, so it stays in view however
+/// long the page: off while every setting it puts back is at its default; none on the Map Art page.
+pub(crate) fn reset_all_button(effect: &str, fields: &DialogFields) -> Option<(String, FooterButton)> {
+    (fields.text("__page") != Some("mapArt")).then(|| {
+        let tip =
+            if effect == REVOLVE { tl!("Reset all Revolve settings to their defaults.") } else { tl!("Reset all 3D settings to their defaults.") };
+        let enabled = differs_from(fields, &reset_defaults(effect));
+        (RESET_ALL.to_owned(), FooterButton::new(tl!("Reset all"), DialogRole::Other).enabled(enabled).tooltip(tip))
     })
-    .companions(keys)
-    .full_width()
+}
+
+/// Reset all's press: the shape, view and light back to their defaults, the first light selected.
+pub(crate) fn reset_all(dialog: &mut HostedParamDialog, effect: &str) {
+    let kept = reset_defaults(effect);
+    let mut fields = dialog.fields().clone();
+    kept.iter().for_each(|(k, v)| set_value(&mut fields, k, v));
+    fields.set("__light", 0i64);
+    for key in kept.keys().map(String::as_str).chain(["__light"]) {
+        match fields.get(key) {
+            Some(value) if dialog.fields().get(key) != Some(value) => dialog.set_field(key, value.clone()),
+            Some(_) => {}
+            None => dialog.clear_field(key),
+        }
+    }
 }
 
 const LIGHT_KEYS: [(&str, &str); 6] = [

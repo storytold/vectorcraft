@@ -85,18 +85,28 @@ const MAX_SPACING: f64 = 1.0e5;
 
 /// What New Document edits: the document's name over the engine's settings, whose own `name` is the
 /// preset they were filled from.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct VcNewDocument {
     /// The new document's name.
     title: String,
     /// The settings; `name` is the preset they came from, `Custom` once edited.
     settings: DocSettings,
+    /// The orientation automation set, which [`DocumentSettings::note_set`] turns the page to: read back from the
+    /// fields, the width and height carry the orientation, so the one listed with them is not applied.
+    turn: Option<Value>,
+}
+
+/// The same document whatever orientation a set asked for: `turn` is spent by the set that gave it.
+impl PartialEq for VcNewDocument {
+    fn eq(&self, other: &Self) -> bool {
+        (&self.title, &self.settings) == (&other.title, &other.settings)
+    }
 }
 
 impl VcNewDocument {
     /// `settings` as they are, with an empty document name (a card's value).
     fn of(settings: DocSettings) -> Self {
-        Self { title: String::new(), settings }
+        Self { title: String::new(), settings, turn: None }
     }
 
     /// The fields as `ui.dialog.set` and `file.new` name them.
@@ -112,10 +122,17 @@ impl VcNewDocument {
     /// The settings the fields `value` describe; a missing field keeps its default and a bad one is
     /// refused with the engine's own message.
     fn from_value(value: &Value) -> Result<Self, String> {
-        let mut settings = DocSettings::default().with_params(value, "ui.dialog.set").map_err(|e| e.to_string())?;
+        let mut sizes = value.clone();
+        let turn = sizes.as_object_mut().and_then(|m| m.remove("orientation"));
+        let read = |p: &Value| DocSettings::default().with_params(p, "ui.dialog.set").map_err(|e| e.to_string());
+        // A bad orientation is refused with the engine's own message.
+        if let Some(o) = &turn {
+            read(&json!({ "orientation": o }))?;
+        }
+        let mut settings = read(&sizes)?;
         settings.name = value.get("basedOn").and_then(Value::as_str).unwrap_or(CUSTOM).to_owned();
         let title = value.get("name").and_then(Value::as_str).unwrap_or_default().to_owned();
-        Ok(Self { title, settings })
+        Ok(Self { title, settings, turn })
     }
 }
 
@@ -199,6 +216,12 @@ impl DocumentSettings for VcNewDocument {
     fn note_set(&mut self, field: &str, memory: &mut Memory) {
         if field == "units" {
             memory.units_chosen = true;
+        }
+        if let Some(o) = self.turn.take().filter(|_| field == "orientation") {
+            let name = self.settings.name.clone();
+            if let Ok(turned) = self.settings.clone().with_params(&json!({ "orientation": o }), "ui.dialog.set") {
+                self.settings = DocSettings { name, ..turned };
+            }
         }
     }
 
@@ -364,7 +387,7 @@ fn built_in_card(preset: &DocSettings, values: &VcNewDocument, orientation: Opti
         std::mem::swap(&mut s.width, &mut s.height);
     }
     let line = s.size_label();
-    let value = VcNewDocument { title: values.title.clone(), settings: s };
+    let value = VcNewDocument { title: values.title.clone(), settings: s, turn: None };
     DocumentCard::new(text(preset_name(&preset.name)), line, value, CardSource::Preset { artboard: None })
 }
 
@@ -507,7 +530,7 @@ fn first_settings(app: &VectorcraftApp, category: &str) -> Option<VcNewDocument>
     let as_saved = newdoc::find(&app.session, &first.name).is_some_and(|p| p.units == first.units);
     let own = !category.eq_ignore_ascii_case("Recent") || first.units == Unit::Pixels || as_saved;
     let units = if own { first.units } else { app.session.default_units() };
-    Some(VcNewDocument { title: app.session.peek_untitled().to_string(), settings: DocSettings { units, ..first } })
+    Some(VcNewDocument { title: app.session.peek_untitled().to_string(), settings: DocSettings { units, ..first }, turn: None })
 }
 
 /// The settings New Document opens on.
@@ -515,6 +538,7 @@ fn offered(app: &VectorcraftApp) -> VcNewDocument {
     first_settings(app, first_category(app)).unwrap_or_else(|| VcNewDocument {
         title: app.session.peek_untitled().to_string(),
         settings: DocSettings { units: app.session.default_units(), ..DocSettings::default() },
+        turn: None,
     })
 }
 
@@ -534,7 +558,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let mut saved = PresetLibrary::new();
     for preset in &app.session.prefs.new_doc_presets {
         // The engine keeps names the library refuses (an empty one); such a preset is not offered here.
-        saved.add(&GroupPath::root(), &preset.name, VcNewDocument { title: preset.name.clone(), settings: preset.clone() }).ok();
+        saved.add(&GroupPath::root(), &preset.name, VcNewDocument { title: preset.name.clone(), settings: preset.clone(), turn: None }).ok();
     }
     let recent: Vec<VcNewDocument> = app.session.prefs.recent_new_docs.iter().cloned().map(VcNewDocument::of).collect();
     let mut dialog = HostedNewDocument::<VcNewDocument>::new(&ctx, first, move |options| {
@@ -893,7 +917,8 @@ mod tests {
 
         let card = |units| DocumentCard::new("Card", "line", VcNewDocument::of(entry(units)), CardSource::Recent);
         let setup = Setup::default();
-        let mut doc = VcNewDocument { title: "Mine".into(), settings: DocSettings { units: Unit::Millimeters, ..DocSettings::default() } };
+        let mut doc =
+            VcNewDocument { title: "Mine".into(), settings: DocSettings { units: Unit::Millimeters, ..DocSettings::default() }, turn: None };
         let mut memory = Memory::default();
         doc.apply_card(&card(Unit::Inches), &setup, &mut memory);
         assert_eq!((doc.settings.units, doc.title.as_str()), (Unit::Inches, "Mine"), "a saved preset keeps its own units, the name stays");
