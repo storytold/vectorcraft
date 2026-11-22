@@ -2,7 +2,8 @@
 # Rows VectorCraft shares with the Tamil catalogs in craft-i18n reuse them (locales/ta/vectorcraft.tsv and
 # common.tsv by @newsbaba24x7, partly reviewed by a native speaker).
 # The remaining rows are AI-assisted translations from the plain meaning of the English.
-# No other product's localisation or string table was consulted. Native-speaker review is pending.
+# No other product's localisation or string table was consulted. Native speakers reviewed the catalog in the
+# running app (2026-11-15); the rows added on 2026-11-22 await their review.
 # Product names, file extensions, keyboard keys, units, placeholders, command ids and parameter names stay unchanged.
 # Tamil integer plurals: 1 uses one, everything else other (plural_one_other in i18n.rs).
 # @plural and @msgplural translations have two forms separated by |.
@@ -219,6 +220,10 @@
 	Action Options	செயல் விருப்பங்கள்
 	Action Options…	செயல் விருப்பங்கள்…
 	Action Set:	செயல் தொகுப்பு:
+	Choose Align To at playback	இயக்கும்போது எதற்கு ஏற்ப சீரமைப்பது எனத் தேர்ந்தெடு
+	Align steps use the key object, key anchor or key guide when one is set.	முக்கியப் பொருள், முக்கிய நங்கூரப் புள்ளி அல்லது முக்கிய வழிகாட்டி அமைக்கப்பட்டிருந்தால், சீரமைப்புப் படிகள் அதைப் பயன்படுத்தும்.
+	With one whole object selected and no key, they use the artboard.	ஒரே ஒரு முழுப் பொருள் தேர்ந்தெடுக்கப்பட்டு, முக்கியமானது எதுவும் அமைக்கப்படாவிட்டால், அவை ஆர்ட்போர்டைப் பயன்படுத்தும்.
+	Otherwise they use the selection.	இல்லையெனில் அவை தேர்வைப் பயன்படுத்தும்.
 	Actions	செயல்கள்
 	Activate Document	ஆவணத்தைச் செயல்படுத்து
 	Activate Panel	பலகத்தைச் செயல்படுத்து
@@ -230,6 +235,7 @@
 	Add Anchor Point	நங்கூரப் புள்ளி சேர்
 	Add Anchor Point Tool	நங்கூரப் புள்ளி சேர்க்கும் கருவி
 	Add Anchor Points	நங்கூரப் புள்ளிகளைச் சேர்
+	Add Around	சுற்றிலும் சேர்
 	Add Anchors	நங்கூரங்களைச் சேர்
 	Add Anchors…	நங்கூரங்களைச் சேர்…
 	Add as Effect	விளைவாகச் சேர்
@@ -271,9 +277,14 @@
 	Add to Symbols	சின்னங்களில் சேர்
 	Add to the Current Shortcuts	தற்போதைய குறுக்குவழிகளில் சேர்
 	Add Used Colors	பயன்படுத்திய நிறங்களைச் சேர்
+	Add Selected Colors	தேர்ந்த நிறங்களைச் சேர்
 	Additional Fonts Folder	கூடுதல் எழுத்துருக் கோப்புறை
 	Additional Plug-ins Folder	கூடுதல் செருகுநிரல்கள் கோப்புறை
+	Plug-in Instruction Budget	செருகுநிரல் அறிவுறுத்தல் ஒதுக்கீடு
 	Adjust Adjoining Width Points	அருகிலுள்ள அகலப் புள்ளிகளைச் சரிசெய்
+	Incoming	உள்வரும்
+	Outgoing	வெளிச்செல்லும்
+	Single Width Only	ஒற்றை அகலம் மட்டும்
 	Adjust Color Balance…	வண்ண சமநிலையைச் சரிசெய்…
 	Adjust Colors	நிறங்களைச் சரிசெய்
 	Adjust Options:	சரிசெய்தல் விருப்பங்கள்:
@@ -360,6 +371,7 @@
 	Angular	கோணவடிவம்
 	Angular Guides	கோண வழிகாட்டிகள்
 	Animated Zoom	அனிமேஷன் பெரிதாக்கல்
+	Anti Alias	விளிம்பு மென்மையாக்கல்
 	Anti-alias	விளிம்பு மென்மையாக்கல்
 	Anti-Alias	விளிம்பு மென்மையாக்கல்
 	Anti-alias Rasters	ராஸ்டர்களை மென்மையாக்கு
@@ -408,6 +420,10 @@ antiAlias	Sharp	கூர்மையான
 	Arc Lower…	கீழ் வளைவு…
 	Arc Segment Tool Options	வளைவுப் பகுதிக் கருவி விருப்பங்கள்
 	Arc Tool	வளைவு கருவி
+	Three-Point Arc Tool	மூன்று புள்ளி வளைவுக் கருவி
+	Three-Point Arc	மூன்று புள்ளி வளைவு
+	Arc too large	வளைவு மிகப் பெரியது
+	Third Point Sets Direction	மூன்றாவது புள்ளி திசையை அமைக்கும்
 	Arc Upper…	மேல் வளைவு…
 	Arc…	வளைவு…
 	Arch…	வளைவுச் சட்டம்…
@@ -521,6 +537,7 @@ antiAlias	Sharp	கூர்மையான
 	Average…	சராசரி…
 	Away from the Line	கோட்டிலிருந்து விலகி
 	Axis	அச்சு
+	Axis Angle	அச்சுக் கோணம்
 	Axis side	அச்சுப் பக்கம்
 	Axis:	அச்சு:
 	B4	B4
@@ -537,6 +554,7 @@ antiAlias	Sharp	கூர்மையான
 	Bar	பட்டை
 	Bar Graph Tool	பட்டை வரைபடக் கருவி
 	Barbed	முட்கள் போன்ற
+arrowhead	Feather	இறகு
 	Bas Relief	தாழ் புடைப்புச் சிற்பம்
 	Bas Relief…	தாழ் புடைப்புச்சிற்பம்…
 	Base Along:	அடிப்படை அச்சு:
@@ -558,6 +576,8 @@ antiAlias	Sharp	கூர்மையான
 	Checkpoint	சோதனைச் சாவடி
 	Inventory Icons	உடைமைப் பொருள் படவுருக்கள்
 	Skill Icons	திறன் படவுருக்கள்
+	Weather Icons	வானிலைப் படவுருக்கள்
+	Media Controls	ஊடகக் கட்டுப்பாடுகள்
 	Attack	அட்டாக்
 	Defend	தற்காப்பு
 	Heal	குணப்படுத்து
@@ -572,6 +592,7 @@ antiAlias	Sharp	கூர்மையான
 	Batch Trace Folder	கோப்புறையைத் தொகுதியாகக் கண்டறி
 	Batch…	தொகுதிச் செயல்…
 	Bearing	திசைக்கோணம்
+	Stylus Wheel	தொடுபேனா சக்கரம்
 	Before Last:	கடைசிக்கு முன்:
 	Begin Recording	பதிவைத் தொடங்கு
 	Begin Undo Group	செயல்தவிர் குழுவைத் தொடங்கு
@@ -666,6 +687,7 @@ antiAlias	Sharp	கூர்மையான
 	Bristle	முட்கள்
 	Bristle Brush	முட்கள் தூரிகை
 	Bristle Brush Options	முட்கள் தூரிகை விருப்பங்கள்
+	Roundness	வட்டத்தன்மை
 	Bristle Brush Strokes	முட்கள் தூரிகைக் கோடுகள்
 	Bristle Density:	முட்களின் அடர்த்தி:
 	Bristle Length:	முட்களின் நீளம்:
@@ -681,6 +703,12 @@ antiAlias	Sharp	கூர்மையான
 	Brush Library	தூரிகை நூலகம்
 	Brush Options	தூரிகை விருப்பங்கள்
 	Brush Options…	தூரிகை விருப்பங்கள்…
+	Options of Selected Object…	தேர்ந்த பொருளின் விருப்பங்கள்…
+	Options of Selected Object	தேர்ந்த பொருளின் விருப்பங்கள்
+@msg	no path painted with a brush is selected	தூரிகையால் வண்ணம் தீட்டப்பட்ட எந்தப் பாதையும் தேர்ந்தெடுக்கப்படவில்லை
+@msg	the selected paths are painted with brushes of different types	தேர்ந்தெடுத்த பாதைகள் வெவ்வேறு வகைத் தூரிகைகளால் வண்ணம் தீட்டப்பட்டுள்ளன
+@msg	give `params` or `reset`, not both	`params` அல்லது `reset` ஐக் கொடுக்கவும், இரண்டையும் அல்ல
+@msg	a bristle brush has no options of its own on a path	பாதையில் உள்ள முட்கள் தூரிகைக்குத் தனக்கெனத் தனி விருப்பங்கள் இல்லை
 	Brush Scale Options	தூரிகை அளவு விருப்பங்கள்
 	Brush Size	தூரிகை அளவு
 	Brush Strokes	தூரிகைத் தீற்றல்கள்
@@ -782,6 +810,9 @@ antiAlias	Sharp	கூர்மையான
 	Character Direction	எழுத்துத் திசை
 	Character options	எழுத்து விருப்பங்கள்
 	Character Rotation	எழுத்துச் சுழற்சி
+	Chinese Big 5	சீன Big 5
+	Cyrillic	சிரில்லிக்
+	Greek	கிரேக்கம்
 	Character Set:	எழுத்துத் தொகுப்பு:
 	Character Style	எழுத்து பாணி
 	Character Style Options	எழுத்து பாணி விருப்பங்கள்
@@ -809,6 +840,15 @@ antiAlias	Sharp	கூர்மையான
 	Chrome	குரோம்
 	Chrome…	குரோம்…
 	Circle	வட்டம்
+	Circle Tool	வட்டக் கருவி
+	Curvature Circle Tool	வளைவுத்தன்மை வட்டக் கருவி
+	Cusp	கூர்முனை
+	Straight segment	நேரான பகுதி
+	Circle too large	வட்டம் மிகப் பெரியது
+	Show Radii	ஆரங்களைக் காட்டு
+	Show Diameter	விட்டத்தைக் காட்டு
+	Anchors at Standard Positions	நிலையான இடங்களில் நங்கூரங்கள்
+	Third Point by Dragging	இழுப்பதன் மூலம் மூன்றாவது புள்ளி
 	Circle (open)	வட்டம் (திறந்த)
 	Classic	பாரம்பரிய
 	Classic Defaults	பாரம்பரிய இயல்புநிலைகள்
@@ -869,7 +909,6 @@ antiAlias	Sharp	கூர்மையான
 	Close Path:	பாதையை மூடு:
 	Close Path…	பாதையை மூடு…
 	Close paths when ends are within:	முனைகள் இதற்குள் இருக்கும்போது பாதைகளை மூடு:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	திறந்த சுயவிவரங்களின் வட்ட முனைகளை மூடும். பகுதி துடைப்புகள் வெட்டப்பட்ட பக்கங்களைத் திறந்து வைக்கும்.
 	Closed	மூடியது
 	Closing bracket with no opening one	திறக்கும் அடைப்புக்குறி இல்லாத மூடும் அடைப்புக்குறி
 	Clumped	கொத்தாக
@@ -886,9 +925,29 @@ antiAlias	Sharp	கூர்மையான
 	Preserve Embedded Profiles	உட்பொதிக்கப்பட்ட சுயவிவரங்களைப் பாதுகா
 	Convert to Working Space	பணி நிறவெளிக்கு மாற்று
 	Preserve Numbers	எண்களைப் பாதுகா
+	Profile Mismatches:	சுயவிவரப் பொருத்தமின்மைகள்:
+	Ask When Opening	திறக்கும்போது கேள்
+	Ask When Pasting	ஒட்டும்போது கேள்
+	Missing Profiles:	காணாமல் போன சுயவிவரங்கள்:
+	Embedded Profile Mismatch	உட்பொதிக்கப்பட்ட சுயவிவரப் பொருத்தமின்மை
+	Missing Profile	காணாமல் போன சுயவிவரம்
+	Paste Profile Mismatch	ஒட்டுதல் சுயவிவரப் பொருத்தமின்மை
+	“{name}” is not tagged with a {model} profile.	“{name}” ஒரு {model} சுயவிவரத்துடன் குறியிடப்படவில்லை.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	“{name}” {model} சுயவிவரமான “{profile}” உடன் குறியிடப்பட்டுள்ளது; அது {model} பணி நிறவெளியான “{working}” அல்ல.
+	Use the embedded profile	உட்பொதிக்கப்பட்ட சுயவிவரத்தைப் பயன்படுத்து
+	Convert the colors to the working space	நிறங்களைப் பணி நிறவெளிக்கு மாற்று
+	Discard the embedded profile	உட்பொதிக்கப்பட்ட சுயவிவரத்தை நிராகரி
+	Leave as is	அப்படியே விடு
+	Assign the working space	பணி நிறவெளியை ஒதுக்கு
+	Assign profile:	சுயவிவரத்தை ஒதுக்கு:
+	Preserve the color numbers	நிற எண்களைப் பாதுகா
+	Convert to keep the colors' appearance	நிறங்களின் தோற்றத்தைத் தக்கவைக்க மாற்று
+@msg	`{path}` goes with `{key}`: "assign" only	`{key}` "assign" ஆக இருக்கும்போது மட்டுமே `{path}` ஐக் கொடுக்கலாம்
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	ஒட்டிய நிறங்கள், {model} சுயவிவரம் “{from}” ஆக உள்ள ஆவணத்திலிருந்து வருகின்றன; இந்த ஆவணத்தினுடையது “{to}”.
 	Coarse Dots	கரடுமுரடான புள்ளிகள்
 	Coincidence:	ஒன்றிப்பு வரம்பு:
 	Collapse Panel Group	பலகக் குழுவைச் சுருக்கு
+	Cycle Display Sizes	காட்சி அளவுகளைச் சுழற்சியாக மாற்று
 	Collapse Panels to Icons	பலகங்களை ஐகான்களாகச் சுருக்கு
 	Collapse to Icons	ஐகான்களாகச் சுருக்கு
 	Collate	வரிசைப்படுத்து
@@ -903,6 +962,11 @@ antiAlias	Sharp	கூர்மையான
 	Color blindness – Deuteranopia-type	நிறக்குருடு – டியூட்டரனோப்பியா வகை
 	Color blindness – Protanopia-type	நிறக்குருடு – புரோட்டனோப்பியா வகை
 	Color blindness – Tritanopia-type	நிறக்குருடு – டிரிட்டனோப்பியா வகை
+	Show Color Vision Preview	நிறப் பார்வை முன்காட்சியைக் காட்டு
+	Protanopia	புரோட்டனோப்பியா
+	Deuteranopia	டியூட்டரனோப்பியா
+	Tritanopia	டிரிட்டனோப்பியா
+	Achromatopsia	அக்ரோமட்டாப்சியா
 	Color Burn	நிற எரிப்பு
 	Color conversion:	நிற மாற்றம்:
 	Color Dodge	நிறத் தவிர்ப்பு
@@ -923,6 +987,7 @@ antiAlias	Sharp	கூர்மையான
 	Color Mixer (Shift-click the chip)	நிறக் கலவை (சிப்பில் Shift+சொடுக்கு)
 	Color Mode	நிற முறை
 	Color Mode:	நிறப் பயன்முறை:
+	Color Model	நிற மாதிரி
 	Color Model:	நிற மாதிரி:
 	Color Models	நிற மாதிரிகள்
 	Color Panel Options	நிறப் பலக விருப்பங்கள்
@@ -945,6 +1010,19 @@ antiAlias	Sharp	கூர்மையான
 	Saturation and brightness	செறிவு மற்றும் பிரகாசம்
 	Color field	நிறப் புலம்
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	வட்டக் காட்சி
+	Box View	பெட்டிக் காட்சி
+	Show Out-of-Gamut Colors	நிற வரம்புக்கு வெளியே உள்ள நிறங்களைக் காட்டு
+	Box Channel	பெட்டிச் சேனல்
+	Color box	நிறப் பெட்டி
+	Color Wheel Options	நிற வட்ட விருப்பங்கள்
+	Show Document Colors	ஆவண நிறங்களைக் காட்டு
+	Document Colors	ஆவண நிறங்கள்
+	Selection Colors	தேர்வின் நிறங்கள்
+@plural	Used {n} time|Used {n} times	{n} முறை பயன்படுத்தப்பட்டது|{n} முறை பயன்படுத்தப்பட்டது
+	Show Harmony	இணக்கத்தைக் காட்டு
+	Harmony Rule	இணக்க விதி
+	Harmony color	இணக்க நிறம்
 	Color Type:	நிற வகை:
 	Color wheel	நிற வட்டம்
 	Color:	நிறம்:
@@ -957,6 +1035,7 @@ antiAlias	Sharp	கூர்மையான
 	Colors	நிறங்கள்
 	Colors:	நிறங்கள்:
 	Column Graph Tool	நெடுவரிசை வரைபடக் கருவி
+	Columns	நெடுவரிசைகள்
 	Column Type:	நெடுவரிசை வகை:
 	Column Width:	நெடுவரிசை அகலம்:
 	Column…	நெடுவரிசை…
@@ -965,6 +1044,13 @@ antiAlias	Sharp	கூர்மையான
 	Combine Slices	துண்டுகளை இணை
 	Coming soon — tracked in the parity plan	விரைவில் வருகிறது — சமநிலைத் திட்டத்தில் கண்காணிக்கப்படுகிறது
 	Command	கட்டளை
+@plural	{n} result|{n} results	{n} முடிவு|{n} முடிவுகள்
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} முடிவில் {shown} காட்டப்படுகிறது. குறைக்கத் தொடர்ந்து தட்டச்சு செய்யவும்.|{n} முடிவுகளில் {shown} காட்டப்படுகின்றன. அவற்றைக் குறைக்கத் தொடர்ந்து தட்டச்சு செய்யவும்.
+	Recent Commands	சமீபத்திய கட்டளைகள்
+	No recent commands	சமீபத்திய கட்டளைகள் இல்லை
+	Type to search commands, tools, panels and effects	கட்டளைகள், கருவிகள், பலகங்கள், விளைவுகளைத் தேட தட்டச்சு செய்யவும்
+	Clear Recent Commands	சமீபத்திய கட்டளைகளை அழி
+	Search commands	கட்டளைகளைத் தேடு
 	Command Click to Select Objects Behind	பின்னால் உள்ள பொருட்களைத் தேர்ந்தெடுக்க Cmd+சொடுக்கு
 	Command Dialog	கட்டளை உரையாடல் பெட்டி
 	Command API Reference	கட்டளை API குறிப்புதவி
@@ -1006,6 +1092,7 @@ antiAlias	Sharp	கூர்மையான
 	Constrain	கட்டுப்படுத்து
 	Constrain Angle	கோணத்தைக் கட்டுப்படுத்து
 	Constrain Width and Height Proportions	அகலம் மற்றும் உயர விகிதங்களைக் கட்டுப்படுத்து
+	Copy Width to Height	அகலத்தை உயரத்துக்கு நகலெடு
 	Construction Guides	கட்டுமான வழிகாட்டிகள்
 	Conté Crayon	கோன்டே க்ரேயான்
 	Conté Crayon…	கொன்டே வண்ணக்குச்சி…
@@ -1020,6 +1107,8 @@ antiAlias	Sharp	கூர்மையான
 	Control	கட்டுப்பாடு
 	Convert	மாற்றியமை
 	Convert All Spot Colors to Process	அனைத்துப் புள்ளி நிறங்களையும் செயல்முறை நிறங்களாக மாற்று
+	Convert {name} to process	{name} ஐச் செயல்முறை நிறமாக மாற்று
+	Keep {name} as spot	{name} ஐப் புள்ளி நிறமாக வைத்திரு
 	Convert All Strokes to Outlines	அனைத்துக் கோடுகளையும் வெளிரேகைகளாக மாற்று
 	Convert All Text to Outlines	அனைத்து உரையையும் வெளிரேகைகளாக மாற்று
 	Convert Anchor Point	நங்கூரப் புள்ளியை மாற்று
@@ -1073,6 +1162,18 @@ antiAlias	Sharp	கூர்மையான
 	Copyright	பதிப்புரிமை
 	Copyright and Contact Info	பதிப்புரிமை & தொடர்புத் தகவல்
 	Copyright Info URL:	பதிப்புரிமைத் தகவல் URL:
+	Save Metadata Template…	மெட்டாடேட்டா வார்ப்புருவைச் சேமி…
+	Import Options	இறக்குமதி விருப்பங்கள்
+	Clear existing fields and use the template's	ஏற்கெனவே உள்ள புலங்களை அழித்து, வார்ப்புருவின் புலங்களைப் பயன்படுத்து
+	Keep existing fields, but replace those the template has	ஏற்கெனவே உள்ள புலங்களை வைத்திரு, ஆனால் வார்ப்புருவில் உள்ளவற்றை மாற்று
+	Keep existing fields, but append those the template has	ஏற்கெனவே உள்ள புலங்களை வைத்திரு, ஆனால் வார்ப்புருவில் உள்ளவற்றைப் பின்சேர்
+@msg	the template name can't be empty	வார்ப்புருவின் பெயர் காலியாக இருக்கக்கூடாது
+@msg	the template name isn't usable as a file name	வார்ப்புருவின் பெயரைக் கோப்புப் பெயராகப் பயன்படுத்த முடியாது
+@msg	no metadata templates folder here	இங்கே மெட்டாடேட்டா வார்ப்புருக் கோப்புறை இல்லை
+@msg	give `name` or `path`, not both	`name` அல்லது `path` ஐக் கொடுக்கவும், இரண்டையும் அல்ல
+@msg	give one of `path`, `name` and `data`	`path`, `name`, `data` ஆகியவற்றில் ஒன்றைக் கொடுக்கவும்
+@msg	mode must be replace, keep or append	mode ஆனது replace, keep அல்லது append ஆக இருக்க வேண்டும்
+@msg	the file is not an XMP metadata template	இந்தக் கோப்பு ஒரு XMP மெட்டாடேட்டா வார்ப்புரு அல்ல
 	Copyright Notice:	பதிப்புரிமை அறிவிப்பு:
 	Copyright Status:	பதிப்புரிமை நிலை:
 	Copyright Symbol	பதிப்புரிமைக் குறியீடு
@@ -1108,6 +1209,9 @@ antiAlias	Sharp	கூர்மையான
 	Create From:	இதிலிருந்து உருவாக்கு:
 	Create Gradient Mesh	சாய்வு வலை உருவாக்கு
 	Create Gradient Mesh…	சாய்வு வலை உருவாக்கு…
+	Flat	தட்டை
+	To Center	மையத்தை நோக்கி
+	To Edge	விளிம்பை நோக்கி
 	Create Graph	வரைபடம் உருவாக்கு
 	Create New {kind} Style	புதிய {kind} பாணியை உருவாக்கு
 	Create New Action	புதிய செயலை உருவாக்கு
@@ -1119,6 +1223,15 @@ antiAlias	Sharp	கூர்மையான
 	Create New Sublayer	புதிய துணை அடுக்கை உருவாக்கு
 	Create New Swatch…	புதிய வண்ண மாதிரியை உருவாக்கு…
 	Create Object Mosaic	பொருள் மொசைக் உருவாக்கு
+	Current Size:	தற்போதைய அளவு:
+	New Size:	புதிய அளவு:
+	Tile Spacing:	ஓடு இடைவெளி:
+	Number of Tiles:	ஓடுகளின் எண்ணிக்கை:
+	Constrain Ratio:	விகிதத்தைக் கட்டுப்படுத்து:
+	Result:	முடிவாக:
+	Resize Using Percentages	சதவீதங்களைப் பயன்படுத்தி அளவை மாற்று
+	Delete Raster	ராஸ்டரை நீக்கு
+	Use Ratio	விகிதத்தைப் பயன்படுத்து
 	Create Object Mosaic…	பொருள் மொசைக் உருவாக்கு…
 	Create Outlines	வெளிரேகைகளை உருவாக்கு
 	Create Path	பாதை உருவாக்கு
@@ -1258,6 +1371,9 @@ antiAlias	Sharp	கூர்மையான
 	Delete Artboard	ஆர்ட்போர்டை நீக்கு
 	Delete Artboards	ஆர்ட்போர்டுகளை நீக்கு
 	Delete Brush	தூரிகையை நீக்கு
+	Delete Color	நிறத்தை நீக்கு
+	Restore Generated Table	உருவாக்கப்பட்ட அட்டவணையை மீட்டெடு
+	Unshift All Colors	அனைத்து நிறங்களின் மாற்றத்தையும் மீட்டெடு
 	Delete Character Style	எழுத்து பாணியை நீக்கு
 	Delete Data Set	தரவுத் தொகுப்பை நீக்கு
 	Delete Data Sets	தரவுத் தொகுப்புகளை நீக்கு
@@ -1273,6 +1389,10 @@ antiAlias	Sharp	கூர்மையான
 	Delete Guide	வழிகாட்டியை நீக்கு
 	Delete Guides	வழிகாட்டிகளை நீக்கு
 	Delete Image Trace Preset	படக் கண்டறிதல் முன்னமைவை நீக்கு
+	Tracing Presets…	கண்டறிதல் முன்னமைவுகள்…
+	Import Image Trace Presets	படக் கண்டறிதல் முன்னமைவுகளை இறக்குமதி செய்
+	Export Image Trace Presets	படக் கண்டறிதல் முன்னமைவுகளை ஏற்றுமதி செய்
+	Replace the saved presets that have these names?	இந்தப் பெயர்களைக் கொண்ட சேமித்த முன்னமைவுகளை மாற்றவா?
 	Delete Instances	நிகழ்வுகளை நீக்கு
 	Delete Layer	அடுக்கை நீக்கு
 	Delete Library	நூலகத்தை நீக்கு
@@ -1305,6 +1425,7 @@ antiAlias	Sharp	கூர்மையான
 	Delete the graphic style “{name}”?	வரைகலை பாணி “{name}” ஐ நீக்கவா?
 	Delete the library “{name}”?	நூலகம் “{name}” ஐ நீக்கவா?
 	Delete the selected action sets and their actions?	தேர்ந்த செயல் தொகுப்புகளையும் அவற்றின் செயல்களையும் நீக்கவா?
+	Delete all action sets and their actions?	அனைத்துச் செயல் தொகுப்புகளையும் அவற்றின் செயல்களையும் நீக்கவா?
 	Delete the selected brushes?	தேர்ந்த தூரிகைகளை நீக்கவா?
 	Delete the selected symbol?	தேர்ந்த சின்னத்தை நீக்கவா?
 	Delete the selected symbols?	தேர்ந்த சின்னங்களை நீக்கவா?
@@ -1364,6 +1485,7 @@ antiAlias	Sharp	கூர்மையான
 	Direction:	திசை:
 	Directives	உத்தரவுகள்
 	Disable Auto Add/Delete	தானியங்கு சேர்/நீக்கு முடக்கு
+	Interpolate Control Points When Moving Anchors	நங்கூரங்களை நகர்த்தும்போது கட்டுப்பாட்டுப் புள்ளிகளை இடைச்செருகு
 	Disable Opacity Mask	ஒளிபுகாநிலை முகமூடியை முடக்கு
 	Discard	நிராகரி
 	Discard Empty Type	காலியான உரையை நிராகரி
@@ -1453,6 +1575,7 @@ antiAlias	Sharp	கூர்மையான
 	Dot on Bar	பட்டையின் மீது புள்ளி
 	Dots	புள்ளிகள்
 	Double Arrow	இரட்டை அம்புக்குறி
+	Chevron Arrow	கோண அம்புக்குறி
 	Double Bar	இரட்டைப் பட்டை
 	Double Click To Isolate	தனிமைப்படுத்த இருமுறை சொடுக்கு
 	Double Column	இரட்டை நெடுவரிசை
@@ -1486,6 +1609,8 @@ antiAlias	Sharp	கூர்மையான
 	Drag out from a corner, or click two straight lines, then click to place.	ஒரு மூலையிலிருந்து வெளியே இழுக்கவும், அல்லது இரண்டு நேர் கோடுகளைச் சொடுக்கி, பிறகு வைக்க சொடுக்கவும்.
 	Drag out from a segment, or click two points, then click to place.	ஒரு பகுதியிலிருந்து வெளியே இழுக்கவும், அல்லது இரண்டு புள்ளிகளைச் சொடுக்கி, பிறகு வைக்க சொடுக்கவும்.
 	Drag rings to rotate. Shift snaps to 15°.	சுழற்ற வளையங்களை இழுக்கவும். Shift 15° படிகளுக்கு பொருந்தும்.
+	Track cube	சுழற்றும் கனசதுரம்
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	சுழற்ற ஒரு முகத்தையோ, விளிம்பையோ, வளையத்தையோ இழுக்கவும். Shift ஒரு திரை அச்சைச் சுற்றி மட்டும் சுழற்றும்.
 	Drag the art to move it on the paper	காகிதத்தில் நகர்த்த ஓவியத்தை இழுக்கவும்
 	Drag the light, or its rings. Shift snaps to 15°.	ஒளியையோ அதன் வளையங்களையோ இழுக்கவும். Shift 15° படிகளுக்கு பொருந்தும்.
 	Drag to float as a toolbar	கருவிப் பட்டையாக மிதக்க இழுக்கவும்
@@ -1520,6 +1645,8 @@ antiAlias	Sharp	கூர்மையான
 	Duplicate Anchors	நகல் நங்கூரங்கள்
 	Duplicate and Offset 10 pt	நகலெடுத்து 10 pt ஈடுசெய்
 	Duplicate Artboard	ஆர்ட்போர்டை நகலெடு
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	இந்தப் பக்கத்தில் ஓர் ஆர்ட்போர்டைச் சேர்க்க சொடுக்கவும்; இந்த ஆர்ட்போர்டை அதன் ஓவியத்துடன் நகலாக்க Alt+சொடுக்கு
+	Click to add an artboard on this side	இந்தப் பக்கத்தில் ஓர் ஆர்ட்போர்டைச் சேர்க்க சொடுக்கவும்
 	Duplicate Artboards	ஆர்ட்போர்டுகளை நகலெடு
 	Duplicate Brush	தூரிகையை நகலெடு
 	Duplicate Character Style	எழுத்து பாணியை நகலெடு
@@ -1539,11 +1666,26 @@ antiAlias	Sharp	கூர்மையான
 	Duplicate Toolbar	கருவிப் பட்டையை நகலாக்கு
 	Duplication	நகலாக்கம்
 	Dutch	டச்சு
+	PSD Import Options	PSD இறக்குமதி விருப்பங்கள்
+	Place PSD	PSD ஐ இடு
+	Convert Layers to Objects	அடுக்குகளைப் பொருட்களாக மாற்று
+	Import Hidden Layers	மறைக்கப்பட்ட அடுக்குகளை இறக்குமதி செய்
+	Flatten Layers to a Single Image	அடுக்குகளை ஒற்றைப் படமாகத் தட்டையாக்கு
+	Import Slices	துண்டுகளை இறக்குமதி செய்
 	DWG (use DXF)	DWG (DXF ஐப் பயன்படுத்தவும்)
 	DXF Import Options	DXF இறக்குமதி விருப்பங்கள்
 	DXF Info	DXF தகவல்
 	DXF Options	DXF விருப்பங்கள்
 	DXF Options Dialog	DXF விருப்பங்கள் உரையாடல் பெட்டி
+	HP-GL Options	HP-GL விருப்பங்கள்
+	HP-GL Options Dialog	HP-GL விருப்பங்கள் உரையாடல் பெட்டி
+	Curve Tolerance:	வளைவுத் தாங்குதிறன்:
+	Origin:	தொடக்கப் புள்ளி:
+	Pens:	பேனாக்கள்:
+	One Pen per Color	ஒரு நிறத்துக்கு ஒரு பேனா
+	Pen Table	பேனா அட்டவணை
+	Draw the Nearest Path Next	அடுத்து மிக அருகிலுள்ள பாதையை வரை
+	Draw Inner Paths First	உள் பாதைகளை முதலில் வரை
 	Dynamic Symbol	இயங்குநிலைச் சின்னம்
 	e.g. 1-3, 5	எ.கா. 1-3, 5
 	Each Design Represents:	ஒவ்வொரு வடிவமைப்பும் குறிப்பது:
@@ -1652,8 +1794,11 @@ antiAlias	Sharp	கூர்மையான
 	Enable text access for screen readers	திரைப் படிப்பான்களுக்கு உரை அணுகலை அனுமதி
 	Enable Touch Gestures	தொடு சைகைகளை இயக்கு
 	Switch Selection and Drawing Modes	தேர்வு மற்றும் வரைதல் பயன்முறைகளுக்கு இடையே மாறு
+	Select Last Selection Tool	கடைசியாகப் பயன்படுத்திய தேர்வுக் கருவியைத் தேர்ந்தெடு
 	Enable Touch Workspace	தொடு பணியிடத்தை இயக்கு
 	Enclosing Lasso	சூழும் லாசோ
+	Polygonal Lasso Tool	பலகோண லாசோ கருவி
+	Polygonal Lasso	பலகோண லாசோ
 	Enclosing Lasso Tool	சூழும் லாசோ கருவி
 	Encoding	குறியாக்கம்
 	Encoding and writing the file…	கோப்பைக் குறியாக்கம் செய்து எழுதுகிறது…
@@ -1819,7 +1964,17 @@ antiAlias	Sharp	கூர்மையான
 	Highlight Size	ஒளிர்பகுதி அளவு
 	Blend Steps	கலப்புப் படிகள்
 	Shading Color	நிழலிடல் நிறம்
+	Black Overprint	கறுப்பு மேல்அச்சு
 	Draw Hidden Faces	மறைந்த முகங்களை வரை
+	Map Art…	ஓவியத்தைப் பொருத்து…
+	Map Art	ஓவியத்தைப் பொருத்து
+	First Surface	முதல் மேற்பரப்பு
+	Previous Surface	முந்தைய மேற்பரப்பு
+	Next Surface	அடுத்த மேற்பரப்பு
+	Last Surface	கடைசி மேற்பரப்பு
+	Scale to Fit	பொருந்துமாறு அளவிடு
+	Shade Artwork	ஓவியத்துக்கு நிழலிடு
+	Invisible Geometry	கண்ணுக்குத் தெரியாத வடிவவியல்
 	Eyedropper	நிறமெடுப்பான்
 	Eyedropper Applies:	கண் துளிப்பான் பயன்படுத்துவது:
 	Eyedropper Options	கண் துளிப்பான் விருப்பங்கள்
@@ -1854,6 +2009,8 @@ antiAlias	Sharp	கூர்மையான
 	Files	கோப்புகள்
 	Files of a PDF standard can't be password-protected.	PDF தரநிலைக் கோப்புகளை கடவுச்சொல்லால் பாதுகாக்க முடியாது.
 	Files of this standard tag their colours with ICC profiles.	இந்தத் தரநிலைக் கோப்புகள் அவற்றின் நிறங்களை ICC சுயவிவரங்களுடன் குறியிடுகின்றன.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	இந்தத் தரநிலைக் கோப்புகள் அவற்றின் நிறங்களை ICC சுயவிவரங்களுடன் குறியிடுகின்றன; வெளியீட்டு நோக்கத்தின் சுயவிவரத்தில் உள்ள CMYK நிறங்கள் மட்டும் விதிவிலக்கு, அவை DeviceCMYK ஆக எழுதப்படும்.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	சுயவிவரங்களைச் சேர்க்க வேண்டாம் என்பதும் CMYK வெளியீட்டு நோக்கமும் இருக்கும்போது, வேறொரு சுயவிவரத்தின் CMYK இலக்குக்கு மாற்றப்படாத ஒவ்வொரு CMYK நிறமும் DeviceCMYK ஆக எழுதப்படும்.
 	Fill	நிரப்பு
 	Fill (X), double-click for the Color Picker	நிரப்பு (X), நிறத் தேர்விக்கு இருமுறை சொடுக்கு
 	Fill & Stroke	நிரப்பு மற்றும் கோடு
@@ -1883,9 +2040,36 @@ antiAlias	Sharp	கூர்மையான
 	Filters	வடிகட்டிகள்
 	Find	கண்டறி
 	Find and Replace…	கண்டுபிடித்து மாற்று…
+	Find and Replace	கண்டுபிடித்து மாற்று
+	Find:	கண்டறி:
+	Replace With:	இதனால் மாற்று:
+	Replace & Find	மாற்றிக் கண்டறி
+	Replace All	அனைத்தையும் மாற்று
+	Match Case	பெரிய/சிறிய எழுத்தைப் பொருத்து
+	Find Whole Word	முழுச் சொல்லைக் கண்டறி
+	Search Backwards	பின்னோக்கித் தேடு
+	Check Hidden Layers	மறைக்கப்பட்ட அடுக்குகளைச் சரிபார்
+	Check Locked Layers	பூட்டப்பட்ட அடுக்குகளைச் சரிபார்
+@msg	No matches found	பொருத்தங்கள் எதுவும் கிடைக்கவில்லை
+@msg	Matches replaced: {n}	மாற்றப்பட்ட பொருத்தங்கள்: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	பொருள் {_3} இன் {_1}..{_2} பைட்டுகளில் `find` க்கான பொருத்தம் இல்லை
 	Find Font	எழுத்துருவைக் கண்டுபிடி
 	Find Font Files	எழுத்துரு கோப்புகளைக் கண்டுபிடி
 	Find Font…	எழுத்துருவைக் கண்டுபிடி…
+	Retype	மறுதட்டச்சு
+	Find Matching Fonts	பொருந்தும் எழுத்துருக்களைக் கண்டறி
+	Find more font matches	மேலும் பொருந்தும் எழுத்துருக்களைக் கண்டறி
+	Type your text to preview	முன்காட்சிக்கு உங்கள் உரையைத் தட்டச்சு செய்யவும்
+	Select outlined text, then Find Matching Fonts.	வெளிரேகைகளாக மாற்றப்பட்ட உரையைத் தேர்ந்தெடுத்து, பிறகு பொருந்தும் எழுத்துருக்களைக் கண்டறி என்பதைச் சொடுக்கவும்.
+	No font matches the selected shapes.	தேர்ந்தெடுத்த வடிவங்களுடன் எந்த எழுத்துருவும் பொருந்தவில்லை.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	முதல் 2,048 வடிவங்களுக்கு அப்பால் உள்ளவையும், 16 குழுக்களுக்கு மேல் ஆழத்தில் உள்ளவையும் ஒப்பிடப்படவில்லை.
+	Reset Retype Panel	மறுதட்டச்சு பலகத்தை மீட்டமை
+	List Matching Fonts	பொருந்தும் எழுத்துருக்களைப் பட்டியலிடு
+	Retype Preview	மறுதட்டச்சு முன்காட்சி
+@msg	`count` must be a whole number from 1 to 96	`count` 1 முதல் 96 வரையிலான ஒரு முழு எண்ணாக இருக்க வேண்டும்
+@msg	`size` must be small, medium or large	`size` small, medium அல்லது large ஆக இருக்க வேண்டும்
+@msg	`text` must be a string of at most 100 characters	`text` அதிகபட்சம் 100 எழுத்துகள் கொண்ட உரைச்சரமாக இருக்க வேண்டும்
+@msg	Retype: select outlined text (paths or compound paths)	மறுதட்டச்சு: வெளிரேகையாக்கப்பட்ட உரையைத் தேர்ந்தெடுக்கவும் (பாதைகள் அல்லது கூட்டுப் பாதைகள்)
 	Find Fonts	எழுத்துருக்களைக் கண்டுபிடி
 	Find Fonts in Folder…	கோப்புறையில் எழுத்துருக்களைக் கண்டுபிடி…
 	Find in Folder…	கோப்புறையில் கண்டுபிடி…
@@ -1926,6 +2110,7 @@ antiAlias	Sharp	கூர்மையான
 	Fixed	நிலையான
 	Flag…	கொடி…
 	Flare	ஒளிக்கீற்று
+	Edit Flare	ஒளிக்கீற்றைத் திருத்து
 	Flare Tool	ஒளிக்கீற்றுக் கருவி
 	Flare Tool Options	ஒளிக்கீற்றுக் கருவி விருப்பங்கள்
 	Flat Angle	தட்டையான கோணம்
@@ -1967,6 +2152,12 @@ antiAlias	Sharp	கூர்மையான
 	Font Family, Style & Size	எழுத்துரு குடும்பம், பாணி மற்றும் அளவு
 	Font Family:	எழுத்துரு குடும்பம்:
 	Font List	எழுத்துரு பட்டியல்
+	Show Similar Fonts	ஒத்த எழுத்துருக்களைக் காட்டு
+	Clear Similar Fonts	ஒத்த எழுத்துருக்களை அழி
+	Fonts used in this document	இந்த ஆவணத்தில் பயன்படுத்தப்பட்ட எழுத்துருக்கள்
+	This document uses no available fonts	இந்த ஆவணம் கிடைக்கக்கூடிய எழுத்துருக்கள் எதையும் பயன்படுத்தவில்லை
+	Recently Added	சமீபத்தில் சேர்க்கப்பட்டவை
+	Fonts added in the last 30 days	கடந்த 30 நாட்களில் சேர்க்கப்பட்ட எழுத்துருக்கள்
 	Font Preview Size	எழுத்துரு முன்காட்சி அளவு
 	Font Size	எழுத்துரு அளவு
 	Font Size:	எழுத்துரு அளவு:
@@ -2009,6 +2200,7 @@ antiAlias	Sharp	கூர்மையான
 	from your earlier imports	உங்கள் முந்தைய இறக்குமதிகளிலிருந்து
 	From:	இருந்து:
 	Front	முன்
+	Side	பக்கவாட்டு
 	Frosted	உறைந்த கண்ணாடி
 	Full Document	முழு ஆவணம்
 	Full Justify	முழு நியாயப்படுத்தல்
@@ -2102,6 +2294,8 @@ antiAlias	Sharp	கூர்மையான
 	Graph Design	வரைபட வடிவமைப்பு
 	Graph Marker	வரைபட குறியீடு
 	Graph Type	வரைபட வகை
+	Graph Type…	வரைபட வகை…
+	Graph Data…	வரைபடத் தரவு…
 	Graph Options	வரைபட விருப்பங்கள்
 	Left Axis	இடது அச்சு
 	Right Axis	வலது அச்சு
@@ -2119,6 +2313,7 @@ antiAlias	Sharp	கூர்மையான
 	Connect Data Points	தரவுப் புள்ளிகளை இணை
 	Edge-to-Edge Lines	விளிம்பிலிருந்து விளிம்பு வரை கோடுகள்
 	Draw Filled Lines	நிரப்பிய கோடுகளை வரை
+	Line Width	கோட்டு அகலம்
 	Tick Values	அளவுக்குறி மதிப்புகள்
 	Override Calculated Values	கணக்கிட்ட மதிப்புகளை மேலெழுது
 	Divisions	பிரிவுகள்
@@ -2245,6 +2440,8 @@ antiAlias	Sharp	கூர்மையான
 	Hide Bounding Box	எல்லைப்பெட்டியை மறை
 	Hide Code	குறியீட்டை மறை
 	Hide Corner Widget	மூலை விட்ஜெட்டை மறை
+	Hide Shape Widgets	வடிவ விட்ஜெட்டுகளை மறை
+	Show Shape Widgets	வடிவ விட்ஜெட்டுகளைக் காட்டு
 	Hide Corner Widget for angles greater than	இதைவிடப் பெரிய கோணங்களுக்கு மூலை விட்ஜெட்டை மறை
 	Hide Edges	ஓரங்களை மறை
 	Hide Extension Lines	நீட்டிப்புக் கோடுகளை மறை
@@ -2285,6 +2482,8 @@ antiAlias	Sharp	கூர்மையான
 	Highlight anchors on mouse over	சுட்டி மேல் வரும்போது நங்கூரங்களை முன்னிலைப்படுத்து
 	Highlight Area	ஒளிர்பகுதி
 	Highlight Font Name	எழுத்துருவின் பெயரை முன்னிலைப்படுத்து
+	Highlight Font Size	எழுத்துரு அளவை முன்னிலைப்படுத்து
+	Other…	மற்றவை…
 	Highlight Kerning	எழுத்திடைவெளியை முன்னிலைப்படுத்து
 	Highlight Rows	வரிசைகளை முன்னிலைப்படுத்து
 	Highlight Substituted Fonts	மாற்றப்பட்ட எழுத்துருக்களை முன்னிலைப்படுத்து
@@ -2461,6 +2660,7 @@ antiAlias	Sharp	கூர்மையான
 	Isolate Blending	கலப்பைத் தனிமைப்படுத்து
 	Isolate Group	குழுவைத் தனிமைப்படுத்து
 	Isolate Selected Group	தேர்ந்த குழுவைத் தனிமைப்படுத்து
+	Isolate Selected Path	தேர்ந்த பாதையைத் தனிமைப்படுத்து
 	Isolate Selected Object	தேர்ந்த பொருளைத் தனிமைப்படுத்து
 	Isometric Bottom	சமதூர கீழ்
 	Isometric Left	சமதூர இடது
@@ -2528,6 +2728,11 @@ antiAlias	Sharp	கூர்மையான
 	Knife	கத்தி
 	Knockout Group	நாக்அவுட் குழு
 	Lab	Lab
+	OKLCH Sliders	OKLCH வழுக்கிகள்
+	HSL Sliders	HSL வழுக்கிகள்
+	Chroma	குரோமா
+	The largest chroma sRGB holds at this lightness and hue	இந்த வெளிர்த்தன்மையிலும் சாயலிலும் sRGB கொள்ளக்கூடிய அதிகபட்சக் குரோமா
+	OKLCH needs sRGB as the working RGB space	OKLCH-க்கு பணி RGB நிறவெளியாக sRGB தேவை
 	Lab Spot Colors	Lab புள்ளி நிறங்கள்
 	Lab Spot Colors:	Lab புள்ளி நிறங்கள்:
 	Lab Values	Lab மதிப்புகள்
@@ -2686,6 +2891,7 @@ antiAlias	Sharp	கூர்மையான
 	Linked Files	இணைக்கப்பட்ட கோப்புகள்
 	Links	இணைப்புகள்
 	Linux Display Server	Linux காட்சி சேவையகம்
+	Low-Latency Drawing	குறைந்த தாமத வரைதல்
 	Liquify	திரவமாக்கு
 	List Data Sets	தரவுத் தொகுப்புகளைப் பட்டியலிடு
 	List Folder	கோப்புறையைப் பட்டியலிடு
@@ -2702,6 +2908,8 @@ antiAlias	Sharp	கூர்மையான
 	Live curve fitting	நேரடி வளைவுப் பொருத்தம்
 	Live Paint	நேரடி வண்ணம்
 	Live Paint Bucket	நேரடி வண்ண வாளி
+	Fill Area	பரப்பை நிரப்பு
+	Fill Area Tool	பரப்பு நிரப்பும் கருவி
 	Live Paint Bucket (Stroke)	நேரடி வண்ண வாளி (கோடு)
 	Live Paint Info	நேரடி வண்ணத் தகவல்
 	Live Paint Selection Tool	நேரடி வண்ணத் தேர்வுக் கருவி
@@ -2709,6 +2917,12 @@ antiAlias	Sharp	கூர்மையான
 	Live Shape	நேரடி வடிவம்
 	Live Shape Properties	நேரடி வடிவப் பண்புகள்
 	Load Actions…	செயல்களை ஏற்று…
+	Replace Actions…	செயல்களை மாற்று…
+	Clear Actions	செயல்களை அழி
+	Reset Actions	செயல்களை மீட்டமை
+	Replace the current actions with the default set?	தற்போதைய செயல்களை இயல்புநிலைத் தொகுப்பால் மாற்றவா?
+	Append adds the default set after the current sets instead.	பின்சேர், அதற்குப் பதிலாக, இயல்புநிலைத் தொகுப்பைத் தற்போதைய தொகுப்புகளுக்குப் பிறகு சேர்க்கும்.
+	Append	பின்சேர்
 	Load Color Profile…	நிற சுயவிவரத்தை ஏற்று…
 	Load EPS into Clipboard	EPS ஐ கிளிப்போர்டுக்கு ஏற்று
 	Load Image into Clipboard	படத்தை கிளிப்போர்டுக்கு ஏற்று
@@ -2724,6 +2938,7 @@ antiAlias	Sharp	கூர்மையான
 	Loaded Texture	ஏற்றப்பட்ட அமைப்பு
 	Loads native code	சொந்தக் குறியீட்டை ஏற்றுகிறது
 	Local Libraries	உள்ளூர் நூலகங்கள்
+	Locate Layer	அடுக்கைக் கண்டறி
 	Locate Library…	நூலகத்தைக் கண்டறி…
 	Locate Object	பொருளைக் கண்டறி
 	Locate Selected Objects	தேர்ந்த பொருட்களைக் கண்டறி
@@ -2742,6 +2957,8 @@ antiAlias	Sharp	கூர்மையான
 	Lock Selected	தேர்ந்தவற்றைப் பூட்டு
 	Lock Slices	துண்டுகளை நிலைநிறுத்து
 	Lock Station Point	நிலைப் புள்ளியைப் பூட்டு
+	Lossless	இழப்பற்றது
+	Lossy	இழப்புடையது
 	Lock Variables	மாறிகளைப் பூட்டு
 	Locked	பூட்டப்பட்டது
 	Logo 1000×1000	லோகோ 1000×1000
@@ -2749,7 +2966,6 @@ antiAlias	Sharp	கூர்மையான
 	Long Lines	நீண்ட கோடுகள்
 	Long Strokes	நீண்ட தீற்றல்கள்
 	Longest:	நீளமானது:
-	Lossless (lossy WebP isn't available yet)	இழப்பற்றது (இழப்புடைய WebP இன்னும் கிடைக்கவில்லை)
 	Lossy:	இழப்புடையது:
 	Low	குறைந்த
 	Low Fidelity Photo	குறைந்த நம்பகத்தன்மை புகைப்படம்
@@ -2983,6 +3199,9 @@ antiAlias	Sharp	கூர்மையான
 	Navigate	வழிநடத்து
 	Navigator	வழிசெலுத்தி
 	Navigator Panel Options	வழிசெலுத்தி பலக விருப்பங்கள்
+	Attributes Panel Options	பண்புகள் பலக விருப்பங்கள்
+	Number of Recent URLs:	சமீபத்திய URL-களின் எண்ணிக்கை:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 முதல் 30 வரையிலான ஒரு முழு எண்ணாக இருக்க வேண்டும்
 	Nearly Closed Paths	ஏறக்குறைய மூடிய பாதைகள்
 	Nearly Coincident Anchors	ஏறக்குறைய ஒரே இடத்திலுள்ள நங்கூரங்கள்
 	Needless Clipping Groups	தேவையற்ற வெட்டுக் குழுக்கள்
@@ -3353,6 +3572,7 @@ antiAlias	Sharp	கூர்மையான
 	Outside	வெளியே
 	Outside the document	ஆவணத்திற்கு வெளியே
 	Oval	முட்டைவடிவம்
+	Line Arrow	கோட்டு அம்புக்குறி
 	Overlap	மேற்பொருந்தல்
 	Overlap:	மேற்பொருந்தல்:
 	Overlapping	ஒன்றின்மேல் ஒன்று
@@ -3361,6 +3581,11 @@ antiAlias	Sharp	கூர்மையான
 	Overprint	மேல்அச்சு
 	Overprint and Transparency Flattener	மேல்அச்சு மற்றும் வெளிப்படைத்தன்மை தட்டையாக்கி
 	Overprint and Transparency Flattener Options	மேல்அச்சு மற்றும் வெளிப்படைத்தன்மை தட்டையாக்கி விருப்பங்கள்
+	Custom…	தனிப்பயன்…
+	Custom Transparency Flattener Options	தனிப்பயன் வெளிப்படைத்தன்மை தட்டையாக்கி விருப்பங்கள்
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF முன்னமைவு தட்டையாக்கி முன்னமைவை வைத்திருக்கும், ஆனால் தனிப்பயன்… அமைப்புகளை வைத்திருக்காது.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 கோப்புகள் ராஸ்டராக்கப்பட்ட பரப்புகளை அவற்றின் பகுதிகளுக்குள் வெட்டும்; மேல்அச்சுகள் வைத்திருக்கப்படுமா என்பதை மேல்அச்சு அமைப்பு தீர்மானிக்கும்.
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS-இல் ஆல்ஃபா வெளிப்படைத்தன்மை இல்லை; மேல்அச்சுகள் வைத்திருக்கப்படுமா என்பதை மேல்அச்சுகள் அமைப்பு தீர்மானிக்கும்.
 	Overprint Black	கறுப்பை மேல்அச்சு
 	Overprint Black…	கறுப்பை மேல்அச்சு…
 	Overprint Fill	நிரப்பை மேல்அச்சு
@@ -3429,6 +3654,11 @@ antiAlias	Sharp	கூர்மையான
 	Path Eraser	பாதை அழிப்பான்
 	Path Eraser Tool	பாதை அழிப்பான் கருவி
 	Path Length	பாதை நீளம்
+	Grid Size	கட்ட அளவு
+	Grid Colors	கட்ட நிறங்கள்
+	Flattener Preset	தட்டையாக்கி முன்னமைவு
+	X	X
+	Y	Y
 	Path Only	பாதை மட்டும்
 	Path Precision Tools	பாதைத் துல்லியக் கருவிகள்
 	Path:	பாதை:
@@ -3448,6 +3678,9 @@ antiAlias	Sharp	கூர்மையான
 	embedding for preview and print	முன்காட்சிக்கும் அச்சிடுதலுக்கும் உட்பொதித்தல்
 	embedding allowed	உட்பொதிக்க அனுமதி உண்டு
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	அறியப்படாத வகை
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} பயன்பாடு|{n} பயன்பாடுகள்
 	substituted: shown in {family} {style} ({detail})	மாற்றப்பட்டது: {family} {style} இல் காட்டப்படுகிறது ({detail})
 	missing: shown in {family} {style}	காணவில்லை: {family} {style} இல் காட்டப்படுகிறது
 	missing	காணவில்லை
@@ -3492,6 +3725,15 @@ antiAlias	Sharp	கூர்மையான
 	PDF/X-4:2010	PDF/X-4:2010
 	Pen	பேனா
 	Pen Tool	பேனா கருவி
+	Quick Pen Tool	விரைவுப் பேனா கருவி
+	Quick Pen	விரைவுப் பேனா
+	Quick Pen Toolbar	விரைவுப் பேனா கருவிப் பட்டை
+	Continuous Arc	தொடர் வளைவு
+	Sharp Corner Arc	கூர்மூலை வளைவு
+	Flip Arc	வளைவைப் புரட்டு
+	Hide Toolbar	கருவிப் பட்டையை மறை
+	Pin Toolbar Position	கருவிப் பட்டை நிலையைப் பொருத்து
+	Reset Toolbar Position	கருவிப் பட்டை நிலையை மீட்டமை
 	Pencil	பென்சில்
 	Pencil Tool	பென்சில் கருவி
 	Pentagram	ஐங்கோணம்
@@ -3628,6 +3870,10 @@ antiAlias	Sharp	கூர்மையான
 	Polish	போலிஷ்
 	Polygon	பலகோணம்
 	Polygon Properties:	பலகோணப் பண்புகள்:
+	Line Properties:	கோட்டுப் பண்புகள்:
+	Line Length:	கோட்டு நீளம்:
+	Line Angle:	கோட்டுக் கோணம்:
+	Constrain Pie Angle	பை கோணத்தைக் கட்டுப்படுத்து
 	Polygon Tool	பலகோணக் கருவி
 	Portrait	உருவத்தோற்றம்
 	Portrait (flipped)	நெடுவாட்டம் (புரட்டப்பட்டது)
@@ -3659,6 +3905,11 @@ antiAlias	Sharp	கூர்மையான
 	Preserve Appearance	தோற்றத்தைப் பாதுகாக்கவும்
 	Preserve Appearance and Overprints	தோற்றம் மற்றும் மேல்அச்சுகளைப் பாதுகாக்கவும்
 	Preserve CMYK Numbers	CMYK எண்களைப் பாதுகாக்கவும்
+	Preserve RGB Numbers	RGB எண்களைப் பாதுகாக்கவும்
+	Device to Simulate:	உருவகப்படுத்த வேண்டிய சாதனம்:
+	Simulate Paper Color	காகித நிறத்தை உருவகப்படுத்து
+	Simulate Black Ink	கறுப்பு மையை உருவகப்படுத்து
+	Load…	ஏற்று…
 	Preserve editing capabilities	திருத்தும் திறன்களைப் பாதுகாக்கவும்
 	Preserve Editing Capabilities	திருத்தும் திறன்களைப் பாதுகாக்கவும்
 	Preserve Lightness	ஒளிர்வைப் பாதுகாக்கவும்
@@ -3690,6 +3941,18 @@ antiAlias	Sharp	கூர்மையான
 	Preview (1 inch on the page)	முன்காட்சி (பக்கத்தில் 1 அங்குலம்)
 	Preview All Layers	அனைத்து அடுக்குகளையும் முன்காட்சி காண்
 	Preview in Browser	உலாவியில் முன்காட்சி காண்
+	Optimize to File Size…	கோப்பு அளவுக்கு ஏற்ப உகப்பாக்கு…
+	Optimize to File Size	கோப்பு அளவுக்கு ஏற்ப உகப்பாக்கு
+	Desired File Size:	விரும்பிய கோப்பு அளவு:
+	Start With:	இதிலிருந்து தொடங்கு:
+	Use:	பயன்படுத்து:
+	Current Settings	தற்போதைய அமைப்புகள்
+	Auto Select GIF/JPEG	GIF/JPEG ஐத் தானாகத் தேர்ந்தெடு
+	Total of All Slices	அனைத்துத் துண்டுகளின் மொத்தம்
+	Each Slice	ஒவ்வொரு துண்டும்
+	Current Slice	தற்போதைய துண்டு
+	{size}, within {target}	{size}, {target}-க்குள்
+	No setting tried fits in {target}; the smallest is {size}	முயன்ற எந்த அமைப்பும் {target}-க்குள் பொருந்தவில்லை; மிகச் சிறியது {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	உலாவியில் முன்காட்சிக்கு டெஸ்க்டாப் பயன்பாடு தேவை (இணையத்தில் கோப்புகள் பதிவிறக்கப்படும்)
 	Preview Mode	முன்காட்சிப் பயன்முறை
 	Preview the document as it is now	ஆவணத்தை இப்போது உள்ளபடியே முன்காட்சி காண்
@@ -3744,6 +4007,8 @@ antiAlias	Sharp	கூர்மையான
 	Insert Aki Left	இடது Aki ஐச் செருகு
 	Insert Aki Right	வலது Aki ஐச் செருகு
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	ஒலிக்குறியின் கிடைமட்ட நிலையைச் சரிசெய்
+	Adjust Vertical Diacritic Position	ஒலிக்குறியின் செங்குத்து நிலையைச் சரிசெய்
 	Proportional Oldstyle	விகிதாசார பழைய பாணி எண்கள்
 	Protect Corners	மூலைகளைப் பாதுகாத்திடு
 	Proximity Guides	அருகாமை வழிகாட்டிகள்
@@ -3816,6 +4081,9 @@ antiAlias	Sharp	கூர்மையான
 	Real World:	உண்மை உலகு:
 	Real-time Drawing and Editing	நேரடி வரைதல் மற்றும் திருத்துதல்
 	Use Monitor Profile for Canvas	கேன்வாஸுக்குத் திரைச் சுயவிவரத்தைப் பயன்படுத்து
+	Refresh Monitor Profile	திரைச் சுயவிவரத்தைப் புதுப்பி
+@msg	turn on Use Monitor Profile for Canvas first	முதலில் கேன்வாஸுக்குத் திரைச் சுயவிவரத்தைப் பயன்படுத்து என்பதை இயக்கவும்
+@msg	this build doesn't read display profiles	இந்தப் பதிப்பு திரைக்காட்சிச் சுயவிவரங்களைப் படிக்காது
 	The canvas is drawn in sRGB.	கேன்வாஸ் sRGB இல் வரையப்படுகிறது.
 	Canvas display profile:	கேன்வாஸ் திரைக்காட்சிச் சுயவிவரம்:
 	The system matches the window to the display's colors.	கணினி சாளரத்தைத் திரைக்காட்சியின் நிறங்களுக்கு ஏற்பப் பொருத்துகிறது.
@@ -3967,6 +4235,7 @@ antiAlias	Sharp	கூர்மையான
 	Remove Strokes	தூரிகைக் கோடுகளை அகற்று
 	Place Brush Art	தூரிகை ஓவியத்தை இடு
 	Replace Brush Art	தூரிகை ஓவியத்தை மாற்று
+	Replace Pattern Art	வடிவமாதிரி ஓவியத்தை மாற்று
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	கோடுகள் இந்தத் தூரிகையைப் பயன்படுத்துகின்றன. புதிய ஓவியத்தை அந்தக் கோடுகளுக்குப் பயன்படுத்தவா, அல்லது அவற்றை அப்படியே விட்டுவிட்டு, புதிய ஓவியத்துடன் தூரிகையின் நகலைச் சேர்க்கவா?
 	Apply to Strokes	கோடுகளுக்குப் பயன்படுத்து
 	Leave Strokes	கோடுகளை அப்படியே விடு
@@ -4038,7 +4307,11 @@ antiAlias	Sharp	கூர்மையான
 	Reset all Revolve settings to their defaults.	அனைத்து சுழற்சி அமைப்புகளையும் அவற்றின் இயல்புநிலைக்கு மீட்டமை.
 	Reset Automation	Automation ஐ மீட்டமை
 	Reset Bar Position	பட்டை நிலையை மீட்டமை
+	Bar Actions	பட்டைச் செயல்கள்
+	Reset Bar Actions	பட்டைச் செயல்களை மீட்டமை
 	Reset Bounding Box	எல்லைப்பெட்டியை மீட்டமை
+	Rotate Bounding Box	எல்லைப்பெட்டியைச் சுழற்று
+	Rotate Bounding Box…	எல்லைப்பெட்டியைச் சுழற்று…
 	Reset Envelope Mesh	உறை வலையை மீட்டமை
 	Reset Envelope Shape	உறை வடிவத்தை மீட்டமை
 	Reset Essentials	Essentials ஐ மீட்டமை
@@ -4064,6 +4337,11 @@ antiAlias	Sharp	கூர்மையான
 	Edit Arrowheads	அம்புத் தலைகளைத் திருத்து
 	Edit Arrowheads…	அம்புத் தலைகளைத் திருத்து…
 	Reload Arrowheads	அம்புத் தலைகளை மீண்டும் ஏற்று
+	Bevels	சரிவுகள்
+	Edit Bevels	சரிவுகளைத் திருத்து
+	Edit Bevels…	சரிவுகளைத் திருத்து…
+	{name} (document)	{name} (ஆவணம்)
+	Reload Bevels	சரிவுகளை மீண்டும் ஏற்று
 	Reset Rotate View	சுழற்சிக் காட்சியை மீட்டமை
 	Reset Ruler Origin	அளவுகோல் தொடக்கப் புள்ளியை மீட்டமை
 	Reset Symbol Instance	சின்ன நிகழ்வை மீட்டமை
@@ -4071,6 +4349,9 @@ antiAlias	Sharp	கூர்மையான
 	Reset Text Transform and Scale	உரை உருமாற்றத்தையும் அளவீட்டையும் மீட்டமை
 	Reset the rows to the artwork's colors	வரிசைகளை ஓவியத்தின் நிறங்களுக்கு மீட்டமை
 	Color Theme Picker	நிறத் தீம் தேர்வி
+	Undo Changes	மாற்றங்களைச் செயல்தவிர்
+	Redo Changes	மாற்றங்களை மீண்டும் செய்
+@msg	Recolor Artwork is not open	ஓவியத்தின் நிறத்தை மாற்று உரையாடல் பெட்டி திறக்கப்படவில்லை
 	Click or drag across the art to pick its colors; Shift adds more	ஓவியத்தின் நிறங்களை எடுக்க அதன் மீது சொடுக்கவும் அல்லது இழுக்கவும்; Shift மேலும் சேர்க்கும்
 	Prominent Colors	மேலோங்கிய நிறங்கள்
 	Save All Colors	அனைத்து நிறங்களையும் சேமி
@@ -4097,6 +4378,7 @@ antiAlias	Sharp	கூர்மையான
 	Blend Easing	கலப்பு மென்மையாக்கம்
 	Reshape Tool	மறுவடிவக் கருவி
 	Reshape Type Area	உரைப் பரப்பை மறுவடிவமை
+	Resolution	தெளிவுத்திறன்
 	Reshape Type Path	உரைப் பாதையை மறுவடிவமை
 	Resize	அளவை மாற்று
 	Resize Artboard	ஆர்ட்போர்டின் அளவை மாற்று
@@ -4108,6 +4390,179 @@ antiAlias	Sharp	கூர்மையான
 	Responsive	பதிலளிக்கும்
 	Restore	மீளமை
 	Restore every preference to its default (applied on OK)	ஒவ்வொரு விருப்பத்தேர்வையும் அதன் இயல்புநிலைக்கு மீட்டெடு (சரி என்பதில் பயன்படுத்தப்படும்)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	கேன்வாஸில் தேர்வுக்கான அல்லது கருவிக்கான கட்டளைகளின் பட்டையைக் காட்டும்; நீங்கள் இழுக்கும்போதும் விளக்கப் பயன்முறையிலும் அது மறையும்.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	ஓர் அம்புக்குறி விசை தேர்வை எவ்வளவு தூரம் நகர்த்தும் என்பது; Shift உடன், அது பத்து மடங்கு தூரம் நகர்த்தும்.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	அம்புக்குறி விசைகள் எந்த அச்சுகளின் வழியே நகர்த்துமோ, Shift எந்த அச்சுகளுக்கு வரைதலையும் நகர்த்துதலையும் கட்டுப்படுத்துமோ, அந்த அச்சுகளின் கோணம்.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	வட்ட மூலை செவ்வகக் கருவி வரையும் மூலை ஆரம்; வரையும்போது ஆரத்தை மாற்றினால் இந்த மதிப்பும் மாறும்.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	ஸ்கிரிப்டிலிருந்து வருவது போல நிலை எதுவும் கொடுக்கப்படாதபோது, ஒட்டு நகலை வலப்புறமும் கீழேயும் எவ்வளவு தூரம் நகர்த்தும் என்பது; பயன்பாட்டில் உள்ள ஒட்டு அதைக் காட்சியின் மையத்தில் வைக்கும்.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	தேர்ந்தெடுத்த பாதையில் நீங்கள் சொடுக்கும் நங்கூரத்தைப் பேனா கருவி நீக்குவதையும், அதன் பகுதியில் நீங்கள் சொடுக்கும் இடத்தில் ஒன்றைச் சேர்ப்பதையும் தடுக்கும்.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	வரைதல் கருவிகள் அவற்றின் ஐகானுக்குப் பதிலாகக் குறுக்குக்கோட்டுச் சுட்டியைக் காட்டும்; Caps Lock இயக்கத்தில் இருக்கும்போதும் இதுவே நடக்கும்.
+	Shows a tip when the pointer rests on a button or field that has one.	கருவிக்குறிப்பு உள்ள பொத்தான் அல்லது புலத்தின் மீது சுட்டி நிற்கும்போது அந்தக் கருவிக்குறிப்பைக் காட்டும்.
+	Shows a warning before a script you choose runs.	நீங்கள் தேர்ந்தெடுக்கும் ஸ்கிரிப்ட் இயங்கும் முன் எச்சரிக்கையைக் காட்டும்.
+	Smooths the edges of artwork on the canvas.	கேன்வாஸில் உள்ள ஓவியத்தின் விளிம்புகளை மென்மையாக்கும்.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	தேர்ந்தெடு › அதே › நிரப்பு நிறம், கோடு நிறம், நிரப்பு மற்றும் கோடு ஆகியவை பொது அல்லது புள்ளி வண்ண மாதிரியின் அதே நிழலை மட்டுமே பொருத்தும், அதன் எந்த நிழலையும் அல்ல.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	எந்த ஆவணமும் திறக்கப்படாதபோது முகப்புத் திரையைக் காட்டும்; முடக்கப்பட்டிருந்தால், நீங்கள் முகப்பைச் சொடுக்கும் வரை சாளரம் காலியாக இருக்கும்.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	அளவு, நிலை, சீரமைப்பு ஆகியவற்றுக்குப் பொருட்களை அவற்றின் கோடுகளுடனும் வடிவத்தை மாற்றும் விளைவுகளுடனும் அளவிடும்; நிழல்கள், ஒளிர்வுகள், மங்கல்கள் அளவிடப்படுவதில்லை.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% பெரிதாக்கலில், ஆவணத்தின் ஓர் அங்குலம் 72-க்குப் பதிலாக 96 திரைப் புள்ளிகளை எடுத்துக்கொள்ளும்.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	தேர்வுக் கருவியால் ஒரு குழு, பாதை அல்லது படத்தை இருமுறை சொடுக்கினால், அது தனிமைப்படுத்தும் பயன்முறையில் திறக்கும்.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	ஓர் உருமாற்றமோ உருமாற்றப் பலகத்தின் மெனுவோ வேறுவிதமாகத் தேர்ந்தெடுக்காவிட்டால், வடிவமாதிரி நிரப்புகளும் கோடுகளும் ஓவியத்துடன் உருமாறும்.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	அளவிடுதல் வேறுவிதமாகத் தேர்ந்தெடுக்காவிட்டால், நேரடி மூலை ஆரங்கள் ஓவியத்துடன் அளவிடப்படும்.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	அளவிடுதல் வேறுவிதமாகத் தேர்ந்தெடுக்காவிட்டால், கோட்டு எடைகள், கீற்றுகள், விளைவுத் தூரங்கள் ஆகியவை ஓவியத்துடன் அளவிடப்படும்.
+	The mouse wheel zooms the canvas instead of scrolling it.	மவுஸ் சக்கரம் கேன்வாஸை உருட்டுவதற்குப் பதிலாக அதன் பெரிதாக்கலை மாற்றும்.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl அழுத்தியபடி மவுஸ் சக்கரத்தைச் சுழற்றினால் கேன்வாஸ் பக்கவாட்டில் உருளும்.
+	Dragging sideways on a numeric field's label changes the field's value.	எண் புலத்தின் லேபிளின் மீது பக்கவாட்டில் இழுத்தால் அந்தப் புலத்தின் மதிப்பு மாறும்.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	டிராக்பேடில் இரு விரல் சுழற்சிச் சைகை கேன்வாஸ் காட்சியைச் சுழற்றும்.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	ஒரு விசையை அழுத்திப் பிடித்தால், விசைப்பலகை குறுக்குவழிகளில் அதன் பிடி நெடுவரிசையில் உள்ள கருவி அல்லது கட்டளை இயங்கும்; விரைவாக அழுத்தினால் அதன் வழக்கமான குறுக்குவழி இயங்கும்.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	ஒரு விசையின் வழக்கமான குறுக்குவழிக்குப் பதிலாக அதன் அழுத்திப்பிடி குறுக்குவழி இயங்க, அந்த விசையை எத்தனை வினாடிகள் அழுத்திப் பிடிக்க வேண்டும் என்பது.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	நீங்கள் நங்கூரப் புள்ளிகளை நகர்த்தும்போது, ஒரு முனை நகர்ந்த ஒவ்வொரு வளைவும் அதன் முனைகளைப் பொறுத்துத் தன் வடிவத்தைத் தக்கவைக்கும்.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ஒரு கருவியின் குறுக்குவழி விசையை அழுத்திப் பிடித்தால், நீங்கள் விடும் வரை அந்தக் கருவி தேர்ந்தெடுக்கப்படும்; பிறகு முந்தைய கருவி மீண்டும் தேர்ந்தெடுக்கப்படும்.
+	Shows the bounding box while you move the selection or draw a shape.	நீங்கள் தேர்வை நகர்த்தும்போது அல்லது வடிவத்தை வரையும்போது எல்லைப்பெட்டியைக் காட்டும்.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	வெட்டுக் குறிகளை உருவாக்கு என்பது ரோமன் குறிகளுக்குப் பதிலாக ஜப்பானிய பாணிக் குறிகளை வரையும்.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	புதிய ஓவியம் தேர்வின் நிரப்பையும் கோட்டையும் மட்டுமே பெறும்; முடக்கப்பட்டிருந்தால், தேர்ந்தெடுத்த பொருளின் முழுத் தோற்றத்தையும் பெறும்.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	உருமாற்றப் பலகம், பண்புகள் பலகம் அல்லது கட்டுப்பாட்டுப் பட்டியில் அகலத்தையோ உயரத்தையோ மாற்றினால், மற்றொன்றும் விகிதப்படி மாறும்.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	நேரடிச் செவ்வகத்தின் பண்புகள் நான்கு மூலைகளுக்கும் ஒரே மூலை ஆரம் புலத்தைக் காட்டும்; முடக்கப்பட்டிருந்தால், ஒவ்வொரு மூலைக்கும் தனிப் புலம் இருக்கும்.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	உருமாற்றப் பலகத்தில் செய்யும் திருத்தங்கள் எதை உருமாற்றும் என்பது: பொருளை, அதன் வடிவமாதிரி ஓடுகளை அல்லது இரண்டையும்; இயல்புநிலை, வடிவமாதிரி ஓடுகளை உருமாற்று என்பதைப் பின்பற்றும்.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	ஒரு சின்ன நிகழ்வு தேர்ந்தெடுக்கப்பட்டிருக்கும்போது, உருமாற்றப் பலகம் சின்னத்தின் பதிவுப் புள்ளியைத் தன் குறிப்புப் புள்ளியாகப் பயன்படுத்தும்.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	செவ்வகம், நீள்வட்டம், பலகோணம், நட்சத்திரம் அல்லது கோட்டை வரைந்தால், உருமாற்றப் பலகம் மூடியிருந்தால் அது திறக்கும்.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	ஆர்ட்போர்டு கருவி செயலில் இருக்கும்போது ஆர்ட்போர்டுகளுக்கு வெளியே உள்ள கேன்வாஸை இருட்டாக்கும்.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	ஆர்ட்போர்டுக்கு வெளியே உள்ள பகுதியை மங்கச்செய் இயக்கத்தில் இருக்கும்போது, நீங்கள் ஆர்ட்போர்டு கருவியால் இழுக்கும்போதும் ஆர்ட்போர்டுகளுக்கு வெளியே உள்ள பரப்பு இருட்டாகவே இருக்கும்.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	ஒரு சொடுக்கு ஒரு பொருளையோ நங்கூரத்தையோ கைப்பிடியையோ தேர்ந்தெடுக்க, சுட்டி அதற்கு எத்தனை பிக்சல்கள் அருகில் இருக்க வேண்டும் என்பது.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	தேர்வுக் கருவியின் பெட்டி தான் தொடும் பொருட்களைத் தேர்ந்தெடுக்குமா அல்லது முழுமையாக உள்ளே இருப்பவற்றை மட்டுமா என்பது; இழுக்கும் திசை என்பது வலப்புறமாக இழுக்கும்போது உள்ளே இருப்பவற்றைத் தேர்ந்தெடுக்கும். இழுக்கும்போதே E அதைத் தலைகீழாக்கும்.
+	A click selects a filled object only on its path, not inside its fill.	ஒரு சொடுக்கு நிரப்பப்பட்ட பொருளை அதன் பாதையில் மட்டுமே தேர்ந்தெடுக்கும், அதன் நிரப்புக்குள் அல்ல.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	புள்ளியுடன் பொருத்து ஒரு புள்ளியைப் பொருத்த, அது நங்கூரத்துக்கோ அளவுகோல் வழிகாட்டிக்கோ எத்தனை பிக்சல்கள் அருகில் வர வேண்டும் என்பது; திறன்மிகு வழிகாட்டி கோடுகள் இயக்கத்தில் இருக்கும்போது, அதற்குப் பதிலாக அவற்றின் பொருத்தும் சகிப்புத்தன்மை பொருந்தும்.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	தேர்வுக் கருவியுடன், Cmd/Ctrl+சொடுக்கு சுட்டியின் இடத்தில் தேர்ந்தெடுத்த பொருளுக்குக் கீழே உள்ள பொருளைத் தேர்ந்தெடுக்கும்; ஒவ்வொரு கூடுதல் சொடுக்கும் ஒரு பொருள் ஆழமாகச் செல்லும்.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	பெரிதாக்கு, சிறிதாக்கு ஆகியவை தேர்வின் மையத்தைக் காட்சியின் நடுவுக்குக் கொண்டுவரும்.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	ஆர்ட்போர்டுக்குள் உள்ள பூட்டப்பட்ட மற்றும் மறைக்கப்பட்ட ஓவியமும், மற்ற ஓவியத்தைப் போலவே, ஆர்ட்போர்டுடன் நகரும், அளவிடப்படும், நகலெடுக்கப்படும்.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	கேன்வாஸில் நங்கூரப் புள்ளிகள் மற்றும் திசைக் கைப்பிடி முனைகளின் அளவு; பெரிய நங்கூரங்களை அதிகத் தொலைவிலிருந்தும் தேர்ந்தெடுக்கலாம்.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	திசைக் கைப்பிடிகளின் முனைகளைத் திடப் புள்ளிகளாக, உள்ளீடற்ற புள்ளிகளாக அல்லது பெரிய திடப் புள்ளிகளாக வரையும்.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	நேரடித் தேர்வுக் கருவியுடன், சுட்டிக்குக் கீழே உள்ள நங்கூரம் முன்னிலைப்படுத்தப்படும்.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	ஒன்றுக்கு மேற்பட்ட நங்கூரங்கள் தேர்ந்தெடுக்கப்பட்டிருக்கும்போது திசைக் கைப்பிடிகளைக் காட்டும்; முடக்கப்பட்டிருந்தால், ஒரே ஒரு நங்கூரம் தேர்ந்தெடுக்கப்பட்டிருக்கும்போது மட்டுமே அவை தெரியும்.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	இத்தனை பாகைகளைவிடப் பெரிய கோணம் கொண்ட மூலைகளில் மூலை விட்ஜெட்டுகள் மறையும்.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	நீங்கள் சொடுக்கும் முன், பேனா கருவி கடைசி நங்கூரத்திலிருந்து சுட்டி வரையிலான அடுத்த பகுதியை முன்காட்சியாகக் காட்டும்.
+	The Curvature tool previews the curve to the pointer before you place the next point.	நீங்கள் அடுத்த புள்ளியை வைக்கும் முன், வளைவு கருவி சுட்டி வரையிலான வளைவை முன்காட்சியாகக் காட்டும்.
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	பிக்சல் அளவுகள் அல்லாத உள்ளமைந்த அளவுகளிலிருந்து உருவாகும் புதிய ஆவணங்களுக்கும், அலகு எதையும் பதிவு செய்யாத திறக்கப்பட்ட கோப்புகளுக்குமான அலகு; இங்கே ஒன்றைத் தேர்ந்தெடுத்துச் சரி என்பதைச் சொடுக்கினால், செயலில் உள்ள ஆவணத்தின் அலகுகளும் அமைக்கப்படும்.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	கோட்டு எடைகள், கீற்றுகள், இடைவெளிகள் இந்த அலகில் காட்டப்படும்; அவற்றுக்குத் தட்டச்சு செய்யப்படும் எண்களும் இந்த அலகிலேயே படிக்கப்படும்.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	உரை அளவுகள், வரியிடைவெளி, அடிப்படைக்கோடு நகர்வு ஆகியவை இந்த அலகில் காட்டப்படும்; அவற்றுக்குத் தட்டச்சு செய்யப்படும் எண்களும் இந்த அலகிலேயே படிக்கப்படும்.
+	The unit for East Asian type measurements, which no field uses yet.	கிழக்கு ஆசிய உரை அளவீடுகளுக்கான அலகு; இதை எந்தப் புலமும் இன்னும் பயன்படுத்தவில்லை.
+	When on, a number typed without a unit into a field in picas is read in points.	இயக்கத்தில் இருக்கும்போது, பைகாக்களில் உள்ள புலத்தில் அலகின்றித் தட்டச்சு செய்யப்படும் எண் புள்ளிகளில் படிக்கப்படும்.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID உடன், பொருட்களின் பெயர்கள் அடுக்குகள் பலகம், மாறிகள் பலகம், அடுக்கு விருப்பங்கள் ஆகியவற்றில் XML ID-களாகக் காட்டப்படும்.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	உரை அளவுக்கும் வரியிடைவெளிக்குமான படி: Cmd/Ctrl+Shift+. மற்றும் Cmd/Ctrl+Shift+, அளவை ஒரு படி மாற்றும், Alt-உம் சேர்த்தால் ஐந்து படிகள்; கிடைமட்ட உரையில், மேல் அல்லது கீழ் அம்புக்குறியுடன் Alt வரியிடைவெளியை ஒரு படி மாற்றும், Cmd/Ctrl உடன் ஐந்து படிகள்.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	எழுத்துவரிசை இடைவெளிக்கும் எழுத்திடைவெளிக்குமான படி, ஒரு em-இன் ஆயிரத்தில் ஒரு பங்குகளில்: கிடைமட்ட உரையில், இடது அல்லது வலது அம்புக்குறியுடன் Alt, உரைச்சுட்டியில் உள்ள எழுத்திடைவெளியை அல்லது தேர்ந்தெடுத்த உரையின் எழுத்துவரிசை இடைவெளியை ஒரு படி மாற்றும், Cmd/Ctrl உடன் ஐந்து படிகள்.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	அடிப்படைக்கோடு நகர்வுக்கான படி: கிடைமட்ட உரையில், மேல் அல்லது கீழ் அம்புக்குறியுடன் Alt, Shift ஆகியவை அடிப்படைக்கோட்டை ஒரு படி நகர்த்தும், Cmd/Ctrl உடன் ஐந்து படிகள்.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	எழுத்து, பத்தி, OpenType, வரியுருக்கள் பலகங்களிலும் உரை › கூட்டு எழுத்துருக்கள் என்பதிலும் ஜப்பானிய மற்றும் பிற கிழக்கு ஆசிய உரைக்கான விருப்பங்களைக் காட்டும்.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	எழுத்து, பத்தி பலகங்களில் அரபு, ஹீப்ரு, இந்திய உரைக்கான விருப்பங்களைக் காட்டும், எடுத்துக்காட்டாகப் பத்தி திசை, காஷிதாக்கள், இலக்கங்கள்.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	தேர்வுக் கருவிகள் உரையை அதன் அடிப்படைக்கோட்டில், அதன் பரப்பின் சட்டகத்தில் அல்லது அதன் பாதையில் மட்டுமே தேர்ந்தெடுக்கும், அதன் பெட்டிக்குள் எங்கும் அல்ல.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	எழுத்துரு மெனுக்கள் ஒவ்வொரு எழுத்துருவையும் அதன் ஆங்கிலப் பெயரால் பட்டியலிடும்; முடக்கப்பட்டிருந்தால், தன் சொந்த மொழியிலும் பெயர் கொண்ட எழுத்துரு அந்தப் பெயரைக் காட்டும்.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	புதிய பரப்பு உரை தானியங்கு அளவு இயக்கத்தில் இருக்கும்படி தொடங்கும்; எனவே கிடைமட்ட உரையின் செவ்வகச் சட்டகம் அதன் உரைக்குப் பொருந்தும்படி உயரத்தில் வளரும் அல்லது சுருங்கும்.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	எழுத்துருப் பட்டியல்களும் உரை › எழுத்துரு மெனுவும் ஒவ்வொரு எழுத்துருவின் பெயருக்கு அருகில் அதன் மாதிரியைக் காட்டும்.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	இடைமுகத்தின் பிரகாசம் எதுவாக இருந்தாலும், எழுத்துரு மாதிரிகள் வெள்ளைப் பின்னணியில் அடர் நிற எழுத்துகளில் வரையப்படும்; மெனுவில் எழுத்துரு முன்காட்சிகள் இயக்கத்தில் இருக்கும்போது மட்டுமே இது பொருந்தும்.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	எழுத்துப் பலகத்தில் உள்ளவை போன்ற எழுத்துருப் புலங்களின் எழுத்துருப் பட்டியல்களில் ஒவ்வொரு வரிசையும் எவ்வளவு உயரம், அதனால் ஒவ்வொரு மாதிரியும் எவ்வளவு பெரியது.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	கடைசியாகப் பயன்படுத்திய எழுத்துருக்களில் எத்தனையை (1 முதல் 15 வரை) உரை › சமீபத்திய எழுத்துருக்கள் மற்றும் எழுத்துருப் பட்டியல்கள் காட்டும், புதியவை முதலில்.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	உரையின் எழுத்துருவையோ எழுத்துரு பாணியையோ மாற்றும்போது, புதிய எழுத்துருவில் குறியெழுத்து இல்லாத எழுத்துகள் முன்பிருந்த எழுத்துருவையே வைத்திருக்கும்.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	இணைப்பெழுத்துகள் போன்று OpenType அம்சங்கள் மாற்றிய குறியெழுத்துகளைக் கேன்வாஸில் இளஞ்சிவப்பு முன்னிலைப்படுத்தல் குறிக்கும்; அது அச்சிடப்படாது, ஏற்றுமதியும் ஆகாது.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	உரைக் கருவியுடன் ஓர் எழுத்தைத் தேர்ந்தெடுத்தால், தேர்வுசெய்வதற்காக அதன் மாற்றுக் குறியெழுத்துகளின் வரிசை கேன்வாஸில் அதன் அருகில் காட்டப்படும்.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	எழுத்துரு காணாமல் போனதால் மாற்று எழுத்துருவில் வரையப்பட்ட உரையைக் கேன்வாஸில் இளஞ்சிவப்பு முன்னிலைப்படுத்தல் குறிக்கும்; அது அச்சிடப்படாது, ஏற்றுமதியும் ஆகாது.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	ஓர் உரைக் கருவியால் உருவாக்கப்படும் புதிய உரை, தேர்ந்தெடுக்கப்பட்ட மாதிரி உரையுடன் தொடங்கும்; எனவே தட்டச்சு செய்தால் அது மாற்றப்படும்.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	பத்தியின் தொடக்கத்தில் 1. அல்லது * போன்ற பட்டியல் குறிப்பானைத் தட்டச்சு செய்து பிறகு இடைவெளி விட்டால், அந்தப் பத்தி பட்டியலாக மாறும்.
+	Fonts in this folder show in the font menus and can be used without being installed.	இந்தக் கோப்புறையில் உள்ள எழுத்துருக்கள் எழுத்துரு மெனுக்களில் காட்டப்படும், அவற்றை நிறுவாமலேயே பயன்படுத்தலாம்.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	உரைக்கு வரைகலை பாணியைப் பயன்படுத்தும்போது, பாணியில் நிரப்பு அல்லது கோடு இருக்கும் இடத்தில் எழுத்துகளின் சொந்த நிரப்பு அல்லது கோடு நீக்கப்படும்; அதனால் பாணியின் வண்ணம் தெரியும்.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	சீரமை, சமமாகப் பகிர் ஆகியவை புள்ளி உரையை அதன் Em பெட்டிக்குப் பதிலாக அதன் குறியெழுத்துகளின் மையைக் கொண்டு அளவிடும்.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	சீரமை, சமமாகப் பகிர் ஆகியவை பரப்பு உரையை அதன் சட்டகத்துக்குப் பதிலாக அதன் குறியெழுத்துகளின் மையைக் கொண்டு அளவிடும்.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	எல்லைப்பெட்டியும் உருமாற்றப் பலகமும் புள்ளி உரையை அதன் Em பெட்டிக்குப் பதிலாக அதன் குறியெழுத்துகளின் மையைக் கொண்டு அளவிடும்.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	கட்டம் மறைக்கப்பட்டிருந்தாலும், வரைதல், நகர்த்துதல், அளவாக்குதல் ஆகியவற்றைக் கட்டத்தின் உட்பிரிவுகளுடன் பொருத்தும்; இது இயக்கத்தில் இருக்கும்போது பிக்சலுடன் பொருத்து செயல்படாது.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	தேர்ந்தெடுக்கப்படாத வழிகாட்டிகளின் நிறம்; வழிகாட்டி லேபிள் உள்ள ஆர்ட்போர்டு தன் சொந்த வழிகாட்டிகளை அதற்குப் பதிலாக லேபிளின் நிறத்தில் வரையும்.
+	Draws guides as solid lines or as dots, including the guides already in the document.	ஆவணத்தில் ஏற்கெனவே உள்ள வழிகாட்டிகள் உட்பட, வழிகாட்டிகளைத் திடக் கோடுகளாகவோ புள்ளிகளாகவோ வரையும்.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	இதை இயக்கினால், VectorCraft தொடங்கும்போது வழிகாட்டிகள் பூட்டப்பட்டிருக்கும்; இந்த விருப்பத்தை மாற்றினால் அவை உடனே பூட்டப்படும் அல்லது திறக்கப்படும், பார்வை › வழிகாட்டி கோடுகள் › வழிகாட்டி கோடுகளை நிலைநிறுத்து அப்போதும் பூட்டை மாற்றும்.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	இதை இயக்கினால், அளவுகோலிலிருந்து இழுக்கத் தொடங்கும்போது Cmd/Ctrl ஐப் பிடித்திருந்தால், செயலில் உள்ள ஆர்ட்போர்டில் மட்டும் ஒரு வழிகாட்டி உருவாகும்; ஆர்ட்போர்டு கருவியுடன் கேன்வாஸ் வழிகாட்டி உருவாகும்.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	கட்டத்தின் நிறம்; முதன்மைக் கட்டக்கோடுகளுக்கு இடையிலான கோடுகள் அதன் மங்கலான நிழலில் வரையப்படும்.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	கட்டத்தைக் கோடுகளாக வரையும், அல்லது முதன்மைக் கட்டக்கோடுகளின் வழியே ஒவ்வொரு உட்பிரிவிலும் புள்ளிகளாக வரையும்.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	திறந்துள்ள ஒவ்வொரு ஆவணத்திலும் புதியவற்றிலும் முதன்மைக் கட்டக்கோடுகளுக்கு இடையிலான தூரம்; ஒரு VectorCraft ஆவணம், அது சேமிக்கப்பட்டபோது இருந்த கட்டத்துடன் திறக்கும்.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	ஒவ்வொரு முதன்மைக் கட்டச் சதுரமும் எத்தனை பகுதிகளாகப் பிரிக்கப்படுகிறது; பெரிதாக்க நிலை அவற்றின் கோடுகளை மறைத்தாலும், கட்டத்துடன் பொருத்து இந்தப் பகுதிகளுடன் பொருத்தும்.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	கட்டத்தை ஓவியத்துக்குப் பின்னால் வரையும்; முடக்கினால், கட்டம் அதன் மேல் வரையப்படும்.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	600% அல்லது அதற்கு மேல் பெரிதாக்கிய பிக்சல் முன்காட்சியில், செயலில் உள்ள பார்வை ஓவியத்தின் மேல் ஒவ்வொரு ஆவணப் பிக்சலின் விளிம்பிலும் ஒரு கோட்டைக் காட்டும்.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	வடிவமாதிரியைத் திருத்தும்போது காட்டப்படும் ஓட்டு ஓரத்தின் நிறமும் கீற்றுக்கோட்டு வண்ண மாதிரி எல்லைகளின் நிறமும்.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	வரைதல், நகர்த்துதல், உருமாற்றுதல் ஆகியவற்றை அருகிலுள்ள ஓவியத்துடன் பொருத்தி, வழிகாட்டிகளையும் லேபிள்களையும் காட்டும்; பிக்சல் முன்காட்சி அவற்றை முடக்கும், கட்டத்துடன் பொருத்து அதற்குப் பதிலாகக் கட்டத்துடன் பொருத்தும்.
+	The color of Smart Guide lines and labels.	திறன்மிகு வழிகாட்டிக் கோடுகள் மற்றும் லேபிள்களின் நிறம்.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	ஓவியம் சீரமையும் விளிம்பு அல்லது மையத்தின் வழியே ஒரு கோட்டைக் காட்டும்; முடக்கினால், கோடு இல்லாமலேயே ஓவியம் சீரமையும், குறியெழுத்துடன் பொருத்து செயல்படாது.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	தேர்வுக் கருவியுடன், நீங்கள் இழுக்காதபோது, சுட்டிக்குக் கீழே உள்ள தேர்ந்தெடுக்கப்படாத பொருளின் புறவரியை அதன் அடுக்கு நிறத்தில் காட்டும்.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	ஓவியத்தை அளவாக்கும்போது, சுழற்றும்போது, சாய்வடிக்கும்போது அல்லது பிரதிபலிக்கும்போது சுட்டிக்கு அருகில் அளவையோ கோணத்தையோ காட்டும்.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	நீங்கள் வரையும்போது, பகுதி அல்லது வடிவம் தொடங்கும் புள்ளி வழியே தேர்ந்தெடுத்த கோணங்களில் செல்லும் கோடுகளுடன் புள்ளிகள் பொருந்தும்.
+	The set of angles the construction guides follow while Construction Guides is on.	கட்டுமான வழிகாட்டிகள் இயக்கத்தில் இருக்கும்போது, அவை பின்பற்றும் கோணங்களின் தொகுப்பு.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	ஒரு புள்ளி எதனுடன் பொருந்துகிறது என்பதை, எடுத்துக்காட்டாக நங்கூரம், பாதை அல்லது சீரமைப்பு எனப் பெயரிட்டுக் காட்டும்; முடக்கினால், பெயர்கள் இல்லாமல் புள்ளிகள் அதே வழியில் பொருந்தும்.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	நீங்கள் ஓவியத்தை வரையும்போது அல்லது நகர்த்தும்போது, தூரங்கள், கோணங்கள், அது எவ்வளவு நகர்ந்துள்ளது என்பதைச் சுட்டிக்கு அருகில் காட்டும்.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	நகர்த்திய அல்லது அளவுமாற்றிய ஓவியத்தை அருகிலுள்ள பொருட்களுக்கு இடையிலான அதே இடைவெளியுடன் பொருத்தி, சம இடைவெளிகளைக் குறிக்கும்.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	ஏதாவது தேர்ந்தெடுக்கப்பட்டிருக்கும்போது, வேறொரு பொருள் அல்லது ஆர்ட்போர்டின் மேல் Alt/Option ஐப் பிடித்தால், அதற்கும் தேர்வுக்கும் இடையிலான தூரங்கள் காட்டப்படும்.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	இழுத்தல் தொடங்கிய இடத்தின் பொருத்தும் சகிப்புத்தன்மைக்குள் மீண்டும் இழுக்கப்படும் தேர்வு சரியாக அதே இடத்துக்குத் திரும்பும்; நகல் அவ்வாறு திரும்பாது.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	திறன்மிகு வழிகாட்டி கோடுகள் பொருத்த, சுட்டி அல்லது இழுக்கப்படும் புள்ளி திரையில் ஓவியத்துக்கு எவ்வளவு அருகில் வர வேண்டும்; ஒவ்வொரு பெரிதாக்க நிலையிலும் தூரம் ஒன்றே.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	கோட்டுப் பகுதியின் முனையையோ, மையத்திலிருந்து வரையப்படும் வட்டத்தையோ, அருகிலுள்ள வளைவைத் தொடும்படி பொருத்தும்.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	கோட்டுப் பகுதியின் முனையை, அருகிலுள்ள நேர்ப் பகுதியைச் செங்கோணத்தில் சந்திக்கும்படி பொருத்தும்.
+	Edit type set in fonts that aren't available?	கிடைக்காத எழுத்துருக்களில் அமைக்கப்பட்ட உரையைத் திருத்தவா?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	கேன்வாஸில் ஒவ்வொரு துண்டின் எண்ணையும் அதன் மேல் இடது மூலையில் ஒரு பெட்டியில் காட்டும்; முடக்கினால், துண்டுகளின் புறவரிகள் அப்போதும் காட்டப்படும்.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	பயனர் துண்டுகள், பொருள் துண்டுகள் ஆகியவற்றின் புறவரிகள் மற்றும் அவற்றின் எண் பெட்டிகளின் நிறம்; தானியங்கித் துண்டுகள் அதன் மங்கலான நிழலைப் பயன்படுத்தும்.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	சுருக்கக்குறி இடு இயக்கத்தில் உள்ள பத்திகளில், பட்டியலிடப்பட்ட சொல்லுக்கு, அதன் மொழியோ பெரிய/சிறிய எழுத்தோ எதுவாக இருந்தாலும், அதில் தட்டச்சு செய்த சுருக்கக்குறிகளின் இடத்தில் மட்டுமே சுருக்கக்குறி இடப்படும்; அவை இல்லையெனில் ஒருபோதும் இடப்படாது.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	டெஸ்க்டாப்பில், பாதுகாப்புப் பயன்முறையைத் தவிர, இந்தக் கோப்புறையின் .wasm செருகுநிரல்கள் தொடக்கத்திலும், சரி ஒரு புதிய கோப்புறையை அமைக்கும்போதும் ஏற்றப்படும்; அனுமதிகளைக் கேட்கும் செருகுநிரல், நீங்கள் அவற்றை வழங்கிய பிறகே ஏற்றப்படும். இணையப் பதிப்பு எதையும் ஏற்றாது.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	பெரிய என்பது, வடிகட்டி அல்லது கட்டளைச் செருகுநிரலின் ஒவ்வொரு இயக்கத்துக்கும் அதே நேர வரம்புடன் குறைந்தது 250 மில்லியன் அறிவுறுத்தல்களை வழங்கும்; இயல்பான என்பது செருகுநிரலின் சொந்த ஒதுக்கீட்டை வைத்திருக்கும். நேரடி விளைவுகள், ஏற்றுமதிச் செருகுநிரல்கள், இறக்குமதிச் செருகுநிரல்கள் தங்கள் ஒதுக்கீட்டையே வைத்திருக்கும்.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ஆவண அமைப்பின் மொழி ஆங்கிலம்: USA ஆக இருக்கும்போது, புதிய உரை இந்த மொழியைப் பெறும்; ஆவணத்தில் ஏற்கெனவே உள்ள உரை தன் சொந்த மொழியை வைத்திருக்கும்.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ஆவண அமைப்பின் மொழி ஆங்கிலம்: USA ஆகவும் [சாதாரண எழுத்து நடை] எந்த மொழியையும் அமைக்காமலும் இருக்கும்போது, புதிய உரை இந்த மொழியைப் பெறும்; ஆவணத்தில் ஏற்கெனவே உள்ள உரை தன் சொந்த மொழியை வைத்திருக்கும்.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	சுருக்கக்குறி இடு இயக்கத்தில் உள்ள பத்திகளில், பட்டியலிடப்பட்ட சொல், அதன் மொழியோ பெரிய/சிறிய எழுத்தோ எதுவாக இருந்தாலும், அதில் தட்டச்சு செய்த சுருக்கக்குறிகளில் மட்டுமே முறியும்; அவை இல்லையெனில் எங்கும் முறியாது.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	டெஸ்க்டாப்பில், பாதுகாப்புப் பயன்முறையைத் தவிர, இந்தக் கோப்புறையில் உள்ள .wasm செருகுநிரல்கள் தொடக்கத்திலும், இங்கே புதிய கோப்புறையுடன் சரி என்பதைச் சொடுக்கும்போதும் ஏற்றப்படும்; இணையப் பதிப்பு அவற்றை ஏற்றாது.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	இயல்பான என்பது ஒவ்வொரு செருகுநிரலின் சொந்த வரம்புகளையும் வைத்திருக்கும்; பெரிய என்பதில், செருகுநிரல் வடிகட்டி அல்லது கட்டளை அதன் உள்ளீட்டுக்கானவை தவிர குறைந்தது 250 மில்லியன் அறிவுறுத்தல்களை இயக்கலாம். நேர வரம்பு மாறாது.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	செருகுநிரல் பொருள் வடிகட்டியின் ஒவ்வொரு இயக்கமும் எத்தனை அறிவுறுத்தல்களைப் பயன்படுத்தலாம்; அதே 60-வினாடி வரம்புடன் பெரிய என்பது இயல்பானதை விட அதிகம் அனுமதிக்கும். அதிக ஒதுக்கீடு கொண்ட வடிகட்டிகள் தங்கள் சொந்த ஒதுக்கீட்டை வைத்திருக்கும்.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	முதல் தற்காலிக வட்டுத் தேர்வு: Startup, None அல்லது ஒரு கோப்புறைப் பாதை; VectorCraft இதைச் சேமித்து வைக்கும், ஆனால் இன்னும் தற்காலிக வட்டுகளைப் பயன்படுத்துவதில்லை.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	இரண்டாம் தற்காலிக வட்டுத் தேர்வு: Startup, None அல்லது ஒரு கோப்புறைப் பாதை; VectorCraft இதைச் சேமித்து வைக்கும், ஆனால் இன்னும் தற்காலிக வட்டுகளைப் பயன்படுத்துவதில்லை.
+	How light or dark the interface is.	இடைமுகம் எவ்வளவு வெளிச்சமாக அல்லது இருட்டாக இருக்கும்.
+	The set of colors the interface is drawn in.	இடைமுகம் வரையப்படும் நிறங்களின் தொகுப்பு.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	இயக்கத்தில் உள்ள, தேர்ந்தெடுக்கப்பட்ட அல்லது குவியத்திலுள்ள கட்டுப்பாடுகளின் நிறம்; நிறத் திட்டத்துக்குச் சொந்த உச்சரிப்பு நிறம் இருக்கும்போது இந்த மெனு மங்கலாக்கப்படும்.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	ஆர்ட்போர்டுகளைச் சுற்றியுள்ள கேன்வாஸின் நிறம்; பயனர் இடைமுகப் பிரகாசத்துடன் பொருத்து அதைப் பிரகாசம் அமைப்பிலிருந்து எடுக்கும். வெளிரேகைப் பயன்முறை அதை எப்போதும் வெள்ளையாகக் காட்டும்.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	அதன் படவுருவிலிருந்து திறக்கப்பட்ட பலகம், Esc ஐ அழுத்தும்போது அல்லது அதற்கு வெளியே சொடுக்கும்போது மூடும்; முடக்கினால், நீங்கள் ஒரு படவுருவைச் சொடுக்கும் வரை அது திறந்தே இருக்கும்.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	கருவிப் பட்டையில் ஒவ்வொரு கருவிக் குழுவின் பெயரையும் அதன் கருவிகளுக்கு மேலே காட்டும்; முடக்கினால், குழுக்கள் இடையில் எதுவும் இல்லாமல் ஒன்றன்பின் ஒன்றாக வரும்.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	இனிமேல், நீங்கள் திறக்கும் அல்லது உருவாக்கும் ஆவணங்கள் தாவல்களாகத் திறக்கும்; முடக்கினால், ஒவ்வொன்றும் மிதக்கும் சாளரத்தில் திறக்கும். ஏற்கெனவே திறந்துள்ள ஆவணங்கள் இருக்கும் இடத்திலேயே இருக்கும்.
+	Makes the document tabs taller and their names larger.	ஆவணத் தாவல்களை உயரமாக்கி, அவற்றின் பெயர்களைப் பெரிதாக்கும்.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	அடுத்த தொடக்கத்திலிருந்து, VectorCraft இல்லையெனில் தன் சொந்தத் தலைப்புப் பட்டையை வரையும் இடங்களில் கணினியே சாளரத்தின் தலைப்புப் பட்டையை வரையும்; Linux மற்றும் BSD அமைப்புகளில் VECTORCRAFT_TITLEBAR மாறி முன்னுரிமை பெறும்.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	அடுத்த தொடக்கத்திலிருந்து, கணினி தலைப்புப் பட்டை இயக்கத்தில் இருந்தாலோ VECTORCRAFT_TITLEBAR மாறி அதைத் தீர்மானித்தாலோ தவிர, டெஸ்க்டாப் வரையக்கூடிய இடங்களிலும் VectorCraft சாளரத்தின் தலைப்புப் பட்டையை வரையும்.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	இடைமுகத்தைப் பெரிதாக்கும் அல்லது சிறிதாக்கும்; அதே பெரிதாக்க நிலையில் கேன்வாஸில் உள்ள ஓவியம் தன் அளவை வைத்திருக்கும்.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft வரையும் கருவிச் சுட்டிகள் இடைமுக அளவாக்கத்துடன் பெரிதாகும், சிறிதாகும்; முடக்கினால், அவை தங்கள் அளவை வைத்திருக்கும்.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	இடைமுகத்தின் மொழி; தானியங்கி என்பது கணினியின் மொழியைப் பயன்படுத்தும். நீங்கள் ஒரு மொழியைத் தேர்ந்தெடுத்தவுடன் உரையாடல் பெட்டி அந்த மொழிக்கு மாறும்.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	இது இயக்கத்தில் இருக்கும்போது மட்டுமே அனிமேஷன் பெரிதாக்கல் வேலை செய்யும்; முடக்கினால், அனிமேஷன் பெரிதாக்கல் மங்கலாக்கப்படும், பெரிதாக்கும்போது அசைவூட்டம் இருக்காது.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	மவுஸ் சக்கரத்தால் பெரிதாக்குவது மென்மையாக நிகழும், நீங்கள் பக்கவாட்டில் இழுக்கும்போது அல்லது அழுத்திப் பிடிக்கும்போது பெரிதாக்கும் கருவி பெரிதாக்கும்; முடக்கினால், நீங்கள் இழுத்துக் குறிக்கும் பகுதிக்குப் பெரிதாக்கும் கருவி பெரிதாக்கும்.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	அடுத்த தொடக்கத்திலிருந்து, டெஸ்க்டாப் பதிப்பு இந்த வகை வரைகலைச் செயலி மூலம் கேன்வாஸைக் காட்டும்; எப்படியிருந்தாலும் ஓவியம் CPU இல் வரையப்படும். Windows, macOS இல் தானியங்கி என்பது ஒருங்கிணைந்த செயலியை முன்னுரிமையாகத் தேர்வுசெய்யும். இணையப் பதிப்பு இதைப் பயன்படுத்தாது.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	அடுத்த தொடக்கத்திலிருந்து, வரைகலை இயக்கி அனுமதிக்கும் இடங்களில், திரையின் புதுப்பிப்புக்குக் காத்திருக்காமல் சாளரம் ஒவ்வொரு சட்டகத்தையும் காட்டும், வினாடிக்கு அதிகபட்சம் 240 சட்டகங்கள்.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	அடுத்த தொடக்கத்திலிருந்து, டெஸ்க்டாப் பதிப்பு இந்த வகை வரைகலைச் செயலியைக் கொண்டு வரையும்; தானியங்கி என்பது திரையை இயக்கும் செயலியை முன்னுரிமையாகத் தேர்வுசெய்யும். இணையப் பதிப்பு இதைப் பயன்படுத்தாது.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	அடுத்த தொடக்கத்திலிருந்து, திரை புதுப்பிக்கப்படும் வரை காத்திருக்காமல் சாளரம் சட்டகங்களைக் காட்டும், வினாடிக்கு அதிகபட்சம் 240; முடக்கினால், திரையே அவற்றின் வேகத்தை நிர்ணயிக்கும். தொடங்கும்போது அமைக்கப்படும் சட்டகக் காட்சி முறை இதை மீறும்.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	ஒவ்வொரு ஆவணமும் வைத்திருக்கும் அதிகபட்ச செயல்தவிர் படிகள்; இதைக் குறைத்தால், சரி என்பதைச் சொடுக்கும்போது மிகப் பழைய படிகள் நீக்கப்படும். படிகள் அதிக நினைவகத்தைப் பயன்படுத்தினால் அதற்கு முன்பே நீக்கப்படலாம்.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	நீங்கள் இழுக்கும்போது ஓவியம் மாறுவதைக் காட்டும்; முடக்கினால், புறவரிகள் இழுப்பைப் பின்தொடரும், நீங்கள் விடுவிக்கும்போது ஓவியம் மாறும். அளவுகோல் வழிகாட்டி எப்போதும் நீங்கள் இழுக்கும்போதே நகரும்.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	ஓவியத்தை எத்தனை பணி இழைகள் வரைகின்றன; -1 என்பது VectorCraft பயன்படுத்தக்கூடிய செயலி மையங்களை விட ஒன்று குறைவாக, அதிகபட்சம் 8 ஐப் பயன்படுத்தும், 0 எதையும் பயன்படுத்தாது. இணையப் பதிப்பு எப்போதும் எதையும் பயன்படுத்தாது.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	Wayland டெஸ்க்டாப்பில் அடுத்த தொடக்கத்திலிருந்து, X11 (XWayland) சாளரத்தை XWayland வழியாகத் திறக்கும்; மற்ற தேர்வுகள் பேனா இணைக்கப்பட்டிருக்கும்போது மட்டுமே அவ்வாறு செய்யும்.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	அடுத்த தொடக்கத்திலிருந்து, டெஸ்க்டாப் பதிப்பு திரையின் புதுப்பிப்புக்குக் காத்திருக்காமல் சட்டகங்களைக் காட்டும், வினாடிக்கு அதிகபட்சம் 240; முடக்கினால், திரையே அவற்றின் வேகத்தை நிர்ணயிக்கும்.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	பெரிய ஒதுக்கீடு, பொருள் வடிகட்டியின் ஒவ்வொரு இயக்கத்தின் அடிப்படை அறிவுறுத்தல்களையும் ஐந்து மடங்காக உயர்த்தும், உள்ளீட்டு பைட் ஒன்றுக்கான அனுமதியை மாற்றாது; அதிக ஒதுக்கீடு கொண்ட வடிகட்டிகள், நேரடி விளைவுகள், ஏற்றுமதிச் செருகுநிரல்கள், இறக்குமதிச் செருகுநிரல்கள் தங்கள் சொந்த வரம்புகளை வைத்திருக்கும்.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	கணினி ஏற்கெனவே செய்யாத இடங்களில், கேன்வாஸில் உள்ள ஓவியத்தையும் ஆர்ட்போர்டுகளையும் திரையின் நிறச் சுயவிவரத்துக்கு மாற்றும்; முடக்கினால், கேன்வாஸ் sRGB இல் வரையப்படும்.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	டெஸ்க்டாப்பில், நீங்கள் தொடர்ந்து திருத்தும்போதே கோப்புக்கான சேமிப்பு பின்னணியில் எழுதப்படும்; முடக்கினால், அது எழுதப்படும் வரை நீங்கள் காத்திருக்க வேண்டும்.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	டெஸ்க்டாப்பில், 3D ஏற்றுமதிகளைத் தவிர, கோப்புகளுக்கும் தொகுப்புகளுக்குமான ஏற்றுமதிகள் நீங்கள் தொடர்ந்து திருத்தும்போதே பின்னணியில் எழுதப்படும்; முடக்கினால், அவற்றுக்காக நீங்கள் காத்திருக்க வேண்டும்.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	சில நிமிடங்களுக்கு ஒருமுறை, கடைசி நகலுக்குப் பிறகு சேமிக்கப்படாத மாற்றங்கள் உள்ள ஒவ்வொரு ஆவணத்துக்கும் ஒரு மீட்பு நகலை வைத்திருக்கும்; முடக்கினால், குறித்த இடைவெளியில் நகல்கள் எதுவும் உருவாக்கப்படாது.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	மீட்பு தரவை தானாகச் சேமி இயக்கத்தில் இருக்கும்போது, மீட்பு நகல்களுக்கு இடையே எத்தனை நிமிடங்கள் கழியும்.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	டெஸ்க்டாப்பில், மீட்பு நகல்கள் வைக்கப்படும் கோப்புறை; VectorCraft இன் சொந்தக் கோப்புறைக்கு இதை வெறுமையாக விடவும். இணையப் பதிப்பு அவற்றை உலாவியில் வைத்திருக்கும்.
+	No timed recovery copies are made of documents with more than 20,000 objects.	20,000 க்கும் மேற்பட்ட பொருட்கள் உள்ள ஆவணங்களுக்கு, குறித்த இடைவெளியில் மீட்பு நகல்கள் உருவாக்கப்படாது.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	சமீபத்திய கோப்புகளைத் திற, முகப்புத் திரை ஆகியவை அதிகபட்சம் இத்தனை சமீபத்திய கோப்புகளைப் பட்டியலிடும்; 0 எதையும் பட்டியலிடாது, VectorCraft அப்போதும் 30 வரை நினைவில் வைத்திருக்கும்.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	ஆவணம் திறக்கும்போது, சேமிக்கப்பட்ட முன்காட்சியைக் காட்டும் இணைக்கப்பட்ட EPS படம், EPS கோப்பை மீண்டும் படிப்பதற்குப் பதிலாக அந்த முன்காட்சியையே வைத்திருக்கும்; மாற்றப்பட்ட கோப்புகள் அப்போதும் இணைப்புகளைப் புதுப்பி அமைப்பைப் பின்பற்றும்.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	பிக்சல் முன்காட்சியில், படங்கள் மென்மையாக்கப்பட்டு வரையப்படும்; முடக்கினால், அவற்றின் பிக்சல்கள் கூர்மையான விளிம்புகளுடன் தெரியும். பிக்சல் முன்காட்சிக்கு வெளியே, படங்கள் எப்போதும் மென்மையாக்கப்படும்.
+	PDF Text	PDF உரை
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	நீங்கள் திறக்கும் அல்லது உட்பொதிக்கும் PDF இன் உரை, திருத்தக்கூடிய உரையாகவோ, அல்லது அதன் எழுத்துருக்கள் இல்லாத கணினியிலும் ஒரே மாதிரித் தோன்றும் வெளிரேகைகளாகவோ வரும்.
+	Linked pages show the file's own text.	இணைக்கப்பட்ட பக்கங்கள் கோப்பின் சொந்த உரையையே காட்டும்.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	இணைக்கப்பட்ட கோப்பு மாறும்போது, தானாகவே என்பது அதை மீண்டும் படிக்கும், மாற்றப்படும்போது கேள் என்பது முதலில் உங்களிடம் கேட்கும், கைமுறையாக என்பது அதை அப்படியே விட்டு நிலைப்பட்டியில் ஒரு குறிப்பைக் காட்டும்.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	டெஸ்க்டாப்பில், வார்ப்புருவிலிருந்து புதியது… மற்றும் வார்ப்புருவாகச் சேமி… தொடங்கும் கோப்புறை; உங்கள் ஆவணங்கள் கோப்புறையில் உள்ள VectorCraft Templates க்கு இதை வெறுமையாக விடவும்.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	மூலத்தைத் திருத்து, இணைக்கப்பட்ட கோப்பை அதன் வகைக்கான கணினியின் இயல்புநிலைப் பயன்பாட்டில் திறக்கும்; முடக்கினால், PhotoCraft நிறுவப்பட்டிருக்கும் இடத்தில் இணைக்கப்பட்ட ராஸ்டர் படம் அதில் திறக்கும்.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	பழைய VectorCraft பதிப்பால் சேமிக்கப்பட்ட கோப்பு அதன் பெயருக்குப் பின் [மாற்றப்பட்டது] உடன் திறக்கும், சேமி என்பது அதை எங்கே சேமிப்பது எனக் கேட்கும்; முடக்கினால், சேமி என்பது கோப்பை மாற்றியெழுதும்.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	ஒரு சேமிப்பு வேறுவிதமாகக் குறிப்பிடாவிட்டால், VectorCraft கோப்புகளும் வார்ப்புருக்களும் அழுத்தப்பட்டுச் சேமிக்கப்படும், அதனால் அவை சிறியதாக இருக்கும்; அழுத்தப்பட்ட கோப்புகளைத் திறக்க முடியாத பதிப்புகளுக்கான சேமிப்புகள் அழுத்தப்படாமலேயே இருக்கும்.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	நகலெடு, வெட்டு ஆகியவை ஓவியத்தின் SVG குறியீட்டையும் பிற பயன்பாடுகளுக்கு வழங்கும்; டெஸ்க்டாப்பில், ஓவியம் 1 MiB க்கு மேற்பட்ட படங்களை உட்பொதித்திருந்தால் குறியீடு உரையாக நகலெடுக்கப்படாது.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows இல், நகலெடு, வெட்டு ஆகியவை ஓவியத்தின் PDF ஐயும் பிற பயன்பாடுகளுக்கு வழங்கும்; மற்ற தளங்கள் இன்னும் PDF ஐ நகலெடுப்பதில்லை.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft இந்தத் தேர்வைச் சேமித்து வைக்கும், ஆனால் நகலெடு, வெட்டு ஆகியவை இன்னும் பழைய திசையன் கிளிப்போர்டு வடிவத்தைப் பயன்படுத்துவதில்லை.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	பழைய திசையன் கிளிப்போர்டுக்கான தேர்வு: பாதைகளைப் பாதுகாக்கவும் அல்லது தோற்றம் மற்றும் மேல்அச்சுகளைப் பாதுகாக்கவும்; VectorCraft தேர்வைச் சேமித்து வைக்கும், ஆனால் இன்னும் அதைப் பயன்படுத்துவதில்லை.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	VectorCraft உரையிலிருந்து நகலெடுத்த உரை வேறொரு உரைக்குள் ஒட்டப்படும்போது, வடிவமைப்பை வைத்திரு என்பது அதன் பாணிகளைத் தக்கவைக்கும்; எளிய உரையை வைத்திரு என்பது, அது சேரும் இடத்தின் பாணியை அதற்கு வழங்கும்.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	அனைத்துக் கருப்பையும் ரிச் பிளாக்காகக் காட்டு என்பது தூய CMYK கருப்பை (100% இல் கருப்பு மை மட்டும்) கேன்வாஸில் RGB கருப்பாகக் காட்டும்; அனைத்துக் கருப்பையும் துல்லியமாகக் காட்டு என்பது அதை CMYK பணி நிறவெளி வழியாக மாற்றும்.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	அனைத்துக் கறுப்பையும் ரிச் பிளாக்காக வெளியீடு செய் என்பது RGB மற்றும் சாம்பல் அளவு ராஸ்டர் ஏற்றுமதிகளிலும் பிட்மேப்பாக அச்சிடுவதிலும் தூய CMYK கருப்பை RGB கருப்பாக வரையும்; திசையன் ஏற்றுமதிகள், CMYK JPEG, TIFF, PSD அல்லது பிற அச்சிடுதல்களை அது மாற்றாது.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	தொடுதிரையில், Touch பணியிடத்துக்கு மாறும்; இதை முடக்கினாலோ தொடுதிரை இல்லாமல் போனாலோ, மாறுவதற்கு முன் இருந்த பணியிடத்துக்குத் திரும்பும்.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	கேன்வாஸில் இரு விரல் தட்டல் செயல்தவிர்க்கும், அல்லது Touch பணியிடத்தில் தேர்வுக் கருவிகளுக்கும் வரைதல் கருவிகளுக்கும் இடையே மாற்றும்; மூன்று விரல் தட்டல் மீண்டும் செய்யும்; இரண்டும் விளக்கப் பயன்முறையில் வேலை செய்யாது.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	சுருக்கக்குறி இடு இயக்கத்தில் உள்ள பத்திகளில், பட்டியலிடப்பட்ட சொல், பெரிய/சிறிய எழுத்து எதுவாக இருந்தாலும், அதில் தட்டச்சு செய்த சுருக்கக்குறிகளில் மட்டுமே முறியும், அவை இல்லையெனில் எங்கும் முறியாது; கொரியச் சொற்களுக்குச் சுருக்கக்குறி இடப்படாது, இந்திய மொழிச் சொற்கள் ஓர் எழுத்துக் கொத்துக்குள் முறியாது.
 	Reset all preferences to their defaults?	அனைத்து விருப்பத்தேர்வுகளையும் அவற்றின் இயல்புநிலைகளுக்கு மீட்டமைக்கவா?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	விருப்பத்தேர்வுகளில் சரி என்பதைச் சொடுக்கும்போது இயல்புநிலைகள் பயன்படுத்தப்படும். அங்கே ரத்துசெய் என்பதைச் சொடுக்கினால் உங்கள் தற்போதைய விருப்பத்தேர்வுகள் அப்படியே இருக்கும்.
 	Restore Recovered Documents	மீட்கப்பட்ட ஆவணங்களை மீட்டெடு
@@ -4168,6 +4623,7 @@ antiAlias	Sharp	கூர்மையான
 	Rotate…	சுழற்று…
 	Rotation	சுழற்சி
 	Rotation relative to:	இதற்கு ஏற்ப சுழற்சி:
+	Hue Jitter:	சாயல் சீரற்ற மாற்றம்:
 	Rotation X	X சுழற்சி
 	Rotation Y	Y சுழற்சி
 	Rotation Z	Z சுழற்சி
@@ -4190,6 +4646,7 @@ antiAlias	Sharp	கூர்மையான
 	Rounded Rectangle…	வட்ட மூலை செவ்வகம்…
 	Roundness:	வட்டத்தன்மை:
 	Row Size:	வரிசை அளவு:
+	Rows	வரிசைகள்
 	Rows:	வரிசைகள்:
 	Ruby	ஒலிப்பு உரை
 	Ruby…	ஒலிப்பு உரை…
@@ -4259,6 +4716,7 @@ antiAlias	Sharp	கூர்மையான
 	Save Preset	முன்னமைவைச் சேமி
 	Save Document Preset	ஆவண முன்னமைவைச் சேமி
 	Save Preset…	முன்னமைவைச் சேமி…
+	Save Summary…	சுருக்கவுரையைச் சேமி…
 	Save Print Preset	அச்சு முன்னமைவைச் சேமி
 	Save Recovery Data	மீட்புத் தரவைச் சேமி
 	Save Save for Web Preset	இணையத்திற்காகச் சேமி முன்னமைவைச் சேமி
@@ -4283,6 +4741,7 @@ antiAlias	Sharp	கூர்மையான
 	Save Transparency Flattener Preset	வெளிப்படைத்தன்மை தட்டையாக்கி முன்னமைவைச் சேமி
 	Save Transparency Flattener Preset…	வெளிப்படைத்தன்மை தட்டையாக்கி முன்னமைவைச் சேமி…
 	Save Variable Library…	மாறி நூலகத்தைச் சேமி…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	இறக்குமதி கட்டளை .csv, .tsv, .txt அல்லது .xml இல் முடியும் தரவு மூலக் கோப்பை மட்டுமே படிக்கும்
 	Save…	சேமி…
 	Saved	சேமிக்கப்பட்டது
 	SAVED	சேமிக்கப்பட்டவை
@@ -4393,8 +4852,6 @@ antiAlias	Sharp	கூர்மையான
 	Search	தேடு
 	Search All	அனைத்திலும் தேடு
 	Search artboards	ஆர்ட்போர்டுகளைத் தேடு
-	Search commands and tools	கட்டளைகளையும் கருவிகளையும் தேடு
-	Search commands and tools…	கட்டளைகளையும் கருவிகளையும் தேடு…
 	Search Commands…	கட்டளைகளைத் தேடு…
 	Search Fonts Folder	Fonts கோப்புறையில் தேடு
 	Search images	படங்களைத் தேடு
@@ -4522,6 +4979,7 @@ antiAlias	Sharp	கூர்மையான
 	Set Slice Rectangle	துண்டு செவ்வகத்தை அமை
 	Set Tab Stops	தாவல் நிறுத்தங்களை அமை
 	Set Text	உரையை அமை
+	Set the current fill or stroke to the selected color	தற்போதைய நிரப்பு அல்லது கோட்டைத் தேர்ந்தெடுத்த நிறமாக அமை
 	Set the selected color to the current color	தேர்ந்த நிறத்தைத் தற்போதைய நிறமாக அமை
 	Set Zoom	பெரிதாக்கலை அமை
 	Set:	தொகுப்பு:
@@ -4598,6 +5056,7 @@ antiAlias	Sharp	கூர்மையான
 	Shorter Than Length	நீளத்தைவிடக் குறுகியவை
 	Show	காட்டு
 	Show {kind} Brushes	{kind} தூரிகைகளைக் காட்டு
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	தகட்டைக் காட்டு/மறை (Alt+சொடுக்கு: இந்தத் தகடு மட்டும்; மீண்டும் Alt+சொடுக்கு: அனைத்துத் தகடுகளும்)
 	Show Active Plane Widget	செயலில் உள்ள தள விட்ஜெட்டைக் காட்டு
 	Show All	அனைத்தையும் காட்டு
 	Show All Hidden Attributes	மறைக்கப்பட்ட அனைத்துப் பண்புகளையும் காட்டு
@@ -4615,7 +5074,18 @@ antiAlias	Sharp	கூர்மையான
 	Show Center	மையத்தைக் காட்டு
 	Show Center Mark	மையக்குறியைக் காட்டு
 	Show Code	குறியீட்டைக் காட்டு
+	Show in Browser	உலாவியில் காட்டு
 	Show color bars	நிறப் பட்டைகளைக் காட்டு
+	Show brightness and hue on wheel	வட்டத்தில் பிரகாசத்தையும் சாயலையும் காட்டு
+	Show saturation and hue on wheel	வட்டத்தில் செறிவையும் சாயலையும் காட்டு
+	Add Color Tool	நிறம் சேர்க்கும் கருவி
+	Remove Color Tool	நிறம் அகற்றும் கருவி
+	Remove Color	நிறத்தை அகற்று
+	Set As Base Color	அடிப்படை நிறமாக அமை
+	Select Shade	நிழலைத் தேர்ந்தெடு
+	Add New Color	புதிய நிறத்தைச் சேர்
+	Set Current Color As Base Color	தற்போதைய நிறத்தை அடிப்படை நிறமாக அமை
+	Find the selected colors in the artwork	தேர்ந்தெடுத்த நிறங்களை ஓவியத்தில் கண்டறி
 	Show Color Groups	வண்ணக் குழுக்களைக் காட்டு
 	Show Color Swatches	வண்ண மாதிரிகளைக் காட்டு
 	Show Corner Widget	மூலை விட்ஜெட்டைக் காட்டு
@@ -4647,6 +5117,7 @@ antiAlias	Sharp	கூர்மையான
 	Show Modified	மாற்றப்பட்டவற்றைக் காட்டு
 	Show Note	குறிப்பைக் காட்டு
 	Show Options	விருப்பங்களைக் காட்டு
+	Show on Shape Creation	வடிவம் உருவாக்கும்போது காட்டு
 	Show Recent Colors	சமீபத்திய நிறங்களைக் காட்டு
 	Toggle RGB Percent	RGB சதவீதத்தை மாற்று
 	Show Original Path	அசல் பாதையைக் காட்டு
@@ -4681,6 +5152,7 @@ antiAlias	Sharp	கூர்மையான
 	Show Thumbnails	சிறுபடங்களைக் காட்டு
 	Show Tile Edge	ஓடு ஓரத்தைக் காட்டு
 	Show Tints/Shades	நிழல்கள்/நிழல்களின் நிழல்களைக் காட்டு
+	Show Tool Cards	கருவி அட்டைகளைக் காட்டு
 	Show Tool Group Labels	கருவிக் குழு லேபிள்களைக் காட்டு
 	Show Tool Tips	கருவிக்குறிப்புகளைக் காட்டு
 	Show Toolbar	கருவிப் பட்டையைக் காட்டு
@@ -4690,7 +5162,6 @@ antiAlias	Sharp	கூர்மையான
 	Show Vivid/Muted	தெளிவான/மங்கிய நிறங்களைக் காட்டு
 	Show Warm/Cool	வெப்ப/குளிர் நிறங்களைக் காட்டு
 	Show:	காட்டு:
-	Show/hide plate (Alt-click: only this plate)	தகட்டைக் காட்டு/மறை (Alt+சொடுக்கு: இந்தத் தகடு மட்டும்)
 	Shown with the optimised preview.	உகப்பாக்கப்பட்ட முன்காட்சியுடன் காட்டப்படுகிறது.
 	Shrink Text to Fit	பொருந்துமாறு உரையைச் சுருக்கு
 	Side 1:	பக்கம் 1:
@@ -4831,6 +5302,8 @@ antiAlias	Sharp	கூர்மையான
 	Source code on GitHub	GitHub-இல் மூலநிரல்
 	Source Folder:	மூலக் கோப்புறை:
 	Source Image	மூலப் படம்
+	Split View	பிரித்த பார்வை
+	Divider	பிரிகோடு
 	Source Sans 3	Source Sans 3
 	Space After Paragraph	பத்திக்குப் பிறகு இடைவெளி
 	Space Before Paragraph	பத்திக்கு முன் இடைவெளி
@@ -4962,6 +5435,9 @@ antiAlias	Sharp	கூர்மையான
 	Styling:	பாணியமைத்தல்:
 	Stylistic	பாணிசார்ந்த
 	Stylistic Alternates	பாணி மாற்றுகள்
+	Ligatures	இணைப்பெழுத்துகள்
+	Ornaments	அலங்காரங்கள்
+	Figures	எண் வடிவங்கள்
 	Stylistic Sets	பாணித் தொகுப்புகள்
 	Stylize	பாணியூட்டு
 	Subdivisions	உட்பிரிவுகள்
@@ -5038,6 +5514,17 @@ antiAlias	Sharp	கூர்மையான
 	Symbol Type:	சின்ன வகை:
 	Symbolism Tool	குறியீட்டுவாதக் கருவி
 	Symbolism Tools Options	குறியீட்டுவாதக் கருவி விருப்பங்கள்
+	Tool:	கருவி:
+	Symbol Set Density	சின்னத் தொகுப்பின் அடர்த்தி
+	Symbol Sprayer Options	சின்னத் தெளிப்பான் விருப்பங்கள்
+	Scrunch:	நெருக்கல்:
+	Spin:	சுழற்றல்:
+	Screen:	திரைத்தன்மை:
+	Stain:	நிறமூட்டல்:
+	Symbol Sizer Options	சின்ன அளவாக்கி விருப்பங்கள்
+	Proportional Resizing	விகிதப்படி அளவு மாற்றம்
+	Resizing Affects Density	அளவு மாற்றம் அடர்த்தியைப் பாதிக்கும்
+	Show Brush Size and Intensity	தூரிகையின் அளவையும் தீவிரத்தையும் காட்டு
 	Symbols	குறியீடுகள்
 	Syntax newer than ES3	ES3 ஐ விடப் புதிய தொடரியல்
 	System	கணினி
@@ -5080,7 +5567,7 @@ antiAlias	Sharp	கூர்மையான
 	Composite Fonts	கூட்டு எழுத்துருக்கள்
 	Export Composite Fonts	கூட்டு எழுத்துருக்களை ஏற்றுமதி செய்
 	Import Composite Fonts	கூட்டு எழுத்துருக்களை இறக்குமதி செய்
-@msg	each font must be {name, parts}	ஒவ்வொரு எழுத்துருவும் {name, parts} ஆக இருக்க வேண்டும்
+@msg	each font must be {{name, parts}}	ஒவ்வொரு எழுத்துருவும் {{name, parts}} ஆக இருக்க வேண்டும்
 @msg	unknown key `{k}`; a font takes name and parts	அறியப்படாத திறவுச்சொல் `{k}`; ஒரு எழுத்துரு name, parts ஆகியவற்றை மட்டுமே எடுக்கும்
 @msg	each font needs a name	ஒவ்வொரு எழுத்துருவுக்கும் ஒரு பெயர் தேவை
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` கூட்டு எழுத்துருவின் பெயராக இருக்க முடியாது (1 முதல் {COMPOSITE_NAME_MAX} எழுத்துகள், கட்டுப்பாட்டு எழுத்துகள் இல்லாமல்)
@@ -5093,7 +5580,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	two composite fonts are named `{_1}`	இரண்டு கூட்டு எழுத்துருக்களுக்கு `{_1}` என்ற பெயர் உள்ளது
 @msg	`{_1}` is the name of an installed font	`{_1}` என்பது நிறுவப்பட்ட ஓர் எழுத்துருவின் பெயர்
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} ஆனது `{font}` என்ற கூட்டு எழுத்துருவில் அமைக்கப்பட்டுள்ளது
-@msg	give fonts: [{name, parts}…]	fonts: [{name, parts}…] கொடுக்கவும்
+@msg	give fonts: [{{name, parts}}…]	fonts: [{{name, parts}}…] கொடுக்கவும்
 @msg	path is empty	path காலியாக உள்ளது
 @msg	fonts must be a list of composite fonts	fonts கூட்டு எழுத்துருக்களின் பட்டியலாக இருக்க வேண்டும்
 @msg	names must be strings	names உரைகளாக இருக்க வேண்டும்
@@ -5214,6 +5701,13 @@ antiAlias	Sharp	கூர்மையான
 	TIFF (8-bit Color)	TIFF (8-பிட் நிறம்)
 	TIFF (Black & White)	TIFF (கருப்பு மற்றும் வெள்ளை)
 	Tile	ஓடு
+	Tile All Vertically	அனைத்தையும் செங்குத்தாகப் பிரித்து அமை
+	Tile All Horizontally	அனைத்தையும் கிடைமட்டமாகப் பிரித்து அமை
+	2-Up Layout	2 பார்வை அமைப்பு
+	3-Up Layout	3 பார்வை அமைப்பு
+	4-Up Layout	4 பார்வை அமைப்பு
+	6-Up Layout	6 பார்வை அமைப்பு
+	Arrange Documents	ஆவணங்களை ஒழுங்கமை
 	tile {number}	ஓடு {number}
 	Tile Edge Color	ஓட்டின் ஓர நிறம்
 	Tile Edge Color…	ஓட்டின் ஓர நிறம்…
@@ -5342,6 +5836,8 @@ antiAlias	Sharp	கூர்மையான
 	True Colors	உண்மை நிறங்கள்
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	உண்மை நிறத்திற்கு 2004 அல்லது அதற்குப் பிந்தைய பதிப்பு தேவை: 256 நிறங்களில் அருகிலுள்ளது எழுதப்படும்.
 	Turkish	துருக்கியம்
+	Baltic	பால்டிக்
+	Central European	மத்திய ஐரோப்பியம்
 	Turn off Data Recovery for complex documents	சிக்கலான ஆவணங்களுக்கான தரவு மீட்பை முடக்கு
 	Turn the Contour into plain paths	சுற்றுக்கோட்டைச் சாதாரண பாதைகளாக மாற்று
 	Tweak…	சரிசெய்…
@@ -5386,6 +5882,8 @@ antiAlias	Sharp	கூர்மையான
 	Unembedded to {}	{} க்கு உட்பொதிப்பு நீக்கப்பட்டது
 	Ungroup	குழுவைப் பிரி
 	Ungroup Color Group	வண்ணக் குழுவை பிரி
+	Color Group Options	வண்ணக் குழு விருப்பங்கள்
+	Color Group Options…	வண்ணக் குழு விருப்பங்கள்…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5413,6 +5911,7 @@ antiAlias	Sharp	கூர்மையான
 	Unlock Variables	மாறிகளைத் திற
 	Unnamed Objects	பெயரிடப்படாத பொருட்கள்
 	Unpainted Objects	வண்ணமிடப்படாத பொருட்கள்
+	Empty Text Paths	வெற்று உரைப் பாதைகள்
 	Unprintable margin:	அச்சிட முடியாத ஓரம்:
 	Unselected Artwork	தேர்ந்தெடுக்கப்படாத ஓவியம்
 	Unsharp Mask	அன்ஷார்ப் மறைப்பு
@@ -5511,6 +6010,8 @@ antiAlias	Sharp	கூர்மையான
 	Variable Options	மாறி விருப்பங்கள்
 	Variable Options…	மாறி விருப்பங்கள்…
 	Variable Width Profile	மாறும் அகல சுயவிவரம்
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	கோட்டின் தூரிகை தன் சொந்த அளவையே வைத்திருக்கும், எனவே அகல சுயவிவரம் அதை மாற்றாது. சுயவிவரத்தைப் பயன்படுத்த தூரிகையை அகற்றவும்.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	கோட்டின் தூரிகை அதன் சொந்த அளவை வைத்திருக்கும், எனவே அகல சுயவிவரம் அதை மாற்றாது. சுயவிவரத்தைப் பயன்படுத்த, தூரிகையை அகற்றவும்.
 	Variables	மாறிகள்
 	Variation	மாறுபாடு
 	Variation:	மாறுபாடு:
@@ -5567,8 +6068,8 @@ antiAlias	Sharp	கூர்மையான
 	Update While Dragging	இழுக்கும்போது புதுப்பி
 	Video Thumbnail 1280×720	வீடியோ சிறுபடம் 1280×720
 	View	பார்வை
+	View Artboard Contents Only	ஆர்ட்போர்டு உள்ளடக்கத்தை மட்டும் காண்
 	View {n}	காட்சி {n}
-	View Artboard Only	ஆர்ட்போர்டை மட்டும் காட்டு
 	View Opacity Mask	ஒளிபுகாநிலை முகமூடியைக் காட்டு
 	View PDF after saving	சேமித்த பிறகு PDF ஐக் காட்டு
 	View:	காட்சி:
@@ -5641,6 +6142,11 @@ antiAlias	Sharp	கூர்மையான
 	Write Layers	அடுக்குகளை எழுது
 	Writes, moves or deletes files	கோப்புகளை எழுதும், நகர்த்தும் அல்லது நீக்கும்
 	x Height	x உயரம்
+	Em Box Height	Em பெட்டி உயரம்
+	Show Sample	மாதிரியைக் காட்டு
+	Hide Sample	மாதிரியை மறை
+	Max Ascent/Descent	அதிகபட்ச ஏற்றம்/இறக்கம்
+	Max Ascender	அதிகபட்ச ஏறுமுகம்
 	X Position	X நிலை
 	x-height	x-உயரம்
 	x-Height	x-உயரம்
@@ -5904,7 +6410,6 @@ antiAlias	Sharp	கூர்மையான
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` அனுமதிக்கப்பட்ட விருப்பங்களில் ஒன்றல்ல
 @msg	{k} has control characters	{k}-இல் கட்டுப்பாட்டு எழுத்துகள் உள்ளன
 @msg	{k} has control characters or line breaks	{k}-இல் கட்டுப்பாட்டு எழுத்துகள் அல்லது வரி முறிவுகள் உள்ளன
-@msg	{k} has control characters{_1}	{k}-இல் கட்டுப்பாட்டு எழுத்துகள்{_1} உள்ளன
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} மிக நீளமாக உள்ளது (அதிகபட்சம் {MAX_TEXT} எழுத்துகள்)
 @msg	{k} must be {{size?, position?}}	{k} ஆனது {{size?, position?}} ஆக இருக்க வேண்டும்
 @msg	{k} must be > 0	{k} > 0 ஆக இருக்க வேண்டும்
@@ -5952,10 +6457,11 @@ antiAlias	Sharp	கூர்மையான
 @msg	{label}: lost track of a shape's style	{label}: ஒரு வடிவத்தின் பாணி தொலைந்தது
 @msg	{label}: select paths	{label}: பாதைகளைத் தேர்ந்தெடுக்கவும்
 @msg	{label}: select paths, compound paths, groups or text	{label}: பாதைகள், கூட்டுப் பாதைகள், குழுக்கள் அல்லது உரையைத் தேர்ந்தெடுக்கவும்
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	எந்தப் பரப்பையும் மூடாத நேர்கோடு அல்லது பிற திறந்த பாதை முடிவின் வடிவத்தை மாற்றாது; அதைச் சேர்க்க, முதலில் அதற்குப் பொருள் › பாதை › கோட்டை வெளிரேகையாக்கு என்பதைப் பயன்படுத்தவும்
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} வெற்று முடிவைத் தந்தது: நேர்கோடு அல்லது பிற திறந்த பாதை எந்தப் பரப்பையும் மூடுவதில்லை; அதைச் சேர்க்க, முதலில் அதற்குப் பொருள் › பாதை › கோட்டை வெளிரேகையாக்கு என்பதைப் பயன்படுத்தவும்
 @msg	{label}…	{label}…
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} உள்ளமைந்தது, அதை நீக்க முடியாது
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} {lo}–{hi}{unit} ஆக இருக்க வேண்டும் (கிடைத்தது {v})
 @msg	{name}: {e}	{name}: {e}
 @msg	{name}: CRC mismatch	{name}: CRC பொருந்தவில்லை
 @msg	{name}: CRC or size mismatch	{name}: CRC அல்லது அளவு பொருந்தவில்லை
@@ -5974,6 +6480,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	{std} files embed their fonts, and the file would have one that isn't	{std} கோப்புகள் தங்கள் எழுத்துருக்களை உட்பொதிக்கின்றன, ஆனால் இந்தக் கோப்பில் உட்பொதிக்கப்படாத எழுத்துரு ஒன்று இருக்கும்
 @msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} என்பது இந்த ஆவணம் படிக்கப்பட்ட கோப்பு, அதைப் படித்தபோது சில பகுதிகள் விடுபட்டன ({what}): அதன் மேல் எழுதினால் அவை நிரந்தரமாக இழக்கப்படும். அதற்குப் பதிலாக வேறொரு கோப்பை எழுதவும், அல்லது எப்படியும் அதை மாற்ற acknowledgeLoss: true ஐக் கொடுக்கவும்
 @msg	{tool} isn't in a toolbar group of several tools	{tool} பல கருவிகள் கொண்ட கருவிப் பட்டைக் குழுவில் இல்லை
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	விளக்கப் பயன்முறை கருவிப் பட்டைகளை மறைக்கிறது: அவற்றைக் காட்டத் திரைப் பயன்முறையை மாற்றவும்
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab விசை கருவிப் பட்டைகளை மறைத்துள்ளது: அவற்றைக் காட்ட Tab ஐ அழுத்தவும்
 @msg	{ty} brushes need selected art (or params.{k})	{ty} தூரிகைகளுக்குத் தேர்ந்தெடுக்கப்பட்ட ஓவியம் (அல்லது params.{k}) தேவை
 @msg	{v} is not an asset id	{v} ஒரு சொத்து அடையாளம் அல்ல
 @msg	{what} can't be intertwined	{what} ஐப் பின்னிப்பிணைக்க முடியாது
@@ -6037,6 +6545,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	Too many Revolve faces for visibility evaluation	தெரிவுநிலைக் கணிப்புக்கு சுழற்றி உருவாக்கு முகங்கள் மிக அதிகம்
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	ஒரு வண்ண மாதிரி பரிமாற்றக் கோப்பிலிருந்து VectorCraft அதிகபட்சம் {ASE_MAX_ENTRIES} நிறங்களையும் குழுக்களையும் மட்டுமே படிக்கும்; இந்த நூலகத்தில் {entries} உள்ளன
 @msg	WebP encoding failed: {e}	WebP குறியாக்கம் தோல்வியடைந்தது: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP குறியாக்கம் தோல்வியடைந்தது: இழப்புடைய WebP-க்கு படம் மிகப் பெரியது: தெளிவுத்திறனைக் குறைக்கவும் அல்லது இழப்பற்றது என்பதைத் தேர்ந்தெடுக்கவும்
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` என்பது smallThumb, mediumThumb, largeThumb, smallList அல்லது largeList ஆகும்
@@ -6044,6 +6553,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	a line needs at least two points	ஒரு கோட்டுக்குக் குறைந்தது இரண்டு புள்ளிகள் தேவை
 @msg	a linked JavaScript file is outside the read roots	இணைக்கப்பட்ட JavaScript கோப்பு படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுக்கு வெளியே உள்ளது
 @msg	a linked image file is outside the read roots	இணைக்கப்பட்ட படக் கோப்பு படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுக்கு வெளியே உள்ளது
+@msg	a linked file's export folder is outside the read roots	இணைக்கப்பட்ட ஒரு கோப்பின் ஏற்றுமதிக் கோப்புறை படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுக்கு வெளியே உள்ளது
+@msg	a linked file's editing data can't be read to check it against the read roots	படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுடன் ஒப்பிட்டுச் சரிபார்க்க, இணைக்கப்பட்ட ஒரு கோப்பின் திருத்தத் தரவைப் படிக்க முடியவில்லை
 @msg	a number cannot be read	ஓர் எண்ணைப் படிக்க முடியவில்லை
 @msg	a swatch exchange block is too long	ஒரு வண்ண மாதிரி பரிமாற்றத் தொகுதி மிக நீளமானது
 @msg	a swatch exchange name is too long	ஒரு வண்ண மாதிரி பரிமாற்றப் பெயர் மிக நீளமானது
@@ -6130,6 +6641,152 @@ antiAlias	Sharp	கூர்மையான
 	Nest Shapes…	வடிவங்களைச் செறிவாக அடுக்கு…
 	Nest Shapes	வடிவங்களைச் செறிவாக அடுக்கு
 	Roll	சுருள்
+	Packaging Tools	பொதியிடல் கருவிகள்
+	Fold Lines	மடிப்புக் கோடுகள்
+	Make Cut Line	வெட்டுக் கோடாக்கு
+	Make Crease Line	அழுத்த மடிப்புக் கோடாக்கு
+	Make Partial Cut Line	பகுதி வெட்டுக் கோடாக்கு
+	Make Perforation Line	துளையிடல் கோடாக்கு
+	Make Fold Line	மடிப்புக் கோடாக்கு
+	Role Swatches…	பங்கு வண்ண மாதிரிகள்…
+	Role Swatches	பங்கு வண்ண மாதிரிகள்
+	Role	பங்கு
+	Cut Line	வெட்டுக் கோடு
+	Crease Line	அழுத்த மடிப்புக் கோடு
+	Partial Cut Line	பகுதி வெட்டுக் கோடு
+	Perforation Line	துளையிடல் கோடு
+	No objects are selected.	எந்தப் பொருளும் தேர்ந்தெடுக்கப்படவில்லை.
+	Open a document to mark its fold lines.	அதன் மடிப்புக் கோடுகளைக் குறிக்க ஓர் ஆவணத்தைத் திறக்கவும்.
+	Remove Fold Line Role	மடிப்புக் கோட்டுப் பங்கை அகற்று
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	கருவிப் பட்டையிலுள்ள ஒரு கருவி என்ன செய்கிறது, அதன் விசைகள் என்ன செய்கின்றன என்பதைக் காட்டும் அட்டையை அதன் கருவிக்குறிப்புக்குப் பதிலாகக் காட்டுகிறது; இதற்குக் கருவிக்குறிப்புகளைக் காட்டு இயக்கத்தில் இருக்க வேண்டும்.
+	Selects whole objects and groups to move, resize or rotate them.	முழுப் பொருட்களையும் குழுக்களையும் நகர்த்த, மறுஅளவிட அல்லது சுழற்றத் தேர்ந்தெடுக்கிறது.
+	Selects anchor points and path segments to reshape a path.	ஒரு பாதையின் வடிவத்தை மாற்ற நங்கூரப் புள்ளிகளையும் பாதைப் பகுதிகளையும் தேர்ந்தெடுக்கிறது.
+	Draws paths point by point, with straight segments and smooth curves.	நேர்ப் பகுதிகளுடனும் மென்மையான வளைவுகளுடனும், புள்ளிக்குப் புள்ளியாகப் பாதைகளை வரைகிறது.
+	Draws smooth curves through the points you click.	நீங்கள் சொடுக்கும் புள்ளிகள் வழியாக மென்மையான வளைவுகளை வரைகிறது.
+	Adds text at a point, or in a frame you drag.	ஒரு புள்ளியில், அல்லது நீங்கள் இழுக்கும் சட்டகத்தில் உரையைச் சேர்க்கிறது.
+	Draws rectangles and squares.	செவ்வகங்களையும் சதுரங்களையும் வரைகிறது.
+	Draws rectangles with rounded corners.	வட்டமான மூலைகளுடன் செவ்வகங்களை வரைகிறது.
+	Draws ellipses and circles.	நீள்வட்டங்களையும் வட்டங்களையும் வரைகிறது.
+	Draws polygons with sides of equal length.	சம நீளப் பக்கங்கள் கொண்ட பலகோணங்களை வரைகிறது.
+	Draws stars.	நட்சத்திரங்களை வரைகிறது.
+	Turns objects around a reference point.	ஒரு குறிப்புப் புள்ளியைச் சுற்றிப் பொருட்களைச் சுழற்றுகிறது.
+	Flips objects across an axis through a reference point.	ஒரு குறிப்புப் புள்ளி வழியாகச் செல்லும் அச்சின் குறுக்கே பொருட்களைப் புரட்டுகிறது.
+	Resizes objects from a reference point.	ஒரு குறிப்புப் புள்ளியிலிருந்து பொருட்களின் அளவை மாற்றுகிறது.
+	Slants objects from a reference point.	ஒரு குறிப்புப் புள்ளியிலிருந்து பொருட்களைச் சாய்க்கிறது.
+	Moves the view of the document.	ஆவணத்தின் காட்சியை நகர்த்துகிறது.
+	Magnifies or reduces the view.	காட்சியைப் பெரிதாக்குகிறது அல்லது சிறிதாக்குகிறது.
+	Copies the color and other attributes of one object to the selection.	ஒரு பொருளின் நிறத்தையும் பிற பண்புகளையும் தேர்வுக்கு நகலெடுக்கிறது.
+	Sets the direction and length of a gradient.	ஒரு சாய்வின் திசையையும் நீளத்தையும் அமைக்கிறது.
+	Creates, selects and resizes artboards.	ஆர்ட்போர்டுகளை உருவாக்குகிறது, தேர்ந்தெடுக்கிறது, அவற்றின் அளவை மாற்றுகிறது.
+	Changes the width of a stroke along its length.	ஒரு கோட்டின் நீளம் நெடுகிலும் அதன் அகலத்தை மாற்றுகிறது.
+	Bends art by dragging pins placed on it.	ஓவியத்தின் மேல் வைத்த முள்களை இழுத்து அதை வளைக்கிறது.
+	Pushes the outlines of paths in the direction you drag.	நீங்கள் இழுக்கும் திசையில் பாதைகளின் வெளிரேகைகளைத் தள்ளுகிறது.
+	Twists the outlines of paths into swirls.	பாதைகளின் வெளிரேகைகளைச் சுழல்களாக முறுக்குகிறது.
+	Pulls the outlines of paths in toward the brush.	பாதைகளின் வெளிரேகைகளைத் தூரிகையை நோக்கி உள்ளே இழுக்கிறது.
+	Pushes the outlines of paths out from the brush.	பாதைகளின் வெளிரேகைகளைத் தூரிகையிலிருந்து வெளியே தள்ளுகிறது.
+	Adds curved details along the outlines of paths.	பாதைகளின் வெளிரேகைகள் நெடுகிலும் வளைந்த நுணுக்கங்களைச் சேர்க்கிறது.
+	Adds spiky details along the outlines of paths.	பாதைகளின் வெளிரேகைகள் நெடுகிலும் கூர்முனை நுணுக்கங்களைச் சேர்க்கிறது.
+	Adds wrinkles along the outlines of paths.	பாதைகளின் வெளிரேகைகள் நெடுகிலும் சுருக்கங்களைச் சேர்க்கிறது.
+	Moves, copies and resizes objects on the perspective grid.	முன்னோக்குக் கட்டத்தில் பொருட்களை நகர்த்துகிறது, நகலெடுக்கிறது, அவற்றின் அளவை மாற்றுகிறது.
+	Makes a series of steps between two or more objects.	இரண்டு அல்லது அதற்கு மேற்பட்ட பொருட்களுக்கு இடையே தொடர் படிகளை உருவாக்குகிறது.
+	Places dimension lines that show measured lengths.	அளந்த நீளங்களைக் காட்டும் அளவீட்டுக் கோடுகளை வைக்கிறது.
+	Tap	தட்டு
+	Clear Hold	பிடியை அழி
+	Hold Shortcuts	அழுத்திப்பிடி குறுக்குவழிகள்
+	Hold Shortcut Delay	அழுத்திப்பிடி குறுக்குவழித் தாமதம்
+	How hold shortcuts work	அழுத்திப்பிடி குறுக்குவழிகள் எப்படிச் செயல்படுகின்றன
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	சொடுக்கி, இதற்காக அழுத்திப் பிடிக்கும் விசையை அழுத்தவும் (Esc ரத்துசெய்யும்). விசையை அழுத்திப் பிடித்தால் இது இயங்கும்; விரைவாக அழுத்தினால் அந்த விசையின் சொந்தக் குறுக்குவழி இயங்கும்.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	ஒரு விசையை விரைவாக அழுத்தினால் அதன் குறுக்குவழி இயங்கும். தாமத நேரம் வரை விசையை அழுத்திப் பிடித்தால், அதற்குப் பதிலாக அதன் பிடி நெடுவரிசையிலுள்ள கருவி அல்லது கட்டளை இயங்கும். அழுத்திப்பிடி குறுக்குவழி என்பது தனியாகவோ Shift உடனோ அழுத்தும் ஓர் எழுத்து, இலக்கம் அல்லது நிறுத்தக்குறி விசை ஆகும்.
+@msg	Hold {_1} is already used by {_2}	அழுத்திப்பிடி குறுக்குவழி {_1} ஏற்கனவே {_2} ஆல் பயன்படுத்தப்படுகிறது
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	அழுத்திப்பிடி குறுக்குவழி என்பது தனியாகவோ Shift உடனோ ஓர் எழுத்தைத் தட்டச்சு செய்யும் விசையாகும் ({shown} இல் Cmd, Ctrl அல்லது Alt உள்ளது)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} அழுத்திப்பிடி குறுக்குவழியாக இருக்க முடியாது: ஓர் எழுத்து, ஓர் இலக்கம் அல்லது ஒரு நிறுத்தக்குறி விசையைப் பயன்படுத்தவும்
+	Check	சரிபார்
+	Check Fold Lines	மடிப்புக் கோடுகளைச் சரிபார்
+@msg	No cut lines are in the selection.	தேர்வில் வெட்டுக் கோடுகள் இல்லை.
+@msg	No cut lines are in the document.	ஆவணத்தில் வெட்டுக் கோடுகள் இல்லை.
+@msg	The cut lines do not enclose an area.	வெட்டுக் கோடுகள் ஒரு பரப்பை அடைக்கவில்லை.
+@msg	A cut line ends without meeting another cut line.	ஒரு வெட்டுக் கோடு மற்றொரு வெட்டுக் கோட்டைச் சந்திக்காமல் முடிகிறது.
+@msg	A gap between cut lines was closed.	வெட்டுக் கோடுகளுக்கு இடையிலான ஓர் இடைவெளி மூடப்பட்டது.
+@msg	The fold lines are too complex to check.	மடிப்புக் கோடுகள் சரிபார்க்க முடியாத அளவுக்குச் சிக்கலானவை.
+@msg	A cut line and a crease lie on top of each other.	ஒரு வெட்டுக் கோடும் ஓர் அழுத்த மடிப்பும் ஒன்றின்மேல் ஒன்றாக உள்ளன.
+@msg	No cut lines are among the given objects.	கொடுக்கப்பட்ட பொருட்களில் வெட்டுக் கோடுகள் இல்லை.
+@msg	Two fold lines lie on top of each other.	இரண்டு மடிப்புக் கோடுகள் ஒன்றின்மேல் ஒன்றாக உள்ளன.
+@msg	A crease ends inside a panel.	ஓர் அழுத்த மடிப்பு ஒரு பலகைக்குள் முடிகிறது.
+@msg	A crease does not divide two panels.	ஓர் அழுத்த மடிப்பு இரண்டு பலகைகளைப் பிரிக்கவில்லை.
+@msg	A crease lies outside the cut outline, wholly or in part.	ஓர் அழுத்த மடிப்பு வெட்டு வெளிரேகைக்கு முழுமையாகவோ பகுதியாகவோ வெளியே உள்ளது.
+@msg	The pieces of a hinge are not on one straight line.	ஒரு கீலின் துணுக்குகள் ஒரே நேர்கோட்டில் இல்லை.
+@msg	A gap between cut lines is too narrow to tell apart.	வெட்டுக் கோடுகளுக்கு இடையிலான ஓர் இடைவெளி பிரித்தறிய முடியாத அளவுக்கு மிகக் குறுகியது.
+@msg	A cut-out area holds other fold lines or another blank.	வெட்டி அகற்றப்படும் ஒரு பரப்பில் பிற மடிப்புக் கோடுகள் அல்லது மற்றொரு வெட்டுத்தாள் உள்ளது.
+@msg	A panel is not joined to the rest by a crease.	ஒரு பலகை மற்றவற்றுடன் ஓர் அழுத்த மடிப்பால் இணைக்கப்படவில்லை.
+@msg	A fold line is on a non-printing layer.	ஒரு மடிப்புக் கோடு அச்சிடாத அடுக்கில் உள்ளது.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	பலகைகள்: {panels}, கீல்கள்: {hinges}, பிழைகள்: {errors}, எச்சரிக்கைகள்: {warnings}
+	Nature Icons	இயற்கைப் படவுருக்கள்
+	Flower	மலர்
+	Tree	மரம்
+	Mountain	மலை
+	Ornamental	அலங்கார வேலைப்பாடு
+	Scrollwork	சுருள் வேலைப்பாடு
+	Filigree Arrow	சரிகை அம்புக்குறி
+	Petal Sweep	இதழ் வீச்சு
+	Twin Curl	இரட்டைச் சுருள்
+	Vector Packs	திசையன் தொகுப்புகள்
+	Compass Rose	திசைச் சக்கரம்
+	Botanical Sprig	தாவரச் சிறுகிளை
+	Facet Diamond	பட்டை தீட்டிய வைரம்
+	Tide Crest	ஓத அலைமுகடு
+	Leaf Vine	இலைக் கொடி
+	Blossom Chain	பூச் சங்கிலி
+	Pennant Garland	முக்கோணக் கொடித் தோரணம்
+	Lantern String	விளக்குச் சரம்
+	Orbit Lines	சுற்றுப்பாதைக் கோடுகள்
+	Petal Garland	இதழ் மாலை
+	Lattice Braid	வலைப்பின்னல் சடை
+	Facet Sweep	பட்டைமுக வீச்சு
+	Artistic Brushes	கலைத் தூரிகைகள்
+	Paint	வண்ணப்பூச்சு
+	Flat Sweep	தட்டை வீச்சு
+	Dry Drag	உலர் இழுப்பு
+	Loaded Stroke	வண்ணம் நிறைந்த கோடு
+	Fan Sweep	விசிறி வீச்சு
+	Engraving	செதுக்கோவியம்
+	Fine Hatching	நுண் கோடிடல்
+	Dense Hatching	அடர் கோடிடல்
+	Tapered Hatching	குறுகும் கோடிடல்
+	Broken Hatching	உடைந்த கோடிடல்
+	Image Brush	படத் தூரிகை
+	Soft Bloom	மென்மையான மலர்ச்சி
+	Halftone Field	அரைத்தொனிப் புலம்
+	Solar Grain	சூரியத் தானியம்
+	Color Flecks	நிறத் திட்டுகள்
+	Paper Cutouts	காகித வெட்டுருவங்கள்
+	Coral Layers	பவள அடுக்குகள்
+	Mint Layers	புதினா அடுக்குகள்
+	Midnight Layers	நள்ளிரவு அடுக்குகள்
+	Sunflower Sheet	சூரியகாந்தித் தாள்
+	Rose Layers	ரோஜா அடுக்குகள்
+	Monochrome Stack	ஒற்றைநிறக் குவியல்
+	Dashed Arrow	கீற்று அம்புக்குறி
+	Fine Stipple	நுண் புள்ளியிடல்
+	Dense Stipple	அடர் புள்ளியிடல்
+	Soft Stipple	மென்மையான புள்ளியிடல்
+	Bold Stipple	தடித்த புள்ளியிடல்
+	Pressure Sensitive	அழுத்த உணர்திறன்
+	Flex Ribbon	நெகிழ் ரிப்பன்
+	Pulse Stroke	துடிப்புக் கோடு
+	Round Flow	வட்டப் பாய்வு
+	Chisel Flow	உளிப் பாய்வு
+	Fold Preview	மடிப்பு முன்காட்சி
+	Fold	மடிப்பு
+	Show Fold Lines	மடிப்புக் கோடுகளைக் காட்டு
+	Three-Quarter	முக்கால் கோணம்
+	Open a document to preview its folded shape.	அதன் மடித்த வடிவத்தை முன்காட்சியாகப் பார்க்க ஓர் ஆவணத்தைத் திறக்கவும்.
+@msg	Check the fold lines first.	முதலில் மடிப்புக் கோடுகளைச் சரிபார்க்கவும்.
+@msg	Panels: {panels}, hinges: {hinges}	பலகைகள்: {panels}, கீல்கள்: {hinges}
+@msg	Other blanks not shown: {count}	காட்டப்படாத பிற வெட்டுத்தாள்கள்: {count}
+@msg	A joint does not close by {gap} pt.	ஒரு மூட்டு {gap} pt இடைவெளியுடன் மூடாமல் உள்ளது.
+@msg	Two panels pass through each other.	இரண்டு பலகைகள் ஒன்றையொன்று ஊடுருவுகின்றன.
+	Edit Original with:	மூலத்தைத் திருத்தும் பயன்பாடு:
+file-filter	Applications	பயன்பாடுகள்
 @msg	`{_1}` can't be edited or removed	`{_1}` ஐத் திருத்தவோ அகற்றவோ முடியாது
 @msg	`{_1}` has no brushes to apply	`{_1}` இல் பயன்படுத்துவதற்குத் தூரிகைகள் இல்லை
 @msg	`{_1}` has no symbols to place	`{_1}` இல் இடுவதற்குக் குறியீடுகள் இல்லை
@@ -6153,6 +6810,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{id}` is no writable format (see document.formats)	`{id}` எழுதக்கூடிய வடிவம் அல்ல (document.formats ஐப் பார்க்கவும்)
 @msg	`{id}` is not a colour adjustment	`{id}` ஒரு நிறச் சரிசெய்தல் அல்ல
 @msg	`{id}` isn't a loaded library	`{id}` ஏற்றப்பட்ட நூலகம் அல்ல
+@msg	`{file}` has no swatches of its own	`{file}` இல் அதற்கெனச் சொந்த வண்ண மாதிரிகள் இல்லை
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` இல் வடிவமாதிரி வண்ண மாதிரிகள் உள்ளன, அவற்றை ஒரு .vcswatches கோப்பில் வைக்க முடியாது
 @msg	`{k}.family` is required	`{k}.family` தேவை
 @msg	`{k}` is a number 0..1	`{k}` என்பது 0..1 வரம்பில் உள்ள ஓர் எண்
 @msg	`{k}` is true or false	`{k}` true அல்லது false ஆக இருக்க வேண்டும்
@@ -6177,6 +6836,10 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` சதவீதத்தில் [min, desired, max] அல்லது {{min?, desired?, max?}} ஆக இருக்க வேண்டும்
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` ஆனது [x, y, width, height] ஆக இருக்க வேண்டும்: நான்கு முடிவுள்ள எண்கள், width, height எதிர்மறையாக இருக்கக்கூடாது
 @msg	`{key}` must be [x, y]	`{key}` [x, y] ஆக இருக்க வேண்டும்
+	Unit Converter	அலகு மாற்றி
+	Unit Converter Panel	அலகு மாற்றிப் பலகம்
+	Copy with Units	அலகுகளுடன் நகலெடு
+	From Selection	தேர்விலிருந்து
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` என்பது `auto` ஆக அல்லது `en`, `zh-hant` போன்ற மொழிக் குறியீடாக இருக்க வேண்டும்
 @msg	`{key}` must be 0..{max}	`{key}` 0..{max} ஆக இருக்க வேண்டும்
 @msg	`{key}` must be a #rrggbb color	`{key}` ஒரு #rrggbb நிறமாக இருக்க வேண்டும்
@@ -6198,6 +6861,16 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{key}` must be an appearance item index (paint order) or null	`{key}` ஒரு தோற்ற உருப்படிக் குறியீடாக (வண்ணம் தீட்டும் வரிசை) அல்லது null ஆக இருக்க வேண்டும்
 @msg	`{key}` must be an array of asset ids (see assets.list)	`{key}` சொத்து அடையாளங்களின் வரிசையாக இருக்க வேண்டும் (assets.list ஐப் பார்க்கவும்)
 @msg	`{key}` must be an array of these names: {_1}	`{key}` இந்தப் பெயர்களின் வரிசையாக இருக்க வேண்டும்: {_1}
+	Search commands, tools, panels and effects	கட்டளைகள், கருவிகள், பலகங்கள், விளைவுகளைத் தேடு
+	Search commands, tools, panels and effects…	கட்டளைகள், கருவிகள், பலகங்கள், விளைவுகளைத் தேடு…
+	No commands match	பொருந்தும் கட்டளைகள் இல்லை
+	{pos} of {total}: {name}	{pos} / {total}: {name}
+	No menu item	மெனு உருப்படி இல்லை
+	Toolbar	கருவிப் பட்டை
+	{toolbar}, in the {tool} group	{toolbar}, {tool} குழுவில்
+	In the menu bar: {path}	மெனு பட்டையில்: {path}
+	In the {group} group: press and hold to open it	{group} குழுவில்: திறக்க அழுத்திப் பிடிக்கவும்
+	{home}, not shown now	{home}, இப்போது காட்டப்படவில்லை
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` {min} மற்றும் {max} இடையே இருக்க வேண்டும் (பெறப்பட்டது {x})
 @msg	`{key}` must be from {_1} to {shift_max}	`{key}` {_1} முதல் {shift_max} வரை இருக்க வேண்டும்
 @msg	`{key}` must be from {lo} to {hi}	`{key}` {lo} முதல் {hi} வரை இருக்க வேண்டும்
@@ -6397,6 +7070,10 @@ antiAlias	Sharp	கூர்மையான
 @msg	`mode` must be "handles", "straight" or "smooth"	`mode` "handles", "straight" அல்லது "smooth" ஆக இருக்க வேண்டும்
 @msg	`mode` must be "straight", "bezier" or "arc"	`mode` "straight", "bezier" அல்லது "arc" ஆக இருக்க வேண்டும்
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` grayscale, rgb, hsb, cmyk அல்லது websafe ஆக இருக்க வேண்டும்
+@msg	`view` must be wheel or box	`view` wheel அல்லது box ஆக இருக்க வேண்டும்
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green அல்லது blue ஆக இருக்க வேண்டும்
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch அல்லது hsl ஆக இருக்க வேண்டும்
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH க்குப் பணி RGB வெளியாக sRGB தேவை
 @msg	`mode` must be one of {_1}	`mode` {_1} இல் ஒன்றாக இருக்க வேண்டும்
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" அல்லது "lineEndHalf" ஆக இருக்க வேண்டும்
 @msg	`name` is empty	`name` காலியாக உள்ளது
@@ -6483,6 +7160,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	`version`, `description` or `author` is too long	`version`, `description` அல்லது `author` மிக நீளமாக உள்ளது
 @msg	`warnings` must be a list of strings	`warnings` சரங்களின் பட்டியலாக இருக்க வேண்டும்
 @msg	`with` moves points, not a handle	`with` புள்ளிகளை நகர்த்தும், கைப்பிடியை அல்ல
+@msg	`link` and `independent` cannot both be true	`link`, `independent` இரண்டும் true ஆக இருக்க முடியாது
+@msg	`link` places a handle: give `handle`	`link` ஒரு கைப்பிடியை வைக்கும்: `handle` ஐக் கொடுக்கவும்
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` அதிகபட்சம் 10000 முதுகெலும்புப் புள்ளிச் சுட்டெண்களின் பட்டியலாக இருக்க வேண்டும்
 @msg	a {_1} series can't go in a {_2} graph	{_1} தொடர் {_2} வரைபடத்தில் இடம்பெற முடியாது
 @msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} திரைப்பிடிப்பின் பைட் எண்ணிக்கை வரம்பை மீறுகிறது
@@ -6517,6 +7196,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	a graph has at most {_1} series, so it transposes with at most that many categories	ஒரு வரைபடத்தில் அதிகபட்சம் {_1} தொடர்களே இருக்கலாம், எனவே அதிகபட்சம் அத்தனை வகைகளுடன் மட்டுமே அதை இடமாற்ற முடியும்
 @msg	a graph's records don't end where they should: its art was read as it is	ஒரு வரைபடத்தின் பதிவுகள் முடிய வேண்டிய இடத்தில் முடியவில்லை: அதன் ஓவியம் உள்ளபடியே படிக்கப்பட்டது
 @msg	a graphic style named `{to}` already exists	`{to}` என்ற பெயரில் ஒரு வரைகலை பாணி ஏற்கனவே உள்ளது
+@msg	a swatch or color group named `{name}` already exists	`{name}` என்ற பெயரில் ஒரு வண்ண மாதிரி அல்லது வண்ணக் குழு ஏற்கனவே உள்ளது
 @msg	a group crosses a multi-layer mask	ஒரு குழு பல அடுக்கு மறைப்பைக் கடக்கிறது
 @msg	a key object sits on that point	அந்தப் புள்ளியில் ஒரு முக்கியப் பொருள் உள்ளது
 @msg	a layer can't be merged into its own sublayer	ஓர் அடுக்கை அதன் சொந்தத் துணை அடுக்கில் இணைக்க முடியாது
@@ -6721,6 +7401,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	bad trailer size	இறுதிப்பகுதியின் அளவு தவறானது
 @msg	balance must be between 0 and 100	balance 0 மற்றும் 100 இடையே இருக்க வேண்டும்
 @msg	batch step {_1} (`{id}`) failed: {e}	தொகுதிப் படி {_1} (`{id}`) தோல்வியடைந்தது: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	செயல் படி {_1} (`{id}`) தோல்வியடைந்தது: {reason}
 @msg	Batch: {count} processed	தொகுதி: {count} செயலாக்கப்பட்டது
 @msg	Batch: {count} processed, {failed} failed	தொகுதி: {count} செயலாக்கப்பட்டது, {failed} தோல்வி
 @msg	batches cannot nest	தொகுதிச் செயல்களை ஒன்றுக்குள் ஒன்றாக அமைக்க முடியாது
@@ -6788,6 +7469,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	Click in type with a Type tool to split it	உரையைப் பிரிக்க, உரைக் கருவியால் அதனுள் சொடுக்கவும்
 @msg	clip must be true or false	clip true அல்லது false ஆக இருக்க வேண்டும்
 @msg	clipboard is empty	கிளிப்போர்டு காலியாக உள்ளது
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: நிற அட்டவணையில் குறைந்தது ஒரு நிறமாவது இருக்க வேண்டும்
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` குறிப்பிடும் நிறத்தை வேறொரு திறவுச்சொல்லும் குறிப்பிடுகிறது
 @msg	clippingMask must be true or false	clippingMask true அல்லது false ஆக இருக்க வேண்டும்
 @msg	closed must be a boolean	closed ஒரு boolean ஆக இருக்க வேண்டும்
 @msg	closing needs three anchors	மூடுவதற்கு மூன்று நங்கூரப் புள்ளிகள் தேவை
@@ -6832,6 +7515,13 @@ antiAlias	Sharp	கூர்மையான
 	Show External Script Warning	வெளிப்புற ஸ்கிரிப்ட் எச்சரிக்கையைக் காட்டு
 	A Script Is Running	ஒரு ஸ்கிரிப்ட் இயங்கிக்கொண்டிருக்கிறது
 	Script Alert	ஸ்கிரிப்ட் எச்சரிக்கை
+	Script File Access	ஸ்கிரிப்ட் கோப்பு அணுகல்
+	The script asks to read a file you choose.	நீங்கள் தேர்ந்தெடுக்கும் ஒரு கோப்பைப் படிக்க ஸ்கிரிப்ட் அனுமதி கேட்கிறது.
+	The script asks to read and write a file you choose.	நீங்கள் தேர்ந்தெடுக்கும் ஒரு கோப்பைப் படிக்கவும் எழுதவும் ஸ்கிரிப்ட் அனுமதி கேட்கிறது.
+	The script asks to read and write a folder you choose, with everything in it.	நீங்கள் தேர்ந்தெடுக்கும் ஒரு கோப்புறையையும் அதிலுள்ள அனைத்தையும் படிக்கவும் எழுதவும் ஸ்கிரிப்ட் அனுமதி கேட்கிறது.
+	Allow Once	ஒருமுறை அனுமதி
+	Always Allow This Script	இந்த ஸ்கிரிப்டை எப்போதும் அனுமதி
+	Deny	மறு
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	ஒரு ஸ்கிரிப்ட் திறந்துள்ள ஆவணங்களை மாற்றலாம், அது இயக்கும் கட்டளைகள் மூலம் கோப்புகளை எழுதலாம். நீங்கள் நம்பும் ஸ்கிரிப்ட்களை மட்டும் இயக்கவும்.
 	Do not show this warning again	இந்த எச்சரிக்கையை மீண்டும் காட்ட வேண்டாம்
 	Stop the script and undo what it did? Then quit again.	ஸ்கிரிப்டை நிறுத்தி, அது செய்ததைச் செயல்தவிர்க்கவா? பிறகு மீண்டும் வெளியேறவும்.
@@ -6848,6 +7538,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	the script is no longer in the Scripts folder	ஸ்கிரிப்ட் இனி Scripts கோப்புறையில் இல்லை
 	Some scripts were not listed	சில ஸ்கிரிப்ட்கள் பட்டியலிடப்படவில்லை
 	The Scripts folder cannot be read	Scripts கோப்புறையைப் படிக்க முடியவில்லை
+	Loading scripts…	ஸ்கிரிப்ட்களை ஏற்றுகிறது…
+	The Scripts folder is still being read	ஸ்கிரிப்ட்கள் கோப்புறை இன்னும் படிக்கப்படுகிறது
 @msg	the script's run is no longer available	ஸ்கிரிப்டின் இயக்கம் இனி கிடைக்காது
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	தோல்வியடைந்த ஒரு கட்டளை, மீட்டமைக்க முடியாத செயல்தவிர் படிகளை மாற்றிவிட்டது; எனவே ஸ்கிரிப்ட் நிறுத்தப்பட்டது
 @msg	a recovery copy could not be written, so the script was not run	மீட்பு நகலை எழுத முடியவில்லை; எனவே ஸ்கிரிப்ட் இயக்கப்படவில்லை
@@ -6860,8 +7552,6 @@ antiAlias	Sharp	கூர்மையான
 @msg	Script file could not be read	ஸ்கிரிப்ட் கோப்பைப் படிக்க முடியவில்லை
 @msg	Script folder has more than 2,048 entries	ஸ்கிரிப்ட் கோப்புறையில் 2,048 க்கும் அதிகமான உள்ளீடுகள் உள்ளன
 @msg	Script file open mode must be r, w, e or a	ஸ்கிரிப்ட் கோப்பைத் திறக்கும் பயன்முறை r, w, e அல்லது a ஆக இருக்க வேண்டும்
-@msg	Script file writing is not available	ஸ்கிரிப்ட் கோப்பு எழுதும் வசதி கிடைக்கவில்லை
-@msg	Script file dialogs are not available	ஸ்கிரிப்ட் கோப்பு உரையாடல் பெட்டிகள் கிடைக்கவில்லை
 @msg	Script files cannot be opened in another application	ஸ்கிரிப்ட் கோப்புகளை வேறொரு பயன்பாட்டில் திறக்க முடியாது
 @msg	Script file access is unavailable on the web	இணையத்தில் ஸ்கிரிப்ட் கோப்பு அணுகல் கிடைக்காது
 @msg	Script has 256 files open	ஸ்கிரிப்டில் ஏற்கெனவே 256 கோப்புகள் திறந்துள்ளன
@@ -6876,6 +7566,31 @@ antiAlias	Sharp	கூர்மையான
 @msg	$.evalFile requires a file path	$.evalFile க்கு ஒரு கோப்புப் பாதை தேவை
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: காலக்கெடு 0 அல்லது அதற்கு மேற்பட்ட, முடிவுள்ள மில்லிவினாடிகளின் எண்ணாக இருக்க வேண்டும்
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: ஒரு கோப்புப் பாதையையும் ஒரு காலக்கெடுவையும் ஏற்கும்
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} வரையறுக்கப்படவில்லை
+@msg	cannot read property '{key}' of {base}	{base} இன் '{key}' பண்பைப் படிக்க முடியாது
+@msg	cannot set property '{key}' of {base}	{base} இன் '{key}' பண்பை அமைக்க முடியாது
+@msg	cannot read a property of {base}	{base} இன் ஒரு பண்பைப் படிக்க முடியாது
+@msg	cannot set a property of {base}	{base} இன் ஒரு பண்பை அமைக்க முடியாது
+@msg	cannot define property '{key}': {why}	'{key}' பண்பை வரையறுக்க முடியாது: {why}
+@msg	cannot assign to property '{key}': {why}	'{key}' பண்புக்கு மதிப்பிருத்த முடியாது: {why}
+@msg	cannot delete property '{key}'	'{key}' பண்பை நீக்க முடியாது
+@msg	cannot declare function {ident}	{ident} என்ற செயல்பாட்டை அறிவிக்க முடியாது
+@msg	invalid assignment target	தவறான மதிப்பிருத்தல் இலக்கு
+@msg	the array's length is read-only	வரிசையின் நீளம் படிக்க மட்டுமேயானது
+@msg	the property cannot be redefined	பண்பை மீண்டும் வரையறுக்க முடியாது
+@msg	the object is not extensible	பொருளை நீட்டிக்க முடியாது
+@msg	the length cannot be redefined	நீளத்தை மீண்டும் வரையறுக்க முடியாது
+@msg	it is read-only	அது படிக்க மட்டுமேயானது
+@msg	an element cannot be deleted	ஓர் உறுப்பை நீக்க முடியாது
+@msg	it has only a getter	அதற்கு getter மட்டுமே உள்ளது
+@msg	the value is a primitive	மதிப்பு ஓர் அடிப்படை மதிப்பாகும்
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} இல் வரி {line}, நெடுவரிசை {column}: {e} (எறியப்பட்ட பிழை)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: வரி {line}, நெடுவரிசை {column}: {e} (எறியப்பட்ட பிழை)
 @msg	{name}: {e} (thrown)	{name}: {e} (எறியப்பட்ட பிழை)
@@ -6916,6 +7631,27 @@ antiAlias	Sharp	கூர்மையான
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ஓர் உள்ளமைந்த செயல்பாட்டின் callback, ஒரு getter, ஒரு வகை மாற்றம் அல்லது $.evalFile இயக்கும் ஒரு கோப்பு ஆகியவற்றுக்குள் உரையாடல் பெட்டியைத் திறக்க முடியாது; ஸ்கிரிப்டின் சொந்தக் குறியீட்டிலிருந்து இதை அழைக்கவும்
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` இல் உள்ள அடுத்த பதில் {name} க்கானது அல்ல, {_1} க்கானது
 @msg	{name}: `answers` has no answer left for this dialog	{name}: இந்த உரையாடல் பெட்டிக்கு `answers` இல் பதில் எதுவும் மீதமில்லை
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` இல் ஸ்கிரிப்ட் பயன்படுத்தாத {n} பதில் உள்ளது|`answers` இல் ஸ்கிரிப்ட் பயன்படுத்தாத {n} பதில்கள் உள்ளன
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} தூரிகைக்குக் கீழுள்ள {n} பொருளை மாற்றாமல் விட்டது ({_2}): அது பாதைகளை மட்டுமே மறுவடிவமைக்கும்|{_1} தூரிகைக்குக் கீழுள்ள {n} பொருட்களை மாற்றாமல் விட்டது ({_2}): அது பாதைகளை மட்டுமே மறுவடிவமைக்கும்
+liquify-tool	Warp	வளைத்திரி
+liquify-tool	Twirl	சுழல்
+liquify-tool	Pucker	சுருக்கு
+liquify-tool	Bloat	பெருக்கு
+liquify-tool	Scallop	அலை விளிம்பு
+liquify-tool	Crystallize	படிகமாக்கு
+liquify-tool	Wrinkle	சுருக்கம்
+liquify-kind	graphs	வரைபடங்கள்
+liquify-kind	type	உரை
+liquify-kind	symbols	சின்னங்கள்
+liquify-kind	images	படங்கள்
+liquify-kind	meshes	வலைப்பின்னல்கள்
+liquify-kind	envelopes	உறைகள்
+liquify-kind	repeats	மீள்செய்கைகள்
+liquify-kind	placed documents	இடப்பட்ட ஆவணங்கள்
+liquify-kind	blends	கலப்புகள்
+liquify-list-two	{0}, {1}	{0}, {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0}, {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ஒரு ஸ்கிரிப்டுக்கு மிகப் பெரியது
 @msg	vc.log: the log of this run is full	vc.log: இந்த இயக்கத்தின் பதிவு நிரம்பிவிட்டது
 @msg	this function's script run has ended	இந்தச் செயல்பாட்டுக்குரிய ஸ்கிரிப்ட் இயக்கம் முடிந்துவிட்டது
@@ -6932,6 +7668,27 @@ antiAlias	Sharp	கூர்மையான
 @msg	there is no script engine named {name}	{name} என்ற பெயரில் ஸ்கிரிப்ட் எஞ்சின் எதுவும் இல்லை
 @msg	Running a script	ஸ்கிரிப்ட் இயங்குகிறது
 @msg	Copied the script report	ஸ்கிரிப்ட் அறிக்கை நகலெடுக்கப்பட்டது
+@msg	Script file access denied: {path}	ஸ்கிரிப்ட் கோப்பு அணுகல் மறுக்கப்பட்டது: {path}
+@msg	Script file access to the app's own folders is not allowed	பயன்பாட்டின் சொந்தக் கோப்புறைகளுக்கு ஸ்கிரிப்ட் கோப்பு அணுகல் அனுமதிக்கப்படவில்லை
+@msg	Script file cannot encode the text	ஸ்கிரிப்ட் கோப்பால் உரையைக் குறியாக்க முடியாது
+@msg	Script file could not be written	ஸ்கிரிப்ட் கோப்பை எழுத முடியவில்லை
+@msg	Script file dialogs need a person to answer them	ஸ்கிரிப்ட் கோப்பு உரையாடல் பெட்டிகளுக்கு ஒருவர் பதிலளிக்க வேண்டும்
+@msg	Script file is not open for writing	ஸ்கிரிப்ட் கோப்பு எழுதுவதற்காகத் திறக்கப்படவில்லை
+@msg	Script file name is already in use	ஸ்கிரிப்ட் கோப்பின் பெயர் ஏற்கனவே பயன்பாட்டில் உள்ளது
+@msg	Script file name must be a name without a folder	ஸ்கிரிப்ட் கோப்பின் பெயர் கோப்புறை இல்லாத பெயராக இருக்க வேண்டும்
+@msg	Script file permission can be kept only for a script run from a file	கோப்பிலிருந்து இயக்கப்படும் ஸ்கிரிப்டுக்கு மட்டுமே ஸ்கிரிப்ட் கோப்பு அனுமதியை வைத்திருக்க முடியும்
+@msg	Script file permission could not be saved	ஸ்கிரிப்ட் கோப்பு அனுமதியைச் சேமிக்க முடியவில்லை
+@msg	Script folder is not empty	ஸ்கிரிப்ட் கோப்புறை காலியாக இல்லை
+@msg	Script files cannot make aliases	ஸ்கிரிப்ட் கோப்புகளால் மாற்றுப்பெயர்களை உருவாக்க முடியாது
+@msg	Script file hidden setting cannot be changed	ஸ்கிரிப்ட் கோப்பின் மறைநிலை அமைப்பை மாற்ற முடியாது
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ஓர் உள்ளமைந்த செயல்பாட்டின் callback, ஒரு getter, ஒரு வகை மாற்றம் அல்லது $.evalFile இயக்கும் ஒரு கோப்பு ஆகியவற்றுக்குள் கோப்பு உரையாடல் பெட்டியைத் திறக்க முடியாது; ஸ்கிரிப்டின் சொந்தக் குறியீட்டிலிருந்து இதை அழைக்கவும்
+@msg	the script wrote more file data than one run may write (32 MiB)	ஓர் இயக்கம் எழுதக்கூடிய அளவை விட அதிகமான கோப்புத் தரவை ஸ்கிரிப்ட் எழுதியது (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	ஸ்கிரிப்டின் கோப்பு உரையாடல் பெட்டிக்கான `answer` இவற்றில் ஒன்றாக இருக்க வேண்டும்: once, always, deny, stop
+@msg	choose a file or folder first, or deny	முதலில் ஒரு கோப்பையோ கோப்புறையையோ தேர்ந்தெடுக்கவும், அல்லது மறுக்கவும்
+@msg	the script file permissions could not be saved: {e}	ஸ்கிரிப்ட் கோப்பு அனுமதிகளைச் சேமிக்க முடியவில்லை: {e}
+@msg	this script's file access can be allowed only once	இந்த ஸ்கிரிப்டின் கோப்பு அணுகலை ஒருமுறை மட்டுமே அனுமதிக்க முடியும்
+@msg	Only the person at the keyboard can allow a script's file access	விசைப்பலகையில் இருப்பவர் மட்டுமே ஸ்கிரிப்டின் கோப்பு அணுகலை அனுமதிக்க முடியும்
+@msg	A script is given at most 2,048 files: the files picked after them were left out	ஒரு ஸ்கிரிப்டுக்கு அதிகபட்சம் 2,048 கோப்புகள் மட்டுமே வழங்கப்படும்: அவற்றுக்குப் பின் தேர்ந்தெடுக்கப்பட்ட கோப்புகள் விடப்பட்டன
 @msg	Copied the link info	இணைப்புத் தகவல் நகலெடுக்கப்பட்டது
 @msg	copy needs path: the file to copy into the document's folder	copy க்கு path தேவை: ஆவணத்தின் கோப்புறைக்குள் நகலெடுக்க வேண்டிய கோப்பு
 @msg	copy takes images only: relink placed documents where their files are	copy படங்களை மட்டுமே ஏற்கும்: இடப்பட்ட ஆவணங்களை அவற்றின் கோப்புகள் உள்ள இடத்திலேயே மீண்டும் இணைக்கவும்
@@ -7054,6 +7811,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	every search thread stopped on an internal error (please report this bug)	எல்லா தேடல் இழைகளும் ஓர் உள் பிழையால் நின்றுவிட்டன (இந்தப் பிழையைத் தெரிவிக்கவும்)
 @msg	exit isolation mode first	முதலில் தனிமைப்படுத்தும் பயன்முறையிலிருந்து வெளியேறவும்
 @msg	Expand Appearance: the selection has a basic appearance	தோற்றத்தை விரிவாக்கு: தேர்வுக்கு அடிப்படைத் தோற்றம் உள்ளது
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	சில ராஸ்டர் விளைவுகள் படங்களாக மாற்றப்படவில்லை: அவற்றுக்கு மொத்தம் 1,024 க்கும் மேற்பட்ட படங்கள் அல்லது 256 மெகாபிக்சல்களுக்கு மேல் தேவைப்படும்
 @msg	Expand: no brush strokes selected	விரிவாக்கு: தூரிகைக் கோடுகள் எதுவும் தேர்ந்தெடுக்கப்படவில்லை
 @msg	Expand: no gradient fills	விரிவாக்கு: சாய்வு நிரப்புகள் இல்லை
 @msg	Expand: nothing to expand	விரிவாக்கு: விரிவாக்க எதுவும் இல்லை
@@ -7062,6 +7820,9 @@ antiAlias	Sharp	கூர்மையான
 @msg	expected {{"objects": [...]}}	{{"objects": [...]}} எதிர்பார்க்கப்பட்டது
 @msg	export `{name}`: {e}	நிரல்கூறு ஏற்றுமதி `{name}`: {e}
 @msg	Export cancelled	ஏற்றுமதி ரத்துசெய்யப்பட்டது
+	Cancel Save	சேமிப்பை ரத்துசெய்
+@plural	{n} more save waiting|{n} more saves waiting	இன்னும் {n} சேமிப்பு காத்திருக்கிறது|இன்னும் {n} சேமிப்புகள் காத்திருக்கின்றன
+@msg	Save canceled	சேமிப்பு ரத்துசெய்யப்பட்டது
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	திரைகளுக்கு ஏற்றுமதி png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai அல்லது vectorcraft வடிவங்களில் மட்டுமே எழுதும்
 @msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	ஏற்றுமதி முன்னமைவுக் கோப்பு {MAX_PRESET_FILE_BYTES} பைட்டுகளை விடப் பெரியது
 @msg	Exported {path}	{path} ஏற்றுமதி செய்யப்பட்டது
@@ -7158,6 +7919,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	stroke cannot be set on a symbol instance	சின்ன நிகழ்வில் stroke ஐ அமைக்க முடியாது
 @msg	fill on a symbol instance must be a solid color or none	சின்ன நிகழ்வின் நிரப்பு ஒரு திட நிறமாக அல்லது none ஆக இருக்க வேண்டும்
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	வடிவமாக மாற்றியமை அல்லது பொருளை வெளிரேகையாக்கு விளைவு இல்லாத படத்தில் {key} ஐ அமைக்க முடியாது
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type, alignToPixelGrid ஆகியவற்றில் ஒன்றையோ பலவற்றையோ அனுப்பவும்
 @msg	give formats or a preset, not both	formats அல்லது preset இல் ஒன்றை மட்டும் கொடுக்கவும், இரண்டையும் அல்ல
 @msg	give horizontal or vertical	கிடைமட்டம் அல்லது செங்குத்து என்று கொடுக்கவும்
 @msg	give newName or delete	newName அல்லது delete ஐக் கொடுக்கவும்
@@ -7166,6 +7928,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	give one of assets, layers, selection or fullDocument	assets, layers, selection அல்லது fullDocument இல் ஒன்றைக் கொடுக்கவும்
 @msg	give only one of onto, above, below, icon and a column place	onto, above, below, icon, column இடம் ஆகியவற்றில் ஒன்றை மட்டும் தரவும்
 @msg	give only one of onto, below and above	onto, below, above இவற்றில் ஒன்றை மட்டும் கொடுக்கவும்
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices`, `t` ஆகியவற்றில் ஒன்றை மட்டும் கொடுக்கவும்
 @msg	give origin: [x, y], or reset: true	origin: [x, y] அல்லது reset: true ஐக் கொடுக்கவும்
 @msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	overprintFill, overprintStroke, showCenter, imageMap, url அல்லது note ஐக் கொடுக்கவும்
 @msg	give path (a file) or folder	path (ஒரு கோப்பு) அல்லது folder ஐக் கொடுக்கவும்
@@ -7354,6 +8117,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	the Line Breaking setting of legacy type was left out	பழைய உரையின் வரி முறிவு அமைப்பு விடப்பட்டது
 @msg	the Japanese layout rules of legacy type were left out	பழைய உரையின் ஜப்பானிய தளவமைப்பு விதிகள் விடப்பட்டன
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	நேரடி வண்ண இணைப்பு: ஒரு நேரடி வண்ணக் குழுவையும் சேர்க்க வேண்டிய பாதைகளையும் தேர்ந்தெடுக்கவும்
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face`, `Edge` ஆகியவை நேரடி வண்ணக் குழுவின் முகங்களையும் விளிம்புகளையும் குறிக்கும் பெயர்கள்: பாதைக்கு வேறு பெயரைக் கொடுக்கவும்
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	நேரடி வண்ணம் பாதைகளையும் கூட்டுப் பாதைகளையும் மட்டுமே ஏற்கும்: முதலில் உரை, படங்கள் மற்றும் பிற பொருட்களைப் பாதைகளாக மாற்றவும்
 @msg	Live Paint: select paths or compound paths	நேரடி வண்ணம்: பாதைகள் அல்லது கூட்டுப் பாதைகளைத் தேர்ந்தெடுக்கவும்
 @msg	Live Paint: these paths are too degenerate to paint	நேரடி வண்ணம்: இந்தப் பாதைகள் வண்ணம் தீட்ட முடியாத அளவுக்குச் சிதைந்துள்ளன
@@ -7497,7 +8261,25 @@ antiAlias	Sharp	கூர்மையான
 @msg	no active data set	செயலில் உள்ள தரவுத் தொகுப்பு இல்லை
 @msg	no active document	செயலில் உள்ள ஆவணம் இல்லை
 @msg	no active perspective plane	செயலில் உள்ள முன்னோக்குத் தளம் இல்லை
+@msg	the perspective grid is hidden	முன்னோக்குக் கட்டம் மறைக்கப்பட்டுள்ளது
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	தானியங்கி தள நிலைப்படுத்தல் முடக்கத்தில் உள்ளது: anchorPoint அல்லது gridlineIntersection ஐ இயக்கவும் (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint true அல்லது false ஆக இருக்க வேண்டும்
+@msg	gridlineIntersection must be true or false	gridlineIntersection true அல்லது false ஆக இருக்க வேண்டும்
+@msg	tolerance must be 0 or more	tolerance 0 அல்லது அதற்கு மேற்பட்டதாக இருக்க வேண்டும்
+@msg	give `at` or `clear`, not both	`at` அல்லது `clear` ஐக் கொடுக்கவும், இரண்டையும் அல்ல
 @msg	no anchor points selected	நங்கூரப் புள்ளிகள் எதுவும் தேர்ந்தெடுக்கப்படவில்லை
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` இரண்டு அல்லது மூன்று [x, y] எண் இணைகளாக இருக்க வேண்டும்
+@msg	direct-select two or three anchor points, or give `points`	இரண்டு அல்லது மூன்று நங்கூரப் புள்ளிகளை நேரடித் தேர்வு மூலம் தேர்ந்தெடுக்கவும், அல்லது `points` ஐக் கொடுக்கவும்
+@msg	the path is straight there, so no circle matches its curvature	அந்த இடத்தில் பாதை நேராக உள்ளது, எனவே எந்த வட்டமும் அதன் வளைவுத்தன்மையுடன் பொருந்தாது
+@msg	the path has a cusp there, so it has no single curvature	அந்த இடத்தில் பாதையில் ஒரு கூர்முனை உள்ளது, எனவே அதற்கு ஒற்றை வளைவுத்தன்மை இல்லை
+@msg	the path has a corner there, so it has no single curvature	அந்த இடத்தில் பாதையில் ஒரு மூலை உள்ளது, எனவே அதற்கு ஒற்றை வளைவுத்தன்மை இல்லை
+@msg	a guide has no curvature circle	வழிகாட்டிக்கு வளைவுத்தன்மை வட்டம் இல்லை
+@msg	the circle that matches the path there would reach past the canvas	அந்த இடத்தில் பாதையுடன் பொருந்தும் வட்டம் கேன்வாஸைத் தாண்டிச் செல்லும்
+@msg	no circle passes through these points: two are the same or all three lie on one line	இந்தப் புள்ளிகள் வழியாக எந்த வட்டமும் செல்லாது: இரண்டு புள்ளிகள் ஒன்றே, அல்லது மூன்றும் ஒரே கோட்டில் உள்ளன
+@msg	`at` must be "start" or "end"	`at` "start" அல்லது "end" ஆக இருக்க வேண்டும்
+@msg	give exactly one of `through` and `toward`	`through`, `toward` ஆகியவற்றில் சரியாக ஒன்றைக் கொடுக்கவும்
+@msg	no arc fits these points: two are the same or all three lie on one line	இந்தப் புள்ளிகளுக்கு எந்த வளைவும் பொருந்தாது: இரண்டு புள்ளிகள் ஒன்றே, அல்லது மூன்றும் ஒரே கோட்டில் உள்ளன
+@msg	give `at` only with `toward`	`toward` உடன் மட்டுமே `at` ஐக் கொடுக்கவும்
 @msg	no app to open files here	இங்கே கோப்புகளைத் திறக்க பயன்பாடு இல்லை
 @msg	no appearance item {index}	தோற்ற உருப்படி {index} இல்லை
 @msg	no artboard	ஆர்ட்போர்டு இல்லை
@@ -7582,6 +8364,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	no item at index {from}	குறியீடு {from} இல் உருப்படி இல்லை
 @msg	no item at one of the indices {idx}	சுட்டெண்கள் {idx} இல் ஒன்றில் உருப்படி இல்லை
 @msg	no key object	முக்கியப் பொருள் இல்லை
+@msg	Align to Key Object isn't available with the Artboard tool	ஆர்ட்போர்டு கருவியுடன் முக்கியப் பொருளுக்கு ஏற்ப சீரமை என்பது கிடைக்காது
 @msg	no layer	அடுக்கு இல்லை
 @msg	no layer {id} (see layer.list)	{id} என்ற அடுக்கு இல்லை (layer.list ஐப் பார்க்கவும்)
 @msg	no layers to export	ஏற்றுமதி செய்ய அடுக்குகள் எதுவும் இல்லை
@@ -7604,6 +8387,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	no parent layer	தாய் அடுக்கு இல்லை
 @msg	no Pathfinder operation applied yet	இதுவரை எந்த வழிகாட்டி செயல்பாடும் பயன்படுத்தப்படவில்லை
 @msg	no pattern `{name}`	`{name}` என்ற வடிவமாதிரி இல்லை
+@msg	art painted with `{name}` can't be its tile	`{name}` ஆல் வண்ணம் தீட்டப்பட்ட ஓவியம் அந்த வடிவமாதிரியின் ஓடாக இருக்க முடியாது
 @msg	no pattern named `{choice}`	`{choice}` என்ற பெயரில் வடிவமாதிரி இல்லை
 @msg	no pattern swatch `{name}`	`{name}` என்ற வடிவமாதிரி வண்ண மாதிரி இல்லை
 @msg	no PDF preset named `{n}`	`{n}` என்ற PDF முன்னமைவு இல்லை
@@ -7691,9 +8475,15 @@ antiAlias	Sharp	கூர்மையான
 @msg	no such spine point	அப்படி முதுகெலும்புப் புள்ளி இல்லை
 @msg	no such spine segment	அப்படி முதுகெலும்புப் பகுதி இல்லை
 @msg	no such subpath	அப்படி துணைப் பாதை இல்லை
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` அதிகபட்சம் 10000 துண்டுகள் கொண்ட பட்டியலாக இருக்க வேண்டும்
+@msg	give either `start` for a new path or `id`, not both	புதிய பாதைக்கு `start` அல்லது `id` இல் ஒன்றைக் கொடுக்கவும், இரண்டையும் அல்ல
+@msg	`subpath` and `keep` need `id`	`subpath`, `keep` ஆகியவற்றுக்கு `id` தேவை
 @msg	no such user library	அப்படி பயனர் நூலகம் இல்லை
 @msg	no such view	அப்படி காட்சி இல்லை
 @msg	no such width point	அப்படி அகலப் புள்ளி இல்லை
+@msg	`single` must be `incoming` or `outgoing`	`single` `incoming` அல்லது `outgoing` ஆக இருக்க வேண்டும்
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index`, `outIndex` ஆகியவை ஒரே தொடர்ச்சியற்ற அகலப் புள்ளியின் இரு பாதிகளாக இருக்க வேண்டும்
+@msg	a discontinuous width point keeps its place	தொடர்ச்சியற்ற அகலப் புள்ளி அதன் இடத்திலேயே இருக்கும்
 @msg	no swatch `{keep}`	`{keep}` என்ற வண்ண மாதிரி இல்லை
 @msg	no swatch `{n}`	`{n}` என்ற வண்ண மாதிரி இல்லை
 @msg	no swatch `{n}` (swatches and colour groups move separately)	`{n}` என்ற வண்ண மாதிரி இல்லை (வண்ண மாதிரிகளும் வண்ணக் குழுக்களும் தனித்தனியாக நகரும்)
@@ -7903,7 +8693,6 @@ antiAlias	Sharp	கூர்மையான
 @msg	parameters must be an object	அளவுருக்கள் ஒரு JSON பொருளாக இருக்க வேண்டும்
 @msg	params must be an object	params ஒரு பொருளாக இருக்க வேண்டும்
 @msg	part of the program isn't valid PostScript text	நிரலின் ஒரு பகுதி செல்லுபடியான PostScript உரை அல்ல
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice மற்றும்/அல்லது type ஐக் கொடுக்கவும்
 @msg	passwords can have up to {MAX_PASSWORD} bytes	கடவுச்சொற்களில் அதிகபட்சம் {MAX_PASSWORD} பைட்டுகள் இருக்கலாம்
 @msg	paste unavailable	ஒட்டுதல் கிடைக்கவில்லை
 @msg	Pasting	ஒட்டுகிறது
@@ -7965,6 +8754,11 @@ antiAlias	Sharp	கூர்மையான
 @msg	preset must be standard, diffuse, topLeft or right	preset ஆனது standard, diffuse, topLeft அல்லது right ஆக இருக்க வேண்டும்
 @msg	preset must be the name of a print preset	preset ஓர் அச்சு முன்னமைவின் பெயராக இருக்க வேண்டும்
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	உலாவியில் முன்காட்சிக்கு டெஸ்க்டாப் பயன்பாடு தேவை (இணையத்தில் கோப்புகள் பதிவிறக்கப்படும்)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` ஐக் கொடுக்கவும், அதாவது K இல் (1024 பைட்டுகள்) விரும்பிய கோப்பு அளவு: 0 ஐ விட அதிகமான, அதிகபட்சம் 1048576 ஆன ஓர் எண்
+@msg	`startWith` is `current` or `auto`	`startWith` ஆனது `current` அல்லது `auto` ஆகும்
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` ஆனது `allSlices`, `eachSlice` அல்லது `currentSlice` ஆகும்
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` என்பது `slice.list` தரும் ஒரு துண்டு எண்; இது `use: currentSlice` உடன் வரும்
+@msg	Optimize to File Size: there is no image to measure	கோப்பு அளவுக்கு உகப்பாக்கு: அளவிடப் படம் எதுவும் இல்லை
 @msg	previewMode must be default, pixel or overprint	previewMode default, pixel அல்லது overprint ஆக இருக்க வேண்டும்
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	அச்சு மைத் திருத்தங்கள் CMYK ஆவணங்களில் மட்டுமே செயல்படும்: முதலில் கோப்பு › ஆவண நிறப் பயன்முறை › CMYK நிறம் என்பதைத் தேர்ந்தெடுக்கவும்
 @msg	print settings are not an object	அச்சு அமைப்புகள் ஒரு பொருள் அல்ல
@@ -8047,6 +8841,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	select a blend or give `id`	ஒரு கலப்பைத் தேர்ந்தெடுக்கவும் அல்லது `id` ஐக் கொடுக்கவும்
 @msg	select a blend to set easing or color shift	தளர்வு அல்லது நிற நகர்வை அமைக்க ஒரு கலப்பைத் தேர்ந்தெடுக்கவும்
 @msg	select a clip group	ஒரு வெட்டுக் குழுவைத் தேர்ந்தெடுக்கவும்
+@msg	select a flare	ஓர் ஒளிக்கீற்றைத் தேர்ந்தெடுக்கவும்
 @msg	select a compound shape	ஒரு கூட்டு வடிவத்தைத் தேர்ந்தெடுக்கவும்
 @msg	Select a dimension first	முதலில் ஓர் அளவீட்டைத் தேர்ந்தெடுக்கவும்
 @msg	select a gradient mesh	ஒரு சாய்வு வலையைத் தேர்ந்தெடுக்கவும்
@@ -8063,6 +8858,10 @@ antiAlias	Sharp	கூர்மையான
 @msg	select a text object	ஓர் உரைப் பொருளைத் தேர்ந்தெடுக்கவும்
 @msg	select an envelope	ஓர் உறையைத் தேர்ந்தெடுக்கவும்
 @msg	select an image	ஒரு படத்தைத் தேர்ந்தெடுக்கவும்
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	பொருள் {_1} என்பது முன்னோக்குச் சிதைவு அல்லது சுதந்திர சிதைவால் மாற்றப்பட்ட படம்; இந்தக் கட்டளை அதில் வேலை செய்யாது
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	படம் {_1} ஐ இவ்வாறு சிதைக்க முடியாது: அதன் மூலைகள் குவிவான வடிவத்தை உருவாக்காது
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	படம் {_1} ஐ இவ்வாறு சிதைக்க முடியாது: அதன் மூலைகள் சிதைவின் அடிவானக் கோட்டைக் கடக்கும்
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	படம் {_1} ஐ இவ்வாறு சிதைக்க முடியாது: அதன் மூலைகள் முன்னோக்கு வரைபடமாக்கலுக்கு மிக நெருக்கமாக இருக்கும்
 @msg	`background` must be edges, corners or colors	`background` edges, corners அல்லது colors ஆக இருக்க வேண்டும்
 @msg	`match` must be distance or channels	`match` distance அல்லது channels ஆக இருக்க வேண்டும்
 @msg	`{key}` must be from 0 to 100	`{key}` 0 முதல் 100 வரை இருக்க வேண்டும்
@@ -8122,7 +8921,66 @@ antiAlias	Sharp	கூர்மையான
 @msg	select paths or compound paths	பாதைகளையோ கூட்டுப் பாதைகளையோ தேர்ந்தெடுக்கவும்
 @msg	select paths to join	இணைக்க வேண்டிய பாதைகளைத் தேர்ந்தெடுக்கவும்
 @msg	select paths with dashed strokes to expand	விரிவாக்க வேண்டிய, கோடிட்ட கோடுகள் கொண்ட பாதைகளைத் தேர்ந்தெடுக்கவும்
+	Tangent Circle…	தொடு வட்டம்…
+	Tangent Circle	தொடு வட்டம்
+	Tangent Circle Tool	தொடு வட்டக் கருவி
+	No tangent circle here	இங்கே தொடு வட்டம் இல்லை
+	Circle:	வட்டம்:
+@msg	`ids` names an object twice	`ids` ஒரு பொருளை இருமுறை குறிப்பிடுகிறது
+@msg	select two or three paths or compound paths	இரண்டு அல்லது மூன்று பாதைகளையோ கூட்டுப் பாதைகளையோ தேர்ந்தெடுக்கவும்
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 முதல் 1000000 pt வரை இருக்க வேண்டும்
+@msg	two shapes need a `radius`	இரண்டு வடிவங்களுக்கு ஒரு `radius` தேவை
+@msg	three shapes set the radius themselves: leave `radius` out	மூன்று வடிவங்கள் ஆரத்தைத் தாமே அமைக்கின்றன: `radius` ஐ விட்டுவிடவும்
+@msg	`circle` must be from 0 to 64	`circle` 0 முதல் 64 வரை இருக்க வேண்டும்
+@msg	a shape has no outline	ஒரு வடிவத்துக்கு வெளிரேகை இல்லை
+@msg	the shapes are too complex: at most 2000 segments in all	வடிவங்கள் மிகச் சிக்கலானவை: மொத்தம் அதிகபட்சம் 2000 பகுதிகள்
+@msg	these shapes take too long to search	இந்த வடிவங்களில் தேடுவதற்கு மிக அதிக நேரம் ஆகிறது
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	64 க்கும் மேற்பட்ட வட்டங்கள் இந்த வடிவங்களைத் தொடுகின்றன: அவை ஒரு முழு வளைவு நெடுகிலும் தொடக்கூடும்
+@msg	no circle touches these shapes	எந்த வட்டமும் இந்த வடிவங்களைத் தொடவில்லை
+@msg	`circle` is past the last circle found ({found})	`circle` கண்டறியப்பட்ட கடைசி வட்டத்தைத் தாண்டியுள்ளது ({found})
+@msg	object {value} is not a path or compound path	பொருள் {value} பாதையோ கூட்டுப் பாதையோ அல்ல
+@msg	these shapes are too small to measure	இந்த வடிவங்கள் அளவிட முடியாத அளவுக்கு மிகச் சிறியவை
+	Add Bounding Rectangle	எல்லைச் செவ்வகத்தைச் சேர்
+	Add Bounding Circle	எல்லை வட்டத்தைச் சேர்
+	Add Bounding Rectangle…	எல்லைச் செவ்வகத்தைச் சேர்…
+	Add Bounding Circle…	எல்லை வட்டத்தைச் சேர்…
+	One per Object	ஒரு பொருளுக்கு ஒன்று
+@msg	nothing to enclose	அடைக்க எதுவும் இல்லை
+@msg	`offset` must be 0 or more	`offset` 0 அல்லது அதற்கு மேல் இருக்க வேண்டும்
+@msg	the shape would have no size	வடிவத்துக்கு அளவு இருக்காது
+@msg	the shape would reach past the edge of the canvas	வடிவம் கேன்வாஸின் ஓரத்தைத் தாண்டிச் செல்லும்
 @msg	select paths, or segments, to divide	பிரிக்க வேண்டிய பாதைகளை அல்லது பகுதிகளைத் தேர்ந்தெடுக்கவும்
+	Smooth Bridge…	மென்மையான பாலம்…
+	Smooth Bridge	மென்மையான பாலம்
+	Keep Originals	அசல்களை வைத்திரு
+@msg	select two or more circles to bridge	பாலம் அமைக்க இரண்டு அல்லது அதற்கு மேற்பட்ட வட்டங்களைத் தேர்ந்தெடுக்கவும்
+@msg	one circle is inside the other	ஒரு வட்டம் மற்றொன்றுக்குள் உள்ளது
+@msg	the circles are too far apart for this radius: raise the radius	இந்த ஆரத்துக்கு வட்டங்கள் மிகத் தொலைவில் உள்ளன: ஆரத்தை அதிகரிக்கவும்
+@msg	the circles are too far apart for this radius	இந்த ஆரத்துக்கு வட்டங்கள் மிகத் தொலைவில் உள்ளன
+	Constant Gap	நிலையான இடைவெளி
+	Reach:	எட்டும் தூரம்:
+@msg	the circles are too far apart for this gap: raise the gap	இந்த இடைவெளிக்கு வட்டங்கள் மிகத் தொலைவில் உள்ளன: இடைவெளியை அதிகரிக்கவும்
+@msg	the circles are too far apart for this gap	இந்த இடைவெளிக்கு வட்டங்கள் மிகத் தொலைவில் உள்ளன
+@msg	no two circles are within reach: raise the reach	எட்டும் தூரத்துக்குள் எந்த இரண்டு வட்டங்களும் இல்லை: எட்டும் தூரத்தை அதிகரிக்கவும்
+@msg	select at most 2000 circles to bridge	பாலம் அமைக்க அதிகபட்சம் 2000 வட்டங்களைத் தேர்ந்தெடுக்கவும்
+@msg	that makes too many bridges (at most 8000): lower the reach	அது மிக அதிகமான பாலங்களை உருவாக்கும் (அதிகபட்சம் 8000): எட்டும் தூரத்தைக் குறைக்கவும்
+@msg	the bridged circles are too complex to unite	பாலமிடப்பட்ட வட்டங்கள் ஒன்றிணைக்க முடியாத அளவுக்குச் சிக்கலானவை
+	Common Tangents…	பொதுத் தொடுகோடுகள்…
+	Common Tangents	பொதுத் தொடுகோடுகள்
+	Tangents	தொடுகோடுகள்
+	Centerline	மையக்கோடு
+	External	வெளிப்புறம்
+	Internal	உட்புறம்
+@msg	select two closed paths	இரண்டு மூடிய பாதைகளைத் தேர்ந்தெடுக்கவும்
+@msg	a selected path is open	தேர்ந்தெடுக்கப்பட்ட ஒரு பாதை திறந்த பாதையாக உள்ளது
+@msg	a selected path is not convex	தேர்ந்தெடுக்கப்பட்ட ஒரு பாதை குவிந்ததாக இல்லை
+@msg	a selected path has no area	தேர்ந்தெடுக்கப்பட்ட ஒரு பாதைக்குப் பரப்பு இல்லை
+@msg	a selected path has more than 10000 segments	தேர்ந்தெடுக்கப்பட்ட ஒரு பாதையில் 10000 க்கும் மேற்பட்ட பகுதிகள் உள்ளன
+@msg	the two paths have the same outline	இரண்டு பாதைகளுக்கும் ஒரே வெளிரேகை உள்ளது
+@msg	One path lies inside the other, so they have no common tangents	ஒரு பாதை மற்றொன்றுக்குள் உள்ளது, எனவே அவற்றுக்குப் பொதுத் தொடுகோடுகள் இல்லை
+@msg	The paths overlap, so they have no internal tangents	பாதைகள் ஒன்றின்மேல் ஒன்று படிகின்றன, எனவே அவற்றுக்கு உள் தொடுகோடுகள் இல்லை
+@msg	One path lies inside the other, so they have no internal tangents	ஒரு பாதை மற்றொன்றுக்குள் உள்ளது, எனவே அவற்றுக்கு உள் தொடுகோடுகள் இல்லை
+@msg	The point lies inside the path, so it has no tangents	புள்ளி பாதைக்குள் உள்ளது, எனவே அதற்குத் தொடுகோடுகள் இல்லை
 @msg	select plain rectangles, ellipses or regular polygons to convert	மாற்ற வேண்டிய எளிய செவ்வகங்கள், நீள்வட்டங்கள் அல்லது ஒழுங்குப் பலகோணங்களைத் தேர்ந்தெடுக்கவும்
 @msg	Select point type	புள்ளி உரையைத் தேர்ந்தெடுக்கவும்
 @msg	select rows or objects to collect	சேகரிக்க வரிசைகளையோ பொருட்களையோ தேர்ந்தெடுக்கவும்
@@ -8168,6 +9026,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	shadings of more than 4096 patches or triangles were left out	4096 க்கு மேற்பட்ட பட்டைகள் அல்லது முக்கோணங்கள் கொண்ட நிழலிடல்கள் விடப்பட்டன
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	செயல்பாடுகள் அறியப்படாத வகையைச் சேர்ந்த நிழலிடல்கள் அவற்றின் நடுத்தர நிறத்தால் நிரப்பப்படும்
 @msg	Shape Builder: no region under the pointer	வடிவ உருவாக்கி: சுட்டிக்கு கீழே பகுதி இல்லை
+@msg	Fill Area: no enclosed area under the pointer	பரப்பை நிரப்பு: சுட்டிக்குக் கீழே மூடிய பரப்பு இல்லை
+@msg	Shape Builder: select all paths you want to merge	வடிவ உருவாக்கி: இணைக்க விரும்பும் எல்லாப் பாதைகளையும் தேர்ந்தெடுக்கவும்
 @msg	Shape Builder: select paths or compound paths	வடிவ உருவாக்கி: பாதைகள் அல்லது கூட்டுப் பாதைகளைத் தேர்ந்தெடுக்கவும்
 @msg	Shaper needs 1–64 source paths	Shaper க்கு 1–64 மூலப் பாதைகள் தேவை
 @msg	shortcut for `{k}` must be a string	`{k}` க்கான குறுக்குவழி ஒரு சரமாக இருக்க வேண்டும்
@@ -8247,10 +9107,31 @@ antiAlias	Sharp	கூர்மையான
 @msg	a 3D effect on a group's fill or stroke draws nothing	குழுவின் நிரப்பு அல்லது கோட்டின் மீதான 3D விளைவு எதையும் வரையாது
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	குழுவின் நிரப்பு அல்லது கோட்டின் மீதான 3D விளைவு ஏற்றுமதி செய்ய எதையும் வரையாது
 @msg	The 3D object is too complex to export	3D பொருள் ஏற்றுமதி செய்ய முடியாத அளவுக்குச் சிக்கலானது
+@msg	the <filter> element needs an id, the filter's name	<filter> கூறுக்கு வடிகட்டியின் பெயரான ஒரு id தேவை
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG வடிகட்டியின் id அதிகபட்சம் {MAX_NAME} எழுத்துகள் கொண்டதாக இருக்கலாம்
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> SVG வடிகட்டியின் கூறு அல்ல
+@msg	an SVG filter has no event attributes such as {_1}	SVG வடிகட்டியில் {_1} போன்ற நிகழ்வுப் பண்புகள் இருக்க முடியாது
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG வடிகட்டியின் படங்கள் PNG, JPEG, GIF அல்லது WebP data: URL-களாக இருக்க வேண்டும்
+@msg	the SVG filter isn't valid XML: {e}	SVG வடிகட்டி செல்லுபடியான XML அல்ல: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence இன் numOctaves அதிகபட்சம் {MAX_OCTAVES} ஆக இருக்கலாம்
+@msg	{what} is at most {max}	{what} அதிகபட்சம் {max} ஆக இருக்கலாம்
+@msg	feConvolveMatrix's order	feConvolveMatrix இன் order
+@msg	feMorphology's radius	feMorphology இன் radius
+@msg	a blur's stdDeviation	ஒரு மங்கலின் stdDeviation
+@msg	the SVG filter has no primitives	SVG வடிகட்டியில் அடிப்படைச் செயல்கூறுகள் இல்லை
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG வடிகட்டியில் அதிகபட்சம் {MAX_PRIMITIVES} அடிப்படைச் செயல்கூறுகள் இருக்கலாம்
+@msg	the SVG filter is too large once its attributes are written out	பண்புகள் முழுமையாக எழுதப்பட்டதும் SVG வடிகட்டி மிகப் பெரியதாகிறது
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG வடிகட்டியின் படங்களில் மொத்தம் அதிகபட்சம் {MAX_IMAGE_PIXELS} பிக்சல்கள் இருக்கலாம்
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG வடிகட்டியை வரைய முடியவில்லை: அதன் அடிப்படைச் செயல்கூறுகளையும் அவற்றின் உள்ளீடுகளையும் சரிபார்க்கவும்
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG வடிகட்டியின் கூறுகளை அதிகபட்சம் {MAX_DEPTH} நிலைகள் ஆழம் வரை உள்ளமைக்கலாம்
+@msg	an SVG filter is at most {_1} KB	SVG வடிகட்டி அதிகபட்சம் {_1} KB ஆக இருக்கலாம்
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	பொருளில் 3D விளைவு இல்லை (வெளித்தள்ளல் மற்றும் சரிவு, சுழற்றி உருவாக்கு, ஊதிப்பெருக்கு அல்லது சுழற்று)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` என்பது `mode`-ஐ மட்டும் கொண்ட ஒரு பொருளாக இருக்க வேண்டும்; அதன் மதிப்பு shaded அல்லது wireframe
 @msg	its 3D effect builds no solid	அதன் 3D விளைவு எந்தத் திடப்பொருளையும் உருவாக்கவில்லை
-@msg	bevel must be none or one of {_1}	bevel ஆனது none ஆகவோ {_1} இல் ஒன்றாகவோ இருக்க வேண்டும்
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel ஆனது none ஆகவோ, {_1} இல் ஒன்றாகவோ, அல்லது {BEVEL_PROFILE} உடன் custom ஆகவோ இருக்க வேண்டும்
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom க்கு {BEVEL_PROFILE}, அதாவது சரிவின் புள்ளிகள், தேவை
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} ஒரு உரையாக இருக்க வேண்டும்
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 2 முதல் {most} வரையிலான [x, y] புள்ளிகளாக இருக்க வேண்டும், ஒவ்வொன்றும் 0 முதல் 1 வரையிலான பங்கு, [0, 0] (முனையின் விளிம்பு) இலிருந்து [1, 1] (பக்கச் சுவர்) வரை
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: இந்த ஓவியத்திலிருந்து திடப்பொருட்களை உருவாக்க முடியாது: அதன் சின்ன நிகழ்வுகள், கலப்புகள் மற்றும் வெட்டுக் குழுக்களில் மிக அதிகமான பொருட்கள் உள்ளன
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: "{symbol}" சின்னத்தின் நிகழ்விலிருந்து திடப்பொருளை உருவாக்க முடியாது: சின்னத்தின் ஓவியம் கிடைக்கவில்லை
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ஓவியத்தை வெட்டுவதற்கு வெட்டுப் பாதை மிகவும் சிக்கலானது
@@ -8273,11 +9154,14 @@ antiAlias	Sharp	கூர்மையான
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` இன் ஒவ்வொரு உருப்படியும் ஒரு பொருளாக இருக்க வேண்டும்
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` உருப்படிகள் symbol, face, x, y, scale, rotation ஆகியவற்றை ஏற்கும், `{k}` ஐ அல்ல
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` இன் ஒவ்வொரு உருப்படிக்கும் `symbol`, அதாவது ஒரு சின்னத்தின் பெயர், தேவை
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` இன் face ஆனது front, back அல்லது side ஆக இருக்க வேண்டும்
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` இன் face ஆனது front அல்லது back ஆக இருக்க வேண்டும்
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` இன் {key} ஆனது {lo} முதல் {hi} வரையிலான எண்ணாக இருக்க வேண்டும்
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ஒரு வரிசையாக இருக்க வேண்டும்
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	வரைகலைகள் தளம், வெளித்தள்ளு, சுழற்றி உருவாக்கு ஆகிய பொருள் வகைகளில் பொருத்தப்படும்
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	வரைகலைகள் தளம், வெளித்தள்ளு, சுழற்றி உருவாக்கு, ஊதிப்பெருக்கு ஆகிய பொருள் வகைகளில் பொருத்தப்படும்
 @msg	Revolve maps graphics onto its side: map them onto the front	சுழற்றி உருவாக்கு வரைகலைகளை அதன் பக்கவாட்டில் பொருத்துகிறது: அவற்றை முன்பக்கத்தில் பொருத்தவும்
+@msg	Inflate maps graphics onto its front and back, not onto a side	ஊதிப்பெருக்கு வரைகலைகளை அதன் முன்புறத்திலும் பின்புறத்திலும் பொருத்தும், பக்கத்தில் அல்ல
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	பொருள் {_1}: இருபுறமும், முனை ஆகிய இரண்டும் இயக்கப்பட்டிருந்தால் மட்டுமே ஊதிப்பெருக்கின் பின்புறம் வரைகலைகளை ஏற்கும்
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	வரைகலைகள் இந்தப் பரப்புக்கு மிகவும் சிக்கலானவை: சின்னங்களின் ஓவியத்தை எளிதாக்கவும் அல்லது பகுதிகளைக் குறைக்கவும்
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` அதிகபட்சம் {MAX_GRAPHICS} வரைகலைகளை ஏற்கும்
 @msg	A plane has one face: map its graphics onto the front	தளத்துக்கு ஒரே ஒரு முகம் உண்டு: அதன் வரைகலைகளை முன்புறத்தில் பொருத்தவும்
@@ -8317,6 +9201,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	the CMYK image couldn't be written	CMYK படத்தை எழுத முடியவில்லை
 @msg	the Color Picker is not open	நிறத் தேர்வி திறக்கப்படவில்லை
 @msg	the compound shape is too complex to expand	கூட்டு வடிவம் விரிவாக்க முடியாத அளவுக்குச் சிக்கலானது
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	பரப்பை அடைக்காத கோடு அல்லது பிற திறந்த பாதை கூட்டு வடிவத்துக்கு எந்தப் பரப்பையும் சேர்க்காது; அதைச் சேர்க்க, முதலில் அதற்குப் பொருள் › பாதை › கோட்டை வெளிரேகையாக்கு என்பதைப் பயன்படுத்தவும்
 @msg	the compressed file unpacks to more than {_1} MB	அழுத்தப்பட்ட கோப்பு விரிவடைந்தால் {_1} MB க்கு மேல் ஆகும்
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	அழுத்தப்பட்ட கோப்பு விரிவடைந்தால் VectorCraft படிப்பதை விட அதிகம் ஆகும் ({_1} MB ஆவணம், ஒரு படத்திற்கு {_2} MB)
 @msg	the container of the listed objects is gone	பட்டியலிட்ட பொருட்களின் கொள்கலன் இப்போது இல்லை
@@ -8496,6 +9381,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF கோப்பு உரையாக இடுவதற்கு மிகப் பெரியது (அதிகபட்சம் {_1} MB)
 @msg	the runtime panicked	இயக்கச்சூழல் திடீரெனச் செயலிழந்தது
 @msg	the Save PDF dialog didn't open	PDF சேமி உரையாடல் பெட்டி திறக்கவில்லை
+@msg	the Save PDF dialog is not open	PDF சேமி உரையாடல் பெட்டி திறக்கப்படவில்லை
 @msg	the scale is not a usable number	அளவுகோல் பயன்படுத்தக்கூடிய எண் அல்ல
 @msg	the screen color sampler is already open	திரை நிற மாதிரி எடுப்பான் ஏற்கனவே திறந்துள்ளது
 @msg	the search couldn't start: try again in a moment	தேடலைத் தொடங்க முடியவில்லை: சிறிது நேரம் கழித்து மீண்டும் முயலவும்
@@ -8637,6 +9523,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	ஓர் உரைப் பொருளுக்குள் எழுதும் திசையை மாற்றும் உரை, அதன் முதல் எழுத்தின் திசையிலேயே திறக்கும்
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	இணைக்கப்பட்ட பரப்புகள், சுற்றிவரும் உரை அல்லது கூட்டுப் பாதையில் மறைப்பாகப் பயன்படுத்தப்படும் உரை வெட்டாது
 @msg	Unembedded to {_1}	{_1} க்கு உட்பொதிப்பு நீக்கப்பட்டது
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{folder} க்கு {n} படத்தின் உட்பொதிப்பு நீக்கப்பட்டது|{folder} க்கு {n} படங்களின் உட்பொதிப்பு நீக்கப்பட்டது
+@msg	every numbered name for {name} is taken in that folder	{name} க்கான எல்லா எண்ணிட்ட பெயர்களும் அந்தக் கோப்புறையில் ஏற்கனவே உள்ளன
 @msg	unexpected host trap	எதிர்பாராத புரவலன் பிழைநிறுத்தம்
 @msg	unexpected resources	எதிர்பாராத வளங்கள்
 @msg	unknown {k} key `{key}` (size, position)	அறியப்படாத {k} புலம் `{key}` (size, position)
@@ -8706,9 +9594,24 @@ antiAlias	Sharp	கூர்மையான
 @msg	unknown overprints `{v}` (preserve, simulate or discard)	அறியப்படாத மேல்அச்சு அமைப்பு `{v}` (preserve, simulate அல்லது discard)
 @msg	unknown panel	அறியப்படாத பலகம்
 @msg	unknown panel `{raw}`	அறியப்படாத பலகம் `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` க்கு மாறி மாறிக் காட்டக்கூடிய காட்சி அளவுகள் இல்லை
+@msg	the panels are not shown	பலகங்கள் காட்டப்படவில்லை
 @msg	panels can't be shown in Presentation Mode	விளக்கப் பயன்முறையில் பலகங்களைக் காட்ட முடியாது
 @msg	unknown parameter `{key}`; did you mean `{near}`?	அறியப்படாத அளவுரு `{key}`; நீங்கள் `{near}` என்று கருதினீர்களா?
 @msg	unknown parameter `{key}`; the command takes no parameters	அறியப்படாத அளவுரு `{key}`; கட்டளைக்கு அளவுருக்கள் இல்லை
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	அறியப்படாத அளவுரு `{key}`; `{object}` ஏற்பவை: {keys}
+@msg	unknown parameter `{key}`; {why_not}	அறியப்படாத அளவுரு `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	எந்த வடிவமும் இதை ஏற்காது (document.formats ஐப் பார்க்கவும்)
+@msg	no save format takes it (see file.formatOptions)	எந்தச் சேமிப்பு வடிவமும் இதை ஏற்காது (file.formatOptions ஐப் பார்க்கவும்)
+@msg	PDF doesn't take it (see document.formats)	PDF இதை ஏற்காது (document.formats ஐப் பார்க்கவும்)
+@msg	EPS doesn't take it (see document.formats)	EPS இதை ஏற்காது (document.formats ஐப் பார்க்கவும்)
+@msg	DXF doesn't take it (see document.formats)	DXF இதை ஏற்காது (document.formats ஐப் பார்க்கவும்)
+@msg	{name} must be {range} (got {v})	{name} {range} ஆக இருக்க வேண்டும் (கிடைத்தது {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	முதலில் முயன்ற வரைகலைச் செயலியால் சாளரத்தைக் காட்ட முடியவில்லை, எனவே VectorCraft {summary} இல் மீண்டும் தொடங்கியது (அமைப்புகள் › செயல்திறன் › வரைகலைச் செயலி › தானியங்கி, உங்கள் திரையை இயக்கும் செயலியைப் பயன்படுத்தும்)
+@msg	Sent “{title}” to {to}	“{title}” {to} க்கு அனுப்பப்பட்டது
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” {to} க்கு அனுப்பப்பட்டது. அச்சு வரிசைச் சேவை பதிலளித்தது: {note}
+@msg	the default printer	இயல்புநிலை அச்சுப்பொறி
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	பொருள் {object} இன் ராஸ்டர் விளைவுகள்: {requested} ppi கோரப்பட்டது, 64 மில்லியன் பிக்சல் உச்சவரம்பு காரணமாக {achieved} ppi மட்டுமே எட்டப்பட்டது
 @msg	unknown parameter `{key}`; the command takes: {keys}	அறியப்படாத அளவுரு `{key}`; கட்டளை ஏற்பவை: {keys}
 @msg	the params must be an object, not {got}	அளவுருக்கள் ஒரு JSON பொருளாக இருக்க வேண்டும், {got} ஆக அல்ல
 @msg	unknown parameter `{path}`; the object takes no keys	அறியப்படாத அளவுரு `{path}`; இந்த JSON பொருள் எந்த விசையையும் ஏற்காது
@@ -8758,6 +9661,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	unknown tool `{tool}`	அறியப்படாத கருவி `{tool}`
 @msg	unknown tool or command `{key}`	அறியப்படாத கருவி அல்லது கட்டளை `{key}`
 @msg	Unknown unit	அறியப்படாத அலகு
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	திறந்த வெளிவடிவங்களின் வட்ட முனைகளை மூடும். பகுதிச் சுழற்சிகள் அவற்றின் வெட்டப்பட்ட பக்கங்களையும் மூடும்.
 @msg	unknown units	அறியப்படாத அலகுகள்
 @msg	unknown units `{u}`	அறியப்படாத அலகுகள் `{u}`
 @msg	unknown value axis `{v}` (left, right or both)	அறியப்படாத மதிப்பு அச்சு `{v}` (left, right அல்லது both)
@@ -8780,6 +9684,13 @@ antiAlias	Sharp	கூர்மையான
 @msg	variable `{to}` already exists	`{to}` என்ற மாறி ஏற்கெனவே உள்ளது
 @msg	variables are locked	மாறிகள் பூட்டப்பட்டுள்ளன
 @msg	variables that aren't text were left out: {kinds}	உரை அல்லாத மாறிகள் சேர்க்கப்படவில்லை: {kinds}
+variable-kind	Visibility	தெரிநிலை
+variable-kind	Linked File	இணைக்கப்பட்ட கோப்பு
+variable-kind	Graph Data	வரைபடத் தரவு
+variable-kind	Unknown	தெரியாதது
+variable-list-two	{0}, {1}	{0}, {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0}, {1}
 @msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version {v}-ஐத் திருப்பித் தந்தது; இந்தப் புரவலன் பதிப்பு {ABI_VERSION}-ஐச் செயல்படுத்துகிறது
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 0-ஐத் திருப்பித் தந்தது (நினைவகம் போதவில்லை)
 @msg	vc_alloc returned a block outside memory	vc_alloc நினைவகத்திற்கு வெளியே உள்ள தொகுதியைத் திருப்பித் தந்தது
@@ -8813,6 +9724,49 @@ antiAlias	Sharp	கூர்மையான
 @msg	the PSD file's layer groups are nested too deeply	PSD கோப்பின் அடுக்குக் குழுக்கள் மிக ஆழமாக ஒன்றுக்குள் ஒன்றாக அமைந்துள்ளன
 @msg	a layer of the PSD file is too large to read	PSD கோப்பின் ஓர் அடுக்கு படிக்க முடியாத அளவுக்குப் பெரியது
 @msg	the PSD file's layers take more memory to read than allowed	PSD கோப்பின் அடுக்குகளைப் படிக்க அனுமதிக்கப்பட்டதை விட அதிக நினைவகம் தேவைப்படுகிறது
+@msg	the file is no longer loaded	கோப்பு இனி ஏற்றப்படவில்லை
+@msg	the layers can't be read ({e}): the file was placed as its merged image	அடுக்குகளைப் படிக்க முடியவில்லை ({e}): கோப்பு அதன் இணைக்கப்பட்ட படமாக இடப்பட்டது
+@msg	1 type layer came in as pixels: the text isn't editable	1 உரை அடுக்கு பிக்சல்களாக இறக்குமதியானது: அதன் உரையைத் திருத்த முடியாது
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} உரை அடுக்குகள் பிக்சல்களாக இறக்குமதியாயின: அவற்றின் உரையைத் திருத்த முடியாது
+@msg	1 adjustment layer was not applied	1 சரிசெய்தல் அடுக்கு பயன்படுத்தப்படவில்லை
+@msg	{n} adjustment layers were not applied	{n} சரிசெய்தல் அடுக்குகள் பயன்படுத்தப்படவில்லை
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 நிரப்பு அடுக்கு வரையப்படவில்லை (சாய்வு அல்லது வடிவமாதிரி நிரப்பு, படிக்க முடியாத நிறம், அல்லது பிக்சல்களைச் சேமிக்காத வடிவம்)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} நிரப்பு அடுக்குகள் வரையப்படவில்லை (சாய்வு அல்லது வடிவமாதிரி நிரப்பு, படிக்க முடியாத நிறம், அல்லது பிக்சல்களைச் சேமிக்காத வடிவம்)
+@msg	the layer effects of 1 layer weren't drawn	1 அடுக்கின் அடுக்கு விளைவுகள் வரையப்படவில்லை
+@msg	the layer effects of {n} layers weren't drawn	{n} அடுக்குகளின் அடுக்கு விளைவுகள் வரையப்படவில்லை
+@msg	the vector masks of 1 layer weren't applied	1 அடுக்கின் வெக்டர் முகமூடிகள் பயன்படுத்தப்படவில்லை
+@msg	the vector masks of {n} layers weren't applied	{n} அடுக்குகளின் வெக்டர் முகமூடிகள் பயன்படுத்தப்படவில்லை
+@msg	the knockout of 1 layer wasn't applied	1 அடுக்கின் நாக்அவுட் பயன்படுத்தப்படவில்லை
+@msg	the knockout of {n} layers wasn't applied	{n} அடுக்குகளின் நாக்அவுட் பயன்படுத்தப்படவில்லை
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 அடுக்கு விடப்பட்டது (மறைக்கப்பட்ட அடுக்குகளும் அவற்றுக்குள் வெட்டப்பட்ட அடுக்குகளும்)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} அடுக்குகள் விடப்பட்டன (மறைக்கப்பட்ட அடுக்குகளும் அவற்றுக்குள் வெட்டப்பட்ட அடுக்குகளும்)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	வரையப்படாத ஒரு நிரப்பு அடுக்குக்குள் வெட்டப்பட்ட 1 அடுக்கு விடப்பட்டது
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	வரையப்படாத நிரப்பு அடுக்குகளுக்குள் வெட்டப்பட்ட {n} அடுக்குகள் விடப்பட்டன
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	VectorCraft இல் இல்லாத கலப்பு முறைகளில் ({modes}) உள்ள அடுக்குகள் அவற்றுக்குக் கீழுள்ள அடுக்குகளுடன் ஒன்றிணைக்கப்பட்டன
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft இல் இல்லாத கலப்பு முறையிலுள்ள 1 அடுக்கு இயல்பான கலப்பு முறையில் இறக்குமதியானது: ஒன்றிணைப்புக்கு அனுமதிக்கப்பட்டதை விட அதிக நினைவகம் தேவை
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	VectorCraft இல் இல்லாத கலப்பு முறைகளிலுள்ள {n} அடுக்குகள் இயல்பான கலப்பு முறையில் இறக்குமதியாயின: ஒன்றிணைப்புக்கு அனுமதிக்கப்பட்டதை விட அதிக நினைவகம் தேவை
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	கீழுள்ள அடுக்குக்குள் வெட்டப்பட்ட 1 அடுக்கு வெட்டப்படாமல் இறக்குமதியானது: ஒன்றிணைப்புக்கு அனுமதிக்கப்பட்டதை விட அதிக நினைவகம் தேவை
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	கீழுள்ள அடுக்குக்குள் வெட்டப்பட்ட {n} அடுக்குகள் வெட்டப்படாமல் இறக்குமதியாயின: ஒன்றிணைப்புக்கு அனுமதிக்கப்பட்டதை விட அதிக நினைவகம் தேவை
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers, layers: true உடன் வைக்கப்படும் PSD கோப்புக்கு மட்டுமே பொருந்தும்
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: இணைக்கப்பட்ட PSD கோப்பு அதன் தட்டையான படமாக வைக்கப்படும்; அதை அதன் துண்டுகளுடன் உட்பொதிக்க link: false ஐக் கொடுக்கவும்
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: இணைக்கப்பட்ட PSD கோப்பு அதன் தட்டையான படமாக வைக்கப்படும்; link ஐ விட்டுவிடவும் அல்லது link: false ஐக் கொடுக்கவும்
+@msg	the slices can't be read ({e}) and were left out	துண்டுகளைப் படிக்க முடியவில்லை ({e}), எனவே அவை விடப்பட்டன
+@msg	1 slice lies outside the canvas or has no size and was left out	1 துண்டு கேன்வாஸுக்கு வெளியே உள்ளது அல்லது அதற்கு அளவு இல்லை, எனவே அது விடப்பட்டது
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} துண்டுகள் கேன்வாஸுக்கு வெளியே உள்ளன அல்லது அவற்றுக்கு அளவு இல்லை, எனவே அவை விடப்பட்டன
+@msg	1 slice would lie outside the canvas and was left out	1 துண்டு கேன்வாஸுக்கு வெளியே அமையும் என்பதால் விடப்பட்டது
+@msg	{n} slices would lie outside the canvas and were left out	{n} துண்டுகள் கேன்வாஸுக்கு வெளியே அமையும் என்பதால் விடப்பட்டன
+@msg	the slices' descriptor holds too many values	துண்டுகளின் விவரிப்பானில் மிக அதிகமான மதிப்புகள் உள்ளன
+@msg	the slices' descriptor has a version other than 16	துண்டுகளின் விவரிப்பானின் பதிப்பு 16 அல்ல
+@msg	the slices are stored in version {v}, which isn't read	துண்டுகள் பதிப்பு {v} இல் சேமிக்கப்பட்டுள்ளன, அந்தப் பதிப்பு படிக்கப்படுவதில்லை
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	கோப்பில் {count} துண்டுகள் உள்ளன, இது படிக்கப்படும் {MAX_SLICES} ஐ விட அதிகம்
+@msg	the slices' descriptor has no list of slices	துண்டுகளின் விவரிப்பானில் துண்டுகளின் பட்டியல் இல்லை
+@msg	the slices' descriptor lists something other than a slice	துண்டுகளின் விவரிப்பான் துண்டு அல்லாத ஒன்றைப் பட்டியலிடுகிறது
+@msg	a slice in the slices' descriptor has no bounds	துண்டுகளின் விவரிப்பானிலுள்ள ஒரு துண்டுக்கு எல்லைகள் இல்லை
+@msg	a slice's bounds in the slices' descriptor aren't numbers	துண்டுகளின் விவரிப்பானில் ஒரு துண்டின் எல்லைகள் எண்களாக இல்லை
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	துண்டுகளிலுள்ள ஓர் உரையில், படிக்கப்படும் {MAX_TEXT} எழுத்துகளை விட அதிகமானவை உள்ளன
+@msg	the slices' descriptor nests too deep	துண்டுகளின் விவரிப்பான் மிக ஆழமாக உள்ளமைக்கப்பட்டுள்ளது
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	துண்டுகளின் விவரிப்பானில் அறியப்படாத வகைக் குறிப்பு ஒன்று உள்ளது ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	துண்டுகளின் விவரிப்பானில் அறியப்படாத வகையைச் சேர்ந்த மதிப்பு ஒன்று உள்ளது ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	அடுக்குகளைப் படிக்க முடியவில்லை ({e}): கோப்பு அதன் இணைக்கப்பட்ட படமாகத் திறக்கப்பட்டது
 @msg	zone must be a string	zone ஒரு சரமாக இருக்க வேண்டும்
 @msg	zone must be tab, center, left, right, top or bottom	zone tab, center, left, right, top அல்லது bottom ஆக இருக்க வேண்டும்
@@ -8843,8 +9797,12 @@ antiAlias	Sharp	கூர்மையான
 @msgplural	Exported {n} document|Exported {n} documents	{n} ஆவணம் ஏற்றுமதி செய்யப்பட்டது|{n} ஆவணங்கள் ஏற்றுமதி செய்யப்பட்டன
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{n} கோப்பு {folder} இல் ஏற்றுமதி செய்யப்பட்டது|{n} கோப்புகள் {folder} இல் ஏற்றுமதி செய்யப்பட்டன
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ஆவணம் அமைக்கும் வெட்டு விளிம்பை இந்த PDF/X கோப்பு விட்டுவிடுகிறது: ஆவணத்தின் வெட்டு விளிம்பு அமைப்புகளைப் பயன்படுத்து என்பதை இயக்கவும்
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} பொருள் வெட்டுக் கோட்டை அடைகிறது, ஆனால் வெட்டு விளிம்பு வரை நீளவில்லை|{n} பொருட்கள் வெட்டுக் கோட்டை அடைகின்றன, ஆனால் வெட்டு விளிம்பு வரை நீளவில்லை
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} ஏற்றுமதி செய்யப்பட்டது, {n} குறிப்புடன்: {first}|{what} ஏற்றுமதி செய்யப்பட்டது, {n} குறிப்புகளுடன்: {first}
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} குறிப்புடன் திறக்கப்பட்டது: {first}|{n} குறிப்புகளுடன் திறக்கப்பட்டது: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	{n} குறிப்புடன் நகலெடுக்கப்பட்டது: {first}|{n} குறிப்புகளுடன் நகலெடுக்கப்பட்டது: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	{n} குறிப்புடன் வெட்டப்பட்டது: {first}|{n} குறிப்புகளுடன் வெட்டப்பட்டது: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	{n} குறிப்புடன் படக் கண்டறிதல் செய்யப்பட்டது: {first}|{n} குறிப்புகளுடன் படக் கண்டறிதல் செய்யப்பட்டது: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. {n} குறிப்புடன் திறக்கப்பட்டது: {first}|{notice}. {n} குறிப்புகளுடன் திறக்கப்பட்டது: {first}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} கோப்பு ({note}) {folder} இல் தொகுப்பாக்கப்பட்டது|{n} கோப்புகள் ({note}) {folder} இல் தொகுப்பாக்கப்பட்டன
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} கோப்பு தொகுக்கப்பட்டது {note}|{n} கோப்புகள் தொகுக்கப்பட்டன {note}
@@ -9121,10 +10079,18 @@ theme	Appearance	தோற்றப்பாணி
 @msg	No bridge of this width fits across the selected art	இந்த அகலத்திலான எந்தப் பாலமும் தேர்ந்தெடுக்கப்பட்ட ஓவியத்தின் குறுக்கே பொருந்தவில்லை
 @msg	Some islands could not be joined to the area around the art	சில தீவுகளை ஓவியத்தைச் சுற்றியுள்ள பகுதியுடன் இணைக்க முடியவில்லை
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} முதல் {hi} pt வரை இருக்க வேண்டும்
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 முதல் 180 டிகிரி வரை இருக்க வேண்டும்
+@msg	`roundness` must be from 0 to 100%	`roundness` 0 முதல் 100% வரை இருக்க வேண்டும்
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 0.01 முதல் 100 pt வரை இருக்க வேண்டும்
+@msg	style must be "pencil" or "brush"	style "pencil" அல்லது "brush" ஆக இருக்க வேண்டும்
+@msg	extend end must be "start" or "end"	extend இன் end "start" அல்லது "end" ஆக இருக்க வேண்டும்
+@msg	`roundness` must be from 1 to 100%	`roundness` 1 முதல் 100% வரை இருக்க வேண்டும்
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 முதல் {MAX_BRIDGES_PER_ISLAND} வரையிலான ஒரு முழு எண்ணாக இருக்க வேண்டும்
 	Add to Custom Dictionary	தனிப்பயன் அகராதியில் சேர்
 	Apply SVG Filter	SVG வடிகட்டியைப் பயன்படுத்து
 	Assamese	அசாமியம்
+	Konkani	கொங்கணி
+	Sindhi	சிந்தி
 	Bulgarian	பல்கேரியன்
 	Bullets and Numbering…	புள்ளிகள் மற்றும் எண்ணிடல்…
 	Cancel Opening	திறப்பதை ரத்துசெய்
@@ -9143,6 +10109,7 @@ theme	Appearance	தோற்றப்பாணி
 	New SVG Filter	புதிய SVG வடிகட்டி
 	SVG Filter	SVG வடிகட்டி
 	Sanskrit	சமஸ்கிருதம்
+	Nepali	நேபாளி
 	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + சக்கரம் மூலம் பக்கவாட்டில் உருட்டு
 	Select Symbol Instance Part	சின்ன நிகழ்வின் பகுதியைத் தேர்ந்தெடு
 	Spelling Suggestions	எழுத்துப்பிழைப் பரிந்துரைகள்
@@ -9154,6 +10121,15 @@ theme	Appearance	தோற்றப்பாணி
 	Find In	இதில் கண்டறி
 	First Line Indent:	முதல் வரி உள்தள்ளல்:
 	Kinsoku Shori Type	Kinsoku Shori வகை
+	Kinsoku Shori Settings…	Kinsoku Shori அமைப்புகள்…
+	Kinsoku Shori Settings	Kinsoku Shori அமைப்புகள்
+	Kinsoku Sets	Kinsoku தொகுப்புகள்
+	Kinsoku Set Base	Kinsoku தொகுப்பு அடிப்படை
+	Based on:	அடிப்படை:
+	Cannot Start Line	வரித் தொடக்கத்தில் வரக்கூடாதவை
+	Cannot End Line	வரி முடிவில் வரக்கூடாதவை
+	Hanging Punctuation	தொங்கும் நிறுத்தற்குறிகள்
+	Inseparable Characters	பிரிக்க முடியாத எழுத்துகள்
 	Left Indent:	இடது உள்தள்ளல்:
 	Level:	மட்டம்:
 	Number Style:	எண் பாணி:
@@ -9170,6 +10146,26 @@ theme	Appearance	தோற்றப்பாணி
 @msg	CMYK JPEG XL images can't be read	CMYK JPEG XL படங்களைப் படிக்க முடியாது
 @msg	the JPEG XL file can't be read: {e}	JPEG XL கோப்பைப் படிக்க முடியவில்லை: {e}
 @msg	HEIC and HEIF images can't be opened in this build	இந்தப் பதிப்பில் HEIC, HEIF படங்களைத் திறக்க முடியாது
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} வரைபடங்களைத் திறக்க முடியாது: VectorCraft பதிப்புகள் 1 முதல் 27 வரை மட்டுமே படிக்கும்
+@msg	this CDR drawing can't be read ({why})	இந்த CDR வரைபடத்தைப் படிக்க முடியவில்லை ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	VectorCraft இன்னும் படிக்காத CDR உரை, பிட்மேப்கள், கலப்புகள், சுற்றுக்கோடுகள், தூரிகைக் கோடுகள் மற்றும் பிற பொருட்கள் விடப்பட்டன
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR இன் சாய்வு (fountain), வடிவமாதிரி, இழையமைப்பு, PostScript நிரப்புகள் விடப்பட்டன
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	VectorCraft படிக்காத CDR நிற மாதிரிகளில் உள்ள நிறங்கள் கருப்பாகத் திறக்கப்பட்டன
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	வரைபடம் எண்ணால் மட்டுமே சேமிக்கும் CDR நூலக நிறங்கள் கருப்புப் புள்ளி நிறங்களாகத் திறக்கப்பட்டன
+@msg	CDR outline arrowheads were left out	CDR புறவரி அம்புத் தலைகள் விடப்பட்டன
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR உறைகள் பயன்படுத்தப்படவில்லை, அவற்றின் கீழுள்ள வடிவங்கள் தங்கள் சொந்த வெளிவடிவத்தையே வைத்திருக்கின்றன
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR லென்ஸ்களும் பொருள் வெளிப்படைத்தன்மையும் பயன்படுத்தப்படவில்லை, அவை உள்ள பொருட்கள் ஒளிபுகாதவையாகக் காட்டப்படுகின்றன
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	மிக ஆழமாக உள்ளமைக்கப்பட்ட, அல்லது இறக்குமதி வரம்புகளைத் தாண்டிய வரைபடப் பகுதிகள் விடப்பட்டன
+@msg	damaged parts of the drawing were left out	வரைபடத்தின் சேதமடைந்த பகுதிகள் விடப்பட்டன
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt ஐ விட நீளமான CDR பக்கங்கள் அந்த நீளத்தில் திறக்கப்பட்டன; அவற்றின் ஓரங்களுக்கு அருகிலுள்ள ஓவியம் ஆர்ட்போர்டுக்கு வெளியே உள்ளது
+@msg	this CMX file can't be read ({why})	இந்த CMX கோப்பைப் படிக்க முடியவில்லை ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	VectorCraft இன்னும் படிக்காத CMX உரை, படங்கள், செவ்வகங்கள், நீள்வட்டங்கள், வெட்டுப் பாதைகள் மற்றும் பிற பொருட்கள் விடப்பட்டன
+@msg	CMX fills other than uniform colors were left out	சீரான நிறங்கள் அல்லாத CMX நிரப்புகள் விடப்பட்டன
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	VectorCraft படிக்காத CMX நிற மாதிரிகளில் உள்ள நிறங்கள் கருப்பாகத் திறக்கப்பட்டன
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	கோப்பு எண்ணால் மட்டுமே சேமிக்கும் CMX நூலக நிறங்கள் கருப்புப் புள்ளி நிறங்களாகத் திறக்கப்பட்டன
+@msg	CMX outline arrowheads were left out	CMX புறவரி அம்புத் தலைகள் விடப்பட்டன
+@msg	CMX lenses were not applied	CMX லென்ஸ்கள் பயன்படுத்தப்படவில்லை
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt ஐ விட நீளமான CMX பக்கங்கள் அந்த நீளத்தில் திறக்கப்பட்டன; அவற்றின் ஓரங்களுக்கு அருகிலுள்ள ஓவியம் ஆர்ட்போர்டுக்கு வெளியே உள்ளது
 @msg	`threshold` must be a number from 0 to 1	`threshold` 0 முதல் 1 வரையிலான எண்ணாக இருக்க வேண்டும்
 @msg	background {v}: a color such as "#808080"	background {v}: "#808080" போன்ற ஒரு நிறமாக இருக்க வேண்டும்
 @msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor, நேரடி வழிகாட்டி விளைவு உள்ள படக் கண்டறிதலை மீண்டும் குழுவாக்க முடியாது: byColor இல்லாமல் விரிவாக்கவும்
@@ -9187,6 +10183,7 @@ theme	Appearance	தோற்றப்பாணி
 	Korean Composition Settings	கொரிய வரியமைப்பு அமைப்புகள்
 	Korean Line Break Anywhere	கொரிய உரையில் எங்கும் வரி முறிவு
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	Dry Media	உலர் ஊடகங்கள்
 	Chalk Grain	சுண்ணக்கட்டித் துகள்கள்
 	Graphite Pencil	கிராஃபைட் பென்சில்
@@ -9196,6 +10193,9 @@ theme	Appearance	தோற்றப்பாணி
 	Circuit Trace	சுற்றுத் தடம்
 	Bus Lines	பஸ் இணைப்புக் கோடுகள்
 	Terminal Nodes	முனை முடிச்சுகள்
+	Arrows	அம்புக்குறிகள்
+	Solid Arrow	திட அம்புக்குறி
+	Open Arrow	திறந்த அம்புக்குறி
 	Notched Ribbon	வெட்டுவாய் ரிப்பன்
 	Double Line	இரட்டைக் கோடு
 	Wave	அலை
@@ -9212,6 +10212,256 @@ theme	Appearance	தோற்றப்பாணி
 	Stars	நட்சத்திரங்கள்
 	Triangles	முக்கோணங்கள்
 	Sparkles	மின்னல்கள்
+	Warm Gray	வெப்பச் சாம்பல்
+	Cool Gray	குளிர் சாம்பல்
+	Neutrals	நடுநிலைகள்
+	Ivory	தந்தம்
+	Linen	நார்த்துணி
+	Oat	ஓட்ஸ்
+	Greige	சாம்பல் பழுப்பு
+	Stone	கல்
+	Taupe	பழுப்புச் சாம்பல்
+	Slate	கற்பலகை
+	Clay	களிமண்
+	Terracotta	சுடுமண்
+	Ochre	காவி
+	Umber	பழுப்பு மண்
+	Sand	மணல்
+	Olive	ஆலிவ்
+	Moss	பாசி
+	Rosy	ரோஜாச் சாயல்
+	Neutral	நடுநிலை
+	Golden	பொன்னிறம்
+	Pastel	மென்வெளிர்
+	Pastel Red	மென்வெளிர் சிவப்பு
+	Pastel Orange	மென்வெளிர் ஆரஞ்சு
+	Pastel Amber	மென்வெளிர் அம்பர்
+	Pastel Yellow	மென்வெளிர் மஞ்சள்
+	Pastel Lime	மென்வெளிர் எலுமிச்சைப் பச்சை
+	Pastel Green	மென்வெளிர் பச்சை
+	Pastel Teal	மென்வெளிர் கரும் நீல-பச்சை
+	Pastel Cyan	மென்வெளிர் சியான்
+	Pastel Azure	மென்வெளிர் வான நீலம்
+	Pastel Blue	மென்வெளிர் நீலம்
+	Pastel Violet	மென்வெளிர் வயலட்
+	Pastel Magenta	மென்வெளிர் மெஜந்தா
+	Soft Red	மென்மையான சிவப்பு
+	Soft Orange	மென்மையான ஆரஞ்சு
+	Soft Amber	மென்மையான அம்பர்
+	Soft Yellow	மென்மையான மஞ்சள்
+	Soft Lime	மென்மையான எலுமிச்சைப் பச்சை
+	Soft Green	மென்மையான பச்சை
+	Soft Teal	மென்மையான கரும் நீல-பச்சை
+	Soft Cyan	மென்மையான சியான்
+	Soft Azure	மென்மையான வான நீலம்
+	Soft Blue	மென்மையான நீலம்
+	Soft Violet	மென்மையான வயலட்
+	Soft Magenta	மென்மையான மெஜந்தா
+	Vivid Red	துடிப்பான சிவப்பு
+	Vivid Orange	துடிப்பான ஆரஞ்சு
+	Vivid Amber	துடிப்பான அம்பர்
+	Vivid Yellow	துடிப்பான மஞ்சள்
+	Vivid Lime	துடிப்பான எலுமிச்சைப் பச்சை
+	Vivid Green	துடிப்பான பச்சை
+	Vivid Teal	துடிப்பான கரும் நீல-பச்சை
+	Vivid Cyan	துடிப்பான சியான்
+	Vivid Azure	துடிப்பான வான நீலம்
+	Vivid Blue	துடிப்பான நீலம்
+	Vivid Violet	துடிப்பான வயலட்
+	Vivid Magenta	துடிப்பான மெஜந்தா
+	Deep	ஆழமான
+	Deep Red	ஆழமான சிவப்பு
+	Deep Orange	ஆழமான ஆரஞ்சு
+	Deep Amber	ஆழமான அம்பர்
+	Deep Yellow	ஆழமான மஞ்சள்
+	Deep Lime	ஆழமான எலுமிச்சைப் பச்சை
+	Deep Green	ஆழமான பச்சை
+	Deep Teal	ஆழமான கரும் நீல-பச்சை
+	Deep Cyan	ஆழமான சியான்
+	Deep Azure	ஆழமான வான நீலம்
+	Deep Blue	ஆழமான நீலம்
+	Deep Violet	ஆழமான வயலட்
+	Deep Magenta	ஆழமான மெஜந்தா
+	Gold	தங்கம்
+	Silver	வெள்ளி
+	Bronze	வெண்கலம்
+	Copper	செம்பு
+	Brass	பித்தளை
+	Rose Gold	ரோஜாத் தங்கம்
+	Gunmetal	துப்பாக்கி உலோகம்
+	Platinum	பிளாட்டினம்
+	Pewter	வெள்ளீயக் கலவை
+	Ember	கனல்
+	Lagoon	காயல்
+	Dusk	மாலை மங்கல்
+	Clay to Teal	களிமண் முதல் கரும் நீல-பச்சை வரை
+	Plum to Olive	பிளம் முதல் ஆலிவ் வரை
+	Complementary Coral	பவளத்தின் நிரப்பு நிறங்கள்
+	Split Complementary Coral	பவளத்தின் பிரிக்கப்பட்ட நிரப்பு
+	Analogous Coral	பவளத்தின் ஒத்த நிறங்கள்
+	Triad Coral	பவளத்தின் முக்கோண வண்ணம்
+	Tetrad Coral	பவளத்தின் டெட்ராட்
+	Pentagram Coral	பவளத்தின் ஐங்கோணம்
+	Complementary Teal	கரும் நீல-பச்சையின் நிரப்பு நிறங்கள்
+	Split Complementary Teal	கரும் நீல-பச்சையின் பிரிக்கப்பட்ட நிரப்பு
+	Analogous Teal	கரும் நீல-பச்சையின் ஒத்த நிறங்கள்
+	Triad Teal	கரும் நீல-பச்சையின் முக்கோண வண்ணம்
+	Tetrad Teal	கரும் நீல-பச்சையின் டெட்ராட்
+	Pentagram Teal	கரும் நீல-பச்சையின் ஐங்கோணம்
+	Soft Spectrum	மென்மையான நிறமாலை
+	Red to Amber	சிவப்பு முதல் அம்பர் வரை
+	Orange to Yellow	ஆரஞ்சு முதல் மஞ்சள் வரை
+	Amber to Lime	அம்பர் முதல் எலுமிச்சைப் பச்சை வரை
+	Yellow to Green	மஞ்சள் முதல் பச்சை வரை
+	Lime to Teal	எலுமிச்சைப் பச்சை முதல் கரும் நீல-பச்சை வரை
+	Green to Cyan	பச்சை முதல் சியான் வரை
+	Teal to Azure	கரும் நீல-பச்சை முதல் வான நீலம் வரை
+	Cyan to Blue	சியான் முதல் நீலம் வரை
+	Azure to Violet	வான நீலம் முதல் வயலட் வரை
+	Blue to Magenta	நீலம் முதல் மெஜந்தா வரை
+	Violet to Red	வயலட் முதல் சிவப்பு வரை
+	Magenta to Orange	மெஜந்தா முதல் ஆரஞ்சு வரை
+	Dawn	விடியல்
+	Noon	நண்பகல்
+	Sunset	அந்தி வானம்
+	Night	இரவு
+	Overcast	மேகமூட்டம்
+	White to Black	வெள்ளை முதல் கருப்பு வரை
+	Light Grays	வெளிர் சாம்பல்கள்
+	Dark Grays	அடர் சாம்பல்கள்
+	Warm Grays	வெப்பச் சாம்பல்கள்
+	Cool Grays	குளிர் சாம்பல்கள்
+	Fade to Transparent	வெளிப்படையாக மங்கல்
+	White Fade	வெள்ளை மங்கல்
+	Vignette	வினெட்
+	Mist	பனிமூட்டம்
+	Petal	இதழ்
+	Fern	பெரணி
+	Smoke	புகை
+	Honey	தேன்
+	Seafoam	கடல்நுரை
+	Lavender	லாவெண்டர்
+	Driftwood	கரையொதுங்கிய மரக்கட்டை
+	Ink Wash	மை நீர்ப்பூச்சு
+	Tide	ஓதம்
+	Bloom	மலர்ச்சி
+	Dew	பனித்துளி
+	Pollen	மகரந்தம்
+	Lichen	கற்பாசி
+	Prism Veil	பட்டகத் திரை
+	Opal Ribbon	ஓப்பல் ரிப்பன்
+	Pearl Flash	முத்து மின்ஒளி
+	Aurora Foil	துருவ ஒளித் தகடு
+	Iris Sheen	கருவிழி மினுமினுப்பு
+	Frost Spectrum	உறைபனி நிறமாலை
+	Silver Tide	வெள்ளி ஓதம்
+	Rose Quartz Gleam	ரோஜாப் படிகப் பொலிவு
+	Moonstone Shift	சந்திரகாந்த நிறமாற்றம்
+	Violet Edge	வயலட் விளிம்பு
+	Mint Halo	புதினா ஒளிவட்டம்
+	Amber Corona	அம்பர் ஒளிக்கிரீடம்
+	Polar Glint	துருவப் பளிச்சிடல்
+	Pastel Orbit	பேஸ்டல் சுற்றுப்பாதை
+	Coral and Navy	பவளமும் கருநீலமும்
+	Plum and Lime	பிளமும் எலுமிச்சைப் பச்சையும்
+	Teal and Gold	கரும் நீல-பச்சையும் தங்கமும்
+	Indigo and Peach	அவுரியும் பீச் நிறமும்
+	Forest and Rose	காட்டுப் பச்சையும் ரோஜாவும்
+	Red Glow	சிவப்பு ஒளிர்வு
+	Orange Glow	ஆரஞ்சு ஒளிர்வு
+	Amber Glow	அம்பர் ஒளிர்வு
+	Yellow Glow	மஞ்சள் ஒளிர்வு
+	Lime Glow	எலுமிச்சைப் பச்சை ஒளிர்வு
+	Green Glow	பச்சை ஒளிர்வு
+	Teal Glow	கரும் நீல-பச்சை ஒளிர்வு
+	Cyan Glow	சியான் ஒளிர்வு
+	Azure Glow	வான நீல ஒளிர்வு
+	Blue Glow	நீல ஒளிர்வு
+	Violet Glow	வயலட் ஒளிர்வு
+	Magenta Glow	மெஜந்தா ஒளிர்வு
+	Polka Dots	வட்டப் புள்ளிகள்
+	Vertical Stripes	செங்குத்துப் பட்டைகள்
+	Horizontal Stripes	கிடைமட்டப் பட்டைகள்
+	Diagonal Stripes	மூலைவிட்டப் பட்டைகள்
+	Checkerboard	சதுரங்கப் பலகை
+	Diamonds	சாய்சதுரங்கள்
+	Crosses	சிலுவைகள்
+	Coarse Grit	கரடுமுரடான துகள்கள்
+	Stipple	புள்ளியிடல்
+	Scratches	கீறல்கள்
+	Sparse Flecks	அரிதான சிறு திட்டுகள்
+	Dense Flecks	அடர்ந்த சிறு திட்டுகள்
+	Sine Bands	சைன் அலைப் பட்டைகள்
+	Ripple Lines	சிற்றலைக் கோடுகள்
+	Interference Rings	குறுக்கீட்டு வளையங்கள்
+	Offset Rings	இடம்பெயர்ந்த வளையங்கள்
+	Warped Checks	சிதைந்த கட்டங்கள்
+	Pinched Stripes	நெரிந்த பட்டைகள்
+	Chevron Pulse	அம்புக்குறி வடிவத் துடிப்பு
+	Radiating Lenses	கதிர்போல் பரவும் வில்லைகள்
+	Soft Shadow	மென்மையான நிழல்
+	Hard Shadow	கடினமான நிழல்
+	Lifted Card	உயர்த்திய அட்டை
+	Neon Tube	நியான் குழாய்
+	Inner Light	உள் ஒளி
+	Feathered	இறகாக்கப்பட்டது
+	Haze	புகைமூட்டம்
+	Double Rule	இரட்டை வரிக் கோடு
+	Triple Rule	மும்மை வரிக் கோடு
+	Dashed Border	கீற்று எல்லை
+	Dotted Border	புள்ளி எல்லை
+	Offset Keyline	வெளிவிலகிய சுற்றுக்கோடு
+	Inset Keyline	உள்வாங்கிய சுற்றுக்கோடு
+	Outside Stroke	வெளிப்புறக் கோடு
+	Pointer	சுட்டுக்குறி
+	Highlighter	முன்னிலைப்படுத்தி
+	Sketchy Line	தோராய வரைவுக் கோடு
+	Scribble Fill	கிறுக்கல் நிரப்பு
+	Wobble	தள்ளாட்டம்
+	Zig Zag Edge	ஜிக்ஜாக் விளிம்பு
+	Wavy Edge	அலையான விளிம்பு
+	Puffy	உப்பிய
+	Starburst	நட்சத்திர வெடிப்பு
+	Glossy	பளபளப்பான
+	Brushed Metal	தேய்த்த உலோகம்
+	Spotlight	ஸ்பாட்லைட்
+	Sunset Band	சூரியமறைவுப் பட்டை
+	Sea Glass	கடல் கண்ணாடி
+	Pearl	முத்து
+	Chrome Rim	குரோம் விளிம்பு
+	Glow Orb	ஒளிர் உருண்டை
+	Pill Badge	மாத்திரை வடிவப் பதக்கம்
+	Round Badge	வட்டப் பதக்கம்
+	Flag Wave	கொடி அசைவு
+	Bulge	வீக்கம்
+	Twisted	முறுக்கிய
+	Echo	எதிரொலி
+	Spiral Copies	சுருள் நகல்கள்
+	Multiply Tint	பெருக்குச் சாயல்
+	Darken Veil	இருளாக்கும் திரை
+	Ghosted	மங்கலான
+	Two Tone	இருதொனி
+	Overlay Glaze	மேலடுக்கு மெருகு
+	Screen Light	திரை ஒளி
+	Soft Light Wash	மென்மையான ஒளி நீர்ப்பூச்சு
+	Cyan Neon	சியான் நியான்
+	Magenta Laser	மெஜந்தா லேசர்
+	Amber Tube	அம்பர் குழாய்
+	Electric Lime	மின்னொளி எலுமிச்சைப் பச்சை
+	Pulse Violet	துடிப்பு வயலட்
+	Cobalt Phosphor	கோபால்ட் பாஸ்பர்
+	Burst	வெடிப்பு
+	Rounded Square	வட்டமூலைச் சதுரம்
+	Sun	சூரியன்
+	Moon	நிலா
+	Cloud	மேகம்
+	Rain	மழை
+	Thunder	இடி
+	Snow	பனி
+	Play	இயக்கு
+	Pause	இடைநிறுத்து
+	Skip Next	அடுத்ததற்குத் தாவு
+	Shuffle	கலக்கு
 	Optical Effects	ஒளியியல் விளைவுகள்
 	Center on Top	மேற்புறத்தில் மையப்படுத்து
 	Center on Bottom	கீழ்ப்புறத்தில் மையப்படுத்து
@@ -9256,6 +10506,14 @@ theme	Appearance	தோற்றப்பாணி
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` இல் {MAX_ANSWERS} க்கும் மேற்பட்ட பதில்கள் உள்ளன
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB ஐ விடப் பெரியது
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` கேட்க யாரும் இல்லாத இயக்கத்துக்கு மட்டுமே: செயலியில், ஒவ்வொரு உரையாடலுக்கும் பயனரே பதிலளிப்பார்
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 1 முதல் {_1} வரையிலான முழு எண்ணாக இருக்க வேண்டும்
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 64 நிலைகளுக்கு மேல் ஆழமாக உள்ளமைக்கப்பட்டுள்ளது
+@msg	`args` must be an object	`args` ஒரு JSON பொருளாக இருக்க வேண்டும்
+@msg	`args` is larger than 1 MiB	`args` 1 MiB-ஐ விடப் பெரியது
+@msg	`path` is empty	`path` காலியாக உள்ளது
+@msg	`installed` takes a `path`, not a `source`	`installed` ஒரு `path` ஐ ஏற்கும், `source` ஐ அல்ல
+@msg	`path` must name a .js or .jsx file	`path` ஒரு .js அல்லது .jsx கோப்பைக் குறிக்க வேண்டும்
+@msg	give exactly one of `path` and `source`	`path`, `source` ஆகிய இரண்டில் சரியாக ஒன்றை மட்டும் கொடுக்கவும்
 @msg	`answers` must be a list of answers	`answers` பதில்களின் பட்டியலாக இருக்க வேண்டும்
 @msg	`artboard` must be the index of an artboard of the document	`artboard` ஆவணத்திலுள்ள ஓர் ஆர்ட்போர்டின் குறியீடாக இருக்க வேண்டும்
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` [x, y] ஆக இருக்க வேண்டும்
@@ -9296,7 +10554,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` எண்கள் அல்லது null மதிப்புகளின் பட்டியல்களாக இருக்க வேண்டும், {r} அல்ல
 @msg	`scale` must be a number from 0.001 to 1000	`scale` 0.001 முதல் 1000 வரையிலான எண்ணாக இருக்க வேண்டும்
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` காலியல்லாத ஒரு வரிசையாக இருக்க வேண்டும்
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` "document", {artboards} அல்லது {layers} ஆக இருக்க வேண்டும்
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` "document", {{artboards: [index, …]}} அல்லது {{layers: [id, …]}} ஆக இருக்க வேண்டும்
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` "left", "right", "top" அல்லது "bottom" ஆக இருக்க வேண்டும்
 @msg	`side` places the artboard: leave out x, y, width and height	`side` ஆர்ட்போர்டின் இடத்தைத் தீர்மானிக்கும்: x, y, width, height ஆகியவற்றை விட்டுவிடவும்
 @msg	`source` is the only path in series group `target`	`target` என்ற தொடர் குழுவில் உள்ள ஒரே பாதை `source` தான்
@@ -9476,7 +10734,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	not a regular expression	இது வழக்கமான வெளிப்பாடு அல்ல
 @msg	not an action set: the text doesn't start with /version and a number	இது செயல் தொகுப்பு அல்ல: உரை /version மற்றும் ஓர் எண்ணுடன் தொடங்கவில்லை
 @msg	nothing to repeat	மீண்டும் செய்ய எதுவும் இல்லை
-@msg	numbers out of order in {_1} quantifier	{_1} அளவுக்குறியில் எண்கள் வரிசை தவறியுள்ளன
+@msg	numbers out of order in {{}} quantifier	{{}} அளவுக்குறியில் எண்கள் வரிசை தவறியுள்ளன
 @msg	object {_1} needs a 3D effect	பொருள் {_1} க்கு ஒரு 3D விளைவு தேவை
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	பொருள் {_1}: உள்ளீடற்ற வெளித்தள்ளல் மற்றும் சரிவுக்கு முனைகள் இல்லை: ஒரு வரைகலையைப் பொருத்த ‘முனை’ என்பதை இயக்கவும்
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	பொருள் {_1}: ஆழம் 0 ஆக இருப்பதால் பொருளுக்கு ஒரே ஒரு முகம் உண்டு: அதன் வரைகலைகளை முன்புறத்தில் பொருத்தவும்
@@ -9544,7 +10802,7 @@ theme	Appearance	தோற்றப்பாணி
 @msg	the guide is hidden or locked	வழிகாட்டி மறைக்கப்பட்டுள்ளது அல்லது பூட்டப்பட்டுள்ளது
 @msg	the library's file is outside the read roots	நூலகத்தின் கோப்பு படிக்க அனுமதிக்கப்பட்ட மூலக் கோப்புறைகளுக்கு வெளியே உள்ளது
 @msg	the method needs an XML value	இந்த முறைக்கு ஒரு XML மதிப்பு தேவை
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	வண்ணம் கட்டற்ற நிறச்சாய்வு அல்ல (paint.editGradient {kind} மூலம் ஒன்றைப் பயன்படுத்தவும்)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	வண்ணம் கட்டற்ற சாய்வு அல்ல (paint.editGradient {{kind: "freeform"}} மூலம் ஒன்றைப் பயன்படுத்தவும்)
 @msg	the parameters or body do not form one function	அளவுருக்களும் உடற்பகுதியும் சேர்ந்து ஒரே செயல்பாடாக அமையவில்லை
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	ஒட்டப்பட்ட SVG வடிகட்டி {name}, ஆவணத்திலுள்ள அதே பெயருடைய வடிகட்டியிலிருந்து வேறுபட்டு வரைகிறது, அதற்குப் பயன்படுத்தப்படாத பெயர் எதுவும் கிடைக்கவில்லை
 @msg	the pen table holds more than 255 pens	பேனா அட்டவணையில் 255 க்கும் மேற்பட்ட பேனாக்கள் உள்ளன
@@ -9589,7 +10847,6 @@ theme	Appearance	தோற்றப்பாணி
 @msg	unknown panel `{panel}`	அறியப்படாத பலகம் `{panel}`
 @msg	unknown parameter `{key}`	அறியப்படாத அளவுரு `{key}`
 @msg	unknown parameter `{within}settings.{format}`; {why}	அறியப்படாத அளவுரு `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	அறியப்படாத அளவுரு `{within}{key}`; {why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	அறியப்படாத குறைப்பு `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform அல்லது document)
 @msg	unmatched ')'	பொருந்தாத ')'
 @msg	unterminated character class	முடிக்கப்படாத எழுத்து வகுப்பு

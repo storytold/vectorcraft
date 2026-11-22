@@ -1,9 +1,8 @@
 # Tamil interface terminology and verification
 
-The `ta` catalog (`crates/ui-egui/src/i18n/ta.tsv`, interface name **தமிழ்**) has 9,638 rows:
-3,636 `@msg`, 49 `@msgplural` and 44 `@plural`. It has every row of the German and Italian
-catalogs. With main's new menus and messages (2026-11-15), the untranslated report lists 23 menu
-strings and 136 messages for Tamil, fewer than for German (70 and 137) and Italian (70 and 138).
+The `ta` catalog (`crates/ui-egui/src/i18n/ta.tsv`, interface name **தமிழ்**) has 10,894 rows:
+3,946 `@msg`, 56 `@msgplural` and 49 `@plural` (2026-11-22). It has every row that the German,
+French, Spanish and Italian catalogs all have.
 
 ## Provenance
 
@@ -16,6 +15,9 @@ strings and 136 messages for Tamil, fewer than for German (70 and 137) and Itali
   string means on screen. No other product's localisation or string table was consulted.
 - Radhika and Mohan Raj, native speakers, reviewed the catalog in the running app (2026-11-15);
   coverage tests alone do not establish translation quality.
+- 1,275 rows were added on 2026-11-22 for the strings main gained: 28 reuse the Tamil this
+  catalog or craft-i18n already has for the same English, and 1,247 are AI-assisted translations
+  written the same clean-room way. Native review of these rows is pending.
 
 ## Style
 
