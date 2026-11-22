@@ -590,6 +590,19 @@ fn extends_null_and_bad_heritage() {
 }
 
 #[test]
+fn a_class_extends_other_built_ins_but_new_on_it_throws() {
+    let e4x = || Realm::with_options(Options { e4x: true, ..es_options() }, Limits::default());
+    assert_eq!(e4x().run("class X extends XML {} typeof X === 'function' && Object.getPrototypeOf(X) === XML"), Ok(JsValue::Bool(true)));
+    for src in ["class X extends XML {} new X('<a/>');", "class X extends XML { constructor() { super('<a/>'); } } new X();"] {
+        match e4x().run(src) {
+            Err(RunError { kind: RunErrorKind::Thrown, message, .. }) => assert!(message.starts_with("TypeError"), "{src}: {message}"),
+            other => panic!("{src}: {other:?}"),
+        }
+    }
+    truth("class E extends RangeError {} var e = new E('m'); e instanceof E && e instanceof RangeError && e.message === 'm'");
+}
+
+#[test]
 fn a_class_is_called_only_with_new() {
     throws("class A {} A();", "TypeError");
     throws("class A {} A.call({});", "TypeError");

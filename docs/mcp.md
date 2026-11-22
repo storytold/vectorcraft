@@ -2625,7 +2625,8 @@ computed method names, `super` calls and properties, `new.target`, and methods i
 arrays, strings (by code point) and objects with a `length` property, by index, and throws a `TypeError` for any
 other value; that rule is VectorCraft's own until iterators are added. A class can extend a class, a function, `null`
 or the built-in constructors `Object`, `Function`, `Array`, `String`, `Number`, `Boolean`, `RegExp`, `Date` and the
-error types; extending another built-in throws a `TypeError`, a rule that is VectorCraft's own. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+error types. A class can name another built-in constructor in `extends`, but `new` on that class throws a
+`TypeError` when it reaches the built-in constructor, a rule that is VectorCraft's own. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
