@@ -1,7 +1,7 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
 //! map), WebP Options (lossless, or lossy at a quality 0–100), and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
-//! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
+//! transparency and its dither, matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
 //! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
 //! dialog's.
@@ -13,6 +13,7 @@ use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, ColorModel, Method};
 use vectorcraft_render::encode::quantize::{Dither, PaletteOptions, Reduction};
 
+use super::save_for_web::TRANSPARENCY_DITHERS;
 use super::{DialogSpec, form, psd_options, tiff_bmp_tga};
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -113,6 +114,8 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
                 ("dither".into(), json!(p.dither.id())),
                 ("ditherAmount".into(), json!(p.dither_amount)),
                 ("transparency".into(), json!(p.transparency)),
+                ("transparencyDither".into(), json!(p.transparency_dither.id())),
+                ("transparencyDitherAmount".into(), json!(p.transparency_dither_amount)),
                 ("matte".into(), json!(MATTES[1])),
                 ("interlaced".into(), json!(false)),
             ]);
@@ -297,7 +300,7 @@ fn method_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &
 }
 
 /// The PNG-8 and GIF Options rows: the palette (reduction, colours, dither and amount),
-/// transparency and matte, interlacing.
+/// transparency and matte, interlacing, and Transparency Dither with its amount.
 fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
     label(ui, tl!("Color Reduction:"));
     choice(ui, d, "reduction", &Reduction::ALL.map(Reduction::id), &Reduction::ALL.map(Reduction::label));
@@ -344,6 +347,33 @@ fn palette_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui,
     ui.horizontal(|ui| {
         form::check(ui, d, "transparency", tl!("Transparency"));
         form::check(ui, d, "interlaced", tl!("Interlaced"));
+    });
+    ui.end_row();
+
+    // Disabled while Transparency is off, keeping its values. The dropdown is named by the row's
+    // label, and the amount field by its own Amount label.
+    let name = crate::i18n::colon(tl!("Transparency Dither"));
+    label(ui, &name);
+    ui.add_enabled_ui(d.bool("transparency"), |ui| {
+        ui.horizontal(|ui| {
+            let labels = TRANSPARENCY_DITHERS.map(|(_, label)| label);
+            let cur = d.str("transparencyDither");
+            let at = TRANSPARENCY_DITHERS.iter().position(|(id, _)| id.eq_ignore_ascii_case(&cur)).unwrap_or(0);
+            if let Some((id, _)) =
+                widgets::dropdown_named(ui, ("ro", "transparencyDither"), Some(&name), labels.get(at).copied().unwrap_or_default(), &labels, 150.0)
+                    .and_then(|i| TRANSPARENCY_DITHERS.get(i))
+            {
+                d.fields.insert("transparencyDither".into(), json!(id));
+            }
+            if Dither::from_id(&d.str("transparencyDither")) == Some(Dither::Diffusion) {
+                widgets::dim_label(ui, "Amount:");
+                if let Some(amount) =
+                    widgets::range_field(ui, "transparencyDitherAmount", d.f64("transparencyDitherAmount", 100.0), 0.0..=100.0, "%", 0, 52.0)
+                {
+                    d.fields.insert("transparencyDitherAmount".into(), json!(amount as u8));
+                }
+            }
+        });
     });
     ui.end_row();
 }

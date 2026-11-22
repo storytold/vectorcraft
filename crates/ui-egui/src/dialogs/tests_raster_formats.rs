@@ -79,6 +79,63 @@ fn palette_options_reduce_the_colours() {
     assert_eq!(png[25], 3, "indexed");
 }
 
+/// GIF and PNG-8 Options start with No Transparency Dither at amount 100 and send the chosen
+/// method and amount, which change the file of partly transparent art.
+#[test]
+fn palette_options_send_the_transparency_dither() {
+    let (mut app, written) = app(1);
+    app.run("transparency.set", json!({"opacity": 40})).unwrap();
+    let export = |app: &mut VectorcraftApp, format: &str, fields: &[(&str, serde_json::Value)]| {
+        app.run("file.exportAs", json!({"format": format})).unwrap();
+        confirm(app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.str("transparencyDither"), d.f64("transparencyDitherAmount", 0.0)), ("none".into(), 100.0), "{format}");
+        for (k, v) in fields {
+            set(app, k, v.clone());
+        }
+        frame(app);
+        confirm(app).unwrap();
+        written.borrow().last().unwrap().1.clone()
+    };
+    for format in ["gif", "png8"] {
+        let none = export(&mut app, format, &[]);
+        let diffusion = export(&mut app, format, &[("transparencyDither", json!("diffusion")), ("transparencyDitherAmount", json!(100))]);
+        assert_ne!(diffusion, none, "{format}");
+        assert_eq!(export(&mut app, format, &[("transparencyDither", json!("diffusion")), ("transparencyDitherAmount", json!(0))]), none, "{format}");
+        assert_ne!(export(&mut app, format, &[("transparencyDither", json!("pattern"))]), none, "{format}");
+        // With Transparency off the rows are disabled, keep their values and change nothing.
+        let opaque = export(&mut app, format, &[("transparency", json!(false))]);
+        assert_eq!(export(&mut app, format, &[("transparency", json!(false)), ("transparencyDither", json!("noise"))]), opaque, "{format}");
+    }
+}
+
+/// The Transparency Dither dropdown is named by its row, and Diffusion's amount field by its
+/// Amount label.
+#[test]
+fn palette_options_name_the_transparency_dither_controls() {
+    use egui::accesskit::Role;
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "png8"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "transparencyDither", json!("diffusion"));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+    let mut nodes = vec![];
+    for time in [0.0, 0.1] {
+        let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), ..Default::default() };
+        let mut out = ctx.run_ui(input, |ui| show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    }
+    // A label node carries its text as its value.
+    let label_of = |id: egui::accesskit::NodeId| nodes.iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.label().or(n.value())).map(str::to_string);
+    assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transparency Dither:") && n.role() != Role::Label), "a dropdown named by its row");
+    let amount = nodes.iter().find(|(_, n)| n.labelled_by().iter().any(|l| label_of(*l).as_deref() == Some("Amount:")));
+    assert!(amount.is_some(), "a field labeled Amount:");
+}
+
 #[test]
 fn text_export_options_write_the_stories() {
     let (mut app, written) = app(1);
