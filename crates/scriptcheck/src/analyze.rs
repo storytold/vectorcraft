@@ -1342,24 +1342,33 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// `t` in an object literal assigned to a variable: a `:` directly inside its braces after a key
-    /// that names a document method writing a file (`{saveAs: …}`, `{'exportFile': …}`) makes the
-    /// variable one of [`Analyzer::writers`]. A closing brace ends the literals it closes.
+    /// `t` in an object literal assigned to a variable: a function expression directly inside its
+    /// braces as the value of a key that names a document method writing a file
+    /// (`{saveAs: function …}`, `{'exportFile': function …}`) makes the variable one of
+    /// [`Analyzer::writers`], and any other value of that key (`{saveAs: d.saveAs}`) takes the method
+    /// out again. A closing brace ends the literals it closes.
     fn object_key(&mut self, t: &Sig<'s>) {
         let depth = self.depth();
         while self.objects.pop_if(|(_, d)| *d > depth).is_some() {}
-        if !t.is(":") {
+        let [h0, h1, h2, _] = self.h;
+        if !is(h0, ":") || !(is(h2, "{") || is(h2, ",")) {
             return;
         }
-        let [h0, h1, ..] = self.h;
         let Some(name) = self.objects.last().filter(|(_, d)| *d == depth).map(|(n, _)| n.clone()) else { return };
-        let key = match h0 {
+        let key = match h1 {
             Some(k) if k.kind == T::Ident => Cow::Borrowed(k.text),
             Some(k) if k.kind == T::Str => Cow::Owned(unquote(k.text, 32)),
             _ => return,
         };
         let Some(i) = catalog::DOM_FILE_WRITES.iter().position(|m| *m == key.as_ref()) else { return };
-        if (is(h1, "{") || is(h1, ",")) && (self.writers.contains_key(&name) || self.acc.room(self.writers.len())) {
+        if !t.word("function") {
+            let left = self.writers.get(&name).map_or(0, |bits| bits & !(1 << i));
+            if left == 0 {
+                self.writers.remove(&name);
+            } else {
+                self.writers.insert(name, left);
+            }
+        } else if self.writers.contains_key(&name) || self.acc.room(self.writers.len()) {
             *self.writers.entry(name).or_insert(0) |= 1 << i;
         }
     }

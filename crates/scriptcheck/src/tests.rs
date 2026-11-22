@@ -585,7 +585,8 @@ fn the_scripts_own_save_as_writes_no_file() {
 }
 
 /// Once the script replaces or deletes such a method, indexes the object with a computed key, or
-/// lets another name hold the object, its `saveAs` may write a file again.
+/// lets another name hold the object, its `saveAs` may write a file again, and so may a `saveAs` key
+/// whose last value in the literal is not a function expression.
 #[test]
 fn a_changed_or_shared_own_save_as_writes_a_file() {
     let r = report(concat!(
@@ -605,8 +606,11 @@ fn a_changed_or_shared_own_save_as_writes_a_file() {
         "d.saveAs(f);\n",
         "e.saveAs(f);\n",
         "g['saveAs'](f);\n",
+        "var m = {saveAs: d.saveAs}, n = {saveAs: function () {}, saveAs: d.saveAs};\n",
+        "m.saveAs(f);\n",
+        "n.saveAs(f);\n",
     ));
-    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16][..]));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19][..]));
 }
 
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
