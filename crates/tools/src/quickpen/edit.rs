@@ -109,7 +109,16 @@ impl Edit {
                 return out;
             }
             let Some(picked) = self.grab.anchors(cx) else { return out };
-            let already = cx.selection.partial(id).is_some_and(|s| picked.iter().all(|a| s.contains(a)));
+            // A drag on one of several selected anchors moves them all; a drag on a segment moves
+            // its two ends alone.
+            let already = match self.grab {
+                Grab::Anchor { .. } => cx.selection.partial(id).is_some_and(|s| picked.iter().all(|a| s.contains(a))),
+                Grab::Segment { .. } => {
+                    cx.selection.objects == [id]
+                        && cx.selection.anchors.len() == 1
+                        && cx.selection.partial(id).is_some_and(|s| s.len() == picked.len() && picked.iter().all(|a| s.contains(a)))
+                }
+            };
             let moving = if already {
                 cx.selection.clone()
             } else {

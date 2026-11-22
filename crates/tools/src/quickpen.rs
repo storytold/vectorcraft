@@ -512,7 +512,11 @@ impl QuickPenTool {
         }
         match e.grab {
             Grab::Anchor { id, si, ai, .. } if e.shift => {
-                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": "toggle"}))]
+                // `select.anchors` toggles from every anchor of a path selected whole on its own,
+                // so the first Shift-click there selects the anchor alone.
+                let whole = cx.selection.anchors.is_empty() && cx.selection.objects.len() <= 1;
+                let mode = if whole { "set" } else { "toggle" };
+                vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[si, ai]], "mode": mode}))]
             }
             Grab::Anchor { id, si, ai, end: true, .. } => self.continue_path(cx, id, si, ai == 0),
             Grab::Anchor { id, si, ai, .. } => {

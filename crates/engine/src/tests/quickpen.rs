@@ -705,6 +705,33 @@ fn clicks_select_anchors_for_delete() {
     assert!(!left.contains(&pt(200.0, 100.0)) && !left.contains(&pt(300.0, 100.0)), "{left:?}");
 }
 
+/// The first Shift-click on an anchor of a path selected whole selects that anchor alone.
+#[test]
+fn a_first_shift_click_selects_the_anchor_alone() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    assert!(s.doc().unwrap().selection.partial(id).is_none(), "the path is selected whole");
+    shift_click(&mut s, 200.0, 100.0);
+    let picked = s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked, [(0, 1)]);
+}
+
+/// A drag on a segment moves its two ends alone, also when they are selected with another anchor.
+#[test]
+fn a_segment_drag_moves_only_its_ends() {
+    let mut s = session();
+    let pieces = json!([{"x": 300, "y": 300}, {"x": 300, "y": 400}, {"x": 100, "y": 400}, {"x": 100, "y": 500}]);
+    let id = selected_quick_pen_path(&mut s, (100.0, 300.0), pieces);
+    click(&mut s, 300.0, 300.0);
+    shift_click(&mut s, 300.0, 400.0);
+    shift_click(&mut s, 100.0, 400.0);
+    let picked = s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked, [(0, 1), (0, 2), (0, 3)]);
+    press(&mut s, &[(300.0, 350.0), (320.0, 350.0), (350.0, 350.0)]);
+    assert_eq!(points(&s), [pt(100.0, 300.0), pt(350.0, 300.0), pt(350.0, 400.0), pt(100.0, 400.0), pt(100.0, 500.0)]);
+    assert_eq!(paths(&s).len(), 1);
+}
+
 /// Escape during a drag puts the anchor back, and the release then changes nothing.
 #[test]
 fn escape_takes_back_an_anchor_drag() {
