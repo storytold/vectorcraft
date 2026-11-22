@@ -92,7 +92,7 @@ pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
         _ => defaults,
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
-    let orientation = orientation_param(p, cur.orientation);
+    let orientation = orientation_param(p, C, cur.orientation)?;
     let (ease0, color0, no_spine) = match base.as_ref().map(|n| &n.kind) {
         Some(NodeKind::Blend { spec, .. }) => (spec.ease, spec.color_shift, spec.no_spine),
         _ => (Default::default(), 0.0, !create_spine.creates_spine()),
@@ -214,6 +214,25 @@ fn spine_points_param(p: &Value, cmd: &str) -> Result<Vec<usize>> {
     list.iter().map(|i| i.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(wrong)).collect()
 }
 
+/// Whether linking handle `out` of spine point `index` at `q` would leave the blend's spine as it
+/// is (false when the blend or the point is not there, for the edit to report it).
+fn spine_link_unchanged(s: &Session, p: &Value, cmd: &str, index: usize, out: bool, q: Point) -> Result<bool> {
+    let id = match crate::cmd::object_param(p, "id", cmd)? {
+        Some(id) => Some(id),
+        None => selected_of(s, is_blend).first().copied(),
+    };
+    let d = &s.doc()?.doc;
+    let Some(NodeKind::Blend { children, spec }) = id.and_then(|id| d.node(id)).map(|n| &n.kind) else { return Ok(false) };
+    let Some((path, _)) = live::pin_spine(children, spec) else { return Ok(false) };
+    Ok(path.subpaths.first().is_some_and(|sp| {
+        sp.anchors.get(index).is_some_and(|a| {
+            let mut linked = *a;
+            linked.link_handle(out, q, sp.has_segment(index, !out));
+            linked == *a
+        })
+    }))
+}
+
 pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.spine.moveAnchor";
     let index = index_param(p, "anchor", C)?;
@@ -225,15 +244,49 @@ pub(super) fn spine_move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(C, "handle must be in or out")),
     };
     let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    let link = switch_or(p, "link", false, C)?;
     let with = spine_points_param(p, C)?;
     // Any `with`, even an empty list, asks to move points, which a handle drag doesn't.
     if handle.is_some() && p.get("with").is_some_and(|v| !v.is_null()) {
         return Err(bad(C, "`with` moves points, not a handle"));
     }
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
+    if symmetric && handle.is_none() {
+        return Err(bad(C, "`symmetric` places a handle: give `handle`"));
+    }
+    if link && symmetric {
+        return Err(bad(C, "`link` and `symmetric` cannot both be true"));
+    }
+    if link && independent {
+        return Err(bad(C, "`link` and `independent` cannot both be true"));
+    }
+    if link && handle.is_none() {
+        return Err(bad(C, "`link` places a handle: give `handle`"));
+    }
+    if link && let Some(out) = handle {
+        // A spine point the linked handles would leave as it is records no undo step.
+        if spine_link_unchanged(s, p, C, index, out, q)? {
+            return ok();
+        }
+    }
     edit_spine(s, p, C, "Reshape Spine", |sp, anchors, keys| {
+        let pull_out = handle.is_some_and(|out| sp.has_segment(index, !out));
+        // At an open end of the spine the handle moves as it would without `symmetric`.
+        let symmetric = symmetric && pull_out;
         let a = sp.anchors.get_mut(index).ok_or_else(|| bad(C, "no such spine point"))?;
         if let Some(out) = handle {
-            a.set_handle(out, q, independent);
+            if link {
+                a.link_handle(out, q, pull_out);
+            } else {
+                a.set_handle(out, q, independent);
+            }
+            if symmetric {
+                let opposite = a.p - (q - a.p);
+                if out { a.h_in = opposite } else { a.h_out = opposite }
+            }
             return Ok(());
         }
         let delta = q - a.p;
@@ -364,29 +417,91 @@ fn selected_spec(s: &Session) -> Option<(NodeId, BlendSpec, Vec<NodeId>)> {
 
 pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.options";
-    let Some((_, cur, _)) = selected_spec(s) else {
+    let id = crate::cmd::object_param(p, "id", C)?;
+    let target = match id {
+        Some(id) => {
+            let doc = &s.doc()?.doc;
+            match doc.node(id).map(|n| &n.kind) {
+                Some(NodeKind::Blend { .. }) if !doc.is_editable(id) => return Err(bad(C, "the object is hidden or locked")),
+                Some(NodeKind::Blend { spec, children }) => Some((id, (**spec).clone(), children.iter().map(|c| c.id).collect())),
+                _ => return Err(bad(C, "not a blend")),
+            }
+        }
+        None => selected_spec(s),
+    };
+    let Some((_, cur, _)) = target else {
         if ["easingType", "ramp", "colorShift"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null())) {
             return Err(bad(C, "select a blend to set easing or color shift"));
         }
         // Nothing to set them on: the options new blends start with (easing is per blend).
         let d = s.prefs.blend_options.unwrap_or_default();
         let spacing = spacing_param(p, C, d.spacing)?;
-        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation), ..d });
+        let orientation = orientation_param(p, C, d.orientation)?;
+        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation, ..d });
         return Ok(json!({ "defaults": true }));
     };
-    if gives_easing(p) && any_without_spine(s) {
+    let no_spine = if id.is_some() { cur.no_spine } else { any_without_spine(s) };
+    if gives_easing(p) && no_spine {
         return Err(bad(C, "the blend has no spine"));
     }
+    // Every value is checked before anything changes. Each blend then takes only the values that
+    // were given and keeps its own for the rest, so editing several blends does not copy the first
+    // one's options onto the others.
+    let given = |key: &str| p.get(key).is_some_and(|v| !v.is_null());
+    let has_count = given("value") || given("steps") || given("distance");
+    let has_spacing = given("spacing") || has_count || p.get("smooth").and_then(Value::as_bool) == Some(true);
     let spacing = spacing_param(p, C, cur.spacing)?;
-    let orientation = orientation_param(p, cur.orientation);
+    let orientation = orientation_param(p, C, cur.orientation)?;
     let ease = ease_param(p, C, cur.ease)?;
     let color_shift = percent_param(p, C, "colorShift", cur.color_shift, -100.0)?;
-    edit_blends(s, "Blend Options", |_, spec| {
-        spec.spacing = spacing;
-        spec.orientation = orientation;
-        spec.ease = ease;
-        spec.color_shift = color_shift;
-    })
+    let (has_orientation, has_kind, has_ramp, has_shift) = (given("orientation"), given("easingType"), given("ramp"), given("colorShift"));
+    let set = |spec: &mut BlendSpec| {
+        // A spacing mode without a count keeps the count of a blend already in that mode.
+        let same_mode = std::mem::discriminant(&spacing) == std::mem::discriminant(&spec.spacing);
+        if has_spacing && (has_count || !same_mode) {
+            spec.spacing = spacing;
+        }
+        if has_orientation {
+            spec.orientation = orientation;
+        }
+        if has_kind {
+            spec.ease.kind = ease.kind;
+        }
+        if has_ramp {
+            spec.ease.ramp = ease.ramp;
+        }
+        if has_shift {
+            spec.color_shift = color_shift;
+        }
+    };
+    let targets = match id {
+        Some(id) => vec![id],
+        None => selected_of(s, is_blend),
+    };
+    let doc = &s.doc()?.doc;
+    let changes = |b: &NodeId| match doc.node(*b).map(|n| &n.kind) {
+        Some(NodeKind::Blend { spec, .. }) => {
+            let mut next = (**spec).clone();
+            set(&mut next);
+            next != **spec
+        }
+        _ => false,
+    };
+    if !targets.iter().any(changes) {
+        return ok();
+    }
+    match id {
+        Some(id) => {
+            s.edit("Blend Options", |d, _| {
+                if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+                    set(spec);
+                }
+                Ok(())
+            })?;
+            ok()
+        }
+        None => edit_blends(s, "Blend Options", |_, spec| set(spec)),
+    }
 }
 
 pub(super) fn blend_set_easing(s: &mut Session, p: &Value) -> Result<Value> {
@@ -595,9 +710,8 @@ pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 /// Is any selected blend one made without a spine?
-fn any_without_spine(s: &Session) -> bool {
-    let Ok(st) = s.doc() else { return false };
-    selected_of(s, is_blend).iter().any(|b| matches!(st.doc.node(*b).map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine))
+pub(super) fn any_without_spine(s: &Session) -> bool {
+    super::common::any_selected_of(s, is_blend, |n| matches!(&n.kind, NodeKind::Blend { spec, .. } if spec.no_spine))
 }
 
 pub(super) fn blend_reverse_spine(s: &mut Session, _: &Value) -> Result<Value> {

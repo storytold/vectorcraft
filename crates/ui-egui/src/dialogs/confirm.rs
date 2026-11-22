@@ -130,8 +130,78 @@ pub(crate) fn ask_reset_prefs(app: &mut VectorcraftApp) {
 fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut prefs = super::parent(d).filter(|p| p.kind == "preferences").ok_or("the dialog it was opened over is no longer open")?;
     crate::prefs_dialog::reset_fields(&mut prefs);
+    crate::original_editor::reset(app);
     app.ui.dialog = Some(prefs);
     Ok(Value::Null)
+}
+
+/// The dialog kind of the question Reset Actions asks in the Actions panel menu
+/// ([`ask_reset_actions`]). Fields: `message`, `detail`, `append` (set by Append).
+pub const RESET_ACTIONS: &str = "resetActions";
+
+pub(super) const RESET_ACTIONS_SPEC: DialogSpec = DialogSpec { confirm: reset_actions, alternate: Some(("Append", "append")), ..SPEC };
+
+/// Ask whether to replace the Actions panel's sets with the built-in set. OK replaces them, Append
+/// adds the built-in set after them ([`crate::panels::actions::reset`]), and Cancel or Escape
+/// changes nothing.
+pub(crate) fn ask_reset_actions(app: &mut VectorcraftApp) {
+    let message = tl!("Replace the current actions with the default set?");
+    let detail = tl!("Append adds the default set after the current sets instead.");
+    app.ui.dialog = Some(Dialog::new(RESET_ACTIONS, json!({"message": message, "detail": detail, "append": false})));
+}
+
+/// OK or Append on [`ask_reset_actions`]: closes, then resets the action sets.
+fn reset_actions(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mode = if d.fields.get("append").and_then(Value::as_bool) == Some(true) { "append" } else { "replace" };
+    app.ui.dialog = None;
+    app.run(crate::panels::actions::RESET, json!({ "mode": mode }))
+}
+
+/// The dialog kind of the question a click or double-click asks before it edits type set in fonts
+/// that aren't available as named ([`ask_missing_font_edit`]). Fields: `message`, `detail`,
+/// `__token` (the Type tool's edit, which the answer names).
+pub const MISSING_FONT_EDIT: &str = vectorcraft_tools::text::MISSING_FONT_EDIT;
+
+pub(super) const MISSING_FONT_EDIT_SPEC: DialogSpec = DialogSpec { confirm: edit_in_missing_fonts, ..SPEC };
+
+/// Ask whether to edit type whose story is drawn in fonts that aren't available, which the Type
+/// tool names in `p` (`token`, `missing` and `style`: "family style" names, `more`: how many more
+/// there are). The detail names each font (family and style, the family's own names, which are
+/// not translated). OK starts the edit where the type was clicked; Cancel and Escape start nothing.
+/// While another dialog is open (a press sent with `ui.pointer` reaches the tool then), that dialog
+/// stays and the Type tool forgets the edit, as Cancel would.
+pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind != MISSING_FONT_EDIT) {
+        app.session.set_tool_option("missingFontEdit", &json!({"token": p.get("token"), "ok": false}));
+        return;
+    }
+    let names = |k: &str| p.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
+    let mut fonts = names("missing");
+    fonts.extend(names("style"));
+    if p.get("more").and_then(Value::as_u64).is_some_and(|n| n > 0) {
+        fonts.push("…".to_string());
+    }
+    let detail = format!("{}\n{}", fonts.join(", "), tl!("These fonts aren't available. Their text shows in another font."));
+    let message = tl!("Edit type set in fonts that aren't available?");
+    let fields = json!({"message": message, "detail": detail, "__token": p.get("token")});
+    app.ui.dialog = Some(Dialog::new(MISSING_FONT_EDIT, fields));
+}
+
+/// OK on [`ask_missing_font_edit`]: closes, then the Type tool starts the edit.
+fn edit_in_missing_fonts(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    app.ui.dialog = None;
+    answer_missing_font_edit(app, d, true);
+    Ok(Value::Null)
+}
+
+/// Give the Type tool the answer to [`ask_missing_font_edit`]'s question `d`: with `ok` the edit
+/// starts at once; without, the tool forgets it.
+pub(super) fn answer_missing_font_edit(app: &mut VectorcraftApp, d: &Dialog, ok: bool) {
+    app.session.set_tool_option("missingFontEdit", &json!({"token": d.fields.get("__token"), "ok": ok}));
+    if ok {
+        let r = app.session.tool_poll(app.view_info(), false);
+        crate::canvas::apply_requests(app, r);
+    }
 }
 
 /// Most messages kept for later while a dialog is open ([`tell`]).

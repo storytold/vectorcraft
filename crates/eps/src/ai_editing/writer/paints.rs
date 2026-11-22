@@ -1,6 +1,7 @@
 //! Gradients and patterns: their definitions in the setup, gradient instances on paths and the
 //! pattern operators (see [`crate::ai_editing`] for the form).
 
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use vectorcraft_color::gradient::GradientGeom;
@@ -12,6 +13,7 @@ use vectorcraft_geom::{Affine, BezPath, Rect, Shape, Vec2};
 
 use super::{MAX_NEST, Writer, Xy};
 use crate::ai_ops::{self, average, unit};
+use crate::gradient_key::gradient_key;
 use crate::ps;
 
 pub(in crate::ai_editing) const GRADIENTS: &str =
@@ -19,8 +21,8 @@ pub(in crate::ai_editing) const GRADIENTS: &str =
 pub(in crate::ai_editing) const GRADIENT_SHAPES: &str = "gradients without stops or with more than 256, gradients whose ramp has no length and radial gradients flattened to a line are written as their average color in the editing data for other apps";
 pub(in crate::ai_editing) const SWATCH_PLACEMENT: &str =
     "the placement of pattern swatches that move, turn or scale their pattern is left out of the editing data for other apps";
-pub(in crate::ai_editing) const GRADIENT_MIX: &str =
-    "gradients that mix their colors perceptually or dither are written as classic gradients in the editing data for other apps";
+pub(in crate::ai_editing) const GRADIENT_DITHER: &str = "gradients that dither are written without dither's noise in the editing data for other apps";
+pub(in crate::ai_editing) const GRADIENT_PERCEPTUAL: &str = "Perceptual gradients are written in process colors, with the colors between their stops as stops of their own (at most 256), in the editing data for other apps";
 pub(in crate::ai_editing) const GRADIENT_HUE: &str = "gradients mixed around the hue wheel are written in process colors, with the colors between their stops as stops of their own (at most 256), in the editing data for other apps";
 pub(in crate::ai_editing) const CONIC: &str =
     "conic gradients are written as linear gradients along their vector, with the same stops, in the editing data for other apps";
@@ -46,6 +48,113 @@ pub(super) struct PatternOut {
     used: bool,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Whether [`GradientDefs`] and [`PatternDefs`] find definitions on this thread by comparing
+    /// the gradient or name with each definition in turn.
+    pub(in crate::ai_editing) static SCANNED_DEFINITIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many times [`GradientDefs::find`] has compared two gradients on this thread.
+    pub(in crate::ai_editing) static GRADIENT_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Are gradients `a` and `b` the same?
+fn same_gradient(a: &Gradient, b: &Gradient) -> bool {
+    #[cfg(test)]
+    GRADIENT_COMPARISONS.with(|c| c.set(c.get() + 1));
+    a == b
+}
+
+/// The gradient definitions, in the order they are first used, found by name and by gradient
+/// without comparing each one.
+#[derive(Default)]
+pub(super) struct GradientDefs {
+    list: Vec<GradientDef>,
+    /// Each definition's place in `list`, by its name (no two definitions share one).
+    names: HashMap<String, usize>,
+    /// The places in `list` of the definitions no swatch names, in order, by their gradient's key
+    /// ([`gradient_key`]).
+    ramps: HashMap<u64, Vec<usize>>,
+}
+
+impl GradientDefs {
+    /// Is `name` a definition's name?
+    fn has_name(&self, name: &str) -> bool {
+        #[cfg(test)]
+        if SCANNED_DEFINITIONS.with(std::cell::Cell::get) {
+            return self.list.iter().any(|d| d.name == name);
+        }
+        self.names.contains_key(name)
+    }
+
+    /// The place of the definition of `g`: the swatch `swatch` names when it is a gradient swatch
+    /// of the same gradient, else the first definition of the same gradient that no swatch names.
+    fn find(&self, g: &Gradient, swatch: Option<&str>) -> Option<usize> {
+        #[cfg(test)]
+        if SCANNED_DEFINITIONS.with(std::cell::Cell::get) {
+            return swatch
+                .and_then(|s| self.list.iter().position(|d| d.swatch && d.name == s && same_gradient(&d.gradient, g)))
+                .or_else(|| self.list.iter().position(|d| !d.swatch && same_gradient(&d.gradient, g)));
+        }
+        let held = |i: &usize, swatch: bool| self.list.get(*i).is_some_and(|d| d.swatch == swatch && same_gradient(&d.gradient, g));
+        swatch
+            .and_then(|s| self.names.get(s).copied().filter(|i| held(i, true)))
+            .or_else(|| self.ramps.get(&gradient_key(g))?.iter().copied().find(|i| held(i, false)))
+    }
+
+    /// Add `d`, whose name no definition has.
+    fn push(&mut self, d: GradientDef) {
+        let i = self.list.len();
+        if !d.swatch {
+            self.ramps.entry(gradient_key(&d.gradient)).or_default().push(i);
+        }
+        self.names.insert(d.name.clone(), i);
+        self.list.push(d);
+    }
+
+    /// Keep the first `len` definitions; the names of those removed are free again.
+    fn truncate(&mut self, len: usize) {
+        while self.list.len() > len {
+            let Some(d) = self.list.pop() else { break };
+            self.names.remove(&d.name);
+            if !d.swatch {
+                // Places are added in order, so the removed definition's is the last of its key's.
+                let key = gradient_key(&d.gradient);
+                if let Some(places) = self.ramps.get_mut(&key) {
+                    places.pop();
+                    if places.is_empty() {
+                        self.ramps.remove(&key);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The pattern definitions written, each after those its art uses, found by name.
+#[derive(Default)]
+pub(super) struct PatternDefs {
+    list: Vec<PatternOut>,
+    /// Each definition's place in `list`, by its name (no two definitions share one).
+    names: HashMap<String, usize>,
+}
+
+impl PatternDefs {
+    /// The place of pattern `name`'s definition.
+    fn find(&self, name: &str) -> Option<usize> {
+        #[cfg(test)]
+        if SCANNED_DEFINITIONS.with(std::cell::Cell::get) {
+            return self.list.iter().position(|p| p.name == name);
+        }
+        self.names.get(name).copied()
+    }
+
+    /// Add `p`, whose name no definition has.
+    fn push(&mut self, p: PatternOut) {
+        self.names.insert(p.name.clone(), self.list.len());
+        self.list.push(p);
+    }
+}
+
 pub(in crate::ai_editing) const DIAMOND: &str =
     "diamond gradients are written as radial gradients through their corners, with the same stops, in the editing data for other apps";
 pub(in crate::ai_editing) const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (at most 256 stops, padding past them) in the editing data for other apps";
@@ -57,13 +166,14 @@ fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
 }
 
-/// `g` as the data holds its colors: one mixed around the hue wheel (the data's gradients mix
-/// their stops' colors directly) as a classic gradient of the stops on its curve
-/// ([`Gradient::as_classic_curve`]), no more than the `.ai` reader reads when it pads
-/// ([`GRADIENT_HUE`]); others as they are.
-fn hue_as_stops(g: &Gradient) -> std::borrow::Cow<'_, Gradient> {
+/// `g` as the data holds its colors: one mixed by the Perceptual method or around the hue wheel
+/// (the data's gradients mix their stops' colors directly) as a classic gradient of the stops on
+/// its curve in process colors ([`Gradient::as_classic_curve`]), no more than the `.ai` reader
+/// reads when it pads ([`GRADIENT_PERCEPTUAL`], [`GRADIENT_HUE`]); a classic one, and one the
+/// data can't hold as a gradient ([`writable_gradient`]), as it is.
+fn curve_as_stops(g: &Gradient) -> std::borrow::Cow<'_, Gradient> {
     use std::borrow::Cow;
-    if !g.method.is_hue() {
+    if g.method.is_classic() || !writable_gradient(g) {
         return Cow::Borrowed(g);
     }
     let curve = g.as_classic_curve();
@@ -88,6 +198,16 @@ pub(in crate::ai_editing) fn free_gradient_name(next: &mut u64, mut taken: impl 
     }
 }
 
+/// Is `stop` linked to a global process color of `doc` (one [`Writer::stop_color`] writes as its
+/// color, [`STOP_LINKS`])?
+fn links_global_process(doc: &vectorcraft_doc::Document, stop: &GradientStop) -> bool {
+    stop.swatch
+        .as_deref()
+        .filter(|n| *n != REGISTRATION)
+        .and_then(|name| doc.swatch(name))
+        .is_some_and(|sw| matches!(sw.paint, Paint::Solid { swatch: None, .. }) && !sw.spot && sw.global)
+}
+
 /// The stops of `g` in order of their place on the ramp.
 fn sorted_stops(g: &Gradient) -> Vec<&GradientStop> {
     let mut stops: Vec<&GradientStop> = g.stops.iter().collect();
@@ -100,13 +220,14 @@ impl Writer<'_> {
     pub(in crate::ai_editing) fn reserve_swatch_gradients(&mut self) {
         let doc = self.doc;
         for sw in doc.swatches_iter() {
-            // As `swatch_paint` writes it: one mixed around the hue wheel as the stops on its curve,
-            // and the stops of one that repeats or reflects repeated.
+            // As `swatch_paint` writes it: one mixed by the Perceptual method or around the hue
+            // wheel as the stops on its curve, and the stops of one that repeats or reflects
+            // repeated.
             if let Paint::Gradient(g) = &sw.paint
-                && let stops = hue_as_stops(&g.gradient)
+                && let stops = curve_as_stops(&g.gradient)
                 && let gradient = stops.unrolled_within(crate::import::MAX_GRADIENT_STOPS)
                 && writable_gradient(&gradient)
-                && !self.gradients.iter().any(|d| d.name == sw.name)
+                && !self.gradients.has_name(&sw.name)
             {
                 self.gradients.push(GradientDef { name: sw.name.clone(), gradient: gradient.into_owned(), swatch: true, used: false });
             }
@@ -119,17 +240,14 @@ impl Writer<'_> {
     /// swatch or a pattern).
     fn define_gradient(&mut self, g: &Gradient, swatch: Option<&str>) -> String {
         let used = !self.in_palette;
-        let found = swatch
-            .and_then(|s| self.gradients.iter().position(|d| d.swatch && d.name == s && d.gradient == *g))
-            .or_else(|| self.gradients.iter().position(|d| !d.swatch && d.gradient == *g));
-        if let Some(d) = found.and_then(|i| self.gradients.get_mut(i)) {
+        let found = self.gradients.find(g, swatch);
+        if let Some(d) = found.and_then(|i| self.gradients.list.get_mut(i)) {
             d.used |= used;
             return d.name.clone();
         }
         let (doc, gradients) = (self.doc, &self.gradients);
-        let name = free_gradient_name(&mut self.next_gradient, |name| {
-            gradients.iter().any(|d| d.name == name) || doc.swatch(name).is_some() || doc.pattern(name).is_some()
-        });
+        let name =
+            free_gradient_name(&mut self.next_gradient, |name| gradients.has_name(name) || doc.swatch(name).is_some() || doc.pattern(name).is_some());
         self.gradients.push(GradientDef { name: name.clone(), gradient: g.clone(), swatch: false, used });
         name
     }
@@ -137,14 +255,14 @@ impl Writer<'_> {
     /// The gradient definitions' state, for [`Self::gradient_rollback`]: their count, which ones the
     /// art uses, and the next name's number.
     pub(super) fn gradient_mark(&self) -> (usize, Vec<bool>, u64) {
-        (self.gradients.len(), self.gradients.iter().map(|d| d.used).collect(), self.next_gradient)
+        (self.gradients.list.len(), self.gradients.list.iter().map(|d| d.used).collect(), self.next_gradient)
     }
 
     /// The gradient definitions as they were at `mark` ([`Self::gradient_mark`]).
     pub(super) fn gradient_rollback(&mut self, mark: (usize, Vec<bool>, u64)) {
         let (len, used, next) = mark;
         self.gradients.truncate(len);
-        for (d, u) in self.gradients.iter_mut().zip(used) {
+        for (d, u) in self.gradients.list.iter_mut().zip(used) {
             d.used = u;
         }
         self.next_gradient = next;
@@ -165,9 +283,11 @@ impl Writer<'_> {
         // The data has no spread: a gradient that repeats or reflects is written with its stops
         // repeated over `area` (a conic one, written linear, around its turn).
         let mut g: GradientPaint = (**g).clone();
-        if g.gradient.method.is_hue() {
-            self.warn(GRADIENT_HUE);
-            g.gradient = hue_as_stops(&g.gradient).into_owned();
+        // A gradient written as its average color (a freeform one, or one without stops or with
+        // more than the reader reads) keeps its own stops.
+        if !g.gradient.method.is_classic() && writable_gradient(&g.gradient) {
+            self.warn_curve(&g.gradient);
+            g.gradient = curve_as_stops(&g.gradient).into_owned();
         }
         if g.gradient.is_spread() {
             self.warn(SPREAD);
@@ -190,6 +310,18 @@ impl Writer<'_> {
             return Paint::solid(average(&g.gradient));
         }
         Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..g }))
+    }
+
+    /// The warnings for gradient `g`, mixed by the Perceptual method or around the hue wheel,
+    /// written as the stops on its curve ([`curve_as_stops`]): [`GRADIENT_PERCEPTUAL`] or
+    /// [`GRADIENT_HUE`], and [`STOP_LINKS`] when one of its stops is linked to a global process
+    /// color (the stops on the curve hold no links).
+    fn warn_curve(&mut self, g: &Gradient) {
+        self.warn(if g.method.is_hue() { GRADIENT_HUE } else { GRADIENT_PERCEPTUAL });
+        let doc = self.doc;
+        if g.stops.iter().any(|s| links_global_process(doc, s)) {
+            self.warn(STOP_LINKS);
+        }
     }
 
     /// The fills and strokes of `n` that paint (outline `bp`), their gradients placed
@@ -363,8 +495,8 @@ impl Writer<'_> {
     /// linear gradient's from the last to the first and a radial one's from the first to the last,
     /// `BD`, `%AI5_EndGradient`.
     fn gradient_def(&mut self, s: &mut String, d: &GradientDef) {
-        if d.gradient.dither || !d.gradient.method.is_classic() {
-            self.warn(GRADIENT_MIX);
+        if d.gradient.dither {
+            self.warn(GRADIENT_DITHER);
         }
         if d.gradient.kind == GradientKind::Conic {
             self.warn(CONIC);
@@ -391,8 +523,8 @@ impl Writer<'_> {
     /// A stop's color and its style: gray `lightness 0`, CMYK `c m y k 1`, RGB (and Lab, as RGB)
     /// `c m y k r g b 2` with its CMYK equivalent; a spot color its full color's CMYK equivalent,
     /// then its RGB values when it isn't CMYK, its name and how much lighter than the full color,
-    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB). RGB values are an RGB color's own (in the
-    /// working RGB space) and a Lab color's display RGB ([`ai_ops::rgb_values`]). An RGB color's CMYK
+    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB). RGB values are in the working RGB space: an
+    /// RGB color's own and a Lab color's converted ([`ai_ops::rgb_values`]). An RGB color's CMYK
     /// equivalent is converted from its values as written ([`ai_ops::as_written`]), a Lab color's
     /// from its Lab values, and a spot color's CMYK equivalent and RGB values both come from its full
     /// color as the palette writes it.
@@ -450,7 +582,7 @@ impl Writer<'_> {
         if !self.defining.is_empty() || self.nest >= MAX_NEST || self.in_symbol {
             return false;
         }
-        if self.patterns.iter().any(|p| p.name == name) {
+        if self.patterns.find(name).is_some() {
             return true;
         }
         self.doc.pattern(name).is_some_and(tile_holds_art)
@@ -466,7 +598,7 @@ impl Writer<'_> {
             return false;
         }
         let used = !self.in_palette;
-        if let Some(p) = self.patterns.iter_mut().find(|p| p.name == name) {
+        if let Some(p) = self.patterns.find(name).and_then(|i| self.patterns.list.get_mut(i)) {
             p.used |= used;
             return true;
         }
@@ -556,7 +688,7 @@ impl Writer<'_> {
     /// uses).
     pub(in crate::ai_editing) fn definitions(&mut self, s: &mut String) {
         let defs = std::mem::take(&mut self.gradients);
-        let (used, unused): (Vec<&GradientDef>, Vec<&GradientDef>) = defs.iter().partition(|d| d.used);
+        let (used, unused): (Vec<&GradientDef>, Vec<&GradientDef>) = defs.list.iter().partition(|d| d.used);
         let _ = writeln!(s, "{} Bn", used.len());
         for d in &used {
             self.gradient_def(s, d);
@@ -569,12 +701,12 @@ impl Writer<'_> {
             s.push_str("%AI5_End_NonPrinting--\n");
         }
         self.gradients = defs;
-        for p in self.patterns.iter().filter(|p| p.used) {
+        for p in self.patterns.list.iter().filter(|p| p.used) {
             s.push_str(&p.text);
         }
-        if self.patterns.iter().any(|p| !p.used) {
+        if self.patterns.list.iter().any(|p| !p.used) {
             s.push_str("%AI5_Begin_NonPrinting\nNp\n");
-            for p in self.patterns.iter().filter(|p| !p.used) {
+            for p in self.patterns.list.iter().filter(|p| !p.used) {
                 s.push_str(&p.text);
             }
             s.push_str("%AI5_End_NonPrinting--\n");
@@ -587,16 +719,17 @@ impl Writer<'_> {
     /// be written.
     pub(super) fn swatch_paint(&mut self, s: &mut String, sw: &vectorcraft_color::swatch::Swatch) -> bool {
         // A swatch has no placement: one that repeats or reflects holds its stops repeated along
-        // its vector, and one mixed around the hue wheel the stops on its curve.
+        // its vector, and one mixed by the Perceptual method or around the hue wheel the stops on
+        // its curve.
         let stops = match &sw.paint {
-            Paint::Gradient(g) => Some(hue_as_stops(&g.gradient)),
+            Paint::Gradient(g) => Some(curve_as_stops(&g.gradient)),
             _ => None,
         };
         let unrolled = stops.as_deref().map(|g| g.unrolled_within(crate::import::MAX_GRADIENT_STOPS));
         match &sw.paint {
             Paint::Gradient(g) if unrolled.as_deref().is_some_and(writable_gradient) => {
-                if g.gradient.method.is_hue() {
-                    self.warn(GRADIENT_HUE);
+                if !g.gradient.method.is_classic() {
+                    self.warn_curve(&g.gradient);
                 }
                 if g.gradient.is_spread() {
                     self.warn(SPREAD);
@@ -701,4 +834,95 @@ fn tile_holds_art(def: &PatternDef) -> bool {
             let room = t.inflate(1e-6, 1e-6);
             b.x0 >= room.x0 && b.y0 >= room.y0 && b.x1 <= room.x1 && b.y1 <= room.y1
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn two(a: f32, b: Color) -> Gradient {
+        Gradient::new(GradientKind::Linear, vec![GradientStop::new(a, Color::rgb(0.2, 0.4, 0.6)), GradientStop::new(1.0, b)])
+    }
+
+    fn def(name: &str, gradient: Gradient, swatch: bool) -> GradientDef {
+        GradientDef { name: name.into(), gradient, swatch, used: true }
+    }
+
+    /// The same gradients have the same key, a zero of either sign included.
+    #[test]
+    fn a_zero_of_either_sign_gives_the_same_key() {
+        assert_eq!(gradient_key(&two(0.0, Color::BLACK)), gradient_key(&two(-0.0, Color::BLACK)));
+        assert_eq!(two(0.0, Color::BLACK), two(-0.0, Color::BLACK));
+        assert_ne!(gradient_key(&two(0.0, Color::BLACK)), gradient_key(&two(0.0, Color::WHITE)));
+    }
+
+    /// Definitions whose gradients share a key are told apart by their gradients, the first of the
+    /// same gradient found; a gradient that isn't equal to itself is found in none.
+    #[test]
+    fn definitions_that_share_a_key_are_told_apart() {
+        let (black, white) = (two(0.0, Color::BLACK), two(0.0, Color::WHITE));
+        let mut defs = GradientDefs::default();
+        defs.push(def("Gradient", white.clone(), false));
+        defs.push(def("Gradient 2", black.clone(), false));
+        defs.push(def("Gradient 3", black.clone(), false));
+        // Every definition under the black gradient's key, as if the keys of both were the same.
+        defs.ramps = HashMap::from([(gradient_key(&black), vec![0, 1, 2])]);
+        assert_eq!(defs.find(&black, None), Some(1));
+        assert_eq!(defs.find(&white, None), None);
+        defs.ramps.insert(gradient_key(&white), vec![0, 1, 2]);
+        assert_eq!(defs.find(&white, None), Some(0));
+        let nan = two(f32::NAN, Color::BLACK);
+        defs.push(def("Gradient 4", nan.clone(), false));
+        assert_eq!(defs.find(&nan, None), None);
+    }
+
+    /// A swatch's definition is found by the swatch's name and gradient; a definition that no
+    /// swatch names, for the same gradient without the name or with another.
+    #[test]
+    fn a_swatch_definition_is_found_by_its_name_and_gradient() {
+        let (black, white) = (two(0.0, Color::BLACK), two(0.0, Color::WHITE));
+        let mut defs = GradientDefs::default();
+        defs.push(def("Ramp", black.clone(), true));
+        assert_eq!(defs.find(&black, Some("Ramp")), Some(0));
+        assert_eq!(defs.find(&black, None), None);
+        assert_eq!(defs.find(&white, Some("Ramp")), None);
+        defs.push(def("Gradient", black.clone(), false));
+        defs.push(def("Gradient 2", white.clone(), false));
+        assert_eq!(defs.find(&black, Some("Ramp")), Some(0));
+        assert_eq!(defs.find(&black, None), Some(1));
+        assert_eq!(defs.find(&white, Some("Ramp")), Some(2));
+        assert_eq!(defs.find(&black, Some("Other")), Some(1));
+    }
+
+    /// Definitions removed leave their names free and are no longer found; those kept still are.
+    #[test]
+    fn removed_definitions_free_their_names() {
+        let (black, white) = (two(0.0, Color::BLACK), two(0.0, Color::WHITE));
+        let mut defs = GradientDefs::default();
+        defs.push(def("Ramp", white.clone(), true));
+        defs.push(def("Gradient", black.clone(), false));
+        defs.push(def("Gradient 2", white.clone(), false));
+        defs.push(def("Gradient 3", black.clone(), false));
+        defs.truncate(2);
+        assert!(defs.has_name("Ramp") && defs.has_name("Gradient"));
+        assert!(!defs.has_name("Gradient 2") && !defs.has_name("Gradient 3"));
+        assert_eq!(defs.find(&black, None), Some(1));
+        assert_eq!(defs.find(&white, None), None);
+        assert_eq!(defs.ramps.values().map(Vec::len).sum::<usize>(), 1);
+        defs.push(def("Gradient 2", white.clone(), false));
+        assert_eq!(defs.find(&white, None), Some(2));
+        defs.truncate(0);
+        assert!(defs.list.is_empty() && defs.names.is_empty() && defs.ramps.is_empty());
+    }
+
+    /// A pattern's definition is found by its name.
+    #[test]
+    fn pattern_definitions_are_found_by_name() {
+        let mut defs = PatternDefs::default();
+        assert_eq!(defs.find("Dots"), None);
+        for name in ["Dots", "Checks"] {
+            defs.push(PatternOut { name: name.into(), text: String::new(), used: false });
+        }
+        assert_eq!((defs.find("Dots"), defs.find("Checks"), defs.find("Stripes")), (Some(0), Some(1), None));
+    }
 }

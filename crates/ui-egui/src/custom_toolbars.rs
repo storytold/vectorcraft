@@ -686,14 +686,16 @@ pub fn sync(ui: &UiState) {
     }
 }
 
-/// Window › Toolbars: Advanced, Double Column and Keep Tools Beside the Canvas, the toolbars made
-/// with New Toolbar (each checked while it shows), New Toolbar… and Manage Toolbars….
+/// Window › Toolbars: Advanced, Double Column, Compact Tools and Keep Tools Beside the Canvas,
+/// the toolbars made with New Toolbar (each checked while it shows), New Toolbar… and Manage
+/// Toolbars….
 pub fn menu_items() -> Vec<crate::menus::Item> {
     use crate::menus::Item;
     let c = |label: &'static str, id: &'static str| Item::Cmd(label, id, Value::Null);
     let mut v = vec![
         c("Advanced", "window.toolbarAdvanced"),
         c("Double Column", "window.toolbarColumns"),
+        c("Compact Tools", "window.toolbarCompact"),
         c("Keep Tools Beside the Canvas", "window.toolsBesideCanvas"),
         Item::Sep,
     ];
@@ -1121,6 +1123,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             ui.add_space((middle - BUTTON / 2.0 * row.len() as f32 - ui.cursor().min.x).max(0.0));
                             for &(s, slot) in row {
                                 let Some((rect, shown)) = slot_button(ui, &t, &press, slot, &mut actions) else { continue };
+                                crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(Some(bar.name.clone()), slot.clone()));
                                 if edit_this {
                                     buttons.push((s, rect));
                                 }
@@ -1351,7 +1354,7 @@ fn slot_button(ui: &mut egui::Ui, t: &Tokens, p: &Press, slot: &[String], action
     }
     let tip = crate::toolbar::tip(shown);
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, &tip));
-    resp.on_hover_text(tip);
+    crate::toolbar::card::hover(resp, shown, crate::toolbar::card::Side::Beside, Some(tip));
     Some((rect, shown.id))
 }
 
@@ -1382,7 +1385,7 @@ fn add_menu(button: &egui::Response, t: &Tokens, bar: &CustomToolbar, actions: &
             let held: Vec<&'static str> = bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
             let heading = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).size(12.0).color(t.text_strong));
             if !held.is_empty() {
-                heading(ui, &format!("{}:", tl!("Remove Tool")));
+                heading(ui, &crate::i18n::colon(tl!("Remove Tool")));
                 for tool in held.iter().filter_map(|id| tool_info(id)) {
                     if widgets::menu_item(ui, tool.label, true, false) {
                         actions.push(Action::RemoveTool(bar.name.clone(), tool.id));
@@ -1391,7 +1394,7 @@ fn add_menu(button: &egui::Response, t: &Tokens, bar: &CustomToolbar, actions: &
                 ui.separator();
             }
             for (cat, tools) in crate::edit_toolbar::sections() {
-                heading(ui, &format!("{}:", tl!(cat)));
+                heading(ui, &crate::i18n::colon(tl!(cat)));
                 for tool in tools {
                     if widgets::menu_item(ui, tool.label, !held.contains(&tool.id), false) {
                         actions.push(Action::AddTool(bar.name.clone(), tool.id));

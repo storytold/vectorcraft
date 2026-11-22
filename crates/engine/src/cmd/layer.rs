@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Artboard, ArtboardSide, Document, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Rect};
 
+use super::buildcmds::LivePaintMove;
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, checked_node, checked_nodes_param, cmd,
     color_value, f64_or, has_doc, has_selection, ids_param, index, object_param, ok, str_param, switch_or,
@@ -29,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Layer…",
             ["Window", "Layers"],
             Some("Cmd+L"),
-            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer); `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
+            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer), or directly below it in Draw Behind; `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
             super::maskedit::outside_mask_editing,
             new_layer
         ),
@@ -83,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked, and `ids` may name ruler guides (their `guide.list` id), which hide or lock on their own. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked, and `ids` may name ruler guides (their `guide.list` id), which hide or lock on their own. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. A path directly in a Live Paint group can't take the name Face or Edge, which name the group's faces and edges, unless it has it already. One undo step",
             has_doc,
             set_props
         ),
@@ -110,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
+            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer, group or Intertwine group (on top of its contents). Layers go only in layers or at the top level, objects in layers, groups and Intertwine groups; an object placed beside a top-level layer goes inside it. An object placed in an Intertwine group becomes a member drawn in its row's order, with no arranged areas, and one placed in a group that is a member becomes part of that member; one that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused. A member moved out of its Intertwine group drops its arranged areas, and a group left with one member is replaced by that member, or becomes a plain group of it when the group has an opacity, blending, appearance, mask, lock or hidden state of its own (with no member, it is removed). A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies, which may also go above or below a row they copy (the target among `ids`). A row that goes into a Live Paint group from elsewhere joins its paths as livePaint.merge adds them, and the group is selected (paths, compound paths, groups of them and Live Paint groups; anything else is refused and nothing moves); a row that goes into or leaves a Live Paint group's paths makes the group's faces and edges again, keeping the paint of those that stay. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids} (a row that joined a Live Paint group is listed as the group)",
             has_doc,
             move_rows
         ),
@@ -119,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers), deselecting every selected object left hidden or locked (the key object too)",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -191,7 +192,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Target",
             [],
             None,
-            "{id, add?: bool (Shift-click: the item joins the selection, or leaves it when all selected; nothing is targeted)} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]}",
+            "{id, add?: bool} or {range: [id…], add?: bool} target a layer, group or object as clicking its target circle in the Layers panel does: a layer gets its visible, unlocked art (its sublayers' too) selected and becomes the current layer, and appearance.*, effect.*, transparency.* and the opacity-mask commands without `ids` then act on the layer itself; anything else is selected. `add` (Ctrl/Cmd-click): the item joins the selection, or leaves it when all selected; nothing is targeted. `range` (Shift-click, the rows from the last circle clicked to this one): the art of every listed row that is visible, unlocked and inside the isolated group is selected, or added to the selection with `add` (Shift+Ctrl/Cmd-click); nothing is targeted. Any other selection change ends the targeting (`document.inspect` → target) → {id, selected: [..]} (with `range`: {range, selected})",
             has_doc,
             target
         ),
@@ -242,14 +243,15 @@ pub(crate) fn row_roots(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// Whether `parent` (None: the top level) can hold `n`: layers go at the top level or in layers,
-/// anything else in layers and groups.
+/// anything else in layers, groups and Intertwine groups (which also check what the object holds:
+/// [`super::intertwine::refused_in`]).
 pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
     match parent {
         None => n.is_layer(),
         Some(p) => match d.node(p).map(|x| &x.kind) {
             Some(NodeKind::Layer { .. }) => true,
             // A ruler guide stays directly in a layer or sublayer.
-            Some(NodeKind::Group { .. }) => !n.is_layer() && !n.is_ruler_guide(),
+            Some(NodeKind::Group { .. } | NodeKind::Intertwine { .. }) => !n.is_layer() && !n.is_ruler_guide(),
             _ => false,
         },
     }
@@ -431,6 +433,9 @@ fn paste_remembers_layers(s: &mut Session, p: &Value) -> Result<Value> {
 /// The Layers panel's target circle.
 fn target(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.target";
+    if let Some(ids) = ids_param(p, "range", C)? {
+        return target_range(s, p, ids);
+    }
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let st = s.doc()?;
     let n = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
@@ -454,6 +459,31 @@ fn target(s: &mut Session, p: &Value) -> Result<Value> {
         st.active_layer = Some(id);
     }
     Ok(json!({ "id": id.0, "selected": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// `layer.target` with `range`, a Shift-click range of target circles: the art of every listed row
+/// that is visible, unlocked and inside the isolated group is selected, or added to the selection
+/// with `add`. Nothing is targeted, and the highlighted rows stay. The current layer follows the
+/// selection, as with any selection change ([`Session::select`]).
+fn target_range(s: &mut Session, p: &Value, mut ids: Vec<NodeId>) -> Result<Value> {
+    const C: &str = "layer.target";
+    ids.truncate(MAX_ROWS);
+    let add = switch_or(p, "add", false, C)?;
+    let rows = {
+        let st = s.doc()?;
+        // Measures the locked artboards once for every row, not once per row.
+        let editable = st.doc.editable();
+        ids.retain(|id| st.doc.node(*id).is_some() && editable(*id) && in_isolation(&st.doc, st.isolation, *id));
+        st.layer_rows.clone()
+    };
+    if ids.is_empty() {
+        return Err(bad(C, "no row in the range is visible, unlocked and inside the isolated group"));
+    }
+    s.select(|d, sel| sel.target_range(d, &ids, add))?;
+    let st = s.doc_mut()?;
+    // Targeting doesn't change which rows are highlighted.
+    st.layer_rows = rows;
+    Ok(json!({ "range": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "selected": st.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
 }
 
 /// The Layers panel's clipping mask button: the top object of a layer (or group) clips the rest,
@@ -525,12 +555,15 @@ fn add_layer(s: &mut Session, p: &Value, cmd: &str, label: &str, place: impl FnO
 fn new_layer(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.new";
     let below = switch_or(p, "below", false, C)?;
-    if below && bool_or(p, "top", false) {
+    let top = bool_or(p, "top", false);
+    if below && top {
         return Err(bad(C, "`top` and `below` can't both be true"));
     }
+    // In Draw Behind a layer given neither `top` nor `below` goes below the current layer.
+    let below = below || (!top && s.draw_mode == crate::DrawMode::Behind);
     let st = s.doc()?;
     // Above the current layer, at its level; below it with `below`; on top of everything with `top`.
-    let cur = st.current_layer().filter(|_| !bool_or(p, "top", false));
+    let cur = st.current_layer().filter(|_| !top);
     add_layer(s, p, C, "New Layer", |d| match cur.and_then(|c| d.position(c)) {
         Some((parent, i, _)) => Ok((parent, if below { i } else { i + 1 })),
         None => Ok((None, if below { 0 } else { usize::MAX })),
@@ -621,12 +654,22 @@ fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
         "add" | "toggle" => {}
         other => return Err(bad(C, format!("mode is set, add or toggle, not `{other}`"))),
     }
+    // `rows` keeps the highlight order. With more than 8 ids, `held` holds the same rows as a set and
+    // answers each lookup; with fewer, each lookup searches `rows`.
+    let mut held: Option<HashSet<NodeId>> = (ids.len() > 8).then(|| rows.iter().copied().collect());
     let mut last = None;
     for id in ids {
-        if mode == "toggle" && rows.contains(&id) {
+        let has = held.as_ref().map_or_else(|| rows.contains(&id), |h| h.contains(&id));
+        if mode == "toggle" && has {
             rows.retain(|r| *r != id);
-        } else if !rows.contains(&id) {
+            if let Some(h) = &mut held {
+                h.remove(&id);
+            }
+        } else if !has {
             rows.push(id);
+            if let Some(h) = &mut held {
+                h.insert(id);
+            }
             last = Some(id);
         }
     }
@@ -646,6 +689,10 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = rows_or_guides_param(s, p, C, true)?;
     if ids.is_empty() {
         return Err(bad(C, "no rows"));
+    }
+    if let Some(v) = str_param(p, "name").filter(|v| !v.trim().is_empty()) {
+        let name = if xml_id { vectorcraft_doc::xml_id::to_object_name(v) } else { v.to_string() };
+        super::buildcmds::check_part_name(&s.doc()?.doc, &ids, &name)?;
     }
     s.edit("Layer Options", |d, sel| {
         for id in &ids {
@@ -722,19 +769,18 @@ fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         vec![id]
     };
-    let all_selected = !ids.is_empty() && ids.iter().all(|i| st.selection.contains(*i));
+    let all_selected = add && !ids.is_empty() && {
+        let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+        ids.iter().all(|i| selected.contains(i))
+    };
     let rows = st.layer_rows.clone();
     s.select(|_, sel| {
         if !add {
             sel.set(ids.iter().copied());
         } else if all_selected {
-            for i in &ids {
-                sel.remove(*i);
-            }
+            sel.remove_all(ids.iter().copied());
         } else {
-            for i in &ids {
-                sel.add(*i);
-            }
+            sel.add_all(ids.iter().copied());
         }
     })?;
     let st = s.doc_mut()?;
@@ -773,9 +819,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "no such rows"));
     }
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. A copy may go above or below one of the rows it
+    // copies, which a move there would leave where it is (#8237).
+    let beside_itself = copy && place != Place::Inside && ids.contains(&target);
     let around = d.ancestry(target).unwrap_or_default();
-    if ids.iter().any(|i| around.contains(i)) {
+    if ids.iter().any(|i| around.contains(i) && !(beside_itself && *i == target)) {
         return Err(bad(C, "a row can't go into itself"));
     }
     let nodes: Vec<&Node> = ids.iter().filter_map(|i| d.node(*i)).collect();
@@ -787,14 +835,34 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             parent => (parent, Some(target)),
         },
     };
+    // A copy beside a top-level layer it copies, with objects among the rows, would go inside
+    // that layer: into itself.
+    if parent.is_some_and(|p| ids.contains(&p)) {
+        return Err(bad(C, "a row can't go into itself"));
+    }
     if let Some(n) = nodes.iter().find(|n| !accepts(d, parent, n)) {
         let into = parent.and_then(|p| d.node(p)).map_or("the top level", |p| if p.is_layer() { "a layer" } else { p.kind_label() });
         return Err(bad(C, format!("{} can't go into {into}", n.display_name())));
     }
+    if let Some(what) = nodes.iter().find_map(|n| super::intertwine::refused_in(d, parent, n)) {
+        return Err(bad(C, format!("{what} can't be intertwined")));
+    }
     if parent.is_some_and(|p| locked_within(d, p)) {
         return Err(EngineError::Other("the layer or group is locked".into()));
     }
-    let label = if copy { "Duplicate Rows" } else { "Move Rows" };
+    // Rows that go into a Live Paint group join its paths, as Live Paint › Merge adds them.
+    let live_paint = LivePaintMove::plan(d, &ids, parent, copy)?;
+    let label = if live_paint.joins() {
+        "Merge Live Paint"
+    } else if copy {
+        "Duplicate Rows"
+    } else {
+        "Move Rows"
+    };
+    // Where each moved row comes from (a copy has a new id, so it comes from nowhere), and the
+    // Intertwine groups it leaves.
+    let from: std::collections::HashMap<NodeId, Option<NodeId>> = ids.iter().map(|i| (*i, d.parent_of(*i))).collect();
+    let left = if copy { vec![] } else { super::intertwine::groups_of(d, &ids) };
     let moved = s.edit(label, |d, sel| {
         let nodes = if copy {
             let mut nodes = vec![];
@@ -829,6 +897,9 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         if copy {
             super::typecmd::refresh_bounds_of(d, &out);
         }
+        let placed: Vec<(NodeId, Option<NodeId>)> = out.iter().map(|o| (*o, from.get(o).copied().flatten())).collect();
+        super::intertwine::settle_members(d, &placed, &left)?;
+        let out = live_paint.finish(d, sel, &out)?;
         sel.prune(d);
         sel.deselect_uneditable(d);
         Ok(out)
@@ -848,8 +919,18 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
-    s.edit("Reorder", |d, sel| {
+    if let Some(what) = super::intertwine::refused_in(d, parent, n) {
+        return Err(bad(C, format!("{what} can't be intertwined")));
+    }
+    let live_paint = LivePaintMove::plan(d, &[id], parent, false)?;
+    let label = if live_paint.joins() { "Merge Live Paint" } else { "Reorder" };
+    let from = d.parent_of(id);
+    let left = super::intertwine::groups_of(d, &[id]);
+    s.edit(label, |d, sel| {
         d.move_node(id, parent, index)?;
+        super::intertwine::settle_members(d, &[(id, from)], &left)?;
+        live_paint.finish(d, sel, &[id])?;
+        sel.prune(d);
         sel.deselect_uneditable(d);
         Ok(())
     })?;

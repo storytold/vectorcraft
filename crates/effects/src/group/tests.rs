@@ -1,6 +1,6 @@
 use super::*;
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
+use vectorcraft_doc::{CharStyle, Effect, FillLayer, NodeId, TextObject};
 use vectorcraft_geom::{Point, Rect, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
@@ -71,6 +71,33 @@ fn trap_effect_adds_an_overprinting_strip_above_the_members() {
     assert_eq!(fill.paint.color(), Some(yellow));
 }
 
+/// Trap takes each member's top fill that paints: a hidden fill on top is skipped, and a member
+/// whose only fill is hidden does not take part.
+#[test]
+fn trap_skips_a_hidden_fill() {
+    let yellow = Color::cmyk(0.0, 0.0, 1.0, 0.0);
+    let blue = Color::cmyk(1.0, 0.6, 0.0, 0.0);
+    let mut hidden = FillLayer::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+    hidden.visible = false;
+    let trap = |members: Vec<Arc<Node>>| {
+        let mut g = Node::group(NodeId(10), members);
+        let params = serde_json::json!({"thickness": 1.0, "tintReduction": 100});
+        g.appearance.effects.push(Effect { id: crate::trap::TRAP.into(), params, visible: true });
+        pathfinder_children(None, &g, None).unwrap()
+    };
+    let mut covered = (*sq(1, 0.0, yellow)).clone();
+    covered.appearance.items.push(AppearanceItem::Fill(hidden.clone()));
+    let out = trap(vec![Arc::new(covered), sq(2, 10.0, blue)]);
+    assert_eq!(out.len(), 3, "both squares and one trap");
+    assert_eq!(out[2].appearance.fill().unwrap().paint.color(), Some(yellow));
+    let only_hidden = Node::path(
+        NodeId(1),
+        shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)),
+        Appearance { items: vec![AppearanceItem::Fill(hidden)], ..Default::default() },
+    );
+    assert_eq!(trap(vec![Arc::new(only_hidden), sq(2, 10.0, blue)]).len(), 2, "no trap");
+}
+
 #[test]
 fn hard_mix_takes_the_highest_of_each_cmyk_channel_and_drops_strokes() {
     let mut g = two_overlapping_cmyk_squares();
@@ -85,6 +112,72 @@ fn soft_mix_blends_cmyk_bottom_to_top_and_drops_strokes() {
     g.appearance.effects.push(Effect { id: "pathfinder.softMix".into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true });
     let [c, m, y, k] = overlap_cmyk(&g);
     assert!((c - 0.3).abs() < 0.02 && (m - 0.43).abs() < 0.02 && (y - 0.35).abs() < 0.02 && (k - 0.05).abs() < 0.02, "{c} {m} {y} {k}");
+}
+
+/// Soft Mix and Hard Mix mix the top fill that paints: a hidden fill above it adds no color.
+#[test]
+fn mixes_skip_a_hidden_fill() {
+    for effect in ["pathfinder.softMix", "pathfinder.hardMix"] {
+        let mut plain = two_overlapping_cmyk_squares();
+        plain.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"mixingRate": 50.0}), visible: true });
+        let mut covered = plain.clone();
+        let NodeKind::Group { children, .. } = &mut covered.kind else { panic!("group") };
+        let mut hidden = FillLayer::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)));
+        hidden.visible = false;
+        for c in children.iter_mut() {
+            Arc::make_mut(c).appearance.items.push(AppearanceItem::Fill(hidden.clone()));
+        }
+        assert_eq!(overlap_cmyk(&covered), overlap_cmyk(&plain), "{effect}");
+    }
+}
+
+/// Outline strokes each edge with the top fill that paints, keeping that fill's opacity, blend
+/// mode and overprint. A hidden fill or a fill of no paint gives the edges nothing; with no fill
+/// that paints, the edges take the top stroke that paints, which skips hidden and 0 pt strokes.
+#[test]
+fn outline_edges_keep_the_fill_layers_opacity_blend_and_overprint() {
+    use vectorcraft_doc::StrokeLayer;
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let mut fill = FillLayer::new(red.clone());
+    (fill.opacity, fill.blend, fill.overprint) = (0.5, BlendMode::Multiply, true);
+    let mut hidden = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+    hidden.visible = false;
+    let mut stroke = StrokeLayer::new(blue.clone(), 2.0);
+    (stroke.opacity, stroke.blend, stroke.overprint) = (0.5, BlendMode::Multiply, true);
+    let mut hidden_stroke = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 2.0);
+    hidden_stroke.visible = false;
+    let zero_stroke = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), 0.0);
+    let look = |items: Vec<AppearanceItem>| Appearance { items, ..Default::default() };
+    let (f, s) = (AppearanceItem::Fill, AppearanceItem::Stroke);
+    let cases = [
+        (look(vec![f(fill.clone())]), Some(red.clone())),
+        (look(vec![f(fill.clone()), f(hidden.clone())]), Some(red.clone())),
+        (look(vec![f(fill.clone()), f(FillLayer::new(Paint::None))]), Some(red.clone())),
+        (look(vec![f(hidden.clone())]), None),
+        (look(vec![s(stroke.clone())]), Some(blue.clone())),
+        (look(vec![f(hidden.clone()), s(stroke.clone())]), Some(blue.clone())),
+        (look(vec![s(stroke.clone()), s(hidden_stroke), s(zero_stroke.clone())]), Some(blue.clone())),
+        (look(vec![s(zero_stroke)]), None),
+    ];
+    for (appearance, want) in cases {
+        let member = Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), appearance));
+        let mut g = Node::group(NodeId(10), vec![member, sq(2, 5.0, Color::rgb(0.0, 0.0, 1.0))]);
+        g.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({}), visible: true });
+        let out = pathfinder_children(None, &g, None).unwrap();
+        let edges: Vec<_> = out.iter().filter(|n| n.id == NodeId(1)).collect();
+        assert!(!edges.is_empty(), "{out:#?}");
+        for n in edges {
+            let [AppearanceItem::Stroke(s)] = n.appearance.items.as_slice() else { panic!("one stroke: {n:#?}") };
+            match &want {
+                Some(paint) => {
+                    assert_eq!(&s.paint, paint);
+                    assert_eq!((s.opacity, s.blend, s.overprint), (0.5, BlendMode::Multiply, true), "{s:#?}");
+                }
+                None => assert!(s.paint.is_none() && s.opacity == 1.0, "{s:#?}"),
+            }
+        }
+    }
 }
 
 #[test]
@@ -103,6 +196,49 @@ fn shape_modes_follow_the_pathfinder_panel() {
     assert_eq!(div.len(), 3);
 }
 
+/// An Intersect effect draws nothing when a group member's art has no area left at the effect's
+/// precision, and so do Minus Back when that group is in front and Subtract when it is at the
+/// back. Add, and Subtract with the group in front, leave such a member out.
+#[test]
+fn intersect_with_a_group_that_collapses_at_its_precision_draws_nothing() {
+    let thin_pair = |width: f64| {
+        let bar = |id: u64, x: f64| {
+            let fill = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+            Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 10.0, x + width, 30.0)), fill))
+        };
+        Node::group(NodeId(5), vec![bar(3, 10.0), bar(4, 50.0)])
+    };
+    let with_precision = |front: Node, effect: &str| {
+        let mut g = square_and(Some(front), effect);
+        g.appearance.effects[0].params = serde_json::json!({"precision": 1.0});
+        g
+    };
+    let int = results(&with_precision(thin_pair(0.5), "pathfinder.intersect"));
+    assert!(int.is_empty(), "{int:#?}");
+    // Bars wider than the precision keep their area.
+    let int = results(&with_precision(thin_pair(2.0), "pathfinder.intersect"));
+    let total: f64 = int.iter().map(|n| area(n)).sum();
+    assert!((total - 80.0).abs() < 1.0, "{total}: {int:#?}");
+    // Add keeps the square alone.
+    let add = results(&with_precision(thin_pair(0.5), "pathfinder.add"));
+    assert_eq!(add.len(), 1);
+    assert!((area(&add[0]) - 10_000.0).abs() < 1.0, "{add:#?}");
+    // Minus Back cuts the square from the empty group in front, and Subtract cuts nothing from
+    // the square.
+    let minus_back = results(&with_precision(thin_pair(0.5), "pathfinder.minusBack"));
+    assert!(minus_back.is_empty(), "{minus_back:#?}");
+    let subtract = results(&with_precision(thin_pair(0.5), "pathfinder.subtract"));
+    assert_eq!(subtract.len(), 1);
+    assert!((area(&subtract[0]) - 10_000.0).abs() < 1.0, "{subtract:#?}");
+    // With the group at the back, Subtract cuts the square from it and leaves nothing.
+    let mut back = with_precision(thin_pair(0.5), "pathfinder.subtract");
+    if let NodeKind::Group { children, .. } = &mut back.kind {
+        children.reverse();
+    }
+    let subtract = results(&back);
+    assert!(subtract.is_empty(), "{subtract:#?}");
+}
+
 /// Divide and Outline draw no piece of a member without fill or stroke, the same as when such
 /// pieces are left out.
 #[test]
@@ -116,6 +252,100 @@ fn divide_and_outline_draw_nothing_for_unpainted_members() {
         assert!(out.iter().any(|n| n.id == NodeId(1)) && out.iter().any(|n| n.id == NodeId(2)), "{effect}: {out:#?}");
         for n in out.iter().filter(|n| n.id == NodeId(2)) {
             assert!(n.appearance.items.iter().all(|i| i.paint().is_none()), "{effect}: {n:#?}");
+        }
+    }
+}
+
+/// With Remove Unpainted Artwork, Divide and Outline keep the area of a compound shape whose own
+/// appearance has a visible fill and leave out the area of one without.
+#[test]
+fn remove_unpainted_keeps_a_filled_compound_shapes_area() {
+    for effect in ["pathfinder.divide", "pathfinder.outline"] {
+        for filled in [true, false] {
+            let mut g = compound_shape(ShapeMode::Add);
+            if !filled {
+                g.appearance = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0).into();
+            }
+            g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": true}), visible: true });
+            let out = pathfinder_children(None, &g, None).unwrap();
+            assert_eq!(!out.is_empty(), filled, "{effect}, filled {filled}: {out:#?}");
+        }
+    }
+}
+
+/// Outline strokes a compound shape's area in the shape's own fill (its top visible one that
+/// paints), with Remove Unpainted Artwork on or off, and Divide leaves the area's pieces
+/// unpainted for the shape's fill to paint.
+#[test]
+fn outline_strokes_a_compound_shapes_area_in_its_fill() {
+    let green = Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    for (remove, covered) in [(false, false), (true, false), (false, true), (true, true)] {
+        for effect in ["pathfinder.divide", "pathfinder.outline"] {
+            let mut g = compound_shape(ShapeMode::Add);
+            if covered {
+                // A hidden fill and an unpainted fill above the green one.
+                let mut hidden = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+                hidden.visible = false;
+                let mut a = (*g.appearance).clone();
+                a.insert_item(a.items.len(), AppearanceItem::Fill(hidden));
+                a.insert_item(a.items.len(), AppearanceItem::Fill(FillLayer::new(Paint::None)));
+                g.appearance = a.into();
+            }
+            g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": remove}), visible: true });
+            let out = pathfinder_children(None, &g, None).unwrap();
+            assert!(!out.is_empty(), "{effect}, remove {remove}");
+            for n in &out {
+                if effect == "pathfinder.outline" {
+                    assert_eq!(n.appearance.stroke_paint(), green, "{effect}, remove {remove}: {n:#?}");
+                    assert!(n.appearance.fill_paint().is_none(), "{effect}, remove {remove}: {n:#?}");
+                } else {
+                    assert!(n.appearance.items.is_empty(), "{effect}, remove {remove}: {n:#?}");
+                }
+            }
+        }
+    }
+}
+
+/// Outline of a compound shape with no fill gives the edges no paint of their own when Remove
+/// Unpainted Artwork is off. The shape's own appearance strokes the result, so the shape's stroke
+/// is not copied onto the edges.
+#[test]
+fn outline_of_an_unfilled_compound_shape_adds_no_stroke() {
+    let mut g = compound_shape(ShapeMode::Add);
+    let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+    if let Some(AppearanceItem::Stroke(s)) = a.items.last_mut() {
+        s.opacity = 0.5;
+    }
+    g.appearance = a.into();
+    g.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({"removeUnpainted": false}), visible: true });
+    let out = pathfinder_children(None, &g, None).unwrap();
+    assert!(!out.is_empty(), "{out:#?}");
+    for n in &out {
+        assert!(!n.appearance.items.iter().any(paints), "{n:#?}");
+    }
+}
+
+/// With Remove Unpainted Artwork, Divide keeps the pieces of an unfilled member when its group's
+/// own visible fill paints them and leaves them out when the group has no fill. Outline leaves out
+/// the member's segments either way.
+#[test]
+fn remove_unpainted_keeps_members_a_groups_own_fill_paints() {
+    let unfilled = Arc::new(Node::path(
+        NodeId(2),
+        shapes::rectangle(Rect::new(5.0, 0.0, 15.0, 10.0)),
+        Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0),
+    ));
+    for effect in ["pathfinder.divide", "pathfinder.outline"] {
+        for filled in [true, false] {
+            let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), unfilled.clone()]);
+            if filled {
+                g.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), Paint::None, 0.0).into();
+            }
+            g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({"removeUnpainted": true}), visible: true });
+            let out = pathfinder_children(None, &g, None).unwrap();
+            assert!(out.iter().any(|n| n.id == NodeId(1)), "{effect}, filled {filled}: {out:#?}");
+            let kept = filled && effect == "pathfinder.divide";
+            assert_eq!(out.iter().any(|n| n.id == NodeId(2)), kept, "{effect}, filled {filled}: {out:#?}");
         }
     }
 }

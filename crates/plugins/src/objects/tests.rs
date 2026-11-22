@@ -450,10 +450,14 @@ fn bad_stroke_styles_and_effect_records_are_refused() {
 
 /// A `w` × `h` PNG whose pixels vary with their column, half transparent.
 fn png(w: u32, h: u32) -> Vec<u8> {
-    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 100) as u8, (y * 7) as u8, 30, 128]));
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
-    out
+    let mut data = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            data.extend_from_slice(&[(x * 100) as u8, (y * 7) as u8, 30, 128]);
+        }
+    }
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, data).unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// An image object `w` × `h` pixels showing blob `key`, linked to `link`.
@@ -590,14 +594,36 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     let id = d.insert(Some(layer), usize::MAX, n).unwrap();
     assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["pixelsOmitted"], json!(true), "too large to count");
     // Gray pixels, and data that isn't an image.
-    let mut gray = vec![];
-    image::GrayImage::from_pixel(2, 2, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png).unwrap();
+    let gray = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![90; 4]).unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     for (blob, mode) in [(ImageBlob::png(gray), "gray"), (ImageBlob::png(b"not an image".to_vec()), "unknown")] {
         d.images.insert("x".into(), blob);
         let n = image_node(&mut d, "x", (2, 2), None);
         let id = d.insert(Some(layer), usize::MAX, n).unwrap();
         assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["colorMode"], json!(mode));
     }
+}
+
+/// A distorted image comes with its corners, and with the transform that matches it at its middle
+/// rather than the one it had before the distort.
+#[test]
+fn a_distorted_image_comes_with_its_corners() {
+    let (mut d, _, _, [_, embedded, linked, ..]) = mixed();
+    let q = [(40.0, 60.0), (42.0, 60.0), (44.0, 62.0), (40.0, 62.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(embedded).unwrap().set_image_corners(q).unwrap();
+    let e = encode_read_only(&d, d.node(embedded).unwrap()).unwrap();
+    assert_eq!(e["corners"], json!([[40.0, 60.0], [42.0, 60.0], [44.0, 62.0], [40.0, 62.0]]));
+    assert_ne!(e["transform"], json!([2.0, 0.0, 0.0, 2.0, 40.0, 60.0]));
+    // The transform is the affine map nearest the corners, the one that matches them at the middle.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(embedded).unwrap()).unwrap().as_coeffs();
+    let got: Vec<f64> = e["transform"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!(got.len() == 6 && got.iter().zip(near).all(|(a, b)| (a - b).abs() < 1e-9), "{got:?} against {near:?}");
+    let plain = encode_read_only(&d, d.node(linked).unwrap()).unwrap();
+    assert!(plain.get("corners").is_none());
 }
 
 /// A CMYK image's pixels are its inks as the working CMYK profile shows them on the canvas: black

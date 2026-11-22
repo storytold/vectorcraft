@@ -73,8 +73,12 @@ impl Tool for TypeTool {
                 }
                 self.clicks = (None, 0);
                 // A press on other type edits it from there, so a drag selects its text at once,
-                // as it does in the type being edited.
+                // as it does in the type being edited. While the question about its fonts is open,
+                // the press does nothing more, and the edit in progress goes on.
                 if let Some(out) = self.edit_at(cx, ev.pos) {
+                    if self.pending_edit.is_some() {
+                        return out;
+                    }
                     self.selecting = true;
                     self.before_press = Some(before);
                     return out;
@@ -472,7 +476,16 @@ impl Tool for TypeTool {
     }
     fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.prev_tool = None;
+        self.pending_edit = None;
+        self.frames.get_mut().unwrap_or_else(|e| e.into_inner()).clear();
         self.finish(cx)
+    }
+    /// OK on the question about type in missing fonts started an edit the next poll begins.
+    fn waiting(&self) -> bool {
+        self.pending_edit.as_ref().is_some_and(|e| e.accepted)
+    }
+    fn poll(&mut self, cx: &ToolContext, _wait: bool) -> Vec<Action> {
+        self.resume_edit(cx)
     }
     /// Editing ends when a command takes the text out of the selection (Deselect, another object
     /// picked in the Layers panel) or removes it. After an Undo that takes back a list typed
@@ -537,9 +550,15 @@ impl Tool for TypeTool {
         }
     }
     /// `select {start, end}` / `selectAll` / `copy` (with `runs` of the selection) /
-    /// `commitTyping` (the caller commits the engine interaction).
+    /// `commitTyping` (the caller commits the engine interaction) / `missingFontEdit {token, ok}`
+    /// (the answer to the question about type in missing fonts; never a saved setting).
     fn set_option(&mut self, key: &str, v: &Value) {
         match key {
+            "missingFontEdit" => {
+                if let (Some(token), Some(ok)) = (v.get("token").and_then(Value::as_u64), v.get("ok").and_then(Value::as_bool)) {
+                    self.answer_edit(token, ok);
+                }
+            }
             // Transient selection transferred between Type and Eyedropper; never a saved setting.
             "textSelection" => {
                 if let (Some(id), Some(a), Some(b)) = (
@@ -609,6 +628,28 @@ impl Tool for TypeTool {
             _ => {}
         }
     }
+    /// The calls [`Self::set_option`] takes: `commitTyping`, `endTyping`, `selectAll` and
+    /// `stopEditing` take any value, the others the shapes they read (`missingFontEdit` a whole-number
+    /// `token` and a true or false `ok`).
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        let index = |a: &str, b: &str| v.get(a).or_else(|| v.get(b)).and_then(Value::as_u64).is_some();
+        let ok = match key {
+            "textSelection" => index("editing", "id") && index("anchor", "start") && index("caret", "end"),
+            "select" => index("start", "start") && index("end", "end"),
+            "prevTool" | "previousTool" => return crate::option_check::string_or_null(key, v),
+            "copy" => serde_json::from_value::<Vec<TextRun>>(v.clone()).is_ok(),
+            "commitTyping" | "endTyping" | "selectAll" | "stopEditing" => true,
+            "missingFontEdit" => v.get("token").and_then(Value::as_u64).is_some() && v.get("ok").and_then(Value::as_bool).is_some(),
+            _ => return Err(crate::option_check::unknown(key)),
+        };
+        let shape = match key {
+            "textSelection" => "{editing, anchor, caret} with whole numbers",
+            "select" => "{start, end} with whole numbers",
+            "missingFontEdit" => "{token, ok} with a whole number and true or false",
+            _ => "a list of text runs",
+        };
+        if ok { Ok(()) } else { Err(format!("`{key}` must be {shape}")) }
+    }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut o = self.snap.guides().to_vec();
         if let (Some((_, s)), Some(d)) = (self.press, self.drag) {
@@ -633,13 +674,17 @@ impl Tool for TypeTool {
                 o.push(Overlay::Measure { p: d, text: cx.size_label(size.width, size.height) });
             }
         }
+        // The other frames this call draws keep their layouts for the next call; the rest are dropped.
+        let fonts = vectorcraft_text::layout_inputs();
+        let mut now = self.frames.lock().unwrap_or_else(|e| e.into_inner());
+        let mut was = std::mem::take(&mut *now);
         // The ports of selected area type and type on a path, as many as show ([`PORTS_MAX`]), the
         // edited one's included.
         let shown = ports_shown(cx.doc, &cx.selection.objects);
         if shown {
             for id in cx.selection.objects.iter().filter(|id| Some(**id) != self.editing) {
                 if let Some(t) = ported(cx.doc, *id) {
-                    let lay = self.layout(t);
+                    let lay = Self::frame_layout(&mut now, &mut was, fonts, *id, t);
                     ports(cx, *id, t, lay.overflow, &mut o);
                 }
             }
@@ -688,7 +733,7 @@ impl Tool for TypeTool {
         if self.preedit.is_none() {
             for f in self.story_others(cx) {
                 let Some(other) = Self::text(cx, f) else { continue };
-                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), other);
+                let lay = Self::frame_layout(&mut now, &mut was, fonts, f, other);
                 for q in vectorcraft_text::selection_quads(&lay, 0, edit::runs_len(&other.runs)) {
                     o.push(Overlay::Highlight { quad: q.map(|p| other.xf * p), color: [60, 120, 255, 90] });
                 }

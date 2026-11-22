@@ -87,6 +87,48 @@ fn a_graphic_is_drawn_on_the_front_cap_at_its_offset_size_and_turn() {
 }
 
 #[test]
+fn a_mesh_carries_its_caps_graphics_flat_in_the_arts_plane() {
+    let d = document();
+    let graphics =
+        json!([{"symbol": "Mark", "x": 20.0, "y": -10.0, "scale": 200.0}, {"symbol": "Mark", "face": "back", "x": 20.0, "y": -10.0, "scale": 200.0}]);
+    // Turned, so the caps' corners in the mesh are not the art's.
+    let n = object(EXTRUDE, json!({"rotationX": -20.0, "rotationY": 35.0, "rotationZ": 10.0, "graphics": graphics}));
+    let parts = super::super::three_d_meshes_in(Some(&d), &n).unwrap();
+    // The walls first, then the front cap and the back cap, each two triangles.
+    assert_eq!(
+        parts.iter().map(|p| p.graphics.as_ref().map(|g| g.face)).collect::<Vec<_>>(),
+        [None, Some(PlanarFace::Front), Some(PlanarFace::Back)]
+    );
+    let total: usize = parts.iter().map(|p| p.mesh.triangles.len()).sum();
+    let plain = super::super::three_d_meshes_in(Some(&d), &object(EXTRUDE, json!({"rotationX": -20.0, "rotationY": 35.0, "rotationZ": 10.0})));
+    assert_eq!(total, plain.as_ref().map_or(0, |p| p.iter().map(|p| p.mesh.triangles.len()).sum()), "no triangle is lost or doubled");
+    assert!(plain.unwrap().iter().all(|p| p.graphics.is_none()));
+    // The art points of each cap's corners are the art's own square; the graphic is drawn flat at
+    // its place, mirrored on the back so it reads from behind.
+    for (part, drawn) in parts[1..].iter().zip([Rect::new(60.0, 30.0, 80.0, 50.0), Rect::new(20.0, 30.0, 40.0, 50.0)]) {
+        let Some(g) = &part.graphics else { panic!("no graphics") };
+        assert_eq!(g.art.len(), part.mesh.positions.len());
+        assert!(close(g.art_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0)), "{:?}", g.art_bounds());
+        assert_eq!(g.graphics.len(), 1);
+        let art = mesh_graphics_art(&d, NodeId(9), g).unwrap().unwrap();
+        let paths: Vec<(PathData, Paint)> = art
+            .children()
+            .into_iter()
+            .flatten()
+            .filter_map(|c| Some((c.path_data()?.clone(), c.appearance.items.first()?.paint().clone())))
+            .collect();
+        assert!(close(bounds_of(&paths), drawn), "{:?}: {:?}", g.face, bounds_of(&paths));
+        assert_eq!(paths[0].1, Paint::solid(red()), "unshaded");
+    }
+    // A plane is all one face; a graphic whose symbol is gone draws nothing.
+    let n = object(ROTATE, json!({"rotationY": 35.0, "graphics": [{"symbol": "Gone"}]}));
+    let parts = super::super::three_d_meshes_in(Some(&d), &n).unwrap();
+    assert_eq!(parts.len(), 1);
+    let Some(g) = &parts[0].graphics else { panic!("no graphics") };
+    assert_eq!(mesh_graphics_art(&d, NodeId(9), g), Ok(None));
+}
+
+#[test]
 fn without_the_document_or_its_symbol_nothing_is_drawn() {
     let n = object(EXTRUDE, json!({"graphics": [{"symbol": "Mark"}]}));
     let art = solid_art_in(None, &n).unwrap();
@@ -464,6 +506,31 @@ fn the_symbol_check_counts_what_the_view_draws() {
 }
 
 #[test]
+fn a_wireframe_is_not_refused_for_graphics_it_does_not_draw() {
+    let check = |d: &Document, id: &str, mut p: Value, wire: bool| {
+        if wire {
+            p["render"] = json!({"mode": "wireframe"});
+        }
+        validate_three_d_in(Some(d), &object(id, p.clone()), id, &p)
+    };
+    // The straight 30,000-sided polygon at 1000% fits the symbol limit, but cut into pieces on
+    // Inflate's puffed front it is too complex.
+    let straight = dense_document(false);
+    let big = json!({"perspectiveAngle": 0.0, "graphics": [{"symbol": "Dense", "scale": 1000.0}]});
+    assert!(validate_symbols(&straight, &big).is_ok());
+    let e = check(&straight, INFLATE, big.clone(), false).unwrap_err();
+    assert!(e.contains("too complex"), "{e}");
+    // Two copies of the curved one under a perspective are past the symbol limit on Extrude & Bevel.
+    let curved = dense_document(true);
+    let two = json!({"perspectiveAngle": 60.0, "graphics": [{"symbol": "Dense"}, {"symbol": "Dense", "face": "back"}]});
+    let e = check(&curved, EXTRUDE, two.clone(), false).unwrap_err();
+    assert!(e.contains("too complex"), "{e}");
+    // A wireframe draws the faces' edges and no graphics, so neither is checked.
+    assert_eq!(check(&straight, INFLATE, big, true), Ok(()));
+    assert_eq!(check(&curved, EXTRUDE, two, true), Ok(()));
+}
+
+#[test]
 fn a_plane_and_a_hollow_solid() {
     let d = document();
     let plane = object(ROTATE, json!({"rotationY": 30.0, "graphics": [{"symbol": "Mark"}]}));
@@ -489,12 +556,13 @@ fn graphics_are_checked() {
     let n = object(EXTRUDE, json!({}));
     let check = |id: &str, graphics: Value| validate_three_d_in(None, &n, id, &json!({"graphics": graphics}));
     assert!(check(EXTRUDE, json!([{"symbol": "Mark", "face": "back", "x": 3.0, "scale": 50.0, "rotation": -90.0}])).is_ok());
+    assert!(check(EXTRUDE, json!([{"symbol": "Mark", "face": "side", "x": -40.0, "y": 5.0}])).is_ok());
     assert!(check(EXTRUDE, json!([])).is_ok());
     for bad in [
         json!("Mark"),
         json!([{"face": "front"}]),
         json!([{"symbol": ""}]),
-        json!([{"symbol": "Mark", "face": "side"}]),
+        json!([{"symbol": "Mark", "face": "top"}]),
         json!([{"symbol": "Mark", "scale": 0.0}]),
         json!([{"symbol": "Mark", "rotation": 400.0}]),
         json!([{"symbol": "Mark", "x": "1"}]),
@@ -504,10 +572,14 @@ fn graphics_are_checked() {
         assert!(check(EXTRUDE, bad.clone()).is_err(), "{bad}");
     }
     assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "back"}])).is_err());
-    assert!(check(INFLATE, json!([{"symbol": "Mark"}])).is_err());
+    assert!(check(ROTATE, json!([{"symbol": "Mark", "face": "side"}])).is_err());
+    // Inflate takes graphics on its front and its puffed back, and none on a side.
+    assert!(check(INFLATE, json!([{"symbol": "Mark"}, {"symbol": "Mark", "face": "back"}])).is_ok());
+    assert!(check(INFLATE, json!([{"symbol": "Mark", "face": "side"}])).is_err());
     // Revolve takes graphics on its side, named the front; Revolve (Classic) takes none.
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_ok());
     assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "back"}]})).is_err());
+    assert!(validate_three_d_params(crate::REVOLVE, &json!({"graphics": [{"symbol": "Mark", "face": "side"}]})).is_err());
     assert!(validate_three_d_params(crate::CLASSIC_REVOLVE, &json!({"graphics": [{"symbol": "Mark"}]})).is_err());
     // A loaded file's invalid entries are left out when drawn.
     assert_eq!(mapped_graphics(&json!({"graphics": [{"symbol": "Mark"}, {"face": "back"}, 3]})).len(), 1);
@@ -527,10 +599,17 @@ fn the_frame_at_an_index_is_that_effects() {
 
 #[test]
 fn a_change_to_a_plane_drops_the_back_caps_graphics() {
-    let p = json!({"graphics": [{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}]});
+    let p = json!({"graphics": [{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}, {"symbol": "Mark", "face": "side"}]});
     let plane = three_d_params_as(EXTRUDE, &p, ROTATE);
     assert_eq!(plane["graphics"], json!([{"symbol": "Mark", "face": "front"}]));
     assert!(validate_three_d_params(ROTATE, &plane).is_ok());
+    // Revolve drops the side's graphics too; Extrude & Bevel keeps every face's.
+    assert_eq!(three_d_params_as(EXTRUDE, &p, crate::REVOLVE)["graphics"], json!([{"symbol": "Mark", "face": "front"}]));
+    assert_eq!(three_d_params_as(EXTRUDE, &p, EXTRUDE)["graphics"], p["graphics"]);
+    // Inflate keeps the front's and the back's graphics and drops the side's.
+    let inflated = three_d_params_as(EXTRUDE, &p, INFLATE);
+    assert_eq!(inflated["graphics"], json!([{"symbol": "Mark", "face": "front"}, {"symbol": "Mark", "face": "back"}]));
+    assert!(validate_three_d_params(INFLATE, &inflated).is_ok());
     // Back to Extrude & Bevel, the front's graphic stays.
     assert_eq!(three_d_params_as(ROTATE, &plane, EXTRUDE)["graphics"], plane["graphics"]);
 }
@@ -563,6 +642,15 @@ fn art_nested_too_deep_is_refused_and_not_drawn() {
     // A loaded file draws its other graphics.
     let both = object(EXTRUDE, json!({"graphics": [{"symbol": "Deep"}, {"symbol": "Mark"}]}));
     assert_eq!(graphics_in(&solid_art_in(Some(&d), &both).unwrap()).len(), 1);
+    // A mesh's graphics leave it out as well and draw the others.
+    let parts = super::super::three_d_meshes_in(Some(&d), &both).unwrap();
+    let Some(g) = parts.iter().find_map(|p| p.graphics.as_ref()) else { panic!("no graphics") };
+    let art = mesh_graphics_art(&d, NodeId(9), g).unwrap().unwrap();
+    assert_eq!(art.children().map_or(0, |c| c.len()), 1);
+    let deep = object(EXTRUDE, json!({"graphics": [{"symbol": "Deep"}]}));
+    let parts = super::super::three_d_meshes_in(Some(&d), &deep).unwrap();
+    let Some(g) = parts.iter().find_map(|p| p.graphics.as_ref()) else { panic!("no graphics") };
+    assert_eq!(mesh_graphics_art(&d, NodeId(9), g), Ok(None));
 }
 
 #[test]
@@ -923,4 +1011,179 @@ fn only_an_opaque_part_on_revolve_takes_a_seam_stroke() {
     assert!(!takes_seam(&piece(Paint::solid(red()), 1.0, BlendMode::Multiply)));
     // A pattern's tile may hold transparent art, which the overlap would show.
     assert!(!takes_seam(&piece(Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY }, 1.0, BlendMode::Normal)));
+}
+
+/// The paths in `art` filled in a shade of red: the parts of the "Mark" graphic.
+fn red_parts(art: &Node) -> Vec<PathData> {
+    let mut out = vec![];
+    art.walk(&mut |n| {
+        let Some(path) = n.path_data() else { return };
+        let red = n.appearance.items.iter().any(|i| match i {
+            AppearanceItem::Fill(f) => f.paint.color().is_some_and(|c| c.to_rgb()[0] > 0.3 && c.to_rgb()[1] < 0.1 && c.to_rgb()[2] < 0.1),
+            AppearanceItem::Stroke(_) => false,
+        });
+        if red {
+            out.push(path.clone());
+        }
+    });
+    out
+}
+
+fn reach(parts: &[PathData]) -> Rect {
+    parts.iter().filter_map(PathData::bounds).reduce(|a, b| a.union(b)).unwrap()
+}
+
+#[test]
+fn an_inflate_graphic_lies_on_its_puffed_front_where_the_art_is() {
+    let d = document();
+    let n = object(INFLATE, json!({"graphics": [{"symbol": "Mark", "x": 20.0, "y": -10.0, "scale": 200.0}]}));
+    let art = solid_art_in(Some(&d), &n).unwrap();
+    // Straight on, the puff rises toward the viewer and the graphic is carried straight out onto it:
+    // a 20 × 20 square centered 20 right of and 10 above (50, 50).
+    let parts = red_parts(&art);
+    assert!(!parts.is_empty());
+    assert!(close(reach(&parts), Rect::new(60.0, 30.0, 80.0, 50.0)), "{:?}", reach(&parts));
+    // Turned, the graphic moves and foreshortens with the puff under it.
+    let n = object(INFLATE, json!({"rotationY": 40.0, "graphics": [{"symbol": "Mark", "scale": 200.0}]}));
+    let turned = reach(&red_parts(&solid_art_in(Some(&d), &n).unwrap()));
+    assert!(turned.width() < 20.0 - 0.5 && (turned.height() - 20.0).abs() < 2.0, "{turned:?}");
+    // Without the document nothing is drawn.
+    assert!(red_parts(&solid_art_in(None, &n).unwrap()).is_empty());
+}
+
+#[test]
+fn an_inflate_back_takes_its_graphic_with_both_sides_and_twist_carries_it() {
+    let d = document();
+    let back = |extra: Value| {
+        let mut p = json!({"rotationY": 180.0, "graphics": [{"symbol": "Mark", "face": "back", "x": 20.0, "scale": 200.0}]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        red_parts(&solid_art_in(Some(&d), &object(INFLATE, p)).unwrap())
+    };
+    // Without Both sides the back is flat and open, with no puffed face to carry the graphic.
+    assert!(back(json!({})).is_empty());
+    // Seen from behind, the back reads left to right: 20 to the right as seen from behind is 20 to
+    // the left of the art's center, which turned half a turn lies 20 right on the page.
+    let plain = back(json!({"bothSides": true}));
+    assert!(!plain.is_empty());
+    let r = reach(&plain);
+    assert!((r.center().x - 70.0).abs() < 0.5 && (r.center().y - 50.0).abs() < 0.5 && (r.width() - 20.0).abs() < 0.5, "{r:?}");
+    // Twist turns the back, and the graphic turns with it.
+    let twisted = reach(&back(json!({"bothSides": true, "twist": 45.0})));
+    assert!(twisted.width() > r.width() + 3.0, "{twisted:?} {r:?}");
+}
+
+#[test]
+fn an_inflate_frame_puts_the_handle_on_the_puff_and_reads_it_back() {
+    let d = document();
+    let n = object(INFLATE, json!({"bothSides": true}));
+    let frame = graphic_frame(Some(&d), &n, None).unwrap();
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "x": 20.0, "y": -10.0})).unwrap();
+    let (page, shown) = frame.handle(&g).unwrap();
+    assert!(shown && (page.x - 70.0).abs() < 1e-6 && (page.y - 40.0).abs() < 1e-6, "{page:?}");
+    let (x, y) = frame.offset_at(PlanarFace::Front, page).unwrap();
+    assert!((x - 20.0).abs() < 1e-6 && (y + 10.0).abs() < 1e-6, "{x} {y}");
+    // From the front the back is out of sight: it has no handle and no offset.
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "back"})).unwrap();
+    assert!(frame.handle(&g).is_none());
+    assert!(frame.offset_at(PlanarFace::Back, Point::new(50.0, 50.0)).is_none());
+    // Turned half a turn, the back's handle reads back its offset, as seen from behind.
+    let n = object(INFLATE, json!({"bothSides": true, "rotationY": 180.0}));
+    let frame = graphic_frame(Some(&d), &n, None).unwrap();
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "back", "x": 15.0, "y": 5.0})).unwrap();
+    let (page, _) = frame.handle(&g).unwrap();
+    let (x, y) = frame.offset_at(PlanarFace::Back, page).unwrap();
+    assert!((x - 15.0).abs() < 1e-6 && (y - 5.0).abs() < 1e-6, "{x} {y}");
+}
+
+/// Where two pieces of an Inflate face overlap on the page, a point maps through the piece nearer
+/// at that point, though the other is nearer at its center.
+#[test]
+fn overlapping_inflate_pieces_map_a_point_through_the_one_nearer_there() {
+    let page = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(10.0, 20.0)];
+    let piece = |shift: f64, depth: f64, normal: [f64; 3], offset: f64| MembranePiece {
+        face: PlanarFace::Front,
+        uv: page.map(|p| p + Vec2::new(shift, 0.0)),
+        page,
+        depth,
+        plane: Some(DepthPlane { normal, offset, center: Point::ORIGIN, eye: None }),
+        index: 0,
+    };
+    // The tilted piece is nearer at its center (depth 10) but at depth 0 where x is 10; the flat
+    // one lies at depth 5 everywhere.
+    let tilted = piece(0.0, 10.0, [1.0, 0.0, 1.0], 10.0);
+    let flat = piece(100.0, 5.0, [0.0, 0.0, 1.0], 5.0);
+    let frame = GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces: vec![tilted, flat], covers: vec![] });
+    let (x, y) = frame.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).unwrap();
+    assert!((x - 110.0).abs() < 1e-6 && (y - 5.0).abs() < 1e-6, "{x} {y}");
+    // Near the tilted piece's left corner it is the nearer one.
+    let (x, _) = frame.offset_at(PlanarFace::Front, Point::new(2.0, 0.5)).unwrap();
+    assert!((x - 2.0).abs() < 1e-6, "{x}");
+    // A graphic's center has a handle only where its own piece is the nearer one, and the handle
+    // maps back to the same offset.
+    let mark = |x: f64, y: f64| MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "front", "x": x, "y": y})).unwrap();
+    assert!(frame.handle(&mark(10.0, 5.0)).is_none());
+    for (x, y) in [(2.0, 0.5), (110.0, 5.0)] {
+        let (at, _) = frame.handle(&mark(x, y)).unwrap();
+        let (bx, by) = frame.offset_at(PlanarFace::Front, at).unwrap();
+        assert!((bx - x).abs() < 1e-6 && (by - y).abs() < 1e-6, "{x} {y}: {bx} {by}");
+    }
+    // Of two overlapping pieces drawn last, the later one is drawn over the other, though the
+    // earlier one's plane is nearer.
+    let last = |shift: f64, offset: f64, index: usize| MembranePiece { index, ..piece(shift, f64::MAX, [0.0, 0.0, 1.0], offset) };
+    let pieces = vec![last(0.0, 10.0, 0), last(100.0, 0.0, 1)];
+    let frame = GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces, covers: vec![] });
+    let (x, _) = frame.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).unwrap();
+    assert!((x - 110.0).abs() < 1e-6, "{x}");
+    assert!(frame.handle(&mark(10.0, 5.0)).is_none());
+    assert!(frame.handle(&mark(110.0, 5.0)).is_some());
+}
+
+/// A graphic on Inflate's back has no handle where a nearer piece of the front covers its center
+/// on the page, and the back has no offset there; where the back is nearer, it has both.
+#[test]
+fn an_inflate_back_graphic_covered_by_a_nearer_front_piece_has_no_handle() {
+    let page = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(10.0, 20.0)];
+    let piece = |face: PlanarFace, depth: f64| MembranePiece { face, uv: page, page, depth, plane: None, index: 0 };
+    let frame = |front: f64, back: f64| {
+        let pieces = vec![piece(PlanarFace::Front, front), piece(PlanarFace::Back, back)];
+        GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces, covers: vec![] })
+    };
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "back", "x": -10.0, "y": 5.0})).unwrap();
+    let covered = frame(10.0, 5.0);
+    assert!(covered.handle(&g).is_none());
+    assert!(covered.offset_at(PlanarFace::Back, Point::new(10.0, 5.0)).is_none());
+    assert!(covered.offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).is_some());
+    let seen = frame(5.0, 10.0);
+    let (at, _) = seen.handle(&g).unwrap();
+    assert!((at.x - 10.0).abs() < 1e-6 && (at.y - 5.0).abs() < 1e-6, "{at:?}");
+    assert!(seen.offset_at(PlanarFace::Back, Point::new(10.0, 5.0)).is_some());
+}
+
+/// A nearer side facet that covers a graphic's center on Inflate's front hides its handle; one
+/// behind the front, or beside the center, leaves it. A facet drawn last (a back cap) hides it
+/// whatever its plane's depth, unless the front piece is drawn last too, after it.
+#[test]
+fn an_inflate_graphic_covered_by_a_nearer_side_has_no_handle() {
+    let page = [Point::new(0.0, 0.0), Point::new(20.0, 0.0), Point::new(10.0, 20.0)];
+    let front = |depth: f64, index: usize| MembranePiece { face: PlanarFace::Front, uv: page, page, depth, plane: None, index };
+    let side = |x0: f64, depth: f64, index: usize| Cover {
+        contours: vec![vec![Point::new(x0, 0.0), Point::new(x0 + 4.0, 0.0), Point::new(x0 + 4.0, 20.0), Point::new(x0, 20.0)]],
+        depth,
+        // A plane behind the front, as a back cap's is.
+        plane: Some(DepthPlane { normal: [0.0, 0.0, 1.0], offset: 1.0, center: Point::ORIGIN, eye: None }),
+        index,
+    };
+    let frame = |piece: MembranePiece, cover: Cover| {
+        GraphicFrame::inflated(Rect::new(0.0, 0.0, 20.0, 20.0), MembraneFrame { pieces: vec![piece], covers: vec![cover] })
+    };
+    let g = MappedGraphic::from_value(&json!({"symbol": "Mark", "face": "front", "x": 10.0, "y": 5.0})).unwrap();
+    let mut nearer = side(8.0, 10.0, 1);
+    nearer.plane = None;
+    assert!(frame(front(5.0, 0), nearer.clone()).handle(&g).is_none());
+    assert!(frame(front(5.0, 0), nearer).offset_at(PlanarFace::Front, Point::new(10.0, 5.0)).is_none());
+    assert!(frame(front(5.0, 0), side(8.0, 10.0, 1)).handle(&g).is_some());
+    assert!(frame(front(5.0, 0), side(14.0, 10.0, 1)).handle(&g).is_some());
+    assert!(frame(front(5.0, 0), side(8.0, f64::MAX, 1)).handle(&g).is_none());
+    assert!(frame(front(f64::MAX, 0), side(8.0, f64::MAX, 1)).handle(&g).is_none());
+    assert!(frame(front(f64::MAX, 2), side(8.0, f64::MAX, 1)).handle(&g).is_some());
 }

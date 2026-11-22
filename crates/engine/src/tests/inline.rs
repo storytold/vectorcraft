@@ -13,7 +13,8 @@ use crate::*;
 
 fn session() -> Session {
     let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    // A fixed created date: two sessions made in different seconds would otherwise differ in it.
+    s.execute("file.new", &json!({"width": 800, "height": 600, "created": 0})).unwrap();
     s
 }
 
@@ -144,6 +145,31 @@ fn type_tool_inserts_at_its_caret_and_deletes_the_graphic_whole() {
     s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(inline_count(&obj(&s, id)), 1);
+}
+
+/// With Performance › Real-time Drawing and Editing off, the typing waits for its session to end:
+/// a graphic inserted while typing applies it first, as a step of its own, and goes in at the
+/// caret after it.
+#[test]
+fn inserting_while_deferred_typing_keeps_the_typing() {
+    let mut s = session();
+    s.prefs.real_time_drawing = false;
+    // The new type starts empty: the caret after "Pay " is past the end of the text until the
+    // typing is applied.
+    s.prefs.placeholder_text = false;
+    circle_symbol(&mut s, "Mana", 10.0);
+    s.execute("symbol.setCurrent", &json!({"name": "Mana"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 300.0), v).unwrap();
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Pay ", v).unwrap();
+    s.execute("text.insertInline", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), format!("Pay {INLINE_CHAR}"));
+    let labels: Vec<String> = s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+    assert_eq!(labels[labels.len() - 2..], ["Typing", "Insert Inline Symbol"], "{labels:?}");
 }
 
 #[test]
@@ -502,6 +528,248 @@ fn saved_documents_keep_inline_graphics() {
     assert_eq!((art.symbol.as_str(), art.scale), ("Dot", 2.0));
     assert!(art.bounds.is_some());
     assert_eq!(t.cached_bounds, obj(&s, id).cached_bounds);
+}
+
+/// `groups` groups of `each` 5 × 5 black rectangles added to the first layer in one edit; returns
+/// the ids of each group's rectangles.
+fn rect_groups(s: &mut Session, groups: usize, each: usize) -> Vec<Vec<NodeId>> {
+    s.edit("Rectangles", |d, _| {
+        let look = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+        let mut ids = vec![];
+        let mut made = vec![];
+        for g in 0..groups {
+            let kids: Vec<Arc<Node>> = (0..each)
+                .map(|i| {
+                    let r = Rect::new(i as f64 * 6.0, g as f64 * 6.0, i as f64 * 6.0 + 5.0, g as f64 * 6.0 + 5.0);
+                    Arc::new(Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(r), look.clone()))
+                })
+                .collect();
+            ids.push(kids.iter().map(|k| k.id).collect());
+            made.push(Arc::new(Node::group(d.alloc_id(), kids)));
+        }
+        match Arc::make_mut(&mut d.layers[0]).children_mut() {
+            Some(kids) => kids.extend(made),
+            None => panic!("the first layer holds art"),
+        }
+        Ok(ids)
+    })
+    .unwrap()
+}
+
+/// Runs `step` on `full`, with every refresh of inline graphics taking the full pass, then on
+/// `fast`; checks that both leave the same document and that each refresh returned the same changed
+/// texts. Returns whether each of `fast`'s refreshes checked only the changed layer trees.
+fn same_as_full_pass(full: &mut Session, fast: &mut Session, step: &dyn Fn(&mut Session)) -> Vec<bool> {
+    let take = || cmd::inline::PASSES.with(|p| std::mem::take(&mut *p.borrow_mut()));
+    take();
+    cmd::inline::FULL_PASS.set(true);
+    step(full);
+    cmd::inline::FULL_PASS.set(false);
+    let want = take();
+    step(fast);
+    let got = take();
+    assert_eq!(*full.doc().unwrap().doc, *fast.doc().unwrap().doc);
+    let ids = |passes: &[(bool, Vec<NodeId>)]| passes.iter().map(|(_, ids)| ids.clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&got), ids(&want));
+    assert!(want.iter().all(|(partial, _)| !partial));
+    got.iter().map(|(partial, _)| *partial).collect()
+}
+
+/// After an edit, inline graphics are checked again only in the layer trees the edit changed, and
+/// the document and the changed texts are those of the full pass; a change to a symbol's art, its
+/// natural size or anything else a symbol is measured with checks them all.
+#[test]
+fn refreshing_only_changed_trees_matches_the_full_pass() {
+    // Both sessions lay out type, and the test rescans the fonts: a font another test adds between
+    // the full pass and the fast one would change how the type resolves in only one of them.
+    let _fonts = crate::adding_fonts();
+    let setup = |s: &mut Session| {
+        circle_symbol(s, "Tap", 10.0);
+        circle_symbol(s, "Dot", 6.0);
+        let groups = rect_groups(s, 20, 10);
+        let id = text(s, "Tap here");
+        s.execute("text.insertInline", &json!({"id": id.0, "at": 0, "symbol": "Tap"})).unwrap();
+        // Type showing Dot inline becomes the opacity mask of a rectangle.
+        let masked = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 50, "height": 50})).unwrap()["id"].clone();
+        let mask = text(s, "Dot");
+        s.execute("text.insertInline", &json!({"id": mask.0, "at": 0, "symbol": "Dot"})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({"ids": [masked, mask.0]})).unwrap();
+        (groups, id)
+    };
+    let (mut full, mut fast) = (session(), session());
+    let (groups, id) = setup(&mut full);
+    assert_eq!(setup(&mut fast), (groups.clone(), id));
+    let rect = groups[3][4].0;
+    let len = obj(&fast, id).plain_text().len();
+    let only_changed = |passes: &[bool]| !passes.is_empty() && passes.iter().all(|&p| p);
+    let all = |passes: &[bool]| !passes.is_empty() && passes.iter().all(|&p| !p);
+
+    // A rectangle beside 19 unchanged groups moves.
+    let passes = same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    });
+    assert!(only_changed(&passes), "{passes:?}");
+    // Type with an inline graphic is edited, gets a second one, and loses it again.
+    let passes = same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.execute("text.editRange", &json!({"id": id.0, "start": len, "end": len, "insert": "!"})).unwrap();
+        s.execute("text.insertInline", &json!({"id": id.0, "at": len, "symbol": "Dot"})).unwrap();
+        s.execute("text.editRange", &json!({"id": id.0, "start": len, "end": len + INLINE_CHAR.len_utf8(), "insert": ""})).unwrap();
+    });
+    assert!(only_changed(&passes), "{passes:?}");
+    // Dot's art is redefined: the type in the opacity mask follows it.
+    let passes = same_as_full_pass(&mut full, &mut fast, &|s| redefine_as_wide_ellipse(s, "Dot"));
+    assert!(passes.contains(&false), "{passes:?}");
+    // Tap's natural size changes, its art unchanged.
+    let passes = same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.edit("Size", |d, _| {
+            d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.into(), json!({ "Tap": [40.0, 20.0] }));
+            Ok(())
+        })
+        .unwrap();
+    });
+    assert!(all(&passes), "{passes:?}");
+    let (b, want) = (inline_bounds(&obj(&fast, id)), fast.doc().unwrap().doc.symbol_art_bounds("Tap"));
+    assert!(b.is_some() && b == want, "{b:?} {want:?}");
+    // 9-slice guides for Tap, its art unchanged.
+    let passes = same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.execute("symbol.options", &json!({"name": "Tap", "nineSlice": true})).unwrap();
+    });
+    assert!(all(&passes), "{passes:?}");
+    // Symbol editing mode, entered and left, a rectangle moved inside it.
+    same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.execute("symbol.edit", &json!({"name": "Dot"})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 4, "height": 4})).unwrap();
+        s.execute("symbol.exitEditing", &json!({})).unwrap();
+    });
+    // Undo and redo, then edits after them.
+    same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        s.execute("object.move", &json!({"dx": 0, "dy": 5})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.redo", &json!({})).unwrap();
+        s.execute("object.move", &json!({"dx": -5, "dy": 0})).unwrap();
+    });
+    // Fonts scanned again, then another move.
+    same_as_full_pass(&mut full, &mut fast, &|s| {
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        s.execute("object.move", &json!({"dx": 1, "dy": 1})).unwrap();
+    });
+}
+
+/// The CPU time this thread has used, from Linux's scheduler statistics; `None` elsewhere.
+fn thread_cpu() -> Option<std::time::Duration> {
+    let stat = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    stat.split_whitespace().next()?.parse().ok().map(std::time::Duration::from_nanos)
+}
+
+/// The time `f` takes in milliseconds: this thread's CPU time where Linux reports it, otherwise the
+/// wall clock.
+fn time_ms(f: impl FnOnce()) -> f64 {
+    let d = match thread_cpu() {
+        Some(before) => {
+            f();
+            thread_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before))
+        }
+        None => {
+            let start = std::time::Instant::now();
+            f();
+            start.elapsed()
+        }
+    };
+    d.as_secs_f64() * 1000.0
+}
+
+/// The median, fastest and slowest of `runs`, as text.
+fn spread(runs: &mut [f64]) -> String {
+    runs.sort_by(f64::total_cmp);
+    format!("{:>9.3} ({:.3}-{:.3})", runs[runs.len() / 2], runs[0], runs[runs.len() - 1])
+}
+
+/// Timings of the refresh of inline graphics after one rectangle moves, with the full pass and with
+/// only the changed layer trees checked, in documents of 5,000, 50,000 and 200,000 rectangles in 100
+/// groups, with three symbols and one line of type showing one of them inline: the refresh alone,
+/// on copies of the same edit, and the whole `object.move` command. 7 runs each, taking turns going
+/// first. Ignored by default; it prints the median, fastest and slowest run and sets no bound on
+/// them: `cargo test --release -p vectorcraft-engine --lib inline_refresh_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn inline_refresh_perf() {
+    const RUNS: usize = 7;
+    eprintln!("inline_refresh_perf: {}", if thread_cpu().is_some() { "thread CPU time" } else { "wall clock" });
+    eprintln!("inline_refresh_perf: {:>7} {:<14} {:>28} {:>28}", "objects", "case", "full pass ms (min-max)", "changed trees ms (min-max)");
+    for n in [5_000, 50_000, 200_000] {
+        let mut s = session();
+        for name in ["A", "B", "C"] {
+            circle_symbol(&mut s, name, 10.0);
+        }
+        let groups = rect_groups(&mut s, 100, n / 100);
+        let id = text(&mut s, "Type");
+        s.execute("text.insertInline", &json!({"id": id.0, "at": 0, "symbol": "B"})).unwrap();
+        let rect = groups[50][7];
+        s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 1, "dy": 0})).unwrap();
+        // The refresh alone, after the same move made on a copy of the resolved document.
+        let resolved = s.doc().unwrap().inline_resolved.clone().unwrap();
+        let before = resolved.0.clone();
+        // The rectangle and the group and layer above it become new nodes, as a move makes them.
+        let mut after = (*before).clone();
+        assert!(after.node_mut(rect).is_some());
+        // Each run times EACH refreshes, or EACH commands, and gives the time of one.
+        const EACH: usize = 20;
+        let (mut full, mut partial) = (vec![], vec![]);
+        for run in 0..RUNS {
+            let (mut a, mut b) = (vec![after.clone(); EACH], vec![after.clone(); EACH]);
+            let mut go_full = || {
+                cmd::inline::FULL_PASS.set(true);
+                full.push(
+                    time_ms(|| {
+                        for d in &mut a {
+                            cmd::inline::refresh(Some(&resolved), &before, d);
+                        }
+                    }) / EACH as f64,
+                );
+                cmd::inline::FULL_PASS.set(false);
+            };
+            let mut go_partial = || {
+                partial.push(
+                    time_ms(|| {
+                        for d in &mut b {
+                            cmd::inline::refresh(Some(&resolved), &before, d);
+                        }
+                    }) / EACH as f64,
+                );
+            };
+            if run % 2 == 0 {
+                go_full();
+                go_partial();
+            } else {
+                go_partial();
+                go_full();
+            }
+            assert_eq!(a, b);
+        }
+        eprintln!("inline_refresh_perf: {n:>7} {:<14} {:>28} {:>28}", "refresh", spread(&mut full), spread(&mut partial));
+        // The whole command, moving the rectangle back and forth.
+        let (mut full, mut partial) = (vec![], vec![]);
+        for run in 0..2 * RUNS {
+            let take_full = (run / 2) % 2 == run % 2;
+            cmd::inline::FULL_PASS.set(take_full);
+            let ms = time_ms(|| {
+                for i in 0..EACH {
+                    let dx = if i % 2 == 0 { -1 } else { 1 };
+                    s.execute("object.move", &json!({"dx": dx, "dy": 0})).unwrap();
+                }
+            }) / EACH as f64;
+            cmd::inline::FULL_PASS.set(false);
+            if take_full { full.push(ms) } else { partial.push(ms) }
+        }
+        eprintln!("inline_refresh_perf: {n:>7} {:<14} {:>28} {:>28}", "object.move", spread(&mut full), spread(&mut partial));
+        cmd::inline::PASSES.with(|p| p.borrow_mut().clear());
+    }
 }
 
 #[test]

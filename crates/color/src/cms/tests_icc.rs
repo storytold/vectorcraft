@@ -30,11 +30,62 @@ fn cmyk_profiles_convert_like_the_cms() {
             let de = delta_e2000(lab::srgb_to_lab(want), lab::srgb_to_lab(got));
             assert!(de < 2.5, "{name} {cmyk:?}: {want:?} vs {got:?} (ΔE {de})");
         }
-        // And back: an in-gamut colour separates to about the same inks.
-        let srgb = cms.cmyk_to_srgb([0.1, 0.6, 0.8, 0.0], false);
-        let back = p.from_srgb(srgb, Intent::RelativeColorimetric).unwrap();
-        let again = cms.cmyk_to_srgb([back[0], back[1], back[2], back[3]], false);
-        assert!(delta_e2000(lab::srgb_to_lab(srgb), lab::srgb_to_lab(again)) < 3.0, "{back:?}");
+        // And back: in-gamut colours separate to inks that print them. The Lab → CMYK table is
+        // the colorimetric inverse of the CMYK → Lab table, with no black-point compensation.
+        for inks in [
+            [0.1, 0.6, 0.8, 0.0],
+            [0.5, 0.1, 0.3, 0.1],
+            [0.3, 0.3, 0.3, 0.2],
+            [0.05, 0.05, 0.4, 0.0],
+            [0.4, 0.3, 0.3, 0.6],
+            [0.6, 0.5, 0.5, 0.4],
+            [0.2, 0.2, 0.2, 0.8],
+            [0.0, 0.0, 0.0, 0.5],
+        ] {
+            let srgb = cms.cmyk_to_srgb(inks, false);
+            let back = p.from_srgb(srgb, Intent::RelativeColorimetric).unwrap();
+            let again = cms.cmyk_to_srgb([back[0], back[1], back[2], back[3]], false);
+            let de = delta_e2000(lab::srgb_to_lab(srgb), lab::srgb_to_lab(again));
+            assert!(de < 1.5, "{name} {inks:?}: {srgb:?} -> {back:?} -> {again:?} (ΔE {de})");
+        }
+        // The perceptual table keeps black-point compensation: source black separates to inks
+        // that print the press's black point, as the CMS separates it with compensation.
+        let compensated = Cms::new(&ColorSettings { cmyk: name.into(), bpc: true, ..Default::default() }).unwrap();
+        let want = compensated.srgb_to_cmyk([0.0; 3], Intent::RelativeColorimetric);
+        let got = p.from_srgb([0.0; 3], Intent::Perceptual).unwrap();
+        let printed = |inks: &[f32]| cms.cmyk_to_lab([inks[0], inks[1], inks[2], inks[3]]);
+        let de = delta_e2000(printed(&want), printed(&got));
+        assert!(de < 1.5, "{name}: perceptual black {got:?} prints {:?}, want {want:?} ({:?})", printed(&got), printed(&want));
+    }
+}
+
+#[test]
+fn cmyk_profiles_separate_saturated_inks_back_without_clipping_to_srgb() {
+    // CMYK → PCS → CMYK through the profile's own colorimetric tables, by way of linear ProPhoto
+    // RGB, which holds every color these profiles print, so no display gamut clips the inks.
+    // Inks that print outside sRGB come back to inks that print the same color.
+    for name in BUILTIN_CMYK {
+        let p = IccProfile::from_bytes(None, &icc_bytes(name).unwrap()).unwrap();
+        let cms = Cms::new(&ColorSettings { cmyk: name.into(), bpc: false, ..Default::default() }).unwrap();
+        for inks in
+            [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [1.0, 1.0, 0.0, 0.0], [0.0, 1.0, 1.0, 0.0], [1.0, 0.0, 1.0, 0.0]]
+        {
+            let back = p.to_same_model_of(&p, &inks, Intent::RelativeColorimetric, false).unwrap();
+            let de = delta_e2000(cms.cmyk_to_lab(inks), cms.cmyk_to_lab([back[0], back[1], back[2], back[3]]));
+            // Within the ΔE of 3 that the gamut tag counts as reproduced.
+            assert!(de <= 3.0, "{name} {inks:?} -> {back:?} (ΔE {de})");
+        }
+    }
+}
+
+#[test]
+fn cmyk_profiles_carry_their_paper_as_the_media_white() {
+    let generic = generic::swop_like();
+    let p = parse(&icc_bytes(GENERIC_CMYK).unwrap());
+    let white = p.media_white_point.unwrap();
+    let paper = lab::lab_to_xyz(generic.paper);
+    for (got, want) in [white.x, white.y, white.z].iter().zip(paper) {
+        assert!((*got - f64::from(want)).abs() < 2e-3, "{white:?} vs {paper:?}");
     }
 }
 
@@ -116,9 +167,10 @@ fn black_point_compensation_maps_the_darkest_ink_to_rgb_black() {
     let rich = [0.75, 0.68, 0.67, 0.9];
     let (on, off) = (icc_cmyk(true).cmyk_to_rgb(rich, Intent::RelativeColorimetric), icc_cmyk(false).cmyk_to_rgb(rich, Intent::RelativeColorimetric));
     // Without compensation the profile's black is a dark grey; with it, rich black goes most of
-    // the way to RGB black (not all: it isn't quite the darkest ink the profile prints).
+    // the way to RGB black (not all: it isn't quite the darkest ink the profile prints, and the
+    // profile's Lab → CMYK table carries no compensation of its own).
     assert!(off.iter().all(|v| *v > 0.1), "without: {off:?}");
-    assert!(on.iter().zip(off).all(|(a, b)| *a < 0.08 && *a < b * 0.5), "with: {on:?}, without: {off:?}");
+    assert!(on.iter().zip(off).all(|(a, b)| *a < 0.09 && *a < b * 0.55), "with: {on:?}, without: {off:?}");
     // The screen shows what an sRGB conversion writes, compensated alike.
     let srgb = |bpc| {
         let c = icc_cmyk(bpc);
@@ -133,6 +185,25 @@ fn black_point_compensation_maps_the_darkest_ink_to_rgb_black() {
     assert!(white.iter().all(|v| *v > 0.99), "{white:?}");
     let abs = |bpc| icc_cmyk(bpc).cmyk_to_rgb(rich, Intent::AbsoluteColorimetric);
     assert_eq!(abs(true), abs(false));
+}
+
+/// A loaded ICC CMYK profile as Proof Setup's device shows its darkest ink with the settings'
+/// black-point compensation, as the working CMYK proof of the same profile does, and Simulate
+/// Black Ink shows it as the lighter gray the press prints.
+#[test]
+fn simulate_black_ink_shows_a_loaded_cmyk_profiles_black_as_gray() {
+    let c = icc_cmyk(true);
+    let k100 = [0.0, 0.0, 0.0, 1.0];
+    let device = ProofSetup { target: ProofTarget::Cmyk(c.settings().cmyk.clone()), ..Default::default() };
+    let plain = c.proof_cmyk_to_srgb(k100, &device);
+    let working = c.proof_cmyk_to_srgb(k100, &ProofSetup { target: ProofTarget::WorkingCmyk, ..Default::default() });
+    assert!(plain.iter().zip(working).all(|(a, b)| (a - b).abs() < 0.01), "device {plain:?}, working {working:?}");
+    let black = c.proof_cmyk_to_srgb(k100, &ProofSetup { simulate_black: true, ..device.clone() });
+    assert!(plain.iter().zip(black).all(|(a, b)| b > a + 0.03), "black ink {black:?}, without {plain:?}");
+    // Without black-point compensation the device shows the darkest ink as the press prints it.
+    let off = icc_cmyk(false);
+    let plain_off = off.proof_cmyk_to_srgb(k100, &ProofSetup { target: ProofTarget::Cmyk(off.settings().cmyk.clone()), ..Default::default() });
+    assert!(plain_off.iter().zip(black).all(|(a, b)| (a - b).abs() < 0.02), "without compensation {plain_off:?}, black ink {black:?}");
 }
 
 /// #1584: every built-in profile (RGB, CMYK and gray) has each tag on a 4-byte boundary and a size

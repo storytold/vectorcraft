@@ -1157,9 +1157,41 @@ fn pathfinder_takes_swatch_linked_pieces_of_type_in_a_reshaped_group() {
 fn an_image_s_painted_fill_is_hit_and_measured_as_drawn() {
     let mut s = session();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
     let im = NodeId(r["ids"][0].as_u64().unwrap());
     run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
@@ -4414,6 +4446,59 @@ fn a_cancelled_filter_run_changes_nothing() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
+/// Preferences › Plug-ins & Scratch Disks › Plug-in Instruction Budget: with Normal a light filter
+/// runs out of instructions and changes nothing; with Large the same installed filter finishes, as
+/// one undo step, without being installed again. The time budget, Cancel and a heavy filter's
+/// larger budget stay as they are, and setting Normal again applies to the next run.
+#[test]
+fn the_plugin_instruction_budget_preference_sets_a_filter_run_s_instructions() {
+    use cmd::plugin::FilterRun;
+    let mut s = session();
+    let id = "test.engine.largebudget";
+    let output = json!({"objects": [{"path": triangle(), "name": "Plug-in"}]}).to_string();
+    // More steps than a light budget pays for, fewer than 5 times it.
+    install_wat(&mut s, &tpl::spinning(&tpl::manifest(id, "filter", "{}"), 20_000_000, &output));
+    let p = json!({"id": id, "ids": []});
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute("plugin.run", &p).unwrap_err().to_string();
+    assert!(e.contains("instruction budget"), "{e}");
+    assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&before, undo));
+
+    run(&mut s, "prefs.set", json!({"key": "pluginInstructionBudget", "value": "large"}));
+    let light = vectorcraft_plugins::Limits::default();
+    let large = FilterRun::prepare(&s, &p).unwrap().limits().clone();
+    assert_eq!(large, vectorcraft_plugins::Limits { fuel_base: vectorcraft_plugins::LARGE_FUEL, ..light.clone() });
+    assert_eq!((large.fuel_per_byte, large.wall_time_ms), (light.fuel_per_byte, light.wall_time_ms));
+    // Cancel still stops it, and it changes nothing.
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || s.execute("plugin.run", &p));
+    assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
+    assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&before, undo));
+    let made = run(&mut s, "plugin.run", p.clone())["ids"].clone();
+    assert_eq!(made.as_array().map(Vec::len), Some(1));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+
+    // A heavy filter keeps its larger budget with either choice.
+    let heavy_id = "test.engine.largebudget.heavy";
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&heavy(heavy_id, 1)), "allowHeavy": true}));
+    let hp = json!({"id": heavy_id, "ids": []});
+    for budget in ["large", "normal"] {
+        run(&mut s, "prefs.set", json!({"key": "pluginInstructionBudget", "value": budget}));
+        let limits = FilterRun::prepare(&s, &hp).unwrap().limits().clone();
+        let heavy_limits = (vectorcraft_plugins::HEAVY_FUEL, vectorcraft_plugins::HEAVY_WALL_TIME_MS);
+        assert_eq!((limits.fuel_base, limits.wall_time_ms), heavy_limits, "{budget}");
+    }
+
+    // Normal again: the next run runs out of instructions.
+    let undo = s.doc().unwrap().history.undo.len();
+    let e = s.execute("plugin.run", &p).unwrap_err().to_string();
+    assert!(e.contains("instruction budget"), "{e}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "plugin.remove", json!({"id": heavy_id}));
+}
+
 /// The manifest of a filter `id` named "Cmd Test" of `kind` with `commands` (a JSON list).
 fn with_commands(id: &str, kind: &str, commands: &str) -> String {
     format!(r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"{kind}","commands":{commands}}}"#)
@@ -4479,9 +4564,10 @@ fn plugin_commands_are_registered_run_and_removed() {
     install_wat(&mut s, &tpl::module(&tpl::manifest(id, "filter", "{}"), tpl::ECHO, "", 1));
     assert!(listed(&s, grow).is_none() && crate::cmd::find_command(grow).is_none());
     install_wat(&mut s, &grower(id));
-    assert!(listed(&s, grow).is_some());
+    assert!(listed(&s, grow).is_some() && crate::cmd::find_command(grow).is_some());
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert!(listed(&s, grow).is_none() && listed(&s, tidy).is_none());
+    assert!(crate::cmd::find_command(grow).is_none() && crate::cmd::find_command(tidy).is_none());
     assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
 }
 

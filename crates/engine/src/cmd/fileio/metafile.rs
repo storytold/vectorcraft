@@ -19,6 +19,18 @@ pub(super) const OPTIONS: &[FormatOption] = &[super::ARTBOARD, super::ARTBOARDS,
 /// Encode `doc` as `kind`: the chosen artboard (default the first), or with `use_artboards` one
 /// picture per chosen artboard (default all).
 pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kind: Kind) -> Result<Encoded> {
+    encode_flattening(doc, p, use_artboards, kind, crate::flatten_raster_effects)
+}
+
+/// [`encode`] with `flatten` turning raster effects into images. The chosen artboards are checked
+/// first, so an export that is refused does not call `flatten`.
+pub(super) fn encode_flattening(
+    doc: &Document,
+    p: &Value,
+    use_artboards: Option<bool>,
+    kind: Kind,
+    flatten: impl FnOnce(&Document) -> Option<Document>,
+) -> Result<Encoded> {
     let f = super::format(kind.id()).ok_or_else(|| bad(C, "no metafile format"))?;
     let pick: ArtboardPick = super::encode::options(f, p)?;
     let n = doc.artboards.len();
@@ -26,13 +38,20 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
         Some(true) => pick.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect()),
         _ => vec![pick.one(n).map_err(|e| bad(C, e))?],
     };
+    if boards.is_empty() {
+        return Err(bad(C, "the document has no artboard"));
+    }
+    let rects = boards
+        .iter()
+        .map(|&b| doc.artboards.get(b).map(|a| a.rect).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))))
+        .collect::<Result<Vec<_>>>()?;
+    vectorcraft_metafile::check_regions(&rects).map_err(|e| bad(C, e))?;
     // Raster effects (shadows, glows, blurs) as images, as PDF export does.
-    let flat = crate::flatten_raster_effects(doc);
+    let flat = flatten(doc);
     let src = flat.as_ref().unwrap_or(doc);
+    let outs = vectorcraft_metafile::export_regions(src, &rects, kind).map_err(|e| bad(C, e))?;
     let mut enc = Encoded::default();
-    for b in boards {
-        let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
-        let out = vectorcraft_metafile::export(src, region, kind).map_err(|e| bad(C, e))?;
+    for (b, out) in boards.into_iter().zip(outs) {
         enc.files.push((Some(b), out.bytes));
         for w in out.warnings {
             if !enc.warnings.contains(&w) {

@@ -8,8 +8,7 @@
 use egui::{Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{
-    Composer, HyphenationOptions, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, Mojikumi, NodeKind, ParaDirection, ParaStyle,
-    SingleWordJustify,
+    Composer, HyphenationOptions, JustificationOptions, Justify, KinsokuShoriType, Mojikumi, NodeKind, ParaDirection, ParaStyle, SingleWordJustify,
 };
 
 use super::character::{Metric, Shared, text_style};
@@ -94,8 +93,7 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 /// the Selection tool these are the paragraphs of every frame of the selected stories
 /// ([`super::character::selected_stories`]).
 pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
-    if let Some((id, a, b)) = super::character::text_editing(app) {
-        super::character::end_typing(app);
+    if let Some((id, a, b)) = super::character::text_editing_kept(app)? {
         match super::character::text_story(app) {
             // After Select All in threaded text: every paragraph of every frame.
             Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),
@@ -795,14 +793,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Which characters may not start or end a line.
         ui.horizontal(|ui| {
             widgets::dim_label(ui, tl!("Kinsoku Set"));
-            let sets = [(tl!("None"), Kinsoku::None, "none"), (tl!("Hard"), Kinsoku::Hard, "hard"), (tl!("Soft"), Kinsoku::Soft, "soft")];
-            let names = sets.map(|s| s.0);
-            let current = shared_para(app, |p| p.kinsoku).and_then(|k| sets.iter().find(|s| s.1 == k).map(|s| s.0)).unwrap_or("");
+            let sets = [(tl!("None"), "None", "none"), (tl!("Hard"), "Hard", "hard"), (tl!("Soft"), "Soft", "soft")];
+            let custom: Vec<String> = app.session.active().map(|st| st.doc.kinsoku_sets.iter().map(|k| k.name.clone()).collect()).unwrap_or_default();
+            let mut names: Vec<&str> = sets.iter().map(|s| s.0).collect();
+            names.extend(custom.iter().map(String::as_str));
+            names.push(tl!("Kinsoku Shori Settings…"));
+            let current = shared_kinsoku_name(app);
+            let current = current.as_deref().map_or("", |n| sets.iter().find(|s| s.1 == n).map_or(n, |s| s.0));
             // Already translated: shown as they are.
-            if let Some(i) = widgets::dropdown_names(ui, "pa-kinsoku", current, &names, ui.available_width() - 4.0)
-                && let Some((_, _, key)) = sets.get(i)
-            {
-                format(app, json!({"kinsoku": key}));
+            if let Some(i) = widgets::dropdown_names(ui, "pa-kinsoku", current, &names, ui.available_width() - 4.0) {
+                if let Some((_, _, key)) = sets.get(i) {
+                    format(app, json!({"kinsoku": key}));
+                } else if let Some(name) = custom.get(i - sets.len()) {
+                    format(app, json!({"kinsoku": name}));
+                } else {
+                    crate::menus::invoke(app, crate::dialogs::kinsoku_sets::COMMAND, json!({}));
+                }
             }
         });
     }
@@ -859,6 +865,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // A repeat mark starting a line is drawn as the character it repeats.
+        let repeat = shared_para(app, |p| p.kurikaeshi_moji_shori) == Some(true);
+        if menu_item(ui, tl!("Kurikaeshi Moji Shori"), has, repeat) {
+            toggle_kurikaeshi_moji_shori(app);
+        }
         // How a line keeps the kinsoku characters off its ends: the selected paragraphs' type is
         // checked, and none is when they differ.
         let kinsoku_type = shared_para(app, |p| p.kinsoku_type);
@@ -927,7 +938,23 @@ fn mojikumi_sets() -> [(&'static str, Mojikumi, &'static str); 6] {
 /// Bunri-Kinshi's menu item for the paragraphs the panel acts on ([`format`]): (available, checked).
 /// It is available when none of them has kinsoku None, and checked when every one of them has it.
 fn bunri_kinshi_item(app: &VectorcraftApp) -> (bool, bool) {
-    (shared_para(app, |p| p.kinsoku == Kinsoku::None) == Some(false), shared_para(app, |p| p.bunri_kinshi) == Some(true))
+    (shared_para(app, ParaStyle::kinsoku_on) == Some(true), shared_para(app, |p| p.bunri_kinshi) == Some(true))
+}
+
+/// The Kinsoku set every paragraph the panel acts on ([`format`]) has, by name (None, Hard, Soft or
+/// a custom set's), or `None` when they differ.
+fn shared_kinsoku_name(app: &VectorcraftApp) -> Option<String> {
+    let mut first: Option<String> = None;
+    let mut differ = false;
+    visit_paragraphs(app, |p| match &first {
+        None => first = Some(p.kinsoku_name().to_string()),
+        Some(n) => differ |= n != p.kinsoku_name(),
+    });
+    match first {
+        None => text_style(app).map(|(_, p)| p.kinsoku_name().to_string()),
+        Some(_) if differ => None,
+        n => n,
+    }
 }
 
 /// Bunri-Kinshi (Paragraph panel menu): a click turns it off for all the paragraphs the panel acts
@@ -935,6 +962,14 @@ fn bunri_kinshi_item(app: &VectorcraftApp) -> (bool, bool) {
 fn toggle_bunri_kinshi(app: &mut VectorcraftApp) {
     let on = shared_para(app, |p| p.bunri_kinshi) == Some(true);
     format(app, json!({"bunriKinshi": !on}));
+}
+
+/// Kurikaeshi Moji Shori (Paragraph panel menu): the menu item is checked when every paragraph the
+/// panel acts on ([`format`]) has it, and a click turns it off for all of them then, and on for all
+/// of them otherwise, in one undo step.
+fn toggle_kurikaeshi_moji_shori(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.kurikaeshi_moji_shori) == Some(true);
+    format(app, json!({"kurikaeshiMojiShori": !on}));
 }
 
 /// Korean Line Break Anywhere (Paragraph panel menu): the menu item is checked when every paragraph
@@ -949,7 +984,7 @@ fn toggle_korean_line_break_anywhere(app: &mut VectorcraftApp) {
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
 /// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
 /// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Bunri-Kinshi,
-/// Roman Hanging Punctuation and Korean Line Break Anywhere off, no kashidas and no tab stops, as one undo
+/// Kurikaeshi Moji Shori, Roman Hanging Punctuation and Korean Line Break Anywhere off, no kashidas and no tab stops, as one undo
 /// step named Reset Panel (inside an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
@@ -971,7 +1006,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
             "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
             "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false, "koreanLineBreakAnywhere": false,
-            "bunriKinshi": false
+            "bunriKinshi": false, "kurikaeshiMojiShori": false
         }),
     );
     para_cmd(app, "text.tabs.clear", json!({}));

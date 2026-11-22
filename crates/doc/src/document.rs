@@ -35,6 +35,7 @@ impl Document {
             char_styles,
             para_styles,
             composite_fonts,
+            kinsoku_sets,
             text_threads,
             symbols,
             graph_designs,
@@ -96,6 +97,7 @@ impl Document {
             && *char_styles == other.char_styles
             && *para_styles == other.para_styles
             && *composite_fonts == other.composite_fonts
+            && *kinsoku_sets == other.kinsoku_sets
             && *text_threads == other.text_threads
             && symbols.len() == other.symbols.len()
             && symbols.iter().zip(&other.symbols).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
@@ -221,6 +223,7 @@ impl Document {
             char_styles: Default::default(),
             para_styles: Default::default(),
             composite_fonts: Default::default(),
+            kinsoku_sets: Default::default(),
             text_threads: vec![],
             symbols: vec![],
             graph_designs: vec![],
@@ -339,6 +342,7 @@ impl Document {
     /// Index path from the top-level layer list to `id` (e.g. `[0, 3, 1]`): the first place in
     /// tree order where `id` appears.
     pub fn index_path(&self, id: NodeId) -> Option<Vec<usize>> {
+        crate::id_index::note_path_lookup();
         // The cached path, while the node there still has the id ([`id_index`]).
         let cached = self.index.get();
         match cached.as_ref().and_then(|m| m.get(&id)) {
@@ -419,6 +423,44 @@ impl Document {
             let mut rest = HashMap::with_capacity(want.len());
             walk(&self.layers, &want, &mut Vec::new(), &mut rest);
             out.extend(rest);
+        }
+        out
+    }
+
+    /// Every node whose id is in `ids`, in tree order (the order of [`Document::walk`]): unlike
+    /// [`Document::index_paths`], an id that appears more than once (a damaged file) gives every
+    /// node that has it. When the cache ([`id_index`]) holds each id once, at a path that still
+    /// checks out, the nodes are found along those paths; otherwise one walk of the tree finds
+    /// them. As for every cached lookup, a second node given an existing id after the cache was
+    /// built is not found while the first one's cached path checks out (see [`id_index`]).
+    pub fn nodes_in_order(&self, ids: impl IntoIterator<Item = NodeId>) -> Vec<&Node> {
+        let want: std::collections::HashSet<NodeId, std::hash::BuildHasherDefault<crate::id_index::IdHasher>> = ids.into_iter().collect();
+        // As in `index_paths`, one walk is quicker than checking the cached paths of a good share
+        // of the document.
+        if let Some(cache) = self.index.get().filter(|c| want.len().saturating_mul(8) < c.len()) {
+            let mut paths = Vec::with_capacity(want.len());
+            let cached = want.iter().all(|id| match cache.get(id) {
+                Some(Some(p)) if self.node_at(&p).is_some_and(|n| n.id == *id) => {
+                    paths.push(p);
+                    true
+                }
+                _ => false,
+            });
+            if cached {
+                // A node's path sorts after the paths of the nodes before it in tree order, its
+                // ancestors included.
+                paths.sort_unstable();
+                return paths.iter().filter_map(|p| self.node_at(p)).collect();
+            }
+        }
+        let mut out = Vec::new();
+        if !want.is_empty() {
+            crate::id_index::note_tree_walk();
+            self.walk(|n| {
+                if want.contains(&n.id) {
+                    out.push(n);
+                }
+            });
         }
         out
     }
@@ -509,13 +551,19 @@ impl Document {
     }
 
     /// Insert `node` into `parent` at `index` (clamped; `usize::MAX` = top). In a layer, art goes
-    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]).
+    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]). A
+    /// node that is or holds a dimension (a pasted one) sets [`Document::dimensions`].
     pub fn insert(&mut self, parent: Option<NodeId>, index: usize, node: Node) -> Result<NodeId, DocError> {
+        fn holds_dimension(n: &Node) -> bool {
+            n.extras().dimension.is_some() || n.children().into_iter().flatten().any(|c| holds_dimension(c))
+        }
         let id = node.id;
         self.check_ruler_guide_place(&node, parent)?;
+        let dimension = !self.dimensions && holds_dimension(&node);
         let ch = self.children_mut(parent)?;
         let i = Node::insert_index(ch, index, &node);
         ch.insert(i, Arc::new(node));
+        self.dimensions |= dimension;
         Ok(id)
     }
 
@@ -612,6 +660,21 @@ impl Document {
             }
             let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
             children.extend(nodes.into_iter().map(Arc::new));
+        })?;
+        self.index.clear();
+        Ok(())
+    }
+
+    /// Put each list of nodes in `items` directly below its anchor, in list order, in one pass over
+    /// the children of each parent. It fails as [`Document::insert_beside`] does.
+    pub fn insert_below(&mut self, items: Vec<(NodeId, Vec<Node>)>) -> Result<(), DocError> {
+        let anchors: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+        let places = self.places(&anchors)?;
+        let mut lists: Vec<Vec<Node>> = items.into_iter().map(|(_, nodes)| nodes).collect();
+        self.edit_children(places, |k, anchor, children| {
+            let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
+            children.extend(nodes.into_iter().map(Arc::new));
+            children.push(anchor);
         })?;
         self.index.clear();
         Ok(())
@@ -752,6 +815,18 @@ impl Document {
 
     /// [`Document::locked_artboards`] leaving out artboard `index`.
     pub fn locked_artboards_except(&self, index: usize) -> LockedArtboards<'_> {
+        self.locks_except(index, false)
+    }
+
+    /// [`Document::locked_artboards`] starting with the symbol art boxes earlier hit tests kept
+    /// ([`Document::kept_symbol_boxes`]). Kept boxes made after it keep its measurements too
+    /// ([`crate::symbols::KeptBoxes::keeping`]).
+    pub(crate) fn locked_artboards_kept(&self) -> LockedArtboards<'_> {
+        self.locks_except(usize::MAX, true)
+    }
+
+    /// [`Document::locked_artboards_except`], with `kept` measuring with kept art boxes.
+    fn locks_except(&self, index: usize, kept: bool) -> LockedArtboards<'_> {
         // Art flush with an edge from outside can overlap it by a rounding error, as in
         // `art_bounds_on` (#1295).
         let rects: Vec<Rect> =
@@ -770,7 +845,9 @@ impl Document {
         if let Some(layer) = self.pattern_edit.as_ref().filter(|_| !rects.is_empty()).and_then(|e| self.layers.iter().find(|l| l.id == e.layer)) {
             objects(layer, &mut pattern_art);
         }
-        LockedArtboards { rects, symbols: self.symbol_boxes(), new_art: self.new_art.get(), pattern_art, held: Default::default() }
+        // Nothing is measured without a locked artboard.
+        let symbols = if kept && !rects.is_empty() { self.symbol_boxes_from_kept() } else { self.symbol_boxes() };
+        LockedArtboards { rects, symbols, new_art: self.new_art.get(), pattern_art, held: Default::default() }
     }
 
     /// Is `id` on a locked artboard ([`LockedArtboards::holds_id`])? A layer or sublayer is on none.

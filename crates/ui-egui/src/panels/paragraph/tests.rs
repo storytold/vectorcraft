@@ -1,4 +1,5 @@
 use super::*;
+use vectorcraft_doc::Kinsoku;
 use vectorcraft_doc::Mojikumi;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
@@ -184,6 +185,25 @@ fn paragraph_mixed_kinsoku_and_mojikumi_show_blank_dropdowns() {
     assert_eq!(shared_para(&app, |p| p.mojikumi), Some(Mojikumi::LineEndHalf));
 }
 
+/// Kinsoku Set shows a custom set by its name, a blank when the paragraphs' sets differ, even when
+/// each has Hard under it; Bunri-Kinshi is available with a custom set.
+#[test]
+fn kinsoku_set_shows_a_custom_set_by_name() {
+    let (mut app, id) = editing_text("A\nB\n");
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Tight", "cannotStart": "」"}]})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "hard"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "kinsoku": "tight"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(shared_para(&app, |p| p.kinsoku), Some(Kinsoku::Hard));
+    assert_eq!(shared_kinsoku_name(&app), None);
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "Tight"})).unwrap();
+    assert_eq!(shared_kinsoku_name(&app).as_deref(), Some("Tight"));
+    assert!(bunri_kinshi_item(&app).0);
+    app.run("text.setFormat", json!({"id": id, "kinsoku": "none"})).unwrap();
+    assert_eq!(shared_kinsoku_name(&app).as_deref(), Some("None"));
+    assert!(!bunri_kinshi_item(&app).0);
+}
+
 /// The Mojikumi Set menu lists None, the four other predefined sets and Line-end Punctuation Half
 /// Width, each under its own label in every interface language. Each entry sets the selected
 /// paragraphs' set in one undo step and is shown as the current set; paragraphs with different
@@ -319,6 +339,37 @@ fn bunri_kinshi_toggle_follows_kinsoku_and_the_selected_paragraphs() {
     assert_eq!(flags(&app), (false, false));
     app.session.set_tool_option("selectAll", &json!(true));
     toggle_bunri_kinshi(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
+}
+
+/// Kurikaeshi Moji Shori: new type has it off; the menu item turns it on for the paragraphs the Type
+/// tool's selection touches in one undo step, a click while the selected paragraphs differ turns it
+/// on for all of them, and a click while all have it turns it off. Reset Panel turns it off.
+#[test]
+fn kurikaeshi_moji_shori_toggle_follows_the_selected_paragraphs() {
+    let (mut app, id) = editing_text("時々\nすゝ\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).kurikaeshi_moji_shori, text.para_at(1).kurikaeshi_moji_shori)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (true, true), "mixed: a click turns it on for all");
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (false, false), "all on: a click turns it off");
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
     app.session.set_tool_option("selectAll", &json!(true));
     reset_panel(&mut app);
     assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");

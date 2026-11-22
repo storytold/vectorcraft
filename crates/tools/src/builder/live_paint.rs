@@ -1,7 +1,7 @@
 use super::cache::RegionCache;
 use super::lookup::{
     connected_edges, connected_edges_through, edges, face_at, faces, flood_faces, is_live_paint, leaf_shapes, live_paint_at, live_paint_at_where,
-    lp_stroke_paint, node_outline, visible_edge_near, visible_face_at,
+    lp_stroke_paint, node_outline, visible_edge_near, visible_edges_along, visible_face_at,
 };
 use super::map::{BuilderMap, HIGHLIGHT_RED, sorted_roots};
 use super::{
@@ -173,9 +173,12 @@ enum LpPaint {
 /// With Paint Strokes alone on, a click paints the edge nearest the pointer and
 /// Shift-click fills the face. With both on, a click paints the edge nearest the pointer when one
 /// is within 4 pixels, else it fills the face, and Shift-click fills the face. With both off, a
-/// click paints nothing. With Highlight off, the face or edge under the pointer is not
-/// highlighted. The cursor is a filled bucket where a click fills a face, a brush where it paints
-/// an edge and an empty bucket where it paints nothing; with Alt it is the Eyedropper.
+/// click paints nothing. A drag from where a click paints an edge paints that edge and every edge
+/// of the same group that the drag crosses or touches with the current stroke, as one undo step
+/// (Escape cancels); a drag from where a click fills a face fills only faces. With Highlight off,
+/// the face or edge under the pointer is not highlighted. The cursor is a filled bucket where a
+/// click fills a face, a brush where it paints an edge and an empty bucket where it paints nothing;
+/// with Alt it is the Eyedropper.
 ///
 /// A double-click on a face fills it and the faces reached from it across edges that draw no
 /// stroke (`scope: "connected"`); on an edge it paints the edges joined to it that have its stroke.
@@ -195,16 +198,17 @@ enum LpPaint {
 /// Swatches panel, wrapping around; from a color that is no swatch, Right picks the first swatch
 /// and Left the last. The selected art keeps its paint. With `cursorSwatchPreview` (on), the
 /// active paint shows as a chip above the pointer between the swatches before and after it,
-/// except during a fill drag or with Alt held; a solid color that is no swatch shows alone, and a
+/// except during a fill or stroke drag or with Alt held; a solid color that is no swatch shows alone, and a
 /// paint that is not a solid color shows no chip.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
     /// Where the pointer last moved, and the modifiers held there.
     at: Option<(Point, Mods)>,
-    /// The fill command and polyline previewed from the press's snapshot.
-    fill_drag: Option<(Value, Vec<Vec<Point>>)>,
-    /// What a fill drag paints, as it was at its press.
+    /// The command (`livePaint.fill` or `livePaint.strokeEdge`), its params and the polyline of a
+    /// drag, previewed from the press's snapshot.
+    fill_drag: Option<(&'static str, Value, Vec<Vec<Point>>)>,
+    /// What a drag paints, as it was at its press.
     drag_from: LpDragFrom,
     /// The last [`LP_PRESSES`] presses, oldest first: the face or edge each one painted, with its
     /// paint before that press, or None for a press that painted no face or edge.
@@ -234,15 +238,15 @@ struct LpPress {
     /// The other faces or edges the double-click that followed the press reached, each with its
     /// fill or drawn stroke paint before the double-click.
     also: Vec<(NodeId, Paint)>,
-    /// The other faces the press's drag crossed, its release included, each with its fill before
-    /// the press.
+    /// The other faces or edges the press's drag crossed, its release included, each with its fill
+    /// or drawn stroke paint before the press.
     dragged: Vec<(NodeId, Paint)>,
     /// For a press that makes the Live Paint group: what the group is made from, with the path
     /// chunks of the press's drag, its release included.
     dragged_made: Option<Arc<(LpMade, Vec<Vec<Point>>)>>,
 }
 
-/// What a Live Paint Bucket fill drag paints, as it was at the press.
+/// What a Live Paint Bucket fill or stroke drag paints, as it was at the press.
 #[derive(Default)]
 enum LpDragFrom {
     #[default]
@@ -251,17 +255,27 @@ enum LpDragFrom {
     Faces(Vec<Arc<Node>>),
     /// What the group is made from, for a drag that makes the group.
     Made(LpMade),
+    /// The Live Paint group whose edges a stroke drag paints.
+    Edges(Arc<Node>),
 }
 
 /// The faces among `faces` (a Live Paint group's faces, back to front) that a drag along the path
 /// chunks `chunks` crosses, as `livePaint.fill` finds them, each with its fill.
 fn crossed_faces(faces: &[Arc<Node>], chunks: &[Vec<Point>]) -> Vec<(NodeId, Paint)> {
+    // Only a face whose bounds meet the drag's bounds can be crossed.
+    let Some(drag) = chunks.iter().flatten().fold(None, |r: Option<Rect>, p| Some(r.map_or(Rect::from_points(*p, *p), |r| r.union_pt(*p)))) else {
+        return vec![];
+    };
     let mut hit = vec![];
     let mut regions = vec![];
     // Front first, as visible_face_at looks.
     for f in faces.iter().rev().filter(|f| f.visible) {
         if let Some(path) = f.path_data()
             && let Some(bounds) = path.bounds()
+            && bounds.x0 <= drag.x1
+            && drag.x0 <= bounds.x1
+            && bounds.y0 <= drag.y1
+            && drag.y0 <= bounds.y1
         {
             hit.push(f);
             regions.push((po::Region { path: path.clone(), sources: vec![] }, path.to_bezpath(), bounds));
@@ -396,13 +410,15 @@ impl LivePaintBucketTool {
         usize::from(!cx.fill_active)
     }
 
-    fn begin_fill(&mut self, params: Value, p: Point) -> Vec<Action> {
-        self.fill_drag = Some((params.clone(), vec![vec![p]]));
-        vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), params)]
+    /// Start a drag pressed at `p` that previews `cmd` with `params` and the drag's path.
+    fn begin_fill(&mut self, cmd: &'static str, params: Value, p: Point) -> Vec<Action> {
+        self.fill_drag = Some((cmd, params.clone(), vec![vec![p]]));
+        vec![Action::Begin("Live Paint Bucket".into()), Action::Preview(cmd.into(), params)]
     }
 
     fn drag_fill(&mut self, p: Point) -> Vec<Action> {
-        let Some((params, chunks)) = &mut self.fill_drag else { return vec![] };
+        let Some((cmd, params, chunks)) = &mut self.fill_drag else { return vec![] };
+        let cmd = *cmd;
         let Some(points) = chunks.last_mut() else { return vec![] };
         let Some(&last) = points.last() else { return vec![] };
         if last == p {
@@ -423,7 +439,7 @@ impl LivePaintBucketTool {
         if !continuation.is_empty() {
             params["continuation"] = Value::Array(continuation);
         }
-        vec![Action::Preview("livePaint.fill".into(), params)]
+        vec![Action::Preview(cmd.into(), params)]
     }
 
     /// What a click paints, Shift held or not. Shift switches Paint Fills alone to Paint Strokes
@@ -451,13 +467,13 @@ impl LivePaintBucketTool {
         self.note_press(Some(LpPress { part: Some(n.id), at, before, also: vec![], dragged: vec![], dragged_made: None }));
     }
 
-    /// End the fill drag, noting on the last press the other faces its drag crossed, with their
-    /// fills before the press (for a press that makes the group, what the group is made from and
-    /// the drag, for [`Self::before`] to look the faces up in the group made). → whether a fill
-    /// drag was on.
+    /// End the drag, noting on the last press the other faces or edges its drag crossed, with their
+    /// fills or drawn stroke paints before the press (for a press that makes the group, what the
+    /// group is made from and the drag, for [`Self::before`] to look the faces up in the group
+    /// made). → whether a drag was on.
     fn end_fill(&mut self) -> bool {
         let from = std::mem::take(&mut self.drag_from);
-        let Some((_, chunks)) = self.fill_drag.take() else { return false };
+        let Some((_, _, chunks)) = self.fill_drag.take() else { return false };
         let Some(Some(last)) = self.presses.last_mut() else { return true };
         match from {
             LpDragFrom::None => {}
@@ -466,6 +482,11 @@ impl LivePaintBucketTool {
                 last.dragged = crossed_faces(&faces, &chunks).into_iter().filter(|(id, _)| part != Some(*id)).collect();
             }
             LpDragFrom::Made(made) => last.dragged_made = Some(Arc::new((made, chunks))),
+            LpDragFrom::Edges(group) => {
+                let part = last.part;
+                last.dragged =
+                    visible_edges_along(&group, &chunks).into_iter().filter(|e| part != Some(e.id)).map(|e| (e.id, lp_stroke_paint(e))).collect();
+            }
         }
         true
     }
@@ -487,8 +508,8 @@ impl LivePaintBucketTool {
     /// The paint `part` had before the first press of a click sequence of `clicks` presses that
     /// painted `part`, or before the double-click after a press when that double-click reached it
     /// (the sequence's first press counts when it made the group `part` is in and the face it
-    /// filled there is `part`), a press's drag or release crossing `part` included; `now` when the
-    /// last press did not paint it.
+    /// filled there is `part`), a press's drag or release crossing `part` included; `now` when no
+    /// press of the sequence painted `part` and the last press's drag did not cross it.
     fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
         let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
         let made_part = |at: Point| live_paint_at(cx.doc, at).and_then(|g| visible_face_at(cx.doc.node(g)?, at)).is_some_and(|f| f.id == part);
@@ -541,19 +562,19 @@ impl LivePaintBucketTool {
             if clicks == 2
                 && let Some(group) = cx.doc.node(g)
             {
-                // The other edge either click painted joins as the stroke paint it had before.
-                let through: Vec<NodeId> = self
-                    .presses
-                    .len()
-                    .checked_sub(2)
-                    .and_then(|i| self.presses.get(i..))
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .filter(|q| q.before == like)
-                    .filter_map(|q| q.part)
-                    .filter(|id| *id != e.id)
-                    .collect();
+                // The other edges of this group either click painted, by its press or its drag, join
+                // as the stroke paint they had before. A face either click filled is not an edge and
+                // does not join. `livePaint.strokeEdge` takes at most 4096 of them.
+                let group_edges: std::collections::HashSet<NodeId> = edges(group).iter().map(|x| x.id).collect();
+                let mut seen = std::collections::HashSet::from([e.id]);
+                let mut through: Vec<NodeId> = vec![];
+                for id in self.presses.len().checked_sub(2).and_then(|i| self.presses.get(i..)).into_iter().flatten().flatten().flat_map(|q| {
+                    q.part.filter(|_| q.before == like).into_iter().chain(q.dragged.iter().filter(|(_, before)| *before == like).map(|(id, _)| *id))
+                }) {
+                    if through.len() < 4096 && group_edges.contains(&id) && seen.insert(id) {
+                        through.push(id);
+                    }
+                }
                 self.note_reached(group, connected_edges_through(group, e.id, &like, &through), true);
                 if !through.is_empty() {
                     v["through"] = json_ids(&through);
@@ -704,7 +725,8 @@ impl Tool for LivePaintBucketTool {
                     && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
                 {
                     self.note_part(e, true, p);
-                    return vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0) }))];
+                    self.drag_from = cx.doc.node(g).map_or(LpDragFrom::None, |n| LpDragFrom::Edges(Arc::new(n.clone())));
+                    return self.begin_fill("livePaint.strokeEdge", json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0) }), p);
                 }
                 if !matches!(paint, LpPaint::Fills | LpPaint::Both) {
                     self.note_press(None);
@@ -716,7 +738,7 @@ impl Tool for LivePaintBucketTool {
                         None => self.note_press(None),
                     }
                     self.drag_from = LpDragFrom::Faces(cx.doc.node(g).map(|n| faces(n).into_iter().cloned().collect()).unwrap_or_default());
-                    return self.begin_fill(json!({ "group": g.0, "point": point }), p);
+                    return self.begin_fill("livePaint.fill", json!({ "group": g.0, "point": point }), p);
                 }
                 if self.cache.at(cx, p).is_some() {
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
@@ -724,7 +746,7 @@ impl Tool for LivePaintBucketTool {
                     let before = made_face_fill(&made, p);
                     self.note_press(Some(LpPress { part: None, at: p, before, also: vec![], dragged: vec![], dragged_made: None }));
                     self.drag_from = LpDragFrom::Made(made);
-                    return self.begin_fill(json!({ "ids": json_ids(&roots), "point": point }), p);
+                    return self.begin_fill("livePaint.fill", json!({ "ids": json_ids(&roots), "point": point }), p);
                 }
                 self.note_press(None);
                 vec![]
@@ -748,7 +770,7 @@ impl Tool for LivePaintBucketTool {
         self.presses.clear();
     }
 
-    /// Escape during a fill drag cancels it. Left and Right pick the color swatch before or after
+    /// Escape during a fill or stroke drag cancels it. Left and Right pick the color swatch before or after
     /// the active paint, while no drag is on.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape {
@@ -797,7 +819,7 @@ impl Tool for LivePaintBucketTool {
         self.at = None;
     }
 
-    /// A press the view tools took counts as a press that paints no face or edge, for the clicks
+    /// A press that did not reach the tool counts as a press that paints no face or edge, for the clicks
     /// a double-click or triple-click compares.
     fn press_elsewhere(&mut self) {
         self.note_press(None);
@@ -805,7 +827,7 @@ impl Tool for LivePaintBucketTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut out = lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, (self.width * LP_BUCKET_EDGE_FRACTION) as f32);
-        // No chips during a fill drag, or while Alt makes the tool sample with the eyedropper.
+        // No chips during a fill or stroke drag, or while Alt makes the tool sample with the eyedropper.
         if self.preview
             && !self.busy()
             && let Some((at, mods)) = self.at
@@ -846,6 +868,10 @@ impl Tool for LivePaintBucketTool {
             _ => return,
         }
         self.hover = LpHover::None;
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_live_paint_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
     }
 
     fn waiting(&self) -> bool {
@@ -1270,5 +1296,9 @@ impl Tool for LivePaintSelectionTool {
             _ => return,
         }
         self.hover = LpHover::None;
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_live_paint_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
     }
 }
