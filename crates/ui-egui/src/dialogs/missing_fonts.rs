@@ -352,6 +352,11 @@ fn after_open_for(app: &mut VectorcraftApp, r: &Value, web: bool) {
     }
 }
 
+/// Whether an opened document's Missing Fonts dialog waits for the frame's pump to open it.
+pub(crate) fn waiting(app: &VectorcraftApp) -> bool {
+    app.ui.pending_fonts.iter().any(|&uid| dialog_for(app, uid).is_some())
+}
+
 /// The Missing Fonts dialog of the open document `uid`, when fonts it uses aren't available.
 fn dialog_for(app: &VectorcraftApp, uid: u64) -> Option<MissingFontsDialog> {
     let st = app.session.documents().iter().find(|d| d.uid == uid)?;

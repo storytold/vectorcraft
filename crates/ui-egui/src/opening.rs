@@ -142,7 +142,7 @@ fn track(app: &mut VectorcraftApp, path: &str, done: Receiver<Result<ReadFile, S
 /// May the active document change now ([`poll`])?
 pub(crate) fn may_switch(app: &VectorcraftApp) -> bool {
     let s = &app.session;
-    !(app.any_dialog_open() || s.in_interaction() || (s.tool_busy() && s.pointer_held()))
+    !(app.any_dialog_open() || crate::dialogs::missing_fonts::waiting(app) || s.in_interaction() || (s.tool_busy() && s.pointer_held()))
 }
 
 /// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
