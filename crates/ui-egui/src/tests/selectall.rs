@@ -4,7 +4,8 @@
 //! tool, and only otherwise are all the objects selected. The clipboard keys follow it too: Copy
 //! and Cut copy the text selected in a field or in a panel's label before the art.
 
-use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, vec2};
+use egui::accesskit::{Node, NodeId};
+use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_tools::{PointerEvent, PointerKind};
@@ -17,6 +18,9 @@ struct App {
     time: f64,
     /// The window has the keyboard.
     focused: bool,
+    /// The accessibility nodes of the latest frame, and the one with the keyboard.
+    nodes: Vec<(NodeId, Node)>,
+    focus: NodeId,
 }
 
 impl App {
@@ -31,14 +35,21 @@ impl App {
     fn over(mut app: VectorcraftApp) -> Self {
         app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
         app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 37, "height": 40})).unwrap();
-        let mut a = Self { app, ctx: crate::testing::ui_context(), time: 0.0, focused: true };
+        let mut a = Self::bare(app);
         for _ in 0..3 {
             a.frame(vec![]);
         }
         a
     }
 
-    /// One whole app frame with `events`; `menu`: a system menu item chosen first, as the macOS
+    /// `app` in a window of its own, with the access tree on; no frame has run.
+    fn bare(app: VectorcraftApp) -> Self {
+        let ctx = crate::testing::ui_context();
+        ctx.enable_accesskit();
+        Self { app, ctx, time: 0.0, focused: true, nodes: Vec::new(), focus: NodeId(0) }
+    }
+
+    /// One whole app frame with `events`, as the hosts run it; `menu`: a system menu item chosen first, as the macOS
     /// host dispatches it before the app's logic.
     fn frame_with(&mut self, events: Vec<Event>, menu: Option<&str>) -> egui::FullOutput {
         self.time += 0.1;
@@ -49,16 +60,17 @@ impl App {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(raw, |ui| {
+        let mut out = crate::testing::part_frame(&mut self.app, &self.ctx, raw, |app, ui| {
             if let Some(id) = menu {
-                // PLAN: assumed `craft::keymap::CommandRef` is the type `commands::fire` takes.
                 craft::ui::runtime::commands::fire(ui.ctx(), craft::keymap::CommandRef::new(id), craft::ui::runtime::commands::FireSource::Menu);
             }
             app.tick(ui.ctx());
             app.ui(ui);
         });
-        out.textures_delta.clear();
+        if let Some(update) = out.platform_output.accesskit_update.take() {
+            self.focus = update.focus;
+            self.nodes = update.nodes;
+        }
         out
     }
 
@@ -74,23 +86,39 @@ impl App {
         self.app.session.active().unwrap().selection.objects.len()
     }
 
-    /// The panel number field showing `text` (the field keeps its text under its id): id, rect.
-    fn field(&self, text: &str) -> (egui::Id, Rect) {
-        let widgets: Vec<(egui::Id, Rect)> =
-            self.ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| (w.id, w.rect)).collect());
-        widgets
-            .into_iter()
-            .find(|&(id, _)| {
-                self.ctx.data(|d| d.get_temp::<String>(id)).is_some_and(|t| t == text) && egui::TextEdit::load_state(&self.ctx, id).is_some()
-            })
-            .unwrap_or_else(|| panic!("no field shows {text:?}"))
+    /// The node of `id` in the latest frame.
+    fn node(&self, id: NodeId) -> Option<&Node> {
+        self.nodes.iter().find(|(n, _)| *n == id).map(|(_, node)| node)
     }
 
-    /// The selected character range of text field `id`.
-    fn field_selection(&self, id: egui::Id) -> Option<(usize, usize)> {
-        let r = egui::TextEdit::load_state(&self.ctx, id)?.cursor.char_range()?;
-        let (a, b) = (r.primary.index, r.secondary.index);
-        Some((a.min(b).into(), a.max(b).into()))
+    /// The text field showing `text` (a number field shows its number, its unit apart): its node and rect.
+    fn field(&self, text: &str) -> (NodeId, Rect) {
+        self.nodes
+            .iter()
+            .find(|(_, n)| !n.is_hidden() && n.supports_action(egui::accesskit::Action::SetValue) && n.value() == Some(text))
+            .and_then(|(id, n)| n.bounds().map(|b| (*id, Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))))
+            .unwrap_or_else(|| {
+                let shown: Vec<_> =
+                    self.nodes.iter().filter_map(|(_, n)| n.supports_action(egui::accesskit::Action::SetValue).then(|| n.value())).collect();
+                panic!("no field shows {text:?} in {shown:?}")
+            })
+    }
+
+    /// The text field `id` shows.
+    fn field_text(&self, id: NodeId) -> Option<&str> {
+        self.node(id)?.value()
+    }
+
+    /// Whether field `id` has the keyboard.
+    fn has_keyboard(&self, id: NodeId) -> bool {
+        self.focus == id
+    }
+
+    /// The selected character range of text field `id` (its text is one run).
+    fn field_selection(&self, id: NodeId) -> Option<(usize, usize)> {
+        let r = self.node(id)?.text_selection()?;
+        let (a, b) = (r.anchor.character_index, r.focus.character_index);
+        Some((a.min(b), a.max(b)))
     }
 }
 
@@ -106,15 +134,16 @@ fn click(at: Pos2, pressed: bool) -> Event {
 fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let mut a = App::new();
     assert_eq!(a.selected(), 1);
-    let (id, rect) = a.field("37 pt");
+    // The W field shows its number; its unit is drawn apart.
+    let (id, rect) = a.field("37");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     a.frame(vec![]);
-    assert!(a.ctx.text_edit_focused(), "the W field has the keyboard");
-    let all = Some((0, "37 pt".chars().count()));
+    assert!(a.has_keyboard(id), "the W field has the keyboard");
+    let all = Some((0, "37".chars().count()));
     // The window's Cmd+A (Windows, Linux, the web, macOS without the system menu).
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
-    assert_eq!(a.field_selection(id), Some((5, 5)), "End collapses the selection");
+    assert_eq!(a.field_selection(id), Some((2, 2)), "End collapses the selection");
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     assert_eq!(a.field_selection(id), all, "Cmd+A selects the field's text");
     assert_eq!(a.selected(), 1, "and not the art");
@@ -126,18 +155,11 @@ fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     assert_eq!(a.selected(), 1, "and not the art");
     // The menu's Copy copies the field's text, not the art.
     let out = a.menu("edit.copy");
-    let copied: Vec<_> = out
-        .platform_output
-        .commands
-        .iter()
-        .filter_map(|c| match c {
-            egui::OutputCommand::CopyText(t) => Some(t.as_str()),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(copied, ["37 pt"]);
+    // A fired command reaches the field in the next pass.
+    let after = a.frame(vec![]);
+    assert_eq!([copied(&out), copied(&after)].concat(), ["37"]);
     assert!(a.app.session.clipboard.is_empty(), "no art copied");
-    assert!(a.ctx.text_edit_focused(), "the field keeps the keyboard");
+    assert!(a.has_keyboard(id), "the field keeps the keyboard");
 }
 
 #[test]
@@ -148,6 +170,8 @@ fn cmd_a_while_editing_type_selects_all_of_its_text() {
     for kind in [PointerKind::Down, PointerKind::Up] {
         a.app.session.pointer(&PointerEvent::new(kind, 100.0, 200.0), view).unwrap();
     }
+    // The frame of the click: the edit's text part appears and takes the keys.
+    a.frame(vec![]);
     a.frame(vec![Event::Text("abc".into())]);
     let text = a.app.session.active().unwrap().selection.objects.clone();
     let range = |a: &App| {
@@ -241,19 +265,19 @@ fn the_clipboard_keys_in_a_focused_field_edit_its_text() {
     for _ in 0..3 {
         a.frame(vec![]);
     }
-    for text in ["37 pt", "FFFFFF"] {
+    for text in ["37", "FFFFFF"] {
         let (id, rect) = a.field(text);
         a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
         a.frame(vec![click(rect.center(), false)]);
         a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
-        assert!(a.ctx.memory(|m| m.has_focus(id)), "{text}: the field has the keyboard");
+        assert!(a.has_keyboard(id), "{text}: the field has the keyboard");
         let out = a.frame(vec![Event::Copy]);
         assert_eq!(copied(&out), [text], "Copy copies the field's text");
         assert!(a.app.session.clipboard.is_empty(), "{text}: no art copied");
         let out = a.frame(vec![Event::Cut]);
         assert_eq!(copied(&out), [text], "Cut cuts the field's text");
         a.frame(vec![Event::Paste("12".into())]);
-        assert_eq!(a.ctx.data(|d| d.get_temp::<String>(id)).as_deref(), Some("12"), "Paste pastes into the field");
+        assert_eq!(a.field_text(id), Some("12"), "Paste pastes into the field");
         assert_eq!(a.selected(), 1, "{text}: the art stays");
         a.frame(vec![press(Key::Escape, Modifiers::NONE)]);
     }
@@ -396,7 +420,7 @@ fn panel_text_copied_before_the_art_formats_are_written_stays_on_the_clipboard()
     for (menu, cut) in [(false, false), (false, true), (true, false), (true, true)] {
         let (id, event) = if cut { ("edit.cut", Event::Cut) } else { ("edit.copy", Event::Copy) };
         let (app, board, hold) = super::sysclip::app_with_busy_worker("");
-        let mut a = App { app, ctx: crate::testing::ui_context(), time: 0.0, focused: true };
+        let mut a = App::bare(app);
         super::sysclip::copy_rect(&mut a.app);
         let out = show_document_info(&mut a);
         // The rectangle's outline: 2 × (40 + 20).
@@ -445,31 +469,31 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     let mut a = App::over(app);
     // Text on the system clipboard.
     super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"42 pt".to_vec())]);
-    let (id, rect) = a.field("37 pt");
+    let (id, rect) = a.field("37");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     let out = a.frame(vec![press(Key::End, Modifiers::NONE)]);
     let (edit, select) = (text_at(&out, "Edit", true), text_at(&out, "Select", true));
     let menu = |a: &mut App, title: Pos2, item: &str| {
         let out = click_at(a, title);
-        assert!(!a.ctx.text_edit_focused(), "the menu took the keyboard");
+        assert!(!a.has_keyboard(id), "the menu took the keyboard");
         click_at(a, text_at(&out, item, false))
     };
     menu(&mut a, select, "All");
-    assert!(a.ctx.memory(|m| m.has_focus(id)), "the field has the keyboard back");
-    assert_eq!(a.field_selection(id), Some((0, 5)), "Select All selected the field's text");
+    assert!(a.has_keyboard(id), "the field has the keyboard back");
+    assert_eq!(a.field_selection(id), Some((0, 2)), "Select All selected the field's text");
     assert_eq!(a.selected(), 1, "not the art");
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     a.frame(vec![]);
     let out = menu(&mut a, edit, "Copy");
-    assert_eq!(copied(&out), ["37 pt"], "Copy copied the field's text");
+    assert_eq!(copied(&out), ["37"], "Copy copied the field's text");
     assert!(a.app.session.clipboard.is_empty(), "no art copied");
     // Art on the app's clipboard (Paste is enabled): the field still takes the text.
     a.app.run("edit.copy", json!({})).unwrap();
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     menu(&mut a, edit, "Paste");
-    assert_eq!(a.ctx.data(|d| d.get_temp::<String>(id)).as_deref(), Some("42 pt"), "Paste pasted into the field");
+    assert_eq!(a.field_text(id), Some("42 pt"), "Paste pasted into the field");
     assert_eq!(a.selected(), 1, "nothing pasted on the canvas");
     // With no field focused, the menu's Select All selects the art.
     a.frame(vec![press(Key::Escape, Modifiers::NONE)]);

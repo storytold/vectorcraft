@@ -4,6 +4,7 @@
 use craft::keymap::{CommandRef, Mods};
 use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
 use craft::ui::runtime::keys::{self, Intent};
+use craft::ui::runtime::windows::WindowHost;
 use serde_json::json;
 use vectorcraft_tools::ToolKey;
 
@@ -19,6 +20,13 @@ pub(crate) use presentation::presentation_step;
 /// Runs one command the key stage fired. A tool key chooses its tool (and starts or ends a hold), `Select All`
 /// with the Artboard tool selects artboards, and every other command runs as its menu item does.
 pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fired) {
+    // A menu's Select All (the macOS menu bar's, or the window's menu that gave the keys back) selects the text of the
+    // field that has the keys, as Cmd+A does: it goes to the field as the framework's edit command. The Type tool's
+    // text is selected by the app's own Select All.
+    if fired.command.id == "select.all" && fired.source == FireSource::Menu && WindowHost::of(ctx).typing() && !app.session.tool_wants_text() {
+        craft::ui::runtime::commands::fire(ctx, CommandRef::new("edit.select_all"), FireSource::Menu);
+        return;
+    }
     let renamed;
     let command = match engine_id(&fired.command.id) {
         Some(id) => {
