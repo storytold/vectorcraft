@@ -67,6 +67,7 @@ mod presentation;
 mod printing;
 #[cfg(not(any(target_os = "macos", windows)))]
 mod quit_windows;
+mod screen_density;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
@@ -77,6 +78,8 @@ mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
+#[cfg(windows)]
+mod windows_display_size;
 mod windows_screen_color;
 mod windows_stylus;
 mod xwayland;
@@ -140,6 +143,9 @@ struct App {
     monitors_listed: Option<(f64, f32)>,
     /// Reads the profile of the display that shows the main window, for the canvas.
     display_profile: display_profile::Reader,
+    /// Measures the density of the display that shows the main window, for Display Print Size at
+    /// 100% Zoom.
+    screen_density: screen_density::Tracker,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
     frame_start: Option<std::time::Instant>,
     /// The shortest time between the starts of two frames, while the window presents without vsync
@@ -712,6 +718,7 @@ fn main() -> std::process::ExitCode {
                     held_files,
                     monitors_listed: None,
                     display_profile: Default::default(),
+                    screen_density: Default::default(),
                     frame_start: None,
                     min_frame,
                     last_frame_began: None,

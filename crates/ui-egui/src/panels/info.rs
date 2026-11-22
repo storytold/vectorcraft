@@ -179,7 +179,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if app.session.tool_id() == "zoom" {
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        mono(ui, format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.session.prefs.display_print_size)));
+        mono(ui, format!("{} {}", crate::i18n::colon(tl!("Zoom")), crate::state::zoom_label(zoom, app.print_ppi())));
     }
     if let Some(Readout::Brush { name: Some(name) }) = readout {
         mono(ui, name);
@@ -315,7 +315,7 @@ mod tests {
         assert!(!texts(&mut app).iter().any(|t| t.starts_with("Zoom:")));
         app.session.select_tool("zoom", view()).unwrap();
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        let want = format!("Zoom: {}", crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
+        let want = format!("Zoom: {}", crate::state::zoom_label(zoom, app.print_ppi()));
         assert!(texts(&mut app).contains(&want), "{want}: {:?}", texts(&mut app));
     }
 
@@ -331,7 +331,7 @@ mod tests {
         crate::i18n::set_current(crate::i18n::Lang::EN);
         assert_eq!(shear.right[1], format!("{}\u{a0}: -12.5°", crate::i18n::tr(fr, "Shear")));
         let zoom = app.view().map_or(1.0, |v| v.zoom);
-        let want = format!("{}\u{a0}: {}", crate::i18n::tr(fr, "Zoom"), crate::state::zoom_label(zoom, app.session.prefs.display_print_size));
+        let want = format!("{}\u{a0}: {}", crate::i18n::tr(fr, "Zoom"), crate::state::zoom_label(zoom, app.print_ppi()));
         assert!(shown_texts.contains(&want), "{want}: {shown_texts:?}");
     }
 

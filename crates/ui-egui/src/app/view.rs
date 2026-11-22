@@ -104,6 +104,34 @@ impl VectorcraftApp {
         self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin_for(artboard))
     }
 
+    /// The screen points an inch takes at 100% zoom with Display Print Size at 100% Zoom on, for
+    /// the display that shows the window; `None` with it off ([`crate::state::print_ppi`]).
+    pub(crate) fn print_ppi(&self) -> Option<f64> {
+        crate::state::print_ppi(self.session.prefs.display_print_size, self.services.screen_ppi)
+    }
+
+    /// Takes `ppi` as the measured density of the main window's display
+    /// ([`crate::Services::screen_ppi`]). With Display Print Size at 100% Zoom on, every document
+    /// window's view keeps its zoom percentage, so the art keeps its physical size on the new
+    /// display. Returns whether the density changed.
+    pub fn set_screen_ppi(&mut self, ppi: Option<f64>) -> bool {
+        if self.services.screen_ppi == ppi {
+            return false;
+        }
+        let before = self.print_ppi();
+        self.services.screen_ppi = ppi;
+        if let (Some(before), Some(after)) = (before, self.print_ppi())
+            && before != after
+        {
+            let k = after / before;
+            for v in &mut self.views {
+                v.zoom = (v.zoom * k).clamp(0.0313, 640.0);
+            }
+            self.canvas.windows.views.scale_zooms(k);
+        }
+        true
+    }
+
     pub fn view_mut(&mut self) -> Option<&mut View> {
         self.sync_views();
         let i = self.session.active_index()?;

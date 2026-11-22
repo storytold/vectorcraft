@@ -974,7 +974,7 @@ fn ui_commands_refuse_params_of_the_wrong_type() {
         assert_eq!(after, before, "{id} {params}: nothing changes");
     }
     app.run("view.setZoom", json!({"zoom": null, "center": null})).unwrap();
-    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.session.prefs.display_print_size)));
+    assert_eq!(app.view().map(|v| v.zoom), Some(crate::state::zoom_from_display_percent(100.0, app.print_ppi())));
 }
 
 #[test]

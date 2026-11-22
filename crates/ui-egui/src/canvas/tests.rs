@@ -8550,6 +8550,41 @@ fn view_actual_size_follows_display_print_size() {
     assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "an inch is 96 screen points");
 }
 
+/// #9051: with Display Print Size on, Actual Size shows a document inch in an inch of the display
+/// the window is on, from the density the host measured for it. When the window moves to a
+/// display of another density, every document window keeps its zoom percentage, so the art keeps
+/// its physical size there.
+#[test]
+fn view_actual_size_fills_an_inch_of_the_measured_display() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    let rect = egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0));
+    app.canvas_rect = Some(rect);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    assert!(app.set_screen_ppi(Some(127.0)));
+    let inch = |v: &View| {
+        let xf = Xf::new(rect, v);
+        f64::from(xf.to_screen(Point::new(72.0, 0.0)).x - xf.to_screen(Point::new(0.0, 0.0)).x)
+    };
+    app.run("view.actualSize", json!({})).unwrap();
+    assert!((inch(app.view().unwrap()) - 127.0).abs() < 1e-3, "72 pt take the display's 127 points to an inch");
+    app.run("window.newWindow", json!({})).unwrap();
+    let stepped = app.run("view.zoomIn", json!({})).unwrap()["zoom"].as_f64().unwrap_or(0.0);
+    assert!((stepped - 150.0).abs() < 1e-9, "the stops count from that 100%: {stepped}");
+    assert!(app.set_screen_ppi(Some(91.0)), "the window moved to a sparser display");
+    assert!(!app.set_screen_ppi(Some(91.0)), "the same reading changes nothing");
+    let first = *crate::doc_windows::view(&app, (0, 1)).unwrap();
+    assert!((inch(&first) - 91.0).abs() < 1e-3, "the other window's 100% still fills an inch");
+    assert_eq!(crate::state::zoom_label(first.zoom, app.print_ppi()), "100%");
+    assert_eq!(crate::state::zoom_label(app.view().unwrap().zoom, app.print_ppi()), "150%");
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let zoom = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert_eq!(app.view().unwrap().zoom, zoom, "off, a move leaves the zoom alone");
+    app.run("view.actualSize", json!({})).unwrap();
+    assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "and 100% stays one point per point");
+}
+
 /// Fit Artboard in Window fits the artboard as a rotated view shows it: at 45° every corner is
 /// on the canvas and one is within the 30-point margin of an edge. At 0° the zoom is unchanged.
 #[test]
@@ -8604,7 +8639,7 @@ fn animated_zoom_scrubs_and_holds_else_the_zoom_tool_zooms_to_an_area() {
     press(&mut app, vec2(-100.0, 0.0), 0);
     assert!((app.view().unwrap().zoom - z0).abs() < 1e-6, "and back to the left");
     press(&mut app, vec2(0.0, 0.0), 0);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true), "a click steps");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true, None), "a click steps");
     let z2 = app.view().unwrap().zoom;
     press(&mut app, vec2(0.0, 0.0), 40);
     assert!(app.view().unwrap().zoom > z2 * 1.2, "held, it zooms on");
@@ -8959,9 +8994,9 @@ fn cmd_space_zooms_and_space_pans_whatever_the_tool() {
     let z0 = app.view().unwrap().zoom;
     drag(&mut app, Modifiers::COMMAND, at);
     let z1 = app.view().unwrap().zoom;
-    assert_eq!(z1, crate::state::next_zoom(z0, true), "Cmd+Space click zooms in");
+    assert_eq!(z1, crate::state::next_zoom(z0, true, None), "Cmd+Space click zooms in");
     drag(&mut app, Modifiers::COMMAND | Modifiers::ALT, at);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z1, false), "Cmd+Alt+Space click zooms out");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z1, false, None), "Cmd+Alt+Space click zooms out");
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the Rectangle tool drew nothing");
     // Space alone pans, with the Zoom tool too.
     app.select_tool("zoom");
@@ -9009,7 +9044,7 @@ fn space_types_a_space_while_editing_text_and_does_not_pan() {
     assert_eq!(shown(&mut app), CursorIcon::ZoomIn, "Cmd+Space shows the magnifier");
     typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true), "Cmd+Space click zooms in");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true, None), "Cmd+Space click zooms in");
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
     assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }
@@ -9119,7 +9154,7 @@ fn space_shift_drag_rotates_the_view_whatever_the_tool() {
     assert_eq!((panned.rotation, panned.zoom), (v.rotation, v.zoom));
     assert_ne!(panned.center, v.center, "Space pans");
     drag(&mut app, Modifiers::COMMAND | Modifiers::SHIFT, true, c, c);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(v.zoom, true), "Cmd+Shift+Space click zooms in");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(v.zoom, true, None), "Cmd+Shift+Space click zooms in");
     assert_eq!(app.view().unwrap().rotation, v.rotation);
     // The Rotate View tool's Shift still rounds to 15°.
     app.select_tool("rotateView");

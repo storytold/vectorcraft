@@ -31,7 +31,7 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     };
     let Some(target) = target else { return };
     let zoom = if how == "view.actualSize" {
-        actual_size_zoom(app.session.prefs.display_print_size)
+        actual_size_zoom(app.print_ppi())
     } else {
         fit_zoom(rect, target, app.view().map_or(0.0, |v| v.rotation), app.canvas_ui_zoom)
     };
@@ -102,11 +102,12 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 }
 
 /// Zoom for View → Actual Size (`view.actualSize`). With Preferences › General › Display Print
-/// Size at 100% Zoom off, one document point is one screen point. On, one document inch (72 pt)
-/// fills an inch of the screen as the system counts it: 96 screen points, the reference density
-/// that display scaling is set against (a CSS inch), whatever the scale factor.
-pub(crate) fn actual_size_zoom(display_print_size: bool) -> f64 {
-    if display_print_size { 96.0 / 72.0 } else { 1.0 }
+/// Size at 100% Zoom off (`print` `None`), one document point is one screen point. On, one
+/// document inch (72 pt) fills an inch of the display that shows the window: `print` screen
+/// points, its measured density, or 96 (a CSS inch) where the system reports no physical size
+/// ([`crate::state::print_ppi`]).
+pub(crate) fn actual_size_zoom(print: Option<f64>) -> f64 {
+    crate::state::zoom_baseline(print)
 }
 
 /// Zoom view `vm` of the canvas `rect` to `zoom` (clamped to the zoom range), keeping the document

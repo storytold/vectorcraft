@@ -10,7 +10,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 let zoom = app.view().map(|v| v.zoom).unwrap_or(1.0);
-                let print = app.session.prefs.display_print_size;
+                let print = app.print_ppi();
                 let shown = crate::state::zoom_display_percent(zoom, print);
                 ui.name_inputs(tl!("Zoom"), |ui| {
                     craft_ui::ComboBox::from_id_salt("zoom-combo")

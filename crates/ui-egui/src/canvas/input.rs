@@ -602,7 +602,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     });
     // Backtick as it was at the button-up: a key pressed or released later in the frame does not count.
     let backquote = backquote_at_release(ui, egui::PointerButton::Primary, f.backquote_before);
-    let ui_zoom = app.canvas_ui_zoom;
+    let (ui_zoom, print) = (app.canvas_ui_zoom, app.print_ppi());
     match d {
         Drag::ZoomBox { start } => {
             let start = zoom_marquee_start(ui, start, before, p);
@@ -615,14 +615,14 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
                     let fill = (rect.width() / r.width()).min(rect.height() / r.height());
                     vm.zoom = (xf.zoom * f64::from(ui_zoom) * f64::from(fill)).clamp(0.0313, 640.0);
                 } else {
-                    zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt), ui_zoom);
+                    zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt, print), ui_zoom);
                 }
             }
         }
         // A click (not held, not dragged) steps the zoom as with the marquee.
         Drag::ZoomScrub { held, moved: false, .. } if held <= HOLD_DELAY => {
             if let Some(vm) = app.view_mut() {
-                zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt), ui_zoom);
+                zoom_about(vm, rect, p, crate::state::next_zoom(vm.zoom, !m.alt, print), ui_zoom);
             }
         }
         Drag::ZoomScrub { .. } => {}

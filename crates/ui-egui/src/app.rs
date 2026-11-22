@@ -586,7 +586,6 @@ impl VectorcraftApp {
             ctx.request_repaint();
             return;
         }
-        crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         // Whether this pass draws the last step of an action playing at Step by Step.
         let step_held = crate::panels::actions::playback_held(self);
         let t0 = now_ms();

@@ -1918,7 +1918,7 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
-    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, false);
+    let title = |s: &Session| super::tab_title(s.active().unwrap(), 1.0, false, None);
     assert!(title(&s).ends_with("(RGB/Preview)"), "{}", title(&s));
     s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
     assert!(title(&s).ends_with("(<Opacity Mask>/Opacity Mask)"), "{}", title(&s));

@@ -220,6 +220,12 @@ pub struct Services {
     /// reports for a window on that monitor. Empty on the web, and where the host cannot place a
     /// window by these points, which sends floating panels to the main window's monitor.
     pub dock_monitors: Vec<craft_ui::docking::Monitor>,
+    /// The density of the display that shows most of the main window, in the window's points
+    /// (before UI Scaling) per inch, from the physical size the system reports for that display.
+    /// The desktop host keeps it current as the window moves between displays. With Display Print
+    /// Size at 100% Zoom, 100% shows one document inch in this many points ([`crate::state::print_ppi`]).
+    /// `None` on the web and where the system reports no size, and then an inch takes 96 points.
+    pub screen_ppi: Option<f64>,
     /// The text Help › Copy Troubleshooting Info copies (desktop: the platform, the graphics
     /// processor, recent commands and frame times, and the hang reports of this session and the
     /// one before). Without it the command copies the version only ([`crate::troubleshooting`]).
