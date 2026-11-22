@@ -1144,7 +1144,14 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // The specs and rails leave the app for the pass, which lends the app to the panel bodies.
     let specs = std::mem::take(&mut app.dock_rt.specs);
     let rails = std::mem::take(&mut app.dock_rt.rails);
-    let hide = if presenting { HidePanels::All } else { HidePanels::Except(&rails) };
+    // The rails are what Shift+Tab keeps; while the panels show, the area hides none.
+    let hide = if presenting {
+        HidePanels::All
+    } else if chrome_state(&ctx, ctx.viewport_id()).panels_hidden {
+        HidePanels::Except(&rails)
+    } else {
+        HidePanels::None
+    };
     let hand_over = app.dock_rt.hand_over.take();
     let output = {
         let mut panels = Panels { app: &mut *app };
