@@ -1614,6 +1614,220 @@ fn space_held_at_the_release_counts_when_the_focus_goes_after_it() {
     assert_eq!(lost, released, "a focus loss after the release keeps Space as held at the release");
 }
 
+/// A Rectangle tool press that moves and goes up in one frame drags to where it went up: it draws
+/// the rectangle across the drag and opens no Rectangle dialog. One that moves no farther than the
+/// tool's own click distance is a click, which opens the dialog.
+#[test]
+fn a_press_moved_and_released_within_one_frame_drags_the_tool() {
+    {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let at = app.canvas_rect.unwrap().center();
+        let jitter = at + vec2(2.0, 1.0);
+        let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        frame(&mut app, &ctx, vec![b(at, true), egui::Event::PointerMoved(jitter), b(jitter, false)]);
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("rectangle"), "a click's jitter opens the dialog");
+        assert!(app.session.active().unwrap().doc.layers[0].children().unwrap().is_empty(), "a click's jitter draws nothing");
+    }
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("rectangle");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let from = app.canvas_rect.unwrap().center() - vec2(30.0, 15.0);
+    let to = from + vec2(60.0, 30.0);
+    let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+    frame(&mut app, &ctx, vec![b(from, true), egui::Event::PointerMoved(to), b(to, false)]);
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.ui.dialog.is_none(), "the drag opens no dialog: {:?}", app.ui.dialog.as_ref().map(|d| &d.kind));
+    let st = app.session.active().unwrap();
+    let kids = st.doc.layers[0].children().unwrap();
+    assert_eq!(kids.len(), 1, "the drag draws one rectangle");
+    let r = kids[0].geometric_bounds().unwrap();
+    let (w, h) = (r.width(), r.height());
+    assert!(w > 0.0 && (w - 2.0 * h).abs() < 1e-6, "the rectangle spans the drag, got {w} x {h}");
+}
+
+/// With Animated Zoom off, a Zoom tool drag pressed and released in one frame zooms to the area
+/// dragged across, though Space goes down, the pointer moves and Space goes up after the release in
+/// that frame.
+#[test]
+fn space_after_a_zoom_drag_within_one_frame_does_not_move_its_marquee() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+    app.select_tool("zoom");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() - vec2(100.0, 50.0);
+    let to = at + vec2(100.0, 50.0);
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    let z0 = app.view().unwrap().zoom;
+    let area = z0 * f64::from((rect.width() / 100.0).min(rect.height() / 50.0));
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+    frame(
+        &mut app,
+        &ctx,
+        vec![button(at, true), Event::PointerMoved(to), button(to, false), space(true), Event::PointerMoved(to + vec2(40.0, 20.0)), space(false)],
+    );
+    frame(&mut app, &ctx, vec![]);
+    let z = app.view().unwrap().zoom;
+    assert!((z - area).abs() < 1e-6, "the drag zooms to its area: {z0} → {z}, not {area}");
+    // Cmd+Space held at the press and Space let go before the release, in the press's frame: the
+    // moves while Space was held size the marquee, as they do over several frames.
+    app.view_mut().unwrap().zoom = z0;
+    let cmd = egui::Modifiers::COMMAND;
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: cmd };
+    let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: cmd };
+    frame(&mut app, &ctx, vec![Event::ModifiersChanged(cmd), space(true), Event::PointerMoved(at)]);
+    frame(
+        &mut app,
+        &ctx,
+        vec![button(at, true), Event::PointerMoved(at + vec2(50.0, 25.0)), Event::PointerMoved(to), space(false), button(to, false)],
+    );
+    frame(&mut app, &ctx, vec![Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let z = app.view().unwrap().zoom;
+    assert!((z - area).abs() < 1e-6, "Space held at the press sizes the marquee: {z0} → {z}, not {area}");
+}
+
+/// A Selection tool click pressed and released in one frame presses with the modifiers held at
+/// its press: Shift held at the press and let go before the release adds the clicked object to
+/// the selection.
+#[test]
+fn a_click_within_one_frame_presses_with_the_modifiers_of_its_press() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].clone();
+    let b = app.run("shape.rectangle", json!({"x": 200, "y": 100, "width": 60, "height": 60})).unwrap()["id"].clone();
+    app.select_tool("selection");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = xf.to_screen(Point::new(230.0, 130.0));
+    let press = |pressed, modifiers| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+    frame(
+        &mut app,
+        &ctx,
+        vec![
+            egui::Event::ModifiersChanged(egui::Modifiers::SHIFT),
+            press(true, egui::Modifiers::SHIFT),
+            egui::Event::ModifiersChanged(egui::Modifiers::NONE),
+            press(false, egui::Modifiers::NONE),
+        ],
+    );
+    frame(&mut app, &ctx, vec![]);
+    let id = |v: &serde_json::Value| vectorcraft_doc::NodeId(v.as_u64().unwrap());
+    let mut selected = app.session.active().unwrap().selection.objects.clone();
+    selected.sort_by_key(|n| n.0);
+    assert_eq!(selected, vec![id(&a), id(&b)], "Shift held at the press adds the clicked object");
+}
+
+/// A press and release in one frame takes Space as it was at the press: Space held at the press
+/// and let go before the release pans the view to the release instead of drawing with the
+/// Rectangle tool, and Space pressed after the release leaves a Rectangle tool click, which opens
+/// its dialog.
+#[test]
+fn a_press_within_one_frame_takes_space_as_it_was_at_the_press() {
+    let run = |events: &dyn Fn(Pos2, Pos2) -> Vec<egui::Event>| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let at = app.canvas_rect.unwrap().center();
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
+        let center = app.view().unwrap().center;
+        frame(&mut app, &ctx, events(at, at + vec2(60.0, 30.0)));
+        frame(&mut app, &ctx, vec![]);
+        let drawn = app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+        let panned = app.view().unwrap().center != center;
+        (drawn, app.ui.dialog.as_ref().map(|d| d.kind.clone()), panned)
+    };
+    let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let space = |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+    let held = run(&|a, to| vec![space(true), b(a, true), egui::Event::PointerMoved(to), space(false), b(to, false)]);
+    assert_eq!(held, (0, None, true), "Space held at the press pans");
+    let after = run(&|a, _| vec![b(a, true), b(a, false), space(true)]);
+    assert_eq!(after, (0, Some("rectangle".to_string()), false), "Space after the release leaves a click");
+}
+
+/// A Rotate View drag pressed and released in one frame turns the view to the release, snapped
+/// to 15° when Shift is held at the release, though it was not held at the press nor at the end
+/// of the frame.
+#[test]
+fn a_rotate_view_drag_within_one_frame_turns_with_the_release_modifiers() {
+    let turn = |shift_at_release: bool| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rotateView");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let c = app.canvas_rect.unwrap().center();
+        let (from, to) = (c + vec2(100.0, 0.0), c + vec2(100.0, 36.4));
+        let up = if shift_at_release { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
+        let b = |pos, pressed, modifiers| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)]);
+        frame(
+            &mut app,
+            &ctx,
+            vec![
+                b(from, true, egui::Modifiers::NONE),
+                egui::Event::PointerMoved(to),
+                egui::Event::ModifiersChanged(up),
+                b(to, false, up),
+                egui::Event::ModifiersChanged(egui::Modifiers::NONE),
+            ],
+        );
+        frame(&mut app, &ctx, vec![]);
+        app.view().unwrap().rotation
+    };
+    let free = turn(false);
+    assert!(free.rem_euclid(15.0) > 1.0 && free.rem_euclid(15.0) < 14.0, "without Shift the turn is not snapped: {free}");
+    let snapped = turn(true);
+    assert!((snapped.rem_euclid(15.0) % 15.0).abs() < 1e-9, "Shift held at the release snaps the turn: {snapped}");
+}
+
+/// A Pencil stroke pressed and released in one frame takes the moves between its press and its
+/// release, not the moves before the press: it bends through the point it passed, and it starts
+/// at the press.
+#[test]
+fn a_stroke_within_one_frame_takes_the_moves_after_its_press() {
+    use egui::{Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.smart_guides = false;
+    app.ui.view.snap_to_point = false;
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    let a = app.canvas_rect.unwrap().center() - vec2(100.0, 0.0);
+    let end = a + vec2(120.0, 0.0);
+    app.select_tool("pencil");
+    frame(&mut app, &ctx, vec![Event::PointerMoved(a - vec2(60.0, 0.0))]);
+    let mut events = vec![Event::PointerMoved(a - vec2(30.0, 0.0)), Event::PointerMoved(a), button(a, true)];
+    events.extend([20.0, 40.0, 60.0, 80.0, 100.0].map(|x: f32| Event::PointerMoved(a + vec2(x, 40.0 - (x - 60.0).abs() * 0.5))));
+    events.extend([Event::PointerMoved(end), button(end, false)]);
+    frame(&mut app, &ctx, events);
+    frame(&mut app, &ctx, vec![]);
+    let st = app.session.active().unwrap();
+    let r = st.doc.node(*st.selection.objects.first().expect("the stroke is drawn and selected")).unwrap().geometric_bounds().unwrap();
+    let (left, right) = (xf.to_doc(a), xf.to_doc(end));
+    assert!((r.x0 - left.x).abs() < 1.0 && (r.x1 - right.x).abs() < 1.0, "the stroke runs from the press to the release: {r:?}");
+    assert!(r.height() > 10.0, "the stroke bends through the moves after the press: {r:?}");
+}
+
 /// A press on an artboard's name starts no drag. Moving with the button still held is not hover,
 /// so Shift over a gridline intersection does not position the Perspective Selection tool's plane
 /// until the button is up.
@@ -12280,7 +12494,8 @@ fn only_the_freehand_tools_get_every_move_of_a_frame() {
     {
         app.select_tool(tool);
         let mut moves = vec![];
-        let mut out = ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app, false).0);
+        let mut out =
+            ctx.run_ui(egui::RawInput { events: events.clone(), ..Default::default() }, |ui| moves = tool_frame_moves(ui, &app, false, false).0);
         out.textures_delta.clear();
         assert_eq!(moves.len(), if every { 19 } else { 0 }, "{tool}");
     }

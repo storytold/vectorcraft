@@ -134,6 +134,18 @@ pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before:
 /// Whether `key` was held when `button` went up in this frame, by the rules of
 /// [`backquote_at_release`], with `before` its state at the end of the frame before.
 pub(super) fn key_at_release(ui: &Ui, key: egui::Key, button: egui::PointerButton, before: Option<bool>) -> bool {
+    key_at_button(ui, key, button, false, before)
+}
+
+/// Whether `key` was held when `button` went down in this frame, by the rules of
+/// [`backquote_at_release`] with the button-down in place of the button-up.
+pub(super) fn key_at_press(ui: &Ui, key: egui::Key, button: egui::PointerButton, before: Option<bool>) -> bool {
+    key_at_button(ui, key, button, true, before)
+}
+
+/// Whether `key` was held when `button` first went down (`pressed`) or up in this frame
+/// ([`key_at_release`], [`key_at_press`]).
+fn key_at_button(ui: &Ui, key: egui::Key, button: egui::PointerButton, pressed: bool, before: Option<bool>) -> bool {
     ui.input(|i| {
         let now = i.key_down(key);
         // A press or release of `key` (`Some(pressed)`), or a focus loss (`None`).
@@ -142,7 +154,9 @@ pub(super) fn key_at_release(ui: &Ui, key: egui::Key, button: egui::PointerButto
             egui::Event::WindowFocused(false) => Some(None),
             _ => None,
         };
-        let Some(up) = i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: false, .. } if *b == button)) else {
+        let Some(up) =
+            i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: p, .. } if *b == button && *p == pressed))
+        else {
             return now;
         };
         let start = match i.events.iter().find_map(step) {
@@ -218,9 +232,30 @@ pub(super) type FrameMove = (Pos2, Option<f32>, Option<PenPose>);
 /// button's button-up in this frame, if it came: the moves after it are hover, and the button-up's
 /// position is the pointer's. The last move before it is left out only when it is at that
 /// position; its tilt and rotation come second either way.
+#[cfg(test)]
 pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<egui::PointerButton>) -> (Vec<FrameMove>, Option<PenPose>) {
+    frame_moves_since(ui, stylus, release, false)
+}
+
+/// [`frame_moves`], and with `since_press` only the moves after the primary button first went down
+/// in this frame: a press that began in this frame did not pass the positions before it.
+pub(super) fn frame_moves_since(
+    ui: &Ui,
+    stylus: Option<&StylusFeed>,
+    release: Option<egui::PointerButton>,
+    since_press: bool,
+) -> (Vec<FrameMove>, Option<PenPose>) {
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
+        // How many of the frame's moves came before the press, when only those after it count.
+        let before_press = if since_press {
+            i.events
+                .iter()
+                .position(|e| matches!(e, egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: true, .. }))
+                .map_or(0, |k| i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count())
+        } else {
+            0
+        };
         // How many of the frame's moves came before the button-up, and where it came, if it came.
         let before_up = release.and_then(|b| {
             i.events.iter().enumerate().find_map(|(k, e)| match e {
@@ -264,6 +299,7 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
             }
             None => moves.pop().and_then(|(_, _, q)| q),
         };
+        moves.drain(..before_press.min(moves.len()));
         // A burst of events (a stalled frame) is thinned to a bounded count.
         const MAX: usize = 64;
         if moves.len() > MAX {
@@ -279,10 +315,10 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
 /// for the others, which get one drag a frame. The moves are read either way, so the host's feed
 /// pairs the next frame's with its own. The tilt and rotation the feed kept for the pointer's
 /// position come second, for every tool. With `released`, only the moves before the primary
-/// button-up count.
-pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp, released: bool) -> (Vec<FrameMove>, Option<PenPose>) {
+/// button-up count, and with `pressed_here` too, only those after the press in this frame.
+pub(super) fn tool_frame_moves(ui: &Ui, app: &VectorcraftApp, released: bool, pressed_here: bool) -> (Vec<FrameMove>, Option<PenPose>) {
     let release = released.then_some(egui::PointerButton::Primary);
-    let (moves, last_pose) = frame_moves(ui, app.services.stylus.as_ref(), release);
+    let (moves, last_pose) = frame_moves_since(ui, app.services.stylus.as_ref(), release, pressed_here);
     (if app.session.tool_wants_samples() { moves } else { vec![] }, last_pose)
 }
 
