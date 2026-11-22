@@ -810,6 +810,10 @@ struct Host {
     /// The index of each open document's active artboard as the run starts, by document uid. The
     /// view keeps that index while the run goes on, so the steps `app.doScript` plays act on it.
     active_artboards: Vec<(u64, usize)>,
+    /// The artboards the Artboard tool had selected in the active document as the run starts (two or
+    /// more), with that document's uid. The run gives the tool fresh state, which drops them, so the
+    /// steps `app.doScript` plays read them here.
+    artboard_picks: Option<(u64, Vec<usize>)>,
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -1963,6 +1967,9 @@ impl Session {
         if self.script_copy_first && self.docs.iter().any(DocState::is_dirty) && cmd::recovery::save_copies(self).is_err() {
             return Err(EngineError::Other(NO_RECOVERY_COPY.to_string()));
         }
+        // The Artboard tool's selection, which the fresh tool state below drops.
+        let picks = cmd::artboard_tool_picks(self);
+        let artboard_picks = self.active().filter(|_| !picks.is_empty()).map(|d| (d.uid, picks));
         self.reset_tool();
         let open: Vec<u64> = self.docs.iter().map(|d| d.uid).collect();
         self.script_high_water.retain(|uid, _| open.contains(uid));
@@ -2075,6 +2082,7 @@ impl Session {
             dom: dom::State::default(),
             actions: request.actions,
             active_artboards: self.docs.iter().map(|d| (d.uid, dom::active_artboard(d))).collect(),
+            artboard_picks,
         });
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {

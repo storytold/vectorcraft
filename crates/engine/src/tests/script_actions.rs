@@ -262,6 +262,31 @@ fn steps_act_on_the_artboard_active_as_they_run() {
     assert_eq!(left(&s), was[0].x0, "a step that names artboard 0 keeps it");
 }
 
+/// A recorded `command.batch` step that names its `artboard` gives it to its steps that name none,
+/// past the last artboard the last one, as `command.batch` does; a step that names its own keeps it.
+#[test]
+fn a_batch_steps_artboard_holds_for_its_steps_that_name_none() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let was: Vec<_> = s.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    make_active(&mut s, 1);
+    let align = json!({"command": "object.align", "params": {"horizontal": "left", "to": "artboard"}});
+    let mut own = align.clone();
+    own["params"]["artboard"] = json!(1);
+    let batch = |artboard: u64, step: &Value| json!({"command": "command.batch", "params": {"artboard": artboard, "commands": [step]}});
+    let actions = set(&[("First", vec![batch(0, &align)]), ("Past", vec![batch(9, &align)]), ("Own", vec![batch(0, &own)])]);
+    let left = |s: &Session| s.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap().x0;
+    log_with(&mut s, "app.doScript('First', 'Set');", &actions);
+    assert_eq!(left(&s), was[0].x0, "the batch's artboard 0");
+    log_with(&mut s, "app.doScript('Past', 'Set');", &actions);
+    assert_eq!(left(&s), was[2].x0, "past the last artboard, the last one");
+    log_with(&mut s, "app.doScript('Own', 'Set');", &actions);
+    assert_eq!(left(&s), was[1].x0, "a step that names artboard 1 keeps it");
+}
+
 /// The active artboard a step gets is the index it had as the run started: after a step deletes an
 /// artboard before it, the artboard now at that index, as the view shows it.
 #[test]
@@ -269,7 +294,8 @@ fn steps_keep_the_active_artboards_index() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
     let uid = s.active().unwrap().uid;
-    let add = |s: &Session| script::actions::on_active_artboard(s, &[(uid, 1)], "object.align", &json!({}));
+    let start = script::actions::Start { active: &[(uid, 1)], picks: None, batch: None };
+    let add = |s: &Session| script::actions::on_active_artboard(s, &start, "object.align", &json!({}));
     assert_eq!(add(&s), json!({"artboard": 1}));
     s.execute("artboard.delete", &json!({"index": 0})).unwrap();
     assert_eq!(add(&s), json!({"artboard": 1}), "the artboard now at index 1");
@@ -310,7 +336,8 @@ fn paste_and_fit_steps_keep_the_artboard_tools_selection() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
     make_active(&mut s, 1);
-    let add = |s: &Session, id: &str| script::actions::on_active_artboard(s, &[], id, &json!({}));
+    let start = script::actions::Start { active: &[], picks: None, batch: None };
+    let add = |s: &Session, id: &str| script::actions::on_active_artboard(s, &start, id, &json!({}));
     assert_eq!(add(&s, "edit.pasteInPlace"), json!({"artboard": 1}));
     assert_eq!(add(&s, "artboard.fitToArt"), json!({"index": 1}));
     s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
@@ -322,4 +349,48 @@ fn paste_and_fit_steps_keep_the_artboard_tools_selection() {
     assert_eq!(add(&s, "artboard.fitToSelection"), json!({"index": 1}));
     assert_eq!(add(&s, "object.align"), json!({"artboard": 1}));
     assert_eq!(add(&s, "shape.rectangle"), json!({}));
+}
+
+/// The Artboard tool's selection as `script.run` starts holds for the steps `app.doScript` plays,
+/// though the run gives the tool fresh state: a paste step pastes on those artboards and a Fit to
+/// Artwork Bounds step fits them.
+#[test]
+fn a_run_keeps_the_artboard_tools_selection_for_its_steps() {
+    // Three artboards with a rectangle on each, artboard 1 active and the Artboard tool holding 0 and 2.
+    let setup = || {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
+        let was: Vec<_> = s.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+        let mut art = Vec::new();
+        for b in &was {
+            let id = s.execute("shape.rectangle", &json!({"x": b.x0 + 10.0, "y": 10, "width": 20, "height": 30})).unwrap()["id"].as_u64().unwrap();
+            s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+            art.push(s.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap());
+        }
+        s.execute("edit.copy", &json!({})).unwrap();
+        make_active(&mut s, 1);
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", &json!([0, 2]));
+        (s, was, art)
+    };
+    let actions = set(&[("Paste", vec![json!({"command": "edit.pasteInPlace"})]), ("Fit", vec![json!({"command": "artboard.fitToArt"})])]);
+    let (mut s, ..) = setup();
+    let before = objects(&s);
+    log_with(&mut s, "app.doScript('Paste', 'Set');", &actions);
+    assert_eq!(objects(&s), before + 2, "one copy on each selected artboard");
+    let (mut s, was, art) = setup();
+    log_with(&mut s, "app.doScript('Fit', 'Set');", &actions);
+    let boards: Vec<_> = s.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(boards, [art[0], was[1], art[2]], "the selected artboards fit their art");
+    // A kept artboard past the last one is left out; with fewer than two left, the active one applies.
+    let (mut s, ..) = setup();
+    s.reset_tool();
+    let uid = s.active().unwrap().uid;
+    let kept = (uid, vec![0, 2]);
+    let start = script::actions::Start { active: &[(uid, 1)], picks: Some(&kept), batch: None };
+    let add = |s: &Session, id: &str| script::actions::on_active_artboard(s, &start, id, &json!({}));
+    assert_eq!(add(&s, "edit.pasteInBack"), json!({"artboards": [0, 2]}));
+    assert_eq!(add(&s, "artboard.fitToSelection"), json!({"index": 1}));
+    s.execute("artboard.delete", &json!({"index": 2})).unwrap();
+    assert_eq!(add(&s, "artboard.fitToArt"), json!({"index": 1}));
 }

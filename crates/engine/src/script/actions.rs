@@ -52,13 +52,14 @@ pub struct Playable {
 
 /// A step of a [`Playable`]: its place in the action as errors give it (1 for the first; a step of a
 /// `command.batch` step has the batch's place and its own, as in `3.2`), its command, its params and
-/// their size as JSON.
+/// their size as JSON, and for a step of a `command.batch` step the `artboard` that batch names.
 #[derive(Clone, Debug)]
 struct Step {
     place: String,
     id: String,
     params: Value,
     bytes: u64,
+    artboard: Option<u64>,
 }
 
 /// `script.run`'s `actions`: `[{set, name, steps: [{command, params?, step?}]}]`, where `step` is the
@@ -100,6 +101,9 @@ pub fn parse(v: Option<&Value>) -> Result<Vec<Playable>, String> {
             let (id, params) = command_of(s, &at)?;
             match params.get("commands") {
                 Some(Value::Array(inner)) if id == "command.batch" => {
+                    // The batch's `artboard`, for its steps that act on the active artboard, as
+                    // `command.batch` reads it.
+                    let artboard = params.get("artboard").and_then(Value::as_u64);
                     for (k, c) in inner.iter().enumerate() {
                         let at = format!("{at}.params.commands[{k}]");
                         let Value::Object(c) = c else { return Err(format!("{at} must be an object")) };
@@ -107,11 +111,11 @@ pub fn parse(v: Option<&Value>) -> Result<Vec<Playable>, String> {
                         if id == "command.batch" {
                             return Err(format!("{at} is a command.batch inside a command.batch"));
                         }
-                        steps.push(step(format!("{place}.{}", k + 1), id, params));
+                        steps.push(step(format!("{place}.{}", k + 1), id, params, artboard));
                     }
                 }
                 _ if id == "command.batch" => return Err(format!("{at}.params.commands must be a list")),
-                _ => steps.push(step(place, id, params)),
+                _ => steps.push(step(place, id, params, None)),
             }
             if steps.len() > MAX_ACTION_STEPS {
                 return Err(format!("{at}: the action has more than {MAX_ACTION_STEPS} steps"));
@@ -167,9 +171,9 @@ fn command_of(o: &Map<String, Value>, at: &str) -> Result<(String, Value), Strin
     Ok((id, params))
 }
 
-fn step(place: String, id: String, params: Value) -> Step {
+fn step(place: String, id: String, params: Value, artboard: Option<u64>) -> Step {
     let bytes = serde_json::to_vec(&params).map_or(0, |b| b.len() as u64);
-    Step { place, id, params, bytes }
+    Step { place, id, params, bytes, artboard }
 }
 
 /// `text` as an error shows it: at most 80 characters, with … after a cut, and control characters
@@ -248,7 +252,8 @@ fn do_script(h: &Host, a: &[Data]) -> std::result::Result<Data, HostError> {
         h.charge_call(16 + s.id.len() as u64 + s.bytes)?;
         // Saved steps run as they run in the Actions panel: keys their commands no longer read are
         // passed over.
-        let params = on_active_artboard(&h.session.borrow(), &h.active_artboards, &s.id, &s.params);
+        let start = Start { active: &h.active_artboards, picks: h.artboard_picks.as_ref(), batch: s.artboard };
+        let params = on_active_artboard(&h.session.borrow(), &start, &s.id, &s.params);
         let outer = h.session.borrow_mut().set_replaying(true);
         let r = command(h, &s.id, &params);
         h.session.borrow_mut().set_replaying(outer);
@@ -289,16 +294,24 @@ fn refused_step(s: &Step) -> Option<(String, String)> {
 /// run started, which the view keeps), past the last artboard the last one, as the view shows it
 /// after a step deletes artboards; a document the run opened has its own ([`super::dom`]'s). While
 /// the Artboard tool has several artboards selected, a Fit to Artwork Bounds step gets those as its
-/// `indices` instead, and a paste step gets none (it pastes on them). A paste step in a document
-/// without artboards, or one that names `artboards`, and a Fit to Artwork Bounds step that names
-/// `indices`, get none. A key the step gives is kept.
-pub(crate) fn on_active_artboard(s: &crate::Session, start: &[(u64, usize)], id: &str, params: &Value) -> Value {
+/// `indices` instead, and a paste step gets none (it pastes on them). The run gives the tool fresh
+/// state, which drops its selection, so while the tool is still the Artboard tool and has none, the
+/// selection [`Start::picks`] holds for the document as the run started applies: a Fit to Artwork
+/// Bounds step gets those as its `indices` and a paste step as its `artboards`, the ones past the
+/// last artboard left out, and only while two or more remain. A step of a recorded `command.batch`
+/// that names its `artboard` ([`Start::batch`]) gets that artboard instead of the active one, past
+/// the last artboard the last one, and none in a document without artboards, as `command.batch`
+/// gives it. A paste step in a document without artboards, or one that names `artboards`, and a Fit
+/// to Artwork Bounds step that names `indices`, get none. A key the step gives is kept.
+pub(crate) fn on_active_artboard(s: &crate::Session, start: &Start<'_>, id: &str, params: &Value) -> Value {
     let mut params = params.clone();
     let Some(st) = s.active() else { return params };
     let n = st.doc.artboards.len();
-    let active = match start.iter().find(|(uid, _)| *uid == st.uid) {
-        Some((_, i)) => (*i).min(n.saturating_sub(1)),
-        None => super::dom::active_artboard(st),
+    let active = match (start.batch, start.active.iter().find(|(uid, _)| *uid == st.uid)) {
+        (Some(_), _) if n == 0 => return params,
+        (Some(a), _) => usize::try_from(a).map_or(n - 1, |a| a.min(n - 1)),
+        (None, Some((_, i))) => (*i).min(n.saturating_sub(1)),
+        (None, None) => super::dom::active_artboard(st),
     };
     let paste = matches!(id, "edit.pasteInPlace" | "edit.pasteInFront" | "edit.pasteInBack");
     let fit_art = id == "artboard.fitToArt";
@@ -314,10 +327,27 @@ pub(crate) fn on_active_artboard(s: &crate::Session, start: &[(u64, usize)], id:
         return params;
     }
     let picks = if paste || fit_art { crate::cmd::artboard_tool_picks(s) } else { Vec::new() };
-    if picks.is_empty() {
+    let kept: Vec<usize> = match start.picks {
+        Some((uid, list)) if picks.is_empty() && (paste || fit_art) && *uid == st.uid && s.tool_id() == "artboard" => {
+            list.iter().copied().filter(|i| *i < n).collect()
+        }
+        _ => Vec::new(),
+    };
+    if kept.len() >= 2 {
+        p.insert((if fit_art { "indices" } else { "artboards" }).into(), json!(kept));
+    } else if picks.is_empty() {
         p.insert(key.into(), json!(active));
     } else if fit_art {
         p.insert("indices".into(), json!(picks));
     }
     params
+}
+
+/// What [`on_active_artboard`] reads besides the session: the index of each open document's active
+/// artboard as the run started, by document uid; the Artboard tool's selection as the run started,
+/// with its document's uid; and the `artboard` a step's recorded `command.batch` names.
+pub(crate) struct Start<'a> {
+    pub active: &'a [(u64, usize)],
+    pub picks: Option<&'a (u64, Vec<usize>)>,
+    pub batch: Option<u64>,
 }

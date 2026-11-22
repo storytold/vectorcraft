@@ -80,8 +80,8 @@ const INSIDE: &[(&str, &str)] = &[
     ("Application.", "prototype"),
     (
         "Application.prototype.",
-        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents doScript \
+         getIsFileOpen loadAction loadAction= selection typename unloadAction unloadAction=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),

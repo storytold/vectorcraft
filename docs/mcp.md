@@ -2689,10 +2689,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   Distribute Spacing to the artboard, Select › All on Active Artboard, Edit Symbol, Fit to Artwork Bounds and Fit to
   Selected Art) and does not name one acts on the active document's active artboard, by the index it had as the run
   started, which the view keeps: after the script deletes artboards, the artboard now at that index, or the last one
-  past the end. While the Artboard tool has several artboards selected, a paste step and a Fit to Artwork Bounds step
-  act on those instead, as in the panel's playback. VectorCraft's own rules: the action and its set are matched by
-  their exact names, and a name that matches no action or more than one throws an error before any step runs, as does
-  an action with no included step. A stop, and a step whose command a script may not run or the engine does not have
+  past the end. While the Artboard tool has several artboards selected as the run starts, a paste step and a Fit to
+  Artwork Bounds step act on those instead, as in the panel's playback. A step of a recorded `command.batch` step that
+  names its `artboard` acts on that artboard, or the last one past the end, as `command.batch` gives it. VectorCraft's
+  own rules: the action and its set are matched by their exact names, and a name that matches no action or more than
+  one throws an error before any step runs, as does an action with no included step. When the app leaves an action
+  out of `actions`, it also leaves out every other action of that set with the same name. A stop, and a step whose command a script may not run or the engine does not have
   (a View menu step, or a step that plays an action or runs a script), throw an error that names the step before any
   step runs, as does such a command among the commands a Batch step (`action.batch`) plays on each file, so an
   action cannot play itself.

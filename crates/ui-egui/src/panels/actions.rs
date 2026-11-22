@@ -589,15 +589,25 @@ pub(crate) fn has_stop(commands: &[Value]) -> bool {
 /// script's `app.doScript` plays, unless the caller gave them: every action of every set, in panel
 /// order, with its steps as playback runs them ([`Action::playback_steps`]) and each step's place in
 /// the action. An action that `actions` cannot hold (a step that is not a command, a name that is
-/// too long, or one past the limits of [`vectorcraft_engine::script::actions`]) is left out.
+/// too long, or one past the limits of [`vectorcraft_engine::script::actions`]) is left out, and so
+/// is every other action of its set with its name, so that a name two actions share is never one a
+/// script can play.
 pub(crate) fn add_script_actions(app: &VectorcraftApp, id: &str, params: &mut Value) {
+    use std::collections::HashMap;
     use vectorcraft_engine::script::actions::{MAX_ACTIONS, MAX_ACTIONS_BYTES, MAX_ALL_STEPS, parse};
     let Some(p) = params.as_object_mut().filter(|_| id == "script.run") else { return };
     if p.contains_key("actions") {
         return;
     }
+    let all = || app.ui.action_sets.iter().flat_map(|set| set.actions.iter().map(move |a| (set, a)));
+    // How many actions of the panel have each set's name and action's name, and how many of them
+    // `actions` holds.
+    let mut named: HashMap<(&str, &str), (usize, usize)> = HashMap::new();
+    for (set, a) in all() {
+        named.entry((set.name.as_str(), a.name.as_str())).or_default().0 += 1;
+    }
     let (mut list, mut steps, mut bytes) = (Vec::new(), 0usize, 2usize);
-    for (set, a) in app.ui.action_sets.iter().flat_map(|set| set.actions.iter().map(move |a| (set, a))) {
+    for (set, a) in all() {
         if list.len() >= MAX_ACTIONS {
             break;
         }
@@ -636,10 +646,18 @@ pub(crate) fn add_script_actions(app: &VectorcraftApp, id: &str, params: &mut Va
         }
         steps += count;
         bytes += size;
+        if let Some(n) = named.get_mut(&(set.name.as_str(), a.name.as_str())) {
+            n.1 += 1;
+        }
         if let Value::Array(mut one) = one {
             list.append(&mut one);
         }
     }
+    let partly = |e: &Value| {
+        let key = (e["set"].as_str().unwrap_or_default(), e["name"].as_str().unwrap_or_default());
+        named.get(&key).is_some_and(|(panel, held)| held < panel)
+    };
+    list.retain(|e| !partly(e));
     p.insert("actions".into(), Value::Array(list));
 }
 
@@ -7540,6 +7558,27 @@ mod tests {
             .unwrap();
         assert_eq!(r["log"], json!(["there is no action set “Mine”"]));
         assert_eq!(objects(&app), 2);
+    }
+
+    /// A name two actions of a set share stays a name a script can't play when `actions` leaves one
+    /// of them out: the other is left out too.
+    #[test]
+    fn a_script_cant_play_a_name_two_actions_share() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let rect = ("shape.rectangle".to_string(), json!({"x": 0, "y": 10, "width": 10, "height": 10}));
+        let good = Action::new("Twin", vec![rect.clone()]);
+        let odd = Action::new("Twin", vec![rect.clone(), ("select.none".to_string(), json!(5))]);
+        app.ui.action_sets.push(ActionSet::new("Mine", vec![good, odd, Action::new("Other", vec![rect])]));
+        let mut params = json!({});
+        add_script_actions(&app, "script.run", &mut params);
+        let mine: Vec<_> = params["actions"].as_array().into_iter().flatten().filter(|a| a["set"] == "Mine").map(|a| a["name"].clone()).collect();
+        assert_eq!(mine, [json!("Other")]);
+        app.session.script_frames = false;
+        let source = "try { app.doScript('Twin', 'Mine'); vc.log('ran'); } catch (e) { vc.log(e.message); }";
+        let r = app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+        assert_eq!(r["log"], json!(["the set “Mine” has no action “Twin”"]));
+        assert_eq!(app.session.active().map_or(0, |d| d.doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>()), 0);
     }
 
     /// The steps a script's `app.doScript` plays act on the view's active artboard, as the panel's
