@@ -73,7 +73,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPresetType \
+        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
          PageItems PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits StrokeCap \
          StrokeJoin Transformation ZOrderMethod",
@@ -83,6 +83,14 @@ const INSIDE: &[(&str, &str)] = &[
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
          selection typename",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -149,9 +157,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`,
-/// the page item types other than `PathItem`, and the color classes.
-const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem DocumentPreset EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// other than `PathItem`, and the color classes.
+const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
      IntertwineItem LabColor MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor \
      SymbolItem TextFrame cmykColor";
 
