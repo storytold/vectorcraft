@@ -259,6 +259,19 @@ fn reflect_is_a_plain_object_of_functions() {
 }
 
 #[test]
+fn reflect_reads_an_argument_list_length_with_to_length() {
+    truth(
+        "function count() { return arguments.length; }
+         function Made() { this.n = arguments.length; }
+         Reflect.apply(count, null, { length: -1 }) === 0 && Reflect.apply(count, null, { length: 2.5 }) === 2
+             && Reflect.apply(count, null, { length: NaN }) === 0 && new Made().n === 0
+             && Reflect.apply(count, null, { length: 65536.5 }) === 65536
+             && Reflect.construct(Made, { length: -5 }).n === 0
+             && (function () { try { Reflect.apply(count, null, { length: 4294967296 }); } catch (e) { return e instanceof RangeError; } return false; })()",
+    );
+}
+
+#[test]
 fn reflect_methods_answer_with_booleans_and_receivers() {
     truth(
         "var o = {}; Object.defineProperty(o, 'fixed', { value: 1 }); Object.preventExtensions(o);

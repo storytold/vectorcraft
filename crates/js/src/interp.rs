@@ -2843,7 +2843,7 @@ impl Interp {
                     let list = args.get(1).cloned().unwrap_or(Value::Undefined);
                     f = this;
                     this = args.first().cloned().unwrap_or(Value::Undefined);
-                    args = self.list_from_array_like(&list)?;
+                    args = self.list_from_array_like(&list, false)?;
                 }
                 Func::Bound { target, this: bound_this, args: bound_args } => {
                     self.use_fuel()?;
@@ -2901,8 +2901,10 @@ impl Interp {
         }
     }
 
-    /// The elements of an array-like `apply` argument (section 15.3.4.3).
-    pub(crate) fn list_from_array_like(&mut self, list: &Value) -> JsResult<Vec<Value>> {
+    /// The elements of an array-like `apply` argument (section 15.3.4.3). With `to_length`, the
+    /// length is read with ToLength (ECMA-262 2020 sections 7.1.20 and 7.3.17), so a negative
+    /// length gives no elements; otherwise it is read with ToUint32.
+    pub(crate) fn list_from_array_like(&mut self, list: &Value, to_length: bool) -> JsResult<Vec<Value>> {
         let Value::Object(o) = list else {
             if list.is_nullish() {
                 return Ok(Vec::new());
@@ -2910,7 +2912,16 @@ impl Interp {
             return Err(self.type_error("the argument list is not an object"));
         };
         let len = self.get_from(*o, &key("length"), list)?;
-        let n = to_uint32(self.to_number(&len)?) as usize;
+        let len = self.to_number(&len)?;
+        let n = if !to_length {
+            to_uint32(len) as usize
+        } else if len.is_nan() || len <= 0.0 {
+            0
+        } else if len.trunc() > MAX_APPLY_ARGS as f64 {
+            MAX_APPLY_ARGS + 1
+        } else {
+            to_uint32(len) as usize
+        };
         if n > MAX_APPLY_ARGS {
             return Err(self.throw(ErrorType::Range, "too many arguments"));
         }

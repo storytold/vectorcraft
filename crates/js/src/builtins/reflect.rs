@@ -100,7 +100,7 @@ fn argument_list(interp: &mut Interp, list: &Value, function: &str) -> JsResult<
     if !matches!(list, Value::Object(_)) {
         return Err(interp.type_error(&format!("Reflect.{function}: the argument list is not an object")));
     }
-    interp.list_from_array_like(list)
+    interp.list_from_array_like(list, true)
 }
 
 /// `Reflect.apply(target, thisArgument, argumentsList)` (section 26.1.1).
