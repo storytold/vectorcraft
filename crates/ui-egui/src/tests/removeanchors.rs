@@ -312,7 +312,7 @@ fn open_anchor_delete_and_backspace_cut_the_clicked_anchor_then_clear() {
     }
 }
 
-/// With General › Delete Removes Anchor Points and Keeps Paths Joined on, both deletion keys
+/// With General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined on, both deletion keys
 /// remove the clicked anchor of a closed path and leave it closed, in one undo step.
 #[test]
 fn with_the_preference_on_delete_and_backspace_keep_the_path_joined() {

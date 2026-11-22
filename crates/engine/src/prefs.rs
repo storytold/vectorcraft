@@ -55,11 +55,12 @@ pub struct Prefs {
     /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
     /// default), the handles of a moved anchor move with it and the other handles stay.
     pub interpolate_control_points: bool,
-    /// General › Delete Removes Anchor Points and Keeps Paths Joined: the default of the
+    /// General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined: the default of the
     /// `keepJoined` param of `edit.clear` (the Delete and Backspace keys and Edit › Clear). On,
     /// Clear removes the direct-selected anchors of a path as Remove Anchor Points does, refitting
-    /// the curve around each one, instead of deleting them with their segments. Off (the default),
-    /// Clear opens the path there.
+    /// the curve around each one, instead of deleting them with their segments, and a plain
+    /// double-click on a path segment with Direct Selection adds an anchor there. Off (the
+    /// default), Clear opens the path there and the double-click adds nothing.
     pub delete_keeps_paths_joined: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
