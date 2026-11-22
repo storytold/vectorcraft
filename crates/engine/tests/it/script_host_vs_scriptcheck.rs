@@ -74,7 +74,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "",
         "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
-         DocumentArtboardLayout DocumentColorSpace DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
+         DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
          DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits \
          ZOrderMethod",
     ),
@@ -83,6 +83,14 @@ const INSIDE: &[(&str, &str)] = &[
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
          selection typename",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -157,9 +165,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`
-/// and the page item types that have no members of their own.
-const BARE_CLASSES: &str = "BlendItem DocumentPreset EnvelopeItem GraphItem IntertwineItem MeshItem PathItem PlacedDocumentItem \
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// that have no members of their own.
+const BARE_CLASSES: &str = "BlendItem EnvelopeItem GraphItem IntertwineItem MeshItem PathItem PlacedDocumentItem \
      PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
