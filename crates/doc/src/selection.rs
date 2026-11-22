@@ -12,6 +12,9 @@ pub type AnchorRef = (usize, usize);
 /// (subpath index, segment index) inside a path.
 pub type SegmentRef = (usize, usize);
 
+/// The most objects [`Selection::add_all`] adds by looking for each one in the selected objects.
+const FEW_TO_ADD: usize = 8;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Selection {
     /// Selected objects in selection order.
@@ -197,14 +200,24 @@ impl Selection {
     /// carry its current activation, so a removal drops every slot of the id at once.
     fn each(&mut self, ids: impl IntoIterator<Item = NodeId>, toggle: bool) {
         use std::collections::hash_map::{Entry, HashMap};
-        let mut ids = ids.into_iter().peekable();
-        if ids.peek().is_none() {
+        let ids: Vec<NodeId> = ids.into_iter().collect();
+        if ids.is_empty() {
             return;
         }
         self.target = None;
         self.slices.clear();
         self.symbol_part = None;
         self.on_path_member = None;
+        // Up to [`FEW_TO_ADD`] objects to add are each looked for in the selected objects; more go
+        // through a table of the selected objects.
+        if !toggle && ids.len() <= FEW_TO_ADD {
+            for id in ids {
+                if !self.objects.contains(&id) {
+                    self.objects.push(id);
+                }
+            }
+            return;
+        }
         let mut live: HashMap<NodeId, usize> = self.objects.iter().map(|id| (*id, 0)).collect();
         let mut added: Vec<(NodeId, usize)> = Vec::new();
         let mut removed = false;

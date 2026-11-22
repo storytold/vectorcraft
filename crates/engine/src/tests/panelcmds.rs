@@ -967,6 +967,21 @@ fn a_locked_artboard_protects_the_art_on_it() {
     assert!(!tile.is_empty() && !tile.contains(&a), "{tile:?}");
 }
 
+/// Art on a locked artboard stays unselected when `select.add` adds it after another object.
+#[test]
+fn art_on_a_locked_artboard_added_after_another_object_stays_unselected() {
+    let mut s = session();
+    let a = rect(&mut s);
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let b = NodeId(s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    for id in [a, b] {
+        s.execute("select.add", &json!({"ids": [id.0]})).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, [a]);
+}
+
 /// New art on a locked artboard stays selected and editable until the selection leaves it: a
 /// second Pen click goes on the path the first one started, and pasted art moves. Once another
 /// object is clicked, a click, a marquee, `select.set` and Select All pass over that art. Undo, in
