@@ -1652,10 +1652,13 @@ fn put_grants(dir: &Path, entries: Vec<serde_json::Value>, signed: bool) -> bool
             return false;
         }
     };
-    // A file too large to keep is found before the raise, at the longest generation and a MAC of its
-    // length, so the file in place keeps its grants when nothing can be written.
+    // A file too large to keep is found before the raise, at the generation it would be written at
+    // (three past the kept one, [`raise_generation`]) and a MAC of its length, so the file in place
+    // keeps its grants when nothing can be written. When the kept generation can't be read, the raise
+    // fails too.
+    let expected = grant_keys::current_generation(&folder).ok().and_then(|kept| kept.checked_add(3)).unwrap_or(u64::MAX);
     let mut file =
-        SignedGrants { version: GRANTS_VERSION, generation: Some(u64::MAX), grants: entries, mac: Some("0".repeat(2 * grant_keys::KEY_LEN)) };
+        SignedGrants { version: GRANTS_VERSION, generation: Some(expected), grants: entries, mac: Some("0".repeat(2 * grant_keys::KEY_LEN)) };
     if grants_bytes(serde_json::to_value(&file).ok()).is_none() {
         log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
         return false;

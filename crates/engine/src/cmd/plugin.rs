@@ -1218,19 +1218,36 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let installed = registry::get(id).is_some();
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
+    // A module stored for an id that isn't installed (one no grant covers is skipped at startup)
+    // counts as removed once its file is gone.
+    let module = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.holds_stored_plugin(id);
+    let module_left = std::cell::Cell::new(false);
+    let cant_delete = || format!("plugin.remove: can't delete {}", s.stored_plugin_file(id).unwrap_or_default());
     // Installed again, it asks again. A grant that can't be removed may still approve the module, and
     // so may a grants file that can't be opened or read, or a signed copy of the file put back when
     // the generation couldn't be raised (the key store can't be reached). Without a plug-in folder
-    // nothing keeps a grant.
-    let forget = || s.store_grant_in(&turn, id, None) || s.plugin_dir.is_none();
-    // Its settings and cache are moved aside and its grant removed before anything is deleted: when
-    // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
-    // tries again.
+    // nothing keeps a grant. The stored module of an id that isn't installed is deleted next, while
+    // its settings and cache can still be moved back.
+    let forget = || {
+        if !s.store_grant_in(&turn, id, None) && s.plugin_dir.is_some() {
+            return false;
+        }
+        let deleted = !module || s.unstore_plugin(&turn, id);
+        module_left.set(!deleted);
+        deleted
+    };
+    // Its settings and cache are moved aside, its grant removed and its stored module deleted before
+    // anything else is deleted: when one of them can't be done, the settings and cache are moved back,
+    // the plug-in stays installed, as it was, and a second `plugin.remove` tries again. An invalid id
+    // names no grant and no module.
     let failed = if installed || stored {
         s.remove_plugin_storage(&turn, id, forget).err().map(|e| e.to_string())
-    } else {
+    } else if vectorcraft_plugins::manifest::valid_id(id) {
         (!forget()).then(|| crate::store::GRANT_NOT_REMOVED.to_string())
+    } else {
+        None
     };
+    let failed = failed.map(|e| if module_left.get() && e == crate::store::GRANT_NOT_REMOVED { cant_delete() } else { e });
     if let Some(e) = failed {
         if installed {
             s.attach_plugin_storage(&turn, id);
@@ -1238,11 +1255,8 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other(e));
     }
     registry::revoke(id);
-    // A module stored for an id that isn't installed (one no grant covers is skipped at startup)
-    // counts as removed once its file is gone.
-    let module = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.holds_stored_plugin(id);
     if !s.unstore_plugin(&turn, id) && module {
-        return Err(EngineError::Other(format!("plugin.remove: can't delete {}", s.stored_plugin_file(id).unwrap_or_default())));
+        return Err(EngineError::Other(cant_delete()));
     }
     if !stored && !module && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));

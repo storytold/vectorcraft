@@ -269,7 +269,9 @@ struct OsGrantKeys {
     /// same time keep one.
     making: Mutex<()>,
     /// The connection to the system's key store, once one is made. A failed connection is not
-    /// kept: the next call tries again, so a key store that starts after VectorCraft is used.
+    /// kept, and a kept one is dropped when the key store can't be reached through it or fails
+    /// ([`OsGrantKeys::failed`]): the next call connects again, so a key store that starts after
+    /// VectorCraft, or restarts, is used.
     store: Mutex<Option<Arc<keyring_core::CredentialStore>>>,
     /// How a connection is made ([`connect`]).
     connect: fn() -> Result<Arc<keyring_core::CredentialStore>, keyring_core::Error>,
@@ -296,8 +298,18 @@ impl OsGrantKeys {
         Ok(store.insert((self.connect)().map_err(store_error)?).clone())
     }
 
+    /// What the key store error `e` says ([`store_error`]). When the key store can't be reached or
+    /// fails, the connection is dropped first, so the next call makes a new one: the Secret Service
+    /// loses the session of a connection when it restarts. An entry that isn't there keeps it.
+    fn failed(&self, e: keyring_core::Error) -> KeyStoreError {
+        if matches!(e, keyring_core::Error::NoStorageAccess(_) | keyring_core::Error::PlatformFailure(_)) {
+            *self.store.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+        store_error(e)
+    }
+
     fn entry(&self, account: &str) -> Result<keyring_core::Entry, KeyStoreError> {
-        self.store()?.build(Self::SERVICE, account, None).map_err(store_error)
+        self.store()?.build(Self::SERVICE, account, None).map_err(|e| self.failed(e))
     }
 
     fn key_entry(&self) -> Result<keyring_core::Entry, KeyStoreError> {
@@ -305,7 +317,7 @@ impl OsGrantKeys {
     }
 
     /// The key the system's key store keeps, read from it.
-    fn stored(entry: &keyring_core::Entry) -> Result<Option<GrantKey>, KeyStoreError> {
+    fn stored(&self, entry: &keyring_core::Entry) -> Result<Option<GrantKey>, KeyStoreError> {
         match entry.get_secret() {
             // A secret that is not 64 hexadecimal digits is not a key this version made: there is none.
             Ok(secret) => Ok(std::str::from_utf8(&secret)
@@ -314,7 +326,7 @@ impl OsGrantKeys {
                 .and_then(|bytes| <[u8; KEY_LEN]>::try_from(bytes.as_slice()).ok())
                 .map(GrantKey)),
             Err(keyring_core::Error::NoEntry) => Ok(None),
-            Err(e) => Err(store_error(e)),
+            Err(e) => Err(self.failed(e)),
         }
     }
 
@@ -361,12 +373,12 @@ fn to_hex(bytes: &[u8]) -> String {
 impl GrantKeyStore for OsGrantKeys {
     /// Read from the key store each time, so that a key removed or replaced there is not used.
     fn key(&self) -> Result<Option<GrantKey>, KeyStoreError> {
-        Self::stored(&self.key_entry()?)
+        self.stored(&self.key_entry()?)
     }
 
     fn set_key(&self, key: &GrantKey) -> Result<(), KeyStoreError> {
         let _making = self.making.lock().unwrap_or_else(|e| e.into_inner());
-        self.key_entry()?.set_secret(to_hex(&key.0).as_bytes()).map_err(store_error)
+        self.key_entry()?.set_secret(to_hex(&key.0).as_bytes()).map_err(|e| self.failed(e))
     }
 
     /// Reads the key store again and makes the key only while holding [`creation_lock`], so that
@@ -374,15 +386,15 @@ impl GrantKeyStore for OsGrantKeys {
     fn create_key(&self) -> Result<GrantKey, KeyStoreError> {
         let _making = self.making.lock().unwrap_or_else(|e| e.into_inner());
         let entry = self.key_entry()?;
-        if let Some(key) = Self::stored(&entry)? {
+        if let Some(key) = self.stored(&entry)? {
             return Ok(key);
         }
         let _turn = creation_lock()?;
-        match Self::stored(&entry)? {
+        match self.stored(&entry)? {
             Some(key) => Ok(key),
             None => {
-                entry.set_secret(to_hex(&GrantKey::random()?.0).as_bytes()).map_err(store_error)?;
-                Self::stored(&entry)?.ok_or_else(|| KeyStoreError("the key store didn't keep the key".into()))
+                entry.set_secret(to_hex(&GrantKey::random()?.0).as_bytes()).map_err(|e| self.failed(e))?;
+                self.stored(&entry)?.ok_or_else(|| KeyStoreError("the key store didn't keep the key".into()))
             }
         }
     }
@@ -399,12 +411,12 @@ impl GrantKeyStore for OsGrantKeys {
                 .map(|bytes| Some(u64::from_be_bytes(bytes)))
                 .ok_or_else(|| KeyStoreError("the key store holds a generation that is not 16 hexadecimal digits".into())),
             Err(keyring_core::Error::NoEntry) => Ok(None),
-            Err(e) => Err(store_error(e)),
+            Err(e) => Err(self.failed(e)),
         }
     }
 
     fn set_generation(&self, folder: &Path, generation: u64) -> Result<(), KeyStoreError> {
-        self.generation_entry(folder)?.set_secret(to_hex(&generation.to_be_bytes()).as_bytes()).map_err(store_error)
+        self.generation_entry(folder)?.set_secret(to_hex(&generation.to_be_bytes()).as_bytes()).map_err(|e| self.failed(e))
     }
 }
 
@@ -463,6 +475,37 @@ mod tests {
         }
         let store: Arc<keyring_core::CredentialStore> = MOCK.clone();
         Ok(store)
+    }
+
+    /// Connections asked for from [`restarting`].
+    static RESTARTS: AtomicUsize = AtomicUsize::new(0);
+    /// The store [`restarting`] connects to first.
+    static BEFORE: LazyLock<Arc<keyring_core::mock::Store>> = LazyLock::new(|| keyring_core::mock::Store::new().unwrap());
+    /// The store [`restarting`] connects to on every later try.
+    static AFTER: LazyLock<Arc<keyring_core::mock::Store>> = LazyLock::new(|| keyring_core::mock::Store::new().unwrap());
+
+    /// A key store that restarts after the first connection: later connections reach another store.
+    fn restarting() -> Result<Arc<keyring_core::CredentialStore>, keyring_core::Error> {
+        let store: Arc<keyring_core::CredentialStore> = if RESTARTS.fetch_add(1, Ordering::SeqCst) == 0 { BEFORE.clone() } else { AFTER.clone() };
+        Ok(store)
+    }
+
+    /// A connection that the key store can't be reached through is dropped, and the next call
+    /// connects again; an entry that isn't there keeps the connection.
+    #[test]
+    fn the_system_key_store_reconnects_after_it_restarts() {
+        let keys = OsGrantKeys { connect: restarting, ..OsGrantKeys::default() };
+        assert_eq!(keys.key().unwrap(), None, "no key is kept yet");
+        keys.set_key(&GrantKey::from_bytes([0xc1; KEY_LEN])).unwrap();
+        assert_eq!(RESTARTS.load(Ordering::SeqCst), 1, "an entry that isn't there keeps the connection");
+
+        AFTER.build(OsGrantKeys::SERVICE, OsGrantKeys::ACCOUNT, None).unwrap().set_secret("d2".repeat(KEY_LEN).as_bytes()).unwrap();
+        let entry = BEFORE.build(OsGrantKeys::SERVICE, OsGrantKeys::ACCOUNT, None).unwrap();
+        let cred: &keyring_core::mock::Cred = entry.as_any().downcast_ref().unwrap();
+        cred.set_error(keyring_core::Error::NoStorageAccess("the session is gone".into()));
+        assert!(keys.key().is_err(), "the connection fails");
+        assert_eq!(keys.key().unwrap(), Some(GrantKey::from_bytes([0xd2; KEY_LEN])), "the next call reads the key through a new connection");
+        assert_eq!(RESTARTS.load(Ordering::SeqCst), 2);
     }
 
     /// The secret `MOCK` keeps for `account`, as it is kept.

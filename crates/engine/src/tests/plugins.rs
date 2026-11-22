@@ -4514,7 +4514,8 @@ fn a_removal_the_key_store_cannot_make_last_fails() {
 
 /// A stored plug-in that didn't load, because the grants file of an older version doesn't count, and
 /// that keeps no settings or cache, is removed with its module and its entry, and the removal
-/// reports it removed. A removal whose stored module can't be deleted fails.
+/// reports it removed. A removal whose stored module can't be deleted fails and keeps its settings.
+/// Removing an invalid id leaves the kept generation as it is.
 #[test]
 fn removing_a_stored_plugin_that_did_not_load_reports_it_removed() {
     use vectorcraft_plugins::permissions::sha256_hex;
@@ -4536,13 +4537,29 @@ fn removing_a_stored_plugin_that_did_not_load_reports_it_removed() {
     assert!(s.execute("plugin.remove", &json!({"id": id})).is_err(), "a second removal finds nothing");
 
     // A stored module that can't be deleted (here a folder in its place), of a plug-in that keeps
-    // settings, fails the removal.
+    // settings, fails the removal, and the settings stay for the next try.
     std::fs::create_dir_all(module.join("held")).unwrap();
-    std::fs::create_dir_all(crate::store::plugin_data_dir(&folder.0, id)).unwrap();
+    let data_dir = crate::store::plugin_data_dir(&folder.0, id);
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let setting = data_dir.join("settings.json");
+    std::fs::write(&setting, b"{}").unwrap();
     let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
     assert!(refused.contains("can't delete"), "{refused}");
     assert!(module.exists());
+    assert_eq!(std::fs::read(&setting).ok().as_deref(), Some(&b"{}"[..]), "the settings are moved back");
     std::fs::remove_dir_all(&module).unwrap();
+    assert_eq!(s.execute("plugin.remove", &json!({"id": id})).ok(), Some(json!({"removed": id})), "a second removal deletes them");
+    assert!(!data_dir.exists());
+
+    // An invalid id names no grant: its removal doesn't raise the generation.
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::with_key(crate::store::grant_keys::GrantKey::from_bytes([3; 32])));
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    for invalid in ["", "not an id"] {
+        assert!(s.execute("plugin.remove", &json!({"id": invalid})).is_err(), "{invalid:?} isn't found");
+        assert_eq!(kept_generation(&keys, &folder.0), None, "{invalid:?}: the generation is left as it is");
+    }
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err());
+    assert_eq!(kept_generation(&keys, &folder.0), Some(2), "a valid id's removal still retires signed copies");
 }
 
 /// A MAC is made over the generation, the grants and the folder, and only the whole MAC of the same
@@ -4933,6 +4950,30 @@ fn a_revoke_after_a_write_whose_generation_wasnt_kept_keeps_that_write_granting_
     for id in ids {
         _ = s.execute("plugin.remove", &json!({"id": id}));
     }
+}
+
+/// A grant whose signed file fits the 1 MiB limit at the generation it is written at is kept, also
+/// when the file would not fit with a longer generation number.
+#[test]
+fn a_grants_file_that_fits_at_its_generation_is_written() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let keys = std::sync::Arc::new(crate::store::grant_keys::MemoryGrantKeys::default());
+    let _keys = ThreadKeys::using(SharedKeys::new(&keys));
+    let folder = crate::tests_links::Folder::new("plugin-store-grants-fit");
+    let id = "test.engine.permissions.grantsfit";
+    let grant = doc_read_grant(id, &sha256_hex(b"module"));
+    let grants = folder.0.join("grants.json");
+    // The file as it is written: compact, since pretty-printed it is larger than the limit.
+    let size = |pad: &str| serde_json::to_vec(&json!({"version": 1, "generation": 3, "grants": [grant, pad], "mac": "0".repeat(64)})).unwrap().len();
+    let pad = "a".repeat((1 << 20) - size(""));
+    assert_eq!(size(&pad), 1 << 20);
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    std::fs::write(&grants, crate::store::signed_grants_file(&folder.0, &json!([pad]).to_string())).unwrap();
+    assert!(s.store_grant(id, Some(grant)), "the grant is kept");
+    let written = std::fs::read(&grants).unwrap();
+    assert_eq!((written.len(), generation_of(&written)), (1 << 20, Some(3)));
+    assert_eq!(kept_generation(&keys, &folder.0), Some(3));
 }
 
 /// A grants file edited to carry the largest generations doesn't stop a revoke and doesn't move the
