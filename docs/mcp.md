@@ -2628,7 +2628,7 @@ too), shorthand properties (`{a}`) and methods (`{m() {}}`), and `__proto__: val
 Functions get a `name` property (section 9.2.11): a declaration's or expression's own name, or else the name of the
 binding, parameter, assignment target or property they are first given to, with `get ` or `set ` before an
 accessor's; `bound ` before the target's name for `bind`; `anonymous` for `Function`; and an own empty `name`
-otherwise, as the 11th edition gives it (https://262.ecma-international.org/11.0/). A function's `length` can be
+otherwise, as the 12th edition gives it (https://262.ecma-international.org/12.0/, section 20.2.4.2). A function's `length` can be
 redefined. The built-in functions get their names the first time a run reads ECMAScript 2015, and keep them in later
 `.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
