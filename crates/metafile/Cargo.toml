@@ -15,7 +15,7 @@ vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
-craft-metafile = { workspace = true }
+craft-metafile = { workspace = true, features = ["write"] }
 kurbo = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }

@@ -44,8 +44,10 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, PathEl, Point, Rect,
 
 use super::{BAD_IMAGE, FAR_AWAY, HAIRLINE, LIMIT, MAX_NODES, around, rgb, sane};
 use crate::dib::Rgba;
-use crate::wmf::PLACEABLE_KEY;
 use crate::{Imported, Kind};
+
+// The placeable header is interpreted here for VectorCraft’s logical-unit policy.
+const PLACEABLE_KEY: u32 = 0x9AC6_CDD7;
 
 const PATTERNS: &str = "hatched and pattern brushes are filled with their average color";
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";

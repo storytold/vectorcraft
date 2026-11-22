@@ -22,18 +22,14 @@
 //! [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2) into the same kind of
 //! document.
 //!
-//! - `bytes`: little-endian writing.
-//! - `dib`: device-independent bitmaps for the writers.
-//! - `scene`: the document walk both writers share.
-//! - `emf`, `wmf`: the writers.
-//! - `import`: the readers.
+//! The app walks its document and maps its drawing operations to the shared writers.
 
+#[cfg(test)]
 mod bytes;
 mod dib;
-mod emf;
+mod encode;
 mod import;
 mod scene;
-mod wmf;
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::Rect;
@@ -59,13 +55,10 @@ impl Kind {
 
 /// The metafile format `bytes` start like, if any.
 pub fn sniff(bytes: &[u8]) -> Option<Kind> {
-    if emf::is_emf(bytes) {
-        Some(Kind::Emf)
-    } else if wmf::is_wmf(bytes) {
-        Some(Kind::Wmf)
-    } else {
-        None
-    }
+    craft_metafile::sniff(bytes).map(|kind| match kind {
+        craft_metafile::Kind::Emf => Kind::Emf,
+        craft_metafile::Kind::Wmf => Kind::Wmf,
+    })
 }
 
 /// A written metafile.
@@ -109,18 +102,13 @@ pub fn export_regions(doc: &Document, regions: &[Rect], kind: Kind) -> Result<Ve
     let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
     let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
     let doc = baked.as_ref().unwrap_or(doc);
-    let outputs = regions
+    regions
         .into_iter()
         .map(|r| {
             let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
-            let bytes = match kind {
-                Kind::Emf => emf::write(&ops, r, doc.info_title()),
-                Kind::Wmf => wmf::write(&ops, r, &mut warnings),
-            };
-            Output { bytes, warnings }
+            encode::write(ops, r, kind, doc.info_title(), &mut warnings).map(|bytes| Output { bytes, warnings })
         })
-        .collect();
-    Ok(outputs)
+        .collect()
 }
 
 /// A metafile read into a document.
