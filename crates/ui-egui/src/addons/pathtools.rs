@@ -1,6 +1,6 @@
 //! Path Precision Tools in the interface: its submenu (Object › Plug-ins › Path Precision Tools),
 //! which selects its tools, opens its panels and runs Split / Add Points at Crossings, Set Corners… ([`set_corners`]), Divide into
-//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle… and Add Bounding Circle…; the Anchor Inspector panel (the selected
+//! Dashes ([`dashes`]), Expand Dashes into Paths, Smooth Bridge ([`bridge`]), Convert to Parametric Shape, Tangent Circle… ([`tangent_circle`]), Add Bounding Rectangle…, Add Bounding Circle… and Add Inscribed Circle; the Anchor Inspector panel (the selected
 //! anchor's position and handles as numbers, the add-on's anchor edits, the Corner Tool's values,
 //! [`corner`], and the Shared Edge Merge Tool's, [`shared_edge`]); the Parametric Shape panel
 //! ([`shape`]); and its tools' options dialog (a double-click on the tool). Everything acts through `addon.pathtools.*` and
@@ -87,6 +87,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
         Item::Cmd("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
         Item::Cmd("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
+        Item::Cmd("Add Inscribed Circle", "addon.pathtools.inscribedCircle", json!({})),
     ]
 }
 

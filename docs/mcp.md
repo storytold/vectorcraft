@@ -14816,6 +14816,24 @@ Commands:
   ```json
   {"name":"run_command","arguments":{"command":"addon.pathtools.boundingCircle","params":{"offset":2}}}
   ```
+- `addon.pathtools.inscribedCircle {}` draws the largest live circle inside each selected closed path or compound
+  path (Object › Plug-ins › Path Precision Tools › Add Inscribed Circle, #6966). Its center is the shape's
+  [pole of inaccessibility](https://en.wikipedia.org/wiki/Pole_of_inaccessibility). A path of a compound path
+  selected on its own counts as a path. The circle lies in the area the shape fills under its fill rule: holes and the
+  overlaps of crossing subpaths count as the fill shows them, and strokes and effects are left out. The command
+  flattens the outline to within 0.005 pt and searches square cells best first, measuring the radius from the center
+  to the curves, so its radius is within 0.02 pt of the largest. A shape whose
+  box is less than 10 pt across on its narrower side is measured to a thousandth of that side instead. A curve whose
+  control polygon is longer than 83,886 pt is flattened more coarsely, and the circle can be smaller by as much. The
+  drawn circle's four curves reach up to 0.03% of its radius past a true circle, so the command draws it that much
+  smaller, and it stays inside where it touches the shape. Narrow holes count; holes and gaps narrower than 1e-6 pt close up, as
+  in the other path operations. The circles get the current paint and go on top of the current layer, or of the isolated group, as other new art does.
+  The new circles are selected, and one undo removes them all. It is an error, with the document unchanged, when a selected
+  object is not a closed path or compound path ("object N is not a closed path or compound path"; an open path has no
+  inside), when it fills no area ("object N fills no area"), and when its outline has more than 262,144 straight
+  pieces once flattened, or the search measures more than 134,217,728 distances from a point to an edge ("object N is
+  too complex to measure").
+  → `{id: the first circle, ids}`
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
