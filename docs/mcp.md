@@ -2350,7 +2350,7 @@ The transform, Align, Object Properties and Live Shape Properties commands refus
 that is not true or false with `` `strokes` must be true or false ``, naming the key, and leave the document and its
 undo history as they were: the options `copy`, `strokes`, `corners`, `patterns`, `objects` and `typeAreas` in
 `object.transform`, `object.move`, `object.nudge`, `object.rotate`, `object.scale`, `object.reflect`, `object.shear`,
-`object.transformAgain` and `object.setBounds`; `anchors` and `releaseOutside` in `object.transform`; `big` in `object.nudge`;
+`object.transformAgain` and `object.setBounds`; `anchors`, `releaseOutside` and `drawBehind` in `object.transform`; `big` in `object.nudge`;
 `absolute` in `object.rotate`; `proportional` in `object.setBounds`; `patterns` in `object.align`, `object.distribute`
 and `object.distributeSpacing`; `visible`, `locked`, `isolate` and `knockoutShape` in `object.setProps`; and
 `invertPie`, `makeSidesEqual` and `relativeRadii` in `object.setLiveShape`. A null is read as a key left out.
@@ -9153,7 +9153,12 @@ too: in Draw Inside, `edit.paste`, `edit.pasteInPlace` and `edit.pasteOnAllArtbo
 object drawn into (its clip group, made on the first paste), whatever Paste Remembers Layers says; in Draw Behind,
 `edit.pasteInPlace` and `edit.pasteOnAllArtboards` put them just below the selection, and a placed symbol instance
 (`symbol.place`) goes just below the selection too. `edit.pasteInFront` and
-`edit.pasteInBack` ignore the drawing mode. When the object drawn into is the one isolation mode isolates (`object.isolate`,
+`edit.pasteInBack` ignore the drawing mode. In Draw Behind, an Alt-drag (Option-drag on macOS) of whole objects with
+the Selection or Direct Selection tool puts each copy directly below its own original, in the original's group or layer,
+and selects the copies: the tools send `object.transform` with `copy` and `drawBehind: true`. The copy of the clipping
+path of a clip group or a clipping layer goes directly above it, so the clipping path stays the bottom object. Without `drawBehind`, and
+in Draw Normal and Draw Inside, the copies go directly above; `object.move` and the transform dialogs' Copy,
+`edit.duplicate` and `object.transformAgain` put them above in every drawing mode. When the object drawn into is the one isolation mode isolates (`object.isolate`,
 or a double-click on it with the Selection tool), art drawn or pasted inside it takes isolation mode into its clip group,
 so the new art can be picked and isn't dimmed; `edit.undo` or `edit.redo` that removes the isolated object ends
 isolation mode.
