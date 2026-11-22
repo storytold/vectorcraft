@@ -106,6 +106,7 @@ pub(super) const DEBRIS: f64 = 1e-6;
 /// contours were merged. An empty answer is an answer: contours that cancel (a square drawn twice
 /// under even-odd), or that are all thinner than [`DEBRIS`], fill nothing, so nothing is built.
 /// Each curve takes at most `most` pieces, on the profile as drawn and on the merged outline.
+#[cfg(test)]
 pub(super) fn solid_rings(path: &PathData, rule: FillRule, size: f64, limit: usize, most: u32) -> Result<Vec<Vec<Point>>, String> {
     Ok(solid_rings_traced(path, rule, size, limit, most)?.into_iter().map(|r| r.points).collect())
 }
