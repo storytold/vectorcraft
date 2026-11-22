@@ -223,6 +223,50 @@ fn eval_code_keeps_its_let_and_const_to_itself() {
     truth("let a; try { eval('var b; var a;'); } catch (e) {} typeof b === 'undefined'");
 }
 
+#[test]
+fn eval_code_keeps_its_environments_through_collections() {
+    // With a collection on every heap reservation, eval code's own environment and the scope of
+    // its `let` and `const` names stay while its declarations are made: the scope of a function
+    // the code declares leads out to the global scope without coming back to itself.
+    use crate::heap::{Class, Env, Func, key};
+    use crate::value::Value;
+    let cases = [
+        ("function g() { var o = 1; return eval(\"'use strict'; let x = 2; var y = 3; function f() { return x + y + o; } f\"); }", 6.0),
+        ("function g() { return (0, eval)(\"'use strict'; let x = 5; var y = 6; function f() { return x + y; } f\"); }", 11.0),
+        ("function g() { return (0, eval)(\"let x = 7; function f() { return x; } f\"); }", 7.0),
+    ];
+    for (setup, want) in cases {
+        let mut realm = es();
+        crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(true));
+        let made = realm.run(&format!("{setup} var f = g(); 0"));
+        crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(false));
+        assert_eq!(made, Ok(JsValue::Number(0.0)), "{setup}");
+        let interp = realm.interp();
+        let global = interp.global;
+        let f = match interp.get_from(global, &key("f"), &Value::Object(global)) {
+            Ok(Value::Object(f)) => f,
+            other => panic!("{setup}: {other:?}"),
+        };
+        let mut cur = match interp.heap.object(f).map(|o| &o.class) {
+            Some(Class::Function(Func::Closure { env, .. })) => Some(*env),
+            _ => panic!("{setup}: not a closure"),
+        };
+        let mut seen = std::collections::HashSet::new();
+        while let Some(e) = cur {
+            assert!(seen.insert(e), "{setup}: the scope chain comes back to {e:?}");
+            if e == interp.global_lex {
+                break;
+            }
+            cur = match interp.heap.env(e) {
+                Some(Env::Decl { outer, .. } | Env::Obj { outer, .. }) => *outer,
+                None => panic!("{setup}: {e:?} was freed"),
+            };
+        }
+        assert_eq!(cur, Some(interp.global_lex), "{setup}");
+        assert_eq!(realm.run("f()"), Ok(JsValue::Number(want)), "{setup}");
+    }
+}
+
 // ---- arrow functions ----
 
 #[test]

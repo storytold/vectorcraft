@@ -388,6 +388,9 @@ const NAMED_KEY_UNITS: usize = 256;
 thread_local! {
     /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
     pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Tests: [`Interp::reserve_heap`] collects garbage on every call, so anything left
+    /// unreachable from the roots while it runs is freed.
+    pub(crate) static COLLECT_ON_RESERVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
@@ -696,6 +699,10 @@ impl Interp {
     /// collection. Everything the caller still needs must be reachable from the roots.
     pub(crate) fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
         self.settle_held();
+        #[cfg(test)]
+        if COLLECT_ON_RESERVE.with(std::cell::Cell::get) {
+            self.collect_garbage();
+        }
         if self.heap.bytes.saturating_add(bytes) <= self.limits.heap_bytes {
             return Ok(());
         }
@@ -3218,6 +3225,17 @@ impl Interp {
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
     /// global scope ([`Self::declare_global_lexical`]).
     fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+        // Strict eval code's own environment is in no frame yet, so it is a root while the
+        // declarations reserve heap.
+        let mark = self.temp_envs.len();
+        self.temp_envs.extend([env, var_env]);
+        let r = self.instantiate_global_rooted(code, env, var_env, is_eval);
+        self.temp_envs.truncate(mark);
+        r
+    }
+
+    /// [`Self::instantiate_global`] with `env` and `var_env` in [`Self::temp_envs`].
+    fn instantiate_global_rooted(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
