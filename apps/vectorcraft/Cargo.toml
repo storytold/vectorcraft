@@ -18,10 +18,10 @@ accessibility = ["eframe/accesskit"]
 vectorcraft-engine = { workspace = true, features = ["bundled-fonts", "heif"] }
 vectorcraft-ui-egui = { workspace = true }
 vectorcraft-text = { workspace = true }
-# Shared across the Craft suite: the UI runtime, settings, control server, file dialogs, the window
+# Shared across the Craft suite: the UI runtime and its eframe hooks, settings, control server, file dialogs, the window
 # frame policy and placement store (so VectorCraft matches the rest on Linux, see #217), printing and
 # the update client.
-craft = { workspace = true, features = ["ui", "settings", "automation", "platform", "window", "dialogs", "print", "update"] }
+craft = { workspace = true, features = ["ui", "ui-app", "settings", "automation", "platform", "window", "dialogs", "print", "update"] }
 eframe = { workspace = true, features = ["clipboard", "default_fonts", "wayland", "x11"] }
 egui = { workspace = true }
 egui_extras = { workspace = true }

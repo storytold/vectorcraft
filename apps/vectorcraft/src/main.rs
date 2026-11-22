@@ -67,27 +67,24 @@ mod xwayland;
 
 use std::sync::{Arc, Mutex};
 
-// PLAN: assumed paths: `craft::ui::shell::embed`, `craft::ui::{InstallSpec, register_app_icons}`, `craft::ui::runtime::PenSource`, `craft::window::{Prefix, SystemWindows}`, `craft::host::{AppInfo, Backend::X11}`, `craft::dialogs::{FilePanels, FileService}`
-use craft::automation::server::{self, Listening};
 use craft::automation::args::{ControlOptions, EnvNames};
+use craft::automation::server::{self, Listening};
 use craft::dialogs::service::{FilePanels, FileService};
 use craft::host::target::{Backend, ShellInfo};
 use craft::host::{AppInfo, Wake};
 use craft::settings::SharedSettings;
 use craft::ui::InstallSpec;
-use craft::ui::runtime::pen::PenSource;
 use craft::ui::shell::embed;
+use craft::window::Prefix;
 use craft::window::policy::{TitleBarPref, decide_for};
 use craft::window::restore::Store;
-use craft::window::Prefix;
 use craft::window::system::SystemWindows;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_ui_egui::dialogs::safe_mode;
 use vectorcraft_ui_egui::graphics::GraphicsLoss;
-use vectorcraft_ui_egui::settings::AppSettings;
-use vectorcraft_ui_egui::{Services, VectorcraftApp};
+use vectorcraft_ui_egui::{AppSettings, Services, VectorcraftApp};
 
 mod app;
 mod host_services;
@@ -95,7 +92,6 @@ mod prefs;
 
 #[cfg(all(test, feature = "wgpu"))]
 use app::bring_window_forward;
-use app::native_input_hook;
 use app::open_or_hold;
 use host_services::{file_service, services, start_pen};
 use prefs::{load_prefs, log_dir, open_store, prefs_enabled};
@@ -162,6 +158,8 @@ struct App {
     files: Arc<FileService>,
     /// Shows the native dialogs the file service was asked for.
     file_panels: FilePanels,
+    /// The interface language the Replace question of [`Self::file_panels`] is worded in.
+    replace_lang: Option<vectorcraft_ui_egui::i18n::Lang>,
     /// Keeps the control server running while the app does.
     _control_server: Option<Listening>,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
@@ -331,15 +329,14 @@ fn main() -> std::process::ExitCode {
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
     let mut presentation = presentation::Overrides::default();
-    let CommandLine { files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
+    let CommandLine { files: command_line_files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
         match read_command_line(std::env::args().skip(1), &mut control, &mut roots_args, &mut presentation) {
             Ok(command_line) => command_line,
             Err(code) => return code,
         };
     let automation_args::AutomationArgs { read_roots, write_roots, .. } = roots_args;
     // After the arguments: the flags and `--version` win over a bad environment value.
-    // PLAN: assumed `ControlArg::into_options(self) -> ControlOptions` (shell-w12 edits `automation_args`)
-    let control_options = match ControlOptions::resolve(control.into_options(), &EnvNames::for_app("VECTORCRAFT")) {
+    let control_options = match ControlOptions::resolve(control.options(), &EnvNames::for_app("VECTORCRAFT")) {
         Ok(options) => options,
         Err(e) => {
             eprintln!("vectorcraft: {e}");
@@ -362,7 +359,7 @@ fn main() -> std::process::ExitCode {
     // the log file is attached: a launch that hands its files over leaves the running app's log be.
     #[cfg(not(target_os = "macos"))]
     // A launch that sets the presentation runs as its own app: a running app keeps its own surface.
-    match single_instance::start(control_port.is_some(), new_instance || presentation.is_set(), safe_mode_flag, &files) {
+    match single_instance::start(control_port.is_some(), new_instance || presentation.is_set(), safe_mode_flag, &command_line_files) {
         single_instance::Start::Forwarded => return std::process::ExitCode::SUCCESS,
         single_instance::Start::Running(primary) => single_instance::hold(primary),
     }
@@ -489,12 +486,11 @@ fn main() -> std::process::ExitCode {
     // A window forced onto XWayland runs on X11, whose window manager draws the frame: the
     // framework decides the frame for that backend, from the platform, `VECTORCRAFT_TITLEBAR` and
     // Preferences › User Interface › System Title Bar.
-    // PLAN: assumed `Backend::X11`
     let shell_info = if forced_to_x11 { ShellInfo::current().backend(Backend::X11) } else { ShellInfo::current() };
     let titlebar_pref =
         if engine_pref("systemTitleBar").and_then(|v| v.as_bool()).unwrap_or(false) { TitleBarPref::System } else { TitleBarPref::Integrated };
     let decision = decide_for(Prefix::new("VECTORCRAFT"), shell_info.backend, titlebar_pref);
-    let custom_titlebar = matches!(decision.frame, craft::window::Frame::App(_));
+    let custom_titlebar = matches!(decision.frame, craft::window::policy::Frame::Integrated(_));
     let options = native_options(custom_titlebar);
     #[cfg(target_os = "linux")]
     let options = {
@@ -606,28 +602,26 @@ fn main() -> std::process::ExitCode {
             Box::new(move |cc| {
                 let ctx = &cc.egui_ctx;
                 let winit_window = cc.winit_window().cloned();
-                let pen = PenSource::default();
                 let spec = InstallSpec::new(shell_info, Arc::new(SystemWindows))
                     .app_id(WINDOW_APP_ID)
                     .placement(Arc::new(Mutex::new(Store::open("vectorcraft"))))
-                    .frame(decision)
-                    .pen(pen.clone());
+                    .frame(decision);
+                let spec = match start_pen(&winit_window) {
+                    Some(pen) => spec.pen(pen),
+                    None => spec,
+                };
                 embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts()).map_err(|e| e.to_string())?;
                 egui_extras::install_image_loaders(ctx);
-                // PLAN: assumed `craft::ui::register_app_icons(&[..])` and `cursors::CURSOR_ICONS` (cv.S13)
                 craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::icons::APP_ICONS);
                 craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::cursors::CURSOR_ICONS);
-                start_pen(&winit_window, &pen);
-                // PLAN: assumed `UiState::last_folders: HashMap<String, PathBuf>`, the folders the picks chose
                 let folders = settings.lock().get().ui.last_folders.clone();
                 let wake = {
                     let ctx = ctx.clone();
                     Wake::new(move || ctx.request_repaint())
                 };
-                let (file_service, file_panels) = file_service(wake, folders);
-                let files = Arc::new(file_service);
+                let (files, file_panels) = file_service(wake, folders);
+                let files = Arc::new(files);
                 craft::host::Host::builder(AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
-                    // PLAN: assumed `vectorcraft_ui_egui::i18n::shared() -> Arc<I18n>`
                     .i18n(vectorcraft_ui_egui::i18n::shared())
                     .settings(Arc::new(settings.clone()))
                     .files(files.clone())
@@ -639,9 +633,8 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_color_settings(&mut session);
                 // Before any plug-in loads: this launch's marker in the Launch folder next to the
                 // preferences (none for runs without preferences), and Safe Mode.
-                // PLAN: assumed `prefs::prefs_dir() -> Option<PathBuf>` (shell-w8), the one folder rule
-                let launch_dir = prefs::prefs_dir().filter(|_| prefs_enabled()).map(|d| d.join("Launch"));
-                let folder = |name: &str| prefs::prefs_dir().map(|d| d.join(name).to_string_lossy().to_string());
+                let launch_dir = prefs_dir::prefs_dir().filter(|_| prefs_enabled()).map(|d| d.join("Launch"));
+                let folder = |name: &str| prefs_dir::prefs_dir().map(|d| d.join(name).to_string_lossy().to_string());
                 let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
@@ -779,8 +772,7 @@ fn main() -> std::process::ExitCode {
                     let _ = in_window_menus;
                     single_instance::set_ui(&cc.egui_ctx);
                 }
-                app.services.native_input_hook = native_input_hook(&app);
-                let held_files = file_access::unconfined(|| open_or_hold(&mut app, files));
+                let held_files = file_access::unconfined(|| open_or_hold(&mut app, command_line_files));
                 // The first frame is due from now (`gpu::watch_first_frame`).
                 #[cfg(feature = "wgpu")]
                 created.ready();
@@ -791,6 +783,7 @@ fn main() -> std::process::ExitCode {
                     settings,
                     files,
                     file_panels,
+                    replace_lang: None,
                     _control_server: control_server,
                     graphics_loss,
                     graphics_lost: false,

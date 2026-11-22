@@ -3,28 +3,13 @@ use super::gpu;
 use super::prefs::{flush, save_tick};
 #[cfg(not(target_os = "macos"))]
 use super::single_instance;
-#[cfg(all(windows, not(target_vendor = "win7")))]
-use super::windows_stylus;
 use super::{App, VectorcraftApp, file_access};
 #[cfg(target_os = "macos")]
 use super::{mac_window, open_documents};
-// PLAN: assumed `craft::ui::shell::embed` path (`craft::ui::shell::embed`)
-use craft::ui::shell::embed;
+use craft::ui::runtime::env::WindowKey;
+use craft::ui::shell::{WindowDialogs, embed};
 use vectorcraft_ui_egui::dialogs::safe_mode;
 use vectorcraft_ui_egui::hang_beacon::{self, BEACON, FrameTime, Stage};
-
-/// The parts of [`App::raw_input_hook`] that every window needs, for the OS windows of floating
-/// panels: the pen barrel button's secondary click on Windows. The control channel's input goes to
-/// the main window only.
-#[cfg(windows)]
-pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egui::NativeInputHook> {
-    Some(std::sync::Arc::new(windows_stylus::raw_input_hook))
-}
-
-#[cfg(not(windows))]
-pub(crate) fn native_input_hook(_: &VectorcraftApp) -> Option<vectorcraft_ui_egui::NativeInputHook> {
-    None
-}
 
 impl eframe::App for App {
     // Each frame runs unconfined: it is the person at the keyboard's. The app confines what the
@@ -58,9 +43,6 @@ impl eframe::App for App {
         if let Some(window_frame) = self.window_frame.as_mut() {
             window_frame();
         }
-        // A pen contact with the barrel button held presses the secondary button (Windows Ink).
-        #[cfg(windows)]
-        windows_stylus::raw_input_hook(raw);
         // The characters Alt + keypad codes typed (#5108).
         #[cfg(windows)]
         super::windows_alt_codes::raw_input_hook(raw);
@@ -83,10 +65,18 @@ impl eframe::App for App {
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
         file_access::unconfined(|| save_tick(&mut self.app, &self.settings, std::time::Instant::now()));
-        // The native dialogs the app asked for in this frame show now, over the window.
-        // PLAN: assumed `VectorcraftApp::window_dialogs: craft::ui::dialog::DialogHost` and `UiState::last_folders: HashMap<String, PathBuf>` (hub-w1)
-        self.file_panels.pump_with(&mut self.app.window_dialogs, Some(&*frame));
-        let folders = self.files.last_folders();
+        // The native dialogs the app asked for in this frame show now, over the window, in the
+        // interface language.
+        let lang = vectorcraft_ui_egui::i18n::current();
+        if self.replace_lang != Some(lang) {
+            self.replace_lang = Some(lang);
+            self.file_panels.set_replace_words(vectorcraft_ui_egui::i18n::replace_words());
+        }
+        WindowDialogs::of(ui.ctx(), &WindowKey::main()).with(|dialogs| self.file_panels.pump_with(dialogs, Some(&*frame)));
+        // The folders the picks chose are saved with the UI state; one the file can't hold (not
+        // UTF-8) is left out.
+        let mut folders = self.files.last_folders();
+        folders.retain(|_, folder| folder.to_str().is_some());
         if folders != self.app.ui.last_folders {
             self.app.ui.last_folders = folders;
         }
@@ -97,7 +87,7 @@ impl eframe::App for App {
         // of a stall the interface came back from is removed.
         let log_dir = super::prefs::log_dir().filter(|_| super::prefs::prefs_enabled());
         super::hang_watch::closing(log_dir.as_deref(), &super::hang_watch::CLOSING, &BEACON);
-        file_access::unconfined(|| flush(&self.settings));
+        file_access::unconfined(|| flush(&self.app, &self.settings));
         // A ready update installs once the process has exited. The macOS exit below skips
         // dropping the app, so the helper is started here.
         self.app.start_pending_update();

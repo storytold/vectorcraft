@@ -114,14 +114,8 @@ pub struct Services {
     pub print: Option<Box<dyn print::PrintService>>,
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
     pub native_menu: Option<craft::menu::NativeMenu>,
-    /// The host's rewrites of a window's raw input (pen barrel button) for floating panels in OS
-    /// windows of their own: eframe runs the host's `raw_input_hook` for the main window only.
-    pub native_input_hook: Option<NativeInputHook>,
     /// The text Help › Copy Troubleshooting Info copies (desktop: the platform, the graphics
     /// processor, recent commands and frame times, and the hang reports of this session and the
     /// one before). Without it the command copies the version only ([`crate::troubleshooting`]).
     pub troubleshooting: Option<Box<dyn Fn() -> String>>,
 }
-
-/// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).
-pub type NativeInputHook = std::sync::Arc<dyn Fn(&mut egui::RawInput) + Send + Sync>;

@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use craft::dialogs::service::{ExtensionPolicy, FilePanels, FileService};
 use craft::dialogs::ShowHook;
+use craft::dialogs::service::{ExtensionPolicy, FilePanels, FileService};
 use craft::host::Wake;
 use craft::ui::runtime::pen::PenSource;
 use vectorcraft_ui_egui::hang_beacon::{Activity, BEACON, Beacon};
 
-use super::{Services, fileio, printing};
-#[cfg(target_os = "linux")]
-use super::tablet;
 #[cfg(target_os = "macos")]
 use super::mac_tablet;
+#[cfg(target_os = "linux")]
+use super::tablet;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 use super::windows_stylus;
+use super::{Services, fileio, printing};
 
 /// The main window, which the pen reader looks at to tell an X11 window from a Wayland one.
 pub(crate) type Parent = Option<std::sync::Arc<winit::window::Window>>;
@@ -22,11 +22,7 @@ pub(crate) type Parent = Option<std::sync::Arc<winit::window::Window>>;
 /// session's picks chose, so a pick of this one starts where that ended.
 pub(crate) fn file_service(wake: Wake, folders: HashMap<String, PathBuf>) -> (FileService, FilePanels) {
     let (service, panels) = FileService::new(wake);
-    let panels = panels
-        .extension_policy(ExtensionPolicy::AS_TYPED)
-        // PLAN: assumed `vectorcraft_ui_egui::replace_words() -> ReplaceWords`, the catalog's Replace question
-        .replace_words(vectorcraft_ui_egui::replace_words())
-        .show_hook(marking_dialogs(&BEACON));
+    let panels = panels.extension_policy(ExtensionPolicy::AS_TYPED).show_hook(marking_dialogs(&BEACON));
     (service.with_last_folders(folders), panels)
 }
 
@@ -39,11 +35,10 @@ fn marking_dialogs(beacon: &'static Beacon) -> ShowHook {
     })
 }
 
-/// Starts the host's tablet reader for `window`, which writes the pen's pressure and end into `pen`:
-/// XInput2 under X11 and XWayland, AppKit's events on macOS, the pen's pointer messages on Windows.
-/// Other windows read the pen from touch events only.
-// PLAN: assumed `tablet::start`, `mac_tablet::start` and `windows_stylus::start` take the `PenSource` to write into (shell-w13)
-pub(crate) fn start_pen(window: &Parent, pen: &PenSource) {
+/// Starts the host's tablet reader for `window`: the pen source it writes the pen's pressure and end
+/// into. XInput2 under X11 and XWayland, AppKit's events on macOS, the pen's pointer messages on
+/// Windows; other windows read the pen from touch events only (`None`).
+pub(crate) fn start_pen(window: &Parent) -> Option<PenSource> {
     #[cfg(target_os = "linux")]
     {
         use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
@@ -51,18 +46,23 @@ pub(crate) fn start_pen(window: &Parent, pen: &PenSource) {
             .as_ref()
             .and_then(|w| w.window_handle().ok())
             .is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)));
-        if x11 {
-            tablet::start(pen.clone());
-        }
+        x11.then(tablet::start).flatten()
     }
-    #[cfg(not(target_os = "linux"))]
-    let _ = window;
     #[cfg(target_os = "macos")]
-    mac_tablet::start(pen.clone());
+    {
+        let _ = window;
+        mac_tablet::start()
+    }
     #[cfg(all(windows, not(target_vendor = "win7")))]
-    windows_stylus::start(pen.clone());
+    {
+        let _ = window;
+        Some(windows_stylus::start())
+    }
     #[cfg(not(any(target_os = "linux", target_os = "macos", all(windows, not(target_vendor = "win7")))))]
-    let _ = pen;
+    {
+        let _ = window;
+        None
+    }
 }
 
 #[cfg(test)]
@@ -542,5 +542,3 @@ mod open_with_tests {
         assert_eq!(super::registry_default_path(windows::Win32::System::Registry::HKEY_CURRENT_USER, &key), None, "deleted");
     }
 }
-
-

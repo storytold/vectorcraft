@@ -138,7 +138,6 @@ fn pasteboard_types(mime: &str) -> &'static [(&'static str, &'static str)] {
     }
 }
 
-
 /// Most pixels a side of a bitmap another app put on the clipboard (untrusted data).
 const MAX_SIDE: u32 = 32_768;
 
@@ -1297,7 +1296,6 @@ mod portable {
             }
         }
 
-
         /// The bitmap, for a check on the UI thread: on Linux and the BSDs it waits
         /// [`LOAD_WAIT`](super::loads::LOAD_WAIT) at most, as text does.
         fn image_now(&mut self) -> Result<arboard::ImageData<'static>, String> {
@@ -1552,7 +1550,6 @@ mod portable {
             }
             read
         }
-
     }
 
     impl ClipboardBackend for Clipboard {
@@ -2121,9 +2118,9 @@ mod wayland {
     use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
     use std::time::{Duration, Instant};
 
+    use super::ClipboardRead;
     use rustix::event::{PollFd, PollFlags, Timespec};
     use vectorcraft_engine::cmd::clipboard::names_a_picture;
-    use super::ClipboardRead;
     use wayland_client::backend::ObjectData;
     use wayland_client::globals::{GlobalListContents, registry_queue_init};
     use wayland_client::protocol::wl_callback::{self, WlCallback};
@@ -2544,7 +2541,6 @@ mod wayland {
             (takes_files(mimes) && file_list_type(&seen.offered).is_some()) || mimes.iter().any(|m| wire_type(m, &seen.offered).is_some())
         }
 
-
         /// The text read that got no answer in its wait, while its answer has still not come and a
         /// paste of one of `mimes` can take text. Once it has come the answer may be old, and it is
         /// dropped: a new read is made.
@@ -2848,7 +2844,6 @@ mod wayland {
         pub fn has(&self, mimes: &[&'static str]) -> bool {
             self.reads.has(mimes)
         }
-
 
         /// The read that got no answer in its wait, when a paste of one of `mimes` can take its
         /// answer ([`Reads::unanswered`]).

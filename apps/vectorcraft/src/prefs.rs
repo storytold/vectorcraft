@@ -78,8 +78,7 @@ pub(crate) fn save_tick(app: &mut VectorcraftApp, store: &SharedSettings<AppSett
     store.tick(now);
 }
 
-/// On exit: save what changed since the last sample.
-// PLAN: contract sh.S11 gives `flush(store)`; the exit save needs the app's last state, so hub-w3's `on_exit` passes the app too.
+/// On exit: save the app's last state, with what changed since the last sample.
 pub(crate) fn flush(app: &VectorcraftApp, store: &SharedSettings<AppSettings>) {
     let mut store = store.lock();
     if !store.is_persistent() {
@@ -95,8 +94,6 @@ pub(crate) fn flush(app: &VectorcraftApp, store: &SharedSettings<AppSettings>) {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-
-    use serde_json::json;
 
     use super::*;
 
@@ -120,7 +117,10 @@ mod tests {
         }
 
         fn set_sets(&mut self, names: &[&str]) {
-            self.app.ui.action_sets = names.iter().map(|n| serde_json::from_value(json!({"name": n, "actions": []})).unwrap()).collect();
+            self.app.ui.actions = craft::automation::actions::ActionList::new();
+            for name in names {
+                self.app.ui.actions.new_set(name).unwrap();
+            }
         }
     }
 
@@ -133,8 +133,7 @@ mod tests {
     }
 
     fn set_names(settings: &AppSettings) -> Vec<String> {
-        let sets = serde_json::to_value(&settings.ui.action_sets).unwrap();
-        sets.as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect()
+        settings.ui.actions.sets().into_iter().map(str::to_string).collect()
     }
 
     /// The status line and open palette reset at start: a window that has them up neither saves
@@ -144,13 +143,13 @@ mod tests {
         let dir = temp();
         Window::open(dir.path()).save();
         let (mut first, mut second) = (Window::open(dir.path()), Window::open(dir.path()));
-        second.store.update(|s| s.ui.toolbar = false);
+        second.store.update(|s| s.ui.status_bar = false);
         second.store.flush().unwrap();
         first.app.ui.status = "Saved".to_string();
         first.app.ui.palette_query = "find".to_string();
         first.save();
         let back = saved(dir.path());
-        assert!(!back.ui.toolbar, "the other window's setting survives");
+        assert!(!back.ui.status_bar, "the other window's setting survives");
         assert!(back.ui.status.is_empty() && back.ui.palette_query.is_empty(), "nothing a start resets is written");
     }
 

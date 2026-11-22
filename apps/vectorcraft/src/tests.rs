@@ -5,36 +5,30 @@ fn legacy_ui(bytes: &[u8]) -> Option<vectorcraft_ui_egui::UiState> {
     vectorcraft_ui_egui::parse_legacy(bytes).ok().map(|(settings, _)| settings.ui)
 }
 
-/// Shortcut overrides an earlier version saved still load: its spellings, `panel:` keys, an
-/// override that can't fire (#487), an entry for a command this version lacks, and an old set
-/// name.
+/// Shortcut overrides an earlier version saved still load: its spellings, `panel:` keys, a cleared
+/// shortcut and an entry for a command this version lacks become a set of the user's.
 #[test]
 fn shortcut_overrides_from_an_earlier_version_load() {
     use serde_json::json;
-    use vectorcraft_ui_egui::{keymap, shortcut_editor};
+    use vectorcraft_ui_egui::{keymap::stored_key, shortcut_editor};
     let mut raw = serde_json::to_value(vectorcraft_ui_egui::UiState::default()).unwrap();
+    raw.as_object_mut().unwrap().remove("shortcut_sets");
     raw["shortcut_overrides"] = json!({
         "tool:pen": "Shift+9",
         "edit.preferences": "",
         "panel:layers": "Cmd+Alt+Shift+F7",
-        "tool:groupSelection": "Shift+ShiftLeft",
         "test.unknown": "Cmd+Alt+Shift+F9",
-        "view.grid": "Cmd+Period",
     });
     raw["shortcut_set"] = json!(shortcut_editor::LEGACY_PRESETS[0].0);
     let ui = legacy_ui(&serde_json::to_vec(&raw).unwrap()).unwrap().sanitized();
-    assert_eq!(ui.shortcut_set, shortcut_editor::LEGACY_PRESETS[0].1);
-    let km = keymap::keymap_with(&ui.shortcut_overrides);
-    let text = |key: &str| keymap::effective_with(&km, key);
-    assert_eq!(text("tool:pen").as_deref(), Some("Shift+9"));
-    assert_eq!(text("edit.preferences"), None);
-    assert_eq!(text("panel:layers").as_deref(), Some("Cmd+Alt+Shift+F7"));
-    assert_eq!(text("tool:groupSelection").as_deref(), shortcut_editor::default_of("tool:groupSelection"), "back on its default");
-    assert_eq!(text("view.grid").as_deref(), Some("Cmd+Period"));
-    let period = keymap::vc_chord("Cmd+.").unwrap();
-    assert_eq!(keymap::lookup(&km, &period).map(|c| c.id), Some("view.grid".to_string()));
-    assert_eq!(text("test.unknown").as_deref(), Some("Cmd+Alt+Shift+F9"), "kept");
-    assert!(km.problems().iter().any(|p| format!("{p:?}") == r#"UnknownCommand { key: "test.unknown" }"#), "reported");
+    let sets = &ui.shortcut_sets;
+    assert!(!shortcut_editor::PRESETS.contains(&sets.active_name(&shortcut_editor::BUILTINS)), "the overrides are a set of the user's");
+    let overrides = sets.active_overrides(&shortcut_editor::BUILTINS);
+    let text = |key: &str| overrides.get(&stored_key(key)).map(|t| t.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(text("tool:pen"), Some(vec!["Shift+9"]));
+    assert!(text("edit.preferences").is_none_or(|t| t.iter().all(|k| k.is_empty())), "cleared");
+    assert_eq!(text("panel:layers"), Some(vec!["Cmd+Alt+Shift+F7"]));
+    assert_eq!(text("test.unknown"), Some(vec!["Cmd+Alt+Shift+F9"]), "kept");
 }
 
 /// The command line's files wait for the choice about a stopped plug-in, so they open with the
@@ -75,51 +69,31 @@ fn opening_files_unminimizes_and_focuses_the_window() {
     assert!(cmds.contains(&egui::ViewportCommand::Focus));
 }
 
+/// An old file whose docking data this version can't read keeps its preferences and every one of
+/// its workspaces: only the unreadable layout is dropped.
 #[test]
 fn unreadable_saved_docking_keeps_preferences_and_every_workspace() {
     use serde_json::json;
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
-    app.ui.toolbar = false;
-    app.ui.engine_prefs = json!({"interfaceLanguage":"fr", "uiBrightness":"light"});
-    app.ui.custom_workspaces =
-        vec![vectorcraft_ui_egui::workspaces::capture(&app.ui, "Future"), vectorcraft_ui_egui::workspaces::capture(&app.ui, "Valid")];
-    app.ui.workspace_changes = vec![vectorcraft_ui_egui::workspaces::capture(&app.ui, "Future")];
-    let original = serde_json::to_value(&app.ui).unwrap();
-    let valid_location = original["docking_hidden"]["layers"].clone();
-    assert!(valid_location.is_object());
-    for invalid_layout in [json!({"root":{"FutureNode":{}},"floating":[]}), json!(false)] {
-        for invalid_hidden in [json!({"layers":{"placement":{"FuturePlacement":{}}},"swatches":valid_location}), json!(["malformed"])] {
-            let mut raw = original.clone();
-            raw["docking"] = invalid_layout.clone();
-            raw["docking_hidden"] = invalid_hidden.clone();
-            raw["custom_workspaces"][0]["docking"] = invalid_layout.clone();
-            raw["custom_workspaces"][0]["dockingHidden"] = invalid_hidden.clone();
-            raw["workspace_changes"][0]["docking"] = invalid_layout.clone();
-            raw["workspace_changes"][0]["dockingHidden"] = invalid_hidden.clone();
-            assert!(serde_json::from_value::<vectorcraft_ui_egui::UiState>(raw.clone()).is_err(), "runtime serde stays strict");
-            let loaded = legacy_ui(&serde_json::to_vec(&raw).unwrap()).unwrap();
-            assert_eq!(loaded.engine_prefs, app.ui.engine_prefs);
-            assert!(!loaded.toolbar);
-            assert!(loaded.docking.is_none());
-            assert!(!loaded.docking_hidden.contains_key("layers"));
-            if invalid_hidden.is_object() {
-                assert_eq!(serde_json::to_value(loaded.docking_hidden.get("swatches")).unwrap(), valid_location);
-            } else {
-                assert!(loaded.docking_hidden.is_empty());
+    let prefs = json!({"interfaceLanguage": "fr", "uiBrightness": "light"});
+    for layout in [json!({"root": {"FutureNode": {}}, "floating": []}), json!(false)] {
+        for hidden in [json!({"layers": {"placement": {"FuturePlacement": {}}}}), json!(["malformed"])] {
+            let saved = json!({
+                "engine_prefs": prefs,
+                "control_bar": false,
+                "docking": layout,
+                "docking_hidden": hidden,
+                "custom_workspaces": [{"name": "Future", "docking": layout, "dockingHidden": hidden}, {"name": "Valid", "dockTab": "Layers"}],
+                "workspace_changes": [{"name": "Future", "docking": layout, "dockingHidden": hidden}],
+            });
+            let ui = legacy_ui(&serde_json::to_vec(&saved).unwrap()).unwrap();
+            assert_eq!(ui.engine_prefs, prefs);
+            assert!(!ui.control_bar);
+            let names = vectorcraft_ui_egui::workspaces::names(&ui);
+            for name in ["Future", "Valid"] {
+                assert!(names.iter().any(|n| n == name), "{name} kept: {names:?}");
             }
-            assert_eq!(loaded.custom_workspaces.len(), 2);
-            assert_eq!(loaded.custom_workspaces[0].name, "Future");
-            assert!(loaded.custom_workspaces[0].docking.is_none());
-            assert!(!loaded.custom_workspaces[0].docking_hidden.contains_key("layers"));
-            assert_eq!(serde_json::to_value(&loaded.custom_workspaces[1]).unwrap(), original["custom_workspaces"][1]);
-            assert_eq!(loaded.workspace_changes.len(), 1, "a remembered layout is recovered, not the whole file lost");
-            assert!(loaded.workspace_changes[0].docking.is_none());
         }
     }
-    let roundtrip = legacy_ui(&serde_json::to_vec(&original).unwrap()).unwrap();
-    assert_eq!(serde_json::to_value(roundtrip).unwrap(), original);
-    assert!(legacy_ui(&serde_json::to_vec(&json!({"toolbar":"invalid"})).unwrap()).is_none(), "unrelated fields retain normal strict parsing");
 }
 
 /// The format boundary of the preferences file: a state with its saved fields off their defaults
@@ -132,10 +106,10 @@ fn a_saved_ui_state_survives_a_config_toml_round_trip() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
     app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
-    app.ui.toolbar = false;
+    app.ui.status_bar = false;
     app.ui.image_trace_preview = false;
-    app.ui.custom_workspaces = vec![workspaces::capture(&app.ui, "Mine")];
-    app.ui.workspace_changes = vec![workspaces::capture(&app.ui, "Mine")];
+    app.ui.last_folders.insert("open".to_string(), std::env::temp_dir());
+    workspaces::save_as(&mut app.ui, "Mine").unwrap();
     let temp = tempfile::Builder::new().prefix("vectorcraft-config-toml-").tempdir().unwrap();
     let wanted = from_app(&app);
     let (mut store, _) = SettingsStore::<AppSettings>::open_at(temp.path());

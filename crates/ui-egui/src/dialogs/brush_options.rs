@@ -181,8 +181,23 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
     let dialog =
         HostedParamDialog::new(&ctx, KIND, initial, move |fields| ParamDialog::new(KIND, title.clone(), rows.clone()).values(Bind::bound(fields)))
             .held_ok();
-    host::open_held(app, dialog, ok).ok_or("no window")?;
+    app.ui.brush_options = Some(host::open_held(app, dialog, ok).ok_or("no window")?);
     Ok(Value::Null)
+}
+
+/// Once a frame: runs the Key Color pick of the open Brush Options, and forgets the dialog once it
+/// is gone, ending a pick it left.
+pub(super) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(id) = app.ui.brush_options else { return };
+    let Some(dialogs) = app.dialogs() else { return };
+    let open =
+        dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|dialog| brush_art_options::key_color_pick(app, dialog)).is_some());
+    if !open {
+        app.ui.brush_options = None;
+        if app.ui.brush_key_color_pick.as_ref().is_some_and(|pick| pick.dialog == id) {
+            brush_art_options::end_key_color_pick(app, true);
+        }
+    }
 }
 
 /// The fields of brush `b`, whose definition is `def`.

@@ -230,9 +230,9 @@ mod monitor {
     use std::ptr::NonNull;
 
     use block2::RcBlock;
+    use craft::ui::runtime::pen::PenSource;
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSEvent, NSEventMask};
-    use craft::ui::runtime::pen::PenSource;
 
     use super::{Pen, RawEvent, event_mask};
 
@@ -342,7 +342,11 @@ mod tests {
     #[test]
     fn proximity_says_which_end_is_near() {
         let mut p = Pen::default();
-        let eraser = |pressure| PointerSample { pressure, ..near(true) };
+        let eraser = |pressure| {
+            let mut sample = near(true);
+            sample.pressure = pressure;
+            sample
+        };
         assert_eq!(p.handle(&proximity(device::ERASER, true)), Update::Set(Some(near(true))));
         assert_eq!(p.handle(&pen(DRAG, 0.4)), Update::Set(Some(eraser(0.4))));
         assert_eq!(p.handle(&proximity(device::ERASER, false)), Update::Set(None), "it left");

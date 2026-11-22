@@ -211,6 +211,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         super::gradient_stop::pump,
         super::swatch_options::pump,
         super::new_swatch::pump,
+        super::brush_options::pump,
         super::brush_delete::pump,
         super::brush_replace_art::pump,
         super::symbol_delete::pump,

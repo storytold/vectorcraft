@@ -251,6 +251,18 @@ pub fn t(s: &str) -> &str {
     tr(current(), s)
 }
 
+/// The words of the native Replace question that a Save panel asks over an existing file, in the
+/// current language.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn replace_words() -> craft::dialogs::service::ReplaceWords {
+    craft::dialogs::service::ReplaceWords {
+        title: t("Replace").to_string(),
+        question: t("“{name}” already exists. Replace it?").to_string(),
+        replace: t("Replace").to_string(),
+        cancel: t("Cancel").to_string(),
+    }
+}
+
 /// `label`, already in the current language, followed by a field label's colon as the current
 /// language writes it (its catalog row for ":"): French puts a no-break space before the colon, and
 /// Chinese and Japanese write a full-width colon.

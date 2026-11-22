@@ -735,6 +735,10 @@ pub struct UiState {
     /// File → Open Recent Files, most recent first.
     #[serde(default)]
     pub recent_files: Vec<String>,
+    /// The folder each kind of file pick chose last, by the pick's purpose: the next pick of that
+    /// kind starts there (the desktop host's file service).
+    #[serde(default)]
+    pub last_folders: HashMap<String, std::path::PathBuf>,
     /// Type → Recent Fonts, most recent first.
     #[serde(default)]
     pub recent_fonts: Vec<String>,
@@ -1422,6 +1426,7 @@ impl Default for UiState {
             legacy_shortcuts: LegacyShortcuts::default(),
             touch_workspace_restore: None,
             recent_files: vec![],
+            last_folders: HashMap::new(),
             recent_fonts: vec![],
             recent_commands: vec![],
             command_uses: Default::default(),

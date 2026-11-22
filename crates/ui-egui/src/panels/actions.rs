@@ -52,7 +52,7 @@ pub use edits::{
 };
 pub use files::{ACTIONS_EXT, LOAD_SET, REPLACE_SET, SAVE_SET, load_set, replace_set, save_set};
 pub use keys::{FUNCTION_KEYS, FunctionKey, function_keys, key_error};
-pub use model::{default_list, default_sets, deserialize_current_set};
+pub use model::{automatic_align_to, default_list, default_sets, deserialize_current_set, members, set_automatic_align_to};
 pub use playback::{
     CONTINUE_PLAYBACK, PAUSE_SECONDS, PLAY_ACTION, PLAY_AT, PLAYBACK_OPTIONS, PlaybackOptions, PlaybackSpeed, Playing, STOP_STEP, continue_playback,
     deserialize_playback, play, play_action, play_at, playback_drawn, playback_held, playback_options, tick_playback, waiting_at_stop,
