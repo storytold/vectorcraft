@@ -436,6 +436,10 @@ pub(crate) fn sphere(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut Cust
     if Button::new(text).show(ui).clicks > 0 {
         select(fields, current);
         set_light_value(fields, "lightBehind", json!(!behind));
+        // The rows hear of a custom row's change through its events: the move is one step.
+        let mut moved = craft::behavior::EditEvents::new();
+        moved.push(craft::behavior::EditEvent::set(craft::behavior::Mixed::Same(behind), !behind, text.into(), None));
+        cx.gesture(&moved);
     }
     ui.add_space(4.0);
     out.edit.response

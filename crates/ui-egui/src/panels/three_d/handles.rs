@@ -198,7 +198,7 @@ impl Component for GraphicHandles<'_> {
     fn parts(&mut self, _: egui::Rect, cx: &mut PartsCx<'_, Self>) {
         let Some(space) = canvas_space(&cx.env) else { return };
         for (index, at) in self.handles {
-            cx.part(HANDLE.at(*index as u64), HitShape::circle(to_screen(&space.view, *at), HANDLE_REACH)).sense(Sense::CLICK);
+            cx.part(HANDLE.at(*index as u64), HitShape::circle(to_screen(&space.view, *at), HANDLE_REACH)).sense(Sense::DRAG | Sense::CLICK);
         }
     }
 

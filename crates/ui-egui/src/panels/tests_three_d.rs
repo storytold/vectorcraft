@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use craft::behavior::{CancelReason, EditEvent, GestureId, Mixed};
 use craft::ui::canvas::CanvasSpace;
+use craft::ui::contract::ShowContainer as _;
 use craft::ui::patterns::form_dialogs::DialogFields;
 use craft::ui::testing::Fixture;
 use serde_json::{Map, Value, json};
@@ -693,10 +694,10 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     let (app, mut fixture) = handles_fixture(app);
     let history = undo_len(&app.borrow());
     // Straight on, the graphic's handle is at the center of the square.
-    let handle = screen_at(&app, &fixture, 150.0, 150.0);
-    let target = screen_at(&app, &fixture, 170.0, 140.0);
+    let handle = screen_at(150.0, 150.0);
+    let target = screen_at(170.0, 140.0);
     // A press away from the handle is left to the tool.
-    let away = screen_at(&app, &fixture, 110.0, 110.0);
+    let away = screen_at(110.0, 110.0);
     assert!(!grabs(&app, &mut fixture, away));
     let before = graphics(&app.borrow());
     fixture.drag_hold_at(handle, target - handle);
@@ -764,19 +765,31 @@ fn the_graphics_frame_is_built_once_for_each_revision() {
 
 /// `app` with the graphics' handles over an 800 × 600 canvas, and the handle the trial reads the app through.
 fn handles_fixture(mut app: VectorcraftApp) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
-    // The handles show while the 3D and Materials panel shows its Materials tab.
-    if !crate::panel_docking::visible(&app, super::ID) {
-        app.run("window.panel", json!({ "panel": super::ID })).unwrap();
-    }
+    show_panel(&mut app);
     let app = Rc::new(RefCell::new(app));
     let drawn = Rc::clone(&app);
+    // The handles are canvas controls: they show in the body of a canvas over the app's view, as the document's canvas
+    // shows them.
     let mut fixture = Fixture::new(move |ui| {
         let mut app = drawn.borrow_mut();
-        let space = canvas_space(&app, ui.max_rect());
-        handles::show(&mut app, ui, &space);
+        let room = ui.max_rect();
+        let view = canvas_space(&app, room).view;
+        craft::ui::canvas::Canvas::new("Document").view(view).show_at(ui, room, |ui, body| {
+            if let Some(space) = craft::ui::canvas::canvas_space(&body.env) {
+                SHOWN_SPACE.with(|shown| shown.set(Some(space)));
+                handles::show(&mut app, ui, &space);
+            }
+        });
     });
     fixture.room(egui::vec2(800.0, 600.0)).settle();
     (app, fixture)
+}
+
+/// Shows the 3D and Materials panel: the graphics' handles show while it shows its Materials tab.
+fn show_panel(app: &mut VectorcraftApp) {
+    if !crate::panel_docking::visible(app, super::ID) {
+        app.run("window.panel", json!({ "panel": super::ID })).unwrap();
+    }
 }
 
 /// The canvas's mapping between document points and the screen over `rect`.
@@ -785,9 +798,15 @@ fn canvas_space(app: &VectorcraftApp, rect: egui::Rect) -> CanvasSpace {
     CanvasSpace::new(view.canvas(app.ui_scaling(), rect), 1.0)
 }
 
-/// Where document point (`x`, `y`) is on the canvas of [`handles_fixture`].
-fn screen_at(app: &Rc<RefCell<VectorcraftApp>>, fixture: &Fixture, x: f64, y: f64) -> egui::Pos2 {
-    canvas_space(&app.borrow(), fixture.shown()).view.to_screen(vectorcraft_geom::Point::new(x, y))
+thread_local! {
+    /// The space of the canvas [`handles_fixture`] last showed, as its body reads it.
+    static SHOWN_SPACE: std::cell::Cell<Option<CanvasSpace>> = const { std::cell::Cell::new(None) };
+}
+
+/// Where document point (`x`, `y`) is on the canvas of [`handles_fixture`], as the canvas shows it.
+fn screen_at(x: f64, y: f64) -> egui::Pos2 {
+    let space = SHOWN_SPACE.with(std::cell::Cell::get).expect("the canvas has shown");
+    space.view.to_screen(vectorcraft_geom::Point::new(x, y))
 }
 
 /// Whether a drag from `from` moves a graphic (it records an undo step then); a drag that did is undone.
@@ -807,7 +826,7 @@ fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
     let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
     let (app, mut fixture) = handles_fixture(app);
-    let handle = screen_at(&app, &fixture, 150.0, 150.0);
+    let handle = screen_at(150.0, 150.0);
     let push_effect = |object: usize, id: &str, params: Value| {
         let mut guard = app.borrow_mut();
         let st = guard.session.active_mut().unwrap();
@@ -847,6 +866,7 @@ fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
 fn a_hidden_fill_shows_no_handles_for_its_graphics() {
     let (mut app, _) = materials_app();
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    show_panel(&mut app);
     // The 3D effect, with its graphic, moves onto the square's fill.
     let fill = {
         let st = app.session.active_mut().unwrap();
@@ -876,7 +896,7 @@ fn a_click_on_a_graphics_handle_records_no_undo_step() {
     app.run("threeD.mapGraphic", json!({"symbol": "Graphic", "x": 5.03})).unwrap();
     let (app, mut fixture) = handles_fixture(app);
     let history = undo_len(&app.borrow());
-    let handle = screen_at(&app, &fixture, 155.03, 150.0);
+    let handle = screen_at(155.03, 150.0);
     fixture.click_at(handle);
     assert_eq!(undo_len(&app.borrow()), history);
     assert_eq!(graphics(&app.borrow())[0]["x"], json!(5.03));
@@ -899,8 +919,7 @@ fn a_selection_change_during_a_handle_drag_ends_it() {
     };
     let before = graphic_of(&app, other);
     let (app, mut fixture) = handles_fixture(app);
-    let (handle, target, further) =
-        (screen_at(&app, &fixture, 150.0, 150.0), screen_at(&app, &fixture, 170.0, 140.0), screen_at(&app, &fixture, 190.0, 130.0));
+    let (handle, target, further) = (screen_at(150.0, 150.0), screen_at(170.0, 140.0), screen_at(190.0, 130.0));
     fixture.drag_hold_at(handle, target - handle);
     // The selection changes to the other object while the pointer is down: the drag ends there.
     app.borrow_mut().run("select.set", json!({"ids": [other]})).unwrap();
