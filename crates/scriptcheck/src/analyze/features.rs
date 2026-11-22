@@ -307,6 +307,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.outside(OutsideId::FilesWritten, line, None);
             } else if catalog::DOM_FILE_READS.contains(&name.as_str()) && self.app_receiver(h3, self.h4) {
                 self.acc.feature(FeatureId::FileRead, line);
+                // `app['open'](f)` gives a document, as `app.open(f)` does.
+                let (depth, cap) = (self.depth(), self.acc.limits.echo);
+                if let Some(c) = self.suspended.last_mut().filter(|c| c.wait.saturating_add(1) == depth) {
+                    c.name_call(&name, cap);
+                }
             }
             return;
         }

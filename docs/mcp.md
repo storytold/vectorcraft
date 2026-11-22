@@ -2775,11 +2775,13 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   run's changes. A run that fails or is stopped sends
   nothing. Before it sends them, the app checks that each printer is still installed under that name, and sends none
   when one is not. A run prepares at most 4 jobs, together at most 100 pages, every copy counted, and 32 MiB, and
-  none while an earlier run's jobs wait for an answer. A job for a printer is a PDF, so `postScriptLevel` with no
+  none while an earlier run's jobs wait for an answer. The pages are counted from the art as it prints, artboard
+  backgrounds and placed files included, before the job is composed. A job for a printer is a PDF, so `postScriptLevel` with no
   file throws. Where the app lists no printers for scripts (the web build, and MCP or the command line without the app),
   `print` with no file throws `Printing to a printer is not available here`. `app.printerList` gives a `Printer` for
   each printer the app listed for the run, at most 256, leaving out names longer than 512 bytes or with a control
-  character (https://ai-scripting.docsforadobe.dev/jsobjref/Application/,
+  character; when the system's default printer comes after the first 256, it takes the last place
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Application/,
   https://ai-scripting.docsforadobe.dev/jsobjref/Printer/). Its `name` is read-only and its `printerInfo` throws an
   error that says it is not available yet. With no document open, `app.printerList` throws `Application.printerList
   needs an open document`, as the Printer help page describes, and where the app lists no printers for scripts it
@@ -11292,7 +11294,9 @@ bleed, composite or separations output, graphics and colour management options o
 `transform` from the document onto the page (pt, y down), the document `area` it prints, its `trim` box on the page
 and, with copies per sheet, each copy's artboard on the page (`copies`), plus `tiles`, the
 `inks` of a separation and `warnings`. `file.print {settings?, path?}` writes the job as a print-ready PDF (one page per
-sheet, tile, ink and copy); headless it answers `dataBase64`. In the app, `file.print` with no params opens the Print
+sheet, tile, ink and copy); headless it answers `dataBase64`. With `maxPages`, the job is composed only when it
+prints at most that many pages, copies counted; with more, `file.print` composes and writes nothing and answers
+`{pages, format}`. In the app, `file.print` with no params opens the Print
 dialog, and with params it prints through the system (`printer`: a name from `print.printers`, default the system's
 default printer) or, with `toFile`, a `path` or no printing available, saves the PDF.
 

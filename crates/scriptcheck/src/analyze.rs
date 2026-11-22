@@ -452,6 +452,19 @@ impl Chain {
         self.last_change = false;
         self.append(if call { "()" } else { "[]" }, cap);
     }
+
+    /// The call that ends the chain is of the member `name`, which a string literal in brackets
+    /// named: `[]()` becomes `.name()`.
+    fn name_call(&mut self, name: &str, cap: usize) {
+        if self.cut || !self.path.ends_with("[]()") {
+            return;
+        }
+        self.path.truncate(self.path.len() - 4);
+        self.chars = self.chars.saturating_sub(4);
+        for s in [".", name, "()"] {
+            self.append(s, cap);
+        }
+    }
 }
 
 /// A function body being read: the bracket depth inside it, and what each name declared in it

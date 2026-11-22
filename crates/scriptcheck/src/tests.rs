@@ -578,8 +578,8 @@ fn app_open_reads_a_file() {
 }
 
 /// A document's `print` writes the file its options' `jobOptions.file` names, called with a dot or
-/// with its name in brackets, on a document (also one `add`, `addDocument` or `addDocumentNoUI`
-/// returns) or a variable that holds one; reading the method without
+/// with its name in brackets, on a document (also one `add`, `addDocument`, `addDocumentNoUI` or
+/// `app.open`, with or without brackets, returns) or a variable that holds one; reading the method without
 /// calling it, and a `print` method of another object, do not.
 #[test]
 fn print_writes_a_file() {
@@ -598,8 +598,10 @@ fn print_writes_a_file() {
         "app.documents.addDocument('Print', s, false).print(o);\n",
         "documents.addDocumentNoUI('Print').print(o);\n",
         "app.documents.addDocumentNoUI('Print').print(o);\n",
+        "var g = app['open'](new File(p)); g.print(o);\n",
+        "var h = app['activeDocument'](new File(p)); h.print(o);\n",
     ));
-    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14][..];
+    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14, 15][..];
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
 }

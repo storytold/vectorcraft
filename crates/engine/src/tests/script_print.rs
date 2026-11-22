@@ -164,6 +164,13 @@ fn printer_list_is_the_bounded_list_the_frontend_gave() {
     let snapshot = Printers::new(list, false);
     assert_eq!(snapshot.names().len(), MAX_PRINTERS);
     assert_eq!(snapshot.default_name(), Some("Printer 1"));
+    // A default listed after the first 256 takes the last place, and a repeated name keeps a later
+    // default mark without a second entry.
+    let late = Printers::new((0..300).map(|i| (format!("Q{i}"), i == 280)), false);
+    let names = late.names();
+    assert_eq!((names.len(), late.default_name(), names[254].as_str(), names[255].as_str()), (MAX_PRINTERS, Some("Q280"), "Q254", "Q280"));
+    let repeat = Printers::new([("A".to_string(), false), ("B".to_string(), false), ("A".to_string(), true)], false);
+    assert_eq!((repeat.names(), repeat.default_name()), (&["A".to_string(), "B".to_string()][..], Some("A")));
     s.script_printers = Some(snapshot);
     let out = logged(
         &mut s,
@@ -222,7 +229,15 @@ fn print_to_a_printer_holds_the_job_until_the_run_ends() {
     assert_eq!((jobs[0].printer.as_str(), jobs[0].sheets, job_pages(&jobs[0])), (ODD_NAME, 4, 4), "two artboards, two copies");
     assert_eq!((jobs[1].printer.as_str(), jobs[1].sheets, job_pages(&jobs[1])), ("Office", 2, 2), "the default printer");
     assert!(jobs.iter().all(|j| j.title == title && j.pdf.starts_with(b"%PDF")));
-    assert_ne!(jobs[0].pdf, jobs[1].pdf, "each job holds the document as it was when print was called");
+    // Each job holds the document as it was when print was called: one copy of the second job has
+    // the rectangle the script added after the first job, and the first job's two copies do not.
+    let paths = |job: &PreparedPrint| {
+        let mut n = 0;
+        vectorcraft_pdf::import(&job.pdf).unwrap().walk(|c| n += usize::from(matches!(c.kind, vectorcraft_doc::NodeKind::Path { .. })));
+        n
+    };
+    assert_eq!(paths(&jobs[0]) % 2, 0, "two equal copies");
+    assert_eq!(paths(&jobs[0]) / 2 + 1, paths(&jobs[1]), "the second job has the added rectangle");
     assert!(s.take_script_prints().is_empty(), "a job is taken once");
     let _ = std::fs::remove_dir_all(base);
 }
@@ -279,7 +294,7 @@ fn print_to_a_printer_refuses_what_it_cannot_send() {
     failure(&mut s, &base, "var o = new PrintOptions(); o.jobOptions.copies = 999; app.activeDocument.print(o);");
     let report = s.script_report().unwrap();
     let ran: Vec<&str> = report["slowestCommands"].as_array().unwrap().iter().filter_map(|c| c["id"].as_str()).collect();
-    assert_eq!(ran, ["print.preview"], "{report}");
+    assert_eq!(ran, ["file.print"], "{report}");
     s.script_printers = Some(Printers::new([("Office".to_string(), false)], false));
     let e = failure(&mut s, &base, "app.activeDocument.print();");
     assert!(e.contains("There is no default printer: set PrintOptions.printerName"), "{e}");
@@ -305,6 +320,48 @@ fn print_to_a_printer_refuses_what_it_cannot_send() {
     );
     assert!(dir.join("f.pdf").exists());
     assert!(!s.script_prints_waiting());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The pages of a job for a printer are counted from the art as it prints, artboard backgrounds
+/// included, as `file.print` lays it out: an artboard that holds only its background prints with
+/// `skipBlank`, and counts toward the sheet limit.
+#[test]
+fn print_to_a_printer_counts_the_pages_of_the_art_as_it_prints() {
+    let base = folder("backgrounds");
+    let mut s = session(&base);
+    s.execute("artboard.setProps", &json!({"index": 1, "color": "#ff0000"})).unwrap();
+    s.execute("print.setup", &json!({"settings": {"skipBlank": true, "artboards": "range", "range": "2"}})).unwrap();
+    s.script_printers = Some(printers());
+    logged(&mut s, &base, "app.activeDocument.print();");
+    let jobs = s.take_script_prints();
+    assert_eq!(jobs.iter().map(|j| (j.sheets, job_pages(j))).collect::<Vec<_>>(), [(1, 1)], "the background prints");
+    s.execute("print.setup", &json!({"settings": {"artboards": "all"}})).unwrap();
+    s.script_printers = Some(printers());
+    let e = failure(&mut s, &base, "var o = new PrintOptions(); o.jobOptions.copies = 51; app.activeDocument.print(o);");
+    assert!(e.contains("this job has 102"), "both artboards print: {e}");
+    assert!(!s.script_prints_waiting());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `file.print`'s `maxPages` composes nothing for a longer job, and only after the other params are
+/// checked.
+#[test]
+fn file_print_max_pages_composes_only_what_fits() {
+    let base = folder("max-pages");
+    let mut s = session(&base);
+    let r = s.execute("file.print", &json!({"maxPages": 5, "settings": {"copies": 3}})).unwrap();
+    assert_eq!((&r["pages"], r.get("dataBase64").is_none()), (&json!(6), true), "{r}");
+    let r = s.execute("file.print", &json!({"maxPages": 6, "settings": {"copies": 3}})).unwrap();
+    assert_eq!((&r["pages"], r["dataBase64"].is_string()), (&json!(6), true));
+    for bad in [
+        json!({"maxPages": 0, "format": "postscript", "level": 1}),
+        json!({"maxPages": 0, "settings": {"advanced": {"flattenerPreset": "nope"}}}),
+        json!({"maxPages": -1}),
+        json!({"maxPages": "2"}),
+    ] {
+        assert!(s.execute("file.print", &bad).is_err(), "{bad}");
+    }
     let _ = std::fs::remove_dir_all(base);
 }
 

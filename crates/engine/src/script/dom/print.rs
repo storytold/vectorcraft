@@ -962,20 +962,16 @@ fn prepare(h: &Host, doc: Doc, mut job: Job) -> Answer {
     if for_printer {
         p.insert("forPrinter".into(), json!(true));
     }
-    // The pages are counted from the layout before the job is composed.
-    let plan: serde_json::Map<String, Value> =
-        p.iter().filter(|(k, _)| matches!(k.as_str(), "preset" | "settings")).map(|(k, v)| (k.clone(), v.clone())).collect();
-    let planned = on_doc(h, doc.uid, false, |h| unfenced(h, PREVIEW, || command_kept(h, PREVIEW, &Value::Object(plan))))?;
-    let pages = planned.get("pages").and_then(Value::as_u64).unwrap_or(0);
-    sheets_fit(sheets, pages)?;
+    // `file.print` counts the pages of the art as it prints and composes the job only when they fit.
+    p.insert("maxPages".into(), json!(MAX_SHEETS.saturating_sub(sheets)));
     let printed = on_doc(h, doc.uid, false, |h| unfenced(h, PRINT, || command_kept(h, PRINT, &Value::Object(p))))?;
+    let pages = printed.get("pages").and_then(Value::as_u64).unwrap_or(0);
+    sheets_fit(sheets, pages)?;
     let pdf = printed
         .get("dataBase64")
         .and_then(Value::as_str)
         .and_then(vectorcraft_format::base64_decode)
         .ok_or_else(|| HostError::Error("the print job has no data".into()))?;
-    let pages = printed.get("pages").and_then(Value::as_u64).unwrap_or(pages);
-    sheets_fit(sheets, pages)?;
     if bytes.saturating_add(pdf.len()) > MAX_JOB_BYTES {
         return Err(HostError::Range("a script's printer jobs can hold at most 32 MiB in a run".into()));
     }
@@ -1078,8 +1074,6 @@ fn sheets_fit(sheets: u64, pages: u64) -> std::result::Result<(), HostError> {
 }
 
 const PRINT: &str = "file.print";
-/// Counts a job's pages without composing it.
-const PREVIEW: &str = "print.preview";
 
 /// Runs `run`, which runs `id`, a command scripts may not run through `vc.run`, for a member that
 /// checked its params: only `id` passes the fence, and only while `run` runs.

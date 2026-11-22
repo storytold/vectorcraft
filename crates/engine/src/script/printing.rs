@@ -36,16 +36,32 @@ pub struct Printers {
 
 impl Printers {
     /// The printers of `list` (name, whether it is the default), in its order. A name that is
-    /// empty, longer than [`MAX_PRINTER_NAME_BYTES`], holds a control character or repeats an
-    /// earlier one is left out, and so is every printer after the first [`MAX_PRINTERS`].
+    /// empty, longer than [`MAX_PRINTER_NAME_BYTES`] or holds a control character is left out, and
+    /// so is a name that repeats an earlier one, though its default mark is kept. Every printer
+    /// after the first [`MAX_PRINTERS`] is left out, except the default printer, which takes the
+    /// last place when it comes later.
     pub fn new(list: impl IntoIterator<Item = (String, bool)>, for_printer: bool) -> Self {
         let mut names: Vec<String> = Vec::new();
         let mut default = None;
         for (name, is_default) in list {
-            if names.len() >= MAX_PRINTERS {
+            let full = names.len() >= MAX_PRINTERS;
+            if full && default.is_some() {
                 break;
             }
-            if name.is_empty() || name.len() > MAX_PRINTER_NAME_BYTES || name.chars().any(char::is_control) || names.contains(&name) {
+            if name.is_empty() || name.len() > MAX_PRINTER_NAME_BYTES || name.chars().any(char::is_control) {
+                continue;
+            }
+            if let Some(i) = names.iter().position(|n| *n == name) {
+                if is_default && default.is_none() {
+                    default = Some(i);
+                }
+                continue;
+            }
+            if full {
+                if is_default && let Some(last) = names.last_mut() {
+                    *last = name;
+                    default = Some(MAX_PRINTERS - 1);
+                }
                 continue;
             }
             if is_default && default.is_none() {
