@@ -491,6 +491,8 @@ pub(crate) struct PendingInstall {
     pub approval: InstallApproval,
     /// Who asked; a question automation asked has no OK that installs.
     pub origin: InstallOrigin,
+    /// The question shown for it, once [`ask_install`] opened it: only its answer counts.
+    pub question: Option<DialogId>,
 }
 
 /// How long, in seconds, the approval's question stays on screen in the focused window, on every
@@ -559,9 +561,10 @@ impl StackDialog for InstallPrompt {
 /// Asks a person whether to install what `pending` describes, its question not yet shown, even when
 /// it reads as the one it replaces. → `{pending}`, and `approval: "personMustStartInstall"` when
 /// automation asked.
-pub(crate) fn ask_install(app: &mut VectorcraftApp, pending: PendingInstall) -> Value {
+pub(crate) fn ask_install(app: &mut VectorcraftApp, mut pending: PendingInstall) -> Value {
     let prompt = InstallPrompt::new(&pending);
     let automated = prompt.automated;
+    pending.question = Some(prompt.id);
     app.pending_plugin_install = Some(pending);
     if let Some(dialogs) = app.dialogs() {
         dialogs.with(|host| host.open(prompt));
@@ -575,7 +578,15 @@ pub(crate) fn ask_install(app: &mut VectorcraftApp, pending: PendingInstall) -> 
 /// The answer to the install question: Cancel drops it; OK installs the module the question showed,
 /// when a person pressed it.
 fn pump_install(app: &mut VectorcraftApp) {
-    let Some(answer) = app.dialogs().and_then(|d| d.with(|host| host.take::<InstallPrompt>())) else { return };
+    let Some(dialogs) = app.dialogs() else { return };
+    let question = app.pending_plugin_install.as_ref().and_then(|p| p.question);
+    let answer = dialogs.with(|host| {
+        let answer = question.and_then(|id| host.take_by_id::<InstallPrompt>(id));
+        // A question a newer one replaced was answered Cancel: that answer is not the pending install's.
+        while host.take::<InstallPrompt>().is_some() {}
+        answer
+    });
+    let Some(answer) = answer else { return };
     match answer.ok() {
         Some(()) => approve(app),
         None => app.pending_plugin_install = None,
