@@ -11561,8 +11561,9 @@ at a leftover distance of 0.05. A compound path that holds several
 glyphs, such as a word made into one compound path, is split into groups of contours (a contour with the contours
 inside it) in path order, and runs of up to three groups are matched, the longest first among those after which the
 remaining groups can still all be matched, so an i's stem and dot become one i. A group whose contours run the other
-way round, as Make Compound Path leaves some of them, still matches exactly. Exact matches of the whole shape come
-first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
+way round, as Make Compound Path leaves some of them, still matches exactly, and so does one where only some of its
+contours run the other way round (in an even-odd compound, an o's counter and not its outer contour). Exact matches
+of the whole shape come first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
 compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
 `unmatched` when another shape of the selection becomes type, and the command returns an error when no shape does. A
 glyph also has to paint the area the shape paints under the shape's fill rule: a compound filled by the nonzero rule
