@@ -34,7 +34,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember, host_
 
 use super::super::{
     Answer, Doc, Host, Item, Link, NOT_FOUND, arg, boolean, class, current, doc_of, doc_ref, edit_item, find_doc, float, function, get, handle_of,
-    id_of, id_parts, in_compound, item_of, item_ref, later, method, named, num, property, text, whole, with_doc,
+    id_of, id_parts, in_compound, item_of, item_ref, method, named, num, property, text, whole, with_doc,
 };
 use super::{
     ATTRS, Index, Log, Part, STALE_RANGE, frame_ids, from_script, part_spans, range_ref, read_only, text_of, this_frame, to_script, touched,
@@ -284,7 +284,8 @@ fn story_text(st: &DocState, frames: &[NodeId]) -> String {
     frames.iter().filter_map(|f| text_of(st, *f)).flat_map(|t| t.runs.iter().map(|r| r.text.as_str())).collect()
 }
 
-/// The story's index and its generation now, read again when its document changed.
+/// The story's index and its generation now, read again when its document changed. The stories
+/// read from the frames of one story share one index of its text while the document is unchanged.
 fn observe(h: &Host, st: &DocState, anchor: NodeId) -> std::result::Result<(Rc<Index>, u64), HostError> {
     if text_of(st, anchor).is_none() {
         return Err(HostError::Error(STALE_STORY.into()));
@@ -292,24 +293,45 @@ fn observe(h: &Host, st: &DocState, anchor: NodeId) -> std::result::Result<(Rc<I
     let mut logs = h.dom.text.stories.logs.borrow_mut();
     let key = (st.uid, anchor.0);
     let now = Arc::as_ptr(&st.doc);
-    match logs.get_mut(&key) {
-        Some(l) if std::ptr::eq(l.doc.as_ptr(), now) && l.reverts == st.reverts => {}
-        Some(l) => {
-            let frames = charged_frames(h, st, anchor)?;
-            let text = story_text(st, &frames);
-            if l.reverts != st.reverts || text != l.index.text {
-                l.stamp += 1;
-                l.floor = l.stamp;
-                l.edits.clear();
-                l.index = Rc::new(Index::new(text));
+    let current = |l: &Log| std::ptr::eq(l.doc.as_ptr(), now) && l.reverts == st.reverts;
+    if !logs.get(&key).is_some_and(current) {
+        let frames = charged_frames(h, st, anchor)?;
+        // Another frame of the same story read at this state of the document has the same text;
+        // a frame listed in two threads can belong to another story, so its frames must match.
+        let mut shared = None;
+        if frames.len() > 1 {
+            h.charge_call(frames.len() as u64)?;
+            if let Some((f, l)) =
+                frames.iter().filter(|f| **f != anchor).find_map(|f| logs.get(&(st.uid, f.0)).filter(|l| current(l)).map(|l| (*f, l)))
+                && charged_frames(h, st, f)? == frames
+            {
+                shared = Some(l.index.clone());
             }
-            l.doc = Arc::downgrade(&st.doc);
-            l.reverts = st.reverts;
         }
-        None => {
-            let frames = charged_frames(h, st, anchor)?;
-            let index = Rc::new(Index::new(story_text(st, &frames)));
-            logs.insert(key, Log { doc: Arc::downgrade(&st.doc), reverts: st.reverts, index, stamp: 0, floor: 0, edits: VecDeque::new() });
+        let index = match shared {
+            Some(index) => index,
+            None => {
+                let text = story_text(st, &frames);
+                match logs.get(&key) {
+                    Some(l) if l.reverts == st.reverts && l.index.text == text => l.index.clone(),
+                    _ => Rc::new(Index::new(text)),
+                }
+            }
+        };
+        match logs.get_mut(&key) {
+            Some(l) => {
+                if l.reverts != st.reverts || index.text != l.index.text {
+                    l.stamp += 1;
+                    l.floor = l.stamp;
+                    l.edits.clear();
+                }
+                l.index = index;
+                l.doc = Arc::downgrade(&st.doc);
+                l.reverts = st.reverts;
+            }
+            None => {
+                logs.insert(key, Log { doc: Arc::downgrade(&st.doc), reverts: st.reverts, index, stamp: 0, floor: 0, edits: VecDeque::new() });
+            }
         }
     }
     let l = logs.get(&key).ok_or_else(|| HostError::Error(STALE_STORY.into()))?;
@@ -691,6 +713,20 @@ fn range_later(link: &Link, name: &'static str) -> (String, HostMember) {
     (name.to_string(), HostMember::Property { get: f.clone(), set: f })
 }
 
+/// A member of `Story` that is not available yet: reading or assigning it throws, after the check
+/// that the story is still there.
+fn story_later(link: &Link, name: &'static str) -> (String, HostMember) {
+    let message = format!("Story.{name} is not available yet");
+    let l = link.clone();
+    let f: HostFunction = Rc::new(move |a: Vec<Data>| {
+        let h = current(&l)?;
+        h.charge_call(16)?;
+        this_story(&h, &a)?;
+        Err(HostError::Error(message.clone()))
+    });
+    (name.to_string(), HostMember::Property { get: f.clone(), set: f })
+}
+
 /// The members of `TextFrame` this module adds.
 pub(super) fn frame_members(l: &Link) -> Vec<(String, HostMember)> {
     named(vec![
@@ -717,7 +753,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("words", get(l, story_words)),
         ("paragraphs", get(l, story_paragraphs)),
     ]);
-    story.extend(["lines", "insertionPoints", "textRanges", "textSelection"].into_iter().map(|m| later(l, "Story", m)));
+    story.extend(["lines", "insertionPoints", "textRanges", "textSelection"].into_iter().map(|m| story_later(l, m)));
     let mut range = named(vec![
         ("typename", get(l, span_typename)),
         ("parent", get(l, span_story)),

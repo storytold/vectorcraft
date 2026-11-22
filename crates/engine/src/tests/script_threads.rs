@@ -440,10 +440,16 @@ fn a_frame_of_another_document_cannot_be_linked() {
     let before = state(&s, &ids);
     s.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
     area(&mut s, 10.0, 100.0, 40.0, "Elsewhere");
+    s.execute("shape.rectangle", &json!({"x": 150, "y": 10, "width": 80, "height": 60})).unwrap();
     let m = failure(&mut s, "app.documents[0].textFrames[2].nextFrame = app.documents[1].textFrames[0];");
     assert!(m.contains("different documents"), "{m}");
-    let m = failure(&mut s, "app.documents[1].textFrames.areaText(app.documents[1].pageItems[0], undefined, app.documents[0].textFrames[2]);");
-    assert!(m.contains("another document") || m.contains("PathItem"), "{m}");
+    let out = log(
+        &mut s,
+        "var d = app.documents[1], p = d.pageItems[1];\
+         try { d.textFrames.areaText(p, undefined, app.documents[0].textFrames[2]); } catch (e) { vc.log(String(e.message)); }\
+         vc.log(p.typename); vc.log(d.textFrames.length);",
+    );
+    assert_eq!(out, vec![json!("baseFrame: the frame is in another document"), json!("PathItem"), json!(1)]);
     s.execute("document.activate", &json!({"index": 0})).unwrap();
     unchanged(&s, &ids, &before);
 }
@@ -452,6 +458,8 @@ fn a_frame_of_another_document_cannot_be_linked() {
 fn a_deleted_frame_makes_its_story_and_links_stale() {
     let (mut s, _, _) = threaded(STORY);
     let m = failure(&mut s, "var f = app.activeDocument.textFrames[1], st = f.story; f.remove(); st.length;");
+    assert!(m.contains("Stale story"), "{m}");
+    let m = failure(&mut s, "var f = app.activeDocument.textFrames[1], st = f.story; f.remove(); st.lines;");
     assert!(m.contains("Stale story"), "{m}");
     let m = failure(&mut s, "var f = app.activeDocument.textFrames[0], g = app.activeDocument.textFrames[1]; g.remove(); f.nextFrame = g;");
     assert!(m.contains("Stale page item"), "{m}");
@@ -518,6 +526,21 @@ fn a_thread_listing_a_frame_twice_is_walked_once() {
     let r = s.execute("text.thread.setNeighbor", &json!({"id": b.0, "side": "previous", "neighbor": null})).unwrap();
     assert_eq!(r, json!({"changed": true, "threads": [[a.0], [b.0]]}));
     assert!(threads(&s).is_empty());
+}
+
+/// When a frame is listed in two threads, a story read from a frame of the second thread reads
+/// that thread's text, not the text of the story read before it from a shared frame.
+#[test]
+fn stories_of_threads_that_share_a_frame_keep_their_own_text() {
+    let mut s = new_doc();
+    let a = area(&mut s, 10.0, 120.0, 60.0, "One.");
+    let b = area(&mut s, 150.0, 120.0, 60.0, "Two.");
+    let c = area(&mut s, 300.0, 120.0, 60.0, "Three!");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).text_threads = vec![vec![a, b], vec![b, c]];
+    let out = log(&mut s, "var t = app.activeDocument.textFrames; vc.log(t[1].story.length); vc.log(t[2].story.length);");
+    let (ab, bc) = (story(&s, &[a, b]).encode_utf16().count(), story(&s, &[b, c]).encode_utf16().count());
+    assert_ne!(ab, bc);
+    assert_eq!(out, vec![json!(ab), json!(bc)]);
 }
 
 /// A story and its range keep the exact id of the frame they were read from, also past 2^53.

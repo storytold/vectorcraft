@@ -2692,8 +2692,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
   with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
   a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
-  value; a `startTValue`, `endTValue`, `baseFrame` or `postFix` that is given throws an error that says it is not
-  available yet. A `TextFrame`
+  value; a `startTValue` or `endTValue` that is given throws an error that says it is not available yet, and
+  `baseFrame` and `postFix` thread the new frame as the threaded-type paragraph below describes. A `TextFrame`
   (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
   `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
   `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
