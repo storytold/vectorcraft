@@ -91,7 +91,7 @@ fn escape_ends_one_thing(app: &mut VectorcraftApp, ctx: &egui::Context) {
     } else if app.session.tool_id() == "rotateView" && escape_resets_rotation(app, ctx) {
         // With the Rotate View tool, the view resets before a full screen mode ends.
         let _ = app.run("view.rotateReset", json!({}));
-    } else if matches!(app.ui.screen_mode, 1 | 2) && keys::escape_mods(ctx).is_none() {
+    } else if matches!(app.ui.screen_mode, 1 | 2) && keys::escape_mods(ctx).is_some_and(|mods| mods.is_none()) {
         let _ = app.run("view.screenMode", json!({ "mode": 0 }));
     } else if escape_resets_rotation(app, ctx) {
         // An Escape that has nothing else to end resets a rotated view. A modified Escape does not leave a full
