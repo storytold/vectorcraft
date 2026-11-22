@@ -199,11 +199,11 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     }
 }
 
-/// The label of an Effect menu item in the UI language, by the effect's own id
+/// The label of an Effect menu item in `lang`, by the effect's own id
 /// ([`crate::i18n::effect_menu_label`]). Every effect item runs `effect.apply` or `effect.dialog`,
 /// so the command id can't tell them apart. `None` for any other item, and for a plug-in effect,
 /// whose item shows the plug-in's own text.
-pub(super) fn effect_item_label(id: &str, p: &Value) -> Option<String> {
+pub(crate) fn effect_item_label(id: &str, p: &Value, lang: crate::i18n::Lang) -> Option<String> {
     if !matches!(id, "effect.apply" | "effect.dialog") {
         return None;
     }
@@ -211,7 +211,7 @@ pub(super) fn effect_item_label(id: &str, p: &Value) -> Option<String> {
     if vectorcraft_plugins::effect::plugin_id(effect).is_some() {
         return None;
     }
-    crate::i18n::effect_menu_label(crate::i18n::current(), effect)
+    crate::i18n::effect_menu_label(lang, effect)
 }
 
 /// The label of an item of the canvas context menu's Unlock submenu (`layer.setProps` with one id

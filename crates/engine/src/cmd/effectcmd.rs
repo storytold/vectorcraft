@@ -891,8 +891,9 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    // The effect edited, when every target has the same one: a dialog's preview names its step after it.
-    let one = edited.first().filter(|e| edited.iter().all(|other| other == *e)).cloned().unwrap_or_default();
+    // The effect edited, when every target has one at `index` and all are the same: a dialog's
+    // preview names its step after it.
+    let one = edited.first().filter(|e| edited.len() == targets.len() && edited.iter().all(|other| other == *e)).cloned().unwrap_or_default();
     let ids = s.edit_effect(&one, |s| {
         edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), index, |fx, index| {
             let Some(e) = fx.get_mut(index) else { return false };

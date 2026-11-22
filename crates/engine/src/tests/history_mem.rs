@@ -2,7 +2,7 @@
 //! shared between steps, and past a memory budget the oldest steps go (never the last few).
 
 use serde_json::json;
-use vectorcraft_doc::{Appearance, Node};
+use vectorcraft_doc::{Appearance, Node, NodeId};
 use vectorcraft_geom::shapes;
 
 use crate::*;
@@ -500,4 +500,30 @@ fn only_steps_an_effect_records_keep_the_effect() {
     s.preview("command.batch", &json!({"commands": [{"command": "effect.apply", "params": {"effect": "stylize.feather"}}]})).unwrap();
     s.commit_interaction().unwrap();
     assert_eq!(last(&s), Some(("Feather".into(), None)), "a batch the preview ran");
+}
+
+/// An `effect.setParams` step keeps the effect it edited only when every target has that effect at
+/// the index: with one target lacking it, the step keeps none, and the target that has it is still
+/// edited.
+#[test]
+fn effect_options_keep_the_effect_only_when_every_target_has_it() {
+    let mut s = session_with_rects(2);
+    let ids: Vec<u64> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect();
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [ids[0]], "item": null})).unwrap();
+    let last = |s: &Session| s.doc().unwrap().history.undo.last().map(|e| (e.label.clone(), e.effect()));
+    let radius = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        d.node(NodeId(ids[0])).unwrap().appearance.effects[0].params["radius"].as_f64()
+    };
+    s.begin_interaction("Feather").unwrap();
+    s.preview("effect.setParams", &json!({"ids": ids, "item": null, "index": 0, "params": {"radius": 7}})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), None)), "one target without the effect");
+    assert_eq!(radius(&s), Some(7.0), "the target with the effect is edited");
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [ids[1]], "item": null})).unwrap();
+    s.begin_interaction("Feather").unwrap();
+    s.preview("effect.setParams", &json!({"ids": ids, "item": null, "index": 0, "params": {"radius": 9}})).unwrap();
+    s.commit_interaction().unwrap();
+    assert_eq!(last(&s), Some(("Feather".into(), Some("stylize.feather"))), "every target with the effect");
+    assert_eq!(radius(&s), Some(9.0));
 }

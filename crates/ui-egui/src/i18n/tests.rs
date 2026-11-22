@@ -2287,17 +2287,14 @@ fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
     p.get("effect").and_then(serde_json::Value::as_str).filter(|_| matches!(id, "effect.apply" | "effect.dialog"))
 }
 
-/// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
-/// effect's `@id` row when the catalog has one, any other command by its id's row or its English
-/// label, and a submenu or an unbuilt item by its English label.
-fn shown_menu_label(lang: Lang, item: &crate::menus::Item) -> Option<&'static str> {
+/// The label a menu item shows in `lang`, as the menus resolve it: a built-in Effect menu item by
+/// its effect's name ([`crate::menus::effect_item_label`]), any other command by its id's row or
+/// its English label, and a submenu or an unbuilt item by its English label.
+fn shown_menu_label(lang: Lang, item: &crate::menus::Item) -> Option<String> {
     use crate::menus::Item;
     match item {
-        Item::Cmd(l, id, p) => {
-            let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
-            Some(by_effect.unwrap_or_else(|| tr_id(lang, id, l)))
-        }
-        Item::Todo(l, _) | Item::Sub(l, _) => Some(tr(lang, l)),
+        Item::Cmd(l, id, p) => Some(crate::menus::effect_item_label(id, p, lang).unwrap_or_else(|| tr_id(lang, id, l).to_string())),
+        Item::Todo(l, _) | Item::Sub(l, _) => Some(tr(lang, l).to_string()),
         Item::Header(_) | Item::Sep => None,
     }
 }
@@ -2309,7 +2306,7 @@ fn shown_menu_label(lang: Lang, item: &crate::menus::Item) -> Option<&'static st
 fn menu_items_side_by_side_have_different_labels() {
     use crate::menus::Item;
     fn walk(lang: Lang, path: &str, items: &[Item], out: &mut Vec<String>) {
-        let mut seen: std::collections::BTreeMap<&str, (&str, &str)> = std::collections::BTreeMap::new();
+        let mut seen: std::collections::BTreeMap<String, (&str, &str)> = std::collections::BTreeMap::new();
         for item in items {
             let Some(shown) = shown_menu_label(lang, item) else { continue };
             let (english, what) = match item {
@@ -2317,7 +2314,7 @@ fn menu_items_side_by_side_have_different_labels() {
                 Item::Todo(l, _) | Item::Sub(l, _) => (*l, "submenu or unbuilt item"),
                 Item::Header(_) | Item::Sep => continue,
             };
-            match seen.get(shown) {
+            match seen.get(&shown) {
                 Some(&(other, other_what)) if other != english => {
                     out.push(format!("{}: {path}: {other:?} ({other_what}) and {english:?} ({what}) both show {shown:?}", lang.0.code));
                 }
@@ -2369,7 +2366,7 @@ fn menu_items_never_show_an_id() {
             if let crate::menus::Item::Cmd(l, id, p) = item {
                 let key = menu_item_effect(id, p).unwrap_or(id);
                 let shown = shown_menu_label(lang, item).unwrap_or_default();
-                if label_shows_an_id(shown, key) && !label_shows_an_id(l, key) {
+                if label_shows_an_id(&shown, key) && !label_shows_an_id(l, key) {
                     out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.0.code));
                 }
             }
