@@ -6321,7 +6321,9 @@ Alt+Shift-click samples only the color at the pointer into the active paint defa
 sets them; a tree names flags under `appearance` (`transparency`, `fill` `{color, transparency, overprint}`, `stroke`
 `{color, transparency, overprint, weight, cap, join, miter, dash}`), `character` and `paragraph`, and a bool for a
 branch sets all of it. `paint.sampleColor {color}` puts a sampled color into the active proxy (in a CMYK document an
-RGB color is stored as CMYK, as `paint.setFill` stores it). Clicking an image samples its pixels: a CMYK image (a
+RGB color is stored as CMYK, as `paint.setFill` stores it). `paint.sampleColor {color, stop}` recolors that stop of
+the gradient behind the proxy; with objects in `ids` it recolors that stop in the topmost fill (or stroke) gradient of
+the first object `paint.editGradient` edits for them, whatever tool is active. Clicking an image samples its pixels: a CMYK image (a
 four-component JPEG, or an 8- or 16-bit chunky CMYK TIFF) gives its ink amounts as they are, and an RGB image's sRGB
 pixel is taken into the working RGB space.
 
