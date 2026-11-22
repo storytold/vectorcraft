@@ -1432,7 +1432,13 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    set_props(h, a, |n| (f64::from(n.opacity) * 100.0 - v).abs() < 1e-4, json!({"opacity": v}))
+    // A value the getter reports for the item's opacity sends the opacity it has, and
+    // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
+    // replaces the one the graph keeps for its series or kind.
+    let item = this_item(h, a)?;
+    let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
+    let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
+    set_props(h, a, |_| false, json!({"opacity": v}))
 }
 
 fn item_selected(h: &Host, a: &[Data]) -> Answer {

@@ -206,6 +206,42 @@ fn page_item_properties_join_one_undo_step() {
     }
 }
 
+/// An opacity a graph mark already has still replaces the opacity another mark of its series left on
+/// the graph, as `object.setProps` does.
+#[test]
+fn an_opacity_a_graph_mark_already_has_replaces_the_one_its_series_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let r = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let kept =
+        |s: &Session| s.active().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().series_paints.first().and_then(|p| p.opacity);
+    let series = |s: &Session| {
+        let n = s.active().unwrap().doc.node(id).unwrap().clone();
+        let group = n.children().unwrap().iter().find(|c| c.extras().series_index == Some(0)).unwrap().clone();
+        group.children().unwrap().iter().map(|m| m.id).collect::<Vec<_>>()
+    };
+    let marks = series(&s);
+    s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 50})).unwrap();
+    assert_eq!(kept(&s), Some(0.5));
+    s.execute("object.setProps", &json!({"id": series(&s)[1].0, "name": "mark"})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems.getByName('mark').opacity = 100;");
+    assert_eq!(kept(&s), None);
+}
+
+/// Assigning an item the opacity it reports, rounded to four decimals, changes nothing.
+#[test]
+fn assigning_the_reported_opacity_changes_nothing() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 100.0 / 3.0})).unwrap();
+    let (before, steps) = (s.active().unwrap().doc.node(a).unwrap().opacity, undo_steps(&s));
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; vc.log(i.opacity); i.opacity = i.opacity;");
+    assert_eq!(out, vec![json!(33.3333)]);
+    assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
 #[test]
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
