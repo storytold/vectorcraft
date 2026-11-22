@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::shell::embed;
 use egui::{Event, Rect, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeId;
@@ -78,14 +79,16 @@ impl Frames {
     fn new(width: f32) -> Self {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
-        // PLAN: the framework's root install and theme (hub-w1's `ui_context()` makes the same calls) have no
-        // public form outside `cfg(test)`; hub-w1 exposes them beside `ui_fonts()`.
-        ui_fonts().install(&ctx);
+        embed::install(&ctx, craft::ui::testing::install_spec(), &ui_fonts()).unwrap();
         Self { ctx, time: 0.0, width }
     }
 
+    /// One frame of the bar as the hosts run the window's: the app gives the frame's input, and the commands the
+    /// pass fired run as the next frame begins.
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>) -> Painted {
         self.time += 0.05;
+        app.adopt_context(&self.ctx);
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut output = self.ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(self.width, 1100.0))),
@@ -96,6 +99,7 @@ impl Frames {
             },
             |ui| chrome::control_bar(app, ui),
         );
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
         let nodes =
             output.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default();
         output.textures_delta.clear();
