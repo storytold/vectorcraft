@@ -424,23 +424,8 @@ impl<'a> Builder<'a> {
             let places = curves.as_ref().map_or([None, None], |w| w.places);
             // Where the edge's curve is at share `s` of it.
             let t = |s: f64| span.map_or(0.0, |span| span.t0 + (span.t1 - span.t0) * s);
-            // A cut corner on a ring that follows a curve lies on the curve, moved by the offsets of
-            // the edge's corners from it (a bevel's miters), eased across the edge as the cap's edge
-            // eases them, so the pieces' edges follow the same curve as the cap's edge they meet. The
-            // offsets are eased as drawn, and the corner keeps the depth they give it in view space.
             let camera = self.camera;
-            let corner = |p: V3, q: V3, s: f64, ring: usize| match (span, places.get(ring).copied().flatten()) {
-                (Some(span), Some(place)) if s > 0.0 && s < 1.0 => {
-                    let (c, c0, c1) = (place(&span, t(s)), place(&span, span.t0), place(&span, span.t1));
-                    let (ep, eq) = (outline::fade(s), outline::fade(1.0 - s));
-                    let (dp, dq) = (p.sub(c0), q.sub(c1));
-                    let z = c.2 + dp.2 * ep + dq.2 * eq;
-                    let (dp, dq) = (camera.project(p) - camera.project(c0), camera.project(q) - camera.project(c1));
-                    let v = camera.unproject(camera.project(c) + dp * ep + dq * eq, z);
-                    if v.0.is_finite() && v.1.is_finite() && v.2.is_finite() { v } else { along_edge(p, q, s) }
-                }
-                _ => along_edge(p, q, s),
-            };
+            let corner = |p: V3, q: V3, s: f64, ring: usize| cut_corner(camera, span, places.get(ring).copied().flatten(), p, q, s);
             let ends = [[self.camera.project(a[i]), self.camera.project(a[j])], [self.camera.project(b[i]), self.camera.project(b[j])]];
             for k in 0..pieces {
                 let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
@@ -854,8 +839,18 @@ pub(crate) const BEVEL_CREASE: f64 = 60.0;
 /// bands of the same bevel, front or back, that turn by less than [`BEVEL_CREASE`], neither of
 /// them lying flat toward the front or back (as a cap does). Such a corner takes the mean of the
 /// two bands' unit normals at that piece; every other corner is `None` and takes its face's
-/// normal. `placed` holds the ring at each step in view space.
-fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<V3>], cuts: &[usize]) -> Vec<Vec<Vec<Option<V3>>>> {
+/// normal. `placed` holds the ring at each step in view space, `spans` the piece of curve each edge
+/// of the ring follows, and `places` where a point of a span's curve lies on the ring at each step:
+/// the pieces' cut corners lie where [`Builder::curved_band`] puts them ([`cut_corner`]).
+fn smoothed_rows(
+    camera: &Camera,
+    ring: &[Point],
+    steps: &[Step],
+    placed: &[Vec<V3>],
+    cuts: &[usize],
+    spans: &[Option<Span>],
+    places: &[&Place],
+) -> Vec<Vec<Vec<Option<V3>>>> {
     let n = ring.len();
     let pieces = |i: usize| cuts.get(i).copied().unwrap_or(1).max(1);
     let front = camera.rotate(V3(0.0, 0.0, 1.0));
@@ -864,18 +859,22 @@ fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<
     let bands: Vec<(MeshPart, Vec<Vec<V3>>)> = placed
         .windows(2)
         .zip(steps.windows(2))
-        .map(|(pair, s)| {
+        .enumerate()
+        .map(|(b, (pair, s))| {
             let face = band_face(&s[0], &s[1]);
+            let (near, far) = (places.get(b).copied(), places.get(b + 1).copied());
             let normals = (0..n)
                 .map(|i| {
                     let j = (i + 1) % n;
                     let pieces = pieces(i);
+                    let span = spans.get(i).copied().flatten();
                     (0..pieces)
                         .map(|k| {
                             let (Some(a), Some(c)) = (pair.first(), pair.get(1)) else { return V3::default() };
                             let (Some((&ai, &aj)), Some((&ci, &cj))) = (a.get(i).zip(a.get(j)), c.get(i).zip(c.get(j))) else { return V3::default() };
                             let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
-                            let quad = vec![along_edge(ai, aj, s0), along_edge(ai, aj, s1), along_edge(ci, cj, s1), along_edge(ci, cj, s0)];
+                            let (corner_a, corner_c) = (|s| cut_corner(camera, span, near, ai, aj, s), |s| cut_corner(camera, span, far, ci, cj, s));
+                            let quad = vec![corner_a(s0), corner_a(s1), corner_c(s1), corner_c(s0)];
                             let normal = newell(std::slice::from_ref(&quad)).unit();
                             if normal.dot(camera.rotate(outward(ring, i, face))) < 0.0 { V3(-normal.0, -normal.1, -normal.2) } else { normal }
                         })
@@ -907,6 +906,28 @@ fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<
                 .collect()
         })
         .collect()
+}
+
+/// The corner a share `s` of the way along the edge from `p` to `q` where [`Builder::curved_band`]
+/// cuts it. On a ring that follows a curve (`span`, placed on the ring by `place`) the corner lies on
+/// the curve, moved by the offsets of the edge's corners from it (a bevel's miters), eased across
+/// the edge as the cap's edge eases them, so the pieces' edges follow the same curve as the cap's
+/// edge they meet. The offsets are eased as drawn, and the corner keeps the depth they give it in
+/// view space. Otherwise, and at 0 and 1, the corner lies on the chord ([`along_edge`]).
+fn cut_corner(camera: &Camera, span: Option<Span>, place: Option<&Place>, p: V3, q: V3, s: f64) -> V3 {
+    match (span, place) {
+        (Some(span), Some(place)) if s > 0.0 && s < 1.0 => {
+            let t = span.t0 + (span.t1 - span.t0) * s;
+            let (c, c0, c1) = (place(&span, t), place(&span, span.t0), place(&span, span.t1));
+            let (ep, eq) = (outline::fade(s), outline::fade(1.0 - s));
+            let (dp, dq) = (p.sub(c0), q.sub(c1));
+            let z = c.2 + dp.2 * ep + dq.2 * eq;
+            let (dp, dq) = (camera.project(p) - camera.project(c0), camera.project(q) - camera.project(c1));
+            let v = camera.unproject(camera.project(c) + dp * ep + dq * eq, z);
+            if v.0.is_finite() && v.1.is_finite() && v.2.is_finite() { v } else { along_edge(p, q, s) }
+        }
+        _ => along_edge(p, q, s),
+    }
 }
 
 /// The point a share `s` of the way from `p` to `q`: at 0 and 1, the corners themselves.
@@ -1023,7 +1044,12 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         let unrolled = unrolled.as_ref().filter(|(k, ..)| *k == r);
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
         let u = along_ring(ring);
-        let rows = if b.keeps_mesh() { smoothed_rows(&camera, ring, &steps, &placed, pieces) } else { vec![] };
+        let rows = if b.keeps_mesh() {
+            let at: Vec<&Place> = places.iter().map(|p| p as &Place).collect();
+            smoothed_rows(&camera, ring, &steps, &placed, pieces, &traced.spans, &at)
+        } else {
+            vec![]
+        };
         for (k, pair) in placed.windows(2).enumerate() {
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
             b.cells = layout.as_ref().and_then(|(sides, spans)| {
