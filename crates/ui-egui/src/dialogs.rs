@@ -813,8 +813,10 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::PICKER_KIND {
             script_run::picker_cancel(app, &d);
         }
-        if d.kind == script_window::KIND {
-            script_window::cancel(app, &mut d);
+        if d.kind == script_window::KIND
+            && let Err(e) = script_window::cancel(app, &mut d)
+        {
+            app.status(e);
         }
         missing_links::cancelled(app, &d);
         // Cancel discards Recolor Artwork's own history of color edits with them.

@@ -2948,7 +2948,9 @@ cancel button, or closes the dialog when it has none. Quitting while it waits, o
 asks whether to stop the script, and Cancel shows it again with the events it has not given the script yet.
 `ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name or
 its text) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
-script the text still typed in the dialog's fields. A disabled or hidden control, a value out of a list's range, a
+script the text still typed in the dialog's fields. When one of those texts is longer than 16 KiB, the script gets
+no event and every field keeps its text: `ui.dialog.confirm` returns an error, and Escape and `ui.dialog.cancel` show
+it in the status bar. A disabled or hidden control, a value out of a list's range, a
 list index that is not a whole number and a click on a control that takes none are errors, and the dialog stays
 open.
 

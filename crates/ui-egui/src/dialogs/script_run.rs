@@ -210,25 +210,26 @@ pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
 
 /// Closes the question quitting asks once the run it asks about has ended, and forgets the
 /// script's dialog it was asked over once the run no longer waits at that dialog (or, for a
-/// ScriptUI dialog, once its `show()` has ended), so Cancel does not show it again.
+/// ScriptUI dialog, once its `show()` has ended, also when the run has gone on to another
+/// `show()`), so Cancel does not show it again.
 pub(crate) fn settle_close(app: &mut VectorcraftApp) {
     if !app.ui.dialog.as_ref().is_some_and(|d| d.kind == CLOSE_KIND) {
         return;
     }
     if !app.session.script_running() {
         app.ui.dialog = None;
-    } else if app.session.script_dialog().is_none()
-        && app.session.script_picker().is_none()
-        && app.session.script_window().is_none()
-        && !over_running_show(app)
-        && let Some(d) = app.ui.dialog.as_mut()
-    {
+        return;
+    }
+    let over_window = app.ui.dialog.as_ref().and_then(super::parent).is_some_and(|p| p.kind == super::script_window::KIND);
+    let keep = if over_window { over_running_show(app) } else { app.session.script_dialog().is_some() || app.session.script_picker().is_some() };
+    if !keep && let Some(d) = app.ui.dialog.as_mut() {
         d.fields.remove(super::PARENT);
     }
 }
 
-/// Was the question asked over the ScriptUI dialog of the `show()` the run is still in (one of its
-/// handlers runs)? Cancel then shows that dialog again, with the events it has not given yet.
+/// Was the question asked over the ScriptUI dialog of the `show()` the run is still in (it waits
+/// there, or one of its handlers runs)? Cancel then shows that dialog again, with the events it
+/// has not given yet.
 fn over_running_show(app: &VectorcraftApp) -> bool {
     let Some(w) = app.session.script_window_showing() else { return false };
     app.ui.dialog.as_ref().and_then(super::parent).is_some_and(|p| super::script_window::is_open_for(&p, &w))

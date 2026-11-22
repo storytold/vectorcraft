@@ -108,8 +108,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
     if events.is_empty() && waiting && !typing && crate::shortcuts::pressed_anew(ui.ctx(), egui::Key::Enter) {
         events.extend(w.default_element.map(UiEvent::Click));
     }
-    if events.iter().any(|e| matches!(e, UiEvent::Click(_))) {
-        commit_drafts(&w, d, &mut events);
+    if events.iter().any(|e| matches!(e, UiEvent::Click(_)))
+        && let Err(e) = commit_drafts(&w, d, &mut events)
+    {
+        // A refused text stays in its field, and the click waits for the person to fix it.
+        events.retain(|e| !matches!(e, UiEvent::Click(_)));
+        app.status(e);
     }
     let mut queue: Vec<Value> = match d.fields.remove(QUEUE_KEY) {
         Some(Value::Array(queue)) => queue,
@@ -137,23 +141,39 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
 const QUEUE_KEY: &str = "queued";
 
 /// Before a click or a close, gives the script the text typed in each edit field that has not left
-/// the field yet, so the handler of a button that closes the dialog, or `onClose`, reads it.
-pub(crate) fn commit_drafts(w: &ScriptUiDialog, d: &mut Dialog, events: &mut Vec<UiEvent>) {
+/// the field yet, so the handler of a button that closes the dialog, or `onClose`, reads it. A
+/// disabled or hidden field keeps its text for later. Each text is checked as the script would
+/// check it first; when one is refused, every field keeps its text, `events` stays as it was and
+/// the error is returned.
+pub(crate) fn commit_drafts(w: &ScriptUiDialog, d: &mut Dialog, events: &mut Vec<UiEvent>) -> Result<(), String> {
+    let mut drafts = Vec::new();
     let mut changes = Vec::new();
     for (i, n) in w.nodes.iter().enumerate() {
-        if n.kind != UiKind::EditText || n.readonly || events.iter().any(|e| matches!(e, UiEvent::Change(c, _) if *c == i)) {
+        if n.kind != UiKind::EditText
+            || n.readonly
+            || !n.enabled
+            || !n.visible
+            || events.iter().any(|e| matches!(e, UiEvent::Change(c, _) if *c == i))
+        {
             continue;
         }
-        if let Some(Value::String(text)) = d.fields.remove(&draft_key(i))
-            && text != n.text
-        {
-            changes.push(UiEvent::Change(i, UiValue::Text(text)));
+        let key = draft_key(i);
+        if let Some(Value::String(text)) = d.fields.get(&key) {
+            if *text != n.text {
+                let change = UiEvent::Change(i, UiValue::Text(text.clone()));
+                changes.push(vectorcraft_engine::script::scriptui::check_event(w, change)?);
+            }
+            drafts.push(key);
         }
+    }
+    for key in drafts {
+        d.fields.remove(&key);
     }
     let closing = |e: &UiEvent| matches!(e, UiEvent::Click(_) | UiEvent::Close);
     events.sort_by_key(closing);
     let at = events.iter().position(closing).unwrap_or(events.len());
     events.splice(at..at, changes);
+    Ok(())
 }
 
 /// The field that holds an edit field's text while it is typed.
@@ -377,7 +397,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(open) = open
         && matches!(events[0], UiEvent::Click(_) | UiEvent::Close)
     {
-        commit_drafts(&w, open, &mut events);
+        commit_drafts(&w, open, &mut events)?;
     }
     let mut events = events.into_iter();
     if let Some(first) = events.next() {
@@ -402,12 +422,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 
 /// Escape or `ui.dialog.cancel`: a click on the cancel button, or the close box when the dialog
 /// has none or it cannot be clicked, after the text still typed in its fields. Events the script
-/// has not had yet go after the ones before them.
-pub(super) fn cancel(app: &mut VectorcraftApp, d: &mut Dialog) {
-    let Some(w) = app.session.script_window() else { return };
+/// has not had yet go after the ones before them. A typed text the script would refuse is an
+/// error, and the dialog is left as it was.
+pub(crate) fn cancel(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let Some(w) = app.session.script_window() else { return Ok(()) };
     let click = w.cancel_element.map(UiEvent::Click).filter(|e| vectorcraft_engine::script::scriptui::check_event(&w, e.clone()).is_ok());
     let mut events = vec![click.unwrap_or(UiEvent::Close)];
-    commit_drafts(&w, d, &mut events);
+    commit_drafts(&w, d, &mut events)?;
     let mut queue: Vec<Value> = match d.fields.remove(QUEUE_KEY) {
         Some(Value::Array(queue)) => queue,
         _ => Vec::new(),
@@ -422,4 +443,5 @@ pub(super) fn cancel(app: &mut VectorcraftApp, d: &mut Dialog) {
     if !queue.is_empty() {
         d.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
     }
+    Ok(())
 }

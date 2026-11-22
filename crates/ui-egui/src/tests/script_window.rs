@@ -125,7 +125,7 @@ fn text_still_in_a_field_reaches_the_script_before_a_click() {
     let d = app.ui.dialog.as_mut().unwrap();
     d.fields.insert("text1".into(), json!("Ann"));
     let mut events = vec![UiEvent::Click(3)];
-    script_window::commit_drafts(&w, d, &mut events);
+    script_window::commit_drafts(&w, d, &mut events).unwrap();
     assert_eq!(events, vec![UiEvent::Change(1, UiValue::Text("Ann".into())), UiEvent::Click(3)]);
     assert!(!d.fields.contains_key("text1"), "the text is given once");
     d.fields.insert("queued".into(), json!([{"event": "change", "control": 1, "value": "Ann"}, {"event": "click", "control": 3, "value": null}]));
@@ -285,6 +285,70 @@ fn a_click_from_ui_dialog_confirm_gives_the_typed_text_first() {
     frame(&mut app, Vec::new());
     assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
     assert_eq!(log(&app), json!([[1, "typed"]]));
+}
+
+#[test]
+fn a_typed_text_the_script_refuses_keeps_every_field_and_queues_nothing() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); w.add('edittext', undefined, 'a'); w.add('edittext', undefined, 'b'); \
+        w.add('button', undefined, 'OK'); w.add('button', undefined, 'Cancel'); vc.log(w.show());",
+    );
+    assert!(until_window(&mut app));
+    let long = "x".repeat(16 * 1024 + 1);
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("text1".into(), json!(long));
+    d.fields.insert("text2".into(), json!("fine"));
+    let kept = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+        assert_eq!(d.kind, KIND);
+        assert_eq!(d.fields.get("text1"), Some(&json!(long)), "the refused text stays in its field");
+        assert_eq!(d.fields.get("text2"), Some(&json!("fine")), "and so does the other one");
+        assert!(!d.fields.contains_key("queued"), "nothing is queued");
+    };
+    assert!(give(&mut app, json!({"event": "click", "control": "OK"})).is_err(), "OK is an error");
+    kept(&app);
+    let mut d = app.ui.dialog.clone().unwrap();
+    assert!(script_window::cancel(&mut app, &mut d).is_err(), "Cancel is an error");
+    dialogs::cancel(&mut app);
+    kept(&app);
+    assert!(app.session.script_window().is_some(), "the script still waits");
+    app.ui.dialog.as_mut().unwrap().fields.remove("text1");
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(until_window(&mut app), "the script takes the other text and waits again");
+    assert_eq!(app.session.script_window().unwrap().nodes[2].text, "fine");
+    frame(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([1]));
+}
+
+#[test]
+fn cancel_on_the_quit_question_does_not_show_a_dialog_whose_show_ended() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var a = new Window('dialog', 'A'); a.add('button', undefined, 'OK'); a.show(); \
+        var b = new Window('dialog', 'B'); b.add('button', undefined, 'OK'); vc.log(b.show());",
+    );
+    assert!(until_window(&mut app));
+    let first = app.session.script_window().unwrap().shown;
+    dialogs::script_run::ask_to_close(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(CLOSE_KIND));
+    app.session.script_window_answer(UiEvent::Click(1)).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_window().is_some_and(|w| w.shown != first) {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    assert_eq!(app.session.script_window().map(|w| w.title().to_string()), Some("B".to_string()), "the run waits at the second show()");
+    dialogs::script_run::settle_close(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.kind, CLOSE_KIND);
+    assert!(!d.fields.contains_key(dialogs::PARENT), "the first dialog is forgotten");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
 }
 
 #[test]
