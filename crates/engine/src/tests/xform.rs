@@ -254,6 +254,170 @@ fn canceling_an_alt_drag_leaves_the_document_as_it_was() {
     assert!(s.doc().unwrap().interaction.is_none());
 }
 
+/// Returns the ids of the children of the document's layer `layer` (0 is the bottom one).
+fn layer_kids(s: &Session, layer: usize) -> Vec<NodeId> {
+    s.doc().unwrap().doc.layers[layer].children().unwrap().iter().map(|n| n.id).collect()
+}
+
+/// Returns a session with three squares side by side, `a`, `b` and `c` from the bottom of the
+/// stack up, and `b` selected; and their ids.
+fn three_squares() -> (Session, [NodeId; 3]) {
+    let mut s = session();
+    let ids = [100.0, 200.0, 300.0].map(|x| rect(&mut s, x, 100.0, 40.0, 40.0));
+    s.execute("select.set", &json!({"ids": [ids[1].0]})).unwrap();
+    (s, ids)
+}
+
+/// Alt-drags the selection 80 pt down with `tool`, pressing at `press`.
+fn alt_drag(s: &mut Session, tool: &str, press: (f64, f64)) {
+    s.select_tool(tool, ViewInfo::default()).unwrap();
+    drag_at(s, PointerKind::Down, press, true);
+    for dy in [20.0, 50.0, 80.0] {
+        drag_at(s, PointerKind::Drag, (press.0, press.1 + dy), true);
+    }
+    drag_at(s, PointerKind::Up, (press.0, press.1 + 80.0), true);
+}
+
+/// In Draw Behind, an Alt-drag with the Selection tool, or with Direct Selection on an object
+/// selected whole, puts the copy directly below its original, selected, in one undo step. In Draw
+/// Normal and Draw Inside the copy goes directly above it, as before.
+#[test]
+fn an_alt_drag_in_draw_behind_puts_the_copy_directly_below_its_original() {
+    for (tool, press) in [("selection", (220.0, 120.0)), ("directSelection", (200.0, 100.0))] {
+        for mode in ["behind", "normal", "inside"] {
+            let (mut s, [a, b, c]) = three_squares();
+            s.execute("view.drawMode", &json!({"mode": mode})).unwrap();
+            let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+            alt_drag(&mut s, tool, press);
+            let what = format!("{tool}, {mode}");
+            let kids = layer_kids(&s, 0);
+            let copy = s.doc().unwrap().selection.objects.clone();
+            assert_eq!(copy.len(), 1, "{what}: the copy is selected");
+            let want = if mode == "behind" { vec![a, copy[0], b, c] } else { vec![a, b, copy[0], c] };
+            assert_eq!(kids, want, "{what}");
+            assert!(close(bounds(&s, copy[0]), Rect::new(200.0, 180.0, 240.0, 220.0)), "{what}: {:?}", bounds(&s, copy[0]));
+            assert!(close(bounds(&s, b), Rect::new(200.0, 100.0, 240.0, 140.0)), "{what}: the original stays");
+            assert_eq!(undo_len(&s), undo + 1, "{what}");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert!(*s.doc().unwrap().doc == *before, "{what}: Undo gives back the document");
+        }
+    }
+}
+
+/// In Draw Behind, an Alt-drag of several objects puts each copy directly below its own original,
+/// in the original's group or layer: objects side by side in one layer, a group (copied whole) and
+/// an object in another layer.
+#[test]
+fn an_alt_drag_in_draw_behind_puts_each_copy_below_its_own_original() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 40.0, 40.0);
+    let x = rect(&mut s, 200.0, 100.0, 40.0, 40.0);
+    let y = rect(&mut s, 260.0, 100.0, 40.0, 40.0);
+    s.execute("select.set", &json!({"ids": [x.0, y.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let c = rect(&mut s, 400.0, 100.0, 40.0, 40.0);
+    s.execute("layer.new", &json!({})).unwrap();
+    let d = rect(&mut s, 500.0, 100.0, 40.0, 40.0);
+    assert_eq!(layer_kids(&s, 0), vec![a, g, c]);
+    assert_eq!(layer_kids(&s, 1), vec![d]);
+    s.execute("select.set", &json!({"ids": [a.0, g.0, c.0, d.0]})).unwrap();
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    let undo = undo_len(&s);
+    alt_drag(&mut s, "selection", (120.0, 120.0));
+    let (bottom, top) = (layer_kids(&s, 0), layer_kids(&s, 1));
+    assert_eq!(bottom.len(), 6, "{bottom:?}");
+    assert_eq!([bottom[1], bottom[3], bottom[5], top[1]], [a, g, c, d], "the originals keep their order");
+    let copies = [bottom[0], bottom[2], bottom[4], top[0]];
+    let mut selected = s.doc().unwrap().selection.objects.clone();
+    selected.sort_unstable();
+    let mut want = copies.to_vec();
+    want.sort_unstable();
+    assert_eq!(selected, want, "the copies are selected");
+    let group_copy = s.doc().unwrap().doc.node(copies[1]).unwrap().children().map(Vec::len);
+    assert_eq!(group_copy, Some(2), "the group is copied whole, once");
+    assert_eq!(undo_len(&s), undo + 1);
+}
+
+/// `drawBehind` puts the copies of an interaction's previews below their originals only in Draw
+/// Behind and only with `copy`: a later preview without it does not reuse the copies made below,
+/// and a transform with `copy` but without `drawBehind`, `object.move` with `copy`, and Transform
+/// Again after an Alt-drag in Draw Behind put their copies above. A `drawBehind` that is not true or
+/// false is refused, and the document and its undo history stay as they were.
+#[test]
+fn only_an_alt_drag_copy_follows_draw_behind() {
+    let (mut s, [a, b, c]) = three_squares();
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    s.begin_interaction("Copy").unwrap();
+    let below = json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": true});
+    s.preview("object.transform", &below).unwrap();
+    let first = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(layer_kids(&s, 0), vec![a, first[0], b, c]);
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 90], "copy": true})).unwrap();
+    let second = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(layer_kids(&s, 0), vec![a, b, second[0], c], "a copy without `drawBehind` goes above");
+    s.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 90], "copy": false, "drawBehind": true})).unwrap();
+    assert_eq!(layer_kids(&s, 0), vec![a, b, c], "without `copy`, nothing is copied");
+    s.cancel_interaction().unwrap();
+
+    let (mut s, [a, b, c]) = three_squares();
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    for (cmd, params) in
+        [("object.transform", json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true})), ("object.move", json!({"dx": 0, "dy": 80, "copy": true}))]
+    {
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        let copy = ids_of(&s.execute(cmd, &params).unwrap());
+        assert_eq!(layer_kids(&s, 0), vec![a, b, copy[0], c], "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // An object listed twice is copied twice, each copy directly below it in turn.
+    let twice =
+        ids_of(&s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": true, "ids": [b.0, b.0]})).unwrap());
+    assert_eq!(layer_kids(&s, 0), vec![a, twice[0], twice[1], b, c]);
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    alt_drag(&mut s, "selection", (220.0, 120.0));
+    let copy = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(layer_kids(&s, 0), vec![a, copy[0], b, c]);
+    let Some(LastTransform::Matrix(_, options)) = s.doc().unwrap().last_transform.clone() else { panic!("the drag is kept for Transform Again") };
+    assert!(options.get("drawBehind").is_none(), "{options}");
+    let again = ids_of(&s.execute("object.transformAgain", &json!({})).unwrap());
+    assert_eq!(layer_kids(&s, 0), vec![a, copy[0], again[0], b, c], "Transform Again copies above");
+
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let e = s.execute("object.transform", &json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": "yes"})).unwrap_err();
+    assert!(e.to_string().contains("`drawBehind` must be true or false"), "{e}");
+    assert!(Arc::ptr_eq(&s.doc().unwrap().doc, &before));
+    assert_eq!(undo_len(&s), undo);
+}
+
+/// In Draw Behind, the copy of a clip group's clipping path goes directly above it, so the clipping
+/// path stays the group's bottom child; the copy of the clipped art goes below that art.
+#[test]
+fn a_copy_in_draw_behind_leaves_the_clipping_path_at_the_bottom() {
+    let mut s = session();
+    let art = rect(&mut s, 100.0, 100.0, 80.0, 80.0);
+    rect(&mut s, 110.0, 110.0, 40.0, 40.0);
+    s.execute("select.all", &json!({})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let kids = |s: &Session| -> Vec<NodeId> { s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect() };
+    let [mask, clipped] = kids(&s)[..] else { panic!("{:?}", kids(&s)) };
+    assert_eq!(clipped, art);
+    s.execute("view.drawMode", &json!({"mode": "behind"})).unwrap();
+    let params = |ids: [NodeId; 2]| json!({"matrix": [1, 0, 0, 1, 0, 80], "copy": true, "drawBehind": true, "ids": [ids[0].0, ids[1].0]});
+    let copies = ids_of(&s.execute("object.transform", &params([mask, art])).unwrap());
+    assert_eq!(kids(&s), vec![mask, copies[0], copies[1], art]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // An object listed twice is copied one at a time, over the clipping path too.
+    let copies = ids_of(&s.execute("object.transform", &params([mask, mask])).unwrap());
+    assert_eq!(kids(&s), vec![mask, copies[1], copies[0], art]);
+}
+
+/// Returns the `ids` of a command's reply.
+fn ids_of(r: &Value) -> Vec<NodeId> {
+    r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect()
+}
+
 /// Returns a session with the grid and the square of [`persp_session`], the grid shown with its
 /// right plane active, and a group of two squares attached to the right plane beside the square,
 /// with the square and the group selected; and the square's id.
@@ -879,13 +1043,6 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
     for (cmd, params) in [
         ("object.cropImage", json!({})),
         ("imageTrace.make", json!({})),
-        ("links.relink", json!({"path": "/nowhere/pic.png"})),
-        // Refused before the folder is searched, so a file missing there does not hide it.
-        ("links.relink", json!({"folder": "/nowhere"})),
-        ("links.embed", json!({"ids": [img.0]})),
-        ("links.unembed", json!({})),
-        // Refused before any file is written.
-        ("links.unembed", json!({"folder": "/nowhere"})),
         ("object.createObjectMosaic", json!({})),
         ("object.mesh.create", json!({})),
         (

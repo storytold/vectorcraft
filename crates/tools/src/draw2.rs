@@ -375,6 +375,7 @@ pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
+    // The loop skips ids that are already listed.
     let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
         if seen.insert(id) {

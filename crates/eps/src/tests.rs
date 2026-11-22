@@ -1605,6 +1605,62 @@ fn a_field_taken_back_at_the_page_limit_leaves_no_image_behind() {
     assert!(page.setup.contains("/VCim0 VCsrc") && !page.setup.contains("VCim1"), "{}", page.setup);
 }
 
+/// On a plate at Level 2, an overprinting field drawn again inside the clip of its inked cells
+/// is charged the reference to the image already kept against the page limit, not its samples a
+/// second time: a page with room for that reference keeps both placements.
+#[test]
+fn a_repeated_field_clipped_on_a_plate_is_charged_its_reference_at_the_page_limit() {
+    let square = |d: &mut Document| {
+        // Wide spreads of pure color: paper white around the left point.
+        let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+        let pure = |x: f64, c: Color| FreeformPoint { spread: 0.9, ..FreeformPoint::new(Point::new(x, 32.0), c) };
+        g.freeform = Some(Freeform { points: vec![pure(12.0, Color::gray(0.0)), pure(52.0, Color::gray(0.6))], ..Default::default() });
+        let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+        for it in &mut n.appearance.items {
+            *it.overprint_mut() = true;
+        }
+        n
+    };
+    let twice = doc_with(|d| vec![square(d), square(d)]);
+    let o = EpsOptions { level: Level::Two, ..opts(&twice) };
+    let full = crate::scene::Scene::new(&twice, &o).on_plate(true).run();
+    assert!(full.warnings.is_empty(), "{:?}", full.warnings);
+    assert_eq!(reuses(&full.body, 0, Level::Two), 2, "{}", full.body);
+    assert!(full.body.contains("\nW\n"), "the inked cells clip the image: {}", full.body);
+    // The image's samples are in the setup and the body draws them twice. The limit leaves room
+    // for the body and the samples twice over (the clip is charged more than it writes), though
+    // not for the samples charged again at the second placement.
+    assert!(full.setup.len() > 2_000, "{}", full.setup.len());
+    let limit = full.body.len() + 2 * full.setup.len();
+    let page = crate::scene::Scene::new(&twice, &o).on_plate(true).with_max_body(limit).run();
+    assert!(page.warnings.is_empty(), "{:?}", page.warnings);
+    assert_eq!((&page.setup, &page.body), (&full.setup, &full.body));
+}
+
+/// On a plate, an overprinting freeform gradient whose cells are translucent enough that their
+/// opacity takes every sample to no ink (or to paper white in RGB) draws no image at either level.
+#[test]
+fn a_translucent_field_whose_samples_write_no_ink_on_a_plate_draws_no_image() {
+    let faint = [Color::cmyk(0.004, 0.0, 0.0, 0.0), Color::rgb(254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0)];
+    for color in faint {
+        let d = doc_with(|d| {
+            let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+            let point = |x: f64| FreeformPoint { opacity: 0.25, ..FreeformPoint::new(Point::new(x, 32.0), color) };
+            g.freeform = Some(Freeform { points: vec![point(12.0), point(52.0)], ..Default::default() });
+            let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 64.0, 64.0)), Paint::Gradient(Box::new(g)), Paint::None, 0.0);
+            for it in &mut n.appearance.items {
+                *it.overprint_mut() = true;
+            }
+            vec![n]
+        });
+        for level in [Level::Three, Level::Two] {
+            let o = EpsOptions { level, ..opts(&d) };
+            let out = crate::scene::Scene::new(&d, &o).on_plate(true).run();
+            assert!(!out.body.contains("image"), "{color:?} at {level:?}: {}", out.body);
+        }
+    }
+}
+
 /// A 200 × 200 pt document holding 8 × 8 pixels of noise as image `pic` and a three-pixel gray ramp
 /// as image `gray`, its first layer holding what `nodes` makes.
 fn image_doc_with(nodes: impl FnOnce(&mut Document) -> Vec<Node>) -> Document {
@@ -2137,4 +2193,53 @@ fn ruby_is_written_with_its_type() {
         page_of(&d, &opts(&d)).lines().filter(|l| l.ends_with(" m")).count()
     };
     assert_eq!(moves(true), moves(false) + reading, "the reading's contours are written");
+}
+
+#[test]
+fn tiff_preview_round_trips_when_postscript_is_unreadable() {
+    let d = doc_with(|d| vec![red_rect(d)]);
+    for kind in [Preview::TiffColor, Preview::TiffBlackWhite] {
+        let out = export(&d, &EpsOptions { preview: kind, ..opts(&d) }, Some(&preview()), None).unwrap();
+        let (ps, tiff) = sections(&out.bytes).unwrap();
+        let tiff = tiff.unwrap();
+        // Corrupt the PostScript body while keeping the binary header and TIFF preview intact.
+        let bad_ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\nunknown_op\n%%EOF\n";
+        let wrapped = craft_eps::wrap(bad_ps, Some(tiff), None).unwrap();
+        let imported = import_with(&wrapped, false).unwrap();
+        assert!(imported.preview, "{kind:?}: expected TIFF preview fallback");
+        let mut has_image = false;
+        imported.document.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                has_image = true;
+            }
+        });
+        assert!(has_image, "{kind:?}: expected preview image node");
+        assert!(ps.starts_with(b"%!PS-Adobe-3.0 EPSF-3.0"));
+    }
+}
+
+#[test]
+fn edit_payloads_and_bounded_malformed_inputs_preserve_benign_fixtures() {
+    // Ordinary benign fixture with native edit payload + TIFF preview round-trips cleanly.
+    let d = doc_with(|d| vec![red_rect(d)]);
+    let payload = b"vectorcraft-native-edit-payload".to_vec();
+    let out = export(&d, &EpsOptions { native: Some(payload.clone()), preview: Preview::TiffColor, ..opts(&d) }, Some(&preview()), None).unwrap();
+    assert!(super::has_native(&out.bytes));
+    assert_eq!(super::native(&out.bytes).as_deref(), Some(payload.as_slice()));
+    let benign = import_with(&out.bytes, false).unwrap();
+    assert!(!benign.preview);
+
+    // Truncated DOS EPS binary header is refused cleanly without panicking.
+    let mut bad_header = vec![0xC5, 0xD0, 0xD3, 0xC6];
+    bad_header.extend_from_slice(&[0xFF; 26]);
+    assert!(sections(&bad_header).is_none());
+    assert!(import_with(&bad_header, false).is_err());
+
+    // Bounded malformed currentfile filter hitting EOF early does not panic or hang.
+    let truncated_inline = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n2 2 8 [2 0 0 -2 0 2] currentfile /ASCII85Decode filter false 3 colorimage\n9jqo^";
+    let _ = import_with(truncated_inline, false);
+
+    // Unterminated PostScript string at EOF is refused cleanly.
+    let unterminated = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n%%EndComments\n(unterminated";
+    assert!(import_with(unterminated, false).is_err());
 }

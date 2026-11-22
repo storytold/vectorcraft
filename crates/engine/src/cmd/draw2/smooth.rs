@@ -645,14 +645,28 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
     (!same_anchors(&res, &anchors)).then(|| SubPath::new(res, false))
 }
 
-/// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
-/// enters the reach: the part outside, then the part in reach. `None` when no more than a sliver
-/// is outside.
-fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez, CubicBez)> {
+/// How much of a segment that ends in the drag's reach is in reach ([`split_at_reach`]).
+enum Reach {
+    /// All of it, or all but a sliver.
+    Whole,
+    /// No more than a sliver at its end.
+    End,
+    /// The part outside the reach, then the part in reach.
+    Split(CubicBez, CubicBez),
+}
+
+/// Share of the tool's reach that the part of a segment in reach must be longer than for
+/// [`split_at_reach`] to split the segment. VectorCraft's own value.
+const REACH_SLIVER: f64 = 1.0 / 64.0;
+
+/// The segment `c`, which ends in the drag's reach (`near`, `radius` points) and starts outside it,
+/// split where it enters the reach. No more than 2% of its parameter range outside the reach is a
+/// sliver, and so is a part in reach no longer than [`REACH_SLIVER`] of the reach.
+fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool, radius: f64) -> Reach {
     const STEPS: u32 = 32;
     let step = 1.0 / f64::from(STEPS);
     // Back from the end in reach to the first sample outside, then halving to the crossing.
-    let outside = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t)))?;
+    let Some(outside) = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t))) else { return Reach::Whole };
     let (mut lo, mut hi) = (outside, outside + step);
     for _ in 0..20 {
         let mid = (lo + hi) / 2.0;
@@ -668,7 +682,11 @@ fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez
         let s = c.subsegment(range);
         if straight { CubicBez::new(s.p0, s.p0, s.p3, s.p3) } else { s }
     };
-    (hi > 0.02).then(|| (part(0.0..hi), part(hi..1.0)))
+    if hi <= 0.02 {
+        return Reach::Whole;
+    }
+    let (far, reach) = (part(0.0..hi), part(hi..1.0));
+    if polygon_len(reach) <= REACH_SLIVER * radius { Reach::End } else { Reach::Split(far, reach) }
 }
 
 /// `anchors` with each run of `marked` ones smoothed by a Gaussian of spread `sigma` and refitted
@@ -695,25 +713,33 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
     }
     let mut out = anchors.to_vec();
     for (a, b) in runs.into_iter().rev() {
-        let lo = a.saturating_sub(1);
-        let hi = (b + 1).min(n - 1);
+        let (mut lo, mut hi) = (a.saturating_sub(1), (b + 1).min(n - 1));
+        // How much of the segments leading out of the run is in reach. A segment that is in reach
+        // only at the run's anchor stays out of the piece, so the piece ends at that anchor rather
+        // than in a sliver of a segment, which would leave the refit no direction to end along.
+        let after = if hi > b { split_at_reach(CubicBez::new(out[hi].p, out[hi].h_in, out[b].h_out, out[b].p), near, radius) } else { Reach::Whole };
+        let before = if lo < a { split_at_reach(CubicBez::new(out[lo].p, out[lo].h_out, out[a].h_in, out[a].p), near, radius) } else { Reach::Whole };
+        if matches!(after, Reach::End) {
+            hi = b;
+        }
+        if matches!(before, Reach::End) {
+            lo = a;
+        }
         if hi == lo {
             continue;
         }
         let mut piece = out[lo..=hi].to_vec();
         // The anchors outside the reach, kept with the part of their segment that is outside.
         let (mut head, mut tail) = (None, None);
-        if hi > b
+        if let Reach::Split(far, reach) = after
             && let [.., inner, outer] = piece.as_mut_slice()
-            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_in, inner.h_out, inner.p), near)
         {
             inner.h_out = reach.p2;
             tail = Some(Anchor { h_in: far.p1, ..*outer });
             *outer = Anchor::with_handles(far.p3, reach.p1, far.p2);
         }
-        if lo < a
+        if let Reach::Split(far, reach) = before
             && let [outer, inner, ..] = piece.as_mut_slice()
-            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_out, inner.h_in, inner.p), near)
         {
             inner.h_in = reach.p2;
             head = Some(Anchor { h_out: far.p1, ..*outer });
