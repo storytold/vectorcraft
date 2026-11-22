@@ -9,6 +9,7 @@ description = "VectorCraft metafiles: EMF and WMF export and EMF, EMF+ and WMF i
 workspace = true
 
 [dependencies]
+craft-codepage = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

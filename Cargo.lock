@@ -6901,6 +6901,7 @@ dependencies = [
  "cfb",
  "chrono",
  "craft-cdr",
+ "craft-codepage",
  "craft-docpath",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=ba25ccd233934d1b2f74e3c0f235168bf5f13ef3)",
  "craft-jxl",
@@ -7060,6 +7061,7 @@ dependencies = [
 name = "vectorcraft-metafile"
 version = "0.24.1"
 dependencies = [
+ "craft-codepage",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=ba25ccd233934d1b2f74e3c0f235168bf5f13ef3)",
  "craft-metafile",
  "image",
