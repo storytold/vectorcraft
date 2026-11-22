@@ -10,9 +10,9 @@ use super::color_wheel::{bytes, vision_colors};
 use super::tests_color_wheel::Panel;
 use crate::VectorcraftApp;
 
-/// `#rrggbb` of display sRGB `rgb`, as the chips show it.
+/// `#rrggbb` of display sRGB `rgb`, as the chips report it.
 fn hex(rgb: [f32; 3]) -> String {
-    super::color_wheel::hex(bytes(rgb))
+    format!("#{}", super::color_wheel::hex(bytes(rgb)).to_lowercase())
 }
 
 const NAMES: [&str; 4] = ["Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"];
@@ -52,11 +52,11 @@ fn the_chips_show_the_proof_setup_simulations_of_the_fill() {
 fn the_achromatopsia_chip_is_the_gray_of_the_colors_lightness() {
     let cms = cms::active();
     let [p, d, t, a] = vision_colors(&cms, &Color::rgb(1.0, 0.0, 0.0));
-    assert_eq!(hex(a), "828282");
+    assert_eq!(hex(a), "#828282");
     assert_ne!(hex(p), hex(d));
     assert_ne!(hex(t), hex(a));
     let panel = Panel::new(app(json!("#ff0000")));
-    assert_eq!(panel.value("Achromatopsia").as_deref(), Some("828282"));
+    assert_eq!(panel.value("Achromatopsia").as_deref(), Some("#828282"));
 }
 
 /// A gray fill is the same gray in all four simulations.
@@ -70,14 +70,14 @@ fn a_gray_fill_is_the_same_gray_in_every_chip() {
     }
 }
 
-/// With a None fill the cells carry only their names, with no value.
+/// With a None fill the cells carry only their names, with no color: a swatch reports a clear one.
 #[test]
 fn with_a_none_fill_the_chips_have_no_color() {
     let mut a = app(json!("#ff0000"));
     a.run("paint.setFill", json!({"none": true})).unwrap();
     let p = Panel::new(a);
     for name in NAMES {
-        assert_eq!(p.value(name), None, "{name} has no value");
+        assert_eq!(p.value(name).as_deref(), Some("#00000000"), "{name} has no color");
     }
 }
 

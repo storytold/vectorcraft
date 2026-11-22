@@ -53,7 +53,7 @@ pub(super) fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// one), view, a button to reveal the tracing controls, Expand and Release.
 pub(super) fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vectorcraft_doc::TraceView) {
     Section::fixed(tl!("Image Trace")).show(ui, |ui, _| {
-        Field::new(tl!("Preset:")).show(ui, |ui, _| crate::panels::image_trace::preset_dropdown(app, ui, preset));
+        Field::new(tl!("Preset")).show(ui, |ui, _| crate::panels::image_trace::preset_dropdown(app, ui, preset));
         crate::panels::image_trace::view_row(app, ui, view);
         crate::panels::image_trace::split_row(app, ui);
         if Button::new(tl!("Image Trace")).sizing(Sizing::FillWidth).show(ui).clicked() {
@@ -119,7 +119,7 @@ pub(super) fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop
         }
     };
     Section::fixed(tl!("Objects on Path Options")).show(ui, |ui, _| {
-        Field::new(tl!("Pivot:")).show(ui, |ui, _| {
+        Field::new(tl!("Pivot")).show(ui, |ui, _| {
             // Mixed while the groups' pivots differ: no square is chosen.
             let shown = oop.pivot.map_or(Mixed::Mixed, |p| Mixed::Same(Anchor9::ALL.get(usize::from(p)).copied()));
             let out = ReferencePoint::new(tl!("Pivot"), Bind::given(shown)).look(ReferencePointLook::Squares).show(ui);
@@ -129,7 +129,7 @@ pub(super) fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop
                 set(app, json!({ "pivot": i }));
             }
         });
-        Field::new(tl!("Rotate:")).show(ui, |ui, _| {
+        Field::new(tl!("Rotate")).show(ui, |ui, _| {
             let presets: Vec<Entry<NumberPick>> =
                 transform::ANGLE_PRESETS.iter().map(|v| Entry::new(NumberPick::Number(*v), format!("{v}°"))).collect();
             let out = NumberField::new(tl!("Rotate"), Bind::given(oop.rotate))

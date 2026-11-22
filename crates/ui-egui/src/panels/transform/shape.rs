@@ -94,7 +94,7 @@ fn number_row(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, value:
 /// them about its own center.
 fn angle_row(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, key: &'static str) {
     let angle = shared_shape_angle(app, live);
-    number_row(app, ui, tl!("Angle:"), angle, Quantity::Degrees, |a| json!({ key: a }));
+    number_row(app, ui, tl!("Angle"), angle, Quantity::Degrees, |a| json!({ key: a }));
 }
 
 /// The angle ([`LiveShape::shape_angle`]) every selected live shape of `live`'s kind shares, `None` when they
@@ -145,8 +145,8 @@ fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape) -> bool {
         return false;
     }
     under_heading(ui, Some(tl!("Line Properties:")), |ui| {
-        number_row(app, ui, tl!("Line Length:"), live.line_length(), Quantity::Length, |l| json!({ "lineLength": l }));
-        number_row(app, ui, tl!("Line Angle:"), Some(live.line_angle().unwrap_or(0.0)), Quantity::Degrees, |a| json!({ "lineAngle": a }));
+        number_row(app, ui, tl!("Line Length"), live.line_length(), Quantity::Length, |l| json!({ "lineLength": l }));
+        number_row(app, ui, tl!("Line Angle"), Some(live.line_angle().unwrap_or(0.0)), Quantity::Degrees, |a| json!({ "lineAngle": a }));
     });
     true
 }
@@ -156,7 +156,7 @@ fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape) -> bool {
 /// link on, a typed angle moves the other one by as much, so each selected ellipse keeps its span.
 fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64)) {
     let constrain = app.ui.constrain_pie_angle;
-    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+    for (label, key, v) in [(tl!("Pie Start Angle"), "pieStart", pie.0), (tl!("Pie End Angle"), "pieEnd", pie.1)] {
         number_row(
             app,
             ui,
@@ -178,12 +178,12 @@ fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShap
     let LiveShape::Polygon { sides, .. } = live else { return };
     let radius = live.polygon_radius();
     let side = radius.map(|r| 2.0 * r * (std::f64::consts::PI / f64::from((*sides).max(3))).sin());
-    number_row(app, ui, tl!("Sides:"), Some(f64::from(*sides)), Quantity::Sides, |s| json!({ "sides": s as u64 }));
+    number_row(app, ui, tl!("Sides"), Some(f64::from(*sides)), Quantity::Sides, |s| json!({ "sides": s as u64 }));
     angle_row(app, ui, live, "polygonAngle");
     corner_kind_row(app, ui, corner_style(app, n).1);
-    Field::new(tl!("Corner Radius:")).show(ui, |ui, _| corner_radius_field(app, ui, n));
-    number_row(app, ui, tl!("Radius:"), radius, Quantity::Length, |r| json!({ "polygonRadius": r }));
-    number_row(app, ui, tl!("Side Length:"), side, Quantity::Length, |l| json!({ "sideLength": l }));
+    Field::new(tl!("Corner Radius")).show(ui, |ui, _| corner_radius_field(app, ui, n));
+    number_row(app, ui, tl!("Radius"), radius, Quantity::Length, |r| json!({ "polygonRadius": r }));
+    number_row(app, ui, tl!("Side Length"), side, Quantity::Length, |l| json!({ "sideLength": l }));
     if Button::new(tl!("Make Sides Equal")).enabled(!live.polygon_sides_equal()).show(ui).clicked() {
         set_live_shape(app, json!({"makeSidesEqual": true}));
     }
@@ -193,8 +193,8 @@ fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShap
 fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, kind: Option<CornerKind>) {
     let entries = corner_entries();
     let mut edit = None;
-    Field::new(tl!("Corner:")).show(ui, |ui, _| {
-        edit = Some(Select::new(tl!("Corner:"), Bind::given(kind.map_or(Mixed::Mixed, Mixed::Same)), &entries).show(ui));
+    Field::new(tl!("Corner")).show(ui, |ui, _| {
+        edit = Some(Select::new(tl!("Corner"), Bind::given(kind.map_or(Mixed::Mixed, Mixed::Same)), &entries).show(ui));
     });
     if let Some(edit) = edit {
         apply_edits(app, &edit, EditPath::Scope, |app, k, _| set_live_shape(app, json!({ "kind": k })));

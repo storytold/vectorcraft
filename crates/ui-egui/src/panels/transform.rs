@@ -500,7 +500,7 @@ pub(crate) fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Opti
 pub(crate) fn guide_fields(app: &mut VectorcraftApp, ui: &mut Ui, (x, y): (Option<f64>, Option<f64>)) {
     let lengths = general_lengths(app);
     let origin = app.ruler_origin();
-    for (label, pos, zero, by, vertical) in [("X:", x, origin.x, "dx", true), ("Y:", y, origin.y, "dy", false)] {
+    for (label, pos, zero, by, vertical) in [("X", x, origin.x, "dx", true), ("Y", y, origin.y, "dy", false)] {
         let edit = Field::new(tl!(label))
             .enabled(pos.is_some())
             .show(ui, |ui, _| NumberField::length(tl!(label), Bind::given(pos.map(|p| p - zero)), lengths).show(ui).edit)
@@ -693,18 +693,21 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let mut set = |id: &str, state: CommandState| states.set(CommandRef::new(id), state);
     let title = if part_hidden(app, HIDE_OPTIONS_KEY) { tl!("Show Options") } else { tl!("Hide Options") };
     set(HIDE_OPTIONS, CommandState::new().title(title));
-    set(SHOW_ON_SHAPE_CREATION, CommandState::new().checked(prefs.show_on_shape_creation));
-    set(FLIP_HORIZONTAL, CommandState::new().enabled(has));
-    set(FLIP_VERTICAL, CommandState::new().enabled(has));
-    set(SCALE_STROKES, CommandState::new().checked(prefs.scale_strokes));
-    set(TYPE_GLYPH_BOUNDS, CommandState::new().checked(prefs.type_glyph_bounds));
+    set(SHOW_ON_SHAPE_CREATION, CommandState::new().title(tl!("Show on Shape Creation")).checked(prefs.show_on_shape_creation));
+    set(FLIP_HORIZONTAL, CommandState::new().title(tl!("Flip Horizontal")).enabled(has));
+    set(FLIP_VERTICAL, CommandState::new().title(tl!("Flip Vertical")).enabled(has));
+    set(SCALE_STROKES, CommandState::new().title(tl!("Scale Strokes & Effects")).checked(prefs.scale_strokes));
+    set(TYPE_GLYPH_BOUNDS, CommandState::new().title(tl!("Measure Type by Glyph Bounds")).checked(prefs.type_glyph_bounds));
     let align_new = app.session.active().map(|st| st.doc.setup.align_new_objects_to_pixel_grid);
-    set(ALIGN_NEW_OBJECTS, CommandState::new().enabled(align_new.is_some()).checked(align_new == Some(true)));
+    set(
+        ALIGN_NEW_OBJECTS,
+        CommandState::new().title(tl!("Align New Objects to Pixel Grid")).enabled(align_new.is_some()).checked(align_new == Some(true)),
+    );
     let current = pattern_mode(app);
-    for (value, id) in PATTERN_MODES {
-        set(id, CommandState::new().checked(value == current));
+    for ((value, id), title) in PATTERN_MODES.into_iter().zip([tl!("Transform Object Only"), tl!("Transform Pattern Only"), tl!("Transform Both")]) {
+        set(id, CommandState::new().title(title).checked(value == current));
     }
-    set(REGISTRATION_POINT, CommandState::new().checked(prefs.use_registration_point_for_symbol));
+    set(REGISTRATION_POINT, CommandState::new().title(tl!("Use Registration Point for Symbol")).checked(prefs.use_registration_point_for_symbol));
 }
 
 /// Runs the panel menu row `id`; `None` for an id that is not one of its rows. An error is also shown in the status bar.

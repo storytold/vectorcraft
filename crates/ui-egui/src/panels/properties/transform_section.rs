@@ -97,11 +97,11 @@ pub(super) fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The corners differ in kind: no entry is the value.
     let kind = panels::corner_style(app, &n).1.map_or(Mixed::Mixed, Mixed::Same);
     let entries = panels::corner_entries();
-    let picked = Field::new(tl!("Corner:")).show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied()).inner;
+    let picked = Field::new(tl!("Corner")).show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied()).inner;
     if let Some(Some(kind)) = picked {
         app.run("object.setLiveShape", json!({"kind": kind})).ok();
     }
-    Field::new(tl!("Corner Radius:")).show(ui, |ui, _| panels::corner_radius_field(app, ui, &n));
+    Field::new(tl!("Corner Radius")).show(ui, |ui, _| panels::corner_radius_field(app, ui, &n));
 }
 
 /// Ruler guides selected on their own: a Transform section with the X of the vertical ones and

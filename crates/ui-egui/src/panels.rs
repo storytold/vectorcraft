@@ -120,7 +120,7 @@ pub(crate) fn corner_entries() -> Vec<Entry<CornerKind>> {
 pub(crate) fn corner_radius_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let single = app.session.prefs.single_corner_radius;
     let mut toggled = None;
-    Field::new(tl!("Corner Radius:")).show(ui, |ui, _| {
+    Field::new(tl!("Corner Radius")).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             if single {
                 corner_radius_field(app, ui, n);
@@ -145,7 +145,7 @@ fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let Some(lc) = LiveCorners::of(n) else { return };
     let entries = corner_entries();
     let current = lc.style(&lc.all()).1;
-    let picked = Field::new(tl!("Corner:")).show(ui, |ui, _| corner_select(ui, tl!("Corner:"), current, &entries)).inner.flatten();
+    let picked = Field::new(tl!("Corner")).show(ui, |ui, _| corner_select(ui, tl!("Corner"), current, &entries)).inner.flatten();
     if let Some(kind) = picked {
         set_rectangle_kinds(app, kind, None);
     }
@@ -188,9 +188,15 @@ fn set_rectangle_corners(app: &mut VectorcraftApp, mut p: Value, corner: Option<
     }
 }
 
-/// The corners of a live rectangle in the order their fields show, with their labels.
-fn rectangle_corners() -> [(usize, &'static str); 4] {
-    [(0, tl!("Top Left:")), (1, tl!("Top Right:")), (2, tl!("Bottom Right:")), (3, tl!("Bottom Left:"))]
+/// The corners of a live rectangle in the order their fields show, with their labels (which name their radius
+/// fields) and the names of their Corner selects.
+fn rectangle_corners() -> [(usize, &'static str, &'static str); 4] {
+    [
+        (0, tl!("Top Left"), tl!("Top Left Corner")),
+        (1, tl!("Top Right"), tl!("Top Right Corner")),
+        (2, tl!("Bottom Right"), tl!("Bottom Right Corner")),
+        (3, tl!("Bottom Left"), tl!("Bottom Left Corner")),
+    ]
 }
 
 /// The columns of [`corner_fields`]: each corner's labelled radius field, then its Corner select.
@@ -207,11 +213,11 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let mut radii = Vec::new();
     let mut kinds = Vec::new();
     let _ = Grid::new(&CORNER_COLUMNS).show(ui, |ui, _| {
-        for (k, label) in rectangle_corners() {
+        for (k, label, corner) in rectangle_corners() {
             Field::new(label).show(ui, |ui, _| {
                 radii.push((k, NumberField::length(label, Bind::given(Some(lc.radius(k))), lengths).show(ui).edit));
             });
-            if let Some(kind) = corner_select(ui, label, Some(lc.kind(k)), &entries) {
+            if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
                 kinds.push((k, kind));
             }
         }

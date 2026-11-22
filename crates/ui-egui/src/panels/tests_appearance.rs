@@ -69,9 +69,14 @@ pub(super) fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
     texts.iter().find(|(t, _)| t == s).unwrap_or_else(|| panic!("`{s}` not drawn: {texts:?}")).1
 }
 
-/// One whole app frame, so the dialog host and the effect dialogs' pump run as in production.
+/// One whole app frame in the app's window, so the dialog host and the effect dialogs' pump run as in production.
 pub(super) fn app_frame(app: &mut VectorcraftApp) {
-    key_frame(app, &crate::testing::ui_context(), vec![]);
+    key_frame(app, &window(app), vec![]);
+}
+
+/// The app's window context, or a new window for an app without one: every frame of a window draws in its context.
+fn window(app: &VectorcraftApp) -> egui::Context {
+    app.ui_ctx.clone().unwrap_or_else(crate::testing::ui_context)
 }
 
 /// The id of the open effect dialog.
@@ -152,7 +157,7 @@ fn shows(panel: &mut Panel, name: &str) -> bool {
 /// The Cmd+/ or Cmd+Alt+/ key pressed through the whole app frame.
 fn press_slash(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
     let ev = egui::Event::Key { key: egui::Key::Slash, physical_key: None, pressed: true, repeat: false, modifiers };
-    key_frame(app, &crate::testing::ui_context(), vec![ev]);
+    key_frame(app, &window(app), vec![ev]);
 }
 
 /// The name of the colour chip of the "Fill:" or "Stroke:" row.
@@ -166,7 +171,7 @@ fn stroke_panel_shows_the_active_rows_weight() {
     let mut app = app_with_rect();
     run(&mut app, "appearance.addStroke", json!({})); // [Fill, Stroke 1 pt, Stroke 1 pt]
     run(&mut app, "stroke.set", json!({"item": 1, "weight": 6}));
-    let six = Unit::Points.format(6.0);
+    let six = Unit::Points.number(6.0);
     let mut panel = Panel::new(app, stroke::show);
     // PLAN: assumed the weight field's accessible name
     let weight = |panel: &mut Panel| {
@@ -1061,9 +1066,10 @@ fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
             assert!(!shown.contains(not), "{name} no longer shows {not}: {shown}");
         }
     };
-    edit_shows("transparency.set", json!({"opacity": 60}), "60%", "35%");
-    edit_shows("transparency.set", json!({"opacity": 35}), "35%", "60%");
-    edit_shows("edit.undo", json!({}), "60%", "35%");
+    // A percent field's value is its number, with the % painted after it; the Appearance row reads "Opacity: 60%".
+    edit_shows("transparency.set", json!({"opacity": 60}), "60", "35");
+    edit_shows("transparency.set", json!({"opacity": 35}), "35", "60");
+    edit_shows("edit.undo", json!({}), "60", "35");
 }
 
 /// Right-clicking a stroke row, on its label, picks it and opens its menu: Duplicate, Delete and Hide Stroke.

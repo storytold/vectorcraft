@@ -72,7 +72,9 @@ fn saved_preset(p: &Panel, name: &str) -> Value {
 fn check(p: &Panel, id: &str, params: Value) -> Option<bool> {
     let mut states = CommandStates::new();
     menu_states(&p.app(), &mut states);
-    states.get(&CommandRef::with_params(id, params)).and_then(|s| s.is_checked())
+    // States match their rows by id and params, and a row without params holds `Null`, not `{}`.
+    let command = if params == json!({}) { CommandRef::new(id) } else { CommandRef::with_params(id, params) };
+    states.get(&command).and_then(|s| s.is_checked())
 }
 
 /// Whether the panel menu lists the row `id` with `params`.
@@ -133,9 +135,9 @@ fn finish_pick(p: &Panel) {
     crate::tests::picks::poll(&mut p.app(), &ctx);
 }
 
-/// Picks `to` in the format select showing `from` (PLAN: assumed the select is named by its shown value).
-fn pick_format(p: &mut Panel, from: &str, to: &str) {
-    p.click(from);
+/// Picks `to` in the format select named `select` (the first row's "Format", or "3D Format:").
+fn pick_format(p: &mut Panel, select: &str, to: &str) {
+    p.click(select);
     p.click(to);
 }
 
@@ -560,7 +562,7 @@ fn tiff_dropdown_exports_only_the_selected_asset_and_shares_settings() {
     )
     .unwrap();
     let mut p = panel(app);
-    pick_format(&mut p, "PNG", "TIFF");
+    pick_format(&mut p, "Format", "TIFF");
     let saved = settings(&p);
     assert_eq!(saved["formats"], json!([{"format": "tiff", "scale": "2x", "suffix": "@2x"}]));
     p.click("Badge");
@@ -637,7 +639,7 @@ fn tiff_cmyk_defaults_match_screens_and_preserve_explicit_rgb() {
                 app.run("assets.settings.set", json!({"settings": {"tiff": {"colorModel": "rgb"}}})).unwrap();
             }
             let mut p = panel(app);
-            pick_format(&mut p, "PNG", "TIFF");
+            pick_format(&mut p, "Format", "TIFF");
             if !rgb_override {
                 assert!(p.app().session.active().unwrap().doc.export_settings.get("settings").and_then(|s| s.get("tiff")).is_none());
             }
@@ -679,7 +681,7 @@ fn tiff_panel_preserves_shared_antialias_and_explicit_overrides() {
         }
         app.run("assets.settings.set", json!({"formats": [row], "antiAlias": "none", "settings": shared_settings})).unwrap();
         let mut p = panel(app);
-        pick_format(&mut p, "PNG", "TIFF");
+        pick_format(&mut p, "Format", "TIFF");
         p.click("Export");
         {
             let log = log.borrow();
@@ -766,7 +768,7 @@ fn a_3d_asset_takes_its_format_from_the_row_and_exports_as_a_mesh() {
     let list = assets(&mut p.app());
     assert_eq!((list[1]["name"].clone(), list[1]["format3D"].clone()), (json!("Box"), json!("usda")));
     assert!(p.shows("3D Format:"));
-    pick_format(&mut p, "USDA", "OBJ");
+    pick_format(&mut p, "3D Format:", "OBJ");
     assert_eq!(assets(&mut p.app())[1]["format3D"], "obj");
     // The menu left the new 3D asset selected: Export writes its OBJ and MTL alone, as one zip.
     p.click("Export 1 Selected");

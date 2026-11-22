@@ -541,7 +541,8 @@ mod tests {
             let mut panel = Panel::new(app, scrolled);
             panel.room(egui::vec2(300.0, 120.0));
             panel.frame();
-            assert!(!panel.in_view(BPC), "the section starts below the view");
+            // The section draws lazily: below the view it is not drawn at all.
+            assert!(!panel.shows(BPC) || !panel.in_view(BPC), "the section starts below the view");
             panel.app().run(id, json!({})).unwrap();
             panel.frame();
             assert!(!panel.app().ui.color_settings_scroll, "{id}: the pass that read the request spent it");

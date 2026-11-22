@@ -13,7 +13,7 @@ use std::ops::RangeInclusive;
 use craft::behavior::IconId;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, clicked};
 use craft::ui::display::Divider;
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::form::{SliderField, SliderFieldLayout};
@@ -193,7 +193,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     create_spine(app, ui);
     Divider::horizontal().show(ui);
     FieldGroup::new(tl!("Blend Options")).enabled(blend || selection_len(app) >= 2).show(ui, |ui, _| settings(app, ui));
-    Field::new(tl!("Direction:")).show(ui, |ui, _| action(app, ui, tl!("Reverse Front to Back"), "object.blend.reverseFrontToBack"));
+    // The button keeps its own name: the label says what it changes.
+    Field::new(tl!("Direction:"))
+        .side(SideLabel::new().role(FieldLabelRole::Describes))
+        .show(ui, |ui, _| action(app, ui, tl!("Reverse Front to Back"), "object.blend.reverseFrontToBack"));
     Divider::horizontal().show(ui);
     actions(app, ui, &[(tl!("Reverse Spine"), "object.blend.reverseSpine"), (tl!("Replace Spine"), "object.blend.replaceSpine")]);
     Divider::horizontal().show(ui);

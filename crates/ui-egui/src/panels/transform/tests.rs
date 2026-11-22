@@ -1,4 +1,3 @@
-use serde_json::Value;
 use vectorcraft_doc::Unit;
 
 use super::*;
@@ -14,8 +13,9 @@ fn bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     object_bar_fields(app, ui);
 }
 
+/// A length in points as a length field reads it: its number, with the unit painted after it.
 fn pt(v: f64) -> String {
-    Unit::Points.format(v)
+    Unit::Points.number(v)
 }
 
 /// A shown angle, in degrees.
@@ -23,8 +23,21 @@ fn degrees(p: &Panel, name: &str) -> Option<f64> {
     p.value(name)?.trim_end_matches('°').parse().ok()
 }
 
+/// The state of panel-menu row `id`, as the panel menus' states give it.
+fn row_state(app: &VectorcraftApp, id: &str) -> Option<CommandState> {
+    let mut states = CommandStates::new();
+    crate::panels::panel_menu_states(app, &mut states);
+    states.get(&CommandRef::new(id)).cloned()
+}
+
+/// The check of panel-menu row `id`.
 fn checked(app: &VectorcraftApp, id: &str) -> Option<bool> {
-    crate::menus::checked(app, id, &Value::Null)
+    row_state(app, id)?.is_checked()
+}
+
+/// Whether panel-menu row `id` is on.
+fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    row_state(app, id).is_some_and(|s| s.is_enabled())
 }
 
 fn blank(v: Option<String>) -> bool {
@@ -328,7 +341,7 @@ fn the_artboard_tool_shows_the_active_artboard() {
     p.frame();
     // Centre reference point: X 150, Y 100, W 300, H 200; no rotate/shear for artboards.
     let r = p.app().session.active().unwrap().doc.artboards[0].rect;
-    assert_eq!((p.value("X"), p.value("Y")), (Some(pt(r.center().x)), Some(pt(r.center().y))));
+    assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(r.center().x)), Some(pt(r.center().y))));
     assert_eq!((p.value("Width"), p.value("Height")), (Some(pt(r.width())), Some(pt(r.height()))));
     assert!(!p.shows("Rotate"));
 }
@@ -363,11 +376,11 @@ fn an_anchor_selection_shows_and_moves_its_own_box() {
     let square = json!({"anchors": [{"x": 20, "y": 30}, {"x": 120, "y": 30}, {"x": 120, "y": 130}, {"x": 20, "y": 130}], "closed": true});
     let id = app.run("path.create", square).unwrap()["id"].as_u64().unwrap();
     let mut p = panel(app);
-    assert_eq!((p.value("X"), p.value("Width")), (Some(pt(70.0)), Some(pt(100.0))), "the whole path");
+    assert_eq!((p.value("X position"), p.value("Width")), (Some(pt(70.0)), Some(pt(100.0))), "the whole path");
     p.app().run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
     p.frame();
-    assert_eq!((p.value("X"), p.value("Y"), p.value("Width")), (Some(pt(120.0)), Some(pt(30.0)), Some(pt(0.0))));
-    p.type_into("X", "150");
+    assert_eq!((p.value("X position"), p.value("Y position"), p.value("Width")), (Some(pt(120.0)), Some(pt(30.0)), Some(pt(0.0))));
+    p.type_into("X position", "150");
     let n = first_selected(&p.app()).unwrap();
     let Some(path) = n.path_data() else { panic!("a path") };
     let xs: Vec<f64> = path.subpaths[0].anchors.iter().map(|a| a.p.x).collect();
@@ -433,7 +446,7 @@ fn the_menu_chooses_whether_the_object_its_pattern_or_both_transform() {
                 assert_eq!(checked_modes(&app), [item], "{case}");
                 // The centre reference point: X 150 becomes 170.
                 let mut p = Panel::new(app, draw);
-                p.type_into("X", "170");
+                p.type_into("X position", "170");
                 let mut guard = p.app();
                 let app = &mut *guard;
                 let x0 = app.selection_box().unwrap().rect.x0;
@@ -484,19 +497,19 @@ fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_
         let id = app.run("symbol.new", json!({"name": "Corner", "registration": 0})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();
         let mut p = Panel::new(app, draw);
-        assert_eq!((p.value("X"), p.value("Y")), (Some(pt(140.0)), Some(pt(70.0))), "the centre");
+        assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(140.0)), Some(pt(70.0))), "the centre");
         assert_ne!(checked(&p.app(), "ui.transform.registrationPoint"), Some(true));
         p.app().run("ui.transform.registrationPoint", json!({})).unwrap();
         assert!(p.app().session.prefs.use_registration_point_for_symbol);
         assert_eq!(checked(&p.app(), "ui.transform.registrationPoint"), Some(true));
         p.frame();
-        assert_eq!((p.value("X"), p.value("Y")), (Some(pt(100.0)), Some(pt(50.0))), "the top-left");
-        p.type_into("X", "30");
+        assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(100.0)), Some(pt(50.0))), "the top-left");
+        p.type_into("X position", "30");
         assert_eq!(p.app().selection_box().unwrap().rect, Rect::new(30.0, 50.0, 110.0, 90.0));
         // Any other selection: the reference point.
         p.app().run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
         p.frame();
-        assert_eq!(p.value("X"), Some(pt(210.0)), "the centre");
+        assert_eq!(p.value("X position"), Some(pt(210.0)), "the centre");
     }
 }
 
@@ -521,9 +534,9 @@ fn the_control_bar_fields_use_the_shared_reference_point() {
         app.ui.transform_panel.reference_point = refi;
         let mut p = Panel::new(app, bar);
         let before = revision(&p);
-        assert_eq!((p.value("X"), p.value("Y")), (Some(pt(x)), Some(pt(y))), "reference {refi}");
+        assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(x)), Some(pt(y))), "reference {refi}");
         assert_eq!(revision(&p), before, "reference {refi}: choosing the point leaves the art");
-        p.type_into("X", new_x);
+        p.type_into("X position", new_x);
         assert_eq!(p.app().selection_box().unwrap().rect, moved, "reference {refi}: X");
         assert_eq!(revision(&p), before + 1, "reference {refi}: one undo step");
         p.type_into("Width", "200");
@@ -565,9 +578,9 @@ fn use_registration_point_for_symbol_follows_a_transformed_instance() {
         app.run("prefs.set", json!({"key": "useRegistrationPointForSymbol", "value": true})).unwrap();
         let q = registration(&app, id);
         let mut p = panel(app);
-        assert_eq!((p.value("X"), p.value("Y")), (Some(pt(q.x)), Some(pt(q.y))), "{case}: X/Y at {q:?}");
+        assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(q.x)), Some(pt(q.y))), "{case}: X/Y at {q:?}");
         // A new X moves the registration point there.
-        p.type_into("X", &format!("{}", q.x - 40.0));
+        p.type_into("X position", &format!("{}", q.x - 40.0));
         let q = vectorcraft_geom::Point::new(q.x - 40.0, q.y);
         assert!(near(registration(&p.app(), id), q), "{case}: moved to {q:?}, now {:?}", registration(&p.app(), id));
         // The rotation field turns it about the registration point.
@@ -823,13 +836,13 @@ fn align_to_pixel_grid_state_is_measured_once_per_revision() {
 fn align_new_objects_menu_item_toggles_the_active_document() {
     const ID: &str = "ui.transform.alignNewObjects";
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    assert!(!crate::menus::enabled(&app, ID), "no document");
+    assert!(!enabled(&app, ID), "no document");
     // The command refuses with no document; the refusal is what is checked next.
     let _ = app.run(ID, json!({}));
     assert!(app.session.active().is_none());
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
     app.run("file.new", json!({"preset": "Web 1920×1080"})).unwrap();
-    assert!(crate::menus::enabled(&app, ID));
+    assert!(enabled(&app, ID));
     let on = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.setup.align_new_objects_to_pixel_grid;
     assert_eq!((on(&app, 0), on(&app, 1)), (false, true));
     assert_eq!(checked(&app, ID), Some(true), "the Web document");

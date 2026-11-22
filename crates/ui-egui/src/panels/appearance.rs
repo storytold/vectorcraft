@@ -833,7 +833,7 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
     }
     let painted = if new_art { Painted::NewArt { fill } } else { Painted::Item(i) };
     let pass = cx.pass;
-    row.trailing_field(paint_swatch(it.paint()), move |out: SwatchOutput| {
+    row.trailing_field(paint_swatch(it.is_fill(), it.paint()), move |out: SwatchOutput| {
         let mut pass = pass.borrow_mut();
         if let Some(activation) = out.activation {
             pass.acts.push(Act::Swatch(key, painted, activation.mods.shift));
@@ -842,8 +842,9 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
     })
 }
 
-/// The well of a fill/stroke row: `paint` as its face, its colour (a solid paint's) as its value.
-fn paint_swatch(paint: &Paint) -> Swatch {
+/// The well of a fill (`fill`) or stroke row, named for it: `paint` as its face, its colour (a solid paint's) as its
+/// value.
+fn paint_swatch(fill: bool, paint: &Paint) -> Swatch {
     let color = paint.color().map_or(Srgba::BLACK, |c| {
         let [r, g, b] = c.to_rgb();
         Srgba::rgb(r, g, b)
@@ -851,7 +852,8 @@ fn paint_swatch(paint: &Paint) -> Swatch {
     let mut hasher = DefaultHasher::new();
     serde_json::to_string(paint).unwrap_or_default().hash(&mut hasher);
     let shown = paint.clone();
-    Swatch::new(tl!("Color"), color)
+    let row = if fill { tl!("Fill") } else { tl!("Stroke") };
+    Swatch::new(crate::i18n::fmt(tl!("{row} swatch"), &[("row", row)]), color)
         .face(FacePaint::new(hasher.finish(), move |painter, rect| paint_preview::paint_rect(painter, rect, &shown)))
         .tooltip(tl!("Click to choose a swatch, Shift-click to mix a colour"))
 }

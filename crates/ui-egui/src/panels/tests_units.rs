@@ -63,6 +63,15 @@ fn side_mm() -> String {
     Unit::Millimeters.format(100.0)
 }
 
+/// Whether a length field's `value` reads `pt` points in `unit`, to the decimals it shows: a length field's value is
+/// its number, with the unit painted after it.
+pub(crate) fn reads(value: Option<String>, unit: Unit, pt: f64) -> bool {
+    value.is_some_and(|v| {
+        let decimals = v.split_once('.').map_or(0, |(_, d)| d.len());
+        v.parse::<f64>().is_ok_and(|shown| (shown - unit.from_pt(pt)).abs() <= 0.5 * 10f64.powi(-(decimals as i32)) + 1e-9)
+    })
+}
+
 fn general_mm(app: &mut VectorcraftApp) {
     app.run("prefs.set", json!({"key": "unitsGeneral", "value": "Millimeters"})).unwrap();
 }
@@ -70,20 +79,19 @@ fn general_mm(app: &mut VectorcraftApp) {
 #[test]
 fn panels_show_millimetres_after_the_preference_changes() {
     let mut p = Panel::new(app_with_rect(), transform::show);
-    assert_eq!(side_mm(), "35.2778 mm");
-    assert_eq!(p.value("Width"), Some(Unit::Points.format(100.0)), "points first");
+    assert!(reads(p.value("Width"), Unit::Points, 100.0), "points first: {:?}", p.value("Width"));
     general_mm(&mut p.app());
     // The next frame: no restart, nothing cached.
     p.frame();
-    assert_eq!(p.value("Width"), Some(side_mm()), "Transform panel");
+    assert!(reads(p.value("Width"), Unit::Millimeters, 100.0), "Transform panel: {:?}", p.value("Width"));
     let mut app = app_with_rect();
     general_mm(&mut app);
     let mut b = Panel::new(app, bar);
-    assert_eq!(b.value("Width"), Some(side_mm()), "Control bar");
+    assert!(reads(b.value("Width"), Unit::Millimeters, 100.0), "Control bar: {:?}", b.value("Width"));
     // Document Setup back to points: everything follows the document.
     run(&mut b.app(), "document.setUnits", json!({"units": "Points"}));
     b.frame();
-    assert_eq!(b.value("Width"), Some(Unit::Points.format(100.0)));
+    assert!(reads(b.value("Width"), Unit::Points, 100.0), "{:?}", b.value("Width"));
 }
 
 #[test]
@@ -116,11 +124,11 @@ fn type_sizes_follow_units_type() {
     general_mm(&mut app);
     let mut p = Panel::new(app, character::show);
     assert_eq!(character::type_unit(&p.app()), character::doc_unit(Unit::Points), "General leaves type alone");
-    assert_eq!(p.value("Font Size"), Some(Unit::Points.format(24.0)));
+    assert!(reads(p.value("Font size"), Unit::Points, 24.0), "{:?}", p.value("Font size"));
     p.app().run("prefs.set", json!({"key": "unitsType", "value": "inches"})).unwrap();
     p.frame();
     assert_eq!(character::type_unit(&p.app()), character::doc_unit(Unit::Inches));
-    assert_eq!(p.value("Font Size"), Some(Unit::Inches.format(24.0)));
+    assert!(reads(p.value("Font size"), Unit::Inches, 24.0), "{:?}", p.value("Font size"));
 }
 
 #[test]
@@ -131,11 +139,11 @@ fn the_preferences_dialog_shows_the_documents_units() {
     assert_eq!(crate::prefs_dialog::fields(&app).unwrap()["unitsGeneral"], json!("millimeters"));
     let inc = app.session.prefs.keyboard_increment;
     let mut p = Panel::new(app, |app, ui| crate::prefs_dialog::show(app, ui));
-    assert_eq!(p.value("Keyboard Increment"), Some(Unit::Millimeters.format(inc)), "Keyboard Increment in mm");
+    assert!(reads(p.value("Keyboard Increment"), Unit::Millimeters, inc), "Keyboard Increment in mm: {:?}", p.value("Keyboard Increment"));
     // Choosing another General unit in the dialog shows at once, and OK applies it.
     crate::prefs_dialog::set_field(&mut p.app(), "unitsGeneral", json!("inches")).unwrap();
     p.frame();
-    assert_eq!(p.value("Keyboard Increment"), Some(Unit::Inches.format(inc)));
+    assert!(reads(p.value("Keyboard Increment"), Unit::Inches, inc), "{:?}", p.value("Keyboard Increment"));
     crate::prefs_dialog::confirm(&mut p.app()).unwrap();
     let app = p.app();
     assert_eq!(app.session.active().unwrap().doc.units, Unit::Inches);

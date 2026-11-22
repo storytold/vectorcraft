@@ -144,7 +144,7 @@ fn artboard_coordinate_fields_move_art_in_properties_and_transform() {
             app.select_tool("artboard");
             app.session.set_tool_option("moveArt", &json!(move_art));
             let mut panel = Panel::new(app, draw);
-            panel.click("X");
+            panel.click("X position");
             panel.key(Key::ArrowUp, Modifiers::NONE);
             let app = panel.app();
             let d = &app.session.doc().unwrap().doc;
@@ -186,7 +186,7 @@ fn artboard_width_resizes_every_selected_artboard_in_properties_and_transform() 
         let mut panel = Panel::new(two_selected_artboards(), draw);
         let before = boards(&panel.app());
         let undo = undo_depth(&panel.app());
-        panel.type_into("W", "250");
+        panel.type_into("Width", "250");
         let mut want = before.clone();
         for (i, shift) in [(0, 25.0), (2, -25.0)] {
             want[i].2 = 250.0;
@@ -1184,7 +1184,7 @@ fn selected_guides_show_their_position_in_a_transform_section() {
     panel.app().run("select.set", json!({"ids": [id]})).unwrap();
     panel.app().run("guide.select", json!({"indexes": [v], "toggle": true})).unwrap();
     panel.frame();
-    assert!(!panel.shows("Guides") && panel.shows("W"));
+    assert!(!panel.shows("Guides") && panel.shows("Width"));
 }
 
 /// Two 20 pt squares attached to a horizontal line in an Objects on Path group (`rotate` degrees),
@@ -1250,7 +1250,7 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     let group = objects_on_path(&mut app, 150.0, 0.0);
     let mut panel = Panel::new(app, objects_on_path_options);
     let depth = undo_depth(&panel.app());
-    panel.click("Top Left");
+    panel.click("Top left");
     assert_eq!(pivot_rotate(&panel.app(), &group), (0, 0.0), "Pivot: top left");
     assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
     panel.type_into("Rotate", "30");
