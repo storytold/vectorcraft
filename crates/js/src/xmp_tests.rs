@@ -349,6 +349,19 @@ fn deeply_nested_values_read_back_after_serializing() {
     assert!(read > 0, "some of the packets are read");
 }
 
+/// Namespaces declared only inside a structure or on a qualifier are registered when the packet
+/// is read.
+#[test]
+fn namespaces_inside_kept_values_are_registered() {
+    let packet = PACKET.replace(
+        "<dc:format>",
+        "<dc:source xmlns:q='http://q/' q:k='v'>s</dc:source><dc:relation rdf:parseType='Resource'><in:a xmlns:in='http://inner/'>1</in:a></dc:relation><dc:format>",
+    );
+    let src =
+        format!("var m = new XMPMeta({packet:?}); [XMPMeta.getNamespacePrefix('http://inner/'), XMPMeta.getNamespacePrefix('http://q/')].join('|')");
+    assert_eq!(string(&src), "in:|q:");
+}
+
 #[test]
 fn array_forms_follow_their_options() {
     assert_eq!(Form::from_options(0x200), Form::Bag);

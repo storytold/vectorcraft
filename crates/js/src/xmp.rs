@@ -534,10 +534,37 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry) -> Result<P
         if PROPERTY_DEPTH + height(p) > MAX_DEPTH {
             return Err(XmpError::TooLarge);
         }
+        register_names(p, scope, registry)?;
+        register_nested(p, scope, registry)?;
         other(p, &own, &children, scope, mark)
     };
     scope.truncate(mark);
     Ok(Prop { ns, name: local.to_string(), value })
+}
+
+/// Registers the namespaces of the name and the attributes of `el`, with `scope` holding the
+/// bindings in scope there, other than RDF, XML and no namespace.
+fn register_names(el: &El, scope: &Scope, registry: &mut Registry) -> Result<(), XmpError> {
+    let names = std::iter::once((el.name.as_str(), true)).chain(attrs(el).into_iter().map(|(k, _)| (k, false)));
+    for (name, element) in names {
+        let Some((ns, _)) = resolve(name, scope, element) else { continue };
+        if !ns.is_empty() && ns != RDF && ns != XML {
+            registry.register(&ns, name.split_once(':').map_or("ns", |(p, _)| p))?;
+        }
+    }
+    Ok(())
+}
+
+/// Registers the namespaces the elements inside `el` use, as [`register_names`] does.
+fn register_nested(el: &El, scope: &mut Scope, registry: &mut Registry) -> Result<(), XmpError> {
+    for c in el.elements() {
+        let mark = scope.len();
+        push_decls(c, scope);
+        let r = register_names(c, scope, registry).and_then(|()| register_nested(c, scope, registry));
+        scope.truncate(mark);
+        r?;
+    }
+    Ok(())
 }
 
 /// The elements a written packet holds around a property.
