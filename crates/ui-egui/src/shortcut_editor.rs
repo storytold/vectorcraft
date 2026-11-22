@@ -1182,7 +1182,7 @@ fn keep(app: &mut VectorcraftApp, keymap: &Keymap) -> Result<(), String> {
 
 /// Hands the set in use to the key stage, each Effect menu item's shortcut under the command its
 /// item runs now.
-fn use_active_set(app: &mut VectorcraftApp) {
+pub(crate) fn use_active_set(app: &mut VectorcraftApp) {
     let active = app.ui.shortcut_sets.active_overrides(&BUILTINS);
     app.shortcut_overrides = Arc::new(crate::keymap::effect_keys_in(active, &snapshot().effects));
 }

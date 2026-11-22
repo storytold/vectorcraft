@@ -13,8 +13,10 @@ pub fn snapshot(app: &mut VectorcraftApp) {
     app.ui.engine_prefs = app.session.prefs.to_json();
 }
 
-/// Restore engine prefs from `UiState` after the host loaded saved UI state.
+/// Restore engine prefs from `UiState` after the host loaded saved UI state, and hand its shortcut set to the key
+/// stage.
 pub fn restore(app: &mut VectorcraftApp) {
+    crate::shortcut_editor::use_active_set(app);
     let mut p: Prefs = serde_json::from_value(app.ui.engine_prefs.clone()).unwrap_or_default();
     if app.ui.engine_prefs.is_null() {
         // Older preference files: keep the saved brightness.
