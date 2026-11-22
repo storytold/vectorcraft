@@ -7,10 +7,7 @@ use crate::menus;
 
 fn app_with(boards: usize) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    for _ in 1..boards {
-        app.run("artboard.add", json!({})).unwrap();
-    }
+    app.run("file.new", json!({"width": 200, "height": 200, "artboards": boards})).unwrap();
     app
 }
 
