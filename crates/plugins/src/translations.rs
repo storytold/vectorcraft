@@ -170,6 +170,13 @@ fn key(path: &[&str]) -> String {
     format!("`translations.{}`", parts.join("."))
 }
 
+/// Text `s` as a dialog shows it: each line with its control and bidirectional characters escaped
+/// and cut at [`MAX_HELP`] characters.
+fn shown_text(s: &str) -> String {
+    let lines: Vec<String> = s.split('\n').map(|l| permissions::display_text(l, MAX_HELP)).collect();
+    lines.join("\n")
+}
+
 /// Checks text `s` at `path` against `max` characters (`lines`: `\n` allowed).
 fn check_text(s: &str, max: usize, lines: bool, path: &[&str]) -> Result<()> {
     if fits(s, max, lines) {
@@ -277,11 +284,13 @@ impl Manifest {
     }
 
     /// Checks that no two options of a choice show the same label in language `lang`, naming the
-    /// choice's `options` under `path`.
+    /// choice's `options` under `path`. Labels are compared as dialogs show them, with control and
+    /// bidirectional characters escaped, so an option value holding U+202E and a translation
+    /// giving the text `\u{202E}` count as the same label.
     fn check_option_labels(&self, lang: &str, path: &[&str]) -> Result<()> {
         for (k, p) in &self.params {
             let ParamSpec::Choice { options, .. } = &p.spec else { continue };
-            let shown: Vec<&str> = options.iter().map(|o| self.option_label_in(k, o, lang)).collect();
+            let shown: Vec<String> = options.iter().map(|o| shown_text(self.option_label_in(k, o, lang))).collect();
             if shown.iter().enumerate().any(|(i, s)| shown.get(..i).is_some_and(|before| before.contains(s))) {
                 let at = key(&[path, &[k.as_str(), "options"]].concat());
                 return Err(Error::Manifest(format!("{at} gives two options the same label")));
@@ -488,6 +497,15 @@ mod tests {
             let e = Manifest::parse(with(&translations).as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{translations}: {e}");
         }
+        // An option value holding U+202E shows as the text `\u{202E}`, so a translation giving
+        // that text for another option shows the same label.
+        let escaped = format!(
+            r#"{{"id":"a","name":"x","kind":"filter","params":{{"mode":{{"type":"choice","options":["soft","{}"]}}}},
+                "translations":{{"de":{{"params":{{"mode":{{"options":{{"soft":"\\u{{202E}}"}}}}}}}}}}}}"#,
+            esc(0x202E)
+        );
+        let e = Manifest::parse(escaped.as_bytes()).unwrap_err().to_string();
+        assert!(e.contains("`translations.de.params.mode.options` gives two options the same label"), "{e}");
         // Keys and types serde reads: an unknown key, a repeated one, and a value of the wrong type.
         for (translations, says) in [
             (r#"{"de":{"title":"X"}}"#, "unknown field `title`"),

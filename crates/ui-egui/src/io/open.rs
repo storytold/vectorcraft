@@ -247,10 +247,11 @@ fn permission_words(name: &str, commands: &[String]) -> String {
 /// Installs the plug-in module that `module` names (`plugin.install`'s `path`, or `dataBase64`
 /// with `name`) → `plugin.install`'s result. A plug-in that lists permissions no person has granted
 /// it yet asks first, showing its name, id, version, file hash and what each permission lets it
-/// do, so does a filter that asks for a heavy budget, and so does a module that would take the
-/// place of another one with its id and get its settings and cache (`replace`); OK installs it if
-/// the module still has the hash the prompt showed, Cancel installs nothing → `{pending}` while it
-/// asks. The `grant` and `allowHeavy` of a request are ignored: only the dialog's OK approves.
+/// do, so does a filter that asks for a heavy budget, showing its id and file hash, and so does a
+/// module that would take the place of another one with its id and get its settings and cache
+/// (`replace`). When the name shown is a translation, the id lines also give the manifest's own
+/// name. OK installs it if the module still has the hash the prompt showed, Cancel installs
+/// nothing → `{pending}` while it asks. The `grant` and `allowHeavy` of a request are ignored: only the dialog's OK approves.
 /// Every question opens the approval dialog ([`dialogs::plugin::ask_install`]). When automation
 /// asked ([`VectorcraftApp::automation_asked`]), the question has no OK that installs, its
 /// `replace: true` doesn't skip asking about replacing, and the answer while it asks adds
@@ -323,6 +324,10 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         install["grant"] = Value::Array(asked.clone());
     }
     if heavy {
+        // A heavy filter that asks nothing else shows its id and file hash first.
+        if !needs_grant && !asks_replace {
+            paragraphs.push(identity.clone());
+        }
         let (minutes, times) = vectorcraft_plugins::heavy_terms();
         paragraphs.push(crate::i18n::fmt(
             tl!(

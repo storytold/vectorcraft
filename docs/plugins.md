@@ -177,8 +177,8 @@ an importer an import's). Each of its runs gets 1 G instructions (20 times a lig
 and 300 s (`vectorcraft_plugins::{HEAVY_FUEL, HEAVY_WALL_TIME_MS}`). Its output can't add to the budget: the host learns
 how much there is only once the run has ended.
 
-- **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, and install it once the
-  user clicks OK (see [Permissions](#permissions) for who can). `plugin.install` refuses it without `allowHeavy: true`,
+- **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, with its ID and file
+  SHA-256, and install it once the user clicks OK (see [Permissions](#permissions) for who can). `plugin.install` refuses it without `allowHeavy: true`,
   and refuses `allowHeavy` from a request except in a session started with `vectorcraft-cli --allow-plugin-grants`
   (`plugin.inspect` shows the budget beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed
   again at startup. The Additional Plug-ins Folder skips heavy filters with a note in its report, since loading a folder

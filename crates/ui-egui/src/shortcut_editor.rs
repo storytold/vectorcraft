@@ -378,6 +378,10 @@ pub struct Entry {
     /// Keyboard Shortcuts adds the key to the entry's name: another entry has the same group and
     /// label ([`distinct_names`]).
     pub shows_key: bool,
+    /// For a plug-in item whose `group` and `label` name the plug-in and its command in the UI
+    /// language from the plug-in's translations: the group and label with the manifest's own text,
+    /// which status and error messages use ([`english_name`]). `None` for every other entry.
+    pub english: Option<(String, String)>,
 }
 
 /// The editor's entries, the Effect menu's effect items and Object › Plug-ins' filter items while
@@ -454,6 +458,7 @@ fn build_snapshot(revision: u64, lang: &'static str) -> Arc<Snapshot> {
             group: e.group.clone(),
             is_tool: false,
             shows_key: false,
+            english: vectorcraft_plugins::effect::plugin_id(&e.effect).and_then(|id| own_plugin_text(id, lang, &e.group, &e.label)),
         }))
         .chain(filters.iter().map(|f| Entry {
             key: format!("plugin:{}", f.id),
@@ -461,23 +466,49 @@ fn build_snapshot(revision: u64, lang: &'static str) -> Arc<Snapshot> {
             group: f.group.clone(),
             is_tool: false,
             shows_key: false,
+            english: own_plugin_text(&f.id, lang, &f.group, &f.label),
         }))
         .chain(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| {
             // A plug-in command's label and its plug-in's name in `lang`, as its menu shows them.
+            let own = (c.menu.join(" › "), c.label.to_string());
             let (label, group) = match vectorcraft_engine::cmd::plugin::command_of(c.id) {
                 Some((plugin, command)) => {
                     let m = plugin.manifest();
                     let path: Vec<String> = c.menu.iter().take(2).map(|s| s.to_string()).chain([m.shown_name(lang)]).collect();
                     (m.shown_command_label(&command, lang), path.join(" › "))
                 }
-                None => (c.label.to_string(), c.menu.join(" › ")),
+                None => (own.1.clone(), own.0.clone()),
             };
-            Entry { key: c.id.into(), label, group, is_tool: false, shows_key: false }
+            let english = (own != (group.clone(), label.clone())).then_some(own);
+            Entry { key: c.id.into(), label, group, is_tool: false, shows_key: false, english }
         }))
         .chain(tail.iter().cloned())
         .collect();
     distinct_names(&mut entries);
     Arc::new(Snapshot { revision, lang, effects, filters, entries: entries.into() })
+}
+
+/// The group and label of plug-in `id`'s menu item, shown as `group` and `label` in UI language
+/// `lang`, with the manifest's own name in place of the name its translations give there
+/// ([`Entry::english`]); `None` when no such plug-in is installed or `lang` shows its own name.
+fn own_plugin_text(id: &str, lang: &str, group: &str, label: &str) -> Option<(String, String)> {
+    use vectorcraft_plugins::permissions;
+    let plugin = vectorcraft_plugins::registry::get(id)?;
+    let m = plugin.manifest();
+    let (shown, own) = (m.shown_name(lang), permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME));
+    if shown == own {
+        return None;
+    }
+    // A plug-in with commands of its own has a submenu named after it.
+    let parts: Vec<&str> = group.split(" › ").collect();
+    let submenu = matches!(parts.as_slice(), ["Object" | "Effect", "Plug-ins", name, ..] if *name == shown);
+    let group = parts.iter().enumerate().map(|(i, s)| if submenu && i == 2 { own.as_str() } else { *s }).collect::<Vec<_>>().join(" › ");
+    let label = match label.strip_prefix(shown.as_str()) {
+        Some(rest) if own.ends_with('…') => format!("{own}{}", rest.trim_start_matches('…')),
+        Some(rest) => format!("{own}{rest}"),
+        None => label.to_string(),
+    };
+    Some((group, label))
 }
 
 /// Every tool, command and panel the editor can give a shortcut; [`listed`] says which it lists.
@@ -491,7 +522,14 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
     static E: OnceLock<(Vec<Entry>, Vec<Entry>)> = OnceLock::new();
     E.get_or_init(|| {
         let mut v: Vec<Entry> = vectorcraft_tools::catalog::all_tools()
-            .map(|t| Entry { key: format!("tool:{}", t.id), label: t.label.to_string(), group: "Tools".into(), is_tool: true, shows_key: false })
+            .map(|t| Entry {
+                key: format!("tool:{}", t.id),
+                label: t.label.to_string(),
+                group: "Tools".into(),
+                is_tool: true,
+                shows_key: false,
+                english: None,
+            })
             .collect();
         let mut seen = HashSet::new();
         // The commands listed only because an item of the menu bar runs them as a key press would
@@ -506,7 +544,7 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
                 by_the_menu_bar.insert(c.id);
             }
             let group = if c.menu.is_empty() { id_group(c.id) } else { c.menu.join(" › ") };
-            v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false, shows_key: false });
+            v.push(Entry { key: c.id.into(), label: c.label.into(), group, is_tool: false, shows_key: false, english: None });
         }
         v.extend(crate::state::all_panels().map(|(id, label)| Entry {
             key: format!("panel:{id}"),
@@ -514,6 +552,7 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
             group: "Window".into(),
             is_tool: false,
             shows_key: false,
+            english: None,
         }));
         // Each effect of the Effect menu comes next, by its own key (#3296): see [`snapshot`].
         let mut tail = vec![];
@@ -525,7 +564,7 @@ fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
             if !own {
                 by_the_menu_bar.insert(id);
             }
-            tail.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false, shows_key: false });
+            tail.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false, shows_key: false, english: None });
         }
         // A command listed only because an item of the menu bar runs it can have the group and
         // label of another entry. When that entry is an engine command that no item of the menu bar
@@ -679,9 +718,13 @@ pub(crate) fn shown_name(e: &Entry) -> String {
     name_of(e, &shown_group(&e.group), shown_label(e))
 }
 
-/// [`shown_name`] in English, for a status or error message, which is translated when shown.
+/// [`shown_name`] in English, for a status or error message, which is translated when shown; a
+/// plug-in item by its manifest's own text ([`Entry::english`]).
 fn english_name(e: &Entry) -> String {
-    name_of(e, &e.group, &e.label)
+    match &e.english {
+        Some((group, label)) => name_of(e, group, label),
+        None => name_of(e, &e.group, &e.label),
+    }
 }
 
 /// Entry `e`'s name with its group and label as `group` and `label`.
@@ -713,8 +756,13 @@ fn distinct_names(entries: &mut [Entry]) {
     // The entries of each name that more than one entry has.
     fn shared(entries: &[Entry]) -> Vec<Vec<usize>> {
         let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
+        // A plug-in item counts under the name it shows and under its manifest's own name.
         for (i, e) in entries.iter().enumerate() {
-            by_name.entry(english_name(e)).or_default().push(i);
+            let (shown, english) = (name_of(e, &e.group, &e.label), english_name(e));
+            if english != shown {
+                by_name.entry(english).or_default().push(i);
+            }
+            by_name.entry(shown).or_default().push(i);
         }
         by_name.into_values().filter(|list| list.len() > 1).collect()
     }
@@ -1872,8 +1920,8 @@ pub fn is_recording(app: &VectorcraftApp) -> bool {
 // ---------- dialog ----------
 
 /// The dialog's working set as a keymap, with the entries it lists, each entry's shortcut text (in
-/// their order) and the number of conflicts, kept between frames while the set and the installed
-/// plug-ins are unchanged.
+/// their order) and the number of conflicts, kept between frames while the set, the installed
+/// plug-ins and the UI language are unchanged.
 struct DialogView {
     /// The dialog's `overrides` field this was built from.
     source: Value,
@@ -1881,6 +1929,8 @@ struct DialogView {
     backtick: Option<String>,
     /// The plug-in revision of `entries`.
     revision: u64,
+    /// The UI language `entries` name plug-in items in ([`Snapshot::lang`]).
+    lang: &'static str,
     entries: Arc<[Entry]>,
     keymap: Keymap,
     texts: Vec<Option<String>>,
@@ -1898,6 +1948,7 @@ impl DialogView {
             source: stored::to_value(&crate::keymap::effect_keys_in(&overrides, &snapshot.effects)),
             backtick,
             revision: snapshot.revision,
+            lang: snapshot.lang,
             entries: snapshot.entries.clone(),
             keymap,
             texts,
@@ -1905,15 +1956,18 @@ impl DialogView {
         }
     }
 
-    /// The view of `d`'s working set, from the cache unless the set, the backtick key's character
-    /// or the installed plug-ins changed. The dialog's `overrides` field is left in its stored form.
+    /// The view of `d`'s working set, from the cache unless the set, the backtick key's character,
+    /// the installed plug-ins or the UI language changed. The dialog's `overrides` field is left in
+    /// its stored form.
     fn of(ctx: &egui::Context, d: &mut Dialog) -> Arc<DialogView> {
         let id = egui::Id::unique("dialog-shortcuts-view");
         let source = d.fields.get("overrides").unwrap_or(&Value::Null);
         let backtick = backtick_text();
         let revision = menus::plugin_revision();
-        if let Some(v) =
-            ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source && v.backtick == backtick && v.revision == revision)
+        let lang = crate::i18n::current().code();
+        if let Some(v) = ctx
+            .data(|m| m.get_temp::<Arc<DialogView>>(id))
+            .filter(|v| v.source == *source && v.backtick == backtick && v.revision == revision && v.lang == lang)
         {
             return v;
         }
@@ -3600,6 +3654,7 @@ mod tests {
             group: group.into(),
             is_tool: false,
             shows_key: false,
+            english: None,
         };
         let menu = "Object › Plug-ins";
         let mut rows = vec![
@@ -3623,6 +3678,24 @@ mod tests {
                 "Object › Plug-ins › Foo…"
             ]
         );
+    }
+
+    /// The dialog's view is built again when the UI language changes, so reopening Keyboard
+    /// Shortcuts after a change of language lists plug-in items in the new language.
+    #[test]
+    fn the_dialog_view_is_built_again_when_the_language_changes() {
+        let ctx = egui::Context::default();
+        let mut d = Dialog::new("shortcuts", json!({}));
+        let (en, again, de) = with_steady_plugins(|| {
+            let en = DialogView::of(&ctx, &mut d);
+            let again = DialogView::of(&ctx, &mut d);
+            crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+            let de = DialogView::of(&ctx, &mut d);
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            (en, again, de)
+        });
+        assert!(Arc::ptr_eq(&en, &again), "kept while nothing changes");
+        assert_eq!((en.lang, de.lang), ("en", "de"));
     }
 
     /// A command with items in more than one menu is shown under the path of its first item with

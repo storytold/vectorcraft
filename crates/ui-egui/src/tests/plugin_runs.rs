@@ -90,6 +90,37 @@ fn installing_a_heavy_filter_asks_first() {
     assert!(registry::get(id).is_none());
 }
 
+/// The heavy-budget question gives the filter's ID and file SHA-256, and also the manifest's own
+/// name when the name it asks with is a translation.
+#[test]
+fn the_heavy_budget_question_shows_the_id_hash_and_manifest_name() {
+    let mut app = app();
+    let id = "test.ui.heavy.translated";
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Route","version":"1","kind":"filter","budget":"heavy","translations":{{"de":{{"name":"Fräsen"}}}}}}"#);
+    let bytes = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&bytes);
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let ask = |app: &mut VectorcraftApp, lang: &str| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let r = app.run("ui.installPlugin", json!({ "dataBase64": data }));
+        let pending = app.pending_plugin_install.as_ref().map(|p| (p.message.clone(), p.detail.clone()));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        dialogs::cancel(app);
+        assert_eq!(r.unwrap()["pending"], dialogs::plugin::INSTALL_KIND);
+        pending.unwrap()
+    };
+    let (message, detail) = ask(&mut app, "de");
+    assert!(message.contains("Fräsen") && !message.contains("Route"), "{message}");
+    for shown in [id, "Route", hash.as_str()] {
+        assert!(detail.contains(shown), "{shown}: {detail}");
+    }
+    let (message, detail) = ask(&mut app, "en");
+    assert_eq!(message, "Install “Route”, which asks for a heavy budget?");
+    assert!(detail.starts_with(&format!("ID: {id}\nFile SHA-256: {hash}\n\n")), "no second name line: {detail}");
+    assert!(registry::get(id).is_none());
+}
+
 /// The dialog has no Preview; OK closes it and the filter runs in the background, the status bar
 /// saying so, and its result is one undo step named after it, selected.
 #[test]

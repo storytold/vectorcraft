@@ -864,6 +864,35 @@ fn keyboard_shortcuts_leave_a_plugin_commands_text_as_the_plugin_gives_it() {
     assert_eq!(shown, Some(expected));
 }
 
+/// A shortcut conflict names a translated plug-in's filter and command by the manifest's own text,
+/// as status and error messages name every entry in English, while Keyboard Shortcuts lists them in
+/// the UI language.
+#[test]
+fn a_shortcut_conflict_names_a_translated_plugin_by_its_own_text() {
+    let mut app = app();
+    let id = "test.ui.translated.conflict";
+    // Names no other test's plug-in has, since tests running beside this one share the registry.
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Neaten","kind":"filter","commands":[{{"id":"grow","label":"Grow Rim"}}],"translations":{{"de":{{"name":"Ordnen","commands":{{"grow":{{"label":"Rand wachsen"}}}}}}}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    let (grow, own) = (format!("plugin.{id}.grow"), format!("plugin:{id}"));
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    let conflict = |first: &str, second: &str| {
+        let mut ov = craft_keymap::Overrides::new();
+        crate::shortcut_editor::assign(&mut ov, first, Some("Cmd+Alt+Shift+F10"), false).unwrap();
+        crate::shortcut_editor::assign(&mut ov, second, Some("Cmd+Alt+Shift+F10"), false).unwrap_err()
+    };
+    let (by_command, by_filter) = (conflict(&grow, &own), conflict(&own, &grow));
+    let label = crate::shortcut_editor::entry(&grow).map(|e| e.label);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    assert_eq!(label.as_deref(), Some("Rand wachsen"), "the row is in German");
+    assert!(by_command.ends_with("is already used by Object › Plug-ins › Neaten › Grow Rim"), "{by_command}");
+    assert!(by_filter.ends_with("is already used by Object › Plug-ins › Neaten › Neaten"), "{by_filter}");
+}
+
 /// A filter's and an importer's menu item show their names as prompts do, a right-to-left override
 /// escaped, as a filter with commands already showed its submenu.
 #[test]
