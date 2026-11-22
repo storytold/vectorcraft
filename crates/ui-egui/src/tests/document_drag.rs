@@ -53,7 +53,12 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<E
 
 /// The screen point of document point `x`, `y` in the active view.
 fn at(app: &VectorcraftApp, x: f64, y: f64) -> Pos2 {
-    app.canvas_view().unwrap().to_screen(Point::new(x, y))
+    // A document not shown yet takes the canvas area the shown ones were laid out in.
+    let view = app.canvas_view().or_else(|| {
+        let rect = app.views.iter().map(|v| v.rect).find(|r| r.width() > 0.0 && r.height() > 0.0)?;
+        Some(app.view()?.canvas(app.ui_scaling(), rect))
+    });
+    view.unwrap().to_screen(Point::new(x, y))
 }
 
 /// Build a primary-pointer event without keyboard modifiers.

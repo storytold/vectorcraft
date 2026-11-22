@@ -2049,11 +2049,10 @@ fn automation_cannot_hand_files_or_urls_to_other_apps() {
     };
     let (tx, rx) = std::sync::mpsc::channel();
     let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
-    // The URLs a frame asks the window to open.
+    // The URLs a frame of the app asks the window to open: a link opens in the pass after the dialogs' pump.
     let ctx = crate::testing::ui_context();
     let urls = |app: &mut VectorcraftApp| -> Vec<String> {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
-        out.textures_delta.clear();
+        let out = crate::testing::app_frame(app, &ctx, egui::RawInput::default());
         let opens =
             out.platform_output.commands.iter().filter_map(|c| if let egui::OutputCommand::OpenUrl(u) = c { Some(u.url.clone()) } else { None });
         opens.collect()
