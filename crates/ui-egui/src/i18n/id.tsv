@@ -8470,6 +8470,26 @@ breakText	Glyphs	Glif
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Edit Gambar Hasil Generator…
+	Edit Generated Art	Edit Gambar Hasil Generator
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}” ({id}) tidak terpasang, jadi gambar yang dihasilkannya tidak dapat digambar ulang: gambar tetap seperti apa adanya
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	ID plug-in atau parameter objek gambar hasil generator rusak, jadi gambarnya tidak dapat digambar ulang: gambar tetap seperti apa adanya
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	gambar yang dihasilkan “{name}” ({id}) tidak cocok dengan hash dari berkasnya: gambar tetap seperti apa adanya
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	gambar generator lebih besar daripada {MAX_ART_BYTES} byte yang disimpan objek gambar hasil generator
+@msg	select one generated art object	pilih satu objek gambar hasil generator
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` adalah generator: gambar hasilnya dengan plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` adalah plug-in berjenis `{_2}`, bukan generator
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` bukan parameter `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` paling banyak {max_length} karakter
+@msg	`{k}` must be from {min} to {max}	`{k}` harus antara {min} dan {max}
+@msg	each number of `{k}` must be from {min} to {max}	setiap angka `{k}` harus antara {min} dan {max}
+@msg	a generator always gets the usual budget: leave `budget` out	generator selalu mendapat anggaran biasa: hilangkan `budget`
+@msg	a generator returns `objects`, not `{key}`	generator mengembalikan `objects`, bukan `{key}`
+@msg	a generator's objects are new: leave `id` out	objek generator adalah objek baru: hilangkan `id`
+@msg	the generator returned no objects	generator tidak mengembalikan objek apa pun
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parameter lebih besar daripada {MAX_PARAMS_BYTES} byte yang disimpan objek gambar hasil generator
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Buka Dengan
 	No importer plug-ins installed	Tidak ada plug-in impor yang terinstal

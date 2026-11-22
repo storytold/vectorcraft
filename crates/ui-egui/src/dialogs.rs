@@ -459,6 +459,7 @@ registry! {
     Plugin: [plugin::KIND] => plugin::SPEC,
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
     PluginImport: [plugin::IMPORT_KIND] => plugin::IMPORT_SPEC,
+    PluginGenerate: [plugin::GENERATE_KIND] => plugin::GENERATE_SPEC,
     PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     ScriptRun: [script_run::KIND] => script_run::SPEC,
@@ -1117,6 +1118,8 @@ mod tests_package;
 mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
+#[cfg(test)]
+mod tests_plugin_generate;
 #[cfg(test)]
 mod tests_plugin_import;
 #[cfg(test)]

@@ -1,7 +1,10 @@
 //! WebAssembly plug-ins in the menus and their generated dialogs.
 //!
-//! Object › Plug-ins lists the installed object filters (`plugin.dialog {id}`), then Install
-//! Plug-in… and Reload Plug-ins; Effect › Plug-ins lists the live-effect plug-ins, which open the
+//! Object › Plug-ins lists the installed object filters and generators (`plugin.dialog {id}`),
+//! then Edit Generated Art…, Install Plug-in… and Reload Plug-ins. A generator with parameters
+//! opens dialog `pluginGenerate`, whose OK draws new generated art (`plugin.generate`); Edit
+//! Generated Art… opens it with a selected generated art object's parameters, and its OK draws the
+//! object again (`plugin.editGenerated`); Effect › Plug-ins lists the live-effect plug-ins, which open the
 //! effect dialog (`effect.dialog`). A filter with parameters opens dialog `plugin`: one field per
 //! declared parameter (fields named after them; `__plugin` is the plug-in id) with a live
 //! Preview, and OK keeps the run as one undo step (`plugin.run`). A filter without parameters runs
@@ -70,12 +73,12 @@ fn with_commands(plugin: &Plugin, own: Item) -> Item {
     Item::Sub(registry::intern(&permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME)), items)
 }
 
-/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in… and Reload Plug-ins.
+/// Object › Plug-ins: the installed object filters (each with its commands, if it has any) and
+/// generators, then Edit Generated Art…, Install Plug-in… and Reload Plug-ins.
 pub fn object_menu() -> Vec<Item> {
     let mut items: Vec<Item> = registry::list()
         .iter()
-        .filter(|p| p.manifest().kind == Kind::Filter)
+        .filter(|p| matches!(p.manifest().kind, Kind::Filter | Kind::Generator))
         .map(|p| with_commands(p, Item::Cmd(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
@@ -83,6 +86,7 @@ pub fn object_menu() -> Vec<Item> {
     }
     items.extend([
         Item::Sep,
+        Item::Cmd(EDIT_GENERATED, EDIT_COMMAND, Value::Null),
         Item::Cmd("Install Plug-in…", "ui.installPlugin", Value::Null),
         Item::Cmd("Reload Plug-ins", "plugin.reload", Value::Null),
     ]);
@@ -120,14 +124,22 @@ pub fn effect_menu() -> Option<Item> {
     (!items.is_empty()).then_some(Item::Sub("Plug-ins", items))
 }
 
-/// `plugin.dialog {id, params?}`: run filter `id` at once when it takes no parameters or `params`
-/// are given, else open its dialog prefilled with its defaults.
+/// `plugin.dialog {id, params?}`: run filter or generator `id` at once when it takes no parameters
+/// or `params` are given, else open its dialog prefilled with its defaults.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("id").and_then(Value::as_str).ok_or("missing `id` (see plugin.list)")?;
     let plugin = registry::get(id).ok_or_else(|| format!("no plug-in {id:?} is installed"))?;
     let m = plugin.manifest();
     match m.kind {
         Kind::Filter => {}
+        Kind::Generator => {
+            let given = p.get("params").filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
+            if m.params.is_empty() || given.is_some() {
+                return app.run(GENERATE, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
+            }
+            app.ui.dialog = Some(Dialog { kind: GENERATE_KIND.into(), fields: fields_for(m) });
+            return Ok(Value::Null);
+        }
         Kind::Effect => return Err(format!("{} is a live effect (Effect › Plug-ins)", m.name)),
         Kind::Exporter => return Err(format!("{} is an exporter (File › Export › Export As…)", m.name)),
         Kind::Importer => return Err(format!("{} is an importer (File › Open With)", m.name)),
@@ -268,6 +280,68 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         }
         _ => form::commit_preview(app, &command(d), params(d)),
     }
+}
+
+/// The dialog kind of a generator's parameters: for new generated art, or (with `__edit`, the
+/// object's id) for drawing a generated art object again.
+pub const GENERATE_KIND: &str = "pluginGenerate";
+
+const GENERATE: &str = "plugin.generate";
+
+/// Object › Plug-ins › Edit Generated Art…, and the UI command it runs.
+pub const EDIT_GENERATED: &str = "Edit Generated Art…";
+pub const EDIT_COMMAND: &str = "ui.editGeneratedArt";
+
+/// Headed by the plug-in's name, as it is; OK draws the art.
+pub(super) const GENERATE_SPEC: DialogSpec =
+    DialogSpec { heading: |d| d.str("__label"), body: export_body, confirm: generate_confirm, max_width: Some(420.0), ..DialogSpec::FORM };
+
+/// `ui.editGeneratedArt {id?}`: opens the dialog of generated art object `id` (else the one
+/// selected) with the parameters it was drawn with, for the parameters its plug-in still declares.
+/// An object whose plug-in isn't installed, or whose saved fields are damaged, is an error that says
+/// so, and its art stays as it is.
+pub fn open_edit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let mut q = json!({});
+    if let Some(id) = p.get("id").filter(|v| !v.is_null()) {
+        q["id"] = id.clone();
+    }
+    let info = app.run("plugin.generatedInfo", q)?;
+    let id = info.get("id").cloned().unwrap_or(Value::Null);
+    let installed = info.get("installed") == Some(&Value::Bool(true));
+    let Some(plugin) = info.get("plugin").and_then(Value::as_str).and_then(registry::get).filter(|_| installed) else {
+        // The engine's error says which plug-in is missing or that the saved fields are damaged.
+        return app.run("plugin.editGenerated", json!({"id": id, "params": {}}));
+    };
+    let m = plugin.manifest();
+    let mut fields = fields_for(m);
+    if let Some(saved) = info.get("params").and_then(Value::as_object) {
+        for (k, v) in saved.iter().filter(|(k, _)| m.params.iter().any(|(name, _)| name == *k)) {
+            fields.insert(k.clone(), v.clone());
+        }
+    }
+    fields.insert("__edit".into(), id);
+    app.ui.dialog = Some(Dialog { kind: GENERATE_KIND.into(), fields });
+    Ok(Value::Null)
+}
+
+/// Does the selection hold exactly one generated art object, which Edit Generated Art… edits?
+pub fn one_generated_selected(app: &VectorcraftApp) -> bool {
+    app.session
+        .active()
+        .is_some_and(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some_and(|n| n.extras().generated.is_some())).count() == 1)
+}
+
+/// OK: draws new generated art (`plugin.generate`), or draws the object of `__edit` again
+/// (`plugin.editGenerated`), as one undo step; the dialog closes once it is drawn.
+fn generate_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let r = match d.fields.get("__edit").filter(|v| !v.is_null()) {
+        Some(id) => app.run("plugin.editGenerated", json!({"id": id, "params": form::params(d)})),
+        None => app.run(GENERATE, json!({"id": d.str("__plugin"), "params": form::params(d)})),
+    };
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
 }
 
 /// The dialog kind of an exporter's parameters, after Export As picked the file.

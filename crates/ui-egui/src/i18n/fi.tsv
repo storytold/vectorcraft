@@ -8701,6 +8701,26 @@ breakText	Glyphs	Merkit
 	3D Box	3D-laatikko
 	3D Box Tool	3D-laatikkotyökalu
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Muokkaa luotua grafiikkaa…
+	Edit Generated Art	Muokkaa luotua grafiikkaa
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	”{name}” ({id}) ei ole asennettuna, joten sen luomaa grafiikkaa ei voi piirtää uudelleen: grafiikka säilyy ennallaan
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	luodun grafiikkaobjektin laajennustunnus tai parametrit ovat vahingoittuneet, joten sen grafiikkaa ei voi piirtää uudelleen: grafiikka säilyy ennallaan
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	laajennuksen ”{name}” ({id}) luoma grafiikka ei vastaa sen tiedoston tiivistettä: grafiikka säilyy ennallaan
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	generaattorin grafiikka on suurempi kuin {MAX_ART_BYTES} tavua, jotka luotu grafiikkaobjekti säilyttää
+@msg	select one generated art object	valitse yksi luotu grafiikkaobjekti
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` on generaattori: piirrä sen grafiikka komennolla plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` on lajin `{_2}` laajennus, ei generaattori
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` ei ole laajennuksen `{_1}` parametri
+@msg	`{k}` must be at most {max_length} characters	`{k}` saa olla enintään {max_length} merkkiä
+@msg	`{k}` must be from {min} to {max}	`{k}` on oltava välillä {min}–{max}
+@msg	each number of `{k}` must be from {min} to {max}	jokaisen `{k}`-luvun on oltava välillä {min}–{max}
+@msg	a generator always gets the usual budget: leave `budget` out	generaattori saa aina tavallisen budjetin: jätä `budget` pois
+@msg	a generator returns `objects`, not `{key}`	generaattori palauttaa `objects`, ei `{key}`
+@msg	a generator's objects are new: leave `id` out	generaattorin objektit ovat uusia: jätä `id` pois
+@msg	the generator returned no objects	generaattori ei palauttanut objekteja
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parametrit ovat suuremmat kuin {MAX_PARAMS_BYTES} tavua, jotka luotu grafiikkaobjekti säilyttää
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Avaa ohjelmalla
 	No importer plug-ins installed	Tuontilaajennuksia ei ole asennettu

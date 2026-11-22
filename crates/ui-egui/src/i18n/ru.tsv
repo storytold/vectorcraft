@@ -8732,6 +8732,26 @@ shape	Open	Открытый
 	3D Box	3D-параллелепипед
 	3D Box Tool	Инструмент «3D-параллелепипед»
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Изменить созданную графику…
+	Edit Generated Art	Изменить созданную графику
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	«{name}» ({id}) не установлен, поэтому его созданную графику нельзя нарисовать заново: графика остаётся как есть
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	ID модуля или параметры объекта созданной графики повреждены, поэтому его графику нельзя нарисовать заново: графика остаётся как есть
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	созданная графика «{name}» ({id}) не совпадает с хешем из её файла: графика остаётся как есть
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	графика генератора больше {MAX_ART_BYTES} байт, которые хранит объект созданной графики
+@msg	select one generated art object	выделите один объект созданной графики
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` является генератором: нарисуйте его графику командой plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` является модулем вида `{_2}`, а не генератором
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` не является параметром `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` должен содержать не более {max_length} символов
+@msg	`{k}` must be from {min} to {max}	`{k}` должен быть от {min} до {max}
+@msg	each number of `{k}` must be from {min} to {max}	каждое число в `{k}` должно быть от {min} до {max}
+@msg	a generator always gets the usual budget: leave `budget` out	генератор всегда получает обычный бюджет: не указывайте `budget`
+@msg	a generator returns `objects`, not `{key}`	генератор возвращает `objects`, а не `{key}`
+@msg	a generator's objects are new: leave `id` out	объекты генератора новые: не указывайте `id`
+@msg	the generator returned no objects	генератор не вернул ни одного объекта
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	параметры больше {MAX_PARAMS_BYTES} байт, которые хранит объект созданной графики
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Открыть с помощью
 	No importer plug-ins installed	Модули импорта не установлены

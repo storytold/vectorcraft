@@ -10089,6 +10089,26 @@ theme	Appearance	अपीयरेंस
 	Fully Enclosed	पूरी तरह घिरे हुए
 	Drag Direction	खींचने की दिशा
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	जनरेट की गई आर्ट संपादित करें…
+	Edit Generated Art	जनरेट की गई आर्ट संपादित करें
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}” ({id}) इंस्टॉल नहीं है, इसलिए उसकी जनरेट की गई आर्ट फिर से नहीं बनाई जा सकती: आर्ट जैसी है वैसी रहती है
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	जनरेट किए गए आर्ट ऑब्जेक्ट की प्लग-इन आईडी या पैरामीटर खराब हैं, इसलिए उसकी आर्ट फिर से नहीं बनाई जा सकती: आर्ट जैसी है वैसी रहती है
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	“{name}” ({id}) की जनरेट की गई आर्ट उसकी फ़ाइल में दिए हैश से मेल नहीं खाती: आर्ट जैसी है वैसी रहती है
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	जनरेटर की आर्ट उन {MAX_ART_BYTES} बाइट से बड़ी है जो एक जनरेट किया गया आर्ट ऑब्जेक्ट रखता है
+@msg	select one generated art object	एक जनरेट किया गया आर्ट ऑब्जेक्ट चुनें
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` एक जनरेटर है: उसकी आर्ट plugin.generate {{"id": "{_2}"}} से बनाएँ
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` `{_2}` प्रकार का प्लग-इन है, जनरेटर नहीं
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` `{_1}` का पैरामीटर नहीं है
+@msg	`{k}` must be at most {max_length} characters	`{k}` अधिकतम {max_length} वर्णों का होना चाहिए
+@msg	`{k}` must be from {min} to {max}	`{k}` {min} से {max} तक होना चाहिए
+@msg	each number of `{k}` must be from {min} to {max}	`{k}` की हर संख्या {min} से {max} तक होनी चाहिए
+@msg	a generator always gets the usual budget: leave `budget` out	जनरेटर को हमेशा सामान्य बजट मिलता है: `budget` छोड़ दें
+@msg	a generator returns `objects`, not `{key}`	जनरेटर `objects` लौटाता है, `{key}` नहीं
+@msg	a generator's objects are new: leave `id` out	जनरेटर के ऑब्जेक्ट नए होते हैं: `id` छोड़ दें
+@msg	the generator returned no objects	जनरेटर ने कोई ऑब्जेक्ट नहीं लौटाया
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	पैरामीटर उन {MAX_PARAMS_BYTES} बाइट से बड़े हैं जो एक जनरेट किया गया आर्ट ऑब्जेक्ट रखता है
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	इसके साथ खोलें
 	No importer plug-ins installed	कोई इंपोर्टर प्लग-इन स्थापित नहीं है

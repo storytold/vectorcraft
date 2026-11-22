@@ -8488,6 +8488,26 @@ breakText	Glyphs	Glify
 	3D Box	Bryła 3D
 	3D Box Tool	Narzędzie Bryła 3D
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Edytuj wygenerowaną kompozycję…
+	Edit Generated Art	Edytuj wygenerowaną kompozycję
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	„{name}” ({id}) nie jest zainstalowana, więc jej wygenerowanej kompozycji nie można narysować ponownie: kompozycja pozostaje bez zmian
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	identyfikator wtyczki lub parametry obiektu wygenerowanej kompozycji są uszkodzone, więc jego kompozycji nie można narysować ponownie: kompozycja pozostaje bez zmian
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	wygenerowana kompozycja „{name}” ({id}) nie zgadza się z hashem podanym w jej pliku: kompozycja pozostaje bez zmian
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	kompozycja generatora przekracza {MAX_ART_BYTES} bajtów, które przechowuje obiekt wygenerowanej kompozycji
+@msg	select one generated art object	zaznacz jeden obiekt wygenerowanej kompozycji
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` to generator: narysuj jego kompozycję za pomocą plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` to wtyczka rodzaju `{_2}`, a nie generator
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` nie jest parametrem `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` może mieć najwyżej {max_length} znaków
+@msg	`{k}` must be from {min} to {max}	`{k}` musi mieścić się w zakresie od {min} do {max}
+@msg	each number of `{k}` must be from {min} to {max}	każda liczba w `{k}` musi mieścić się w zakresie od {min} do {max}
+@msg	a generator always gets the usual budget: leave `budget` out	generator zawsze dostaje zwykły budżet: pomiń `budget`
+@msg	a generator returns `objects`, not `{key}`	generator zwraca `objects`, a nie `{key}`
+@msg	a generator's objects are new: leave `id` out	obiekty generatora są nowe: pomiń `id`
+@msg	the generator returned no objects	generator nie zwrócił żadnych obiektów
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parametry przekraczają {MAX_PARAMS_BYTES} bajtów, które przechowuje obiekt wygenerowanej kompozycji
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Otwórz za pomocą
 	No importer plug-ins installed	Brak zainstalowanych wtyczek importu

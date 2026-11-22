@@ -10519,6 +10519,26 @@ breakText	Glyphs	Glifler
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Oluşturulan Resmi Düzenle…
+	Edit Generated Art	Oluşturulan Resmi Düzenle
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}” ({id}) yüklü değil, bu yüzden oluşturduğu resim yeniden çizilemez: resim olduğu gibi kalır
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	oluşturulan bir resim nesnesinin eklenti kimliği veya parametreleri bozuk, bu yüzden resmi yeniden çizilemez: resim olduğu gibi kalır
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	“{name}” ({id}) tarafından oluşturulan resim, dosyasındaki karma değerle eşleşmiyor: resim olduğu gibi kalır
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	oluşturucunun resmi, oluşturulan bir resim nesnesinin sakladığı {MAX_ART_BYTES} bayttan büyük
+@msg	select one generated art object	oluşturulan bir resim nesnesi seçin
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` bir oluşturucudur: resmini plugin.generate {{"id": "{_2}"}} ile çizin
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}`, `{_2}` türünde bir eklentidir, oluşturucu değildir
+@msg	`{k}` is not a parameter of `{_1}`	`{k}`, `{_1}` eklentisinin bir parametresi değil
+@msg	`{k}` must be at most {max_length} characters	`{k}` en fazla {max_length} karakter olmalıdır
+@msg	`{k}` must be from {min} to {max}	`{k}` {min} ile {max} arasında olmalıdır
+@msg	each number of `{k}` must be from {min} to {max}	`{k}` içindeki her sayı {min} ile {max} arasında olmalıdır
+@msg	a generator always gets the usual budget: leave `budget` out	oluşturucu her zaman olağan bütçeyi alır: `budget` anahtarını çıkarın
+@msg	a generator returns `objects`, not `{key}`	oluşturucu `{key}` değil, `objects` döndürür
+@msg	a generator's objects are new: leave `id` out	oluşturucunun nesneleri yenidir: `id` anahtarını çıkarın
+@msg	the generator returned no objects	oluşturucu hiç nesne döndürmedi
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parametreler, oluşturulan bir resim nesnesinin sakladığı {MAX_PARAMS_BYTES} bayttan büyük
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Birlikte Aç
 	No importer plug-ins installed	İçe aktarma eklentisi yüklü değil

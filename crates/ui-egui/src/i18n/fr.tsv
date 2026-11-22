@@ -8625,6 +8625,26 @@ breakText	Glyphs	Glyphes
 	3D Box	Boîte 3D
 	3D Box Tool	Outil Boîte 3D
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Modifier l’illustration générée…
+	Edit Generated Art	Modifier l’illustration générée
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}” ({id}) n’est pas installé, son illustration générée ne peut donc pas être redessinée et reste telle quelle
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	l’identifiant de module externe ou les paramètres d’un objet d’illustration générée sont endommagés, son illustration ne peut donc pas être redessinée et reste telle quelle
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	l’illustration générée de “{name}” ({id}) ne correspond pas au hachage indiqué par son fichier et reste telle quelle
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	l’illustration du générateur dépasse les {MAX_ART_BYTES} octets que conserve un objet d’illustration générée
+@msg	select one generated art object	sélectionnez un objet d’illustration générée
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` est un générateur, dessinez son illustration avec plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` est un module externe de type `{_2}`, pas un générateur
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` n’est pas un paramètre de `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` doit comporter au plus {max_length} caractères
+@msg	`{k}` must be from {min} to {max}	`{k}` doit être compris entre {min} et {max}
+@msg	each number of `{k}` must be from {min} to {max}	chaque nombre de `{k}` doit être compris entre {min} et {max}
+@msg	a generator always gets the usual budget: leave `budget` out	un générateur reçoit toujours le budget habituel, omettez `budget`
+@msg	a generator returns `objects`, not `{key}`	un générateur renvoie `objects`, pas `{key}`
+@msg	a generator's objects are new: leave `id` out	les objets d’un générateur sont nouveaux, omettez `id`
+@msg	the generator returned no objects	le générateur n’a renvoyé aucun objet
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	les paramètres dépassent les {MAX_PARAMS_BYTES} octets que conserve un objet d’illustration générée
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Ouvrir avec
 	No importer plug-ins installed	Aucun module externe d’importation installé

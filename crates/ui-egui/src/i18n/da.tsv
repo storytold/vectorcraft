@@ -10685,6 +10685,26 @@ breakText	Glyphs	Glyffer
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Rediger genereret grafik…
+	Edit Generated Art	Rediger genereret grafik
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	»{name}« ({id}) er ikke installeret, så dens genererede grafik kan ikke tegnes igen: grafikken forbliver, som den er
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	plug-in-id'et eller parametrene for et genereret grafikobjekt er beskadiget, så dets grafik kan ikke tegnes igen: grafikken forbliver, som den er
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	den genererede grafik fra »{name}« ({id}) passer ikke med hashen i dens fil: grafikken forbliver, som den er
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	generatorens grafik er større end de {MAX_ART_BYTES} byte, som et genereret grafikobjekt gemmer
+@msg	select one generated art object	marker ét genereret grafikobjekt
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` er en generator: tegn dens grafik med plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` er et plug-in af typen `{_2}`, ikke en generator
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` er ikke en parameter for `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` må højst være {max_length} tegn
+@msg	`{k}` must be from {min} to {max}	`{k}` skal være fra {min} til {max}
+@msg	each number of `{k}` must be from {min} to {max}	hvert tal i `{k}` skal være fra {min} til {max}
+@msg	a generator always gets the usual budget: leave `budget` out	en generator får altid det sædvanlige budget: udelad `budget`
+@msg	a generator returns `objects`, not `{key}`	en generator returnerer `objects`, ikke `{key}`
+@msg	a generator's objects are new: leave `id` out	en generators objekter er nye: udelad `id`
+@msg	the generator returned no objects	generatoren returnerede ingen objekter
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parametrene er større end de {MAX_PARAMS_BYTES} byte, som et genereret grafikobjekt gemmer
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Åbn med
 	No importer plug-ins installed	Ingen import-plug-ins installeret

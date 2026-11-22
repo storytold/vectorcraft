@@ -7822,6 +7822,10 @@ shape	Open	Otvoren
 	3D Box	3D kutija
 	3D Box Tool	Alat za 3D kutiju
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Uredi generisanu grafiku…
+	Edit Generated Art	Uredi generisanu grafiku
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Otvori pomoću
 	No importer plug-ins installed	Nisu instalirani dodaci za uvoz

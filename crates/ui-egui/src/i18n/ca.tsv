@@ -8648,6 +8648,26 @@ breakText	Glyphs	Glifs
 	3D Box	Caixa 3D
 	3D Box Tool	Eina Caixa 3D
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Edita la il·lustració generada…
+	Edit Generated Art	Edita la il·lustració generada
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	«{name}» ({id}) no està instal·lat, així que la seva il·lustració generada no es pot tornar a dibuixar: la il·lustració es queda tal com és
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	l’identificador de complement o els paràmetres d’un objecte d’il·lustració generada estan malmesos, així que la seva il·lustració no es pot tornar a dibuixar: la il·lustració es queda tal com és
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	la il·lustració generada de «{name}» ({id}) no coincideix amb el hash del seu fitxer: la il·lustració es queda tal com és
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	la il·lustració del generador ocupa més dels {MAX_ART_BYTES} bytes que desa un objecte d’il·lustració generada
+@msg	select one generated art object	seleccioneu un objecte d’il·lustració generada
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` és un generador: dibuixeu-ne la il·lustració amb plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` és un complement del tipus `{_2}`, no un generador
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` no és un paràmetre de `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` ha de tenir com a màxim {max_length} caràcters
+@msg	`{k}` must be from {min} to {max}	`{k}` ha d’estar entre {min} i {max}
+@msg	each number of `{k}` must be from {min} to {max}	cada nombre de `{k}` ha d’estar entre {min} i {max}
+@msg	a generator always gets the usual budget: leave `budget` out	un generador sempre rep el pressupost habitual: ometeu `budget`
+@msg	a generator returns `objects`, not `{key}`	un generador retorna `objects`, no `{key}`
+@msg	a generator's objects are new: leave `id` out	els objectes d’un generador són nous: ometeu `id`
+@msg	the generator returned no objects	el generador no ha retornat cap objecte
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	els paràmetres ocupen més dels {MAX_PARAMS_BYTES} bytes que desa un objecte d’il·lustració generada
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Obre amb
 	No importer plug-ins installed	No hi ha complements d’importació instal·lats

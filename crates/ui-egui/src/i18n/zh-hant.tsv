@@ -8322,6 +8322,26 @@ breakText	Glyphs	字符
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	編輯產生的圖稿…
+	Edit Generated Art	編輯產生的圖稿
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	「{name}」({id}) 未安裝，因此無法重新繪製其產生的圖稿：圖稿保持原樣
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	某個產生圖稿物件的增效模組 ID 或參數已損毀，因此無法重新繪製其圖稿：圖稿保持原樣
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	「{name}」({id}) 產生的圖稿與其檔案中的雜湊值不符：圖稿保持原樣
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	產生器的圖稿超過產生圖稿物件可保存的 {MAX_ART_BYTES} 位元組
+@msg	select one generated art object	請選取一個產生圖稿物件
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` 是產生器：請用 plugin.generate {{"id": "{_2}"}} 繪製其圖稿
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` 是 `{_2}` 類型的增效模組，不是產生器
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` 不是 `{_1}` 的參數
+@msg	`{k}` must be at most {max_length} characters	`{k}` 最多只能有 {max_length} 個字元
+@msg	`{k}` must be from {min} to {max}	`{k}` 必須介於 {min} 到 {max} 之間
+@msg	each number of `{k}` must be from {min} to {max}	`{k}` 中的每個數字必須介於 {min} 到 {max} 之間
+@msg	a generator always gets the usual budget: leave `budget` out	產生器一律使用一般預算：請移除 `budget`
+@msg	a generator returns `objects`, not `{key}`	產生器傳回的是 `objects`，不是 `{key}`
+@msg	a generator's objects are new: leave `id` out	產生器的物件是新物件：請移除 `id`
+@msg	the generator returned no objects	產生器未傳回任何物件
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	參數超過產生圖稿物件可保存的 {MAX_PARAMS_BYTES} 位元組
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	開啟方式
 	No importer plug-ins installed	未安裝匯入增效模組

@@ -1227,6 +1227,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "ui.printPresetDialog" => crate::dialogs::print::open_preset(app, p),
         "plugin.dialog" => crate::dialogs::plugin::open(app, p),
+        crate::dialogs::plugin::EDIT_COMMAND => crate::dialogs::plugin::open_edit(app, p),
         "ui.installPlugin" => io::install_plugin(app, p),
         "plugin.cancelRuns" => Ok(crate::plugin_runs::cancel_all(app)),
         "plugin.hideRuns" => Ok(crate::plugin_runs::hide_all(app)),

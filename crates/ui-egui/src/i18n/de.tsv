@@ -8254,6 +8254,26 @@ breakText	Glyphs	Glyphen
 	3D Box	3D-Quader
 	3D Box Tool	3D-Quader-Werkzeug
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Generierte Grafik bearbeiten…
+	Edit Generated Art	Generierte Grafik bearbeiten
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	„{name}“ ({id}) ist nicht installiert, daher kann seine generierte Grafik nicht neu gezeichnet werden: Die Grafik bleibt, wie sie ist
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	die Plug-in-ID oder die Parameter eines generierten Grafikobjekts sind beschädigt, daher kann seine Grafik nicht neu gezeichnet werden: Die Grafik bleibt, wie sie ist
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	die generierte Grafik von „{name}“ ({id}) passt nicht zum Hash aus ihrer Datei: Die Grafik bleibt, wie sie ist
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	die Grafik des Generators ist größer als die {MAX_ART_BYTES} Byte, die ein generiertes Grafikobjekt aufnimmt
+@msg	select one generated art object	Wählen Sie ein generiertes Grafikobjekt aus
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` ist ein Generator: Zeichnen Sie seine Grafik mit plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` ist ein Plug-in der Art `{_2}`, kein Generator
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` ist kein Parameter von `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` darf höchstens {max_length} Zeichen lang sein
+@msg	`{k}` must be from {min} to {max}	`{k}` muss zwischen {min} und {max} liegen
+@msg	each number of `{k}` must be from {min} to {max}	jede Zahl in `{k}` muss zwischen {min} und {max} liegen
+@msg	a generator always gets the usual budget: leave `budget` out	ein Generator erhält immer das übliche Budget: Lassen Sie `budget` weg
+@msg	a generator returns `objects`, not `{key}`	ein Generator gibt `objects` zurück, nicht `{key}`
+@msg	a generator's objects are new: leave `id` out	die Objekte eines Generators sind neu: Lassen Sie `id` weg
+@msg	the generator returned no objects	der Generator hat keine Objekte zurückgegeben
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	die Parameter sind größer als die {MAX_PARAMS_BYTES} Byte, die ein generiertes Grafikobjekt aufnimmt
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Öffnen mit
 	No importer plug-ins installed	Keine Import-Plug-ins installiert

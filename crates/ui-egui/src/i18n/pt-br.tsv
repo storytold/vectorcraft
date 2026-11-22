@@ -8808,6 +8808,26 @@ swatch	Yellow Green	Verde-amarelado
 	3D Box	Caixa 3D
 	3D Box Tool	Ferramenta Caixa 3D
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Editar Arte Gerada…
+	Edit Generated Art	Editar Arte Gerada
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}” ({id}) não está instalado, então sua arte gerada não pode ser desenhada de novo: a arte fica como está
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	o ID do plug-in ou os parâmetros de um objeto de arte gerada estão danificados, então sua arte não pode ser desenhada de novo: a arte fica como está
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	a arte gerada de “{name}” ({id}) não corresponde ao hash indicado pelo arquivo: a arte fica como está
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	a arte do gerador ultrapassa os {MAX_ART_BYTES} bytes que um objeto de arte gerada guarda
+@msg	select one generated art object	selecione um objeto de arte gerada
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` é um gerador: desenhe sua arte com plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` é um plug-in do tipo `{_2}`, não um gerador
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` não é um parâmetro de `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` deve ter no máximo {max_length} caracteres
+@msg	`{k}` must be from {min} to {max}	`{k}` deve estar entre {min} e {max}
+@msg	each number of `{k}` must be from {min} to {max}	cada número de `{k}` deve estar entre {min} e {max}
+@msg	a generator always gets the usual budget: leave `budget` out	um gerador sempre recebe o orçamento usual: omita `budget`
+@msg	a generator returns `objects`, not `{key}`	um gerador retorna `objects`, não `{key}`
+@msg	a generator's objects are new: leave `id` out	os objetos de um gerador são novos: omita `id`
+@msg	the generator returned no objects	o gerador não retornou nenhum objeto
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	os parâmetros ultrapassam os {MAX_PARAMS_BYTES} bytes que um objeto de arte gerada guarda
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Abrir Com
 	No importer plug-ins installed	Nenhum plug-in de importação instalado

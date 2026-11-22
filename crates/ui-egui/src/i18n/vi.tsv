@@ -8320,6 +8320,26 @@ breakText	Glyphs	Glyph
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Sửa hình được tạo…
+	Edit Generated Art	Sửa hình được tạo
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}” ({id}) chưa được cài đặt nên không thể vẽ lại hình được tạo của nó: hình được giữ nguyên
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	ID plug-in hoặc tham số của một đối tượng hình được tạo bị hỏng nên không thể vẽ lại hình của nó: hình được giữ nguyên
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	hình được tạo của “{name}” ({id}) không khớp với mã băm trong tệp của nó: hình được giữ nguyên
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	hình của trình tạo lớn hơn {MAX_ART_BYTES} byte mà một đối tượng hình được tạo lưu giữ
+@msg	select one generated art object	hãy chọn một đối tượng hình được tạo
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` là trình tạo: hãy vẽ hình của nó bằng plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` là plug-in loại `{_2}`, không phải trình tạo
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` không phải là tham số của `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` chỉ được có tối đa {max_length} ký tự
+@msg	`{k}` must be from {min} to {max}	`{k}` phải từ {min} đến {max}
+@msg	each number of `{k}` must be from {min} to {max}	mỗi số trong `{k}` phải từ {min} đến {max}
+@msg	a generator always gets the usual budget: leave `budget` out	trình tạo luôn nhận ngân sách thông thường: hãy bỏ `budget`
+@msg	a generator returns `objects`, not `{key}`	trình tạo trả về `objects`, không phải `{key}`
+@msg	a generator's objects are new: leave `id` out	đối tượng của trình tạo là đối tượng mới: hãy bỏ `id`
+@msg	the generator returned no objects	trình tạo không trả về đối tượng nào
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	tham số lớn hơn {MAX_PARAMS_BYTES} byte mà một đối tượng hình được tạo lưu giữ
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Mở bằng
 	No importer plug-ins installed	Không có plug-in nhập được cài đặt

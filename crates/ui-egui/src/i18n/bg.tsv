@@ -7767,6 +7767,10 @@ breakText	Glyphs	Глифи
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Редактиране на генерирана графика…
+	Edit Generated Art	Редактиране на генерирана графика
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Отваряне с
 	No importer plug-ins installed	Няма инсталирани плъгини за импортиране

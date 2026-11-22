@@ -425,9 +425,13 @@ pub fn uses_pattern(n: &Node, name: Option<&str>) -> bool {
 }
 
 /// Transform Patterns without Transform Objects: `m` moves the pattern tiles of `n` and of
-/// everything inside it, and the art stays where it is.
+/// everything inside it, and the art stays where it is. A generated art object keeps the move, so
+/// its art drawn again has its tiles moved too.
 pub fn transform_patterns_only(n: &mut Node, m: Affine) {
     transform_pattern_paints(n, m);
+    if let Some(g) = n.extras_if_any().and_then(|e| e.generated.as_deref_mut()) {
+        g.pattern_transform = m * g.pattern_transform;
+    }
     for c in n.children_mut().into_iter().flatten() {
         transform_patterns_only(Arc::make_mut(c), m);
     }

@@ -8264,6 +8264,26 @@ breakText	Glyphs	글리프
 	3D Box	3D 상자
 	3D Box Tool	3D 상자 도구
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	생성된 아트 편집…
+	Edit Generated Art	생성된 아트 편집
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	“{name}”({id})이(가) 설치되어 있지 않아 생성된 아트를 다시 그릴 수 없습니다. 아트는 그대로 유지됩니다
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	생성된 아트 개체의 플러그인 ID 또는 매개변수가 손상되어 아트를 다시 그릴 수 없습니다. 아트는 그대로 유지됩니다
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	“{name}”({id})의 생성된 아트가 파일에 기록된 해시와 일치하지 않습니다. 아트는 그대로 유지됩니다
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	생성기의 아트가 생성된 아트 개체가 보관하는 {MAX_ART_BYTES}바이트보다 큽니다
+@msg	select one generated art object	생성된 아트 개체를 하나 선택하십시오
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}`은(는) 생성기입니다. plugin.generate {{"id": "{_2}"}}로 아트를 그리십시오
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}`은(는) `{_2}` 종류의 플러그인이며 생성기가 아닙니다
+@msg	`{k}` is not a parameter of `{_1}`	`{k}`은(는) `{_1}`의 매개변수가 아닙니다
+@msg	`{k}` must be at most {max_length} characters	`{k}`은(는) {max_length}자 이하여야 합니다
+@msg	`{k}` must be from {min} to {max}	`{k}`은(는) {min}에서 {max} 사이여야 합니다
+@msg	each number of `{k}` must be from {min} to {max}	`{k}`의 각 숫자는 {min}에서 {max} 사이여야 합니다
+@msg	a generator always gets the usual budget: leave `budget` out	생성기는 항상 일반 예산을 받습니다. `budget`을 생략하십시오
+@msg	a generator returns `objects`, not `{key}`	생성기는 `{key}`이(가) 아니라 `objects`를 반환합니다
+@msg	a generator's objects are new: leave `id` out	생성기의 개체는 새 개체입니다. `id`를 생략하십시오
+@msg	the generator returned no objects	생성기가 개체를 반환하지 않았습니다
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	매개변수가 생성된 아트 개체가 보관하는 {MAX_PARAMS_BYTES}바이트보다 큽니다
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	연결 프로그램
 	No importer plug-ins installed	설치된 가져오기 플러그인 없음

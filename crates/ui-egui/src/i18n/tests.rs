@@ -3904,6 +3904,33 @@ fn cmx_import_notes_are_translated() {
     }
 }
 
+/// Object › Plug-ins › Edit Generated Art… and its undo step are in every complete catalog, and the
+/// notes and errors about generated art objects (as the engine fills them in) are translated in
+/// every complete-message catalog.
+#[test]
+fn generated_art_strings_are_translated() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Edit Generated Art…", "Edit Generated Art"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let messages = [
+        "“Squares” (org.example.squares) isn't installed, so its generated art can't be drawn again: the art stays as it is",
+        "a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is",
+        "the generated art of “Squares” (org.example.squares) doesn't match the hash its file gave: the art stays as it is",
+        "the generator's art is larger than the 16777216 bytes a generated art object keeps",
+        "select one generated art object",
+        "`org.example.squares` is a generator: draw its art with plugin.generate {\"id\": \"org.example.squares\"}",
+        "`size` must be from 1 to 100",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for m in messages {
+            assert_ne!(message(lang, m), m, "{code}: {m}");
+        }
+    }
+}
+
 /// The plug-in host's status and error messages (manifests, modules, runs and the output of
 /// importers, exporters and effects) have an `@msg` row in every complete-message catalog.
 #[test]

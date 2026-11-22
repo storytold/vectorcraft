@@ -8629,6 +8629,26 @@ breakText	Glyphs	Glyfy
 	3D Box	3D kvádr
 	3D Box Tool	Nástroj 3D kvádr
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Upravit generovanou kresbu…
+	Edit Generated Art	Upravit generovanou kresbu
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	„{name}“ ({id}) není nainstalován, takže jeho generovanou kresbu nelze znovu vykreslit: kresba zůstane, jak je
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	ID zásuvného modulu nebo parametry objektu generované kresby jsou poškozené, takže jeho kresbu nelze znovu vykreslit: kresba zůstane, jak je
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	generovaná kresba „{name}“ ({id}) neodpovídá hashi uvedenému v jejím souboru: kresba zůstane, jak je
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	kresba generátoru je větší než {MAX_ART_BYTES} bajtů, které objekt generované kresby uchová
+@msg	select one generated art object	vyberte jeden objekt generované kresby
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` je generátor: jeho kresbu vykreslíte pomocí plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` je zásuvný modul druhu `{_2}`, ne generátor
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` není parametr `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` smí mít nejvýše {max_length} znaků
+@msg	`{k}` must be from {min} to {max}	`{k}` musí být od {min} do {max}
+@msg	each number of `{k}` must be from {min} to {max}	každé číslo v `{k}` musí být od {min} do {max}
+@msg	a generator always gets the usual budget: leave `budget` out	generátor vždy dostane obvyklý rozpočet: vynechte `budget`
+@msg	a generator returns `objects`, not `{key}`	generátor vrací `objects`, ne `{key}`
+@msg	a generator's objects are new: leave `id` out	objekty generátoru jsou nové: vynechte `id`
+@msg	the generator returned no objects	generátor nevrátil žádné objekty
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parametry jsou větší než {MAX_PARAMS_BYTES} bajtů, které objekt generované kresby uchová
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Otevřít pomocí
 	No importer plug-ins installed	Nejsou nainstalovány žádné importní zásuvné moduly

@@ -10181,6 +10181,26 @@ breakText	Glyphs	字形
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	生成アートを編集…
+	Edit Generated Art	生成アートを編集
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	「{name}」({id}) がインストールされていないため、その生成アートを描き直せません。アートはそのまま残ります
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	生成アートオブジェクトのプラグイン ID またはパラメーターが壊れているため、そのアートを描き直せません。アートはそのまま残ります
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	「{name}」({id}) の生成アートがファイルに記録されたハッシュと一致しません。アートはそのまま残ります
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	ジェネレーターのアートが、生成アートオブジェクトが保持できる {MAX_ART_BYTES} バイトを超えています
+@msg	select one generated art object	生成アートオブジェクトを 1 つ選択してください
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` はジェネレーターです。plugin.generate {{"id": "{_2}"}} でアートを描いてください
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` は種類 `{_2}` のプラグインで、ジェネレーターではありません
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` は `{_1}` のパラメーターではありません
+@msg	`{k}` must be at most {max_length} characters	`{k}` は {max_length} 文字以内にしてください
+@msg	`{k}` must be from {min} to {max}	`{k}` は {min} から {max} の範囲にしてください
+@msg	each number of `{k}` must be from {min} to {max}	`{k}` の各数値は {min} から {max} の範囲にしてください
+@msg	a generator always gets the usual budget: leave `budget` out	ジェネレーターには常に通常の予算が割り当てられます。`budget` は指定しないでください
+@msg	a generator returns `objects`, not `{key}`	ジェネレーターが返すのは `objects` で、`{key}` ではありません
+@msg	a generator's objects are new: leave `id` out	ジェネレーターのオブジェクトは新規です。`id` は指定しないでください
+@msg	the generator returned no objects	ジェネレーターがオブジェクトを返しませんでした
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	パラメーターが、生成アートオブジェクトが保持できる {MAX_PARAMS_BYTES} バイトを超えています
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	このアプリケーションで開く
 	No importer plug-ins installed	読み込みプラグインはインストールされていません

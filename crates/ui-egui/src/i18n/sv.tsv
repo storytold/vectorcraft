@@ -10545,6 +10545,26 @@ digits	Hindi	Hindi
 @msg	{k} must be a string	{k} måste vara en sträng
 @msg	{k} must be true or false	{k} måste vara true eller false
 
+# Generator plug-ins (Object › Plug-ins, plugin.generate, plugin.editGenerated)
+	Edit Generated Art…	Redigera genererad grafik…
+	Edit Generated Art	Redigera genererad grafik
+@msg	“{name}” ({id}) isn't installed, so its generated art can't be drawn again: the art stays as it is	”{name}” ({id}) är inte installerat, så dess genererade grafik kan inte ritas om: grafiken förblir som den är
+@msg	a generated art object's plug-in id or parameters are damaged, so its art can't be drawn again: the art stays as it is	plugin-id:t eller parametrarna för ett genererat grafikobjekt är skadade, så dess grafik kan inte ritas om: grafiken förblir som den är
+@msg	the generated art of “{name}” ({id}) doesn't match the hash its file gave: the art stays as it is	den genererade grafiken från ”{name}” ({id}) stämmer inte med hashen i dess fil: grafiken förblir som den är
+@msg	the generator's art is larger than the {MAX_ART_BYTES} bytes a generated art object keeps	generatorns grafik är större än de {MAX_ART_BYTES} byte som ett genererat grafikobjekt sparar
+@msg	select one generated art object	markera ett genererat grafikobjekt
+@msg	`{_1}` is a generator: draw its art with plugin.generate {{"id": "{_2}"}}	`{_1}` är en generator: rita dess grafik med plugin.generate {{"id": "{_2}"}}
+@msg	`{_1}` is a plug-in of kind `{_2}`, not a generator	`{_1}` är ett plugin av typen `{_2}`, inte en generator
+@msg	`{k}` is not a parameter of `{_1}`	`{k}` är inte en parameter för `{_1}`
+@msg	`{k}` must be at most {max_length} characters	`{k}` får vara högst {max_length} tecken
+@msg	`{k}` must be from {min} to {max}	`{k}` måste vara från {min} till {max}
+@msg	each number of `{k}` must be from {min} to {max}	varje tal i `{k}` måste vara från {min} till {max}
+@msg	a generator always gets the usual budget: leave `budget` out	en generator får alltid den vanliga budgeten: utelämna `budget`
+@msg	a generator returns `objects`, not `{key}`	en generator returnerar `objects`, inte `{key}`
+@msg	a generator's objects are new: leave `id` out	en generators objekt är nya: utelämna `id`
+@msg	the generator returned no objects	generatorn returnerade inga objekt
+@msg	the parameters are larger than the {MAX_PARAMS_BYTES} bytes a generated art object keeps	parametrarna är större än de {MAX_PARAMS_BYTES} byte som ett genererat grafikobjekt sparar
+
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Öppna med
 	No importer plug-ins installed	Inga importplugins är installerade
