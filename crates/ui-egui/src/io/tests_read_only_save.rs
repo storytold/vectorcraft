@@ -301,9 +301,9 @@ fn readonly_changed_format_asks_for_its_options_before_writing() {
     assert_eq!(app.run("file.save", json!({})).unwrap()["pending"], "fileDialog");
     picker.answer_saved("/elsewhere/Poster.pdf", None);
     poll(&mut app);
-    // PLAN: assumed the Save PDF dialog's key is "savePdf" (export-w22)
-    let fields = fields_of(&app, "savePdf").expect("the picked format's Save dialog");
-    assert_eq!(fields["path"], "/elsewhere/Poster.pdf");
+    assert!(fields_of(&app, "pdf-export").is_some(), "the picked format's Save dialog");
+    let job = app.save_pdf.as_ref().and_then(|open| open.job.as_ref());
+    assert_eq!(job.and_then(|job| job.path.as_deref()), Some("/elsewhere/Poster.pdf"));
     assert_eq!(state(&app), before);
     assert_eq!(files.lock().unwrap().attempts, ["/locked/Poster.svg"]);
 }
