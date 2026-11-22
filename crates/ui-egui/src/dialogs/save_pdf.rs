@@ -576,11 +576,10 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 fn differs_from_preset(app: &VectorcraftApp, d: &Dialog) -> bool {
     let saved = &app.session.prefs.pdf_presets;
     let p = params(d);
-    let settings = match (pdf::preset_settings("ui.savePdfDialog", &p, saved), pdf::resolve("ui.savePdfDialog", &p, saved)) {
-        (Ok(base), Ok(current)) => base != current,
-        _ => false,
+    let (Ok(base), Ok(current)) = (pdf::preset_settings("ui.savePdfDialog", &p, saved), pdf::resolve("ui.savePdfDialog", &p, saved)) else {
+        return false;
     };
-    settings
+    base != current
         || d.fields.contains_key("flattener") && {
             let flattener_saved = &app.session.prefs.flattener_presets;
             match (flattener(d, flattener_saved), FlattenOptions::for_export(Some(&flattener_name(d)), None, flattener_saved)) {

@@ -1671,8 +1671,12 @@ fn the_preset_menu_compares_with_the_saved_preset_as_it_is_now() {
     assert!(!reads_custom(&r, &mut app), "the saved preset");
     app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.6"})).unwrap();
     assert!(reads_custom(&r, &mut app), "the preset replaced");
+    let mut other = FlattenOptions::for_export(Some(pdf::DEFAULT_FLATTENER), None, &[]).unwrap();
+    other.balance = if other.balance == 10.0 { 20.0 } else { 10.0 };
+    set_field(&mut app, "flattener", serde_json::to_value(&other).unwrap());
+    assert!(reads_custom(&r, &mut app), "flattener options that differ");
     app.run("pdf.preset.delete", json!({"name": "Mine"})).unwrap();
-    assert!(!reads_custom(&r, &mut app), "the preset deleted");
+    assert!(!reads_custom(&r, &mut app), "the preset deleted, with flattener options that differ");
 }
 
 #[test]
