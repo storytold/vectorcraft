@@ -1476,6 +1476,39 @@ fn shift_pressed_at_a_still_release_constrains_the_tool_drag() {
     assert!((w - h).abs() < 1e-6, "Shift pressed at a still release draws a square, got {w} x {h}");
 }
 
+/// A click whose press and release come in one frame ends with the modifiers held at its release,
+/// not those of the next frame: Alt pressed before the release and let go after it in that frame
+/// opens the Rectangle dialog centered on the click, and Alt pressed after the release does not.
+#[test]
+fn a_click_within_one_frame_ends_with_the_modifiers_of_its_release() {
+    let click = |held: egui::Modifiers, after: egui::Modifiers| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let at = app.canvas_rect.unwrap().center();
+        let b = |pressed, modifiers| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame(
+            &mut app,
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(at),
+                b(true, egui::Modifiers::NONE),
+                egui::Event::ModifiersChanged(held),
+                b(false, held),
+                egui::Event::ModifiersChanged(after),
+            ],
+        );
+        frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+        let d = app.ui.dialog.as_ref().expect("the click opens the Rectangle dialog");
+        assert_eq!(d.kind, "rectangle");
+        d.fields.get("alt").cloned()
+    };
+    assert_eq!(click(egui::Modifiers::ALT, egui::Modifiers::NONE), Some(json!(true)), "Alt held at the release centers the rectangle");
+    assert_eq!(click(egui::Modifiers::NONE, egui::Modifiers::ALT), Some(json!(false)), "Alt pressed after the release does not");
+}
+
 /// Space pressed after a tool drag's release, in the same frame, does not count for the drag: the
 /// Rectangle tool's last move still resizes the rectangle instead of moving it.
 #[test]

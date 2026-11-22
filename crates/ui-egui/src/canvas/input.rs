@@ -121,6 +121,13 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
             ui.data_mut(|dd| dd.insert_temp(name_press_id(), (i, press_shift)));
         } else {
             begin_drag(app, ui, &f, p);
+            // Pressed and released in this frame (a quick click or tap): the press ends now, with
+            // the modifiers, Space and position of its release, not those of the next frame.
+            if !pointer.primary_down()
+                && let Some(d) = ui.data(|dd| dd.get_temp::<Drag>(drag_id()))
+            {
+                end_drag(app, ui, &f, d, egui::PointerButton::Primary, p);
+            }
         }
     } else if drag.is_none()
         && resp.hovered()
@@ -140,12 +147,7 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         if held {
             drag_held(app, ui, &f, d, p);
         } else {
-            // The drag ends where its button went up, with the modifiers and Space held then: the
-            // moves and key changes after the release in this frame do not count.
-            let m = release_mods(ui, button).unwrap_or(f.m);
-            let space = space_lends_view_tools(app, m, key_at_release(ui, egui::Key::Space, button, f.space_before));
-            let up = Pointing { m, space, ..f };
-            drag_released(app, ui, &up, d, release_pos(ui, button, false).unwrap_or(p));
+            end_drag(app, ui, &f, d, button, p);
         }
     } else if let Some(p) = hover_tool
         // A press on an artboard's name starts no drag: the moves while it is held are not hover.
@@ -592,6 +594,16 @@ fn dispatch_frame_moves(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, backquo
         let pen = move_pose(app, &xf, pose);
         dispatch(app, &PointerEvent { kind: PointerKind::Drag, pos: xf.to_doc(at), mods: mods(m, space), backquote, pressure, pen }, view);
     }
+}
+
+/// A gesture whose `button` went up ends where it went up, with the modifiers and Space held then:
+/// the moves and key changes after the release in this frame do not count. Without a release in
+/// this frame, it ends at `p` with the modifiers and Space held now.
+fn end_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, button: egui::PointerButton, p: Pos2) {
+    let m = release_mods(ui, button).unwrap_or(f.m);
+    let space = space_lends_view_tools(app, m, key_at_release(ui, egui::Key::Space, button, f.space_before));
+    let up = Pointing { m, space, ..*f };
+    drag_released(app, ui, &up, d, release_pos(ui, button, false).unwrap_or(p));
 }
 
 /// A gesture released at `p`: the view settles, or the tool gets its up.
