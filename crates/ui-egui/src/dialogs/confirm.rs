@@ -129,7 +129,7 @@ pub(crate) fn ask_reset_prefs(app: &mut VectorcraftApp) {
 /// OK on [`ask_reset_prefs`]: Preferences again, its fields at their defaults.
 fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut prefs = super::parent(d).filter(|p| p.kind == "preferences").ok_or("the dialog it was opened over is no longer open")?;
-    crate::prefs_dialog::reset_fields(&mut prefs);
+    crate::prefs_dialog::reset_fields(&mut prefs, &app.ui);
     crate::original_editor::reset(app);
     app.ui.dialog = Some(prefs);
     Ok(Value::Null)

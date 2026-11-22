@@ -33,6 +33,12 @@ pub(crate) fn reset(app: &mut VectorcraftApp) {
     app.original_editor.generation = app.original_editor.generation.wrapping_add(1);
 }
 
+/// `prefs.reset`: the saved choice goes back to the default, and the next Preferences shows it.
+pub(crate) fn reset_saved(app: &mut VectorcraftApp) {
+    app.ui.original_editor = Choice::default();
+    reset(app);
+}
+
 pub(crate) fn cancel(app: &mut VectorcraftApp) {
     open(app);
 }
@@ -171,6 +177,30 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         prefs_dialog::confirm(&mut app).unwrap();
         assert!(app.ui.original_editor.path.is_none());
+    }
+
+    /// `prefs.reset` of every category or of File Handling, alone or as a batch step, resets the
+    /// saved choice; a reset of another category keeps it.
+    #[test]
+    fn prefs_reset_resets_the_saved_choice_with_file_handling() {
+        let mut app = app();
+        let chosen = |app: &mut VectorcraftApp| {
+            prefs_dialog::open(app, Some("File Handling"));
+            choose(app, Some("/Apps/My Editor.app")).unwrap();
+            prefs_dialog::confirm(app).unwrap();
+            assert!(app.ui.original_editor.path.is_some());
+        };
+        chosen(&mut app);
+        app.run("prefs.reset", json!({"category": "General"})).unwrap();
+        assert!(app.ui.original_editor.path.is_some(), "General keeps the choice");
+        app.run("prefs.reset", json!({"category": "File Handling"})).unwrap();
+        assert!(app.ui.original_editor.path.is_none(), "File Handling resets it");
+        chosen(&mut app);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("command.batch", json!({"commands": [{"command": "prefs.reset", "params": {}}]})).unwrap();
+        assert!(app.ui.original_editor.path.is_none(), "every category, as a batch step");
+        prefs_dialog::open(&mut app, Some("File Handling"));
+        assert!(app.original_editor.choice.path.is_none(), "Preferences shows the default");
     }
 
     #[test]

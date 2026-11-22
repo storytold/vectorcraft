@@ -175,6 +175,8 @@ pub fn builtins() -> Vec<Workspace> {
 /// restored if Touch was entered automatically. Each switch keeps the layout it leaves and brings
 /// back the one it returns to as it was left, as Window › Workspace does.
 pub fn sync_touch_workspace(app: &mut VectorcraftApp, touch_screen: bool) {
+    // A pending `prefs.reset` applies to the workspace it was run in.
+    crate::prefs_dialog::apply_prefs_resets(app);
     let auto = app.session.prefs.touch_workspace && touch_screen;
     if auto {
         if app.ui.workspace != TOUCH {

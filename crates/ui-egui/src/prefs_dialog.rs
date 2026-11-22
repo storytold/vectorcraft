@@ -225,12 +225,21 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
     let document_units = d.fields.get(RESET_UNITS).is_none_or(|v| values.get("unitsGeneral") != Some(v));
     app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+    // Outside an automatic Touch switch, the task bar is set before OK can enter the Touch
+    // workspace, so it goes to the workspace being left; during one, after OK leaves it.
+    let task_bar = d.fields.get("__taskBar").and_then(Value::as_bool);
+    let before_switch = app.ui.touch_workspace_restore.is_none();
+    if before_switch && let Some(on) = task_bar {
+        app.ui.task_bar = on;
+    }
     if touch_ws.is_some() {
         crate::workspaces::sync_touch_workspace(app, app.touch_screen);
     }
     app.ui.view.smart_guides = d.fields.get("__smartGuides").and_then(Value::as_bool).unwrap_or(app.ui.view.smart_guides);
     app.ui.view.snap_to_grid = d.fields.get("__snapToGrid").and_then(Value::as_bool).unwrap_or(app.ui.view.snap_to_grid);
-    app.ui.task_bar = d.fields.get("__taskBar").and_then(Value::as_bool).unwrap_or(app.ui.task_bar);
+    if !before_switch && let Some(on) = task_bar {
+        app.ui.task_bar = on;
+    }
     crate::original_editor::commit(app);
     app.ui.dialog = None;
     app.ui.engine_prefs = app.session.prefs.to_json();
@@ -484,15 +493,49 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// Reset Preferences, once its question is confirmed: every preference in the Preferences dialog
-/// `d` takes its default value. The category, the search and the UI-only rows stay as they were;
-/// nothing is applied until OK, which leaves the open document's units alone unless Units ›
-/// General is changed after the reset.
-pub(crate) fn reset_fields(d: &mut Dialog) {
+/// `d` takes its default value, the UI-only rows ([`UI_FIELDS`]) included. The category and the
+/// search stay as they were; nothing is applied until OK, which leaves the open document's units
+/// alone unless Units › General is changed after the reset.
+pub(crate) fn reset_fields(d: &mut Dialog, ui: &crate::UiState) {
     for (k, v) in Prefs::default().to_json().as_object().cloned().unwrap_or_default() {
         d.fields.insert(k, v);
     }
+    for (key, value) in default_ui_fields(ui) {
+        d.fields.insert(key.into(), json!(value));
+    }
     // OK resets the Units ▸ General preference and leaves the open document's units alone.
     d.fields.insert(RESET_UNITS.into(), d.fields.get("unitsGeneral").cloned().unwrap_or(Value::Null));
+}
+
+/// The default of each UI-only row ([`UI_FIELDS`]), by key. Enable Contextual Task Bar takes the
+/// value the current workspace was saved with, so a reset leaves the workspace as it was saved.
+fn default_ui_fields(ui: &crate::UiState) -> [(&'static str, bool); 3] {
+    let first = crate::UiState::default();
+    let task_bar = crate::workspaces::find_saved(ui, &ui.workspace).map_or(first.task_bar, |w| w.task_bar);
+    [("__smartGuides", first.view.smart_guides), ("__snapToGrid", first.view.snap_to_grid), ("__taskBar", task_bar)]
+}
+
+/// After `prefs.reset`, alone or as a batch step, of every category or of one: the UI-only rows
+/// ([`UI_FIELDS`]) and the Edit Original app of the categories it reset take their defaults too.
+pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) {
+    let resets = app.session.take_prefs_resets();
+    if resets.is_empty() {
+        return;
+    }
+    let in_reset = |category: &str| resets.iter().any(|r| r.is_none_or(|c| c == category));
+    for (key, value) in default_ui_fields(&app.ui) {
+        let reset = UI_FIELDS.iter().any(|&(k, c, _)| k == key && in_reset(c));
+        match key {
+            "__smartGuides" if reset => app.ui.view.smart_guides = value,
+            "__snapToGrid" if reset => app.ui.view.snap_to_grid = value,
+            "__taskBar" if reset => app.ui.task_bar = value,
+            _ => {}
+        }
+    }
+    // The Edit Original row shows the app's Edit Original choice.
+    if vectorcraft_engine::cmd::prefscmds::spec("editOriginalSystemDefaults").is_some_and(|s| in_reset(s.category)) {
+        crate::original_editor::reset_saved(app);
+    }
 }
 
 /// The height of the fields column under the category's name: the field list, the gap and the
