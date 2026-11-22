@@ -1451,6 +1451,98 @@ fn tool_drag_ends_with_the_modifiers_of_its_button_release() {
     assert!((w - 2.0 * h).abs() < 1e-6, "Shift pressed after the release does not constrain, got {w} x {h}");
 }
 
+/// Shift pressed only in the frame of a tool drag's release, with the pointer held still since
+/// the drag's last frame, still constrains the Rectangle tool's rectangle to a square.
+#[test]
+fn shift_pressed_at_a_still_release_constrains_the_tool_drag() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("rectangle");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let from = app.canvas_rect.unwrap().center() - vec2(30.0, 15.0);
+    let to = from + vec2(60.0, 30.0);
+    let b = |pos, pressed, modifiers| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), b(from, true, egui::Modifiers::NONE)]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(30.0, 15.0))]);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::SHIFT), b(to, false, egui::Modifiers::SHIFT)]);
+    frame(&mut app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let st = app.session.active().unwrap();
+    let kids = st.doc.layers[0].children().unwrap();
+    assert_eq!(kids.len(), 1, "the drag draws one rectangle");
+    let r = kids[0].geometric_bounds().unwrap();
+    let (w, h) = (r.width(), r.height());
+    assert!((w - h).abs() < 1e-6, "Shift pressed at a still release draws a square, got {w} x {h}");
+}
+
+/// Space pressed after a tool drag's release, in the same frame, does not count for the drag: the
+/// Rectangle tool's last move still resizes the rectangle instead of moving it.
+#[test]
+fn space_pressed_after_the_release_does_not_move_the_tool_drag() {
+    let draw = |space_after: bool| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let from = app.canvas_rect.unwrap().center() - vec2(30.0, 15.0);
+        let to = from + vec2(60.0, 30.0);
+        let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let space =
+            |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), b(from, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(30.0, 15.0))]);
+        let mut release = vec![egui::Event::PointerMoved(to), b(to, false)];
+        if space_after {
+            release.push(space(true));
+        }
+        frame(&mut app, &ctx, release);
+        frame(&mut app, &ctx, if space_after { vec![space(false)] } else { vec![] });
+        let st = app.session.active().unwrap();
+        let kids = st.doc.layers[0].children().unwrap();
+        assert_eq!(kids.len(), 1, "the drag draws one rectangle");
+        let r = kids[0].geometric_bounds().unwrap();
+        (r.width(), r.height())
+    };
+    let plain = draw(false);
+    let (w, h) = draw(true);
+    assert!((w - plain.0).abs() < 1e-6 && (h - plain.1).abs() < 1e-6, "Space after the release keeps the size {plain:?}, got {w} x {h}");
+}
+
+/// Space held through a tool drag still counts at its release when the window loses the focus
+/// after the release in the same frame: the Rectangle tool's last move still moves the rectangle.
+#[test]
+fn space_held_at_the_release_counts_when_the_focus_goes_after_it() {
+    let draw = |focus_lost: bool| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.select_tool("rectangle");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let from = app.canvas_rect.unwrap().center() - vec2(30.0, 15.0);
+        let to = from + vec2(60.0, 30.0);
+        let b = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let space =
+            |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from), b(from, true)]);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(30.0, 15.0))]);
+        frame(&mut app, &ctx, vec![space(true)]);
+        let mut release = vec![egui::Event::PointerMoved(to), b(to, false)];
+        release.push(if focus_lost { egui::Event::WindowFocused(false) } else { space(false) });
+        frame(&mut app, &ctx, release);
+        frame(&mut app, &ctx, vec![]);
+        let st = app.session.active().unwrap();
+        let kids = st.doc.layers[0].children().unwrap();
+        assert_eq!(kids.len(), 1, "the drag draws one rectangle");
+        let r = kids[0].geometric_bounds().unwrap();
+        (r.x0, r.y0, r.width(), r.height())
+    };
+    let released = draw(false);
+    let lost = draw(true);
+    assert_eq!(lost, released, "a focus loss after the release keeps Space as held at the release");
+}
+
 /// A press on an artboard's name starts no drag. Moving with the button still held is not hover,
 /// so Shift over a gridline intersection does not position the Perspective Selection tool's plane
 /// until the button is up.

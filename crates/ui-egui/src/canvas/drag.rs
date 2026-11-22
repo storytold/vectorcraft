@@ -109,6 +109,18 @@ pub(super) fn backquote_seen(ui: &Ui) -> (bool, Option<bool>) {
     (now, before)
 }
 
+/// Whether Space was held at the end of the frame before (`None` before the first), recording
+/// whether it is held now. The canvas records it once a frame, as it does Backtick ([`backquote_seen`]).
+pub(super) fn space_seen(ui: &Ui) -> Option<bool> {
+    let id = egui::Id::unique("canvas-space-seen");
+    let now = ui.input(|i| i.key_down(egui::Key::Space));
+    ui.data_mut(|d| {
+        let before = d.get_temp::<bool>(id);
+        d.insert_temp(id, now);
+        before
+    })
+}
+
 /// Whether Backtick was held when `button` went up in this frame, with `before` its state at the end
 /// of the frame before ([`backquote_seen`]). Its state as the frame began is the opposite of its
 /// first press or release in the frame; when the window lost the focus first (which lets go of every
@@ -116,11 +128,17 @@ pub(super) fn backquote_seen(ui: &Ui) -> (bool, Option<bool>) {
 /// releases and focus losses before the button-up then apply in the order they came. Without a
 /// button-up in this frame, its state now.
 pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before: Option<bool>) -> bool {
+    key_at_release(ui, egui::Key::Backtick, button, before)
+}
+
+/// Whether `key` was held when `button` went up in this frame, by the rules of
+/// [`backquote_at_release`], with `before` its state at the end of the frame before.
+pub(super) fn key_at_release(ui: &Ui, key: egui::Key, button: egui::PointerButton, before: Option<bool>) -> bool {
     ui.input(|i| {
-        let now = i.key_down(egui::Key::Backtick);
-        // A press or release of Backtick (`Some(pressed)`), or a focus loss (`None`).
+        let now = i.key_down(key);
+        // A press or release of `key` (`Some(pressed)`), or a focus loss (`None`).
         let step = |e: &egui::Event| match e {
-            egui::Event::Key { key: egui::Key::Backtick, pressed, repeat: false, .. } => Some(Some(*pressed)),
+            egui::Event::Key { key: k, pressed, repeat: false, .. } if *k == key => Some(Some(*pressed)),
             egui::Event::WindowFocused(false) => Some(None),
             _ => None,
         };

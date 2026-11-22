@@ -1,8 +1,8 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
     FrameMove, HoverContext, apply_requests, backquote_at_release, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id,
-    drop_press, mods, move_pose, on_canvas, pen_pose, pen_pressure, space_lends_view_tools, tool_drag_doc_id, tool_drag_mods_changed,
-    tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
+    drop_press, key_at_release, mods, move_pose, on_canvas, pen_pose, pen_pressure, space_lends_view_tools, space_seen, tool_drag_doc_id,
+    tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, edge_scroll, edge_scroll_pixels, pan_pixels, pan_ppp, rotate_about,
@@ -30,7 +30,8 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
     let at = hover.or_else(|| pointer.interact_pos().filter(|p| rect.contains(*p)));
     let view = app.view_info();
     let (backquote_now, backquote_before) = backquote_seen(ui);
-    let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, modal };
+    let space_before = space_seen(ui);
+    let f = Pointing { resp, rect, pointer: &pointer, m, space, xf, v, view, backquote_before, space_before, modal };
     touch_gestures(app, ui, rect, view, modal);
     // Pressed and held still, a pen or a finger opens the context menu (egui's long touch): the
     // tool's press is dropped, as a right-click presses nothing. Under a modal dialog it drops nothing.
@@ -139,9 +140,11 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
         if held {
             drag_held(app, ui, &f, d, p);
         } else {
-            // The drag ends where its button went up, with the modifiers held then: the moves and
-            // modifier changes after the release in this frame do not count.
-            let up = Pointing { m: release_mods(ui, button).unwrap_or(f.m), ..f };
+            // The drag ends where its button went up, with the modifiers and Space held then: the
+            // moves and key changes after the release in this frame do not count.
+            let m = release_mods(ui, button).unwrap_or(f.m);
+            let space = space_lends_view_tools(app, m, key_at_release(ui, egui::Key::Space, button, f.space_before));
+            let up = Pointing { m, space, ..f };
             drag_released(app, ui, &up, d, release_pos(ui, button, false).unwrap_or(p));
         }
     } else if let Some(p) = hover_tool
@@ -224,6 +227,8 @@ struct Pointing<'a> {
     view: vectorcraft_engine::ViewInfo,
     /// Whether Backtick was held at the end of the frame before ([`backquote_seen`]).
     backquote_before: Option<bool>,
+    /// Whether Space was held at the end of the frame before ([`space_seen`]).
+    space_before: Option<bool>,
     /// Whether a modal dialog is open ([`crate::panel_docking::modal_open`]).
     modal: bool,
 }
@@ -596,14 +601,17 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     let last_drag: Option<Point> = ui.data(|dd| dd.get_temp(tool_drag_doc_id()));
     // Where the pointer was in the frame before: a zoom marquee moved with Space follows it.
     let before: Option<Pos2> = ui.data(|dd| dd.get_temp(drag_pos_id()));
+    // Backtick as it was at the button-up: a key pressed or released later in the frame does not count.
+    let backquote = backquote_at_release(ui, egui::PointerButton::Primary, f.backquote_before);
+    // Whether Shift, Alt, Cmd/Ctrl, Space or Backtick changed since the drag's last frame, read
+    // before the drag's state is cleared below.
+    let mods_changed = matches!(d, Drag::Tool) && tool_drag_mods_changed(ui, mods(m, space), backquote);
     ui.data_mut(|dd| {
         dd.remove::<Drag>(drag_id());
         dd.remove::<Pos2>(drag_pos_id());
         dd.remove::<Point>(tool_drag_doc_id());
         dd.remove::<Point>(tool_press_doc_id());
     });
-    // Backtick as it was at the button-up: a key pressed or released later in the frame does not count.
-    let backquote = backquote_at_release(ui, egui::PointerButton::Primary, f.backquote_before);
     let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::ZoomBox { start } => {
@@ -640,12 +648,14 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
             // (#834). Only once the press has dragged, so a click's jitter stays a click
             // (the Pen's corner anchor, no nudge with Direct Selection). A tool that builds a
             // stroke from the drag's samples gets the frame's other moves before it, up to the
-            // button-up: the moves after it are hover.
+            // button-up: the moves after it are hover. A modifier that changed at the release
+            // with the pointer held still reshapes the preview too, as it does while held
+            // (#4711): Shift pressed in the release's frame still draws a square.
             let (moves, last_pose) = tool_frame_moves(ui, app, true);
             let pen = move_pose(app, &xf, last_pose);
             if let Some(last) = last_drag {
                 dispatch_frame_moves(app, ui, f, backquote, moves);
-                if last != xf.to_doc(p) {
+                if last != xf.to_doc(p) || mods_changed {
                     let ev = PointerEvent {
                         kind: PointerKind::Drag,
                         pos: xf.to_doc(p),
