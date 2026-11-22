@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
+use crate::script::printing::{MAX_PRINTER_NAME_BYTES, MAX_PRINTERS, PreparedPrint, Printers};
 use crate::*;
 
 const DENIED: &str = "Script file access denied";
@@ -111,6 +112,8 @@ fn print_writes_the_file_with_the_assigned_options_over_the_saved_settings() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Without the printers a frontend lists for scripts (a run outside the app, the web), printing to
+/// a printer and `app.printerList` throw, and nothing is prepared.
 #[test]
 fn print_without_a_file_does_not_print() {
     let base = folder("no-file");
@@ -119,12 +122,186 @@ fn print_without_a_file_does_not_print() {
         "app.activeDocument.print();",
         "app.activeDocument.print(new PrintOptions());",
         "var o = new PrintOptions(); o.jobOptions.copies = 2; app.activeDocument.print(o);",
+        "var o = new PrintOptions(); o.printerName = 'Office'; app.activeDocument.print(o);",
     ] {
         let e = failure(&mut s, &base, case);
-        assert!(e.contains("Printing to a printer is not available to scripts yet"), "{case}: {e}");
+        assert!(e.contains("Printing to a printer is not available here"), "{case}: {e}");
     }
     let e = failure(&mut s, &base, "app.printerList;");
-    assert!(e.contains("Application.printerList is not available yet"), "{e}");
+    assert!(e.contains("Application.printerList is not available here"), "{e}");
+    assert!(!s.script_prints_waiting());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The printers a frontend lists, `Office` the default, with a name a shell or a file system would
+/// read as more than a name.
+const ODD_NAME: &str = "Lab; rm -rf / & \\\\srv\\q $(x) ../p";
+
+fn printers() -> Printers {
+    Printers::new([("Office".to_string(), true), (ODD_NAME.to_string(), false)], false)
+}
+
+/// The PDF pages a prepared job holds.
+fn job_pages(job: &PreparedPrint) -> usize {
+    vectorcraft_pdf::info(&job.pdf, None).unwrap().pages.len()
+}
+
+/// `app.printerList` gives a `Printer` for each printer the frontend listed, at most 256 of them,
+/// without names that are empty, too long, hold a control character or repeat; the list is the
+/// run's own, needs an open document, and its objects go stale after the run.
+#[test]
+fn printer_list_is_the_bounded_list_the_frontend_gave() {
+    let base = folder("printer-list");
+    let mut s = session(&base);
+    let mut list: Vec<(String, bool)> = (0..300).map(|i| (format!("Printer {i}"), i == 1)).collect();
+    list.insert(0, ("x".repeat(MAX_PRINTER_NAME_BYTES + 1), true));
+    list.insert(1, ("Bad\nName".into(), false));
+    list.insert(2, (String::new(), false));
+    list.insert(3, ("Printer 5".into(), false));
+    let snapshot = Printers::new(list, false);
+    assert_eq!(snapshot.names().len(), MAX_PRINTERS);
+    assert_eq!(snapshot.default_name(), Some("Printer 1"));
+    s.script_printers = Some(snapshot);
+    let out = logged(
+        &mut s,
+        &base,
+        "#targetengine keep\nvar l = app.printerList; held = l[0];\n\
+         vc.log([l.length, l[0].name, l[0].typename, l[1].name, l[255].name]);\n\
+         try { l[0].name = 'Other'; } catch (e) {} vc.log(l[0].name);\n\
+         try { l[0].printerInfo; } catch (e) { vc.log(e.message); }",
+    );
+    assert_eq!(out[0], json!([256, "Printer 5", "Printer", "Printer 0", "Printer 255"]));
+    assert_eq!(out[1], json!("Printer 5"), "name is read-only");
+    assert_eq!(out[2], json!("Printer.printerInfo is not available yet"));
+    // The next run has no list unless the frontend gives one again.
+    let e = failure(&mut s, &base, "app.printerList;");
+    assert!(e.contains("Application.printerList is not available here"), "{e}");
+    s.script_printers = Some(printers());
+    let e = failure(&mut s, &base, "#targetengine keep\nheld.name;");
+    assert!(e.contains("Stale printer"), "{e}");
+    s.script_printers = Some(printers());
+    assert_eq!(logged(&mut s, &base, "vc.log(app.printerList[1].name);")[0], json!(ODD_NAME));
+    // With no document open there is no list.
+    let mut empty = Session::new();
+    empty.attach_script_data(base.join("settings/Script Data"));
+    empty.script_printers = Some(printers());
+    let e = failure(&mut empty, &base, "app.printerList;");
+    assert!(e.contains("Application.printerList needs an open document"), "{e}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `print` without a file prepares a print-ready PDF for the printer it names, or the default one,
+/// and sends nothing: the session holds the jobs once the run's changes are kept, for the frontend
+/// to take. A name is matched exactly, whatever characters it holds.
+#[test]
+fn print_to_a_printer_holds_the_job_until_the_run_ends() {
+    let base = folder("prepared");
+    let mut s = session(&base);
+    s.script_printers = Some(printers());
+    let name = serde_json::to_string(ODD_NAME).unwrap();
+    let report = run(
+        &mut s,
+        &base,
+        &format!(
+            "var o = new PrintOptions(); o.printerName = {name}; o.jobOptions.copies = 2; o.jobOptions.collate = true;\n\
+             app.activeDocument.print(o);\n\
+             vc.run('shape.rectangle', {{x: 150, y: 10, width: 20, height: 20}});\n\
+             app.activeDocument.print();"
+        ),
+    )
+    .unwrap();
+    assert_eq!(report["prints"], 2, "{report}");
+    assert!(s.script_prints_waiting());
+    let title = s.active().unwrap().title();
+    let jobs = s.take_script_prints();
+    assert!(!s.script_prints_waiting());
+    assert_eq!(jobs.len(), 2);
+    assert_eq!((jobs[0].printer.as_str(), jobs[0].sheets, job_pages(&jobs[0])), (ODD_NAME, 4, 4), "two artboards, two copies");
+    assert_eq!((jobs[1].printer.as_str(), jobs[1].sheets, job_pages(&jobs[1])), ("Office", 2, 2), "the default printer");
+    assert!(jobs.iter().all(|j| j.title == title && j.pdf.starts_with(b"%PDF")));
+    assert_ne!(jobs[0].pdf, jobs[1].pdf, "each job holds the document as it was when print was called");
+    assert!(s.take_script_prints().is_empty(), "a job is taken once");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A run that throws, runs out of fuel or ends at a failed command keeps no job.
+#[test]
+fn a_run_that_fails_keeps_no_print_job() {
+    let base = folder("rollback");
+    let mut s = session(&base);
+    let objects = s.active().unwrap().doc.layers[0].children().map_or(0, Vec::len);
+    for case in [
+        "app.activeDocument.print(); throw new Error('late');",
+        "app.activeDocument.print(); vc.run('no.such.command', {});",
+        "app.activeDocument.print(); app.activeDocument.print(); app.activeDocument.print(); app.activeDocument.print(); app.activeDocument.print();",
+    ] {
+        s.script_printers = Some(printers());
+        failure(&mut s, &base, case);
+        assert!(!s.script_prints_waiting(), "{case}");
+    }
+    s.script_printers = Some(printers());
+    let stopped = s.execute("script.run", &json!({"source": "app.activeDocument.print(); while (true) {}", "name": "t.js", "maxFuel": 2_000_000}));
+    assert!(stopped.is_err());
+    assert!(s.take_script_prints().is_empty());
+    assert_eq!(s.active().unwrap().doc.layers[0].children().map_or(0, Vec::len), objects);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A name that is not exactly a listed printer's, a list with no default, PostScript, more jobs or
+/// sheets than a run may prepare and jobs an earlier run left waiting all throw, and nothing is
+/// prepared; a file wins over a printer name.
+#[test]
+fn print_to_a_printer_refuses_what_it_cannot_send() {
+    let base = folder("refuse");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let cases = [
+        ("o.printerName = 'office';", "PrintOptions.printerName names no installed printer: office"),
+        ("o.printerName = 'Offic';", "names no installed printer: Offic"),
+        ("o.printerName = ' Office';", "names no installed printer:  Office"),
+        ("o.printerName = 'Office\\n';", "names no installed printer"),
+        ("o.postScriptOptions.postScriptLevel = PrinterPostScriptLevelEnum.PSLEVEL2;", "PostScript prints only to a file"),
+        ("o.jobOptions.copies = 51;", "at most 100 sheets in a run; this job has 102"),
+        ("for (var i = 0; i < 4; i++) app.activeDocument.print(o);", "at most 4 jobs to a printer in a run"),
+        ("o.printPreset = 'Nope';", "printPreset names no print preset"),
+    ];
+    for (case, part) in cases {
+        s.script_printers = Some(printers());
+        let e = failure(&mut s, &base, &format!("var o = new PrintOptions(); {case} app.activeDocument.print(o);"));
+        assert!(e.contains(part), "{case}: {e}");
+        assert!(!s.script_prints_waiting(), "{case}");
+    }
+    // A job past the sheet limit is refused before it is composed.
+    s.script_printers = Some(printers());
+    failure(&mut s, &base, "var o = new PrintOptions(); o.jobOptions.copies = 999; app.activeDocument.print(o);");
+    let report = s.script_report().unwrap();
+    let ran: Vec<&str> = report["slowestCommands"].as_array().unwrap().iter().filter_map(|c| c["id"].as_str()).collect();
+    assert_eq!(ran, ["print.preview"], "{report}");
+    s.script_printers = Some(Printers::new([("Office".to_string(), false)], false));
+    let e = failure(&mut s, &base, "app.activeDocument.print();");
+    assert!(e.contains("There is no default printer: set PrintOptions.printerName"), "{e}");
+    // Jobs an earlier run left waiting: the next run cannot print to a printer until they are taken.
+    s.script_printers = Some(printers());
+    logged(&mut s, &base, "app.activeDocument.print();");
+    s.script_printers = Some(printers());
+    let e = failure(&mut s, &base, "app.activeDocument.print();");
+    assert!(e.contains("A print job from an earlier script still waits for approval"), "{e}");
+    assert_eq!(s.take_script_prints().len(), 1, "the earlier job is kept");
+    s.script_printers = Some(printers());
+    logged(&mut s, &base, "app.activeDocument.print();");
+    assert_eq!(s.take_script_prints().len(), 1);
+    // A file wins over the printer name.
+    s.script_printers = Some(printers());
+    let file = quoted(&dir.join("f.pdf"));
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var o = new PrintOptions(); o.printerName = 'Nowhere'; o.jobOptions.file = new File({file}); app.activeDocument.print(o);"
+        ),
+    );
+    assert!(dir.join("f.pdf").exists());
+    assert!(!s.script_prints_waiting());
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -171,8 +348,6 @@ fn options_that_are_not_available_throw() {
     let dir = data_folder(&mut s, &base);
     let file = format!("j.file = new File({});", quoted(&dir.join("x.pdf")));
     let cases = [
-        ("o.printerName = 'Office';", "PrintOptions.printerName is not available yet"),
-        ("o.printerName = '\\\\\\\\server\\\\share';", "PrintOptions.printerName is not available yet"),
         ("o.PPDName = 'Generic';", "PrintOptions.PPDName is not available yet"),
         ("o.PPDName = '/etc/cups/ppd/office.ppd';", "PrintOptions.PPDName is not available yet"),
         ("j.name = 'Job';", "PrintJobOptions.name is not available yet"),

@@ -2743,8 +2743,27 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
   strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
   names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
-  assigned, a print-ready PDF otherwise. Without a file it throws `Printing to a printer is not available to scripts
-  yet`, and `app.printerList` throws an error that says it is not available yet. `fitToPage` set to true wins over
+  assigned, a print-ready PDF otherwise, and `printerName` does not apply. Without a file, `print` prints to the
+  printer `printerName` names, or to the system's default printer when it is `""` or not assigned
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PrintOptions/). The name must be exactly the name of a printer the
+  app listed for the run, or `print` throws `PrintOptions.printerName names no installed printer`; with no default
+  printer it throws `There is no default printer`. `print` composes the job as a print-ready PDF when it is called
+  and sends nothing while the run goes on. When the run ends and its changes are kept, the app asks before it sends
+  the jobs (dialog kind `scriptPrint`, listing each job's document, printer and pages). Only the person at the
+  keyboard can choose Print: `ui.dialog.confirm` and synthetic input are refused, and the dialog stays open. Cancel,
+  Escape and `ui.dialog.cancel` drop the jobs and keep the run's changes. A run that fails or is stopped sends
+  nothing. Before it sends them, the app checks that each printer is still installed under that name, and sends none
+  when one is not. A run prepares at most 4 jobs, together at most 100 pages, every copy counted, and 32 MiB, and
+  none while an earlier run's jobs wait for an answer. A job for a printer is a PDF, so `postScriptLevel` with no
+  file throws. Where the app lists no printers for scripts (the web, MCP or the command line without the app),
+  `print` with no file throws `Printing to a printer is not available here`. `app.printerList` gives a `Printer` for
+  each printer the app listed for the run, at most 256, leaving out names longer than 512 bytes or with a control
+  character (https://ai-scripting.docsforadobe.dev/jsobjref/Application/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/Printer/). Its `name` is read-only and its `printerInfo` throws an
+  error that says it is not available yet. With no document open, `app.printerList` throws `Application.printerList
+  needs an open document`, as the Printer help page describes, and where the app lists no printers for scripts it
+  throws `Application.printerList is not available here`. A printer name is only compared with the listed names: it
+  is never read as a path, a URL or a command. `fitToPage` set to true wins over
   the scale factors and the tiling mode. With `printAllArtboards` false, `artboardRange` picks the artboards, and
   without a range every artboard prints. With one of `horizontalScale` and `verticalScale` assigned, the other keeps
   the document's saved value. `print` throws before anything is written when an assigned `artboardRange` names an
@@ -2753,7 +2772,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`
   and `width` or `height` is assigned above 0. An assigned name that is empty or only
   spaces, or holds `/`, `\` or a control character, throws too, and each checked name is sent without the spaces
-  around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
+  around it. `PPDName` takes only `""`. A listed option that is not mapped, or a value that is not mapped such as
   `PrintingBounds.ARTWORKBOUNDS`, `INRIPSEPARATION`, `PSLEVEL1` or a scale above 1000, throws an error that says it
   is not available yet. Each value is checked when it is assigned: a wrong type, a number that is not finite or is
   out of range, a string longer than 4,096 bytes, an option object of the wrong class or from an earlier run, and a
@@ -2959,7 +2978,8 @@ In the app, a script past the growth limit stops at a question to continue or to
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
 runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
-the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
+the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`, with
+`prints`, the number of jobs the run prepared for a printer, when it prepared any. The
 report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
 the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the
 script supplied (a value it threw, or an error it made or whose name or message it changed) and `built-in` for the

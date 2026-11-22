@@ -28,6 +28,9 @@ impl PrintService for SystemPrint {
     fn setup(&mut self, printer: Option<&str>) -> Result<(), String> {
         system::setup(printer)
     }
+    fn scripts_may_print(&self) -> bool {
+        true
+    }
 }
 
 /// The status after the job `title` went to `printer` (the default one without a name), with the

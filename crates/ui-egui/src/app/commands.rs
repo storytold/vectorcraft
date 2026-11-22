@@ -247,7 +247,7 @@ impl VectorcraftApp {
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
         let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let spot_base = panels::color_guide::before_command(self);
-        let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        let r = crate::print::execute_listing_printers(self, id, &params);
         let r = panels::actions::after_recorded_command(self, r);
         if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
             self.canvas.hover_cursor = None;

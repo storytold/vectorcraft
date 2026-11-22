@@ -2,6 +2,7 @@
 //! its end, while the app goes on drawing the documents as they were before the run. The status bar
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
 //! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
+//! A run that prepared jobs for a printer ends with the question before they are sent.
 
 use serde_json::json;
 
@@ -12,6 +13,7 @@ use crate::state::Dialog;
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
     script_run::drain(app);
+    script_run::ask_print(app);
     if !app.session.script_running() {
         return;
     }
@@ -39,6 +41,8 @@ pub fn poll(app: &mut VectorcraftApp) {
             if !crate::panels::actions::after_journaled_edit(app) {
                 app.status(format!("Ran {name}"));
             }
+            // The jobs it prepared for a printer wait for the person's answer.
+            script_run::ask_print(app);
         }
         Err(e) => failed(app, e.to_string()),
     }

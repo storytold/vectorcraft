@@ -24,6 +24,13 @@
 //! and the dialog's own fields change neither what it allows nor what it says it allows. Escape,
 //! `ui.dialog.cancel`, Enter, and OK or `ui.dialog.confirm` without an `answer` give Deny.
 //! `selectDlg` opens the host's folder picker in its own folder.
+//!
+//! The jobs a script prepared for a printer (`Document.print` without a file) wait for the dialog of
+//! kind `scriptPrint`, which opens once the run has ended and its changes are kept, when no other
+//! dialog is open. It lists each job's document, printer and sheets from the jobs themselves, which
+//! no field changes. Only the person at the keyboard prints them, with Print: from
+//! `ui.dialog.confirm` or synthetic input Print is refused and the dialog stays open. Cancel,
+//! Escape and `ui.dialog.cancel` drop the jobs, from anyone; the script's changes stay either way.
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
@@ -46,6 +53,18 @@ pub const CLOSE_KIND: &str = "scriptClose";
 pub const NOTICE_KIND: &str = "scriptDialog";
 /// The dialog kind of a script's file dialogs.
 pub const PICKER_KIND: &str = "scriptFiles";
+/// The dialog kind of the question before the jobs a script prepared for a printer are sent.
+pub const PRINT_KIND: &str = "scriptPrint";
+
+pub(super) const PRINT_SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Print").into(),
+    body: print_body,
+    confirm: print_confirm,
+    ok: Some("Print"),
+    min_width: 420.0,
+    max_width: Some(560.0),
+    ..DialogSpec::FORM
+};
 
 pub(super) const PICKER_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Script File Access").into(),
@@ -546,3 +565,67 @@ fn answers_for(kind: &str) -> &'static str {
         _ => "ok, stop",
     }
 }
+
+/// Opens the question before the jobs a script prepared for a printer are sent, once the run has
+/// ended and no other dialog is open.
+pub(crate) fn ask_print(app: &mut VectorcraftApp) {
+    if app.ui.dialog.is_none() && !app.session.script_running() && app.session.script_prints_waiting() {
+        app.ui.dialog = Some(Dialog::new(PRINT_KIND, json!({})));
+    }
+}
+
+/// The jobs, read from the session, so `ui.dialog.set` cannot change what the person reads.
+fn print_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> bool {
+    let t = Tokens::get(ui.ctx());
+    ui.label(tl!("The script asks to print these jobs. Its changes to the documents are kept whether or not you print."));
+    ui.add_space(8.0);
+    egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+        egui::Grid::new("script-print-jobs").num_columns(3).spacing([16.0, 4.0]).show(ui, |ui| {
+            for head in [tl!("Document"), tl!("Printer"), tl!("Pages")] {
+                ui.label(egui::RichText::new(head).font(theme::semibold(12.0)).color(t.text));
+            }
+            ui.end_row();
+            for job in app.session.script_prints() {
+                ui.label(egui::RichText::new(shown_text(&job.title, false)).color(t.text_strong));
+                ui.label(egui::RichText::new(shown_text(&job.printer, false)).color(t.text_strong));
+                ui.label(egui::RichText::new(job.sheets.to_string()).color(t.text_strong));
+                ui.end_row();
+            }
+        });
+    });
+    false
+}
+
+/// Print: sends the jobs, when the person at the keyboard asked. From automation (a control or MCP
+/// request, or synthetic input) it is refused and the dialog stays open.
+fn print_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {
+    if app.automation_asked() {
+        return Err(PRINT_BY_PERSON.into());
+    }
+    close_print(app);
+    let jobs = app.session.take_script_prints();
+    if jobs.is_empty() {
+        return Ok(Value::Null);
+    }
+    // The dialog is closed and the jobs are taken: a failure is reported in the status bar.
+    crate::print::send_script_prints(app, jobs).inspect_err(|e| app.status(e.clone()))
+}
+
+/// Cancel or Escape, from anyone: the jobs are dropped.
+pub(super) fn print_cancel(app: &mut VectorcraftApp, _: &Dialog) {
+    close_print(app);
+    if !app.session.take_script_prints().is_empty() {
+        app.status(PRINTS_DROPPED);
+    }
+}
+
+fn close_print(app: &mut VectorcraftApp) {
+    if app.ui.dialog.as_ref().is_some_and(|open| open.kind == PRINT_KIND) {
+        app.ui.dialog = None;
+    }
+}
+
+/// Print's error when automation asked.
+pub(crate) const PRINT_BY_PERSON: &str = "Only the person at the keyboard can print a script's print jobs";
+/// The status after Cancel.
+pub(crate) const PRINTS_DROPPED: &str = "The script's print jobs were not sent";

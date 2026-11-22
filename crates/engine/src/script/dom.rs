@@ -35,7 +35,7 @@ use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref, host_ref_parts};
 
-use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
+use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_kept, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 mod print;
@@ -105,6 +105,17 @@ impl State {
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
+    }
+
+    /// Gives the run the printers the frontend listed (`None`: none can be printed to here), and
+    /// whether jobs an earlier run prepared still wait.
+    pub(super) fn start_printing(&self, printers: Option<super::printing::Printers>, waiting: bool) {
+        self.printing.start(printers, waiting);
+    }
+
+    /// The jobs the run prepared for a printer, which the run no longer holds.
+    pub(super) fn take_prints(&self) -> Vec<super::printing::PreparedPrint> {
+        self.printing.take_jobs()
     }
 }
 

@@ -18,10 +18,17 @@
 //! into `file.print`'s settings before anything is written.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
-//! - `print` writes a file: `jobOptions.file` names it, a `File` the script may write
-//!   ([`super::super::files`]). PostScript is written when the name ends with `.ps` or
-//!   `postScriptOptions.postScriptLevel` is set, a print-ready PDF otherwise. Printing to a printer
-//!   from a script is not available yet, so `print` without a file throws an error.
+//! - `print` with `jobOptions.file` writes a file, a `File` the script may write
+//!   ([`super::super::files`]), and `printerName` does not apply. PostScript is written when the
+//!   name ends with `.ps` or `postScriptOptions.postScriptLevel` is set, a print-ready PDF otherwise.
+//! - `print` without a file prepares a job for the printer `printerName` names, or for the
+//!   system's default printer when it is empty or not assigned ([`super::super::printing`]): a
+//!   print-ready PDF composed when `print` is called, which the run keeps until it ends. A name
+//!   must be exactly the name of a printer the frontend listed for the run. Where the frontend lists
+//!   no printers for scripts (the web, a run without the app), `print` without a file throws. A run
+//!   prepares at most [`MAX_JOBS`] jobs, of at most [`MAX_SHEETS`] sheets and [`MAX_JOB_BYTES`]
+//!   together, and none while jobs of an earlier run still wait. A job for a printer is a PDF, so
+//!   `postScriptLevel` applies only to a file.
 //! - Only the properties a script assigned apply; the others keep the document's print settings
 //!   (`print.setup`), which `print` leaves as they are. A property that was not assigned reads as
 //!   the default its help page gives.
@@ -38,23 +45,26 @@
 //!   the id or label of a paper `file.print` knows, or names a paper other than `custom` while
 //!   `width` or `height` is assigned above 0. An assigned name that is empty or only spaces,
 //!   or that holds `/`, `\` or a control character, throws too. Each checked name goes to
-//!   `file.print` without the spaces around it. `printerName` and `PPDName` take only the empty
-//!   string.
+//!   `file.print` without the spaces around it. `PPDName` takes only the empty string.
 //! - A run makes at most [`MAX_OPTION_OBJECTS`] option objects.
-//! - `app.printerList` is not available yet, and `app.PPDFileList` is empty: VectorCraft prints
-//!   without PPD files.
+//! - `app.printerList` lists the printers the frontend listed for the run as `Printer` objects,
+//!   whose `name` is read-only and whose `printerInfo` is not available yet. It throws with no
+//!   document open, as the help page <https://ai-scripting.docsforadobe.dev/jsobjref/Printer/>
+//!   describes, and where the frontend lists no printers for scripts. `app.PPDFileList` is empty:
+//!   VectorCraft prints without PPD files.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms;
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember, host_ref, host_ref_parts};
 
+use super::super::printing::{MAX_JOB_BYTES, MAX_JOBS, MAX_SHEETS, PreparedPrint, Printers};
 use super::save_open::{exactly, file_path, plain, refused};
 use super::{
-    Answer, Doc, Host, Link, MAX_LISTED, MAX_TEXT_BYTES, arg, command, current, float, get, given, later, method, named, num, on_doc, text, this_doc,
-    whole, with_doc,
+    Answer, Doc, Host, Link, MAX_LISTED, MAX_TEXT_BYTES, arg, command, command_kept, current, float, get, given, later, method, named, num, on_doc,
+    text, this_doc, whole, with_doc,
 };
 use crate::cmd::flatten::FlattenOptions;
 
@@ -62,16 +72,44 @@ use crate::cmd::flatten::FlattenOptions;
 pub const MAX_OPTION_OBJECTS: usize = 256;
 /// The largest scale factor `file.print` takes, in percent.
 pub const MAX_PRINT_SCALE: f64 = 1000.0;
-/// The error of `print` without `jobOptions.file`.
-pub const NO_PRINTER: &str = "Printing to a printer is not available to scripts yet: set jobOptions.file to print to a file";
+/// The error of `print` without `jobOptions.file` where the frontend lists no printers for scripts.
+pub const NO_PRINTER: &str = "Printing to a printer is not available here: set jobOptions.file to print to a file";
+/// The error of `app.printerList` where the frontend lists no printers for scripts.
+pub const NO_PRINTERS: &str = "Application.printerList is not available here";
+/// The error of `app.printerList` with no document open.
+pub const PRINTERS_NEED_DOCUMENT: &str = "Application.printerList needs an open document";
+/// The error of `print` to the default printer when the system names none.
+pub const NO_DEFAULT_PRINTER: &str = "There is no default printer: set PrintOptions.printerName";
+/// The error of `print` to a printer while jobs an earlier run prepared wait.
+pub const PRINT_WAITING: &str = "A print job from an earlier script still waits for approval";
+/// The error of `print` to a printer with `postScriptLevel` assigned.
+pub const POSTSCRIPT_TO_FILE: &str = "PostScript prints only to a file: set jobOptions.file";
 /// The error for an option object from an earlier run.
 pub const STALE_OPTIONS: &str = "Stale print options";
+/// The error for a `Printer` object from an earlier run.
+pub const STALE_PRINTER: &str = "Stale printer";
 
 /// The option objects of the run: each one's class, as an index into [`CLASSES`], and the
-/// properties the script assigned.
+/// properties the script assigned; the printers the frontend listed for the run, and the jobs the
+/// run prepared for them.
 #[derive(Default)]
 pub(in crate::script) struct State {
     objects: RefCell<Vec<Options>>,
+    printers: RefCell<Option<Printers>>,
+    /// Jobs an earlier run prepared wait to be sent or dropped.
+    waiting: Cell<bool>,
+    jobs: RefCell<Vec<PreparedPrint>>,
+}
+
+impl State {
+    pub(in crate::script) fn start(&self, printers: Option<Printers>, waiting: bool) {
+        *self.printers.borrow_mut() = printers;
+        self.waiting.set(waiting);
+    }
+
+    pub(in crate::script) fn take_jobs(&self) -> Vec<PreparedPrint> {
+        std::mem::take(&mut *self.jobs.borrow_mut())
+    }
 }
 
 struct Options {
@@ -209,7 +247,7 @@ const PRINT_OPTIONS: Class = Class {
         f("paperOptions", Kind::Child("PrintPaperOptions"), Start::None),
         f("postScriptOptions", Kind::Child("PrintPostScriptOptions"), Start::None),
         kept("PPDName", Kind::Text, Start::Text("")),
-        kept("printerName", Kind::Text, Start::Text("")),
+        f("printerName", Kind::Text, Start::Text("")),
         f("printPreset", Kind::Text, Start::None),
     ],
 };
@@ -485,6 +523,8 @@ fn property(link: &Link, class: usize, field: usize) -> HostMember {
 struct Job {
     preset: Option<String>,
     file: Option<Data>,
+    /// The assigned `printerName`.
+    printer: Option<String>,
     level: Option<u64>,
     /// The assigned `artboardRange`, checked whether or not it picks the artboards.
     range: Option<String>,
@@ -567,6 +607,7 @@ fn map_options(h: &Host, slot: usize, job: &mut Job) -> std::result::Result<(), 
         match k {
             "flattenerPreset" => job.flattener = Some(string_of(&v)),
             "printPreset" => job.preset = Some(string_of(&v)),
+            "printerName" => job.printer = Some(string_of(&v)),
             "jobOptions" => map_job(h, child_slot(h, &v, JOB.name)?, job),
             "colorManagementOptions" => map_color(h, child_slot(h, &v, COLOR.name)?, job),
             "colorSeparationOptions" => map_separation(h, child_slot(h, &v, SEPARATION.name)?, job),
@@ -811,7 +852,8 @@ fn map_postscript(h: &Host, slot: usize, job: &mut Job) {
 }
 
 /// `document.print(options?)`: `file.print` of the document to the file `jobOptions.file` names,
-/// with the assigned options over the document's print settings.
+/// with the assigned options over the document's print settings, or without a file the job for a
+/// printer ([`prepare`]).
 fn doc_print(h: &Host, a: &[Data]) -> Answer {
     let doc = this_doc(h, a)?;
     let mut job = Job::default();
@@ -822,10 +864,36 @@ fn doc_print(h: &Host, a: &[Data]) -> Answer {
         })?;
         map_options(h, slot, &mut job)?;
     }
-    let Some(file) = job.file.take() else { return Err(HostError::Error(NO_PRINTER.into())) };
+    let Some(file) = job.file.take() else { return prepare(h, doc, job) };
     check_names(h, doc, &mut job)?;
     let path = file_path(&file, "print")?;
     let real = h.disk.borrow().save_target(path).map_err(|m| refused(m, path))?;
+    let mut p = print_params(&mut job);
+    p.insert("path".into(), json!(plain(real)));
+    let printed = exactly(h, || on_doc(h, doc.uid, false, |h| unfenced(h, PRINT, || command(h, PRINT, &Value::Object(p)))))?;
+    // What the job lost or how its options apply: one Script Console line each.
+    let warnings = match &printed {
+        Data::Object(fields) => fields.iter().find(|(k, _)| k == "warnings").map(|(_, v)| v),
+        _ => None,
+    };
+    if let Some(Data::Array(warnings)) = warnings {
+        for w in warnings.iter().take(MAX_LISTED) {
+            if let Data::String(w) = w {
+                console_warning(h, w);
+            }
+        }
+    }
+    Ok(Data::Undefined)
+}
+
+/// Writes `file.print`'s warning `w` to the Script Console.
+fn console_warning(h: &Host, w: &str) {
+    super::super::each_line(&format!("Document.print: {w}"), |line, cut| h.line(super::super::console::Entry::Output(line), cut));
+}
+
+/// `file.print`'s params for `job`, without a path: the print preset, the PostScript level and the
+/// settings.
+fn print_params(job: &mut Job) -> Map<String, Value> {
     let mut p = Map::new();
     if let Some(preset) = job.preset.take() {
         p.insert("preset".into(), json!(preset));
@@ -838,20 +906,67 @@ fn doc_print(h: &Host, a: &[Data]) -> Answer {
     if !settings.is_empty() {
         p.insert("settings".into(), Value::Object(settings));
     }
-    p.insert("path".into(), json!(plain(real)));
-    let printed = exactly(h, || on_doc(h, doc.uid, false, |h| unfenced(h, PRINT, &Value::Object(p))))?;
-    // What the job lost or how its options apply: one Script Console line each.
-    let warnings = match &printed {
-        Data::Object(fields) => fields.iter().find(|(k, _)| k == "warnings").map(|(_, v)| v),
-        _ => None,
+    p
+}
+
+/// `document.print(options?)` without `jobOptions.file`: the job for the printer `printerName`
+/// names, or for the system's default printer, as `file.print` composes it now. The run keeps it,
+/// and the session takes it only when the run's changes are kept ([`super::super::printing`]).
+/// Everything is checked before the job is composed, and its size after.
+fn prepare(h: &Host, doc: Doc, mut job: Job) -> Answer {
+    let state = &h.dom.printing;
+    let (printer, for_printer) = {
+        let printers = state.printers.borrow();
+        let Some(printers) = printers.as_ref() else { return Err(HostError::Error(NO_PRINTER.into())) };
+        let printer = match job.printer.take().filter(|n| !n.is_empty()) {
+            Some(name) if printers.has(&name) => name,
+            Some(name) => return Err(HostError::Error(format!("PrintOptions.printerName names no installed printer: {name}"))),
+            None => printers.default_name().map(str::to_string).ok_or_else(|| HostError::Error(NO_DEFAULT_PRINTER.into()))?,
+        };
+        (printer, printers.for_printer)
     };
-    if let Some(Data::Array(warnings)) = warnings {
-        for w in warnings.iter().take(MAX_LISTED) {
-            if let Data::String(w) = w {
-                super::super::each_line(&format!("Document.print: {w}"), |line, cut| h.line(super::super::console::Entry::Output(line), cut));
-            }
+    if state.waiting.get() {
+        return Err(HostError::Error(PRINT_WAITING.into()));
+    }
+    if job.level.is_some() {
+        return Err(HostError::Error(POSTSCRIPT_TO_FILE.into()));
+    }
+    let (count, sheets, bytes) = {
+        let jobs = state.jobs.borrow();
+        (jobs.len(), jobs.iter().map(|j| j.sheets).sum::<u64>(), jobs.iter().map(|j| j.pdf.len()).sum::<usize>())
+    };
+    if count >= MAX_JOBS {
+        return Err(HostError::Range(format!("a script can print at most {MAX_JOBS} jobs to a printer in a run")));
+    }
+    check_names(h, doc, &mut job)?;
+    let mut p = print_params(&mut job);
+    if for_printer {
+        p.insert("forPrinter".into(), json!(true));
+    }
+    // The pages are counted from the layout before the job is composed.
+    let plan: serde_json::Map<String, Value> =
+        p.iter().filter(|(k, _)| matches!(k.as_str(), "preset" | "settings")).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let planned = on_doc(h, doc.uid, false, |h| unfenced(h, PREVIEW, || command_kept(h, PREVIEW, &Value::Object(plan))))?;
+    let pages = planned.get("pages").and_then(Value::as_u64).unwrap_or(0);
+    sheets_fit(sheets, pages)?;
+    let printed = on_doc(h, doc.uid, false, |h| unfenced(h, PRINT, || command_kept(h, PRINT, &Value::Object(p))))?;
+    let pdf = printed
+        .get("dataBase64")
+        .and_then(Value::as_str)
+        .and_then(vectorcraft_format::base64_decode)
+        .ok_or_else(|| HostError::Error("the print job has no data".into()))?;
+    let pages = printed.get("pages").and_then(Value::as_u64).unwrap_or(pages);
+    sheets_fit(sheets, pages)?;
+    if bytes.saturating_add(pdf.len()) > MAX_JOB_BYTES {
+        return Err(HostError::Range("a script's printer jobs can hold at most 32 MiB in a run".into()));
+    }
+    for w in printed.get("warnings").and_then(Value::as_array).into_iter().flatten().take(MAX_LISTED) {
+        if let Some(w) = w.as_str() {
+            console_warning(h, w);
         }
     }
+    let title = with_doc(h, doc, |_, st| st.title());
+    state.jobs.borrow_mut().push(PreparedPrint { printer, title, pdf, sheets: pages });
     Ok(Data::Undefined)
 }
 
@@ -921,13 +1036,24 @@ fn plain_name<'a>(what: &str, kind: &str, name: &'a str) -> std::result::Result<
     Ok(n)
 }
 
-const PRINT: &str = "file.print";
+/// The error when a job of `pages` sheets would take a run's jobs past [`MAX_SHEETS`], after
+/// `sheets` in earlier jobs.
+fn sheets_fit(sheets: u64, pages: u64) -> std::result::Result<(), HostError> {
+    if sheets.saturating_add(pages) > MAX_SHEETS {
+        return Err(HostError::Range(format!("a script's printer jobs can hold at most {MAX_SHEETS} sheets in a run; this job has {pages}")));
+    }
+    Ok(())
+}
 
-/// Runs `id`, which scripts may not run through `vc.run`, for a member that checked its params:
-/// only `id` passes the fence, and only for this one command.
-fn unfenced(h: &Host, id: &'static str, params: &Value) -> Answer {
+const PRINT: &str = "file.print";
+/// Counts a job's pages without composing it.
+const PREVIEW: &str = "print.preview";
+
+/// Runs `run`, which runs `id`, a command scripts may not run through `vc.run`, for a member that
+/// checked its params: only `id` passes the fence, and only while `run` runs.
+fn unfenced<T>(h: &Host, id: &'static str, run: impl FnOnce() -> std::result::Result<T, HostError>) -> std::result::Result<T, HostError> {
     h.session.borrow_mut().script_unfenced = Some(id);
-    let r = command(h, id, params);
+    let r = run();
     h.session.borrow_mut().script_unfenced = None;
     r
 }
@@ -942,11 +1068,39 @@ fn app_ppd_files(_: &Host, _: &[Data]) -> Answer {
     Ok(Data::Array(Vec::new()))
 }
 
+/// `app.printerList`: a `Printer` for each printer the frontend listed for the run.
+fn app_printers(h: &Host, _: &[Data]) -> Answer {
+    if h.session.borrow().active().is_none() {
+        return Err(HostError::Error(PRINTERS_NEED_DOCUMENT.into()));
+    }
+    let printers = h.dom.printing.printers.borrow();
+    let printers = printers.as_ref().ok_or_else(|| HostError::Error(NO_PRINTERS.into()))?;
+    let count = u64::try_from(printers.names().len()).unwrap_or(0);
+    Ok(Data::Array((0..count).map(|i| host_ref(PRINTER, &[float(h.run), float(i)])).collect()))
+}
+
+const PRINTER: &str = "Printer";
+
+/// `printer.name`: the name the frontend listed for the printer.
+fn printer_name(h: &Host, a: &[Data]) -> Answer {
+    let wrong = || HostError::Type("this is not a Printer".into());
+    let (class, handle) = host_ref_parts(arg(a, 0)).ok_or_else(wrong)?;
+    if class != PRINTER {
+        return Err(wrong());
+    }
+    let [run, index] = handle.as_slice() else { return Err(wrong()) };
+    let stale = || HostError::Error(STALE_PRINTER.into());
+    if whole(*run) != Some(h.run) {
+        return Err(stale());
+    }
+    let index = whole(*index).and_then(|i| usize::try_from(i).ok()).ok_or_else(stale)?;
+    let printers = h.dom.printing.printers.borrow();
+    printers.as_ref().and_then(|p| p.names().get(index)).map(|n| text(n.clone())).ok_or_else(stale)
+}
+
 /// The members these add to `Application`.
 pub(super) fn application_members(l: &Link) -> Vec<(String, HostMember)> {
-    let mut members = named(vec![("printPresetsList", get(l, app_presets)), ("PPDFileList", get(l, app_ppd_files))]);
-    members.push(later(l, "Application", "printerList"));
-    members
+    named(vec![("printPresetsList", get(l, app_presets)), ("PPDFileList", get(l, app_ppd_files)), ("printerList", get(l, app_printers))])
 }
 
 /// The members these add to `Document`.
@@ -954,9 +1108,10 @@ pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
     named(vec![("print", method(l, doc_print))])
 }
 
-/// The option classes: each `new Name()` gives a new option object with nothing assigned.
+/// The option classes: each `new Name()` gives a new option object with nothing assigned. And
+/// `Printer`, whose objects only `app.printerList` gives.
 pub(super) fn classes(link: &Link) -> Vec<HostClass> {
-    CLASSES
+    let mut classes: Vec<HostClass> = CLASSES
         .iter()
         .enumerate()
         .map(|(index, c)| {
@@ -970,5 +1125,10 @@ pub(super) fn classes(link: &Link) -> Vec<HostClass> {
             members.extend(c.fields.iter().enumerate().map(|(i, field)| (field.name.to_string(), property(link, index, i))));
             HostClass { name: c.name.into(), parent: None, members, index: None, construct: Some(construct) }
         })
-        .collect()
+        .collect();
+    let mut printer = named(vec![("name", get(link, printer_name))]);
+    printer.insert(0, ("typename".to_string(), super::typename_of(PRINTER)));
+    printer.push(later(link, PRINTER, "printerInfo"));
+    classes.push(HostClass { name: PRINTER.into(), parent: None, members: printer, index: None, construct: None });
+    classes
 }
