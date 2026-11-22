@@ -831,7 +831,7 @@ pub struct UiState {
     #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
     pub swatches_show_recent_colors: bool,
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub svg_options: Value,
     /// File → Place: Link is on (the Place dialog remembers it).
     #[serde(default = "yes")]
@@ -842,7 +842,7 @@ pub struct UiState {
     #[serde(default = "yes")]
     pub place_import_options: bool,
     /// The Text Import Options confirmed last (`file.place`'s `text` options; null: never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub text_import: Value,
     /// The documents (uids) whose Missing Fonts dialog waits until no dialog is open, the next one to
     /// show first.
@@ -865,27 +865,27 @@ pub struct UiState {
     #[serde(skip)]
     pub links_search: Option<u64>,
     /// The DXF Options chosen last (`document.exportDxf` options; null: never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub dxf_options: Value,
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub eps_options: Value,
     /// The HP-GL Options chosen last (`document.export` HP-GL options; null: never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub hpgl_options: Value,
     /// The Recolor Artwork Preserve checkboxes confirmed last (`preserveWhite`, `preserveBlack`,
     /// `preserveGrays`; null: never used): its dialog opens with them (#2960).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub recolor_preserve: Value,
     /// The spacing used the last time Rearrange All Artboards was confirmed.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub rearrange_artboards_spacing: Value,
     /// The DXF Import Options chosen last (fit, scaleLineweights, center, mergeLayers; null:
     /// never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub dxf_import: Value,
     /// The PSD Import Options chosen last (layers, hiddenLayers, importSlices; null: never used).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub psd_import: Value,
     /// The Home screen is shown over the open documents (`app.home`): the active document's uid
     /// and the document count when it opened. Choosing a tab, or a document opening, closing or
