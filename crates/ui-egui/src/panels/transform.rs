@@ -36,7 +36,7 @@ use crate::canvas::rulers::{general_lengths, general_rulers};
 use crate::edits::{EditPath, apply_edits, apply_event};
 use crate::fields::stops_stepper;
 use crate::panel_docking::visible;
-use crate::panels::{part_hidden, set_part_hidden};
+use crate::panels::{Live, part_hidden, set_part_hidden};
 
 mod shape;
 pub(crate) use shape::live_shape_rows;
@@ -65,11 +65,13 @@ pub struct TransformUi {
     pub reference_point: usize,
     /// Whether the Transform popover under the Control bar's link is open.
     pub popover: bool,
+    /// The point a field's running gesture turns or shears about ([`gesture_origin`]).
+    gesture_origin: Value,
 }
 
 impl Default for TransformUi {
     fn default() -> Self {
-        TransformUi { reference_point: 4, popover: false }
+        TransformUi { reference_point: 4, popover: false, gesture_origin: Value::Null }
     }
 }
 
@@ -177,6 +179,15 @@ pub(crate) fn reference_origin(app: &mut VectorcraftApp) -> Value {
     app.selection_box().map_or(Value::Null, |b| panel_reference(app, &b).origin())
 }
 
+/// [`reference_origin`] for a value of a field's gesture: where it was when the gesture began, since the gesture's
+/// previews move the box it is measured on.
+fn gesture_origin(app: &mut VectorcraftApp) -> Value {
+    if !app.session.in_interaction() {
+        app.ui.transform_panel.gesture_origin = reference_origin(app);
+    }
+    app.ui.transform_panel.gesture_origin.clone()
+}
+
 /// Where the registration point of the one selected symbol instance is on the page, while Use
 /// Registration Point for Symbol is on: the point of the symbol's art box on the 9-point grid,
 /// placed by the instance's transform.
@@ -201,19 +212,23 @@ const PATTERN_MODES: [(&str, &str); 3] =
 /// section with `params` and the `objects` and `patterns` switches of the panel menu's Transform
 /// Object Only (the object; its pattern fills and strokes stay as they are), Transform Pattern
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
-/// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
-/// dropped, as the panels' fields have always done.
-pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
-    try_transform(app, cmd, params).ok();
-}
-
-/// [`run_transform`] that returns the command's result, for a field that shows its error.
+/// value) neither is passed: patterns follow General › Transform Pattern Tiles. → the command's result.
 fn try_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
     let params = with_pattern_switches(app, params);
     app.run(cmd, params)
 }
 
-/// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
+/// [`try_transform`] for a value of a field's gesture in its phase `live`: each value previews the transform from where
+/// the gesture began, and the release keeps the last as one undo step. A typed value previews as it is typed and applies
+/// again with its Enter's modifiers (Alt: to a copy), and a relative transform (a shear, a pattern-only move) applies
+/// once. An error shows in the status bar.
+fn live_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value, live: Live) {
+    let params = with_pattern_switches(app, params);
+    let label = vectorcraft_engine::find_command(cmd).map_or(cmd, |spec| spec.label);
+    super::live_run(app, label, cmd, params, live);
+}
+
+/// `params` with the `objects` and `patterns` switches [`try_transform`] adds.
 pub fn with_pattern_switches(app: &VectorcraftApp, mut params: serde_json::Value) -> serde_json::Value {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
@@ -309,12 +324,13 @@ fn pick_reference(app: &mut VectorcraftApp, row: &TransformRow) {
     }
 }
 
-/// Applies what the fields reported, one undo step per gesture: `run` gets each edit with the field it came from and
-/// how it was made. A changed link is saved first.
+/// Applies what the fields reported along `path`, one undo step per gesture: `run` gets each edit with the field it came
+/// from, how it was made and its phase. A changed link is saved first.
 fn apply_fields(
     app: &mut VectorcraftApp,
     out: &TransformFieldsOutput,
-    mut run: impl FnMut(&mut VectorcraftApp, TransformSource, &TransformRow, Intent),
+    path: EditPath,
+    mut run: impl FnMut(&mut VectorcraftApp, TransformSource, &TransformRow, Intent, Live),
 ) {
     if let Some(on) = out.linked {
         set_pref(app, "constrainProportions", on);
@@ -328,12 +344,12 @@ fn apply_fields(
             proportional: linked || entered.is_some_and(|(field, mods)| mods.cmd && matches!(field, TransformField::W | TransformField::H)),
             copy: entered.is_some_and(|(_, mods)| mods.alt) && no_anchors,
         };
-        apply_event(app, event, &EditPath::Scope, &mut |app, row, _| run(app, source, row, intent));
+        apply_event(app, event, &path, &mut |app, row, live| run(app, source, row, intent, live));
     }
 }
 
-/// `object.setBounds` for an edit of X, Y, W or H of the selection's fields.
-fn set_object_bounds(app: &mut VectorcraftApp, source: TransformSource, row: &TransformRow, intent: Intent) {
+/// `object.setBounds` for an edit of X, Y, W or H of the selection's fields, in its phase `live`.
+fn set_object_bounds(app: &mut VectorcraftApp, source: TransformSource, row: &TransformRow, intent: Intent, live: Live) {
     let Some(bx) = app.selection_box() else { return };
     let reference = panel_reference(app, &bx);
     let (w, h) = sides(row);
@@ -351,7 +367,7 @@ fn set_object_bounds(app: &mut VectorcraftApp, source: TransformSource, row: &Tr
     if sized {
         params["proportional"] = json!(intent.proportional);
     }
-    run_transform(app, "object.setBounds", params);
+    live_transform(app, "object.setBounds", params, live);
 }
 
 /// The panel's fields of the selection's bounding box, rotated with rotated objects: W/H are its own sides, X/Y its
@@ -361,7 +377,7 @@ pub(crate) fn object_fields(app: &mut VectorcraftApp, ui: &mut Ui, groups: Trans
     let state = bx.as_ref().map(|b| box_state(app, b));
     let start = bx.map_or(Rect::ZERO, |b| b.rect);
     let out = fields(app, state, start, groups, false).show(ui);
-    apply_fields(app, &out, set_object_bounds);
+    apply_fields(app, &out, EditPath::Preview, set_object_bounds);
 }
 
 /// The Control bar's form of the selection's fields; `None` with nothing selected. The output's `submitted` carries
@@ -370,7 +386,7 @@ pub(crate) fn object_bar_fields(app: &mut VectorcraftApp, ui: &mut Ui) -> Option
     let bx = app.selection_box()?;
     let state = box_state(app, &bx);
     let out = fields(app, Some(state), bx.rect, panel_groups(), true).show(ui);
-    apply_fields(app, &out, set_object_bounds);
+    apply_fields(app, &out, EditPath::Preview, set_object_bounds);
     Some(out)
 }
 
@@ -408,12 +424,13 @@ pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui) {
     let angle = bx.as_ref().map_or(0.0, |b| b.angle);
     let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, &ANGLE_PRESETS, bx.is_some()) else { return };
     let copy = out.edit.submit_mods.alt && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    apply_edits(app, &out.edit, EditPath::Scope, |app, v, _| {
+    apply_edits(app, &out.edit, EditPath::Preview, |app, v, live| {
+        // The angle shown is the preview's while the gesture runs: its release keeps it.
         if let Some(a) = *v
-            && a != angle
+            && (a != angle || app.session.in_interaction())
         {
-            let origin = reference_origin(app);
-            run_transform(app, "object.rotate", json!({"angle": a, "absolute": true, "origin": origin, "copy": copy}));
+            let origin = gesture_origin(app);
+            live_transform(app, "object.rotate", json!({"angle": a, "absolute": true, "origin": origin, "copy": copy}), live);
         }
     });
 }
@@ -425,14 +442,12 @@ fn shear_field(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has = app.selection_box().is_some();
     let Some(out) = angle_field(ui, tl!("Shear"), "dc-shear", 0.0, f64::NEG_INFINITY..=f64::INFINITY, &SHEAR_PRESETS, has) else { return };
     let copy = out.edit.submit_mods.alt && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
-    apply_edits(app, &out.edit, EditPath::Scope, |app, v, _| {
+    apply_edits(app, &out.edit, EditPath::Preview, |app, v, live| {
         if let Some(a) = *v
             && a != 0.0
         {
-            let origin = reference_origin(app);
-            if let Err(e) = try_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy})) {
-                app.status(e);
-            }
+            let origin = gesture_origin(app);
+            live_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}), live);
         }
     });
 }
@@ -454,7 +469,7 @@ fn artboard_form(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect, b
     let mut state = BoxState::from_rect(r);
     state.pivot = vectorcraft_geom::reference_point(r, refi);
     let out = fields(app, Some(state), r, panel_groups(), bar).show(ui);
-    apply_fields(app, &out, |app, source, row, intent| {
+    apply_fields(app, &out, EditPath::Scope, |app, source, row, intent, _| {
         let (w, h) = sides(row);
         let p = row.state.pivot;
         let xywh = match source {

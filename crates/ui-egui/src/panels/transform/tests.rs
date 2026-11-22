@@ -527,18 +527,20 @@ fn the_control_bar_fields_use_the_shared_reference_point() {
         (8, (110.0, 70.0), "130", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-70.0, -30.0, 130.0, 70.0)),
     ];
     let revision = |p: &Panel| p.app().session.active().unwrap().revision;
+    let steps = |p: &Panel| p.app().session.active().unwrap().history.undo.len();
     for (refi, (x, y), new_x, moved, sized) in cases {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap();
         app.ui.transform_panel.reference_point = refi;
         let mut p = Panel::new(app, bar);
-        let before = revision(&p);
+        let (before, undo) = (revision(&p), steps(&p));
         assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(x)), Some(pt(y))), "reference {refi}");
         assert_eq!(revision(&p), before, "reference {refi}: choosing the point leaves the art");
         p.type_into("X position", new_x);
         assert_eq!(p.app().selection_box().unwrap().rect, moved, "reference {refi}: X");
-        assert_eq!(revision(&p), before + 1, "reference {refi}: one undo step");
+        // A typed value previews as it is typed (contract: a plain number applies as typed); the edit is one step.
+        assert_eq!(steps(&p), undo + 1, "reference {refi}: one undo step");
         p.type_into("Width", "200");
         p.type_into("Height", "100");
         assert_eq!(p.app().selection_box().unwrap().rect, sized, "reference {refi}: W and H");

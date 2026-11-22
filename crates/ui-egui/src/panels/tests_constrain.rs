@@ -3,7 +3,6 @@
 //! Alt+Enter in their fields applies the value to a copy of the selection, passed on as `copy`, and
 //! Ctrl/Cmd+Enter in W or H keeps the proportions whether the link is on or off.
 
-use craft::draw::ui::TransformGroups;
 use egui::Modifiers;
 use serde_json::json;
 
@@ -24,11 +23,6 @@ fn size(app: &VectorcraftApp) -> (f64, f64) {
     let st = app.session.active().unwrap();
     let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
     (b.width().round(), b.height().round())
-}
-
-/// Every field the object groups show.
-fn fields_all(app: &mut VectorcraftApp, ui: &mut Ui) {
-    transform::object_fields(app, ui, TransformGroups::ALL);
 }
 
 /// The paths of the document, bottom to top: their size and angle (rounded), and whether each is
@@ -53,7 +47,7 @@ fn enter_modifiers_set_copy_and_proportional() {
     let rows = [
         ("Alt+Enter on W", "Width", "200", Modifiers::ALT, false, true, Some((200.0, 50.0)), 0.0),
         ("Alt+Enter on X", "X position", "150", Modifiers::ALT, false, true, Some((100.0, 50.0)), 0.0),
-        ("Alt+Enter on Rotate", "Angle", "45", Modifiers::ALT, false, true, None, 45.0),
+        ("Alt+Enter on Rotate", "Rotate", "45", Modifiers::ALT, false, true, None, 45.0),
         ("Alt+Enter on X, anchors", "X position", "150", Modifiers::ALT, true, false, Some((140.0, 50.0)), 0.0),
         ("Cmd+Enter on W", "Width", "200", Modifiers::COMMAND, false, false, Some((200.0, 100.0)), 0.0),
         ("Cmd+Enter on X", "X position", "200", Modifiers::COMMAND, false, false, Some((100.0, 50.0)), 0.0),
@@ -65,7 +59,7 @@ fn enter_modifiers_set_copy_and_proportional() {
             run(&mut app, "select.anchors", json!({"id": id, "anchors": [[0, 1]]}));
         }
         let undo = app.session.doc().unwrap().history.undo.len();
-        let mut p = Panel::new(app, fields_all);
+        let mut p = Panel::new(app, transform::show);
         p.type_into_with(field, text, mods);
         let app = p.app();
         let all = paths(&app);
