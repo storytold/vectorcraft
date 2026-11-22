@@ -16,17 +16,6 @@ const SHAPES: &[&str] = &["rect", "circle", "ellipse", "line", "image", "use", "
 /// The elements whose content has lengths of its own kind (or a viewport of its own).
 const SCOPES: &[&str] = &["symbol", "svg", "pattern", "mask", "clipPath", "marker"];
 
-/// What a percentage of attribute `name` is of, in a viewport of `w` × `h`: its width, its height,
-/// or (a radius) its diagonal over √2.
-fn basis(name: &str, w: f64, h: f64) -> Option<f64> {
-    match name {
-        "x" | "x1" | "x2" | "cx" | "width" | "rx" => Some(w),
-        "y" | "y1" | "y2" | "cy" | "height" | "ry" => Some(h),
-        "r" => Some(((w * w + h * h) / 2.0).sqrt()),
-        _ => None,
-    }
-}
-
 /// The percentage geometry of shapes in symbols with a `viewBox`, each as (value range, number).
 pub(super) fn rewrites(xml: &roxmltree::Document) -> Vec<(Range<usize>, String)> {
     let mut out = Vec::new();
@@ -44,7 +33,7 @@ pub(super) fn rewrites(xml: &roxmltree::Document) -> Vec<(Range<usize>, String)>
         }
         for a in n.attributes().filter(|a| a.namespace().is_none()) {
             let percent = a.value().trim().strip_suffix('%').and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite());
-            if let (Some(p), Some(of)) = (percent, basis(a.name(), vb.w, vb.h)) {
+            if let (Some(p), Some(of)) = (percent, craft_svg::doc_style::symbol_percent_basis(a.name(), vb.w, vb.h)) {
                 out.push((a.range_value(), (p / 100.0 * of).to_string()));
             }
         }
