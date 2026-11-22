@@ -973,6 +973,30 @@ fn remove_refuses_hidden_or_locked_art_as_remove_all_does() {
     assert!(s.active().unwrap().doc.node(b).is_none());
 }
 
+/// Art on a locked artboard stays: `remove()` and `removeAll()` throw and delete nothing.
+#[test]
+fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.pageItems[1].remove();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", b.0)), "{e}");
+    let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
+    assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&a.0.to_string()), "{e}");
+    assert!(s.active().unwrap().doc.node(a).is_some() && s.active().unwrap().doc.node(b).is_some());
+    assert_eq!(undo_steps(&s), steps);
+    lock(&mut s, false);
+    let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
+    assert_eq!(out, vec![json!(0)]);
+}
+
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();

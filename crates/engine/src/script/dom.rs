@@ -1266,18 +1266,25 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `pageItems.removeAll()`: deletes every object of the document in one command. A hidden or
-/// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted,
+/// and so does an object on a locked artboard.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
         let whole = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !whole(i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        (ids, refused, on_locked)
     });
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
@@ -1535,16 +1542,25 @@ fn item_z_order_position(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `remove()`: deletes the object. A hidden or locked object, one in a hidden or locked layer or
-/// group, or a group holding one is refused, as [`items_remove_all`] refuses it.
+/// group, a group holding one, or an object on a locked artboard is refused, as [`items_remove_all`]
+/// refuses it.
 fn item_remove(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    let whole = with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable));
+    let (whole, on_locked) = with_doc(h, item.doc, |_, st| {
+        (editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable), st.doc.on_locked_artboard(item.id))
+    });
     if !whole {
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {}", item.id.0)));
+    }
+    if on_locked {
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {}", item.id.0)));
     }
     edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0]}))?;
     Ok(Data::Undefined)
 }
+
+/// The error of `remove()` and `removeAll()` for an object on a locked artboard.
+const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
 
 /// The error of `move` and `duplicate` given an object of another document.
 pub const CROSS_DOCUMENT: &str = "Cross-document placement is not available";
