@@ -19,6 +19,9 @@ pub(crate) enum Value {
     Number(f64),
     String(Str),
     Object(ObjId),
+    /// A Symbol (ECMA-262 11th edition, section 6.1.5), which only a realm with
+    /// [`crate::Options::es2015`] makes.
+    Symbol(crate::symbol::Sym),
 }
 
 impl Value {
@@ -44,7 +47,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Number(n) => !(n.is_nan() || *n == 0.0),
             Value::String(s) => s.len() > 0,
-            Value::Object(_) => true,
+            Value::Object(_) | Value::Symbol(_) => true,
         }
     }
 }
@@ -189,6 +192,30 @@ impl Str {
             };
             node = next;
         }
+    }
+
+    /// At most `max` code units from the start, read along the rope without flattening it,
+    /// visiting at most `max_nodes` nodes, with the number of nodes visited. When the nodes run
+    /// out first, the units read so far are returned.
+    pub(crate) fn prefix(&self, max: usize, max_nodes: u64) -> (Vec<u16>, u64) {
+        let mut units = Vec::new();
+        let mut stack = vec![self.clone()];
+        let mut visited = 0u64;
+        while let Some(node) = stack.pop() {
+            if units.len() >= max || visited >= max_nodes {
+                break;
+            }
+            visited += 1;
+            match &*node.0.borrow() {
+                Node::Flat(f) => units.extend_from_slice(f.get(..f.len().min(max - units.len())).unwrap_or_default()),
+                Node::Concat { left, right, .. } => {
+                    stack.push(right.clone());
+                    stack.push(left.clone());
+                }
+                Node::Taken => {}
+            }
+        }
+        (units, visited)
     }
 
     pub(crate) fn to_rust_string(&self) -> String {

@@ -28,6 +28,7 @@ use crate::heap::{
     Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
 use crate::string_builtins::flat_charged;
+use crate::symbol::PropKey;
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
 
@@ -323,6 +324,9 @@ pub(crate) struct Interp {
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
     pub(crate) strict_writes: bool,
+    /// The well-known Symbols, `Symbol.for`'s registry and the objects that go with them, in a
+    /// realm with [`crate::Options::es2015`].
+    pub(crate) symbols: crate::symbol::Symbols,
 }
 
 /// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
@@ -557,6 +561,7 @@ impl Interp {
             finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
+            symbols: crate::symbol::Symbols::default(),
         };
         crate::builtins::install(&mut interp);
         interp.fuel = limits.fuel;
@@ -791,6 +796,8 @@ impl Interp {
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
+        roots.values.extend(self.symbols.root_values());
+        roots.objects.extend(self.symbols.root_objects());
         roots.envs.push(self.global_env);
         roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
@@ -801,7 +808,8 @@ impl Interp {
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
         self.flattened.set(0);
-        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get());
+        self.heap.bytes =
+            self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get()).saturating_add(self.symbols.registry_bytes());
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -965,13 +973,13 @@ impl Interp {
         self.frame()?.code.names.get(i as usize).cloned().ok_or_else(|| Abrupt::Internal("name out of range".into()))
     }
 
-    fn strict(&self) -> bool {
+    pub(crate) fn strict(&self) -> bool {
         self.frames.last().is_some_and(|f| f.code.strict)
     }
 
     /// Does a property write the running code makes throw when it cannot be made? It does in
     /// strict mode code and in code from a source with [`crate::bytecode::Source::strict_writes`].
-    fn strict_writes(&self) -> bool {
+    pub(crate) fn strict_writes(&self) -> bool {
         self.frames.last().is_some_and(|f| f.code.strict || f.code.source.strict_writes)
     }
 
@@ -1469,12 +1477,13 @@ impl Interp {
     }
 
     /// The prototype a primitive's properties are looked up on.
-    fn primitive_proto(&mut self, v: &Value, k: &[u16]) -> JsResult<ObjId> {
+    pub(crate) fn primitive_proto(&mut self, v: &Value, k: &[u16]) -> JsResult<ObjId> {
         match v {
             Value::Object(o) => Ok(*o),
             Value::String(_) => Ok(self.intrinsics.string_proto),
             Value::Number(_) => Ok(self.intrinsics.number_proto),
             Value::Bool(_) => Ok(self.intrinsics.boolean_proto),
+            Value::Symbol(_) => Ok(self.symbols.objects.map_or(self.intrinsics.object_proto, |o| o.symbol_proto)),
             Value::Undefined | Value::Null => {
                 let key = String::from_utf16_lossy(k);
                 let base = if matches!(v, Value::Null) { "null" } else { "undefined" };
@@ -1573,7 +1582,7 @@ impl Interp {
         }
     }
 
-    fn reject_bool(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<bool> {
+    pub(crate) fn reject_bool(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<bool> {
         if throw {
             let key = String::from_utf16_lossy(k);
             return Err(self.type_error(&format!("cannot define property '{key}': {why}")));
@@ -1727,7 +1736,7 @@ impl Interp {
         r
     }
 
-    fn reject(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<()> {
+    pub(crate) fn reject(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<()> {
         if throw {
             let key = String::from_utf16_lossy(k);
             return Err(self.type_error(&format!("cannot assign to property '{key}': {why}")));
@@ -1833,7 +1842,7 @@ impl Interp {
     }
 
     /// PutValue on a property reference (section 8.7.2), whose base may be a primitive.
-    fn put_value(&mut self, base: &Value, k: Key, v: Value) -> JsResult<()> {
+    pub(crate) fn put_value(&mut self, base: &Value, k: Key, v: Value) -> JsResult<()> {
         if self.options.e4x && self.is_xml(base) {
             return self.xml_put(base, &Value::String(Str::from_rc(k)), &v);
         }
@@ -1890,6 +1899,8 @@ impl Interp {
         let key = match k {
             Some(Value::String(s)) if s.len() > NAMED_KEY_UNITS => None,
             Some(Value::Object(_)) | None => None,
+            Some(Value::Symbol(s)) if s.description().is_some_and(|d| d.len() > NAMED_KEY_UNITS) => None,
+            Some(Value::Symbol(s)) => Some(self.sym_name(s)?),
             Some(k) => Some(self.to_str(k)?.to_rust_string()),
         };
         let base = if matches!(base, Value::Null) { "null" } else { "undefined" };
@@ -1913,8 +1924,11 @@ impl Interp {
             return Ok(());
         }
         self.check_coercible(&base, Some(&k), true)?;
-        let name = self.to_key(&k)?;
-        self.replace(1, Value::String(Str::from_rc(name)))
+        let key = match self.to_prop_key(&k)? {
+            PropKey::Str(name) => Value::String(Str::from_rc(name)),
+            PropKey::Sym(s) => Value::Symbol(s),
+        };
+        self.replace(1, key)
     }
 
     fn op_get_index(&mut self, with_this: bool) -> JsResult<()> {
@@ -1931,7 +1945,7 @@ impl Interp {
             return self.replace(2, v);
         }
         self.check_coercible(&base, Some(&k), false)?;
-        let v = self.with_key(&k, |i, name| i.get_value(&base, &name))?;
+        let v = self.with_prop_key(&k, |i, key| i.get_value_pk(&base, &key))?;
         self.replace(2, v)?;
         if with_this { self.push(base) } else { Ok(()) }
     }
@@ -1944,8 +1958,8 @@ impl Interp {
             self.xml_put(&base, &k, &v)?;
             return self.replace(3, v);
         }
-        let name = self.to_key(&k)?;
-        self.put_value(&base, name, v.clone())?;
+        let key = self.to_prop_key(&k)?;
+        self.put_value_pk(&base, key, v.clone())?;
         self.replace(3, v)
     }
 
@@ -1970,25 +1984,25 @@ impl Interp {
             return self.replace(2, Value::Bool(r));
         }
         self.check_coercible(&base, Some(&k), false)?;
-        let name = self.to_key(&k)?;
+        let key = self.to_prop_key(&k)?;
         let o = self.to_object(&base)?;
         let strict = self.strict();
-        let r = self.delete(o, &name, strict)?;
+        let r = self.delete_pk(o, &key, strict)?;
         self.replace(2, Value::Bool(r))
     }
 
-    fn inc_property(&mut self, base: &Value, name: Key, prefix: bool, dec: bool) -> JsResult<Value> {
-        let v = self.get_value(base, &name)?;
+    fn inc_property(&mut self, base: &Value, key: PropKey, prefix: bool, dec: bool) -> JsResult<Value> {
+        let v = self.get_value_pk(base, &key)?;
         let old = self.to_number(&v)?;
         let new = if dec { old - 1.0 } else { old + 1.0 };
-        self.put_value(base, name, Value::Number(new))?;
+        self.put_value_pk(base, key, Value::Number(new))?;
         Ok(Value::Number(if prefix { new } else { old }))
     }
 
     fn op_inc_member(&mut self, n: u32, prefix: bool, dec: bool) -> JsResult<()> {
         let name = self.name(n)?;
         let base = self.peek(0)?;
-        let r = self.inc_property(&base, name, prefix, dec)?;
+        let r = self.inc_property(&base, PropKey::Str(name), prefix, dec)?;
         self.replace(1, r)
     }
 
@@ -2003,7 +2017,7 @@ impl Interp {
             return self.replace(2, Value::Number(if prefix { new } else { old }));
         }
         self.check_coercible(&base, Some(&k), false)?;
-        let r = self.with_key(&k, |i, name| i.inc_property(&base, name, prefix, dec))?;
+        let r = self.with_prop_key(&k, |i, key| i.inc_property(&base, key, prefix, dec))?;
         self.replace(2, r)
     }
 
@@ -2922,6 +2936,7 @@ impl Interp {
         } else {
             self.define(a, key("callee"), Prop::Data { value: Value::Object(callee), flags: HIDDEN })?;
         }
+        crate::builtins::iterator::define_arguments_iterator(self, a)?;
         Ok(a)
     }
 
@@ -3292,16 +3307,22 @@ impl Interp {
             Value::Bool(_) => "boolean",
             Value::Number(_) => "number",
             Value::String(_) => "string",
+            Value::Symbol(_) => "symbol",
             Value::Object(_) if self.options.e4x && self.is_xml(v) => "xml",
             Value::Object(_) if self.is_callable(v) => "function",
             Value::Object(_) => "object",
         }
     }
 
-    /// ToPrimitive (section 9.1) through [[DefaultValue]] (section 8.12.8).
+    /// ToPrimitive (section 9.1) through [[DefaultValue]] (section 8.12.8). In a realm with
+    /// [`crate::Options::es2015`], an object's `@@toPrimitive` method is called first when it
+    /// has one (ECMA-262 11th edition, section 7.1.1).
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_primitive(&mut self, v: &Value, hint: Hint) -> JsResult<Value> {
         let Value::Object(o) = v else { return Ok(v.clone()) };
+        if let Some(r) = self.exotic_to_primitive(*o, v, hint)? {
+            return Ok(r);
+        }
         // Without a hint, a Date object converts as with the String hint.
         let date = hint == Hint::Default && matches!(self.heap.object(*o).map(|ob| &ob.class), Some(Class::Date(_)));
         let order = if hint == Hint::String || date { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
@@ -3325,6 +3346,7 @@ impl Interp {
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Number(n) => *n,
             Value::String(s) => string_to_number(&flat_charged(self, s)?),
+            Value::Symbol(_) => return Err(self.type_error("cannot convert a Symbol value to a number")),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
                 return self.to_number(&p);
@@ -3332,7 +3354,9 @@ impl Interp {
         })
     }
 
-    /// ToString applied to a primitive.
+    /// ToString applied to a primitive, with a Symbol written as `Symbol(description)` for
+    /// messages, its description cut as [`crate::symbol::Sym::message_name`] cuts it;
+    /// [`Self::to_str`] refuses a Symbol.
     pub(crate) fn primitive_to_str(&mut self, v: &Value) -> Str {
         match v {
             Value::Undefined => Str::from("undefined"),
@@ -3345,12 +3369,22 @@ impl Interp {
             }
             Value::String(s) => s.clone(),
             Value::Object(_) => Str::from("[object]"),
+            Value::Symbol(s) => {
+                let (units, _) = s.message_name();
+                self.heap.bytes += string_bytes(units.len());
+                Str::from_units(units)
+            }
         }
     }
 
+    /// ToString (section 9.8); a Symbol throws a `TypeError` (ECMA-262 11th edition, section
+    /// 7.1.17).
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_str(&mut self, v: &Value) -> JsResult<Str> {
         let p = self.to_primitive(v, Hint::String)?;
+        if matches!(p, Value::Symbol(_)) {
+            return Err(self.type_error("cannot convert a Symbol value to a string"));
+        }
         Ok(self.primitive_to_str(&p))
     }
 
@@ -3401,6 +3435,7 @@ impl Interp {
             Value::Bool(b) => (Class::Boolean(*b), self.intrinsics.boolean_proto),
             Value::Number(n) => (Class::Number(*n), self.intrinsics.number_proto),
             Value::String(s) => (Class::String(s.clone()), self.intrinsics.string_proto),
+            Value::Symbol(s) => (Class::Symbol(s.clone()), self.primitive_proto(v, &[])?),
         };
         Ok(self.heap.alloc_object(Object::new(class, Some(proto))))
     }
@@ -3479,8 +3514,8 @@ impl Interp {
                     return self.xml_has(b, a).map(Value::Bool);
                 }
                 let Value::Object(o) = b else { return Err(self.type_error("the right side of 'in' is not an object")) };
-                let k = self.to_key(a)?;
-                self.has_property(*o, &k).map(Value::Bool)
+                let k = self.to_prop_key(a)?;
+                self.has_pk(*o, &k).map(Value::Bool)
             }
         }
     }
@@ -3496,8 +3531,10 @@ impl Interp {
         let pa = self.to_primitive(a, Hint::Default)?;
         let pb = self.to_primitive(b, Hint::Default)?;
         if matches!(pa, Value::String(_)) || matches!(pb, Value::String(_)) {
-            let sa = self.primitive_to_str(&pa);
-            let sb = self.primitive_to_str(&pb);
+            // Both are primitives, so this converts them without running script code; a Symbol
+            // throws.
+            let sa = self.to_str(&pa)?;
+            let sb = self.to_str(&pb)?;
             return self.concat(&sa, &sb).map(Value::String);
         }
         Ok(Value::Number(self.to_number(&pa)? + self.to_number(&pb)?))
@@ -3542,29 +3579,45 @@ impl Interp {
                 (Value::Number(_), Value::Number(_))
                 | (Value::String(_), Value::String(_))
                 | (Value::Bool(_), Value::Bool(_))
+                | (Value::Symbol(_), Value::Symbol(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
                 (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
                     return Ok(*n == string_to_number(&flat_charged(self, s)?));
                 }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
-                (Value::Number(_) | Value::String(_), Value::Object(_)) => y = self.to_primitive(&y, Hint::Default)?,
-                (Value::Object(_), Value::Number(_) | Value::String(_)) => x = self.to_primitive(&x, Hint::Default)?,
+                (Value::Number(_) | Value::String(_) | Value::Symbol(_), Value::Object(_)) => y = self.to_primitive(&y, Hint::Default)?,
+                (Value::Object(_), Value::Number(_) | Value::String(_) | Value::Symbol(_)) => x = self.to_primitive(&x, Hint::Default)?,
                 _ => return Ok(false),
             }
         }
     }
 
-    /// `instanceof` (sections 11.8.6 and 15.3.5.3).
+    /// `instanceof` (sections 11.8.6 and 15.3.5.3). In a realm with [`crate::Options::es2015`],
+    /// the right side's `@@hasInstance` method answers when it has one (ECMA-262 11th edition,
+    /// section 12.10.4).
     fn instance_of(&mut self, v: &Value, f: &Value) -> JsResult<bool> {
+        if let Some(r) = self.has_instance_hook(v, f)? {
+            return Ok(r);
+        }
         if !self.is_callable(f) {
             return Err(self.type_error("the right side of 'instanceof' is not a function"));
         }
-        let Some(mut fid) = f.as_object() else { return Ok(false) };
-        // A bound function answers for its target (section 15.3.4.5.3).
+        self.ordinary_has_instance(v, f)
+    }
+
+    /// OrdinaryHasInstance (ECMA-262 11th edition, section 7.3.21): `false` when `f` is not a
+    /// function.
+    pub(crate) fn ordinary_has_instance(&mut self, v: &Value, f: &Value) -> JsResult<bool> {
+        let Some(mut fid) = f.as_object().filter(|_| self.is_callable(f)) else { return Ok(false) };
+        // A bound function answers for its target (section 15.3.4.5.3), or the target's own
+        // `@@hasInstance` method does.
         while let Some(Func::Bound { target, .. }) = self.func_of(&Value::Object(fid)) {
             self.use_fuel()?;
             fid = target;
+            if let Some(r) = self.bound_target_hook(v, fid)? {
+                return Ok(r);
+            }
         }
         let f = &Value::Object(fid);
         let Value::Object(mut o) = v.clone() else { return Ok(false) };
@@ -3595,6 +3648,7 @@ impl Interp {
             Value::Number(n) => crate::JsValue::Number(*n),
             Value::String(s) => crate::JsValue::String(s.to_rust_string()),
             Value::Object(o) => crate::JsValue::Object(self.heap.object(*o).map_or("Object", |o| o.class.name()).to_string()),
+            Value::Symbol(s) => crate::JsValue::Symbol(s.description().map(Str::to_rust_string)),
         }
     }
 
@@ -3615,6 +3669,13 @@ impl Interp {
                 Value::str(&s)
             }
             crate::JsValue::Object(_) => Value::Object(self.new_object()),
+            crate::JsValue::Symbol(description) => {
+                let units: Option<Vec<u16>> = description.map(|d| d.encode_utf16().collect());
+                let bytes = crate::heap::SYMBOL_BYTES + units.as_ref().map_or(0, |u| string_bytes(u.len()));
+                self.reserve_heap(bytes)?;
+                self.heap.bytes += bytes;
+                Value::Symbol(crate::symbol::Sym::new(units.map(Str::from_units), false))
+            }
         })
     }
 
@@ -3674,7 +3735,7 @@ impl Desc {
     }
 
     /// The attribute flags the descriptor gives, each absent one taken from `default`.
-    fn flags_or(&self, default: u8) -> u8 {
+    pub(crate) fn flags_or(&self, default: u8) -> u8 {
         let pick = |field: Option<bool>, bit: u8| match field {
             Some(true) => bit,
             Some(false) => 0,
@@ -3694,7 +3755,7 @@ pub(crate) fn same_value(a: &Value, b: &Value) -> bool {
 
 /// Steps 5 to 12 of [[DefineOwnProperty]] (section 8.12.9) for an existing property: the
 /// property after `desc` is applied, or `None` when the change is not allowed.
-fn merge_desc(current: &Prop, desc: &Desc) -> Option<Prop> {
+pub(crate) fn merge_desc(current: &Prop, desc: &Desc) -> Option<Prop> {
     let flags = current.flags();
     let configurable = flags & CONFIGURABLE != 0;
     if !configurable {
@@ -3750,6 +3811,7 @@ pub(crate) fn strict_eq(a: &Value, b: &Value) -> bool {
         (Value::String(x), Value::String(y)) => x == y,
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Object(x), Value::Object(y)) => x == y,
+        (Value::Symbol(x), Value::Symbol(y)) => x == y,
         _ => false,
     }
 }

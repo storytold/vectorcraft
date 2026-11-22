@@ -39,6 +39,11 @@
 //! `annexb-language-failures.txt` and `annexb-builtins-failures.txt`). A suite without
 //! `test/annexB/` skips them; a folder there with no test to parse or run fails them.
 //!
+//! Another test runs the tests of `Symbol`, `Object.getOwnPropertySymbols` and the iterators of
+//! arrays and strings (the folders [`SYMBOL_BUILT_INS`] names) in a realm with
+//! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
+//! that parse as ES5. Its failures go to `symbol-failures.txt`.
+//!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
 //! [`MAX_FILE_BYTES`] before reading it. A folder or file it cannot read fails the test.
@@ -452,6 +457,11 @@ fn runs_strings_as_code(tokens: &[Token]) -> bool {
 }
 
 /// Runs one test in a new realm made with `options`; `Err` describes a failure.
+fn run_one_with(options: &Options, script: &str, negative_type: Option<&str>) -> Result<(), String> {
+    run_one(script, negative_type, options)
+}
+
+/// Runs one test in a new realm made with `options`; `Err` describes a failure.
 fn run_one(script: &str, negative_type: Option<&str>, options: &Options) -> Result<(), String> {
     let mut realm = Realm::with_options(options.clone(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
     match (realm.run(script), negative_type) {
@@ -842,6 +852,110 @@ fn run_annex_b(dir: &Path) {
     }
     println!("test262 Annex B built-ins failures: {}", path.display());
     assert_eq!(panicked, 0, "the interpreter panicked; see the Annex B failure files in {}", dir.display());
+}
+
+/// The folders of the tests of `Symbol`, Symbol-keyed properties and the iterators of arrays and
+/// strings, which run in a realm with [`Options::es2015`].
+const SYMBOL_BUILT_INS: &[&str] = &[
+    "built-ins/Symbol",
+    "built-ins/ArrayIteratorPrototype",
+    "built-ins/StringIteratorPrototype",
+    "built-ins/Object/getOwnPropertySymbols",
+    "built-ins/Array/prototype/values",
+    "built-ins/Array/prototype/keys",
+    "built-ins/Array/prototype/entries",
+    "built-ins/Array/prototype/Symbol.iterator",
+    "built-ins/String/prototype/Symbol.iterator",
+];
+
+/// The feature tags of the tests under [`SYMBOL_BUILT_INS`] that run; a test with any other tag is
+/// skipped.
+const SYMBOL_FEATURES: &[&str] = &[
+    "Symbol",
+    "Symbol.iterator",
+    "Symbol.toStringTag",
+    "Symbol.hasInstance",
+    "Symbol.toPrimitive",
+    "Symbol.asyncIterator",
+    "Symbol.prototype.description",
+];
+
+#[test]
+fn es2015_symbol_and_iterators_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 Symbol and iterators: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_symbol_built_ins(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under each folder [`SYMBOL_BUILT_INS`] names in a realm with
+/// [`Options::es2015`], prints the counts of each and writes the failures to
+/// `symbol-failures.txt` beside the suite.
+fn run_symbol_built_ins(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in SYMBOL_BUILT_INS {
+        let root = or_fail(inside(dir, &format!("test/{folder}")));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let counts = run_tagged_tests(dir, &root, &missing, &options, SYMBOL_FEATURES);
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no Symbol or iterator tests ran under {}", dir.display());
+    let path = dir.join("symbol-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 Symbol and iterators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// Runs the script tests under `root` of any edition whose feature tags are all in `features`,
+/// each in a new realm made with `options` after the harness, the way [`run_tests`] runs the
+/// others. A test with another tag is counted as skipped.
+fn run_tagged_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, options: &Options, features: &[&str]) -> RunCounts {
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let mut counts = RunCounts::default();
+    for path in or_fail(test_files(root)) {
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.flags.iter().any(|f| f == "module") || matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution")) {
+            continue;
+        }
+        let tagged_elsewhere = meta.features.iter().any(|f| !features.contains(&f.as_str()));
+        let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        if tagged_elsewhere || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&[&source, &includes], missing) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let mode = if strict { "strict" } else { "sloppy" };
+            let body = if meta.flags.iter().any(|f| f == "raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            match std::panic::catch_unwind(|| run_one_with(options, &script, negative_type.as_deref())) {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    counts
 }
 
 /// `needs_missing_builtin` with `Map`, `Symbol` and `Set` missing.
