@@ -894,8 +894,9 @@ pub struct UiState {
     /// place, [`crate::dialogs::settle`] puts the document back at the front of `pending_fonts`.
     #[serde(skip)]
     pub fonts_dialog: Option<u64>,
-    /// The plug-in (`{id, file, name, label}`) the last launch was loading when it stopped, while
-    /// the user has not chosen what to do about it. When another dialog takes the choice's place,
+    /// The fields of the choice about the plug-ins the last launch was loading when it stopped
+    /// (`{item, items}`, each `{id, file, name, label}`), while the user has not chosen what to do
+    /// about them. When another dialog takes the choice's place,
     /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
     #[serde(skip)]
     pub stopped_plugin: Option<Value>,

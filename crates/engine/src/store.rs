@@ -35,14 +35,16 @@
 //! The files are untrusted input like any other: sizes and counts are capped, a file that does not
 //! parse is skipped with a log record, and every write is atomic.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
+use serde_json::Value;
 use vectorcraft_pdf::{PdfPreset, builtin_preset};
+use vectorcraft_plugins::loader::{Job, Loads};
 use vectorcraft_plugins::permissions::GrantToken;
 use vectorcraft_plugins::safe_mode;
 use vectorcraft_plugins::storage::{self, Meter, Storage, StorageError};
@@ -187,6 +189,123 @@ fn read_past_cap(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// Plug-ins loading on worker threads, which [`Session::poll_plugin_loads`] and
+/// [`Session::finish_plugin_loads`] install.
+pub(crate) enum PluginLoad {
+    /// The plug-in store's ([`Session::load_stored_plugins`]).
+    Stored(StoredLoad),
+    /// The Additional Plug-ins Folder's ([`crate::cmd::plugin::sync_prefs`]).
+    Folder(crate::cmd::plugin::FolderPending),
+}
+
+impl PluginLoad {
+    /// Starts the modules loading, unless they started already.
+    fn start(&mut self) {
+        match self {
+            PluginLoad::Stored(load) => load.loads.begin(),
+            PluginLoad::Folder(load) => load.start(),
+        }
+    }
+
+    /// The installs and removals it checks its modules against (`None`: a folder that couldn't be
+    /// listed, or one ended already).
+    fn changes(&self) -> Option<&vectorcraft_plugins::registry::LoadChanges> {
+        match self {
+            PluginLoad::Stored(load) => Some(&load.changes),
+            PluginLoad::Folder(load) => load.changes(),
+        }
+    }
+
+    /// [`PluginLoad::changes`], to adopt an earlier load's.
+    fn changes_mut(&mut self) -> Option<&mut vectorcraft_plugins::registry::LoadChanges> {
+        match self {
+            PluginLoad::Stored(load) => Some(&mut load.changes),
+            PluginLoad::Folder(load) => load.changes_mut(),
+        }
+    }
+
+    /// Whether every module has been installed or skipped.
+    fn done(&self) -> bool {
+        match self {
+            PluginLoad::Stored(load) => load.next == load.files.len(),
+            PluginLoad::Folder(load) => load.done(),
+        }
+    }
+
+    /// Whether something can be installed or ended now, without waiting.
+    fn ready(&mut self) -> bool {
+        match self {
+            PluginLoad::Stored(load) => load.next == load.files.len() || !load.loaded.is_empty() || load.loads.next_ready(),
+            PluginLoad::Folder(load) => load.ready(),
+        }
+    }
+
+    /// Waits until [`PluginLoad::ready`], starting the modules loading first ([`PluginLoad::start`]).
+    fn wait(&mut self) {
+        self.start();
+        match self {
+            PluginLoad::Stored(load) if load.loaded.is_empty() && load.next < load.files.len() => load.loads.wait_next(),
+            PluginLoad::Stored(_) => {}
+            PluginLoad::Folder(load) => load.wait(),
+        }
+    }
+
+    /// Drops the modules not installed yet ([`Session::cancel_plugin_loads`]), leaving it
+    /// [`PluginLoad::done`] with what it installed.
+    fn cancel(&mut self) {
+        match self {
+            PluginLoad::Stored(load) => {
+                load.loads = Loads::deferred(Vec::new());
+                load.loaded.clear();
+                load.next = load.files.len();
+            }
+            PluginLoad::Folder(load) => load.cancel(),
+        }
+    }
+
+    /// Whether installing it takes the plug-in store's own turn, making the store folder (a
+    /// folder's plug-ins keep their settings and cache there), rather than one that goes ahead
+    /// without a store folder.
+    fn creates_store(&self) -> bool {
+        matches!(self, PluginLoad::Folder(_))
+    }
+}
+
+/// The stored plug-ins loading from the plug-in store `dir`.
+pub(crate) struct StoredLoad {
+    dir: PathBuf,
+    /// Each file, with its stamp when it was listed ([`file_stamp`]; `None`: it couldn't be read).
+    files: Vec<(PathBuf, Option<FileStamp>)>,
+    loads: Loads<vectorcraft_plugins::Plugin>,
+    /// Outcomes taken from `loads` and not installed yet, in order.
+    loaded: VecDeque<vectorcraft_plugins::Result<vectorcraft_plugins::Plugin>>,
+    /// The next file to install.
+    next: usize,
+    /// The store's grants this load removed, by id, because the module stored for the id lists no
+    /// permissions: a later file holding a module with that id that the grant covers still loads,
+    /// and the grant goes back to the store.
+    retired: BTreeMap<String, vectorcraft_plugins::permissions::Grant>,
+    /// Installs and removals elsewhere since the store was listed, which a module loaded before
+    /// them doesn't undo.
+    changes: vectorcraft_plugins::registry::LoadChanges,
+}
+
+/// Tests: what runs before a stored module is read, given its path.
+#[cfg(test)]
+type StoredHook = Arc<dyn Fn(&Path) + Send + Sync>;
+
+/// Tests: runs on the worker thread before the stored module at the path it is given is read.
+#[cfg(test)]
+pub(crate) static BEFORE_STORED_LOAD: Mutex<Option<StoredHook>> = Mutex::new(None);
+
+#[cfg(test)]
+fn before_stored_load(path: &Path) {
+    let hook = BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(hook) = hook {
+        hook(path);
+    }
+}
+
 /// What a file over its cap is told (a detail after the file's name, in the log or an error).
 fn too_large(max: u64) -> String {
     format!("larger than {max} bytes")
@@ -230,8 +349,7 @@ fn write_atomic(_: &Path, _: &[u8]) -> std::io::Result<()> {
 /// replaced or removed, so that every window locks the same file.
 #[cfg(not(target_arch = "wasm32"))]
 fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
-    std::fs::create_dir_all(dir)?;
-    let file = std::fs::File::options().create(true).truncate(false).read(true).write(true).open(dir.join(DISABLED_LOCK))?;
+    let file = open_store_lock(dir)?;
     match file.try_lock() {
         Ok(()) => return Ok(file),
         Err(std::fs::TryLockError::WouldBlock) => {}
@@ -243,6 +361,30 @@ fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
     }
     file.lock()?;
     Ok(file)
+}
+
+/// [`DISABLED_LOCK`] in `dir`, opened (and made, with the folder) but not locked.
+#[cfg(not(target_arch = "wasm32"))]
+fn open_store_lock(dir: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::create_dir_all(dir)?;
+    std::fs::File::options().create(true).truncate(false).read(true).write(true).open(dir.join(DISABLED_LOCK))
+}
+
+/// [`lock_store`] without waiting: `None` while another window or process holds the lock.
+#[cfg(not(target_arch = "wasm32"))]
+fn try_lock_store(dir: &Path) -> std::io::Result<Option<std::fs::File>> {
+    let file = open_store_lock(dir)?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+        Err(std::fs::TryLockError::Error(e)) => Err(e),
+    }
+}
+
+/// The browser has no folders to keep anything in.
+#[cfg(target_arch = "wasm32")]
+fn try_lock_store(_: &Path) -> std::io::Result<Option<std::fs::File>> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
 /// The browser has no folders to keep anything in.
@@ -445,48 +587,50 @@ impl Session {
     }
 
     /// Keep the plug-ins this session installs in `dir`, take the disabled plug-ins saved there
-    /// ([`DISABLED_FILE`]), and install the stored ones ([`Session::load_stored_plugins`]).
+    /// ([`DISABLED_FILE`]), and install the stored ones ([`Session::load_stored_plugins`]). Loads
+    /// still running from an earlier call are finished first.
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
-        let path = dir.join(DISABLED_FILE);
+        self.finish_plugin_loads();
         self.plugin_dir = Some(dir);
-        // A `plugin.install` in another session or process writes the store before this reads it.
-        let _held = crate::cmd::plugin::hold_plugin_changes();
-        let turn = self.plugin_store_turn_for_load();
-        let disabled = read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
-        safe_mode::set_disabled(disabled);
-        self.load_stored_plugins_in(&turn);
+        self.start_stored_plugins(true);
     }
 
     /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
-    /// disabled (matched by file name, which is made from the id). The launch marker names each
-    /// file while it loads. A module that doesn't load, and one that lists permissions the grants
-    /// there don't grant that very module ([`grant_covers`]), is skipped with a log record, and
-    /// stays in the folder with its grant. A grant for an id whose stored module lists no
-    /// permissions is forgotten; one that can't be removed from the grants file doesn't count for
-    /// any session in the process attached to the folder until the file can be written for the id
-    /// ([`Session::ignore_stored_grant`]). The folder is read and changed in one turn on it
-    /// ([`Session::plugin_store_turn_for_load`]).
+    /// disabled (matched by file name, which is made from the id). The modules load on worker
+    /// threads ([`vectorcraft_plugins::loader`]) and install in file-name order, whatever order
+    /// their loads finish in; the launch marker names each file while it loads. A module that
+    /// doesn't load (its load panicked or didn't finish in time included), one that changed or
+    /// went away while it loaded, and one that lists permissions the grants there don't grant that
+    /// very module ([`grant_covers`]), is skipped with a log record, and stays in the folder with
+    /// its grant. A grant for an id whose stored module lists no permissions is forgotten; one that
+    /// can't be removed from the grants file doesn't count for any session in the process attached
+    /// to the folder until the file can be written for the id ([`Session::ignore_stored_grant`]).
+    /// The folder is listed, and what loaded is installed and the folder changed, in turns on it
+    /// ([`Session::plugin_store_turn_for_load`]); the modules load between them. With
+    /// [`Session::load_plugins_in_background`] on, this returns while the modules load.
     pub fn load_stored_plugins(&mut self) {
-        if self.plugin_dir.is_none() || safe_mode::active() {
-            return;
-        }
-        // A `plugin.install` in another session or process writes the store before this reads it.
-        let _held = crate::cmd::plugin::hold_plugin_changes();
-        let turn = self.plugin_store_turn_for_load();
-        self.load_stored_plugins_in(&turn);
+        self.start_stored_plugins(false);
     }
 
-    /// [`Session::load_stored_plugins`] in `turn`, while [`crate::cmd::plugin::hold_plugin_changes`]
-    /// is held.
-    fn load_stored_plugins_in(&mut self, turn: &StoreTurn) {
+    /// [`Session::load_stored_plugins`]; `disabled`: first take the disabled plug-ins saved in the
+    /// folder ([`DISABLED_FILE`]).
+    fn start_stored_plugins(&mut self, disabled: bool) {
         let Some(dir) = self.plugin_dir.clone() else { return };
+        // A `plugin.install` in another session or process writes the store before this lists it.
+        let held = crate::cmd::plugin::hold_plugin_changes();
+        let turn = self.plugin_store_turn_for_load();
+        if disabled {
+            let path = dir.join(DISABLED_FILE);
+            let saved = read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
+            safe_mode::set_disabled(saved);
+        }
         if safe_mode::active() {
             return;
         }
-        let grants = self.counted_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
-        let mut asks_nothing = BTreeSet::new();
+        let mut files = Vec::new();
+        let mut jobs = Vec::new();
         for path in list_files(&dir, PLUGIN_EXT) {
             if left == 0 {
                 log::warn!("skipping the other stored plug-ins: they hold more than {MAX_PLUGIN_STORE} bytes together");
@@ -499,24 +643,96 @@ impl Session {
                 log::info!("skipping the stored plug-in {}: disabled", path.display());
                 continue;
             }
-            let token = safe_mode::loading(&item);
-            let loaded = read_capped(&path, (limits.max_module_bytes as u64).min(left)).and_then(|bytes| {
-                left -= bytes.len() as u64;
-                vectorcraft_plugins::Plugin::load(&bytes, limits.clone()).map_err(|e| e.to_string())
-            });
-            safe_mode::loaded(token);
+            // Each file takes its listed length from what the files before it left of the total,
+            // and its load reads no more than that.
+            let cap = (limits.max_module_bytes as u64).min(left);
+            let stamp = file_stamp(&path);
+            let len = match &stamp {
+                Ok(Some((len, _))) if *len <= cap => *len,
+                Ok(Some(_)) => {
+                    log::warn!("skipping the stored plug-in {}: {}", path.display(), too_large(cap));
+                    continue;
+                }
+                Ok(None) => continue,
+                Err(e) => {
+                    log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                    continue;
+                }
+            };
+            // A file this process may not read takes nothing from the total, as one that couldn't
+            // be read didn't when the files were read one after the other.
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Err(e) = vectorcraft_plugins::registry::may_read(&path) {
+                log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                continue;
+            }
+            left -= len;
+            let (read, limits) = (path.clone(), limits.clone());
+            jobs.push(Job::new(Some(item), move || {
+                #[cfg(test)]
+                before_stored_load(&read);
+                let bytes = read_capped(&read, len).map_err(vectorcraft_plugins::Error::Io)?;
+                vectorcraft_plugins::Plugin::load(&bytes, limits)
+            }));
+            files.push((path, stamp.ok()));
+        }
+        // A change made after the listing, while `held` no longer stops one, is made elsewhere.
+        let mut changes = vectorcraft_plugins::registry::LoadChanges::default();
+        changes.start();
+        // The modules load after the turn, once the loads queued before them are done.
+        drop((turn, held));
+        let load = StoredLoad { dir, files, loads: Loads::deferred(jobs), loaded: VecDeque::new(), next: 0, retired: BTreeMap::new(), changes };
+        self.queue_plugin_load(PluginLoad::Stored(load));
+    }
+
+    /// Installs what the stored plug-ins' `load` has loaded so far, in file-name order up to the
+    /// first module still loading, without waiting ([`Session::load_stored_plugins`]), while
+    /// [`crate::cmd::plugin::hold_plugin_changes`] and `turn` are held.
+    fn install_stored_plugins(&mut self, load: &mut StoredLoad, turn: &StoreTurn) {
+        load.loaded.extend(load.loads.ready());
+        if load.loaded.is_empty() {
+            return;
+        }
+        let dir = load.dir.clone();
+        let mut grants = self.counted_grants(&dir);
+        while let (Some(loaded), Some((path, stamp))) = (load.loaded.pop_front(), load.files.get(load.next)) {
+            load.next += 1;
+            load.loads.release(1);
+            if file_stamp(path).ok() != *stamp {
+                log::warn!("skipping the stored plug-in {}: it changed or went away while it loaded", path.display());
+                continue;
+            }
             match loaded {
+                // A file replaced by one of the same length within the clock's resolution keeps its
+                // stamp: its content is compared too.
+                Ok(plugin) if !holds_module(path, stamp.flatten().map_or(0, |(len, _)| len), plugin.hash()) => {
+                    log::warn!("skipping the stored plug-in {}: it changed or went away while it loaded", path.display());
+                }
+                Ok(plugin) if load.changes.superseded(plugin.id()) => {
+                    log::warn!("skipping the stored plug-in {}: {}", path.display(), vectorcraft_plugins::registry::SUPERSEDED);
+                }
                 // Only this store's grants count: one given elsewhere in the process doesn't let a
                 // module stored here load.
                 Ok(plugin) if plugin.manifest().asks_permissions() => {
                     let m = plugin.manifest();
-                    match grants.get(&m.id).filter(|g| grant_covers(g, &plugin)) {
+                    let stored = grants.get(&m.id).filter(|g| grant_covers(g, &plugin)).cloned();
+                    let back = stored.is_none().then(|| load.retired.get(&m.id).filter(|g| grant_covers(g, &plugin)).cloned()).flatten();
+                    match stored.or(back.clone()) {
                         Some(g) => {
-                            asks_nothing.remove(&m.id);
+                            // A grant this load removed for an earlier file with the id goes back.
+                            if back.is_some() {
+                                load.retired.remove(&m.id);
+                                if self.store_grant_in(turn, &m.id, Some(g.clone())) {
+                                    grants.insert(m.id.clone(), g.clone());
+                                } else {
+                                    log::warn!("couldn't put back the grant for the stored plug-in {}", path.display());
+                                }
+                            }
                             vectorcraft_plugins::registry::grant(GrantToken::from_engine_grants_file(g.clone()));
                             vectorcraft_plugins::registry::set_storage(&m.id, plugin_storage(Some(&dir), &m.id, turn));
-                            if let Err(e) = vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
-                                log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                            match vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
+                                Ok(p) => load.changes.installed(&p),
+                                Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
                             }
                         }
                         None => {
@@ -525,28 +741,177 @@ impl Session {
                     }
                 }
                 Ok(plugin) => {
-                    asks_nothing.insert(plugin.id().to_string());
-                    vectorcraft_plugins::registry::set_storage(plugin.id(), plugin_storage(Some(&dir), plugin.id(), turn));
-                    if let Err(e) = vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
-                        log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                    let id = plugin.id().to_string();
+                    vectorcraft_plugins::registry::set_storage(&id, plugin_storage(Some(&dir), &id, turn));
+                    match vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
+                        Ok(p) => load.changes.installed(&p),
+                        Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
+                    }
+                    // In the same turn: the grants for the id stop counting, the process's and the
+                    // store's, so no session sees the earlier module as approved.
+                    vectorcraft_plugins::registry::revoke(&id);
+                    if let Some(g) = grants.remove(&id) {
+                        load.retired.insert(id.clone(), g);
+                    }
+                    if self.holds_plugin_grant(&id) {
+                        let writes = self.grant_writes();
+                        if !self.store_grant_in(turn, &id, None) && self.holds_plugin_grant(&id) {
+                            self.ignore_stored_grant(&id, writes);
+                        }
                     }
                 }
                 Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
             }
         }
-        let kept = read_grants(&dir);
-        for id in &asks_nothing {
-            vectorcraft_plugins::registry::revoke(id);
-            let named = match &kept {
-                Ok(file) => file.names(id),
-                Err(e) => e.unread,
+    }
+
+    /// Whether the loads of the stored plug-ins and of the Additional Plug-ins Folder go on after
+    /// the call that starts them ([`Session::attach_plugin_store`], [`Session::load_stored_plugins`],
+    /// preferences that set the folder): the app turns it on for its launch so that its window
+    /// shows while they load, installs what loaded with [`Session::poll_plugin_loads`] as its
+    /// frames go by, and turns it off once the launch's loads have started. Off (the default),
+    /// those calls return once what loaded is installed, the loads still running from before
+    /// included.
+    pub fn load_plugins_in_background(&mut self, on: bool) {
+        self.plugin_loads_in_background = on;
+    }
+
+    /// Installs what the plug-in loads have loaded so far, in the order the loads started and each
+    /// load's file-name order, up to the first module still loading, without waiting → whether
+    /// some are still loading. A load starts once the loads before it are done. When another
+    /// session or process is changing the plug-ins or the store, nothing installs until a later
+    /// call.
+    pub fn poll_plugin_loads(&mut self) -> bool {
+        while let Some(mut next) = self.plugin_loads.pop_front() {
+            next.start();
+            if !next.ready() {
+                self.plugin_loads.push_front(next);
+                return true;
+            }
+            let Some((held, turn)) = self.plugin_install_turn_now(next.creates_store()) else {
+                self.plugin_loads.push_front(next);
+                return true;
             };
-            if named {
-                let writes = self.grant_writes();
-                if !self.store_grant_in(turn, id, None) && self.holds_plugin_grant(id) {
-                    self.ignore_stored_grant(id, writes);
+            self.install_plugin_load(&mut next, &turn);
+            if !next.done() {
+                self.plugin_loads.push_front(next);
+                return true;
+            }
+            self.end_plugin_load(next, &turn);
+            drop((turn, held));
+        }
+        false
+    }
+
+    /// Waits for every plug-in load still running and installs what they loaded, in the order the
+    /// loads started. Plug-in commands, and commands that may edit, call it first
+    /// ([`Session::execute`]).
+    pub fn finish_plugin_loads(&mut self) {
+        while let Some(next) = self.plugin_loads.pop_front() {
+            self.finish_plugin_load(next);
+        }
+    }
+
+    /// Ends the plug-in loads still running without installing more of what they load: the app
+    /// calls it as it quits. Modules not started are dropped, and the ones running are given until
+    /// their deadline, so the launch marker is not left naming a plug-in that was loading. Each load
+    /// then ends as one that finished does for what it installed, in turns on the store: the grant
+    /// for an id whose installed module lists no permissions is forgotten.
+    pub fn cancel_plugin_loads(&mut self) {
+        while let Some(mut load) = self.plugin_loads.pop_front() {
+            load.cancel();
+            let held = crate::cmd::plugin::hold_plugin_changes();
+            let turn = self.plugin_install_turn(load.creates_store());
+            self.end_plugin_load(load, &turn);
+            drop((turn, held));
+        }
+    }
+
+    /// Waits for `load`'s modules and installs them as they load, in turns on the store, then
+    /// ends it → its report (a folder's; `null` for the stored plug-ins).
+    pub(crate) fn finish_plugin_load(&mut self, mut load: PluginLoad) -> Value {
+        load.start();
+        loop {
+            load.wait();
+            let held = crate::cmd::plugin::hold_plugin_changes();
+            let turn = self.plugin_install_turn(load.creates_store());
+            self.install_plugin_load(&mut load, &turn);
+            if load.done() {
+                let report = self.end_plugin_load(load, &turn);
+                drop((turn, held));
+                return report;
+            }
+        }
+    }
+
+    /// A turn on the store for installing what a load loaded, taken after
+    /// [`crate::cmd::plugin::hold_plugin_changes`]: the folder's own turn
+    /// ([`Session::plugin_store_turn`]) when `create`, else one that goes ahead without a store
+    /// folder ([`Session::plugin_store_turn_for_load`]). One that can't be locked goes ahead
+    /// unheld.
+    fn plugin_install_turn(&self, create: bool) -> StoreTurn {
+        if create { self.plugin_store_turn().unwrap_or_else(|_| StoreTurn::unheld()) } else { self.plugin_store_turn_for_load() }
+    }
+
+    /// [`crate::cmd::plugin::hold_plugin_changes`] and [`Session::plugin_install_turn`] without
+    /// waiting: `None` while another session holds the one or another window or process the other.
+    fn plugin_install_turn_now(&self, create: bool) -> Option<(MutexGuard<'static, ()>, StoreTurn)> {
+        let held = crate::cmd::plugin::try_hold_plugin_changes()?;
+        let turn = match self.plugin_dir.as_deref() {
+            Some(dir) if create || dir.is_dir() => match try_lock_store(dir) {
+                Ok(Some(file)) => StoreTurn { lock: Some(file) },
+                Ok(None) => return None,
+                Err(e) => {
+                    log::warn!("can't lock {}: {e}", dir.join(DISABLED_LOCK).display());
+                    StoreTurn::unheld()
+                }
+            },
+            _ => StoreTurn::unheld(),
+        };
+        Some((held, turn))
+    }
+
+    /// Whether plug-ins are still loading on worker threads ([`Session::load_plugins_in_background`]).
+    pub fn plugins_loading(&self) -> bool {
+        !self.plugin_loads.is_empty()
+    }
+
+    /// Keeps `load` to install after the loads started before it; without
+    /// [`Session::load_plugins_in_background`], waits for them all and installs what they loaded.
+    pub(crate) fn queue_plugin_load(&mut self, load: PluginLoad) {
+        self.plugin_loads.push_back(load);
+        // The first load starts now; one queued after it starts once those before it are done.
+        if let [only] = self.plugin_loads.make_contiguous() {
+            only.start();
+        }
+        if !self.plugin_loads_in_background {
+            self.finish_plugin_loads();
+        }
+    }
+
+    /// Installs what `load` has loaded so far, without waiting, in `turn`.
+    fn install_plugin_load(&mut self, load: &mut PluginLoad, turn: &StoreTurn) {
+        match load {
+            PluginLoad::Stored(load) => self.install_stored_plugins(load, turn),
+            PluginLoad::Folder(load) => crate::cmd::plugin::install_folder(self, load, turn),
+        }
+    }
+
+    /// Ends `load` once [`PluginLoad::done`], in `turn` → its report (a folder's).
+    fn end_plugin_load(&mut self, load: PluginLoad, turn: &StoreTurn) -> Value {
+        // The loads queued after it count what it installed as their own: one of theirs replaces
+        // it, as it would have with the loads run one after the other.
+        if let Some(ended) = load.changes() {
+            for later in &mut self.plugin_loads {
+                if let Some(changes) = later.changes_mut() {
+                    changes.adopt(ended);
                 }
             }
+        }
+        match load {
+            // A stored load's grants were settled as each module installed.
+            PluginLoad::Stored(_) => Value::Null,
+            PluginLoad::Folder(load) => crate::cmd::plugin::end_folder(self, load, turn),
         }
     }
 
@@ -1069,6 +1434,12 @@ fn plugin_storage(dir: Option<&Path>, id: &str, turn: &StoreTurn) -> Option<Arc<
 
 /// A file's size and modified time (`None`: there is no file).
 type FileStamp = Option<(u64, SystemTime)>;
+
+/// Does the file at `path` hold, in its first `len` bytes and no more, the module whose SHA-256 is
+/// `hash`?
+fn holds_module(path: &Path, len: u64, hash: &str) -> bool {
+    read_capped(path, len).is_ok_and(|bytes| vectorcraft_plugins::permissions::sha256_hex(&bytes) == hash)
+}
 
 /// The stamp of the file at `path`.
 fn file_stamp(path: &Path) -> Result<FileStamp, StorageError> {

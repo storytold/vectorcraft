@@ -73,6 +73,8 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
 
 /// [`start`] with the `document.open` options in `params` (`importer` and its `params`).
 pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: Value) -> Result<Value, Vec<u8>> {
+    // A plug-in still loading may be the importer that reads the file.
+    app.session.finish_plugin_loads();
     let (tx, done) = channel();
     let bytes = Arc::new(bytes);
     let (name, file) = (path.to_string(), bytes.clone());

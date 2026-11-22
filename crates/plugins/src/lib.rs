@@ -40,6 +40,7 @@ pub mod effect;
 pub mod export;
 pub mod host;
 pub mod import;
+pub mod loader;
 pub mod manifest;
 pub mod objects;
 pub mod painted;

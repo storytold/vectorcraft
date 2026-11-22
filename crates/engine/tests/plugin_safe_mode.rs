@@ -90,7 +90,7 @@ fn a_disabled_plug_in_stays_installed_and_loads_again_once_enabled_at_the_next_l
     let list = s.execute("plugin.list", &json!({})).unwrap();
     assert_eq!((list["safeMode"].clone(), list["disabled"][0]["id"].clone()), (json!(false), json!("test.sm.x")));
     let state = s.execute("plugin.safeMode", &json!({})).unwrap();
-    assert_eq!(state, json!({"active": false, "source": null, "pendingItem": null, "disabled": state["disabled"].clone()}));
+    assert_eq!(state, json!({"active": false, "source": null, "pendingItem": null, "pendingItems": [], "disabled": state["disabled"].clone()}));
     assert_eq!(state["disabled"].as_array().map(Vec::len), Some(1));
 
     s.execute("plugin.setEnabled", &json!({"id": "test.sm.x", "enabled": true})).unwrap();

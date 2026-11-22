@@ -70,6 +70,8 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // A Shape Builder merge still being computed for a click is exported with the document.
     let r = app.session.finish_tool_edit();
     crate::canvas::apply_requests(app, r);
+    // A live effect whose plug-in the launch is still loading is exported drawn.
+    app.session.finish_plugin_loads();
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;

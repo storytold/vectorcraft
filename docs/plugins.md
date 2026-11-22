@@ -113,6 +113,19 @@ most 1,000 `.wasm` files, the first ones by file name (VectorCraft's own limit);
 (`leftOut`). An entry that is not a regular file, such as a subfolder or a named pipe with a `.wasm` name, is listed in
 the report and skipped, and the load does not wait on a named pipe.
 
+**Loading.** On the desktop, the plug-ins in the `Plug-ins` folder and the Additional Plug-ins Folder load on up to four
+worker threads and install in file-name order, whatever order their loads finish in; at most eight loaded modules wait
+to be installed at once. When the desktop app starts, its window shows while they load, and they install as their loads
+finish. Plug-in commands, commands that edit a document, exports, control-channel requests and files opened at launch
+wait for them first; view commands and queries chosen from a menu do not. Until then a live effect whose plug-in is still loading is drawn as if it weren't
+there, and another window's `plugin.list` reports the folder as `{"folder", "loading": true}`. A folder set later in
+Preferences, `vectorcraft-cli` and `plugin.reload` wait for the loads before they go on. A module whose load panics,
+or whose load takes 10 s or longer (VectorCraft's own limit), is reported as failed or skipped with a log record, and
+the others install. The launch marker names every module still loading, so when the app stops during the loads, the
+next launch's Safe Mode choice lists all of them. A module whose load panicked or failed is no longer named; one past
+its 10 s limit is named until its load returns. A module is also skipped when the plug-in with its id was installed or removed in another window while it loaded. The
+web build loads one module at a time.
+
 Plug-ins are installed **per process**, not per document. Documents store a live effect as an ordinary effect record
 (`{"id": "plugin.<id>", "params": {…}}`): while the plug-in is installed it is drawn, exported and expanded; without it
 the object is drawn as if the effect weren't there, and the record is kept for when the plug-in comes back.

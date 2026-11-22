@@ -1986,6 +1986,289 @@ fn installed_plugins_are_kept_in_the_store() {
     assert!(vectorcraft_plugins::registry::get(id).is_none());
 }
 
+/// Held by the tests that set [`crate::store::BEFORE_STORED_LOAD`].
+static STORED_HOOK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// A stored module's load waits on its worker thread until the test lets it go
+/// ([`crate::store::BEFORE_STORED_LOAD`]). The hook is cleared when this is dropped.
+struct HeldLoad {
+    _lock: std::sync::MutexGuard<'static, ()>,
+    entered: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    go: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    gave_up: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl HeldLoad {
+    /// Holds the load of the file at `path`. A load the test never lets go gives up after a
+    /// million yields (so a test of code that waits for it ends) and says so in `gave_up`.
+    fn new(path: std::path::PathBuf) -> HeldLoad {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let lock = STORED_HOOK.lock().unwrap_or_else(|e| e.into_inner());
+        let (entered, go, gave_up) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
+        let (e, g, q) = (entered.clone(), go.clone(), gave_up.clone());
+        *crate::store::BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(move |p: &std::path::Path| {
+            if p != path {
+                return;
+            }
+            e.store(true, Ordering::SeqCst);
+            if !(0..1_000_000).any(|_| {
+                std::thread::yield_now();
+                g.load(Ordering::SeqCst)
+            }) {
+                q.store(true, Ordering::SeqCst);
+            }
+        }));
+        HeldLoad { _lock: lock, entered, go, gave_up }
+    }
+
+    fn entered(&self) -> bool {
+        self.entered.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn release(&self) {
+        self.go.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    fn gave_up(&self) -> bool {
+        self.gave_up.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Drop for HeldLoad {
+    fn drop(&mut self) {
+        self.release();
+        *crate::store::BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
+/// A store holding the module of a filter `id` in `<id>.wasm`.
+fn store_with(name: &str, id: &str) -> (crate::tests_links::Folder, std::path::PathBuf) {
+    let folder = crate::tests_links::Folder::new(name);
+    let path = folder.0.join(format!("{id}.wasm"));
+    std::fs::create_dir_all(&folder.0).unwrap();
+    std::fs::write(&path, wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    (folder, path)
+}
+
+/// With loads in the background, attaching a plug-in store returns while a stored module is
+/// still loading: the plug-in installs once its load is done, at the next plug-in command.
+#[test]
+fn a_store_attached_with_background_loads_returns_before_its_plugins_load() {
+    let id = "test.engine.background";
+    let (folder, path) = store_with("plugin-background", id);
+    let held = HeldLoad::new(path);
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    let returned_while_loading = !held.gave_up();
+    while !held.entered() {
+        std::thread::yield_now();
+    }
+    assert!(returned_while_loading, "attaching the store waited for the module to load");
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "nothing installs before its load is done");
+    assert!(s.poll_plugin_loads(), "still loading");
+    held.release();
+    let listed = run(&mut s, "plugin.list", json!({}));
+    assert!(listed.to_string().contains(id), "plugin.list waits for the load and lists it: {listed}");
+    assert!(!s.poll_plugin_loads());
+    assert!(vectorcraft_plugins::registry::remove(id));
+}
+
+/// Stored files that can't be opened take nothing from the bytes the stored plug-ins may read
+/// together: a module after 512 MiB of them still installs.
+#[cfg(unix)]
+#[test]
+fn unreadable_stored_files_leave_the_store_budget_to_the_others() {
+    use std::os::unix::fs::PermissionsExt;
+    let id = "test.engine.budget.after";
+    let (folder, _) = store_with("plugin-budget-unreadable", id);
+    let per_file = vectorcraft_plugins::Limits::default().max_module_bytes as u64;
+    let locked: Vec<_> = (0..crate::store::MAX_PLUGIN_STORE.div_ceil(per_file))
+        .map(|n| {
+            // Sparse files sorted before the module, each as long as a module may be.
+            let path = folder.0.join(format!("a{n:03}.wasm"));
+            std::fs::File::create(&path).unwrap().set_len(per_file).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+            path
+        })
+        .collect();
+    // A process that may read any file (root) opens them all: nothing to check.
+    if std::fs::File::open(&locked[0]).is_ok() {
+        return;
+    }
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let installed = vectorcraft_plugins::registry::get(id).is_some();
+    for path in &locked {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    assert!(installed, "the files that couldn't be opened used up the store's bytes");
+    assert!(vectorcraft_plugins::registry::remove(id));
+}
+
+/// A folder listed while the stored plug-ins still load, in the same session, replaces a stored
+/// plug-in with a module of the same id once it loads, as it does when the loads run one after the
+/// other: what an earlier load of the session installed doesn't count as a change made elsewhere.
+#[test]
+fn a_folder_queued_behind_the_stored_plugins_replaces_one_with_its_id() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "test.engine.queued.same";
+    let (store, stored) = store_with("plugin-queued-store", id);
+    let (folder, from_folder) = store_with("plugin-queued-folder", id);
+    let held = HeldLoad::new(stored);
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(store.0.clone());
+    while !held.entered() {
+        std::thread::yield_now();
+    }
+    s.prefs.plugins_folder = folder.0.display().to_string();
+    crate::cmd::plugin::sync_prefs(&mut s);
+    held.release();
+    s.finish_plugin_loads();
+    let source = vectorcraft_plugins::registry::get(id).and_then(|p| p.source().map(str::to_string));
+    assert!(vectorcraft_plugins::registry::remove(id));
+    assert_eq!(source.as_deref(), Some(from_folder.display().to_string().as_str()), "the folder's module replaces the stored one");
+}
+
+/// A query that only reads runs while the stored plug-ins load in the background, and doesn't
+/// wait for them; a plug-in command does.
+#[test]
+fn a_query_runs_while_the_plugins_load() {
+    let id = "test.engine.background.query";
+    let (folder, path) = store_with("plugin-background-query", id);
+    let held = HeldLoad::new(path);
+    let mut s = session();
+    run(&mut s, "file.new", json!({}));
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    while !held.entered() {
+        std::thread::yield_now();
+    }
+    run(&mut s, "document.info", json!({}));
+    let waited = held.gave_up() || !s.plugins_loading();
+    held.release();
+    assert!(!waited, "document.info waited for the plug-ins to load");
+    assert!(crate::waits_for_plugin_loads("plugin.list") && !crate::waits_for_plugin_loads("document.info"));
+    s.finish_plugin_loads();
+    assert!(vectorcraft_plugins::registry::remove(id));
+}
+
+/// The stored plug-ins load without holding the lock that `plugin.install` and `plugin.remove`
+/// take, so another session's plug-in changes don't wait for them.
+#[test]
+fn stored_plugins_load_without_holding_the_plugin_changes_lock() {
+    let id = "test.engine.unlocked";
+    let (folder, path) = store_with("plugin-unlocked", id);
+    let held = HeldLoad::new(path);
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    while !held.entered() && !held.gave_up() {
+        std::thread::yield_now();
+    }
+    // Other tests take the lock for a moment; the load holding it would hold it throughout (a
+    // tenth of the yields the held load waits before it gives up).
+    let free = (0..100_000).any(|_| {
+        std::thread::yield_now();
+        crate::cmd::plugin::plugin_changes_free()
+    });
+    held.release();
+    s.finish_plugin_loads();
+    assert!(free, "the lock was held while the module loaded");
+    assert!(vectorcraft_plugins::registry::remove(id));
+}
+
+/// Loads canceled as the app quits still end for what they installed: a stored module listing no
+/// permissions that installed before a later one finished loading has its id's grant forgotten,
+/// in the process and in `grants.json`, and the module still loading doesn't install.
+#[test]
+fn canceled_loads_forget_the_grants_of_what_they_installed() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let (first, later) = ("test.engine.cancel.a", "test.engine.cancel.b");
+    let (folder, _) = store_with("plugin-cancel", first);
+    let held_path = folder.0.join(format!("{later}.wasm"));
+    std::fs::write(&held_path, wat::parse_str(tpl::returning(&tpl::manifest(later, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    let empty = json!({"objects": []});
+    let approved = asking(first, r#"["doc.read"]"#, &empty);
+    let grants = folder.0.join("grants.json");
+    let entry = json!([{"id": first, "hash": sha256_hex(&approved), "permissions": ["doc.read"]}]);
+    std::fs::write(&grants, serde_json::to_vec(&entry).unwrap()).unwrap();
+    let held = HeldLoad::new(held_path);
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    while vectorcraft_plugins::registry::get(first).is_none() && !held.gave_up() {
+        s.poll_plugin_loads();
+        std::thread::yield_now();
+    }
+    assert!(vectorcraft_plugins::registry::get(first).is_some(), "the first module installed while the second loads");
+    s.cancel_plugin_loads();
+    // The file goes once it holds no grant.
+    let listed: Vec<Value> = std::fs::read(&grants).map(|b| serde_json::from_slice(&b).unwrap()).unwrap_or_default();
+    assert!(listed.iter().all(|e| e["id"] != first), "{listed:?}");
+    assert!(vectorcraft_plugins::registry::granted(first).is_none());
+    assert!(vectorcraft_plugins::registry::get(later).is_none(), "the module still loading doesn't install");
+    assert!(!s.plugins_loading());
+    drop(held);
+    assert!(vectorcraft_plugins::registry::remove(first));
+}
+
+/// The grants for a stored module that lists no permissions stop counting when it installs, in the
+/// same turn, while a later module of the load is still loading.
+#[test]
+fn a_stored_module_without_permissions_ends_its_grant_when_it_installs() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let (first, later) = ("test.engine.retire.a", "test.engine.retire.b");
+    let (folder, _) = store_with("plugin-retire", first);
+    let held_path = folder.0.join(format!("{later}.wasm"));
+    std::fs::write(&held_path, wat::parse_str(tpl::returning(&tpl::manifest(later, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    let empty = json!({"objects": []});
+    let approved = asking(first, r#"["doc.read"]"#, &empty);
+    let grants = folder.0.join("grants.json");
+    let entry = json!([{"id": first, "hash": sha256_hex(&approved), "permissions": ["doc.read"]}]);
+    std::fs::write(&grants, serde_json::to_vec(&entry).unwrap()).unwrap();
+    let held = HeldLoad::new(held_path);
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    while vectorcraft_plugins::registry::get(first).is_none() && !held.gave_up() {
+        s.poll_plugin_loads();
+        std::thread::yield_now();
+    }
+    assert!(vectorcraft_plugins::registry::get(first).is_some(), "the first module installed while the second loads");
+    assert!(s.plugins_loading(), "the second module is still loading");
+    let listed: Vec<Value> = std::fs::read(&grants).map(|b| serde_json::from_slice(&b).unwrap()).unwrap_or_default();
+    assert!(listed.iter().all(|e| e["id"] != first), "{listed:?}");
+    assert!(vectorcraft_plugins::registry::granted(first).is_none());
+    drop(held);
+    s.finish_plugin_loads();
+    assert!(vectorcraft_plugins::registry::remove(first));
+    assert!(vectorcraft_plugins::registry::remove(later));
+}
+
+/// A session that waits for its loads and sets the plug-ins folder another session is still
+/// loading in the background loads the folder itself: its plug-in is installed when `prefs.set`
+/// returns, and the other session's load, when it installs, counts the same module as loaded.
+#[test]
+fn a_folder_another_session_is_loading_is_loaded_by_a_session_that_waits() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "test.engine.sharedfolder";
+    let (folder, _) = store_with("plugin-shared-folder", id);
+    let path = folder.0.display().to_string();
+    let mut background = session();
+    background.load_plugins_in_background(true);
+    run(&mut background, "prefs.set", json!({"values": {"pluginsFolder": path}}));
+    assert!(background.plugins_loading(), "the folder loads in the background");
+    let mut waits = session();
+    run(&mut waits, "prefs.set", json!({"values": {"pluginsFolder": path}}));
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "prefs.set returned before the folder's plug-in installed");
+    let report = run(&mut background, "plugin.list", json!({}));
+    assert!(!background.plugins_loading());
+    assert!(vectorcraft_plugins::registry::remove(id), "{report}");
+}
+
 /// A heavy test filter `id` that counts `steps` down, then adds a triangle named "Plug-in".
 fn heavy(id: &str, steps: u64) -> Vec<u8> {
     let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"filter","budget":"heavy"}}"#);

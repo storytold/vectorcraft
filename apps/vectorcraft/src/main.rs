@@ -548,6 +548,9 @@ fn main() -> std::process::ExitCode {
                 // preferences (none for runs without preferences), and Safe Mode.
                 let launch_dir = prefs_path().filter(|_| prefs_enabled()).and_then(|p| Some(p.parent()?.join("Launch")));
                 let stopped = safe_mode::begin_launch(launch_dir.as_deref(), safe_mode_flag);
+                // The launch's loads of the stored plug-ins and the plug-ins folder go on on worker
+                // threads while the window shows; the frames install them as they finish.
+                session.load_plugins_in_background(true);
                 prefs_dir::attach_plugin_store(&mut session);
                 // File › Scripts lists the scripts of the Scripts folder next to the preferences.
                 prefs_dir::attach_scripts_dir(&mut session);
@@ -560,6 +563,9 @@ fn main() -> std::process::ExitCode {
                 app.set_startup_update_check(true);
                 load_prefs(&mut app, saved);
                 safe_mode::after_start(&mut app, stopped);
+                // Loads started later (a preference change, the end of Safe Mode) are waited for,
+                // after the launch's own.
+                app.session.load_plugins_in_background(false);
                 // The saved PDF presets live in their own folder (also read by vectorcraft-cli),
                 // which takes over from the copy the preferences file used to hold.
                 prefs_dir::attach_pdf_preset_store(&mut app.session);

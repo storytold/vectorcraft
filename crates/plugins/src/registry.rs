@@ -77,10 +77,68 @@ pub fn install(mut plugin: Plugin) -> Result<Arc<Plugin>> {
         return Err(Error::NeedsApproval(crate::permissions::names(&plugin.manifest().permissions()).join(", ")));
     }
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
+    note_change(plugin.id(), plugin.serial());
     let p = Arc::new(plugin);
     plugins.insert(p.id().to_string(), p.clone());
     Ok(p)
 }
+
+/// The [`revision`] of each id's last install or removal ([`changed_since`]).
+static CHANGED: RwLock<BTreeMap<String, u64>> = RwLock::new(BTreeMap::new());
+
+/// Records that `id` was installed or removed at revision `rev`; called while the plug-ins' write
+/// lock is held.
+fn note_change(id: &str, rev: u64) {
+    CHANGED.write().unwrap_or_else(|e| e.into_inner()).insert(id.to_string(), rev);
+}
+
+/// Whether plug-in `id` was installed or removed after [`revision`] gave `rev`.
+pub fn changed_since(id: &str, rev: u64) -> bool {
+    CHANGED.read().unwrap_or_else(|e| e.into_inner()).get(id).is_some_and(|&r| r > rev)
+}
+
+/// What a load that installs plug-ins one by one has to check, so that a module it loaded before
+/// another session installed or removed the same id doesn't undo that change: the [`revision`] when
+/// the load listed its files, and the revision of each id it, or a load of the same session that
+/// ended before it, installed.
+#[derive(Debug, Default)]
+pub struct LoadChanges {
+    since: Option<u64>,
+    own: BTreeMap<String, u64>,
+}
+
+impl LoadChanges {
+    /// Marks the load as started now, unless it started already. A load calls it as it lists its
+    /// files, so a change made between the listing and the loads counts as one made elsewhere.
+    pub fn start(&mut self) {
+        self.since.get_or_insert_with(revision);
+    }
+
+    /// Whether `id` was installed or removed since the load started, other than by the load itself
+    /// or a load it [adopted](LoadChanges::adopt).
+    pub fn superseded(&self, id: &str) -> bool {
+        self.since.is_some_and(|since| changed_since(id, since.max(self.own.get(id).copied().unwrap_or(0))))
+    }
+
+    /// Records that the load installed `plugin`.
+    pub fn installed(&mut self, plugin: &Plugin) {
+        self.own.insert(plugin.id().to_string(), plugin.serial());
+    }
+
+    /// Counts what `earlier`, a load of the same session queued before this one that has ended,
+    /// installed as this load's own: a module this load installs after it then replaces it, as it
+    /// would have with the loads run one after the other.
+    pub fn adopt(&mut self, earlier: &LoadChanges) {
+        for (id, &serial) in &earlier.own {
+            let own = self.own.entry(id.clone()).or_default();
+            *own = (*own).max(serial);
+        }
+    }
+}
+
+/// What a load reports for a module it skips because the plug-in under its id was installed or
+/// removed elsewhere while it loaded ([`LoadChanges`]).
+pub const SUPERSEDED: &str = "skipped: the plug-in with its id was installed or removed elsewhere while it loaded";
 
 /// What [`install_checked`] does to the grant recorded for the plug-in's id.
 pub enum GrantUpdate {
@@ -128,6 +186,7 @@ pub fn install_checked<E>(
         }
     }
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
+    note_change(&id, plugin.serial());
     let p = Arc::new(plugin);
     plugins.insert(id, p.clone());
     Ok(p)
@@ -154,7 +213,7 @@ pub fn remove(id: &str) -> bool {
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     let gone = plugins.remove(id).is_some();
     if gone {
-        REVISION.fetch_add(1, Ordering::Relaxed);
+        note_change(id, REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     }
     gone
 }
@@ -224,6 +283,19 @@ fn open_module(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     open.open(path)
 }
 
+/// Whether this process may read the file at `path`, checked against its permissions without
+/// opening it. On Unix the check uses the effective user and group; elsewhere it passes.
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub fn may_read(path: &std::path::Path) -> std::io::Result<()> {
+    rustix::fs::accessat(rustix::fs::CWD, path, rustix::fs::Access::READ_OK, rustix::fs::AtFlags::EACCESS).map_err(std::io::Error::from)
+}
+
+/// [`may_read`] off Unix: it passes, and a file that can't be read fails when its load reads it.
+#[cfg(all(not(unix), not(target_arch = "wasm32")))]
+pub fn may_read(_path: &std::path::Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 /// The most `.wasm` files one [`load_folder`] reads.
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_FOLDER_FILES: usize = 1000;
@@ -272,9 +344,11 @@ pub struct FolderReport {
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order, up to the first
 /// 1,000 by file name; the report counts the files left out ([`FolderReport::left_out`]). Anything
 /// that isn't a regular file, such as a named pipe, is reported and skipped without waiting on it
-/// ([`load_file`]). A bad module is reported and skipped, the others still load; so is a heavy one
-/// ([`crate::Budget::Heavy`]), which installs only once the user agrees, and one that lists
-/// permissions the user has not granted this very module ([`approved`]).
+/// ([`load_file`]). The modules load on worker threads ([`FolderLoad`]) and install in file-name
+/// order. A bad module is reported and skipped, the others still load; so is one whose load panics
+/// or doesn't finish in time ([`crate::loader`]), a heavy one ([`crate::Budget::Heavy`]), which
+/// installs only once the user agrees, and one that lists permissions the user has not granted this
+/// very module ([`approved`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     load_folder_where(dir, |_| Ok(()), approved)
@@ -291,54 +365,233 @@ pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder_where(
     dir: &std::path::Path,
-    allow: impl Fn(&std::path::Path) -> std::result::Result<(), String>,
+    allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
     approve: impl Fn(&Plugin) -> bool,
 ) -> Result<FolderReport> {
-    use crate::safe_mode::{self, Item};
-    safe_mode::check()?;
-    let (files, left_out) = folder_files(dir)?;
-    let mut report = FolderReport { left_out, ..FolderReport::default() };
-    for f in files {
-        if let Err(why) = allow(&f) {
-            report.failed.push((f.display().to_string(), why));
-            continue;
+    let mut load = FolderLoad::begin(dir, allow)?;
+    while !load.done() {
+        load.wait();
+        load.install_ready(&approve);
+    }
+    Ok(load.finish())
+}
+
+/// Tests: what runs before a folder module loads, given its path.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+type FileHook = std::sync::Arc<dyn Fn(&std::path::Path) + Send + Sync>;
+
+/// Tests: runs on the worker thread before the module at the path it is given loads.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) static BEFORE_FOLDER_FILE: Mutex<Option<FileHook>> = Mutex::new(None);
+
+/// A [`load_folder_where`] whose modules load on worker threads ([`crate::loader`]) while the
+/// caller goes on: [`FolderLoad::begin`] lists the folder and starts the loads,
+/// [`FolderLoad::install_ready`] installs what loaded so far in file-name order, whatever order the
+/// loads finish in, and [`FolderLoad::finish`] ends the load once [`FolderLoad::done`]. A module
+/// whose load panics or doesn't finish in time is reported as failed, and the others still install.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct FolderLoad {
+    /// Each file in file-name order, with why it was refused before loading, if it was.
+    files: Vec<(std::path::PathBuf, Option<String>)>,
+    loads: crate::loader::Loads<Plugin>,
+    /// Outcomes taken from `loads` and not installed yet, in order.
+    loaded: std::collections::VecDeque<Result<Plugin>>,
+    /// The next file to install or report.
+    next: usize,
+    report: FolderReport,
+    /// Installs and removals elsewhere since the folder was listed, which a module loaded before
+    /// them doesn't undo.
+    changes: LoadChanges,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl FolderLoad {
+    /// Lists `dir` and starts loading the files `allow` accepts and the user didn't disable. Each
+    /// file is checked with `allow` again on its worker thread, right before it is read. In Safe
+    /// Mode nothing loads ([`Error::SafeMode`]); an error listing the folder is returned.
+    pub fn begin(
+        dir: &std::path::Path,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+    ) -> Result<FolderLoad> {
+        let mut load = Self::list_on(dir, allow, None)?;
+        load.start();
+        Ok(load)
+    }
+
+    /// [`FolderLoad::begin`] without starting the loads: [`FolderLoad::start`] starts them, and
+    /// so does waiting for them.
+    pub fn list(
+        dir: &std::path::Path,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+    ) -> Result<FolderLoad> {
+        Self::list_on(dir, allow, None)
+    }
+
+    /// Starts the loads, unless they started already.
+    pub fn start(&mut self) {
+        self.changes.start();
+        self.loads.begin();
+    }
+
+    /// [`FolderLoad::list`] for `workers` threads (`None`: as many as [`crate::loader::Loads::start`]
+    /// starts).
+    fn list_on(
+        dir: &std::path::Path,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+        workers: Option<usize>,
+    ) -> Result<FolderLoad> {
+        use crate::loader::{Job, Loads};
+        use crate::safe_mode::{self, Item};
+        safe_mode::check()?;
+        let (found, left_out) = folder_files(dir)?;
+        let allow = std::sync::Arc::new(allow);
+        let mut files = Vec::with_capacity(found.len());
+        let mut jobs = Vec::new();
+        for f in found {
+            let item = Item::file(f.display().to_string());
+            let refused = match allow(&f) {
+                Err(why) => Some(why),
+                Ok(()) if safe_mode::skipped(&item) => Some(DISABLED.to_string()),
+                Ok(()) => None,
+            };
+            if refused.is_none() {
+                let (path, allow) = (f.clone(), allow.clone());
+                jobs.push(Job::new(Some(item), move || {
+                    allow(&path).map_err(Error::Io)?;
+                    #[cfg(test)]
+                    {
+                        let hook = BEFORE_FOLDER_FILE.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                        if let Some(hook) = hook {
+                            hook(&path);
+                        }
+                    }
+                    load_file(&path, Limits::default())
+                }));
+            }
+            files.push((f, refused));
         }
-        let item = Item::file(f.display().to_string());
-        if safe_mode::skipped(&item) {
-            report.failed.push((f.display().to_string(), DISABLED.into()));
-            continue;
-        }
-        let token = safe_mode::loading(&item);
-        let loaded = load_file(&f, Limits::default());
-        safe_mode::loaded(token);
-        match loaded {
-            Ok(p) if safe_mode::skipped(&Item::of(&p)) => {
-                report.disabled_changed |= safe_mode::disable_file_of(&Item::of(&p));
-                report.failed.push((f.display().to_string(), DISABLED.into()));
-            }
-            // A heavy plug-in installs once the user agrees, which loading a folder doesn't ask.
-            Ok(p) if p.manifest().budget == crate::Budget::Heavy => {
-                report.failed.push((f.display().to_string(), "asks for a heavy budget, which the user allows when installing it on its own".into()));
-            }
-            Ok(p) if p.manifest().asks_permissions() && !approve(&p) => {
-                let asked = crate::permissions::names(&p.manifest().permissions()).join(", ");
-                report.failed.push((f.display().to_string(), Error::NeedsApproval(asked).to_string()));
-            }
-            // `approve` only narrows what installs: `install` still refuses a module that no
-            // recorded grant covers.
-            Ok(p) => match install(p) {
-                Ok(p) => report.loaded.push(p.id().to_string()),
-                Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
-            },
-            Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
+        let loads = match workers {
+            Some(n) => Loads::deferred_on(jobs, n),
+            None => Loads::deferred(jobs),
+        };
+        let report = FolderReport { left_out, ..FolderReport::default() };
+        let mut changes = LoadChanges::default();
+        changes.start();
+        Ok(FolderLoad { files, loads, loaded: Default::default(), next: 0, report, changes })
+    }
+
+    /// The installs and removals the load checks its modules against ([`LoadChanges`]).
+    pub fn changes(&self) -> &LoadChanges {
+        &self.changes
+    }
+
+    /// [`FolderLoad::changes`], to [adopt](LoadChanges::adopt) an earlier load's.
+    pub fn changes_mut(&mut self) -> &mut LoadChanges {
+        &mut self.changes
+    }
+
+    /// Whether every file has been installed or reported.
+    pub fn done(&self) -> bool {
+        self.next == self.files.len()
+    }
+
+    /// Whether [`FolderLoad::install_ready`] has something to install or report now, without
+    /// waiting (or nothing is left).
+    pub fn ready(&mut self) -> bool {
+        match self.files.get(self.next) {
+            None => true,
+            Some((_, Some(_))) => true,
+            Some((_, None)) => !self.loaded.is_empty() || self.loads.next_ready(),
         }
     }
-    for id in &report.loaded {
-        if get(id).is_some_and(|p| !p.manifest().asks_permissions()) {
-            revoke(id);
+
+    /// Waits until [`FolderLoad::ready`], starting the loads first ([`FolderLoad::start`]).
+    pub fn wait(&mut self) {
+        self.start();
+        while !self.ready() && !self.loads.taken() {
+            self.loads.wait_next();
         }
     }
-    Ok(report)
+
+    /// Installs the plug-ins that loaded, and reports the files that failed, in file-name order up
+    /// to the first file still loading, as [`load_folder_where`] does: those that list permissions
+    /// only when `approve` accepts them and a recorded grant covers them → the ids it installed.
+    pub fn install_ready(&mut self, approve: impl Fn(&Plugin) -> bool) -> Vec<String> {
+        use crate::safe_mode::{self, Item};
+        self.loaded.extend(self.loads.ready());
+        let mut installed = Vec::new();
+        while let Some((f, refused)) = self.files.get(self.next) {
+            let name = f.display().to_string();
+            if let Some(why) = refused {
+                self.report.failed.push((name, why.clone()));
+                self.next += 1;
+                continue;
+            }
+            let Some(loaded) = self.loaded.pop_front() else { break };
+            self.loads.release(1);
+            self.next += 1;
+            let report = &mut self.report;
+            match loaded {
+                Ok(p) if safe_mode::skipped(&Item::of(&p)) => {
+                    report.disabled_changed |= safe_mode::disable_file_of(&Item::of(&p));
+                    report.failed.push((name, DISABLED.into()));
+                }
+                // A heavy plug-in installs once the user agrees, which loading a folder doesn't ask.
+                Ok(p) if p.manifest().budget == crate::Budget::Heavy => {
+                    report.failed.push((name, "asks for a heavy budget, which the user allows when installing it on its own".into()));
+                }
+                // The very module installed elsewhere meanwhile (another session loading the same
+                // folder) counts as loaded. `approve` may record a grant, so it is asked only for
+                // that module: a module another session replaced or removed changes no grant.
+                Ok(p) if self.changes.superseded(p.id()) => match get(p.id()) {
+                    Some(q) if q.hash() == p.hash() && (!p.manifest().asks_permissions() || approve(&p)) => report.loaded.push(p.id().to_string()),
+                    Some(q) if q.hash() == p.hash() => {
+                        let asked = crate::permissions::names(&p.manifest().permissions()).join(", ");
+                        report.failed.push((name, Error::NeedsApproval(asked).to_string()));
+                    }
+                    _ => report.failed.push((name, SUPERSEDED.into())),
+                },
+                Ok(p) if p.manifest().asks_permissions() && !approve(&p) => {
+                    let asked = crate::permissions::names(&p.manifest().permissions()).join(", ");
+                    report.failed.push((name, Error::NeedsApproval(asked).to_string()));
+                }
+                // `approve` only narrows what installs: `install` still refuses a module that no
+                // recorded grant covers.
+                Ok(p) => match install(p) {
+                    Ok(p) => {
+                        self.changes.installed(&p);
+                        report.loaded.push(p.id().to_string());
+                        installed.push(p.id().to_string());
+                    }
+                    Err(e) => report.failed.push((name, e.to_string())),
+                },
+                Err(e) => report.failed.push((name, e.to_string())),
+            }
+        }
+        installed
+    }
+
+    /// Drops the loads not taken yet: jobs not started don't start, and running ones are given
+    /// until their deadline ([`crate::loader::Loads`]). What was installed stays, and the load is
+    /// [`FolderLoad::done`].
+    pub fn cancel(&mut self) {
+        self.loads = crate::loader::Loads::deferred(Vec::new());
+        self.loaded.clear();
+        self.next = self.files.len();
+    }
+
+    /// Ends the load → its report. When the module the load installed under an id lists no
+    /// permissions and is still installed, the process's grant for that id is forgotten. Files not
+    /// installed or reported yet ([`FolderLoad::done`] false) are left out.
+    pub fn finish(self) -> FolderReport {
+        let FolderLoad { report, changes, .. } = self;
+        for id in &report.loaded {
+            if get(id).is_some_and(|p| changes.own.get(id) == Some(&p.serial()) && !p.manifest().asks_permissions()) {
+                revoke(id);
+            }
+        }
+        report
+    }
 }
 
 #[cfg(test)]
@@ -617,5 +870,208 @@ mod tests {
         let tried: Vec<String> = r.failed.iter().map(|(f, _)| f.clone()).collect();
         let first: Vec<String> = (0..MAX_FOLDER_FILES).map(|i| dir.join(format!("{i:05}.wasm")).display().to_string()).collect();
         assert_eq!(tried, first, "the first files by name, in that order");
+    }
+
+    /// Clears [`BEFORE_FOLDER_FILE`] when a test ends, failed or not.
+    #[cfg(not(target_arch = "wasm32"))]
+    struct Hooked;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl Hooked {
+        fn set(hook: impl Fn(&std::path::Path) + Send + Sync + 'static) -> Hooked {
+            *BEFORE_FOLDER_FILE.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::sync::Arc::new(hook));
+            Hooked
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    impl Drop for Hooked {
+        fn drop(&mut self) {
+            *BEFORE_FOLDER_FILE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+
+    /// The plug-ins of a folder install in file-name order, and take their revisions in that order,
+    /// when the first file's load finishes after the others.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_installs_in_file_name_order_whatever_order_the_loads_finish_in() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("order");
+        let ids = ["test.registry.order.a", "test.registry.order.b", "test.registry.order.c"];
+        for (n, id) in ["a", "b", "c"].iter().zip(ids) {
+            std::fs::write(dir.join(format!("{n}.wasm")), module(id, None, 11)).unwrap();
+        }
+        let first = dir.join("a.wasm");
+        let (go, a_waits) = std::sync::mpsc::channel::<()>();
+        let a_waits = Mutex::new(a_waits);
+        let seen = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let held = first.clone();
+        let saw = seen.clone();
+        let _hook = Hooked::set(move |p| {
+            saw.lock().unwrap_or_else(|e| e.into_inner()).push(p.to_path_buf());
+            if p == held {
+                let _ = a_waits.lock().unwrap_or_else(|e| e.into_inner()).recv();
+            }
+        });
+        // Two workers, so the other files load while the first one waits.
+        let loading = std::thread::spawn({
+            let dir = dir.clone();
+            move || {
+                let mut load = FolderLoad::list_on(&dir, |_| Ok(()), Some(2))?;
+                load.start();
+                while !load.done() {
+                    load.wait();
+                    load.install_ready(|_| false);
+                }
+                Ok::<_, Error>(load.finish())
+            }
+        });
+        // The other two files load on the other worker while the first one waits: their loads have
+        // started (the hook saw them) and ended (the launch marker list no longer has them).
+        let all = ["a", "b", "c"].map(|n| dir.join(format!("{n}.wasm")));
+        let finished = |p: &std::path::Path| {
+            let item = crate::safe_mode::Item::file(p.display().to_string());
+            seen.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|s| s == p) && !crate::safe_mode::still_loading().iter().any(|i| i.same(&item))
+        };
+        while !(seen.lock().unwrap_or_else(|e| e.into_inner()).contains(&first) && finished(&all[1]) && finished(&all[2])) {
+            std::thread::yield_now();
+        }
+        assert!(ids.iter().all(|id| get(id).is_none()), "nothing installs before the first file has loaded");
+        go.send(()).unwrap();
+        let r = loading.join().unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let r = r.unwrap();
+        assert_eq!(r.loaded, ids.to_vec(), "{r:?}");
+        let serials: Vec<u64> = ids.iter().map(|id| get(id).unwrap().serial()).collect();
+        assert!(serials.windows(2).all(|w| w[0] < w[1]), "installed in file-name order: {serials:?}");
+        for id in ids {
+            assert!(remove(id));
+        }
+    }
+
+    /// A folder module that loaded before something else installed or removed the same id, while
+    /// an earlier file still loaded, doesn't undo that change: it is reported as skipped, and the
+    /// plug-in installed meanwhile stays, as does the removal.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_module_doesnt_undo_a_change_made_while_it_waited() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("superseded");
+        let ids = ["test.registry.superseded.a", "test.registry.superseded.b", "test.registry.superseded.c"];
+        // b's file asks for a permission: asking whether it may install could record a grant.
+        for (n, id) in ["a", "b", "c"].iter().zip(ids) {
+            let asks = (*n == "b").then_some(r#"["doc.read"]"#);
+            std::fs::write(dir.join(format!("{n}.wasm")), module(id, asks, 13)).unwrap();
+        }
+        install_bytes(&module(ids[2], None, 14)).unwrap();
+        let first = dir.join("a.wasm");
+        let (go, a_waits) = std::sync::mpsc::channel::<()>();
+        let a_waits = Mutex::new(a_waits);
+        let (reached, a_reached) = std::sync::mpsc::channel::<()>();
+        let held = first.clone();
+        let _hook = Hooked::set(move |p| {
+            if p == held {
+                let _ = reached.send(());
+                let _ = a_waits.lock().unwrap_or_else(|e| e.into_inner()).recv();
+            }
+        });
+        let mut load = FolderLoad::list_on(&dir, |_| Ok(()), Some(2)).unwrap();
+        load.start();
+        a_reached.recv().unwrap();
+        // Elsewhere, while the first file still loads: `b` is installed and `c` removed.
+        let theirs = install_bytes(&module(ids[1], None, 15)).unwrap().serial();
+        assert!(remove(ids[2]));
+        go.send(()).unwrap();
+        let asked = Mutex::new(Vec::new());
+        while !load.done() {
+            load.wait();
+            load.install_ready(|p| {
+                asked.lock().unwrap_or_else(|e| e.into_inner()).push(p.id().to_string());
+                false
+            });
+        }
+        let r = load.finish();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(r.loaded, vec![ids[0]], "{r:?}");
+        assert!(r.failed.iter().all(|(_, why)| why == SUPERSEDED) && r.failed.len() == 2, "{r:?}");
+        assert!(asked.lock().unwrap_or_else(|e| e.into_inner()).is_empty(), "no grant is asked for a superseded module");
+        assert_eq!(get(ids[1]).map(|p| p.serial()), Some(theirs), "the plug-in installed meanwhile stays");
+        assert!(get(ids[2]).is_none(), "the removal stays");
+        for id in &ids[..2] {
+            assert!(remove(id));
+        }
+    }
+
+    /// A plug-in installed elsewhere after the folder was listed and before its loads started
+    /// stays: the folder's module with its id is skipped. One a load of the same session installed
+    /// before it ([`LoadChanges::adopt`]) is replaced.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_module_doesnt_undo_a_change_made_before_its_loads_started() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("superseded-listed");
+        let ids = ["test.registry.listed.a", "test.registry.listed.b"];
+        for (n, id) in ["a", "b"].iter().zip(ids) {
+            std::fs::write(dir.join(format!("{n}.wasm")), module(id, None, 13)).unwrap();
+        }
+        let mut load = FolderLoad::list_on(&dir, |_| Ok(()), Some(2)).unwrap();
+        // Before the loads start: another session installs `a`, and an earlier load of this
+        // session installs `b`.
+        let theirs = install_bytes(&module(ids[0], None, 14)).unwrap().serial();
+        let mut earlier = LoadChanges::default();
+        earlier.start();
+        earlier.installed(&install_bytes(&module(ids[1], None, 15)).unwrap());
+        load.changes_mut().adopt(&earlier);
+        load.start();
+        while !load.done() {
+            load.wait();
+            load.install_ready(|_| false);
+        }
+        let r = load.finish();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(r.loaded, vec![ids[1]], "{r:?}");
+        assert!(r.failed.iter().all(|(_, why)| why == SUPERSEDED) && r.failed.len() == 1, "{r:?}");
+        assert_eq!(get(ids[0]).map(|p| p.serial()), Some(theirs), "the plug-in installed elsewhere stays");
+        for id in ids {
+            assert!(remove(id));
+        }
+    }
+
+    /// A folder whose second module panics while it loads reports it as failed and installs the
+    /// others.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_module_that_panics_while_loading_fails_alone() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("panics");
+        let ids = ["test.registry.panics.a", "test.registry.panics.b", "test.registry.panics.c"];
+        for (n, id) in ["a", "b", "c"].iter().zip(ids) {
+            std::fs::write(dir.join(format!("{n}.wasm")), module(id, None, 12)).unwrap();
+        }
+        let broken = dir.join("b.wasm");
+        let hooked = broken.clone();
+        let hook = Hooked::set(move |p| {
+            if p == hooked {
+                panic!("a defect while loading");
+            }
+        });
+        let r = load_folder_where(&dir, |_| Ok(()), |_| false);
+        drop(hook);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let item = crate::safe_mode::Item::file(broken.display().to_string());
+        let marked = crate::safe_mode::still_loading().iter().any(|i| i.same(&item));
+        let r = r.unwrap();
+        assert_eq!(r.loaded, vec![ids[0], ids[2]], "{r:?}");
+        assert_eq!(r.failed.len(), 1, "{r:?}");
+        assert!(r.failed[0].0 == broken.display().to_string() && r.failed[0].1.contains("panicked"), "{r:?}");
+        assert!(!marked, "the launch marker stops naming the module whose load failed");
+        for id in [ids[0], ids[2]] {
+            assert!(remove(id));
+        }
     }
 }

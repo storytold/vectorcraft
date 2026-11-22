@@ -14,16 +14,16 @@
 //!
 //! **Launch marker** (native builds): a small file in a folder the app picks, written before the
 //! stored plug-ins load, updated before and after each module load and each live effect's first
-//! evaluation (and each evaluation that starts while one of those is running) to name the oldest
-//! item still loading (several threads can load at once), and removed
-//! when the app quits ([`begin_launch`], [`loading`], [`loaded`], [`end_launch`]). A launch that
-//! ends while an item is still loading (a panic the app caught while a plug-in loaded) keeps its
-//! marker naming that item. A marker left behind by a
-//! launch that is no longer running names the item that was loading when it stopped, which may or
-//! may not be what stopped it. Until the user
-//! chooses what to do about that item ([`forget_previous`]), the next launch's marker names it too
-//! and stays when that launch quits, so a launch that asks nothing (`--safe-mode`) or one closed in
-//! Safe Mode leaves the choice to the launch after it. Each launch has
+//! evaluation (and each evaluation that starts while one of those is running) to name every item
+//! still loading, oldest first (several threads can load at once; at most [`MAX_MARKER_ITEMS`]),
+//! and removed when the app quits ([`begin_launch`], [`loading`], [`loaded`], [`end_launch`]). A
+//! launch that ends while an item is still loading (a panic the app caught outside a load job
+//! while a plug-in loaded) keeps its marker naming that item. A marker left behind by a launch
+//! that is no longer running names the items that were loading when it stopped; any one of them,
+//! or none, may be what stopped it. Until the user chooses what to do about those items
+//! ([`forget_previous`]), the next launch's marker names them too and stays when that launch
+//! quits, so a launch that asks nothing (`--safe-mode`) or one closed in Safe Mode leaves the
+//! choice to the launch after it. Each launch has
 //! its own marker and holds a lock on a file beside it, so a launch that is still running (a second
 //! window) is never taken for one that stopped. A marker that is missing, empty, unreadable,
 //! malformed, larger than [`MAX_MARKER_BYTES`] or of another version names nothing.
@@ -41,8 +41,11 @@ const MAX_FIELD_CHARS: usize = 1024;
 /// The most bytes one stored item takes in JSON: three fields of [`MAX_FIELD_CHARS`] characters,
 /// each written in at most 6 bytes (`\u001f`), plus keys, quotes and indentation.
 const MAX_ITEM_JSON_BYTES: usize = 3 * MAX_FIELD_CHARS * 6 + 256;
-/// The largest launch marker read, in bytes: room for one stored item.
-pub const MAX_MARKER_BYTES: u64 = (MAX_ITEM_JSON_BYTES + 256) as u64;
+/// The most items a launch marker names.
+pub const MAX_MARKER_ITEMS: usize = 16;
+/// The largest launch marker read, in bytes: room for [`MAX_MARKER_ITEMS`] stored items, and the
+/// first of them again as `item`.
+pub const MAX_MARKER_BYTES: u64 = ((MAX_MARKER_ITEMS + 1) * MAX_ITEM_JSON_BYTES + 256) as u64;
 /// The longest name an item is shown with, in characters (longer ones end with "…").
 pub const MAX_NAME_CHARS: usize = 64;
 /// The most disabled items kept.
@@ -413,18 +416,19 @@ pub fn read_disabled_file(bytes: &[u8]) -> Option<Vec<Item>> {
     )
 }
 
-/// The item the launch before this one was loading when it stopped, once [`begin_launch`] read it.
-static PREVIOUS: Mutex<Option<Item>> = Mutex::new(None);
+/// The items the launch before this one was loading when it stopped, once [`begin_launch`] read
+/// them.
+static PREVIOUS: Mutex<Vec<Item>> = Mutex::new(Vec::new());
 
-/// The item the launch before this one was loading when it stopped ([`begin_launch`]); `None` once
-/// the user chose what to do about it ([`forget_previous`]).
-pub fn previous() -> Option<Item> {
+/// The items the launch before this one was loading when it stopped, oldest first
+/// ([`begin_launch`]); none once the user chose what to do about them ([`forget_previous`]).
+pub fn previous() -> Vec<Item> {
     PREVIOUS.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-/// The user chose what to do about [`previous`]: this launch's marker stops naming it.
+/// The user chose what to do about [`previous`]: this launch's marker stops naming them.
 pub fn forget_previous() {
-    *PREVIOUS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    PREVIOUS.lock().unwrap_or_else(|e| e.into_inner()).clear();
     refresh();
 }
 
@@ -437,9 +441,19 @@ struct Running {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Running {
-    /// The item this launch's marker names: the oldest item still loading, else [`previous`].
-    fn pending(&self) -> Option<Item> {
-        self.items.first().map(|(_, i)| i.clone()).or_else(previous)
+    /// The items this launch's marker names: the items still loading, oldest first, each plug-in
+    /// once, at most [`MAX_MARKER_ITEMS`]; with none loading, [`previous`].
+    fn pending(&self) -> Vec<Item> {
+        let mut items: Vec<Item> = Vec::new();
+        for (_, item) in &self.items {
+            if items.len() == MAX_MARKER_ITEMS {
+                break;
+            }
+            if !items.iter().any(|i| i.same(item)) {
+                items.push(item.clone());
+            }
+        }
+        if items.is_empty() { previous() } else { items }
     }
 }
 
@@ -450,22 +464,33 @@ static LOADING: Mutex<Running> = Mutex::new(Running { next: 0, items: Vec::new()
 #[derive(Debug)]
 pub struct Loading(u64);
 
-/// Writes this launch's marker naming the item [`Running::pending`] gives, while holding the lock
+/// Writes this launch's marker naming the items [`Running::pending`] gives, while holding the lock
 /// on the items still loading, so two threads' writes land in the order of their changes.
 fn refresh() {
     #[cfg(not(target_arch = "wasm32"))]
-    marker::write(LOADING.lock().unwrap_or_else(|e| e.into_inner()).pending().as_ref());
+    marker::write(&LOADING.lock().unwrap_or_else(|e| e.into_inner()).pending());
 }
 
-/// The marker's content naming `item`, cut as a stored item is (none: nothing is loading).
+/// The marker's content naming `items` (none: nothing is loading), each cut as a stored item is,
+/// at most [`MAX_MARKER_ITEMS`]: the first as `item`, and all of them as `items` when there are
+/// several.
 #[cfg(not(target_arch = "wasm32"))]
-fn marker_bytes(item: Option<&Item>) -> Vec<u8> {
-    let item = item.cloned().and_then(Item::bounded);
-    serde_json::to_vec(&json!({"format": MARKER_FORMAT, "version": MARKER_VERSION, "item": item})).unwrap_or_default()
+fn marker_bytes(items: &[Item]) -> Vec<u8> {
+    let items: Vec<Item> = items.iter().cloned().filter_map(Item::bounded).take(MAX_MARKER_ITEMS).collect();
+    let mut v = json!({"format": MARKER_FORMAT, "version": MARKER_VERSION, "item": items.first()});
+    if items.len() > 1 {
+        v["items"] = json!(items);
+    }
+    serde_json::to_vec(&v).unwrap_or_default()
 }
 
-/// The item a marker's content names; `None` when it names none or isn't a marker of this version.
-pub fn parse_marker(bytes: &[u8]) -> Option<Item> {
+/// The items a marker's content names, oldest first: its `items` when it has them, else its
+/// `item`; none when it names none or isn't a marker of this version.
+pub fn parse_marker(bytes: &[u8]) -> Vec<Item> {
+    read_marker(bytes).unwrap_or_default()
+}
+
+fn read_marker(bytes: &[u8]) -> Option<Vec<Item>> {
     if bytes.len() as u64 > MAX_MARKER_BYTES {
         return None;
     }
@@ -473,31 +498,44 @@ pub fn parse_marker(bytes: &[u8]) -> Option<Item> {
     if v["format"] != MARKER_FORMAT || v["version"] != MARKER_VERSION {
         return None;
     }
-    serde_json::from_value::<Item>(v.get("item").filter(|i| i.is_object())?.clone()).ok()?.bounded()
+    let item = |i: &Value| serde_json::from_value::<Item>(i.clone()).ok()?.bounded();
+    let mut items: Vec<Item> = Vec::new();
+    for i in v["items"].as_array().into_iter().flatten().filter(|i| i.is_object()) {
+        if items.len() == MAX_MARKER_ITEMS {
+            break;
+        }
+        if let Some(i) = item(i).filter(|i| !items.iter().any(|e| e.same(i))) {
+            items.push(i);
+        }
+    }
+    if items.is_empty() {
+        items.extend(v.get("item").filter(|i| i.is_object()).and_then(item));
+    }
+    Some(items)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use marker::{begin_launch, end_launch};
 
-/// Adds `item` to the items still loading and writes this launch's marker naming the oldest of
-/// them (no marker: only the list changes) → the [`Loading`] to give to [`loaded`] when it is done.
+/// Adds `item` to the items still loading and writes this launch's marker naming them (no marker:
+/// only the list changes) → the [`Loading`] to give to [`loaded`] when it is done.
 pub fn loading(item: &Item) -> Loading {
     let mut running = LOADING.lock().unwrap_or_else(|e| e.into_inner());
     let token = running.next;
     running.next = running.next.wrapping_add(1);
     running.items.push((token, item.clone()));
     #[cfg(not(target_arch = "wasm32"))]
-    marker::write(running.pending().as_ref());
+    marker::write(&running.pending());
     Loading(token)
 }
 
 /// Removes the item `token` names from the items still loading and writes this launch's marker
-/// naming the oldest one left; with none left, the item of [`previous`] or nothing.
+/// naming the ones left; with none left, the items of [`previous`] or nothing.
 pub fn loaded(token: Loading) {
     let mut running = LOADING.lock().unwrap_or_else(|e| e.into_inner());
     running.items.retain(|(t, _)| *t != token.0);
     #[cfg(not(target_arch = "wasm32"))]
-    marker::write(running.pending().as_ref());
+    marker::write(&running.pending());
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -551,12 +589,12 @@ mod marker {
         (bytes.len() as u64 <= MAX_MARKER_BYTES).then_some(bytes)
     }
 
-    /// Starts this launch's marker in `dir` → the item a launch that is no longer running was
-    /// loading when it stopped, if one was (its marker is then removed, and this launch's marker
-    /// names the item until [`super::forget_previous`]). A folder that can't be written leaves this
-    /// launch without a marker; it still starts.
-    pub fn begin_launch(dir: &Path) -> Option<Item> {
-        let mut previous = None;
+    /// Starts this launch's marker in `dir` → the items a launch that is no longer running was
+    /// loading when it stopped, if it was loading any (its marker is then removed, and this
+    /// launch's marker names the items until [`super::forget_previous`]). A folder that can't be
+    /// written leaves this launch without a marker; it still starts.
+    pub fn begin_launch(dir: &Path) -> Vec<Item> {
+        let mut previous = Vec::new();
         let mut tokens: Vec<String> = std::fs::read_dir(dir)
             .into_iter()
             .flatten()
@@ -569,8 +607,8 @@ mod marker {
             if running(dir, &token) {
                 continue;
             }
-            if previous.is_none() {
-                previous = read(&json_path(dir, &token)).as_deref().and_then(parse_marker);
+            if previous.is_empty() {
+                previous = read(&json_path(dir, &token)).as_deref().map(parse_marker).unwrap_or_default();
             }
             for path in [json_path(dir, &token), tmp_path(dir, &token), lock_path(dir, &token)] {
                 let _ = std::fs::remove_file(path);
@@ -588,32 +626,32 @@ mod marker {
         previous
     }
 
-    /// Replaces this launch's marker with one naming `item`: written to a temporary file first,
+    /// Replaces this launch's marker with one naming `items`: written to a temporary file first,
     /// then renamed over the marker, so a reader finds the old marker or the new one. A write that
     /// fails leaves the marker as it was.
-    pub(super) fn write(item: Option<&Item>) {
+    pub(super) fn write(items: &[Item]) {
         let current = CURRENT.lock().unwrap_or_else(|e| e.into_inner());
         let Some(c) = current.as_ref() else { return };
         let tmp = tmp_path(&c.dir, &c.token);
         let _ = File::create(&tmp)
-            .and_then(|mut f| f.write_all(&marker_bytes(item)).and_then(|()| f.sync_all()))
+            .and_then(|mut f| f.write_all(&marker_bytes(items)).and_then(|()| f.sync_all()))
             .and_then(|()| std::fs::rename(&tmp, json_path(&c.dir, &c.token)));
     }
 
     /// Removes this launch's marker: the app is quitting normally. While an item is still loading
-    /// ([`super::loading`] without [`super::loaded`]), the marker stays, naming the oldest one;
-    /// otherwise, while the user has not chosen what to do about [`super::previous`], the marker
-    /// stays, naming that, so the next launch asks.
+    /// ([`super::loading`] without [`super::loaded`]), the marker stays, naming the items still
+    /// loading; otherwise, while the user has not chosen what to do about [`super::previous`], the
+    /// marker stays, naming those, so the next launch asks.
     pub fn end_launch() {
         let running = LOADING.lock().unwrap_or_else(|e| e.into_inner());
         let pending = running.pending();
-        if pending.is_some() {
-            write(pending.as_ref());
+        if !pending.is_empty() {
+            write(&pending);
         }
         let Some(c) = CURRENT.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
         let Current { dir, token, _lock } = c;
         drop(_lock);
-        let marker = pending.is_none().then(|| json_path(&dir, &token));
+        let marker = pending.is_empty().then(|| json_path(&dir, &token));
         for path in marker.into_iter().chain([tmp_path(&dir, &token), lock_path(&dir, &token)]) {
             let _ = std::fs::remove_file(path);
         }
@@ -628,6 +666,12 @@ mod marker {
 /// Serializes the tests that change this module's process-wide state.
 #[cfg(test)]
 pub(crate) static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+/// Tests: the items still loading, oldest first.
+#[cfg(test)]
+pub(crate) fn still_loading() -> Vec<Item> {
+    LOADING.lock().unwrap_or_else(|e| e.into_inner()).items.iter().map(|(_, i)| i.clone()).collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -683,11 +727,18 @@ mod tests {
         assert_eq!(Item::file("C:\\Plug-ins\\x.wasm").label(), "x.wasm");
     }
 
+    /// The items the marker at `path` names.
+    fn marker_at(path: &std::path::Path) -> Vec<Item> {
+        std::fs::read(path).ok().as_deref().map(parse_marker).unwrap_or_default()
+    }
+
     #[test]
     fn only_a_marker_of_this_version_names_an_item() {
         let item = Item { id: Some("org.example.x".into()), file: Some("/p/x.wasm".into()), name: None };
-        assert_eq!(parse_marker(&marker_bytes(Some(&item))), Some(item));
-        assert_eq!(parse_marker(&marker_bytes(None)), None, "nothing was loading");
+        assert_eq!(parse_marker(&marker_bytes(std::slice::from_ref(&item))), std::slice::from_ref(&item));
+        assert_eq!(parse_marker(&marker_bytes(&[])), [], "nothing was loading");
+        // A marker naming one item has no `items`, as before markers named several.
+        assert!(!String::from_utf8(marker_bytes(std::slice::from_ref(&item))).unwrap().contains("\"items\""));
         for bad in [
             &b""[..],
             b"{",
@@ -698,13 +749,28 @@ mod tests {
             br#"{"format":"vectorcraft-launch","version":1,"item":{}}"#,
             br#"{"format":"vectorcraft-launch","version":1,"item":{"id":"x""#,
         ] {
-            assert_eq!(parse_marker(bad), None, "{}", String::from_utf8_lossy(bad));
+            assert_eq!(parse_marker(bad), [], "{}", String::from_utf8_lossy(bad));
         }
         let mut big =
             format!(r#"{{"format":"vectorcraft-launch","version":1,"item":{{"id":"{}"}}}}"#, "y".repeat(MAX_MARKER_BYTES as usize)).into_bytes();
-        assert_eq!(parse_marker(&big), None, "larger than the limit");
+        assert_eq!(parse_marker(&big), [], "larger than the limit");
         big.truncate(10);
-        assert_eq!(parse_marker(&big), None, "cut short");
+        assert_eq!(parse_marker(&big), [], "cut short");
+    }
+
+    #[test]
+    fn a_marker_names_every_item_up_to_its_limit() {
+        let field = |i: usize, tag: &str| format!("{tag}{i:04}{}", "\u{1}".repeat(MAX_FIELD_CHARS));
+        let items: Vec<Item> =
+            (0..MAX_MARKER_ITEMS + 3).map(|i| Item { id: Some(field(i, "i")), file: Some(field(i, "f")), name: Some(field(i, "n")) }).collect();
+        let bytes = marker_bytes(&items);
+        assert!(bytes.len() as u64 <= MAX_MARKER_BYTES, "{} bytes", bytes.len());
+        let read = parse_marker(&bytes);
+        assert_eq!(read.len(), MAX_MARKER_ITEMS);
+        assert!(read.iter().zip(&items).all(|(r, i)| r.same(i)), "oldest first");
+        // A marker whose `items` names nothing readable falls back to its `item`.
+        let x = br#"{"format":"vectorcraft-launch","version":1,"item":{"id":"x"},"items":[{},"y"]}"#;
+        assert_eq!(parse_marker(x), [Item { id: Some("x".into()), ..Item::default() }]);
     }
 
     #[test]
@@ -714,23 +780,23 @@ mod tests {
         // A launch that stopped while loading x: its marker without a held lock, and a stray
         // temporary file from a write it didn't finish.
         let x = Item { id: Some("org.example.x".into()), file: None, name: Some("X".into()) };
-        std::fs::write(dir.join("launch-1-a.json"), marker_bytes(Some(&x))).unwrap();
+        std::fs::write(dir.join("launch-1-a.json"), marker_bytes(std::slice::from_ref(&x))).unwrap();
         std::fs::write(dir.join("launch-1-a.json.tmp"), b"{\"format\":\"vectorcr").unwrap();
-        assert_eq!(begin_launch(&dir), Some(x.clone()));
-        assert_eq!(previous(), Some(x.clone()));
+        assert_eq!(begin_launch(&dir), std::slice::from_ref(&x));
+        assert_eq!(previous(), std::slice::from_ref(&x));
         assert!(!dir.join("launch-1-a.json").exists() && !dir.join("launch-1-a.json.tmp").exists(), "read once");
         let mine = marker::path_of_current().unwrap();
-        assert_eq!(std::fs::read(&mine).ok().as_deref().and_then(parse_marker), Some(x.clone()), "named until the user chooses");
+        assert_eq!(marker_at(&mine), std::slice::from_ref(&x), "named until the user chooses");
         forget_previous();
-        assert_eq!(std::fs::read(&mine).ok().as_deref().and_then(parse_marker), None);
+        assert_eq!(marker_at(&mine), []);
         let token = loading(&x);
-        assert_eq!(std::fs::read(&mine).ok().as_deref().and_then(parse_marker), Some(x.clone()));
+        assert_eq!(marker_at(&mine), std::slice::from_ref(&x));
         assert!(!mine.with_extension("json.tmp").exists(), "the temporary file is renamed over the marker");
         loaded(token);
-        assert_eq!(std::fs::read(&mine).ok().as_deref().and_then(parse_marker), None);
+        assert_eq!(marker_at(&mine), []);
         end_launch();
         assert!(!mine.exists(), "a normal quit removes the marker");
-        assert_eq!(begin_launch(&dir), None, "nothing left behind");
+        assert_eq!(begin_launch(&dir), [], "nothing left behind");
         end_launch();
         forget_previous();
         let _ = std::fs::remove_dir_all(&dir);
@@ -741,13 +807,13 @@ mod tests {
         let _f = fresh();
         let dir = temp_dir("pending");
         let x = Item { id: Some("org.example.x".into()), file: None, name: Some("X".into()) };
-        std::fs::write(dir.join("launch-1-a.json"), marker_bytes(Some(&x))).unwrap();
-        assert_eq!(begin_launch(&dir), Some(x.clone()));
+        std::fs::write(dir.join("launch-1-a.json"), marker_bytes(std::slice::from_ref(&x))).unwrap();
+        assert_eq!(begin_launch(&dir), std::slice::from_ref(&x));
         end_launch();
-        assert_eq!(begin_launch(&dir), Some(x.clone()), "asked again");
+        assert_eq!(begin_launch(&dir), std::slice::from_ref(&x), "asked again");
         forget_previous();
         end_launch();
-        assert_eq!(begin_launch(&dir), None, "once the user chose");
+        assert_eq!(begin_launch(&dir), [], "once the user chose");
         end_launch();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -757,15 +823,15 @@ mod tests {
         let _f = fresh();
         let dir = temp_dir("ends-loading");
         let x = Item { id: Some("org.example.x".into()), file: None, name: Some("X".into()) };
-        assert_eq!(begin_launch(&dir), None);
+        assert_eq!(begin_launch(&dir), []);
         let token = loading(&x);
         // A panic the app caught while x loaded: the app quits without `loaded`.
         end_launch();
         loaded(token);
-        assert_eq!(begin_launch(&dir), Some(x.clone()), "the next launch asks");
+        assert_eq!(begin_launch(&dir), std::slice::from_ref(&x), "the next launch asks");
         forget_previous();
         end_launch();
-        assert_eq!(begin_launch(&dir), None);
+        assert_eq!(begin_launch(&dir), []);
         end_launch();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -776,22 +842,49 @@ mod tests {
         let dir = temp_dir("two-loading");
         let a = Item { id: Some("org.example.a".into()), file: None, name: Some("A".into()) };
         let b = Item { id: Some("org.example.b".into()), file: None, name: Some("B".into()) };
-        assert_eq!(begin_launch(&dir), None);
+        assert_eq!(begin_launch(&dir), []);
         let mine = marker::path_of_current().unwrap();
-        let marker = || std::fs::read(&mine).ok().as_deref().and_then(parse_marker);
         // Two threads run their plug-ins' first evaluations at once.
         let ta = loading(&a);
         let tb = loading(&b);
-        assert_eq!(marker(), Some(a.clone()), "the oldest item still loading");
+        assert_eq!(marker_at(&mine), [a.clone(), b.clone()], "both items still loading, oldest first");
         loaded(ta);
-        assert_eq!(marker(), Some(b.clone()), "b is still loading");
+        assert_eq!(marker_at(&mine), std::slice::from_ref(&b), "b is still loading");
         // The app stops while b loads.
         end_launch();
         loaded(tb);
-        assert_eq!(begin_launch(&dir), Some(b.clone()), "the next launch offers b");
+        assert_eq!(begin_launch(&dir), std::slice::from_ref(&b), "the next launch offers b");
         forget_previous();
         end_launch();
-        assert_eq!(begin_launch(&dir), None);
+        assert_eq!(begin_launch(&dir), []);
+        end_launch();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A launch that stops while two plug-ins load offers both at the next launch, until the user
+    /// chooses, however many launches that takes.
+    #[test]
+    fn a_launch_that_stops_while_two_plug_ins_load_offers_both() {
+        let _f = fresh();
+        let dir = temp_dir("two-stopped");
+        let a = Item { id: Some("org.example.a".into()), file: None, name: Some("A".into()) };
+        let b = Item { id: Some("org.example.b".into()), file: None, name: Some("B".into()) };
+        assert_eq!(begin_launch(&dir), []);
+        let ta = loading(&a);
+        let tb = loading(&b);
+        // The same plug-in loading twice is named once.
+        let ta2 = loading(&a);
+        end_launch();
+        for t in [ta, tb, ta2] {
+            loaded(t);
+        }
+        assert_eq!(begin_launch(&dir), [a.clone(), b.clone()], "the next launch offers both");
+        assert_eq!(previous(), [a.clone(), b.clone()]);
+        end_launch();
+        assert_eq!(begin_launch(&dir), [a.clone(), b.clone()], "asked again");
+        forget_previous();
+        end_launch();
+        assert_eq!(begin_launch(&dir), []);
         end_launch();
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -802,11 +895,11 @@ mod tests {
         let dir = temp_dir("long-path");
         // Each character written as 6 or 2 bytes, so the item is far larger in JSON than in characters.
         let long = format!("C:\\{}\\x.wasm", "\u{1}é".repeat(700));
-        assert_eq!(begin_launch(&dir), None);
+        assert_eq!(begin_launch(&dir), []);
         let token = loading(&Item::file(long.clone()));
         end_launch();
         loaded(token);
-        let stopped = begin_launch(&dir).expect("the marker names the module");
+        let stopped = begin_launch(&dir).into_iter().next().expect("the marker names the module");
         assert!(stopped.same(&Item::file(long.clone())), "the stored item matches the full path");
         disable(stopped);
         assert!(skipped(&Item::file(long.clone())), "Disable and Continue skips it");
@@ -891,14 +984,14 @@ mod tests {
         let _f = fresh();
         let dir = temp_dir("running");
         let x = Item { id: Some("org.example.x".into()), file: None, name: None };
-        std::fs::write(dir.join("launch-9-b.json"), marker_bytes(Some(&x))).unwrap();
+        std::fs::write(dir.join("launch-9-b.json"), marker_bytes(std::slice::from_ref(&x))).unwrap();
         let lock = std::fs::File::create(dir.join("launch-9-b.lock")).unwrap();
         lock.try_lock().unwrap();
-        assert_eq!(begin_launch(&dir), None, "that launch is still running");
+        assert_eq!(begin_launch(&dir), [], "that launch is still running");
         assert!(dir.join("launch-9-b.json").exists());
         end_launch();
         drop(lock);
-        assert_eq!(begin_launch(&dir), Some(x), "once it stopped");
+        assert_eq!(begin_launch(&dir), [x], "once it stopped");
         end_launch();
         forget_previous();
         let _ = std::fs::remove_dir_all(&dir);

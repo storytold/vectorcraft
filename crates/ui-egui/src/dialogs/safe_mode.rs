@@ -11,8 +11,9 @@ use crate::VectorcraftApp;
 use crate::state::Dialog;
 use crate::theme::Tokens;
 
-/// Dialog kind of the choice after a launch that stopped. Fields: `item` (`{id, file, name, label}`)
-/// and `normal` (Start Normally instead of Disable and Continue). Cancel starts in Safe Mode.
+/// Dialog kind of the choice after a launch that stopped. Fields: `items` (`[{id, file, name,
+/// label}]`, the plug-ins that were loading, oldest first), `item` (the first of them) and
+/// `normal` (Start Normally instead of Disable and Continue). Cancel starts in Safe Mode.
 pub const STOPPED: &str = "pluginStopped";
 
 /// Dialog kind of Help › Safe Mode. Fields: `items` (`[{id, file, name, label, enable}]`, the
@@ -21,17 +22,17 @@ pub const KIND: &str = "safeMode";
 
 /// Before any plug-in loads (desktop): starts this launch's marker in `marker_dir` (none: no
 /// marker), and turns Safe Mode on for `--safe-mode` (`flag`), or until the user chooses after a
-/// launch that stopped while a plug-in was loading → that plug-in, for [`after_start`]. With `flag`
-/// nothing is asked, and the plug-in stays pending (`plugin.safeMode`'s `pendingItem`): the next
-/// launch asks about it.
+/// launch that stopped while plug-ins were loading → those plug-ins, for [`after_start`]. With
+/// `flag` nothing is asked, and the plug-ins stay pending (`plugin.safeMode`'s `pendingItems`): the
+/// next launch asks about them.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn begin_launch(marker_dir: Option<&std::path::Path>, flag: bool) -> Option<Item> {
-    let stopped = marker_dir.and_then(safe_mode::begin_launch);
+pub fn begin_launch(marker_dir: Option<&std::path::Path>, flag: bool) -> Vec<Item> {
+    let stopped = marker_dir.map(safe_mode::begin_launch).unwrap_or_default();
     if flag {
         safe_mode::set_active(Some(safe_mode::Source::Flag));
-        return None;
+        return Vec::new();
     }
-    if stopped.is_some() {
+    if !stopped.is_empty() {
         safe_mode::set_active(Some(safe_mode::Source::Startup));
     }
     stopped
@@ -45,29 +46,30 @@ pub fn end_launch() {
 
 /// Once the app is made: the choice about `stopped` ([`begin_launch`]), or in Safe Mode a status
 /// line saying so.
-pub fn after_start(app: &mut VectorcraftApp, stopped: Option<Item>) {
-    match stopped {
-        Some(item) => ask_about_stopped(app, &item),
-        None if safe_mode::active() => app.status(vectorcraft_plugins::Error::SafeMode.to_string()),
-        None => {}
+pub fn after_start(app: &mut VectorcraftApp, stopped: Vec<Item>) {
+    if !stopped.is_empty() {
+        ask_about_stopped(app, &stopped);
+    } else if safe_mode::active() {
+        app.status(vectorcraft_plugins::Error::SafeMode.to_string());
     }
 }
 
-/// Ask what to do about `item`, the plug-in the last launch was loading when it stopped. Safe Mode
-/// is on until the user chooses. A dialog that takes the choice's place leaves it waiting: it opens
-/// again once no dialog is open ([`reopen`]).
-pub fn ask_about_stopped(app: &mut VectorcraftApp, item: &Item) {
-    let item = item.to_json();
-    app.ui.stopped_plugin = Some(item.clone());
-    app.ui.dialog = Some(Dialog::new(STOPPED, json!({ "item": item })));
+/// Ask what to do about `items`, the plug-ins the last launch was loading when it stopped. Safe
+/// Mode is on until the user chooses. A dialog that takes the choice's place leaves it waiting: it
+/// opens again once no dialog is open ([`reopen`]).
+pub fn ask_about_stopped(app: &mut VectorcraftApp, items: &[Item]) {
+    let items: Vec<Value> = items.iter().map(Item::to_json).collect();
+    let fields = json!({ "item": items.first(), "items": items });
+    app.ui.stopped_plugin = Some(fields.clone());
+    app.ui.dialog = Some(Dialog::new(STOPPED, fields));
 }
 
 /// With no dialog open, the choice about a stopped plug-in that another dialog replaced opens again.
 pub(super) fn reopen(app: &mut VectorcraftApp) {
     if app.ui.dialog.is_none()
-        && let Some(item) = app.ui.stopped_plugin.clone()
+        && let Some(fields) = app.ui.stopped_plugin.clone()
     {
-        app.ui.dialog = Some(Dialog::new(STOPPED, json!({ "item": item })));
+        app.ui.dialog = Some(Dialog::new(STOPPED, fields));
     }
 }
 
@@ -94,14 +96,33 @@ fn item_of(v: &Value) -> Item {
     Item { id: s("id"), file: s("file"), name: s("name") }
 }
 
+/// The items the choice's fields name: its `items`, else its `item`.
+fn stopped_items(fields: &serde_json::Map<String, Value>) -> Vec<Item> {
+    match fields.get("items").and_then(Value::as_array).filter(|i| !i.is_empty()) {
+        Some(items) => items.iter().map(item_of).collect(),
+        None => fields.get("item").filter(|i| i.is_object()).map(item_of).into_iter().collect(),
+    }
+}
+
+/// How many plug-ins the waiting choice names.
+fn stopped_count(app: &VectorcraftApp) -> usize {
+    app.ui.stopped_plugin.as_ref().and_then(Value::as_object).map_or(0, |f| stopped_items(f).len())
+}
+
 /// The choice's Disable and Continue (OK) or Start Normally: Safe Mode ends and the plug-ins load,
-/// without the stopped one for Disable and Continue (kept off for later launches too).
+/// without the stopped ones for Disable and Continue (kept off for later launches too).
 fn confirm_stopped(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     app.ui.dialog = None;
     app.ui.stopped_plugin = None;
-    let item = item_of(d.fields.get("item").unwrap_or(&Value::Null));
-    // When the disabled plug-in can't be saved for the next launch, that launch asks again.
-    let saved = d.bool("normal") || (safe_mode::disable(item) && app.session.store_disabled_plugins());
+    // When a disabled plug-in can't be saved for the next launch, that launch asks again. Every
+    // listed plug-in is turned off for this launch, whether or not the one before it was saved.
+    let saved = d.bool("normal") || {
+        let mut all = true;
+        for item in stopped_items(&d.fields) {
+            all &= safe_mode::disable(item);
+        }
+        all && app.session.store_disabled_plugins()
+    };
     if saved {
         safe_mode::forget_previous();
     } else {
@@ -164,16 +185,32 @@ pub(super) const STOPPED_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Safe Mode").into(),
     body: |_, ui, d| {
         let t = Tokens::get(ui.ctx());
-        let name = item_of(d.fields.get("item").unwrap_or(&Value::Null)).label();
-        let text = crate::i18n::fmt(
-            tl!("The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it."),
-            &[("name", &name)],
+        let items = stopped_items(&d.fields);
+        if let [item] = items.as_slice() {
+            let text = crate::i18n::fmt(
+                tl!("The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it."),
+                &[("name", &item.label())],
+            );
+            ui.label(egui::RichText::new(text).color(t.text));
+            return false;
+        }
+        ui.label(
+            egui::RichText::new(tl!(
+                "The last launch of VectorCraft stopped while these plug-ins were loading. Any one of them, or none, may be what stopped it."
+            ))
+            .color(t.text),
         );
-        ui.label(egui::RichText::new(text).color(t.text));
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
+            for item in &items {
+                ui.label(egui::RichText::new(item.label()).color(t.text));
+            }
+        });
         false
     },
     confirm: confirm_stopped,
     ok: Some("Disable and Continue"),
+    ok_label: Some(|app| if stopped_count(app) > 1 { "Disable Listed Plug-ins and Continue" } else { "Disable and Continue" }),
     cancel: Some("Start in Safe Mode"),
     alternate: Some(("Start Normally", "normal")),
     min_width: 380.0,
