@@ -4844,6 +4844,59 @@ fn a_cmd_press_on_a_wide_strokes_outer_half_selects_behind() {
 }
 
 #[test]
+fn a_cmd_press_on_a_lone_selected_object_is_lent() {
+    // With nothing behind the selected object, there is nothing to select behind: Direct Selection
+    // takes the press.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let lone = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [lone.0]})).unwrap();
+    assert_eq!(s.hover_tool_at(Some(Point::new(200.0, 200.0)), &cmd, v), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection");
+}
+
+#[test]
+fn a_layer_effect_that_moves_art_moves_where_a_cmd_press_selects_behind() {
+    // A layer effect draws the selected object 250 pt to the right of its path, over the object
+    // behind it: a Cmd press where it is drawn selects behind. A drop shadow there is not hit, so
+    // the press is lent. Outline view hits the path where it is, and Preview afterwards still finds
+    // the moved art.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let outline = ViewInfo { outline: true, ..view() };
+    let drawn = Point::new(450.0, 200.0);
+    // On both rectangles' top edges, which Outline view hits, away from the box's handles.
+    let path = Point::new(170.0, 150.0);
+    for effect in ["distort.transform", "stylize.dropShadow"] {
+        let mut s = session();
+        let back = rect(&mut s, 50.0, 150.0, 700.0, 300.0);
+        let front = rect(&mut s, 150.0, 150.0, 100.0, 100.0);
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let params = if effect == "distort.transform" { json!({"moveH": 250}) } else { json!({"x": 250, "y": 0, "blur": 0}) };
+        s.execute("effect.apply", &json!({"effect": effect, "params": params, "ids": [layer.0], "item": null})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+        // The back rectangle is drawn moved too, so it is under both points.
+        if effect == "distort.transform" {
+            assert_eq!(s.hover_tool_at(Some(path), &cmd, outline), "selection", "Outline view: on the path");
+            assert_eq!(s.hover_tool_at(Some(drawn), &cmd, v), "selection", "Preview: where the effect draws it");
+            s.pointer(&PointerEvent::new(PointerKind::Down, drawn.x, drawn.y).with_mods(cmd), v).unwrap();
+            assert_eq!(s.tool_id(), "selection");
+            s.pointer(&PointerEvent::new(PointerKind::Up, drawn.x, drawn.y).with_mods(cmd), v).unwrap();
+            let picked = &s.active().unwrap().selection;
+            assert!(picked.contains(back) && !picked.contains(front), "the Cmd-click selects the object behind");
+        } else {
+            assert_eq!(s.hover_tool_at(Some(drawn), &cmd, v), "directSelection", "on the shadow");
+        }
+    }
+}
+
+#[test]
 fn repeated_cmd_clicks_select_behind_a_group_whose_member_is_selected() {
     // The first Cmd-click on an unselected group lends Direct Selection, which selects the path
     // under the pointer. The group holds that selected path, so the next Cmd-click there selects

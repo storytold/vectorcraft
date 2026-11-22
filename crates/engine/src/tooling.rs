@@ -10,13 +10,24 @@ use vectorcraft_tools::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEv
 
 use crate::{EngineError, Prefs, Result, Session};
 
-/// What a hover's lend decision holds for ([`Session::hover_tool_at`]): the active document's uid
-/// and revision, the active tool, the keys, the selection tools chosen last and the preferences a
-/// press's hit test reads (Command Click to Select Objects Behind, Object Selection by Path Only,
-/// Type Object Selection by Path Only, Selection Tolerance, anchor Size; Use Preview Bounds,
-/// Measure Type by Glyph Bounds, Show Handles When Multiple Anchors Are Selected).
-pub(crate) type HoverKey =
-    (Option<(u64, u64)>, &'static str, Mods, (Option<&'static str>, Option<&'static str>), ((bool, bool, bool, f64, u32), (bool, bool, bool)));
+/// What a hover's lend decision holds for ([`Session::hover_tool_at`]).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct HoverKey {
+    /// The active document's uid and revision, which moves with the selection.
+    doc: Option<(u64, u64)>,
+    tool: &'static str,
+    mods: Mods,
+    /// The selection tool and the part selection tool chosen last.
+    last_tools: (Option<&'static str>, Option<&'static str>),
+    ctrl_click_selects_behind: bool,
+    object_selection_by_path_only: bool,
+    type_selection_by_path_only: bool,
+    selection_tolerance: f64,
+    anchor_size: u32,
+    use_preview_bounds: bool,
+    type_glyph_bounds: bool,
+    show_handles_multiple_anchors: bool,
+}
 
 /// The tool whose radius is General › Corner Radius.
 const ROUNDED_RECTANGLE: &str = "roundedRectangle";
@@ -333,16 +344,20 @@ impl Session {
     /// and the preferences a press's hit test reads.
     fn hover_key(&self, mods: &Mods) -> HoverKey {
         let p = &self.prefs;
-        let picks =
-            (p.ctrl_click_selects_behind, p.object_selection_by_path_only, p.type_selection_by_path_only, p.selection_tolerance, p.anchor_size);
-        let bounds = (p.use_preview_bounds, p.type_glyph_bounds, p.show_handles_multiple_anchors);
-        (
-            self.active().map(|d| (d.uid, d.revision)),
-            self.tool.id(),
-            *mods,
-            (self.last_selection_tool, self.last_part_selection_tool),
-            (picks, bounds),
-        )
+        HoverKey {
+            doc: self.active().map(|d| (d.uid, d.revision)),
+            tool: self.tool.id(),
+            mods: *mods,
+            last_tools: (self.last_selection_tool, self.last_part_selection_tool),
+            ctrl_click_selects_behind: p.ctrl_click_selects_behind,
+            object_selection_by_path_only: p.object_selection_by_path_only,
+            type_selection_by_path_only: p.type_selection_by_path_only,
+            selection_tolerance: p.selection_tolerance,
+            anchor_size: p.anchor_size,
+            use_preview_bounds: p.use_preview_bounds,
+            type_glyph_bounds: p.type_glyph_bounds,
+            show_handles_multiple_anchors: p.show_handles_multiple_anchors,
+        }
     }
 
     /// The tool whose marks and widgets the canvas draws this frame with `mods` held and the

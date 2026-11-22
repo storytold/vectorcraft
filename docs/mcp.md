@@ -7082,12 +7082,13 @@ macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`
 Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
 the path it had begun while that stays selected. With Direct Selection or Group Selection, `mods.cmd` drags with the
 Selection tool (with Direct Selection and `mods.alt` held too, with Group Selection). With the Selection tool, it drags
-with Direct Selection or Group Selection, whichever was chosen last
-(Direct Selection until one is), except where the press lands on a selected object, or on a group holding a selected
-member, with another object under the pointer, away from its anchors, direction handles, mesh points, blend spine and
-the bounding box's handles and rotate zones, while `ctrlClickSelectsBehind` is on: there the Selection tool keeps the press and selects the
-object behind. A double-click or triple-click made with Cmd still held after Cmd-clicks goes to the tool the clicks went
-to, and one that follows a Cmd-click selecting behind keeps what that click selected, without isolating or editing. Its reply's `tool` is the tool given back.
+with Direct Selection or Group Selection, whichever was chosen last (Direct Selection until one is), except where the
+press lands on a selected object, or on a group holding a selected member, with another object under the pointer, away
+from its anchors, direction handles, mesh points, blend spine and the bounding box's handles and rotate zones, while
+`ctrlClickSelectsBehind` is on: there the Selection tool keeps the press and selects the object behind. A double-click
+or triple-click made with Cmd still held after Cmd-clicks goes to the tool the clicks went to, and one that follows a
+Cmd-click selecting behind keeps what that click selected, without isolating or editing. Its reply's `tool` is the tool
+given back.
 
 `tool.selectLastSelection` (Select Last Selection Tool, `{}`) chooses the selection tool chosen last, as Ctrl+` does on
 Windows and Linux ([the help page](https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html) lists the
