@@ -331,6 +331,29 @@ fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2020");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "var o = { a: { f: function () { return this.n; }, n: 3 } }, none = null;\n\
+                  vc.log(none?.a.b ?? 'none');\nvc.log(o.a?.f());\nvc.log(0 ?? 1);\nvc.log(eval('none?.[0] ?? 2'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["none", 3, 0, 2]), "{r}");
+    for (name, text) in [("chain.jsx", "var o; vc.log(o?.a);"), ("coalesce.jsx", "vc.log(null ?? 1);"), ("mixed.js", "vc.log(1 || 2 ?? 3);")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "vc.log(null ?? 1);").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A new empty folder for test `name`.
 fn fresh_folder(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vc-script-run-{name}-{}", std::process::id()));
