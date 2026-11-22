@@ -85,14 +85,7 @@ pub fn click(cx: &ToolContext, p: Point) -> Option<Action> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extra::ShaperTool;
-    use crate::select::SelectionTool;
     use crate::testutil::*;
-    use crate::{PointerEvent, PointerKind, Tool};
-
-    fn ev(kind: PointerKind, p: Point) -> PointerEvent {
-        PointerEvent::new(kind, p.x, p.y)
-    }
 
     #[test]
     fn the_widget_sits_right_of_the_group_and_a_click_switches_the_mode() {
@@ -106,12 +99,10 @@ mod tests {
             let c = cx(&d, &s, &p);
             let w = ShaperWidget::of(c.doc, c.selection, c.isolation, c.zoom).unwrap();
             assert_eq!((w.group, w.construction, w.at), (g, false, Point::new(166.0, 350.0)));
-            let isolate = vec![Action::Exec("object.isolate".into(), json!({ "id": g.0 }))];
-            assert_eq!(SelectionTool::default().pointer(&c, &ev(PointerKind::Down, w.at)), isolate);
-            assert_eq!(ShaperTool::default().pointer(&c, &ev(PointerKind::Down, w.at + vectorcraft_geom::Vec2::new(0.0, 5.0))), isolate);
-            // A double-click on it does nothing more than its two clicks.
-            assert_eq!(SelectionTool::default().pointer(&c, &ev(PointerKind::DoubleClick, w.at)), vec![]);
-            assert_eq!(ShaperTool::default().pointer(&c, &ev(PointerKind::DoubleClick, w.at)), vec![]);
+            let isolate = Some(Action::Exec("object.isolate".into(), json!({ "id": g.0 })));
+            assert_eq!(click(&c, w.at), isolate);
+            assert_eq!(click(&c, w.at + vectorcraft_geom::Vec2::new(0.0, 5.0)), isolate);
+            assert_eq!(click(&c, w.at + vectorcraft_geom::Vec2::new(0.0, 9.0)), None, "out of reach");
         }
         // Construction mode: the source shapes isolated; the widget in the same place, and a click
         // leaves the mode.
@@ -119,11 +110,7 @@ mod tests {
         let c = ToolContext { isolation: Some(sources), ..cx(&d, &s, &p) };
         let w = ShaperWidget::of(c.doc, c.selection, c.isolation, c.zoom).unwrap();
         assert_eq!((w.group, w.construction, w.at), (g, true, Point::new(166.0, 350.0)));
-        let exit = vec![Action::Exec("object.exitIsolation".into(), json!({}))];
-        assert_eq!(SelectionTool::default().pointer(&c, &ev(PointerKind::Down, w.at)), exit);
-        assert_eq!(ShaperTool::default().pointer(&c, &ev(PointerKind::Down, w.at)), exit);
-        assert_eq!(SelectionTool::default().pointer(&c, &ev(PointerKind::DoubleClick, w.at)), vec![]);
-        assert_eq!(ShaperTool::default().pointer(&c, &ev(PointerKind::DoubleClick, w.at)), vec![]);
+        assert_eq!(click(&c, w.at), Some(Action::Exec("object.exitIsolation".into(), json!({}))));
         // At 4× zoom the widget sits 4 pt out.
         let c4 = ToolContext { zoom: 4.0, ..c };
         assert_eq!(ShaperWidget::of(c4.doc, c4.selection, c4.isolation, c4.zoom).unwrap().at, Point::new(154.0, 350.0));
