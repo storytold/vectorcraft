@@ -71,7 +71,7 @@ fn colours_cap_the_palette() {
     let px = ramps(64, 48);
     for colors in [2, 16, 64, 256] {
         for dither in Dither::ALL {
-            for reduction in [Reduction::Perceptual, Reduction::Selective, Reduction::Adaptive, Reduction::Web, Reduction::Gray] {
+            for reduction in Reduction::ALL {
                 let ix = quantize(&px, 64, 48, &PaletteOptions { colors, dither, reduction, ..Default::default() });
                 assert!(ix.palette.len() <= colors as usize, "{colors} {dither:?} {reduction:?}: {}", ix.palette.len());
                 assert!(ix.indices.iter().all(|&i| (i as usize) < ix.palette.len()));
@@ -325,6 +325,12 @@ fn transparency_dither_leaves_clear_and_opaque_pixels_and_needs_transparency() {
     let o = PaletteOptions { colors: 2, ..alpha_dither(Dither::Pattern, 100) };
     let ix = quantize(&see_through(w, h, |_, _| 128), w, h, &o);
     assert_eq!((ix.palette.len(), ix.transparent), (2, Some(0)));
+    // So does Black & White, with black and white pixels both left opaque.
+    let bw = PaletteOptions { reduction: Reduction::BlackWhite, matte: None, ..o };
+    let px: Vec<u8> = (0..64u32).flat_map(|i| if i % 8 < 4 { [0, 0, 0, 128] } else { [255, 255, 255, 128] }).collect();
+    let ix = quantize(&px, 8, 8, &bw);
+    assert_eq!(ix.transparent, Some(0));
+    assert!(ix.palette.len() <= 2, "{:?}", ix.palette);
     // No pixels, and a width past the pixels there are.
     assert!(clear_mask(&[], 0, &alpha_dither(Dither::Diffusion, 100)).is_empty());
     assert_eq!(clear_mask(&see_through(3, 1, |_, _| 200), 1000, &alpha_dither(Dither::Diffusion, 100)).len(), 3);

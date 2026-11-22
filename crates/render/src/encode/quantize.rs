@@ -178,6 +178,22 @@ pub fn quantize_locked(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions,
     }
     let free = k - lock.len();
     let (mut palette, exact) = match o.reduction {
+        // With one entry left (two colors and a transparent entry, or the others locked): black or
+        // white, whichever leaves the opaque pixels nearer the palette, the locked colors included.
+        Reduction::BlackWhite if free < 2 => {
+            let mut hist = [0u64; 256];
+            for c in opaque() {
+                hist[c[0] as usize] += 1;
+            }
+            let w = o.reduction.weights();
+            let cost = |end: [u8; 3]| -> f32 {
+                let entries: Vec<[f32; 3]> = lock.iter().chain([&end]).map(|c| c.map(f32::from)).collect();
+                let near = |g: f32| entries.iter().map(|&e| dist([g; 3], e, w)).fold(f32::INFINITY, f32::min);
+                hist.iter().enumerate().filter(|(_, n)| **n > 0).map(|(g, &n)| n as f32 * near(g as f32)).sum()
+            };
+            let ends = [[0; 3], [255; 3]].into_iter().filter(|c| !lock.contains(c));
+            (ends.min_by(|a, b| cost(*a).total_cmp(&cost(*b))).into_iter().collect(), false)
+        }
         Reduction::BlackWhite => (vec![[0; 3], [255; 3]], false),
         Reduction::Gray => ((0..free).map(|i| [(i * 255 / (free - 1).max(1)) as u8; 3]).collect(), false),
         Reduction::Web => (web(opaque(), free), false),
