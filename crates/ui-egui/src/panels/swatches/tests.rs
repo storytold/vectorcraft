@@ -155,7 +155,7 @@ fn double_click_opens_swatch_options_and_ok_edits_linked_art() {
     app.run("paint.setFill", json!({"ids": [id], "swatch": "Red"})).unwrap();
     let ctx = context(&app);
     activated(&mut app, "Red");
-    assert_eq!((dialog_field(&app, KIND, "__swatch"), dialog_field(&app, KIND, "mode")), (json!("Red"), json!("rgb")));
+    assert_eq!((dialog_field(&app, KIND, "name"), dialog_field(&app, KIND, "mode")), (json!("Red"), json!("rgb")));
     // The dialog previews live on the canvas; OK keeps the edit as one undo step.
     let undo = undo_steps(&app);
     dialog_frame(&mut app, &ctx);
@@ -354,7 +354,8 @@ fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_grou
     let key = crate::dialogs::new_swatch::KIND;
     app.run("paint.setFill", json!({"color": "#ff8000"})).unwrap();
     new_swatch(&mut app, &["Bright Red".into()], cmd());
-    assert_eq!((dialog_field(&app, key, "name"), dialog_field(&app, key, "group")), (json!("R=255 G=128 B=0"), json!("Brights")));
+    // The colour group the swatch goes into is the dialog's own: OK below puts it into Brights.
+    assert_eq!(dialog_field(&app, key, "name"), json!("R=255 G=128 B=0"));
     assert_eq!(
         (dialog_field(&app, key, "spot"), dialog_field(&app, key, "global")),
         (json!(true), json!(true)),
@@ -429,7 +430,7 @@ fn new_color_group_dialog_makes_a_group_from_swatches_or_artwork() {
     let ctx = context(&app);
     let key = crate::dialogs::new_color_group::KIND;
     app.run("ui.newColorGroup", json!({"swatches": ["Red", "Sunset"]})).unwrap();
-    assert_eq!((dialog_field(&app, key, "name"), dialog_field(&app, key, "fromArtwork")), (json!("Color Group"), json!(false)));
+    assert_eq!((dialog_field(&app, key, "name"), dialog_field(&app, key, "from")), (json!("Color Group"), json!("swatches")));
     dialog_frame(&mut app, &ctx);
     confirm(&mut app, key);
     let d = doc(&app);
@@ -442,8 +443,8 @@ fn new_color_group_dialog_makes_a_group_from_swatches_or_artwork() {
     app.run("select.set", json!({"ids": [id]})).unwrap();
     app.run("ui.newColorGroup", json!({})).unwrap();
     assert_eq!(
-        (dialog_field(&app, key, "name"), dialog_field(&app, key, "fromArtwork"), dialog_field(&app, key, "toGlobal")),
-        (json!("Color Group 2"), json!(true), json!(true))
+        (dialog_field(&app, key, "name"), dialog_field(&app, key, "from"), dialog_field(&app, key, "toGlobal")),
+        (json!("Color Group 2"), json!("artwork"), json!(true))
     );
     dialog_frame(&mut app, &ctx);
     confirm(&mut app, key);
@@ -880,7 +881,7 @@ fn the_active_tint_or_gradient_swatch_is_highlighted_and_a_tint_edits_its_base()
     app.run("paint.setFill", json!({"swatch": "Sunset"})).unwrap();
     assert_eq!(active_swatch(&app).as_deref(), Some("Sunset"), "the applied gradient swatch");
     app.run("ui.swatchOptions", json!({"name": "Ink 40%"})).unwrap();
-    assert_eq!(dialog_field(&app, KIND, "__swatch"), json!("Ink"), "a tint swatch opens its base's options");
+    assert_eq!(dialog_field(&app, KIND, "name"), json!("Ink"), "a tint swatch opens its base's options");
 }
 
 /// Selecting art scrolls the tiles to its swatch, once, and clears the panel's own selection so
@@ -1025,12 +1026,12 @@ fn color_group_options_opens_on_a_sole_selected_group() {
     }
     select_rows(&mut app, &["Grays"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
-    assert_eq!(dialog_field(&app, key, "__group"), json!("Grays"));
+    assert_eq!(dialog_field(&app, key, "name"), json!("Grays"));
     set_field(&mut app, key, "name", json!("Neutrals"));
     confirm(&mut app, key);
     assert_eq!(selected(&app), ["Neutrals"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
-    assert_eq!(dialog_field(&app, key, "__group"), json!("Neutrals"));
+    assert_eq!(dialog_field(&app, key, "name"), json!("Neutrals"));
     cancel(&mut app, key);
     // The command run on its own, and as batch steps, keeps the selection the same way.
     app.run("swatch.renameGroup", json!({"group": "Neutrals", "name": "Stone"})).unwrap();
@@ -1051,7 +1052,7 @@ fn color_group_options_without_a_group_opens_on_the_selected_group() {
     let key = crate::dialogs::color_group_options::KIND;
     select_rows(&mut app, &["Grays"]);
     app.run("ui.colorGroupOptions", json!({})).unwrap();
-    assert_eq!(dialog_field(&app, key, "__group"), json!("Grays"));
+    assert_eq!(dialog_field(&app, key, "name"), json!("Grays"));
     cancel(&mut app, key);
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let ctx = context(&app);

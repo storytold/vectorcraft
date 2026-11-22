@@ -17,6 +17,18 @@ fn move_box(v: &mut RulerValues, by: f32) {
     v.left_indent += by;
 }
 
+/// Moves the upper (first-line) marker to `at` points, as its drag does: the first line's indent is
+/// relative to the left one.
+fn upper_to(v: &mut RulerValues, at: f32) {
+    v.first_line_indent = at - v.left_indent;
+}
+
+/// Moves the lower (left) marker alone to `at` points, as its drag does: the first line stays where it is.
+fn lower_to(v: &mut RulerValues, at: f32) {
+    v.first_line_indent -= at - v.left_indent;
+    v.left_indent = at;
+}
+
 /// A left-aligned stop with no leader at `position`, as a click on the ruler adds one.
 fn stop_at(position: f32) -> RulerStop {
     RulerStop::new(position, RulerAlign::Left, TabLeader::None)
@@ -116,13 +128,13 @@ fn indent_values(app: &VectorcraftApp, paragraph: usize) -> (f64, f64) {
 fn upper_and_lower_marker_drags_map_indents_and_undo_once() {
     let mut app = indent_app(24.0, 12.0);
     let before = app.session.active().unwrap().history.undo.len();
-    edit_ruler(&mut app, |v| v.first_line_indent = 60.0);
+    edit_ruler(&mut app, |v| upper_to(v, 60.0));
     assert_eq!(indent_values(&app, 0), (24.0, 36.0));
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(indent_values(&app, 0), (24.0, 12.0));
     let before = app.session.active().unwrap().history.undo.len();
-    edit_ruler(&mut app, |v| v.left_indent = 40.0);
+    edit_ruler(&mut app, |v| lower_to(v, 40.0));
     assert_eq!(indent_values(&app, 0), (40.0, -4.0));
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
     let before = app.session.active().unwrap().history.undo.len();
@@ -137,7 +149,7 @@ fn mixed_indent_upper_marker_keeps_each_left_indent_in_one_undo_step() {
     let id = current(&app).unwrap().0.id.0;
     app.run("text.setFormat", json!({"id": id, "start": 4, "end": 4, "leftIndent": 60, "firstLineIndent": -10})).unwrap();
     let before = app.session.active().unwrap().history.undo.len();
-    edit_ruler(&mut app, |v| v.first_line_indent = 70.0);
+    edit_ruler(&mut app, |v| upper_to(v, 70.0));
     assert_eq!(indent_values(&app, 0), (24.0, 46.0));
     assert_eq!(indent_values(&app, 1), (60.0, 10.0));
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
@@ -153,7 +165,7 @@ fn mixed_indent_upper_marker_keeps_each_left_indent_in_one_undo_step() {
     app.run("text.setFormat", json!({"id": b, "leftIndent": 60, "firstLineIndent": -10})).unwrap();
     app.run("select.set", json!({"ids": [a, b.clone()]})).unwrap();
     assert_eq!(current_para(&app).unwrap().1.left_indent, 24.0);
-    edit_ruler(&mut app, |v| v.first_line_indent = 70.0);
+    edit_ruler(&mut app, |v| upper_to(v, 70.0));
     assert_eq!(indent_values(&app, 0), (24.0, 46.0));
     let second = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(b.as_u64().unwrap())).unwrap();
     let NodeKind::Text(second) = &second.kind else { panic!("second text") };
@@ -168,7 +180,7 @@ fn lower_marker_keeps_each_first_line_position_in_one_undo_step() {
     assert_eq!(indent_values(&app, 0), (24.0, 12.0));
     assert_eq!(indent_values(&app, 1), (24.0, 28.0));
     let before = app.session.active().unwrap().history.undo.len();
-    edit_ruler(&mut app, |v| v.left_indent = 40.0);
+    edit_ruler(&mut app, |v| lower_to(v, 40.0));
     assert_eq!(indent_values(&app, 0), (40.0, -4.0));
     assert_eq!(indent_values(&app, 1), (40.0, 12.0));
     assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
@@ -590,9 +602,9 @@ fn indent_markers_show_and_set_a_list_paragraphs_laid_out_indent() {
     assert_eq!((marker_position(IndentMarker::Lower, &para), marker_position(IndentMarker::Upper, &para)), (28.0, 34.0));
     edit_ruler(&mut app, |v| move_box(v, 12.0));
     assert_eq!(indent_values(&app, 0), (22.0, 6.0), "the ruler's 40 pt is the paragraph's 22 pt and the level's 18");
-    edit_ruler(&mut app, |v| v.first_line_indent = 70.0);
+    edit_ruler(&mut app, |v| upper_to(v, 70.0));
     assert_eq!(indent_values(&app, 0), (22.0, 30.0));
-    edit_ruler(&mut app, |v| v.left_indent = 20.0);
+    edit_ruler(&mut app, |v| lower_to(v, 20.0));
     assert_eq!(indent_values(&app, 0), (2.0, 50.0), "the first line stays at 70 pt");
 }
 

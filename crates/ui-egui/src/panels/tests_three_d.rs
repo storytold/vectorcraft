@@ -224,7 +224,7 @@ fn a_drag_previews_and_records_one_undo_step_when_released() {
     commit(&mut app, GESTURE, before);
     assert_eq!(undo_len(&app), history + 1);
     let (_, params) = effect(&app);
-    assert_eq!((params["depth"].clone(), params["twist"].clone()), (json!(120.0), json!(45.0)));
+    assert_eq!((params["depth"].as_f64(), params["twist"].as_f64()), (Some(120.0), Some(45.0)));
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(effect(&app).1["depth"], 50.0);
     // A typed value is one undo step at once.
@@ -588,10 +588,12 @@ fn the_bevel_reset_restores_only_the_bevel_settings_of_each_selected_effect() {
     };
     for id in [a, b] {
         for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
-            assert_eq!(merged(&app, id)[key], defaults[key], "{key} of {id}");
+            // A whole number the panel wrote is a JSON integer: the same number as the default's.
+            let (got, want) = (&merged(&app, id)[key], &defaults[key]);
+            assert!(got == want || got.as_f64().is_some_and(|v| Some(v) == want.as_f64()), "{key} of {id}: {got} for {want}");
         }
     }
-    assert_eq!((merged(&app, a)["depth"].clone(), merged(&app, b)["depth"].clone()), (json!(70.0), json!(30.0)));
+    assert_eq!((merged(&app, a)["depth"].as_f64(), merged(&app, b)["depth"].as_f64()), (Some(70.0), Some(30.0)));
     assert_eq!(merged(&app, a)["rotationX"], 15.0);
     let nodes = controls(&mut app, &ctx);
     assert!(named(&nodes, "Reset").is_disabled(), "every bevel setting at its default: Reset is off");

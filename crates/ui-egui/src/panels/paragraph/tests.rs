@@ -476,7 +476,8 @@ fn the_bullets_button_and_its_presets_set_the_list_and_reset_panel_clears_it() {
     toggle_list(&mut app, ListKind::Bullets);
     assert_eq!(lists(&app), (Some(ParaList::bulleted(Bullet::Dot)), None), "the caret's paragraph");
     assert_eq!(bullets_shown(&app), Some(Some(Bullet::Dot)), "the button shows pressed");
-    for (_, key, bullet) in bullet_presets() {
+    // None, the first preset, is picked last.
+    for (_, key, bullet) in bullet_presets().into_iter().rev() {
         set_bullet(&mut app, key);
         assert_eq!(lists(&app), (bullet.map(ParaList::bulleted), None), "{key}");
     }
