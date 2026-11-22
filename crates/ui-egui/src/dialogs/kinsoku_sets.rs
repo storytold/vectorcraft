@@ -264,9 +264,10 @@ impl KinsokuDialog {
         set.remove("from");
         set.insert("name".into(), json!(name));
         list.push(set);
-        let last = list.len() - 1;
+        // The fields are already committed: picking would write them into the new set when the old pick has its index.
+        self.selected = list.len() - 1;
         self.sets = json!(list);
-        self.pick(last);
+        self.load();
         Ok(())
     }
 

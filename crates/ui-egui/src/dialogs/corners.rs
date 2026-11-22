@@ -186,14 +186,12 @@ mod tests {
         with(app, |h| h.set_json_field(&ctx, dialog_id(KIND), key, value)).unwrap();
     }
 
-    /// Presses OK; the pump then runs the held answer.
+    /// Presses OK; the app's frames then run the held answer and close the dialog on it.
     fn confirm(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().unwrap();
         with(app, |h| h.confirm_by_id(&ctx, dialog_id(KIND)));
         for _ in 0..2 {
-            let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
-            out.textures_delta.clear();
-            crate::dialogs::host::pump(app, &ctx);
+            crate::testing::app_frame(app, &ctx, egui::RawInput::default());
         }
     }
 

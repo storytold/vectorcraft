@@ -130,10 +130,10 @@ mod tests {
         app.dialogs().expect("a window")
     }
 
-    /// One frame: the host's pump carries out what the manager queued.
+    /// One app frame: the host's pump carries out what the manager queued, and answered panels are taken.
     fn frame(app: &mut VectorcraftApp) {
         let ctx = ctx(app);
-        super::super::host::pump(app, &ctx);
+        crate::testing::app_frame(app, &ctx, egui::RawInput::default());
     }
 
     /// Press a manager button as the user does: the manager queues it and the pump carries it out.

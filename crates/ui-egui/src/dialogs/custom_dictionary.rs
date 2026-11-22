@@ -197,7 +197,7 @@ mod tests {
         let mut p = Panel::new(app, draw);
         super::open(&mut p.app()).unwrap();
         // Add: the Entry field's word (kept in lower case) joins the list.
-        p.type_into("Entry", " ZqvDictB ");
+        p.type_into("Entry:", " ZqvDictB ");
         p.click("Add");
         assert_eq!(words(&p.app(), &[A, B, C]), [A, B]);
         assert!(!has(&mut p.app(), B), "not until Done");
@@ -216,9 +216,9 @@ mod tests {
         super::open(&mut p.app()).unwrap();
         p.click(A);
         p.click("Delete");
-        p.type_into("Entry", B);
+        p.type_into("Entry:", B);
         p.click("Add");
-        p.type_into("Entry", C);
+        p.type_into("Entry:", C);
         p.click("Add");
         p.click("Done");
         assert!(!is_open(&p.app()), "Done closes it");
@@ -244,7 +244,7 @@ mod tests {
         super::open(&mut p.app()).unwrap();
         p.click(P);
         p.click("Delete");
-        p.type_into("Entry", Q);
+        p.type_into("Entry:", Q);
         p.click("Add");
         assert_eq!(words(&p.app(), &[P, Q]), [Q]);
         p.click("Done");

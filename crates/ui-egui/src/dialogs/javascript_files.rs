@@ -182,11 +182,16 @@ fn selected_row(files: &[(String, String)], selected: &str) -> Option<usize> {
     }
 }
 
+/// The rows the linked-files list shows, empty or not, before it scrolls.
+const LIST_ROWS: u16 = 6;
+
 fn body(ui: &mut Ui, files: &[(String, String)], form: &mut Form) {
     let source = keyed(files, |(linked, _): &(String, String)| linked.clone());
     let selection =
         selected_row(files, &form.selected).and_then(|i| files.get(i)).map(|(linked, _)| Selection::single(linked.clone())).unwrap_or_default();
     let list = List::<String>::options(tl!("Linked files"))
+        .min_rows(LIST_ROWS)
+        .max_rows(LIST_ROWS)
         .selection(Bind::given(selection))
         .sizing(Sizing::FillWidth)
         .empty(tl!("No JavaScript files linked"))

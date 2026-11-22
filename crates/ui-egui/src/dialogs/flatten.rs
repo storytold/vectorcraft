@@ -212,7 +212,9 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, KEY, option_fields(&FlattenOptions::default()), |_| {
         ParamDialog::new(KEY, tl!("Flatten Transparency"), option_params(&[], "")).previews(true)
-    });
+    })
+    // Flattening complex art is slow: the preview waits until it is turned on.
+    .preview_off();
     let held = HeldOptions {
         parent: None,
         cancel: Some(Box::new(|app: &mut VectorcraftApp| {

@@ -168,12 +168,10 @@ mod tests {
         app
     }
 
-    /// One app frame and one dialog pump.
+    /// One app frame: the dialog pump runs and the dialogs draw, so an accepted OK closes its dialog.
     fn frame(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().unwrap();
-        let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
-        out.textures_delta.clear();
-        crate::dialogs::host::pump(app, &ctx);
+        crate::testing::app_frame(app, &ctx, egui::RawInput::default());
     }
 
     fn with<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {

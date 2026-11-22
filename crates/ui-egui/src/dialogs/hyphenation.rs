@@ -120,7 +120,8 @@ mod tests {
         driver::set(&mut app, "hyphenate", json!(true));
         driver::set(&mut app, "wordsLongerThan", json!(8));
         driver::set(&mut app, "hyphenLimit", json!(2));
-        driver::set(&mut app, "hyphenationZone", json!("1 in"));
+        // A length row holds points (1 in), whatever unit its field shows.
+        driver::set(&mut app, "hyphenationZone", json!(72));
         driver::set(&mut app, "hyphenateCapitalized", json!(false));
         let undo = app.session.active().unwrap().history.undo.len();
         driver::ok(&mut app);

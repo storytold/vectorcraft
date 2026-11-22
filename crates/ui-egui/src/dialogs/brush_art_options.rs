@@ -29,7 +29,7 @@ use craft::theme::Srgba;
 use craft::ui::buttons::Button;
 use craft::ui::choice::{CellMarks, Segmented, Swatch};
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
-use craft::ui::dialog::StackDialog;
+use craft::ui::dialog::{FieldRefusal, StackDialog};
 use craft::ui::display::{Picture, PictureSize, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{ThumbAspect, ThumbSize};
@@ -683,7 +683,16 @@ fn colorization_rows() -> Vec<Param> {
         }
         shown
     })
-    .companions(["tips"]);
+    .companions(["tips"])
+    // A method set from outside is held as the select holds it, so Key Color's `enabled_when` reads it.
+    .on_set(|f: &mut DialogFields, key: &str, value: Value| {
+        let read = match key {
+            "colorization" => value.as_str().filter(|id| Colorization::IDS.contains(id)).map(|id| FieldValue::Text(id.to_string())),
+            _ => value.as_bool().map(FieldValue::Bool),
+        };
+        f.set(key, read.ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?);
+        Ok(())
+    });
     // Hue Shift's key colour: the art colour that becomes the stroke colour.
     let key_color_row = Param::custom("keyColors", tl!("Key Color"), |ui, f, cx| {
         let colors: Vec<Color> = json_field(f, "__colors").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();

@@ -172,6 +172,12 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
     let rows = rows(ty, object, doc, crate::canvas::rulers::unit_kind(app.session.general_unit()));
     let title = Label::from(title(ty, object));
     let mut initial = form::fields_of(&rows, f);
+    // The hidden values the rows read whole stay JSON: an untagged read makes an array a list of values.
+    for key in ["__def", "__patterns", "__colors"] {
+        if let Some(value) = f.get(key) {
+            initial.set(key, FieldValue::Json(value.clone()));
+        }
+    }
     if let Some(keys) = object_keys {
         let opened = object_params(&initial, keys);
         initial.set(OPENED, FieldValue::Json(Value::Object(opened)));

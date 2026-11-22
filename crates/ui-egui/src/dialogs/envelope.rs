@@ -2,7 +2,7 @@
 //! undo step:
 //!
 //! - **Warp Options** (`envelopeWarp`): Make with Warp, or Reset with Warp for a selected envelope
-//!   (`reset`). Fields `style` (one of the 15 warp styles), `horizontal` (false: Vertical),
+//!   (`reset`). Fields `style` (one of the 15 warp styles), `horizontal` (`horizontal` | `vertical`),
 //!   `bend`, `h` and `v` (%, -100..100).
 //! - **Envelope Mesh** (`envelopeMesh`): Make with Mesh, or Reset with Mesh (`reset`, with
 //!   `maintainShape`). Fields `rows`, `cols` (1..50).
@@ -145,7 +145,7 @@ pub fn open(app: &mut VectorcraftApp, id: &str) -> Result<Value, String> {
             let warp = info["type"] == "warp";
             let own = |k: &str, d: f64| if warp { num(k, d) } else { d };
             let style = if warp { info["style"].clone() } else { json!("arc") };
-            let horizontal = !warp || info["horizontal"] != false;
+            let horizontal = if !warp || info["horizontal"] != false { "horizontal" } else { "vertical" };
             (
                 WARP,
                 json!({"reset": envelope, "style": style, "horizontal": horizontal, "bend": own("bend", 50.0), "h": own("h", 0.0), "v": own("v", 0.0)}),
@@ -223,8 +223,8 @@ fn command(kind: &str, f: &Map<String, Value>) -> (&'static str, Value, &'static
     match kind {
         WARP => {
             let style = f.get("style").and_then(Value::as_str).unwrap_or("arc");
-            let p =
-                json!({"style": style, "horizontal": flag("horizontal", true), "bend": num("bend", 50.0), "h": num("h", 0.0), "v": num("v", 0.0)});
+            let horizontal = f.get("horizontal").and_then(Value::as_str) != Some("vertical");
+            let p = json!({"style": style, "horizontal": horizontal, "bend": num("bend", 50.0), "h": num("h", 0.0), "v": num("v", 0.0)});
             if reset { (RESET_WARP, p, "Reset with Warp") } else { (MAKE_WARP, p, "Make Envelope") }
         }
         MESH => {

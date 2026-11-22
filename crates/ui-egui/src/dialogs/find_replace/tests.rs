@@ -97,23 +97,24 @@ fn selected(p: &Panel) -> Vec<u64> {
     p.app().session.active().unwrap().selection.objects.iter().map(|id| id.0).collect()
 }
 
-/// The Edit menu's rows for Find and Replace, Check Spelling and Edit Custom Dictionary are enabled,
-/// and invoking each puts that dialog on the host.
+/// The Edit menu's rows for Find and Replace, Check Spelling (in its Spelling submenu) and Edit Custom Dictionary
+/// are enabled, and invoking each puts that dialog on the host.
 #[test]
 fn the_edit_menu_rows_open_their_dialogs() {
     type Shown = fn(&DialogHost) -> bool;
-    let rows: [(&str, &str, Shown); 3] = [
-        ("Find and Replace…", super::COMMAND, |h| h.get::<FindReplaceDialog>().is_some()),
-        ("Check Spelling…", crate::dialogs::check_spelling::COMMAND, |h| !h.open_dialogs().is_empty()),
-        ("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND, |h| {
+    let rows: [(&str, &[&str], &str, Shown); 3] = [
+        ("Find and Replace…", &["Edit"], super::COMMAND, |h| h.get::<FindReplaceDialog>().is_some()),
+        ("Check Spelling…", &["Edit", "Spelling"], crate::dialogs::check_spelling::COMMAND, |h| !h.open_dialogs().is_empty()),
+        ("Edit Custom Dictionary…", &["Edit"], crate::dialogs::custom_dictionary::COMMAND, |h| {
             h.get::<craft::ui::patterns::form_dialogs::HostedListManager>().is_some()
         }),
     ];
-    for (label, command, shown) in rows {
+    for (label, path, command, shown) in rows {
         let (app, _) = app_with(&["Hello zqvmisspelt world"]);
         let p = Panel::new(app, draw);
         let e = crate::menus::menu_entries(&p.app()).into_iter().find(|e| e.label == label).unwrap_or_else(|| panic!("{label} is in the Edit menu"));
-        assert_eq!((e.path.as_slice(), e.command.as_deref(), e.enabled), (&["Edit".to_string()][..], Some(command), true), "{label}");
+        let shown_path: Vec<&str> = e.path.iter().map(String::as_str).collect();
+        assert_eq!((shown_path.as_slice(), e.command.as_deref(), e.enabled), (path, Some(command), true), "{label}");
         choose_command(&p, command);
         assert!(p.app().dialogs().expect("a window").with(|host| shown(host)), "{label} opens its dialog");
     }
@@ -208,6 +209,8 @@ fn replace_waits_for_a_match_of_the_text_as_it_is() {
     set(&p, "find", json!("ca"));
     pump(&p);
     assert_eq!(matched(&p), None);
+    // The buttons' state is what a frame drew.
+    p.frame();
     assert!(!p.enabled("Replace"));
     for button in ["Replace", "Replace & Find"] {
         p.click(button);

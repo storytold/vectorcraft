@@ -242,7 +242,9 @@ impl StackDialog for GradientStopPopover {
             }
             "color" => {
                 let hex = value.as_str().ok_or_else(|| rejects(field, &value))?;
-                self.set.color = Some(Color::from_hex(hex).ok_or_else(|| format!("bad colour `{hex}` (#rrggbb)"))?);
+                // Hex digits only: `Color::from_hex` also takes a few colour names.
+                let color = Srgba::from_hex(hex).and_then(|_| Color::from_hex(hex));
+                self.set.color = Some(color.ok_or_else(|| format!("bad colour `{hex}` (#rrggbb)"))?);
             }
             "opacity" => self.set.opacity = Some(number()?),
             "location" => self.set.location = Some(number()?),

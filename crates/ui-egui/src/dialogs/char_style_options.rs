@@ -9,7 +9,7 @@ use std::sync::Arc;
 use craft::behavior::Mixed;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _};
-use craft::ui::dialog::DialogResult;
+use craft::ui::dialog::{DialogResult, FieldRefusal};
 use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
 };
@@ -197,13 +197,13 @@ pub(crate) fn value_of(value: &FieldValue) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
-/// The field value of a JSON `value` (`None` for `null`): a number is its text, which the text rows hold.
+/// The field value of a JSON `value` (`None` for `null`): a number is its JSON text (`12.0`), which the text rows hold.
 fn field_of(value: &Value) -> Option<FieldValue> {
     Some(match value {
         Value::Null => return None,
         Value::Bool(b) => FieldValue::Bool(*b),
         Value::String(s) => FieldValue::Text(s.clone()),
-        Value::Number(n) => FieldValue::Text(n.as_f64().map_or_else(|| n.to_string(), |n| n.to_string())),
+        Value::Number(n) => FieldValue::Text(n.to_string()),
         other => FieldValue::Json(other.clone()),
     })
 }
@@ -272,6 +272,17 @@ pub(crate) fn tri_state(key: impl Into<String>, label: impl Into<Label>) -> Para
             None => {}
         }
         response
+    })
+    // Set from outside: on, off, or `null` for neither.
+    .on_set(|fields, key, value| {
+        match value {
+            Value::Bool(on) => fields.set(key, FieldValue::Bool(on)),
+            Value::Null => {
+                fields.remove(key);
+            }
+            other => return Err(FieldRefusal::Rejects(&other).message(key)),
+        }
+        Ok(())
     })
 }
 
@@ -811,6 +822,16 @@ fn paint_row(key: &'static str, label: &'static str, swatches: Vec<(String, Valu
         out.response().clone()
     })
     .companions(companions.iter().copied())
+    .on_set(|fields, key, value| {
+        match field_of(&value) {
+            Some(value) => fields.set(key, value),
+            None => {
+                fields.remove(key);
+            }
+        }
+        paint_flags(fields);
+        Ok(())
+    })
 }
 
 /// The Stylistic Sets grid: each set is on (`ssNN`), off (`-ssNN`) or unset (not listed), as the other checkboxes are.
@@ -970,8 +991,9 @@ pub(crate) struct Frame {
     pub(crate) ok: bool,
 }
 
-/// Runs one frame of an options dialog's live preview of `cmd`: previews the values while they are accepted, and
-/// at OK keeps the preview as one undo step. Returns the preview state to keep and the commit's answer at OK.
+/// Runs one frame of an options dialog's live preview of `cmd`: previews the values while they are accepted, keeps
+/// the last accepted preview while they are refused, and at OK keeps the preview as one undo step. Returns the
+/// preview state to keep and the commit's answer at OK.
 pub(crate) fn drive(
     app: &mut VectorcraftApp,
     mut live: LivePreview,
@@ -986,11 +1008,26 @@ pub(crate) fn drive(
             live.run(app, frame.previewing, label, cmd, params);
             (live, None)
         }
+        // Refused values keep the last accepted preview; turning Preview off still rolls it back.
         (Err(_), false) => {
-            live.run(app, false, label, cmd, &Value::Null);
+            if !frame.previewing {
+                live.run(app, false, label, cmd, &Value::Null);
+            }
             (live, None)
         }
     }
+}
+
+/// Sets `field` of the style dialog `inner` from automation: a number a text row refuses is taken as its text, as
+/// typing it would give.
+pub(crate) fn set_field(inner: &mut HostedPropertiesDialog, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+    use craft::ui::dialog::StackDialog as _;
+    let refused = match inner.set_json_field(ctx, field, value.clone()) {
+        Err(why) if value.is_number() => why,
+        done => return done,
+    };
+    let text = field_of(&value).map(|typed| value_of(&typed)).unwrap_or(Value::Null);
+    inner.set_json_field(ctx, field, text).map_err(|_| refused)
 }
 
 /// Makes a wrapper over a [`HostedPropertiesDialog`] (`inner`) a dialog of its own type: it answers with the values
@@ -1044,11 +1081,19 @@ macro_rules! style_dialog {
             }
 
             fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: serde_json::Value) -> Result<(), String> {
-                craft::ui::dialog::StackDialog::set_json_field(&mut self.inner, ctx, field, value)
+                $crate::dialogs::char_style_options::set_field(&mut self.inner, ctx, field, value)
             }
 
             fn cancelled(&mut self, ctx: &egui::Context) {
                 craft::ui::dialog::StackDialog::cancelled(&mut self.inner, ctx);
+            }
+
+            fn can_reset(&self) -> bool {
+                self.inner.can_reset_tab()
+            }
+
+            fn reset(&mut self, _ctx: &egui::Context) -> bool {
+                self.inner.reset_tab()
             }
         }
     };

@@ -60,9 +60,10 @@ mod tests {
         let count = |panel: &Panel| panel.app().ui.attributes_panel.recent_urls;
         let is_open = |panel: &Panel| panel.app().dialogs().is_some_and(|d| d.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).is_some()));
         let set = |panel: &Panel, value: Value| panel.app().dialogs().unwrap().with(|host| host.set_json_field(&ctx, id, "count", value));
+        // OK files a held answer, which the next frames apply and close on; Cancel closes at once.
         let press = |panel: &mut Panel, ok: bool| {
-            let done = panel.app().dialogs().unwrap().with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
-            assert!(done);
+            let closed = panel.app().dialogs().unwrap().with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
+            assert!(ok || closed);
             panel.frame();
             panel.frame();
         };

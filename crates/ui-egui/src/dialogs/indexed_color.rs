@@ -165,7 +165,8 @@ mod tests {
         for (field, value) in [("reduction", "blackWhite"), ("dither", "none")] {
             host.with(|h| h.set_json_field(&ctx, dialog, field, json!(value))).unwrap();
         }
-        assert!(host.with(|h| h.confirm_by_id(&ctx, dialog)));
+        // OK files the held answer, which the pump applies.
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
         crate::dialogs::host::pump(&mut app, &ctx);
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1);

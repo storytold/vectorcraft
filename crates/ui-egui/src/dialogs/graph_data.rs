@@ -699,6 +699,8 @@ impl StackDialog for GraphDataDialog {
             .ok_enabled(!held.is_waiting())
             .accept_stays_open(true)
             .enter_confirms(false)
+            // The sheet owns the scroll; the controls above it stay in view.
+            .collection_body(true)
             .shaped(|dialog| dialog.initial_focus(Initial::Default))
             .show(ui, |ui, _, values| body(ui, values, &mut pane));
         // The pass reports a press only in the pass that took the input, so a second pass of the frame files nothing.

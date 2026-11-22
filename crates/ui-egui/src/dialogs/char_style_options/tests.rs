@@ -260,7 +260,7 @@ fn advanced_fields_show_set_values_and_keep_untouched_ones() {
         assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(original.clone()), "{original}");
     }
     let (d, _) = dialog_for(json!({"h_scale": 100.0, "rotation": 0.0, "language": null}));
-    assert_eq!((val(&d, "h_scale"), val(&d, "v_scale")), (json!(100.0), json!("")));
+    assert_eq!((val(&d, "h_scale"), val(&d, "v_scale")), (json!("100.0"), json!("")));
     assert_eq!(val(&d, "language"), json!("English: USA"));
     assert_eq!(val(&dialog_for(json!({"language": "de"})).0, "language"), json!("German"));
     assert_eq!(val(&dialog_for(json!({"language": "x-file"})).0, "language"), json!("x-file"));
@@ -315,7 +315,7 @@ fn advanced_options_preview_cancel_reset_and_commit() {
     let before = app.session.doc().unwrap().doc.clone();
     let undo = app.session.doc().unwrap().history.undo.len();
     open(&mut app, "Body");
-    assert_eq!(fields::<Existing>(&app)["h_scale"], json!(90.0));
+    assert_eq!(fields::<Existing>(&app)["h_scale"], json!("90.0"));
     assert_eq!(fields::<Existing>(&app)["rotation"], json!(""));
     set::<Existing>(&app, "tab", json!("advanced"));
     set::<Existing>(&app, "h_scale", json!("80"));
@@ -380,7 +380,7 @@ fn new_character_style_sets_and_resets_advanced_formats() {
 #[test]
 fn tate_chu_yoko_offsets_show_set_reset_and_keep_their_limits() {
     let (d, o) = dialog_for(json!({"tcyUpDown": 2.0, "size": 12.0}));
-    assert_eq!((val(&d, "tcyUpDown"), val(&d, "tcyLeftRight")), (json!(2.0), json!("")));
+    assert_eq!((val(&d, "tcyUpDown"), val(&d, "tcyLeftRight")), (json!("2.0"), json!("")));
     assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(json!({"tcyUpDown": 2.0, "size": 12.0})));
     // A value a style captured from scaled text stays while its field is untouched.
     let (d, o) = dialog_for(json!({"tcyLeftRight": 3000.0}));
@@ -449,7 +449,7 @@ fn tate_chu_yoko_offsets_preview_cancel_and_commit_to_the_style_and_its_text() {
 #[test]
 fn insert_aki_fields_show_set_reset_and_stop_at_the_character_panel_limits() {
     let (d, o) = dialog_for(json!({"akiLeft": 250.0, "size": 12.0}));
-    assert_eq!((val(&d, "akiLeft"), val(&d, "akiRight")), (json!(250.0), json!("")));
+    assert_eq!((val(&d, "akiLeft"), val(&d, "akiRight")), (json!("250.0"), json!("")));
     assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(json!({"akiLeft": 250.0, "size": 12.0})));
 
     let (mut d, o) = dialog_for(json!({"akiLeft": 250.0}));
@@ -488,7 +488,7 @@ fn insert_aki_fields_commit_to_the_style_and_its_text() {
 #[test]
 fn diacritic_position_fields_show_set_reset_and_commit() {
     let (d, o) = dialog_for(json!({"diacriticHorizontal": -250.0, "size": 12.0}));
-    assert_eq!((val(&d, "diacriticHorizontal"), val(&d, "diacriticVertical")), (json!(-250.0), json!("")));
+    assert_eq!((val(&d, "diacriticHorizontal"), val(&d, "diacriticVertical")), (json!("-250.0"), json!("")));
     assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(json!({"diacriticHorizontal": -250.0, "size": 12.0})));
     let (mut d, o) = dialog_for(json!({"diacriticHorizontal": -250.0}));
     put(&mut d, "diacriticHorizontal", json!(""));
@@ -522,7 +522,7 @@ fn tsume_field_shows_sets_resets_and_commits() {
     let (d, _) = dialog_for(json!({"size": 12.0}));
     assert_eq!(val(&d, "tsume"), json!(""));
     let (mut d, o) = dialog_for(json!({"tsume": 50.0}));
-    assert_eq!(val(&d, "tsume"), json!(50.0));
+    assert_eq!(val(&d, "tsume"), json!("50.0"));
     for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("150", 100.0), ("-5", 0.0)] {
         put(&mut d, "tsume", json!(typed));
         assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(json!({"tsume": kept})), "{typed}");
@@ -649,7 +649,7 @@ fn color_tint_and_weight_outside_their_limits_are_errors() {
         assert_eq!(edited_attrs(&d, &o).unwrap_err(), message, "{key} {value}");
     }
     let (mut d, o) = dialog_for(json!({"fill": linked}));
-    assert_eq!(val(&d, "fill_tint"), json!(100.0));
+    assert_eq!(val(&d, "fill_tint"), json!("100.0"));
     put(&mut d, "fill_tint", json!("40"));
     put(&mut d, "stroke_width", json!("1.5"));
     assert_eq!(
@@ -740,7 +740,7 @@ fn color_and_features_preview_cancel_commit_and_new_style() {
     }
     open(&mut app, "Body");
     let shown = fields::<Existing>(&app);
-    assert_eq!((shown["stroke_tint"].clone(), shown["ot_figure"].clone()), (json!(40.0), json!("tabularLining")));
+    assert_eq!((shown["stroke_tint"].clone(), shown["ot_figure"].clone()), (json!("40.0"), json!("tabularLining")));
     cancel::<Existing>(&mut app);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(app.session.doc().unwrap().doc, before);
