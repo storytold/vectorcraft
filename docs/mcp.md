@@ -2558,8 +2558,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
-  File object's `length`, `hidden` or `readonly` counts too, and so does a document's `saveAs` or `exportFile`),
-  `filesOpened` (files opened in other apps), `network`,
+  File object's `length`, `hidden` or `readonly` counts too, and so does a document's `saveAs` or `exportFile`, and
+  `print` called on `app.activeDocument`, `app.documents[i]`, `documents.add()`, `documents.getByName()` or
+  `app.open()`, or on a variable that holds one of them), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2743,17 +2744,19 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
   strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
   names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
-  assigned, a print-ready PDF otherwise. Without a file it throws `Printing to a printer is not available to scripts
-  yet`, and `app.printerList` throws an error that says it is not available yet. `fitToPage` set to true wins over
-  the scale factors and the tiling mode. With `printAllArtboards` false, `artboardRange` picks the artboards, and
-  without a range every artboard prints. With one of `horizontalScale` and `verticalScale` assigned, the other keeps
-  the document's saved value. `print` throws before anything is written when an assigned `artboardRange` names an
+  assigned, a print-ready PDF otherwise, also when that name is a link to a file with another extension. Without a
+  file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
+  that says it is not available yet. `fitToPage` set to true wins over the scale factors and the tiling mode. With
+  `printAllArtboards` false, `artboardRange` picks the artboards, and without a range every artboard prints. With
+  `printAllArtboards` not assigned, an assigned `artboardRange` replaces the saved range, which prints when the
+  saved settings print a range. When the saved settings, or the preset's, ignore the artboards, an assigned
+  `printArea` prints the artboards an assigned `artboardRange` names, or each artboard without a range. With one of
+  `horizontalScale` and `verticalScale` assigned, the other keeps the document's saved value. `print` throws before anything is written when an assigned `artboardRange` names an
   artboard the document does not have, also with `printAllArtboards` true, when `printPreset` or `flattenerPreset`
   is not a preset's name (any case), when `colorManagementOptions.name` is not an RGB or CMYK profile's name (any
   case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`
-  and `width` or `height` is assigned above 0. An assigned name that is empty or only
-  spaces, or holds `/`, `\` or a control character, throws too, and each checked name is sent without the spaces
-  around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
+  and `width` or `height` is assigned above 0. An assigned name that is empty or only spaces, or holds `/`, `\` or
+  a control character (also at either end), throws too, and each checked name is sent without the spaces around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
   `PrintingBounds.ARTWORKBOUNDS`, `INRIPSEPARATION`, `PSLEVEL1` or a scale above 1000, throws an error that says it
   is not available yet. Each value is checked when it is assigned: a wrong type, a number that is not finite or is
   out of range, a string longer than 4,096 bytes, an option object of the wrong class or from an earlier run, and a

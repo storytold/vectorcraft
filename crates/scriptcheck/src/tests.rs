@@ -558,6 +558,26 @@ fn save_as_and_export_file_in_brackets_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// A document's `print` writes the file its options' `jobOptions.file` names, called with a dot or
+/// with its name in brackets, on a document or a variable that holds one; reading the method without
+/// calling it, and a `print` method of another object, do not.
+#[test]
+fn print_writes_a_file() {
+    let r = report(concat!(
+        "var o = new PrintOptions(); o.jobOptions.file = new File(p);\n",
+        "app.activeDocument.print(o);\n",
+        "app.activeDocument['print'](o);\n",
+        "var n = app.activeDocument['print'];\n",
+        "var d = app.documents[0]; d.print(o);\n",
+        "logger.print('hello'); logger['print']('hello');\n",
+        "app.activeDocument.name.concat(logger.print('x'));\n",
+        "app.print(o); app.activeDocument.layers[0]['print'](o); app.documents['print'](o); app.preferences.activeDocument.print(o);\n",
+        "var e = app.open(new File(p)); e.print(o); activeDocument.print(o);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3, 5, 9][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[2, 3, 5, 9][..])]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

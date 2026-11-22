@@ -29,7 +29,12 @@
 //!   and throws an error that says it is not available yet at any other value.
 //! - `fitToPage` set to true wins over the scale factors and the tiling mode.
 //! - With `printAllArtboards` set to false, `artboardRange` picks the artboards; without a range
-//!   every artboard prints.
+//!   every artboard prints. With `printAllArtboards` not assigned, an assigned `artboardRange`
+//!   replaces the saved range, which prints when the saved settings print a range.
+//! - An assigned `printArea` prints by artboard when the saved settings, or the preset's, ignore
+//!   the artboards: the artboards an assigned `artboardRange` names, otherwise each artboard.
+//! - The format follows the name `jobOptions.file` gives, also when that name is a link to a file
+//!   with another extension.
 //! - With one of `horizontalScale` and `verticalScale` assigned, the other keeps the saved value.
 //! - `print` throws, before anything is written, when an assigned `artboardRange` names an artboard
 //!   the document does not have, also with `printAllArtboards` true; when `printPreset` or
@@ -37,8 +42,8 @@
 //!   not the name of an RGB or CMYK color profile (any case); and when `paperOptions.name` is not
 //!   the id or label of a paper `file.print` knows, or names a paper other than `custom` while
 //!   `width` or `height` is assigned above 0. An assigned name that is empty or only spaces,
-//!   or that holds `/`, `\` or a control character, throws too. Each checked name goes to
-//!   `file.print` without the spaces around it. `printerName` and `PPDName` take only the empty
+//!   or that holds `/`, `\` or a control character (also at either end), throws too. Each checked
+//!   name goes to `file.print` without the spaces around it. `printerName` and `PPDName` take only the empty
 //!   string.
 //! - A run makes at most [`MAX_OPTION_OBJECTS`] option objects.
 //! - `app.printerList` is not available yet, and `app.PPDFileList` is empty: VectorCraft prints
@@ -497,6 +502,8 @@ struct Job {
     paper_size: bool,
     /// `colorProfileMode` is `SOURCEPROFILE`: the colors print as they are, whatever `name` says.
     source: bool,
+    /// `printArea` is assigned: the artboards print even when the base settings ignore them.
+    print_area: bool,
     /// The groups of `settings`: the top level and each nested object by its key.
     top: Map<String, Value>,
     groups: Vec<(&'static str, Map<String, Value>)>,
@@ -623,7 +630,15 @@ fn map_job(h: &Host, slot: usize, job: &mut Job) {
                 job.group("advanced").insert("printAsBitmap".into(), json!(flag(v)));
             }
             "file" => job.file = Some(v.clone()),
-            "artboardRange" => job.range = Some(string_of(v)).filter(|r| !r.trim().is_empty()),
+            "artboardRange" => {
+                job.range = Some(string_of(v)).filter(|r| !r.trim().is_empty());
+                // Without `printAllArtboards`, the range replaces the base range and the base
+                // settings still decide whether a range prints.
+                if let Some(range) = job.range.as_ref().filter(|_| value("printAllArtboards").is_none()) {
+                    s.insert("range".into(), json!(range));
+                }
+            }
+            "printArea" => job.print_area = true,
             _ => {}
         }
     }
@@ -708,10 +723,8 @@ fn map_coordinate(h: &Host, slot: usize, job: &mut Job) -> std::result::Result<(
         if let Some(hh) = vs {
             g.insert("height".into(), json!(hh));
         }
-        let linked = match (hs, vs) {
-            (Some(w), Some(hh)) => (w - hh).abs() < 1e-9,
-            _ => false,
-        };
+        // Linked only when the factors are equal, as `file.print` compares them.
+        let linked = matches!((hs, vs), (Some(w), Some(hh)) if w == hh);
         g.insert("linked".into(), json!(linked));
     }
     for (k, v) in &set {
@@ -830,8 +843,10 @@ fn doc_print(h: &Host, a: &[Data]) -> Answer {
     if let Some(preset) = job.preset.take() {
         p.insert("preset".into(), json!(preset));
     }
+    // The format follows the name `jobOptions.file` gives, not the real path a link leads to.
+    let postscript = job.level.is_some() || crate::cmd::fileio::extension(path) == "ps";
+    p.insert("format".into(), json!(if postscript { "postscript" } else { "pdf" }));
     if let Some(level) = job.level {
-        p.insert("format".into(), json!("postscript"));
         p.insert("level".into(), json!(level));
     }
     let settings = job.settings();
@@ -861,17 +876,26 @@ fn doc_print(h: &Host, a: &[Data]) -> Answer {
 /// name (any case) and a paper by its id or label. An empty name, or one with a path separator or
 /// a control character, throws.
 fn check_names(h: &Host, doc: Doc, job: &mut Job) -> std::result::Result<(), HostError> {
+    let (count, saved_ignore) = with_doc(h, doc, |_, st| {
+        let mode = st.doc.print_setup.as_ref().and_then(|v| v.get("artboards")).and_then(Value::as_str);
+        (st.doc.artboards.len(), mode == Some("ignore"))
+    });
     if let Some(range) = &job.range {
-        let count = with_doc(h, doc, |_, st| st.doc.artboards.len());
         vectorcraft_doc::range::parse_range(range, count).map_err(|e| HostError::Range(format!("PrintJobOptions.artboardRange: {e}")))?;
     }
     let s = h.session.borrow();
+    let mut base_ignore = saved_ignore;
     if let Some(name) = job.preset.take() {
         let n = plain_name("PrintOptions.printPreset", "print preset", &name)?;
-        if s.print_preset_settings(n).is_none() {
-            return Err(no_such("PrintOptions.printPreset", "print preset", &name));
-        }
+        let preset = s.print_preset_settings(n).ok_or_else(|| no_such("PrintOptions.printPreset", "print preset", &name))?;
+        base_ignore = matches!(preset.artboards, vectorcraft_pdf::PrintArtboards::Ignore);
         job.preset = Some(n.to_string());
+    }
+    // An assigned `printArea` prints by artboard when the base settings ignore the artboards: the
+    // assigned `artboardRange` when there is one, otherwise every artboard.
+    if job.print_area && base_ignore && !job.top.contains_key("artboards") {
+        let mode = if job.top.contains_key("range") { "range" } else { "all" };
+        job.top.insert("artboards".into(), json!(mode));
     }
     if let Some(name) = job.flattener.take() {
         let n = plain_name("PrintOptions.flattenerPreset", "flattener preset", &name)?;
@@ -911,11 +935,15 @@ fn no_such(what: &str, kind: &str, name: &str) -> HostError {
 /// `name` without the spaces around it, or an error when it is empty or holds a path separator or
 /// a control character.
 fn plain_name<'a>(what: &str, kind: &str, name: &'a str) -> std::result::Result<&'a str, HostError> {
+    // Control characters are looked for before the trim, which would drop a tab or a line break.
+    if name.chars().any(char::is_control) {
+        return Err(no_such(what, kind, name));
+    }
     let n = name.trim();
     if n.is_empty() {
         return Err(HostError::Error(format!("{what} must name a {kind}")));
     }
-    if n.contains(['/', '\\']) || n.chars().any(char::is_control) {
+    if n.contains(['/', '\\']) {
         return Err(no_such(what, kind, name));
     }
     Ok(n)
