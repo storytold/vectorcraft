@@ -718,26 +718,16 @@ typed_ctors! {
     float64_ctor, Float64;
 }
 
-/// TypedArrayCreate (section 22.2.4.6), as `from` and `of` need: a new typed array of `len`
-/// elements made by the constructor `c`. One of the nine typed array constructors makes it
-/// directly; any other constructor is called, and its result must be a typed array with at
-/// least `len` elements.
-fn typed_create(interp: &mut Interp, c: &Value, len: u64, name: &str) -> JsResult<(ObjId, View)> {
+/// The element type of the typed array constructor `this`, as `from` and `of` need.
+fn ctor_elem(interp: &mut Interp, this: &Value, name: &str) -> JsResult<Elem> {
     let ctors = interp.intrinsics.es2015.typed_ctors;
-    let elem = c.as_object().and_then(|o| ctors.iter().position(|t| *t == o)).and_then(|i| Elem::ALL.get(i).copied());
-    let ta = match elem {
-        Some(elem) => new_typed(interp, elem, len)?,
-        None => {
-            #[allow(clippy::cast_precision_loss)]
-            let made = interp.construct(c, &[Value::Number(len as f64)])?;
-            match made.as_object() {
-                Some(o) if view_of(interp, o).is_some_and(|v| v.length as u64 >= len) => o,
-                _ => return Err(interp.type_error(&format!("TypedArray.{name}: the constructor did not make a typed array long enough"))),
-            }
-        }
-    };
-    let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
-    Ok((ta, view))
+    if let Some(o) = this.as_object()
+        && let Some(i) = ctors.iter().position(|c| *c == o)
+        && let Some(elem) = Elem::ALL.get(i)
+    {
+        return Ok(*elem);
+    }
+    Err(interp.type_error(&format!("TypedArray.{name} must be called on a typed array constructor")))
 }
 
 /// `%TypedArray%.from(source, mapFn, thisArg)` (section 22.2.2.1).
@@ -757,7 +747,9 @@ fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
         let src = interp.to_object(&source)?;
         let src_value = Value::Object(src);
         let len = length_of(interp, src)?;
-        let (ta, view) = interp.rooted(std::slice::from_ref(&src_value), |interp| typed_create(interp, &this, len, "from"))?;
+        let elem = ctor_elem(interp, &this, "from")?;
+        let ta = interp.rooted(std::slice::from_ref(&src_value), |interp| new_typed(interp, elem, len))?;
+        let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
         return interp.rooted(&[Value::Object(ta), src_value.clone()], |interp| {
             for i in 0..len {
                 interp.use_fuel()?;
@@ -781,8 +773,10 @@ fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
     });
     let result = gathered.and_then(|()| {
         let items: Vec<Value> = interp.temp_roots.get(mark..).map(<[Value]>::to_vec).unwrap_or_default();
-        let (ta, view) = typed_create(interp, &this, items.len() as u64, "from")?;
+        let elem = ctor_elem(interp, &this, "from")?;
+        let ta = new_typed(interp, elem, items.len() as u64)?;
         interp.temp_roots.push(Value::Object(ta));
+        let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
         for (i, item) in items.into_iter().enumerate() {
             interp.use_fuel()?;
             #[allow(clippy::cast_precision_loss)]
@@ -799,10 +793,9 @@ fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
 
 /// `%TypedArray%.of(...items)` (section 22.2.2.2).
 fn typed_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    if !interp.is_constructor(&this) {
-        return Err(interp.type_error("TypedArray.of must be called on a typed array constructor"));
-    }
-    let (ta, view) = typed_create(interp, &this, args.len() as u64, "of")?;
+    let elem = ctor_elem(interp, &this, "of")?;
+    let ta = new_typed(interp, elem, args.len() as u64)?;
+    let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
     interp.rooted(&[Value::Object(ta)], |interp| {
         for (i, v) in args.iter().enumerate() {
             interp.use_fuel()?;
