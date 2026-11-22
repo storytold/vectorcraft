@@ -327,6 +327,28 @@ fn apply_to_refuses_bad_arguments_with_nothing_changed() {
 
 /// A run names at most 4,096 styles; reading past that throws instead of growing without bound.
 #[test]
+fn style_objects_made_before_file_revert_go_stale_even_when_the_style_is_back() {
+    let (mut s, _) = doc_with("Hello");
+    s.execute("charStyle.new", &json!({"name": "B", "attrs": {"size": 30}})).unwrap();
+    let path = std::env::temp_dir().join(format!("vc-styles-revert-{}.vectorcraft", std::process::id()));
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    let out = log(
+        &mut s,
+        &format!(
+            "{DOC} var a = cs.getByName('B');\
+             vc.run('shape.rectangle', {{x: 1, y: 1, width: 5, height: 5}}); vc.run('file.revert', {{}});\
+             var cs2 = app.activeDocument.characterStyles;\
+             try {{ vc.log(a.name); }} catch (e) {{ vc.log(e.message); }}\
+             vc.log(cs2.getByName('B').name); vc.log(cs2.getByName('B') === a);"
+        ),
+    );
+    let _ = std::fs::remove_file(&path);
+    assert!(out[0].as_str().is_some_and(|m| m.contains("Stale style")), "{out:?}");
+    assert_eq!(out[1], json!("B"), "a style object made after the revert names the reverted style");
+    assert_eq!(out[2], json!(false));
+}
+
+#[test]
 fn a_run_names_at_most_4096_styles() {
     let (mut s, _) = doc_with("Hello");
     let mut d = (*s.active().unwrap().doc).clone();

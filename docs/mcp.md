@@ -2760,7 +2760,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   paragraph the text touches. `clearingOverrides` left out is false. A range lists each style once, in the order
   its text first uses it, the Normal style standing for text in no other style, and its lists cannot add or remove
   styles. The Normal styles cannot be renamed or removed. A style object keeps naming its style after a rename made
-  through `name`; after the style is removed, renamed another way or its document closed, it throws `Stale style`.
+  through `name`; after the style is removed, renamed another way or its document closed or reverted, it throws
+  `Stale style`.
   One run names at most 4,096 styles. `ParagraphStyle.characterAttributes` throws an error that says it is not
   available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and

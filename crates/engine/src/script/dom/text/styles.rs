@@ -12,8 +12,8 @@
 //!   panel lists them.
 //! - A style object names its style for the rest of the run, also after the script renames it
 //!   through `name`. Once the style is removed, or renamed or removed other than through the object
-//!   model, or its document is closed, every member throws `Stale style`; a style added later under
-//!   the same name is another style.
+//!   model, or its document is closed or reverted with File › Revert, every member throws
+//!   `Stale style`; a style added later under the same name is another style.
 //! - A style name is trimmed, and must then be 1 to 256 characters long with no control
 //!   characters.
 //! - A style's `characterAttributes` and `paragraphAttributes` read `undefined` for an attribute the
@@ -54,9 +54,11 @@ pub const MAX_STYLE_NAME: usize = 256;
 /// The most styles one run's style objects name.
 pub const MAX_HELD: usize = 4096;
 
-/// A style that a run's style objects name: its document, its kind and its name now.
+/// A style that a run's style objects name: its document and the document's revert count then, its
+/// kind and its name now.
 struct Slot {
     uid: u64,
+    reverts: u64,
     para: bool,
     name: String,
     live: bool,
@@ -91,7 +93,7 @@ pub(in crate::script) fn after_command(h: &Host) {
         seen.retain(|(uid, ..)| *uid != st.uid);
         seen.push((st.uid, st.doc.char_styles.clone(), st.doc.para_styles.clone()));
         for slot in slots.iter_mut().filter(|x| x.live && x.uid == st.uid) {
-            slot.live = has_style(st, slot.para, &slot.name);
+            slot.live = slot.reverts == st.reverts && has_style(st, slot.para, &slot.name);
         }
     }
     for slot in slots.iter_mut().filter(|x| x.live) {
@@ -131,7 +133,7 @@ pub(in crate::script) fn put_back(h: &Host, mark: Mark) {
         let (older, newer) = slots.split_at_mut(i);
         let Some(slot) = newer.first_mut() else { break };
         let named = older.iter().any(|o| o.live && o.uid == slot.uid && o.para == slot.para && o.name == slot.name);
-        slot.live = !named && s.documents().iter().any(|st| st.uid == slot.uid && has_style(st, slot.para, &slot.name));
+        slot.live = !named && s.documents().iter().any(|st| st.uid == slot.uid && st.reverts == slot.reverts && has_style(st, slot.para, &slot.name));
     }
     *styles.seen.borrow_mut() = mark.seen;
 }
@@ -174,14 +176,15 @@ fn stale() -> HostError {
 /// The style object for the style `name` of the document `uid`: the same slot as every other
 /// object naming it in this run.
 fn style_ref(h: &Host, uid: u64, para: bool, name: &str) -> Answer {
+    let reverts = h.session.borrow().documents().iter().find(|d| d.uid == uid).map_or(0, |d| d.reverts);
     let mut slots = h.dom.text.styles.slots.borrow_mut();
-    let i = match slots.iter().position(|s| s.live && s.uid == uid && s.para == para && s.name == name) {
+    let i = match slots.iter().position(|s| s.live && s.uid == uid && s.reverts == reverts && s.para == para && s.name == name) {
         Some(i) => i,
         None => {
             if slots.len() >= MAX_HELD {
                 return Err(HostError::Range(format!("a script can name at most {MAX_HELD} styles in one run")));
             }
-            slots.push(Slot { uid, para, name: name.to_string(), live: true });
+            slots.push(Slot { uid, reverts, para, name: name.to_string(), live: true });
             slots.len() - 1
         }
     };
@@ -207,7 +210,7 @@ fn style_of(h: &Host, d: &Data, classes: &[(&str, bool)]) -> std::result::Result
     let slot = usize_of(*slot).ok_or_else(stale)?;
     let mut slots = h.dom.text.styles.slots.borrow_mut();
     let s = slots.get_mut(slot).filter(|s| s.live && s.uid == doc.uid && s.para == para).ok_or_else(stale)?;
-    if !with_doc(h, doc, |_, st| has_style(st, para, &s.name)) {
+    if !with_doc(h, doc, |_, st| st.reverts == s.reverts && has_style(st, para, &s.name)) {
         s.live = false;
         return Err(stale());
     }
@@ -552,7 +555,7 @@ fn listed(h: &Host, of: &Of, para: bool) -> std::result::Result<(Doc, Vec<String
                     let (paras, _, _) = para_range(&index, s, e);
                     paras.map(|i| t.para_at(i).style_name.clone()).collect()
                 } else {
-                    styles_in(t, index.byte(s, false), index.byte(e, true))?.into_iter().map(|(c, _)| c.style_name).collect()
+                    styles_in(t, index.byte(s, false), index.byte(e, true), false)?.into_iter().map(|(c, _)| c.style_name).collect()
                 };
                 h.charge_call(used.len() as u64)?;
                 let mut out: Vec<String> = Vec::new();

@@ -96,10 +96,10 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames typename \
-         views views= width",
+        "activeLayer activeLayer= artboards artboards= characterStyles close close= constructor convertCoordinate \
+         documentColorSpace groupItems groupItems= height layers layers= name pageItems paragraphStyles parent pathItems \
+         pathItems= rulerOrigin rulerOrigin= rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols \
+         symbols= textFrames typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name typename"),
@@ -131,8 +131,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
     (
         "",
-        "CharacterAttributes Characters Justification ParagraphAttributes Paragraphs TextFont TextFonts TextFrame TextFrames \
-         TextOrientation TextRange TextType Words",
+        "CharacterAttributes CharacterStyle CharacterStyleAttributes CharacterStyles Characters Justification \
+         ParagraphAttributes ParagraphStyle ParagraphStyleAttributes ParagraphStyles Paragraphs TextFont TextFonts TextFrame \
+         TextFrames TextOrientation TextRange TextType Words",
     ),
     ("TextFrames.", "prototype"),
     ("TextFrames.prototype.", "add areaText constructor getByName index length parent pathText pointText removeAll typename"),
@@ -150,11 +151,11 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "TextRange.prototype.",
         "autoLeading autoLeading= baselineShift baselineShift= changeCaseTo changeCaseTo= characterAttributes characterOffset \
-         characterOffset= characterStyles characterStyles= characters constructor contents contents= deSelect deSelect= \
+         characterOffset= characterStyles characters constructor contents contents= deSelect deSelect= \
          duplicate duplicate= end end= getLocalCharOverridesJSON getLocalCharOverridesJSON= getLocalParaOverridesJSON \
          getLocalParaOverridesJSON= getParagraphLength getTextRunLength horizontalScale horizontalScale= insertionPoints \
          insertionPoints= kerning kerning= leading leading= length length= lines lines= move move= paragraphAttributes \
-         paragraphStyles paragraphStyles= paragraphs parent remove rotation rotation= select select= size size= start start= \
+         paragraphStyles paragraphs parent remove rotation rotation= select select= size size= start start= \
          story story= strikeThrough strikeThrough= textFont textFont= textRanges textRanges= textSelection textSelection= \
          tracking tracking= typename underline underline= verticalScale verticalScale= words",
     ),
@@ -174,6 +175,30 @@ const INSIDE: &[(&str, &str)] = &[
     ("ParagraphAttributes.", "prototype"),
     (
         "ParagraphAttributes.prototype.",
+        "constructor firstLineIndent firstLineIndent= justification justification= leftIndent leftIndent= rightIndent \
+         rightIndent= spaceAfter spaceAfter= spaceBefore spaceBefore= typename",
+    ),
+    ("CharacterStyles.", "prototype"),
+    ("CharacterStyles.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("CharacterStyle.", "prototype"),
+    ("CharacterStyle.prototype.", "applyTo characterAttributes constructor name name= parent remove typename"),
+    ("CharacterStyleAttributes.", "prototype"),
+    (
+        "CharacterStyleAttributes.prototype.",
+        "autoLeading autoLeading= baselineShift baselineShift= constructor horizontalScale horizontalScale= leading leading= \
+         rotation rotation= size size= strikeThrough strikeThrough= textFont textFont= tracking tracking= typename underline \
+         underline= verticalScale verticalScale=",
+    ),
+    ("ParagraphStyles.", "prototype"),
+    ("ParagraphStyles.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("ParagraphStyle.", "prototype"),
+    (
+        "ParagraphStyle.prototype.",
+        "applyTo characterAttributes characterAttributes= constructor name name= paragraphAttributes parent remove typename",
+    ),
+    ("ParagraphStyleAttributes.", "prototype"),
+    (
+        "ParagraphStyleAttributes.prototype.",
         "constructor firstLineIndent firstLineIndent= justification justification= leftIndent leftIndent= rightIndent \
          rightIndent= spaceAfter spaceAfter= spaceBefore spaceBefore= typename",
     ),
