@@ -356,6 +356,8 @@ pub(crate) fn run_action(app: &mut VectorcraftApp, kind: Kind, action: TextStyle
                 set_highlighted(app, kind, serde_json::from_value(r["names"].clone()).unwrap_or_default());
             }
         }
+        // The panel offers no other action.
+        _ => {}
     }
 }
 
@@ -391,7 +393,6 @@ pub(crate) fn load(app: &mut VectorcraftApp, load: &str, path: Option<String>) -
     let request = fileio::builtin_open_filters().fold(PickRequest::open("textStyles"), |r, (name, exts)| r.filter(name, exts));
     let load = load.to_string();
     Ok(file_asks::ask(app, request, Owner::Document, move |app, picked| match file_asks::open_params(&picked) {
-        // PLAN: assumed `open_params(&Picked) -> Option<Map<String, Value>>` (fl.A23)
         Some(params) => app.run(&load, Value::Object(params)),
         None => Ok(Value::Null),
     }))

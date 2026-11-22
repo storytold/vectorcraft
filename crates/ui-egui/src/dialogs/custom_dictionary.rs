@@ -8,7 +8,6 @@
 //! The edited list lives in the window's temporary memory under [`state_id`] while the dialog is
 //! open; [`pump`] applies the dialog's choices to it and shows it back.
 
-// PLAN: assumed paths of the framework crates in this app's dependencies.
 use craft::ui::dialog::{DialogId, dialog_id};
 use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry, ListManagerWords};
 use serde_json::{Value, json};
@@ -58,9 +57,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     words.sort();
     words.dedup();
     let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) else { return Err("no window".into()) };
-    // PLAN: assumed `HostedListManager::renames(self, kind: u32) -> Self`, as `ListManager::renames` (ch.K25).
-    // PLAN: assumed `ListManagerWords: Default`, the English words; the hosted dialog has no `Ui` to read them from.
-    let standard = ListManagerWords::default();
+    let standard = app.host.words().set::<ListManagerWords>();
     let actions = vec![
         ListManagerAction::new(DONE, tl!("Done"), ActionEnabled::Always).keeps_open(),
         ListManagerAction::new(ADD, tl!("Add"), ActionEnabled::OnNewName).keeps_open(),
@@ -131,15 +128,16 @@ fn save(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Runs the choices the dialog was answered with since the last frame.
+/// Runs the choice the dialog was answered with since the last frame; every action keeps it
+/// open, so its close is a Cancel, which drops the edited list.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    // `app.run` must not run inside the host's lock, so each answer is taken first.
-    while let Some(result) = dialogs.with(|host| host.take_by_id::<HostedListManager>(id())) {
-        match result.ok() {
-            Some(choice) => apply(app, ctx, &choice),
-            None => ctx.data_mut(|data| data.remove_temp::<Vec<String>>(state_id())),
-        }
+    // `app.run` must not run inside the host's lock, so the choice is taken first.
+    if let Some(choice) = dialogs.with(|host| host.get_mut_by_id::<HostedListManager>(id()).and_then(HostedListManager::take_choice)) {
+        apply(app, ctx, &choice);
+    }
+    if dialogs.with(|host| host.take_by_id::<HostedListManager>(id())).is_some() {
+        ctx.data_mut(|data| data.remove::<Vec<String>>(state_id()));
     }
 }
 

@@ -402,8 +402,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let marks = color_table::marks(&app.web_export.table);
     on_dialog(&host, |d| d.set_marks(marks));
+    let refresh_presets = !asked.tables.is_empty() || !asked.presets.is_empty();
     store_presets(app, asked.presets);
-    if !asked.tables.is_empty() || !asked.presets_were_empty() {
+    if refresh_presets {
         let presets = dialog_presets(app);
         on_dialog(&host, |d| d.set_presets(presets));
     }
@@ -427,13 +428,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let wanted = on_dialog(&host, HostedSaveForWeb::wanted_variants).unwrap_or_default();
     if !wanted.is_empty() {
         answer_variants(app, ctx, &host, &wanted);
-    }
-}
-
-impl Asked {
-    /// Whether the dialog filed no preset event (the presets were moved out by [`store_presets`]).
-    fn presets_were_empty(&self) -> bool {
-        self.presets.is_empty()
     }
 }
 

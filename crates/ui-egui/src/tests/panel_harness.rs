@@ -8,7 +8,9 @@ use std::{
     rc::Rc,
 };
 
+use craft::behavior::PartRef;
 use craft::ui::runtime::frame::take_output;
+use craft::ui::testing::pointer::part_rect_of_node;
 use craft::ui::testing::{Fixture, Target};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, Ui, Vec2, vec2};
 
@@ -147,9 +149,29 @@ impl Panel {
 
     /// Drags from the control named `from` to the one named `to`.
     pub(crate) fn drag(&mut self, from: &str, to: &str, mods: Modifiers) {
-        let (from, to) = (self.find(from), self.look(to));
-        self.fixture.hold(mods).drag(&from, to.center() - from.center()).hold(Modifiers::NONE);
+        let to = self.find(to).center();
+        self.drag_to(from, to, mods);
+    }
+
+    /// Drags from the control named `from` and releases at `to`.
+    pub(crate) fn drag_to(&mut self, from: &str, to: Pos2, mods: Modifiers) {
+        let from = self.find(from);
+        self.fixture.hold(mods).drag(&from, to - from.center()).hold(Modifiers::NONE);
         self.after();
+    }
+
+    /// Clicks the pointer-only part `part` (a row's thumbnail, a step arrow) of the control named `name`.
+    pub(crate) fn click_part(&mut self, name: &str, part: impl Into<PartRef>, mods: Modifiers) {
+        let (target, part) = (self.find(name), part.into());
+        let at = part_rect_of_node(self.ctx(), target.node.into(), part).unwrap_or_else(|| panic!("{name:?} has no part {part:?}")).center();
+        self.fixture.hold(mods).click_at(at).hold(Modifiers::NONE);
+        self.after();
+    }
+
+    /// Draws the panel in `room` from the next frame on.
+    pub(crate) fn room(&mut self, room: Vec2) -> &mut Self {
+        self.fixture.room(room);
+        self
     }
 
     /// Two clicks on the control named `name`, close enough in time to be a double click.
@@ -177,6 +199,11 @@ impl Panel {
     /// Whether the latest frame shows a control named `name`.
     pub(crate) fn shows(&self, name: &str) -> bool {
         self.fixture.by_label(name).is_some()
+    }
+
+    /// Whether some of the control named `name` can be seen in the latest frame.
+    pub(crate) fn in_view(&self, name: &str) -> bool {
+        self.fixture.visible(&self.look(name)).is_some()
     }
 
     /// Whether the control named `name` takes input.

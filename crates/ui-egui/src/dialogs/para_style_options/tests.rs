@@ -1,7 +1,7 @@
 use super::*;
-// PLAN: assumed paths for the framework items; the hosted dialog comes from type-w21, the pump from hub-w2.
+use crate::tests::panel_harness::Panel;
+use crate::tests::picks::dialogs;
 use craft::ui::dialog::{DialogHost, DialogId, StackDialog};
-use craft::ui::patterns::form_dialogs::DialogFields;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::doc::{Composer, NodeId, NodeKind, ParaStyle};
 
@@ -39,14 +39,11 @@ fn set(app: &VectorcraftApp, key: &str, value: Value) {
     with_dialog(app, |host, id| host.set_json_field(&ctx, id, key, value)).unwrap_or_else(|why| panic!("{key}: {why}"));
 }
 
-/// Edits the dialog's own fields with the tab-list functions the Tabs buttons call.
-fn with_fields(app: &VectorcraftApp, f: impl FnOnce(&mut DialogFields)) {
-    with_dialog(app, |host, _| {
-        // PLAN: assumed `ParaStyleOptions { fields: DialogFields, .. }` and `add_tab`/`delete_tab`/`clear_tabs(&mut DialogFields)` (type-w21)
-        if let Some(d) = host.get_mut::<ParaStyleOptions>() {
-            f(&mut d.fields);
-        }
-    });
+/// Opens the dialog on style `name` with Tabs shown, where its Add, Delete Tab and Clear All Tabs
+/// buttons are.
+fn open_tabs(app: &mut VectorcraftApp, name: &str) {
+    open(app, name);
+    set(app, "tab", json!("tabs"));
 }
 
 /// One pass of the per-frame dialog pump: previews run, results are applied.
@@ -377,28 +374,31 @@ fn tabs_section_edits_the_style_stops() {
     );
     assert_eq!(a["left_indent"], json!(3.0), "other attributes stay");
 
-    open(&mut app, "Body");
-    with_fields(&app, |fields| add_tab(fields, Unit::Points));
-    assert_eq!((tab_rows(&app).len(), fields(&app)["__tabSel"].clone()), (3, json!(2)));
-    set(&app, "__tabSel", json!(0));
-    with_fields(&app, delete_tab);
-    assert!(ok(&mut app));
-    let a = def(&app, "Body");
+    let mut p = Panel::new(app, dialogs);
+    open_tabs(&mut p.app(), "Body");
+    p.click("Add");
+    {
+        let app = p.app();
+        assert_eq!((tab_rows(&app).len(), fields(&app)["__tabSel"].clone()), (3, json!(2)));
+        set(&app, "__tabSel", json!(0));
+    }
+    p.click("Delete Tab");
+    assert!(ok(&mut p.app()));
+    let a = def(&p.app(), "Body");
     assert_eq!(a["tabs"].as_array().unwrap().iter().map(|s| s["position"].clone()).collect::<Vec<_>>(), [json!(108.0), json!(144.0)]);
     assert_eq!(a["tabs"][1], json!({"position": 144.0, "align": "left", "alignOn": "."}), "half an inch past the furthest");
 
     // Clear All Tabs leaves an empty list set, which Reset Panel removes; a new stop on a style
     // without stops goes at half an inch.
-    open(&mut app, "Body");
-    with_fields(&app, clear_tabs);
-    assert!(ok(&mut app));
-    assert_eq!(def(&app, "Body")["tabs"], json!([]), "an empty list is stored");
-    open(&mut app, "Body");
-    set(&app, "tab", json!("tabs"));
-    reset_shown(&app);
-    with_fields(&app, |fields| add_tab(fields, Unit::Points));
-    assert!(ok(&mut app));
-    let a = def(&app, "Body");
+    open_tabs(&mut p.app(), "Body");
+    p.click("Clear All Tabs");
+    assert!(ok(&mut p.app()));
+    assert_eq!(def(&p.app(), "Body")["tabs"], json!([]), "an empty list is stored");
+    open_tabs(&mut p.app(), "Body");
+    reset_shown(&p.app());
+    p.click("Add");
+    assert!(ok(&mut p.app()));
+    let a = def(&p.app(), "Body");
     assert_eq!(a["tabs"], json!([{"position": 36.0, "align": "left", "alignOn": "."}]));
     assert_eq!(a["left_indent"], json!(3.0), "{a:?}");
 }
@@ -433,13 +433,14 @@ fn add_leaves_a_stop_at_the_largest_position_alone() {
     let stops = json!([{"position": 100000.0, "align": "right", "leader": "-"}]);
     app.run("paraStyle.new", json!({"name": "Body", "attrs": {"tabs": stops}})).unwrap();
     let stored = def(&app, "Body");
-    open(&mut app, "Body");
-    let before = tab_rows(&app);
-    with_fields(&app, |fields| add_tab(fields, Unit::Points));
-    assert_eq!(tab_rows(&app), before, "no stop is added");
-    assert!(new_tab_position(&before, Unit::Points).is_none(), "Add is disabled");
-    assert!(ok(&mut app));
-    assert_eq!(def(&app, "Body"), stored, "the stop is kept");
+    let mut p = Panel::new(app, dialogs);
+    open_tabs(&mut p.app(), "Body");
+    let before = tab_rows(&p.app());
+    assert!(!p.enabled("Add"), "Add is disabled");
+    p.click("Add");
+    assert_eq!(tab_rows(&p.app()), before, "no stop is added");
+    assert!(ok(&mut p.app()));
+    assert_eq!(def(&p.app(), "Body"), stored, "the stop is kept");
 }
 
 /// A tab position out of range or not a distance, an unknown alignment, a leader of more than eight
@@ -480,10 +481,11 @@ fn invalid_tab_stops_keep_the_dialog_open() {
     let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
     let held = json!([{"position": 200000.0, "align": "left", "leader": "123456789", "alignOn": "."}]);
     doc.para_styles.iter_mut().find(|d| d.name == "Body").unwrap().attrs.insert("tabs".into(), held.clone());
-    open(&mut app, "Body");
-    with_fields(&app, |fields| add_tab(fields, Unit::Points));
-    assert!(ok(&mut app));
-    assert_eq!(def(&app, "Body")["tabs"][1], held[0]);
+    let mut p = Panel::new(app, dialogs);
+    open_tabs(&mut p.app(), "Body");
+    p.click("Add");
+    assert!(ok(&mut p.app()));
+    assert_eq!(def(&p.app(), "Body")["tabs"][1], held[0]);
 }
 
 /// Preview shows a style's new stops on the paragraphs that use it, and Cancel puts the document

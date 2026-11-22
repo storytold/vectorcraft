@@ -4,13 +4,13 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use craft::automation::ControlRequest;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, Document, Node};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{Rect, shapes};
 
 use super::nativeoptions::{answer, host, pass, replace_files};
-use crate::control::ControlRequest;
 use crate::{Services, VectorcraftApp, background, io};
 
 pub(crate) type Files = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
@@ -565,7 +565,7 @@ fn controlled_with(
 fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, method: &str, params: Value) -> Value {
     let (req, reply) = ControlRequest::new(method, params);
     tx.send(req).unwrap();
-    app.drain_control(&egui::Context::default());
+    app.run_control(&egui::Context::default());
     reply.try_recv().unwrap()
 }
 

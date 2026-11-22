@@ -62,7 +62,7 @@ pub(crate) fn units() -> &'static [UnitKind] {
 }
 
 /// Lengths stored in points and shown in `unit`.
-fn lengths(unit: Unit) -> LengthUnits {
+pub(crate) fn lengths(unit: Unit) -> LengthUnits {
     LengthUnits::new(UnitKind::Points, unit_kind(unit), PIXELS_PER_INCH)
 }
 

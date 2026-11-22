@@ -57,7 +57,7 @@ use craft::layers::ui::filter::{FilterBy, LayerFilter};
 use craft::layers::ui::options::LayersSettings;
 use craft::layers::ui::panel::{Groups, LayerRowLook, LayersPanel};
 use craft::layers::ui::thumbs::ThumbContents;
-use craft::ui::contract::Bind;
+use craft::ui::contract::{Bind, PlainData, Tracked};
 use craft::ui::list::ThumbSize;
 use egui::{Color32, Ui};
 use serde::{Deserialize, Serialize};
@@ -77,11 +77,11 @@ pub use controls::{delete, expand, set_filter};
 // PLAN: the sheet's `pub use` of these cannot work: document-panels-w8 declares them `pub(crate)`, which `pub use` cannot re-export.
 pub(crate) use controls::{menu_rows, menu_states, new_layer_unlisted, run};
 pub(crate) use model::shown_name;
-use model::{DocLayers, RowId, isolated_root};
+use model::{DocLayers, LayerRows, RowId, isolated_root};
 pub(crate) use thumbs::{NodeThumb, NodeThumbs, forget, link_thumbnails, node_arc, retain_open, thumb_options};
 
 /// Layers panel options (≡ › Panel Options…), kept with the UI state.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PlainData)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PanelOptions {
     /// Show Layers Only: no rows for groups and objects.
@@ -107,7 +107,7 @@ impl Default for PanelOptions {
 }
 
 /// Panel Options › Row Size.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, PlainData)]
 #[serde(rename_all = "camelCase")]
 pub enum RowSize {
     /// Small rows.
@@ -168,7 +168,7 @@ impl PanelOptions {
 }
 
 /// What the app keeps of the Layers panel beside its document: the filter, a rename asked for by
-/// `ui.rename`, and whether the rows had key focus in the last pass. Not saved.
+/// `ui.rename`, whether the rows had key focus in the last pass and the rows the panel reads. Not saved.
 #[derive(Clone, Debug)]
 pub struct LayersUi {
     /// Search All and the Filter's ticks.
@@ -179,6 +179,8 @@ pub struct LayersUi {
     pub focused: bool,
     /// The target circle clicked last, with its document's `uid`: where a Shift-click on another circle starts.
     pub target_anchor: Option<(u64, NodeId)>,
+    /// The active document's rows with the [`LayerRows::key`] they were listed at.
+    rows: Option<(u64, Tracked<LayerRows>)>,
 }
 
 impl Default for LayersUi {
@@ -186,7 +188,7 @@ impl Default for LayersUi {
     fn default() -> Self {
         let mut filter = LayerFilter::default();
         filter.by = FilterBy::Objects;
-        Self { filter, rename: None, focused: false, target_anchor: None }
+        Self { filter, rename: None, focused: false, target_anchor: None, rows: None }
     }
 }
 
@@ -214,10 +216,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut target_click = None;
     let thumbnails = thumbs::layer_thumbnails(ui.ctx(), uid);
     let settings = app.ui.layers_panel.settings();
-    let Some(st) = app.session.active() else { return };
-    let tree = DocLayers::new(app, st);
+    refresh_rows(app);
+    let (Some(st), Some((_, kept))) = (app.session.active(), &app.ui.layers_ui.rows) else { return };
+    let tree = DocLayers::of(st, kept);
     let source = thumbs::LayerThumbs { doc: &st.doc };
-    let mut panel = LayersPanel::new(&tree)
+    let mut panel = LayersPanel::new(kept)
         .settings(&settings)
         .thumbnails(&thumbnails, &source)
         .filter(Bind::bound(&mut filter))
@@ -256,6 +259,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && matches!(st.layers_reveal, Some(LayersReveal::Selected(_)))
     {
         st.layers_reveal = None;
+    }
+}
+
+/// Lists the active document's rows again when what they are listed from changed.
+fn refresh_rows(app: &mut VectorcraftApp) {
+    let Some(st) = app.session.active() else { return };
+    let key = LayerRows::key(app, st);
+    if app.ui.layers_ui.rows.as_ref().is_none_or(|(kept, _)| *kept != key) {
+        let rows = Tracked::new(LayerRows::new(app, st));
+        app.ui.layers_ui.rows = Some((key, rows));
     }
 }
 

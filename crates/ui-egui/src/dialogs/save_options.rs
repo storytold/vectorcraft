@@ -537,7 +537,7 @@ fn typed(o: &FormatOption, value: Value) -> Value {
 
 /// Opens the save options dialog of format `f` before writing `path`: `action` is the save command
 /// it finishes, and `pick` (the web's Save As) also names the file and chooses the format.
-pub(crate) fn open(app: &mut VectorcraftApp, action: &str, f: &Format, path: &str, pick: bool) -> Value {
+pub(crate) fn open(app: &mut VectorcraftApp, action: &str, f: &'static Format, path: &str, pick: bool) -> Value {
     let Some(ctx) = app.ui_ctx.clone() else { return json!({ "pending": Value::Null }) };
     let formats: Vec<&'static str> = match (pick, SaveMode::of(action)) {
         (false, _) => vec![],

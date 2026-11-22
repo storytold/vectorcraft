@@ -3,6 +3,7 @@
 use craft::ui::dialog::StandardPrompt;
 use serde_json::json;
 
+use crate::tests::panel_harness::Panel;
 use crate::{VectorcraftApp, canvas};
 
 fn app_with_doc() -> VectorcraftApp {
@@ -111,67 +112,27 @@ fn cmd_alt_n_makes_a_document_without_the_new_document_dialog() {
     assert!(dialogs_open(&mut app, &ctx));
 }
 
-/// One frame of the Home screen in a `w`×`h` window at `time` with `events`: the texts visible (inside
-/// their clip rect and the window) and where.
-fn visible_home_texts(
-    app: &mut VectorcraftApp,
-    ctx: &egui::Context,
-    (w, h): (f32, f32),
-    time: f64,
-    events: Vec<egui::Event>,
-) -> Vec<(String, egui::Rect)> {
-    fn walk(s: &egui::Shape, clip: egui::Rect, out: &mut Vec<(String, egui::Rect)>) {
-        match s {
-            egui::Shape::Text(t) if clip.contains_rect(t.visual_bounding_rect()) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, out)),
-            _ => {}
-        }
-    }
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
-    let raw = egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));
-    out.textures_delta.clear();
-    let mut texts = vec![];
-    out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect.intersect(screen), &mut texts));
-    texts
-}
-
-/// The size of the tall window the Home screen is drawn in, Learn section included.
-const TALL: (f32, f32) = (1000.0, 2400.0);
-
-/// The visible text `text` on a tall Home screen frame drawn at `time` → its center.
-fn text_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, text: &str) -> egui::Pos2 {
-    let texts = visible_home_texts(app, ctx, TALL, time, vec![]);
-    texts.iter().find(|(t, _)| t == text).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{text} is shown: {texts:?}"))
-}
-
-/// `clicks` clicks at `at` on a tall Home screen frame, the first pressed after `time`; two clicks
-/// at one point in a row are a double click.
-fn click_home_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: egui::Pos2, clicks: u32) {
-    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    visible_home_texts(app, ctx, TALL, time, vec![egui::Event::PointerMoved(at)]);
-    for i in 0..clicks {
-        let t = time + 0.05 + 0.1 * f64::from(i);
-        visible_home_texts(app, ctx, TALL, t, vec![press(true)]);
-        visible_home_texts(app, ctx, TALL, t + 0.05, vec![press(false)]);
-    }
+/// The Home screen of `app` in a window tall enough for its Learn section.
+fn home_screen(app: VectorcraftApp) -> Panel {
+    let mut home = Panel::new(app, canvas::show);
+    home.room(egui::vec2(1000.0, 2400.0));
+    home.frame();
+    home
 }
 
 /// The Home screen lists the first recent files (#663); opening one that can't be opened says so.
 #[test]
 fn home_lists_recent_files_and_a_click_opens_one() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = crate::testing::ui_context();
     let dir = std::env::temp_dir().join("vectorcraft-home-recent");
     let missing = dir.join("Gone.svg").to_string_lossy().into_owned();
     app.ui.recent_files = (0..9).map(|i| dir.join(format!("Drawing {i}.svg")).to_string_lossy().into_owned()).collect();
     app.ui.recent_files.insert(0, missing);
-    let texts = visible_home_texts(&mut app, &ctx, TALL, 0.0, vec![]);
-    let has = |s: &str| texts.iter().any(|(t, _)| t == s);
-    assert!(has("Gone.svg") && has("Drawing 4.svg"), "{texts:?}");
-    assert!(!has("Drawing 5.svg"), "the first six only");
-    let at = text_at(&mut app, &ctx, 0.5, "Gone.svg");
-    click_home_at(&mut app, &ctx, 1.0, at, 2);
+    let mut home = home_screen(app);
+    assert!(home.shows("Gone.svg") && home.shows("Drawing 4.svg"), "the first recent files are listed");
+    assert!(!home.shows("Drawing 5.svg"), "the first six only");
+    home.double_click("Gone.svg");
+    let app = home.app();
     assert!(app.session.documents().is_empty());
     assert!(!app.ui.status.is_empty(), "a file that can't be opened says so");
 }
@@ -181,20 +142,17 @@ fn home_lists_recent_files_and_a_click_opens_one() {
 #[test]
 fn home_has_a_learn_section_that_opens_the_learn_panel() {
     use crate::panels::learn::{self, Tab, View, catalog};
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = crate::testing::ui_context();
-    let texts = visible_home_texts(&mut app, &ctx, TALL, 0.0, vec![]);
-    let has = |s: &str| texts.iter().any(|(t, _)| t == s);
-    assert!(has("Learn"), "{texts:?}");
+    let mut home = home_screen(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
+    assert!(home.shows("Learn"));
     for skill in catalog::SKILLS {
-        assert!(has(skill.title), "{} is shown", skill.title);
+        assert!(home.shows(skill.title), "{} is shown", skill.title);
         for tutorial in skill.tutorials {
-            assert!(has(tutorial.title), "{} is shown", tutorial.title);
+            assert!(home.shows(tutorial.title), "{} is shown", tutorial.title);
         }
     }
-    assert!(!learn::visible(&app), "the panel is not shown before a choice");
-    let at = text_at(&mut app, &ctx, 0.5, "Draw paths with the Pen");
-    click_home_at(&mut app, &ctx, 1.0, at, 1);
+    assert!(!learn::visible(&home.app()), "the panel is not shown before a choice");
+    home.click("Draw paths with the Pen");
+    let app = home.app();
     assert!(learn::visible(&app), "a tutorial shows the Learn panel");
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("pen-paths") });
     assert!(app.session.documents().is_empty(), "no document is opened");
@@ -210,9 +168,9 @@ fn home_learn_section_over_open_documents_leaves_them_as_they_are() {
     app.run("file.new", json!({})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("app.home", json!({})).unwrap();
-    let ctx = crate::testing::ui_context();
-    let at = text_at(&mut app, &ctx, 0.0, "Add a gradient");
-    click_home_at(&mut app, &ctx, 0.5, at, 1);
+    let mut home = home_screen(app);
+    home.click("Add a gradient");
+    let app = home.app();
     assert!(learn::visible(&app));
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: Some("gradient") });
     assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)), "the documents stay as they are");

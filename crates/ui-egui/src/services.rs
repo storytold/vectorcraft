@@ -1,3 +1,6 @@
+use craft::platform::clipboard::ClipboardBackend;
+use craft::ui::runtime::pen::PenSource;
+
 use super::{Arc, Mutex, background, place, print};
 
 pub type CheckApplicationFn = Box<dyn Fn(&str) -> Result<(), String>>;
@@ -45,10 +48,20 @@ pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 /// Opens a file in a fixed app; `Ok(false)` when that app isn't installed.
 pub type OpenInFn = Box<dyn FnMut(&str) -> Result<bool, String>>;
 
-/// Platform services injected by the host app (desktop or web). File dialogs, the clipboard, URLs,
-/// the pen and the screen color picker are the framework host's.
+/// Platform services injected by the host app (desktop or web). File dialogs, URLs and the screen
+/// color picker are the framework host's.
 #[derive(Default)]
 pub struct Services {
+    /// The system clipboard (desktop). Without it (tests, the web before its host sets one) copies
+    /// stay inside the app.
+    pub clipboard: Option<Box<dyn ClipboardBackend>>,
+    /// Makes a second clipboard connection on the paste probe's own thread (Linux), so an
+    /// unresponsive clipboard owner never stalls a frame. Without it Paste checks the clipboard in
+    /// line, a few times a second.
+    pub clipboard_probe: Option<Box<dyn FnOnce() -> Box<dyn ClipboardBackend> + Send>>,
+    /// The pen the host reads itself (tablet APIs the window system doesn't route): the same
+    /// handle the host installs for the framework's pointer feed.
+    pub pen: Option<PenSource>,
     pub read: Option<ReadFn>,
     /// Read at most a number of bytes from a file (desktop). A file with a size limit is read one
     /// byte past the limit, so a larger file is refused without reading all of it. Without it, the

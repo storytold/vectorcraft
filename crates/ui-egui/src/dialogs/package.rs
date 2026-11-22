@@ -69,7 +69,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let dialog = HostedParamDialog::new(&ctx, KEY, fields, move |fields| {
         ParamDialog::new(KEY, tl!("Package"), params.clone())
             .values(Bind::bound(fields))
-            .ok_label(tl!("Package"))
+            .ok_label(Label::from(tl!("Package")))
             .footer_note(Label::from(tl!("Fonts whose licence doesn't allow embedding are not copied.")))
     });
     crate::dialogs::host::open_held(app, dialog, |app, answer| confirm(app, &answer.fields).map(|_| ())).ok_or("no window")?;

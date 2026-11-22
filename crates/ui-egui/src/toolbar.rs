@@ -9,29 +9,32 @@
 //! Toolbar and for each group torn off either of them (a `strip:` panel).
 
 use craft::behavior::dock::{Action, DockEdge};
+use craft::behavior::geometry::BoxState;
 use craft::behavior::overlay::Side;
-use craft::behavior::{IconId, Mixed};
+use craft::behavior::{EditEvent, IconId, Mixed};
 use craft::color_ui::ui::PaintChip;
+use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
 use craft::theme::Size; // PLAN: assumed path of the theme's `Size` through the facade
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};
+use craft::ui::display::Divider;
 use craft::ui::docking::GroupAt;
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
-use craft::ui::pickers::Select;
+use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
 use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
+use vectorcraft_geom::Point;
 use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
 
+use crate::VectorcraftApp;
 use crate::paint_preview::well_paint;
 use crate::state::{CustomToolbar, UiState};
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
 
 /// The Tools panel's key in the dock layout.
 pub(crate) const TOOLS: &str = "tools";
@@ -371,8 +374,8 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     {
         // The strip floats inside this window: an OS window would never see the held press move.
         match place_strip(app, &owner, &first.id, Some(torn.pointer)) {
-            // PLAN: assumed panel_docking::continue_move(ctx, panel, grab) wrapping FloatingGroup::continue_move (ch.K16, chrome-w4/w7).
-            Ok(()) => crate::panel_docking::continue_move(ui.ctx(), &strip_id(&owner, &first.id), Vec2::ZERO),
+            // The window shows at the pointer, so the press holds it by its corner.
+            Ok(()) => crate::panel_docking::continue_move(app, &strip_id(&owner, &first.id), Vec2::ZERO),
             Err(e) => app.status(e),
         }
     }
@@ -541,57 +544,80 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let reference = opts["reference"].as_u64().filter(|v| *v <= 8).map_or(crop::CENTER, |v| v as usize);
     let linked = opts["linked"].as_bool().unwrap_or(false);
-    let t = Tokens::get(ui.ctx());
-    let set_option = |app: &mut VectorcraftApp, key: &str, value: Value| {
-        app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
-    };
+    let mut edits = Vec::new();
     // Resolution: the list's choices above the image's limit are disabled; a typed value is held to it.
     let ppi = opts["ppi"].as_f64().unwrap_or(own);
     let label = |v: f64| crate::i18n::fmt(tl!("{n} ppi"), &[("n", &format!("{}", (v * 100.0).round() / 100.0))]);
-    let labels: Vec<String> = PPI_CHOICES.iter().map(|v| label(*v)).collect();
-    let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-    // PLAN: C4 asks for Select/NumberField/TransformFields members; their signatures are not in the bundle, so the widgets stay.
-    widgets::field_label(ui, egui::RichText::new(tl!("PPI")).size(12.0).color(t.text_dim));
-    let current = label(ppi);
-    if let Some(v) =
-        widgets::dropdown_with(ui, ("cb-crop", "ppi-list"), &current, &names, 80.0, |i| PPI_CHOICES.get(i).is_some_and(|v| *v <= max + 1e-6))
-            .and_then(|i| PPI_CHOICES.get(i))
-    {
-        set_option(app, "ppi", json!(v));
-    }
-    // An image's own resolution above the limit (a linked image's, or one past 2400 ppi) still
-    // shows as it is; an edit there sets at most the limit.
-    if let Some(v) = widgets::range_field(ui, ("cb-crop", "ppi"), ppi, 1.0..=max.max(ppi).max(1.0), "", 2, 56.0) {
-        set_option(app, "ppi", json!(v.min(max.max(1.0))));
-    }
-    ui.separator();
-    if let Some(i) = widgets::reference_point(ui, reference) {
-        set_option(app, "reference", json!(i));
-    }
-    let units = app.session.general_unit();
-    let p = vectorcraft_geom::reference_point(r, reference);
-    for (k, lbl, v) in [("x", "X:", p.x), ("y", "Y:", p.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
-        if k == "height"
-            && widgets::icon_button(ui, if linked { "link" } else { "unlink" }, tl!("Constrain Width and Height Proportions"), linked, 22.0).clicked()
-        {
-            set_option(app, "linked", json!(!linked));
+    let choices: Vec<Entry<f64>> = PPI_CHOICES.iter().map(|&v| Entry::new(v, label(v)).enabled(v <= max + 1e-6)).collect();
+    Field::new(tl!("PPI")).show(ui, |ui, _| {
+        if let Some(v) = Select::new(tl!("PPI"), Bind::given(ppi), &choices).placeholder(label(ppi)).show(ui).value().copied() {
+            edits.push(("ppi", json!(v)));
         }
-        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
-        if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0)
-            && let Some(b) = crop::edited_box(r, image, reference, linked, k, nv)
-        {
-            set_option(app, "rect", json!([b.x0, b.y0, b.width(), b.height()]));
+        // An image's own resolution above the limit (a linked image's, or one past 2400 ppi) still
+        // shows as it is; an edit there sets at most the limit.
+        let field = NumberField::new(tl!("Resolution"), Bind::given(Some(ppi))).range(1.0..=max.max(ppi).max(1.0)).fixed_decimals(2);
+        if let Some(v) = field.show(ui).value().copied().flatten() {
+            edits.push(("ppi", json!(v.min(max.max(1.0)))));
+        }
+    });
+    Divider::vertical().show(ui);
+    let rulers = crate::canvas::rulers::general_rulers(app);
+    let pivot = vectorcraft_geom::reference_point(r, reference);
+    let state = BoxState::new([Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], pivot);
+    let mut groups = TransformGroups::NONE;
+    (groups.reference, groups.position, groups.size) = (true, true, true);
+    let out = TransformFields::new(tl!("Crop Box"), Bind::given(TransformRow::new(state, 0.0)), r, Bind::given(linked))
+        .rulers(rulers)
+        .size_unit(SizeUnit::length(rulers.x, rulers.y))
+        .reference_look(ReferencePointLook::Squares)
+        .groups(groups)
+        .bar()
+        .show(ui);
+    if let Some(on) = out.linked {
+        edits.push(("linked", json!(on)));
+    }
+    let as_option = |b: vectorcraft_geom::Rect| json!([b.x0, b.y0, b.width(), b.height()]);
+    for (event, source) in out.events.iter().zip(&out.sources) {
+        // A cancelled gesture puts back the box it began from.
+        if let EditEvent::Cancel { before: Some(Mixed::Same(row)), .. } = event {
+            edits.push(("rect", as_option(quad_bounds(&row.state.quad))));
+            continue;
+        }
+        let Some(row) = event.value() else { continue };
+        let (key, v) = match source {
+            TransformSource::Reference => {
+                if let Some(i) = row.state.anchor_of_pivot().and_then(|a| Anchor9::ALL.iter().position(|b| *b == a)) {
+                    edits.push(("reference", json!(i)));
+                }
+                continue;
+            }
+            TransformSource::Field(TransformField::X) => ("x", row.state.pivot.x),
+            TransformSource::Field(TransformField::Y) => ("y", row.state.pivot.y),
+            TransformSource::Field(TransformField::W) => ("width", quad_bounds(&row.state.quad).width()),
+            TransformSource::Field(TransformField::H) => ("height", quad_bounds(&row.state.quad).height()),
+            _ => continue,
+        };
+        if let Some(b) = crop::edited_box(r, image, reference, linked, key, v) {
+            edits.push(("rect", as_option(b)));
         }
     }
-    ui.separator();
+    for (key, value) in edits {
+        app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
+    }
+    Divider::vertical().show(ui);
     for (label, key) in [(tl!("Apply"), ToolKey::Enter), (tl!("Cancel"), ToolKey::Escape)] {
-        if widgets::flat_button_fit(ui, label, 64.0).clicked() {
+        if Button::new(label).show(ui).clicked() {
             let view = app.view_info();
             let r = app.session.tool_key(key, Mods::default(), view);
             crate::canvas::apply_requests(app, r);
         }
     }
-    ui.separator();
+    Divider::vertical().show(ui);
+}
+
+/// The axis-aligned bounds of a box's corners.
+fn quad_bounds(quad: &[Point; 4]) -> vectorcraft_geom::Rect {
+    quad[1..].iter().fold(vectorcraft_geom::Rect::from_points(quad[0], quad[0]), |b, p| b.union_pt(*p))
 }
 
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes and screen mode under the rail's

@@ -1277,7 +1277,7 @@ fn snap_to_glyph(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The Font Size field of the bars, named `name`: typed, stepped, scrubbed or picked from the
 /// presets, in the type unit, blank where the selected text's sizes differ.
-fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
+fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, name: &'static str) {
     let unit = type_unit(app);
     let scale = unit_scale(unit);
     let units = Env::of(ui).units();

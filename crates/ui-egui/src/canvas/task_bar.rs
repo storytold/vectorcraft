@@ -5,7 +5,7 @@ use craft::theme::Srgba;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::TaskBar;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::PanelRow;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
@@ -454,8 +454,6 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
     let before = local;
     let paints = chip_paints(app, ui.ctx());
     let has_shape = offer.shape.is_some();
-    // PLAN: `CanvasCache::shape_properties_open` is assumed (hub-w1): the Shape Properties popover's open state.
-    let mut shape_open = app.canvas.shape_properties_open;
     let mut run: Option<(&'static str, serde_json::Value)> = None;
     let mut show_swatches = false;
     let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local)).more_rows(more_rows(&offer)).show(
@@ -508,15 +506,11 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             && let NodeKind::Path { live: Some(live), .. } = &shape.kind
                         {
                             // The shape's properties in a popover that stays open while its fields and its
-                            // Corner dropdown are used.
+                            // Corner dropdown are used; the popover keeps its own open state.
                             let props = IconButton::new(IconSpec::svg(IconId::new("shapes"))).label(tl!("Shape Properties")).show(ui);
-                            if props.clicked() {
-                                shape_open = !shape_open;
-                            }
-                            let _ =
-                                Popover::new(tl!("Shape Properties"), Bind::bound(&mut shape_open)).opened_by(&props.response).show(ui, |ui, _| {
-                                    crate::panels::transform::live_shape_rows(app, ui, shape, live, true);
-                                });
+                            let _ = Popover::new(tl!("Shape Properties"), Bind::kept())
+                                .overlay(|overlay| overlay.opened_by(&props.response, Trigger::Click))
+                                .show(ui, |ui, _| crate::panels::transform::live_shape_rows(app, ui, shape, live, true));
                         } else {
                             // The Lock button is off in isolation mode, as Object › Lock › Selection is.
                             let lock = IconButton::new(IconSpec::svg(IconId::new("lock")))
@@ -533,7 +527,6 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
         },
     );
     let (rect, hide) = (shown.output.rect, shown.output.hide);
-    app.canvas.shape_properties_open = shape_open;
     if local != before {
         app.ui.task_bar_place.set(key, local);
     }

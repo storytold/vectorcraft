@@ -44,7 +44,6 @@ fn with_source(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn drop_at(panel: &mut Harness, drag: PanelDrag, at: Pos2) {
     CARRIED.with(|carried| *carried.borrow_mut() = Some(drag));
     panel.frame();
-    // PLAN: assumed `Panel::drag_to(&mut self, from: &str, to: Pos2, mods: Modifiers)` on op.A15 (object-panels-w8): the release at a point of a row, not its centre.
     panel.drag_to(SOURCE, at, Modifiers::NONE);
     panel.frame();
 }

@@ -69,6 +69,9 @@ pub(crate) struct Runtime {
     rails: Tracked<BTreeSet<PanelKey>>,
     /// What each tool rail of the layout reads across passes, by its panel.
     pub(crate) rail_models: HashMap<String, crate::toolbar::RailModel>,
+    /// A panel just floated out of a tool rail, whose window takes over the held press on the next
+    /// pass, with the pointer at this point inside it ([`continue_move`]).
+    hand_over: Option<(String, egui::Vec2)>,
 }
 
 /// `ui.docking`: the layout in use, the hidden panels, the open flyout, the focused panel, the
@@ -1115,6 +1118,13 @@ fn raise(app: &VectorcraftApp, ctx: &egui::Context, panel: &str) {
     }
 }
 
+/// The floating window holding `panel` takes over the held primary press on the next pass, with the
+/// pointer at `grab` inside it: a panel floated out of a tool rail mid-drag follows the pointer and
+/// docks where the release lands.
+pub(crate) fn continue_move(app: &mut VectorcraftApp, panel: &str, grab: egui::Vec2) {
+    app.dock_rt.hand_over = Some((panel.to_owned(), grab));
+}
+
 /// Draw the canvas, the tool rails and the panels below the bars, and apply what the user did to
 /// them. Tab and Shift+Tab hide the panels through the window's shell; Shift+Tab keeps the rails.
 /// Presentation Mode hides every panel and rail; the canvas stays.
@@ -1135,11 +1145,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let specs = std::mem::take(&mut app.dock_rt.specs);
     let rails = std::mem::take(&mut app.dock_rt.rails);
     let hide = if presenting { HidePanels::All } else { HidePanels::Except(&rails) };
+    let hand_over = app.dock_rt.hand_over.take();
     let output = {
         let mut panels = Panels { app: &mut *app };
-        let area = DockArea::new("Dock", Bind::bound(&mut workspace), &specs, &mut panels, DockConfig::default())
+        let mut area = DockArea::new("Dock", Bind::bound(&mut workspace), &specs, &mut panels, DockConfig::default())
             .hide(hide)
             .flyout(Bind::bound(&mut flyout));
+        if let Some((panel, grab)) = hand_over {
+            area = area.continue_move(panel, grab);
+        }
         if auto_collapse { area.auto_collapse().show(ui) } else { area.show(ui) }
     };
     app.dock_rt.specs = specs;

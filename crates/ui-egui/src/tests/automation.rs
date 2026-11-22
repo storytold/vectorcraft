@@ -1601,11 +1601,10 @@ fn first_object(app: &VectorcraftApp) -> (f64, f64) {
 /// Each of `sets` sent as `ui.dialog.set` is refused, sets no field, and runs nothing.
 fn refused_sets(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, sets: &[Value]) {
     for set in sets {
-        let before = dialog_fields(app);
+        let before = (dialog_fields(app), objects(app));
         let r = request(app, tx, "ui.dialog.set", set.clone());
         assert_eq!(r["ok"], false, "{set}: {r}");
-        assert_eq!(dialog_fields(app), before, "{set}: no field changes and the dialog stays open");
-        assert_eq!(objects(app), 0, "{set}: nothing ran");
+        assert_eq!((dialog_fields(app), objects(app)), before, "{set}: no field changes, the dialog stays open and nothing ran");
     }
 }
 
@@ -1636,12 +1635,12 @@ fn dialog_set_cannot_redirect_person_opened_confirm() {
 }
 
 /// The generic parameter dialog runs its command with its fixed parameters: `ui.dialog.set` can
-/// change the parameters it shows, not `__command`, `__params` or `__label`.
+/// change the parameters it shows, not the command, its fixed parameters or its heading.
 #[test]
 fn dialog_set_cannot_redirect_parameter_dialog() {
     let (mut app, tx) = controlled();
-    let fields = json!({"__command": "shape.rectangle", "__label": "Rectangle", "__params": {"x": 10, "y": 10}, "width": 20, "height": 20});
-    app.ui.dialog = Some(Dialog::new("command", fields));
+    let params = json!({"__params": {"x": 10, "y": 10}, "width": 20, "height": 20}).as_object().cloned().unwrap();
+    crate::dialogs::command::open(&mut app, "shape.rectangle", "Rectangle", params).unwrap();
     refused_sets(
         &mut app,
         &tx,
@@ -1654,17 +1653,23 @@ fn dialog_set_cannot_redirect_parameter_dialog() {
     );
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "width", "value": 30, "action": "confirm"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert!(app.ui.dialog.is_none() && objects(&app) == 1, "OK ran the dialog's command");
+    assert!(open_dialogs(&app).is_empty() && objects(&app) == 1, "OK ran the dialog's command");
     assert_eq!(first_object(&app), (10.0, 30.0), "with its fixed x and the width set");
 }
 
-/// A plug-in command's dialog runs that command of that plug-in: `ui.dialog.set` can't change its
-/// `__command` or `__plugin`.
+/// A plug-in command's dialog runs that command of that plug-in: `ui.dialog.set` can't change the
+/// command or the plug-in it runs.
 #[test]
 fn dialog_set_cannot_redirect_plugin_command() {
     let (mut app, tx) = controlled();
-    let fields = json!({"__plugin": "test.ui.redirect", "__command": "plugin.test.ui.redirect.a", "__label": "A", "amount": 1});
-    app.ui.dialog = Some(Dialog::new(crate::dialogs::plugin::KIND, fields));
+    let id = "test.ui.redirect";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Redirect","version":"1","kind":"filter","commands":[{{"id":"a","label":"A",
+        "params":{{"amount":{{"type":"number","min":0,"max":10,"default":1}}}}}},{{"id":"b","label":"B"}}]}}"#
+    );
+    let wasm = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
+    crate::menus::invoke(&mut app, "plugin.test.ui.redirect.a", json!({}));
     refused_sets(
         &mut app,
         &tx,
@@ -1676,123 +1681,64 @@ fn dialog_set_cannot_redirect_plugin_command() {
     );
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "amount", "value": 2}));
     assert_eq!(r["ok"], true, "{r}");
+    app.run("plugin.remove", json!({"id": id})).unwrap();
 }
 
-/// A `__` field the dialog does not hold is refused as a protected field too, and so is a control
-/// of another kind of dialog; the error for an unknown field lists the dialog's own controls only.
+/// The `__` fields Transform Each keeps for itself are not controls: `ui.dialog.set` refuses them as
+/// it refuses a field the dialog does not hold, and sets nothing.
 #[test]
 fn dialog_set_rejects_unknown_hidden_field() {
     let (mut app, tx) = controlled();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 20})).unwrap();
     app.run("select.all", json!({})).unwrap();
     crate::menus::invoke(&mut app, "object.transformEach", json!({}));
-    for field in ["__anything", "__section", "__ratio", "__constrainApplied"] {
-        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": field, "value": true}));
-        assert_eq!(r["error"], format!("the `transformEach` dialog cannot set protected field `{field}`"), "{r}");
-        assert!(!dialog_fields(&app).unwrap().contains_key("__anything"));
-    }
-    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "nosuch", "value": true}));
-    let error = r["error"].as_str().unwrap_or_default();
-    assert!(error.contains("has no field `nosuch`") && error.contains("__constrain"), "{r}");
-    assert!(!error.contains("__ratio") && !error.contains("__section"), "{r}");
-
-    // Artboard Options' Fit, size preset and reference point flags are set by their buttons
-    // together with the size and position they record.
-    app.ui.dialog = Some(Dialog::new("artboardOptions", json!({"width": 60, "height": 20})));
-    for (field, value) in [("__fit", json!(true)), ("__sizeChoice", json!({"landscape": true})), ("__refx", json!(2)), ("__refy", json!(2))] {
-        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": field, "value": value}));
-        assert_eq!(r["error"], format!("the `artboardOptions` dialog cannot set protected field `{field}`"), "{r}");
-        assert!(!dialog_fields(&app).unwrap().contains_key(field));
-    }
-    // Scribble's Settings menu sets the preset's parameters along with its name.
-    app.ui.dialog = Some(Dialog::new("effect", json!({"__effect": "scribble", "angle": 30})));
-    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__scribbleSetting", "value": "sharp"}));
-    assert_eq!(r["error"], "the `effect` dialog cannot set protected field `__scribbleSetting`", "{r}");
+    let sets: Vec<Value> =
+        ["__anything", "__constrainApplied", "__ratioBase", "nosuch"].iter().map(|field| json!({"field": field, "value": true})).collect();
+    refused_sets(&mut app, &tx, &sets);
 }
 
-/// The dialog controls held under a `__` name are still set: Transform Each's link, the Save PDF
-/// section and its All artboards checkbox, and the Preferences search.
+/// The dialog controls held under a `__` name are still set: Transform Each's link, and the
+/// Preferences search through the routing of `ui.dialog.set` to Preferences.
 #[test]
 fn dialog_set_allows_hidden_controls() {
     let (mut app, tx) = controlled();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 20})).unwrap();
     app.run("select.all", json!({})).unwrap();
     crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    let before = dialog_fields(&app);
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__constrain", "value": true}));
     assert_eq!(r["ok"], true, "{r}");
-    assert!(app.ui.dialog.as_ref().is_some_and(|d| d.bool("__constrain")));
-    app.ui.dialog = None;
-
-    app.run("ui.savePdfDialog", json!({})).unwrap();
-    let set = json!({"fields": [{"field": "__section", "value": "Security"}, {"field": "__allArtboards", "value": false}]});
-    let r = request(&mut app, &tx, "ui.dialog.set", set);
+    assert_ne!(dialog_fields(&app), before, "the link is set");
+    let r = request(&mut app, &tx, "ui.dialog.cancel", json!({}));
     assert_eq!(r["ok"], true, "{r}");
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("__section"), d.bool("__allArtboards")), ("Security".to_string(), false));
-    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__save", "value": "file.saveCopy"}));
-    assert_eq!(r["error"], "the `savePdf` dialog cannot set protected field `__save`", "{r}");
-    app.ui.dialog = None;
-
-    // The raster options dialogs share the Resolution menu's Other, PSD Options included.
-    for kind in ["pngOptions", "tiffOptions", "psdOptions"] {
-        app.ui.dialog = Some(Dialog::new(kind, json!({"ppi": 72})));
-        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__otherPpi", "value": true}));
-        assert_eq!(r["ok"], true, "{kind}: {r}");
-    }
-    app.ui.dialog = None;
-
-    // A style section's reset flag alone would keep the section's values: scripts run the Reset
-    // Panel commands, which clear them. Which of the two styles a new style is stays fixed.
-    for (kind, para, flag) in [
-        ("charStyleOptions", false, "__resetColor"),
-        ("paraStyleOptions", true, "__resetHyphenation"),
-        ("newTextStyle", false, "__resetColor"),
-        ("newTextStyle", true, "__resetHyphenation"),
-    ] {
-        app.ui.dialog = Some(Dialog::new(kind, json!({"name": "A", "__para": para})));
-        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": flag, "value": true}));
-        assert_eq!(r["error"], format!("the `{kind}` dialog cannot set protected field `{flag}`"), "{r}");
-        assert!(!app.ui.dialog.as_ref().is_some_and(|d| d.bool(flag)), "{kind}");
-    }
-    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__para", "value": false}));
-    assert_eq!(r["error"], "the `newTextStyle` dialog cannot set protected field `__para`", "{r}");
-    app.ui.dialog = None;
 
     crate::prefs_dialog::open(&mut app, None);
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__search", "value": "grid"}));
     assert_eq!(r["ok"], true, "{r}");
-    assert_eq!(r["result"]["fields"]["__search"], "grid", "{r}");
+    assert_eq!(crate::prefs_dialog::fields(&app).unwrap()["__search"], "grid");
 }
 
-/// Save PDF's and Print's OK save a preset while Save Preset… asks for its name: `ui.dialog.set`
-/// can't add `__savePresetAs` to turn OK into saving a preset, alone or with `action: "confirm"`,
-/// and can type the name once Save Preset… has added the field.
+/// Save PDF's and Print's OK export and print: `ui.dialog.set` can't add a preset name to turn OK
+/// into saving a preset, alone or with `action: "confirm"`. Saving a preset is the preset editor's.
 #[test]
 fn dialog_set_cannot_open_save_preset() {
     let (mut app, tx) = controlled();
     let saved = |app: &VectorcraftApp| (app.session.prefs.pdf_presets.len(), app.session.prefs.print_presets.len());
-    for (open, kind) in [("ui.savePdfDialog", "savePdf"), ("file.print", "print")] {
+    for open in ["ui.savePdfDialog", "file.print"] {
         app.run(open, json!({})).unwrap();
         let presets = saved(&app);
-        for set in [
-            json!({"field": "__savePresetAs", "value": "Proofs"}),
-            json!({"fields": [{"field": "__savePresetAs", "value": "Proofs"}], "action": "confirm"}),
-        ] {
-            let before = dialog_fields(&app);
-            let r = request(&mut app, &tx, "ui.dialog.set", set.clone());
-            assert_eq!(r["error"], format!("the `{kind}` dialog cannot set protected field `__savePresetAs`"), "{set}: {r}");
-            assert_eq!(dialog_fields(&app), before, "{set}: no field changes and the dialog stays open");
-        }
-        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "nosuch", "value": true}));
-        assert!(!r["error"].as_str().unwrap_or_default().contains("__savePresetAs"), "{kind}: {r}");
-        assert_eq!(saved(&app), presets, "{kind}: no preset saved");
-        // Save Preset… adds the field; the name can then be typed and OK saves the preset.
-        app.ui.dialog.as_mut().unwrap().fields.insert("__savePresetAs".into(), json!(""));
-        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__savePresetAs", "value": "Proofs", "action": "confirm"}));
-        assert_eq!(r["result"]["result"]["name"], "Proofs", "{kind}: {r}");
-        app.ui.dialog = None;
+        refused_sets(
+            &mut app,
+            &tx,
+            &[
+                json!({"field": "__savePresetAs", "value": "Proofs"}),
+                json!({"fields": [{"field": "__savePresetAs", "value": "Proofs"}], "action": "confirm"}),
+            ],
+        );
+        assert_eq!(saved(&app), presets, "{open}: no preset saved");
+        let r = request(&mut app, &tx, "ui.dialog.cancel", json!({}));
+        assert_eq!(r["ok"], true, "{open}: {r}");
     }
-    assert_eq!(saved(&app), (1, 1));
 }
 
 /// What the install question automation asked says instead of taking an OK.

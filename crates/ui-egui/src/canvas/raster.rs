@@ -315,7 +315,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
     let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);
-    let key = cache_key(app, ui, st, env.tokens.tokens(), &view, (w, h, ppp), (pixel, smooth_images, plugins, placed));
+    let key = cache_key(app, ui.ctx(), st, env.tokens.tokens(), &view, (w, h, ppp), (pixel, smooth_images, plugins, placed));
     // Placed documents' bitmaps are being made: draw again when they are ready.
     if vectorcraft_render::placed_document::busy() {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
@@ -379,7 +379,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
 /// What the cached frame depends on.
 pub(super) fn cache_key(
     app: &VectorcraftApp,
-    ui: &Ui,
+    ctx: &egui::Context,
     st: &vectorcraft_engine::DocState,
     t: &Tokens,
     v: &CanvasView,
@@ -416,7 +416,7 @@ pub(super) fn cache_key(
         // Appearance of Black › On Screen: Display All Blacks as Rich Black.
         rich_black: app.session.prefs.black_on_screen == "rich",
         // A tool's drag on the canvas, during an interaction (not a dialog's preview).
-        dragging: app.session.in_interaction() && in_gesture(app, ui.ctx()),
+        dragging: app.session.in_interaction() && in_gesture(app, ctx),
         trace_source: app.ui.trace_hold_source.clone(),
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),

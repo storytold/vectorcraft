@@ -16,6 +16,7 @@ use super::{FunctionKey, files, key_error};
 use crate::VectorcraftApp;
 use crate::dialogs::action_batch::BatchDialog;
 use crate::dialogs::action_insert_menu_item::InsertMenuItemDialog;
+use crate::dialogs::action_new::NewActionDialog;
 use crate::dialogs::action_select_object::SelectObjectDialog;
 use crate::dialogs::action_set_options::SetOptionsDialog;
 use crate::dialogs::action_stop::RecordStopDialog;
@@ -192,6 +193,14 @@ fn retarget_set_dialogs(app: &VectorcraftApp, f: impl Fn(usize) -> Option<usize>
                 }
             }
         }
+        if let Some(d) = host.get_mut::<NewActionDialog>() {
+            match f(*d.set_mut()) {
+                Some(set) => *d.set_mut() = set,
+                None => {
+                    host.cancel::<NewActionDialog>(&ctx);
+                }
+            }
+        }
         if let Some(d) = host.get_mut::<SetOptionsDialog>()
             && let Some(held) = d.set
         {
@@ -214,6 +223,7 @@ fn set_dialog_open(app: &VectorcraftApp) -> bool {
                 || placed(host.get::<InsertMenuItemDialog>().map(|d| &d.target))
                 || placed(host.get::<SelectObjectDialog>().map(|d| &d.target))
                 || host.is_open::<BatchDialog>()
+                || host.is_open::<NewActionDialog>()
                 || host.get::<SetOptionsDialog>().is_some_and(|d| d.set.is_some())
         })
     })

@@ -105,7 +105,7 @@ pub struct CanvasCache {
     /// How many objects Start Global Edit would edit, for the key the Properties panel builds.
     pub(crate) global_edit_count: Option<(crate::panels::properties::GlobalEditKey, usize)>,
     /// The selected live shape's angle, for (document uid, revision, kind of shape).
-    pub shape_angle: Option<((u64, u64, std::mem::Discriminant<craft::draw::ui::shape::LiveShape>), Option<f64>)>,
+    pub shape_angle: Option<((u64, u64, std::mem::Discriminant<vectorcraft_doc::LiveShape>), Option<f64>)>,
     /// The Image Trace presets, for the session's preset revision.
     pub(crate) trace_presets: Option<(u64, Arc<crate::panels::image_trace::PresetList>)>,
     /// What the Image Trace panel traces, for (document uid, revision).

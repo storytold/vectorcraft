@@ -1,15 +1,14 @@
 //! Headless frames of the Stroke panel's reach: Units > Stroke in the panel, the Control bar and
 //! the Properties panel, mixed values shown blank, Align Stroke for open paths and type (also
 //! while the Type tool edits it), and the weight presets.
-// PLAN: assumed `Panel::click_part(name, part, mods)` parts "step up" and "step down" for the step arrows (SG-57).
+// PLAN: the step arrows' part keys (`NumberField`'s `STEP_UP`, `STEP_DOWN`) are private; `step` names them once they are public (SG-57).
 
 use egui::Modifiers;
 use serde_json::json;
 
-use crate::tests::panel_harness::Panel;
-// PLAN: assumed path of object-panels-w8's `Panel` harness (op.A15).
 use super::tests_appearance::{app_with_rect, run};
 use super::*;
+use crate::tests::panel_harness::Panel;
 
 type Show = fn(&mut VectorcraftApp, &mut Ui);
 

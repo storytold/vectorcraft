@@ -177,6 +177,8 @@ pub struct VectorcraftApp {
     pub(crate) channel: Option<ControlChannel>,
     /// Where a control-channel Rotate View drag began, kept between its requests.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
+    /// The `ui.pointer` replies that wait for the edit their gesture started on another thread.
+    pub(crate) pointer_waits: Vec<control::PointerWait>,
     /// The egui context the UI's textures were uploaded to (0: none yet; see
     /// [`Self::adopt_context`]).
     context: u64,
@@ -282,7 +284,8 @@ pub struct VectorcraftApp {
     pub(crate) flatten_dialog: dialogs::flatten::FlattenDialog,
     /// The Print dialogs' records.
     pub(crate) print_dialog: dialogs::print::PrintDialogs,
-    // PLAN: export-w17 asks for the open Save PDF record's field (ex.A12), but no row in this set's bundle gives its name or type; export-w17 adds it.
+    /// The Save PDF dialog's record, while it is open.
+    pub(crate) save_pdf: Option<dialogs::save_pdf::SavePdfOpen>,
     /// The open dialogs of the Object menu.
     pub(crate) object_dialogs: dialogs::object_dialogs::ObjectDialogs,
     /// The open dialogs of the colour area.

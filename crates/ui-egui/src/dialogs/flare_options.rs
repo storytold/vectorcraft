@@ -17,7 +17,7 @@
 
 // PLAN: the `craft_ui` paths and `LivePreview`'s home (`form`) are assumed; `general_lengths` is cv.B5b's.
 use craft::ui::contract::Bind;
-use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
@@ -86,9 +86,6 @@ pub fn open(app: &mut VectorcraftApp, at: Option<Point>) -> Value {
     }
     let defaults = form::fields_of(&rows, &defaults);
     let previews = at.is_some() || edit.is_some();
-    let build = move |fields: &mut DialogFields| {
-        ParamDialog::new(KIND, tl!("Flare Tool Options"), params(lengths)).values(Bind::bound(fields)).previews(previews).reset_to(defaults.clone())
-    };
     let Some(ctx) = app.ui_ctx.clone() else {
         app.status("no window");
         return Value::Null;
@@ -107,7 +104,9 @@ pub fn open(app: &mut VectorcraftApp, at: Option<Point>) -> Value {
         }
     });
     let held = HeldOptions { parent: None, cancel: Some(cancel) };
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, build);
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Flare Tool Options"), params(lengths)).values(Bind::bound(fields)).previews(previews).reset_to(defaults.clone())
+    });
     match open_held_with(app, dialog, ok, held) {
         Some(id) => app.object_dialogs.flare = Some(Open { id, click: at, edit, preview: previews.then(LivePreview::default) }),
         None => app.status("no window"),

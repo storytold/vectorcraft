@@ -332,13 +332,13 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
 
 /// The weight field in a row labelled `label` with the side label `side`: the output of the number field, none when
 /// the row's body did not run.
-fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
+fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &'static str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
     Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")
 /// opens the Stroke panel in a popover under it, and whose drag scrubs the weight.
-pub(crate) fn link_field(app: &mut VectorcraftApp, ui: &mut Ui, label: &str, weight: Option<f64>) {
+pub(crate) fn link_field(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, weight: Option<f64>) {
     let side = SideLabel::new().scrub(true).link().tooltip(TooltipSpec::new(tl!("Stroke options")));
     let mut open = app.ui.stroke_panel.link_open;
     if let Some(out) = weight_row(app, ui, label, side, weight) {
@@ -603,7 +603,7 @@ pub(crate) fn profile_select(app: &mut VectorcraftApp, ui: &mut Ui) {
             picked = e.id.to_string();
         }
         // A saved profile's name is the user's.
-        entries.push(Entry::new(e.id.to_string(), super::label_or_name(e.label, e.built_in)));
+        entries.push(Entry::new(e.id.to_string(), super::label_or_name(e.label, e.built_in).to_string()));
         shapes.push((e.id.to_string(), silhouette(e.points).map(<[_]>::to_vec)));
     }
     let tip = TooltipSpec::new(tl!("Variable Width Profile"))

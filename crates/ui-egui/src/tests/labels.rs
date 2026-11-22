@@ -1,6 +1,7 @@
 //! Neutral wording in menus and panels: what users read names VectorCraft's own features.
 
 use craft::menu::Node;
+use craft::ui::menu::PanelRow;
 use egui::epaint::Shape;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -315,10 +316,22 @@ fn stroke_profiles_have_descriptive_names() {
 
 #[test]
 fn swatches_menu_offers_save_swatch_library() {
-    let app = app();
-    // PLAN: assumed `panels::swatches::menu_rows(&VectorcraftApp)` lists the menu's rows, each with a `label`
-    let labels: Vec<String> = crate::panels::swatches::menu_rows(&app).iter().map(|row| row.label.to_string()).collect();
-    assert!(labels.iter().any(|l| l == "Save Swatch Library…"), "{labels:?}");
+    /// The labels of the command rows: a UI command's, else an engine command's.
+    fn command_labels(rows: &[PanelRow], out: &mut Vec<&'static str>) {
+        for row in rows {
+            match row {
+                PanelRow::Command(c) | PanelRow::Alternated(c, _) => {
+                    let ui = menus::UI_COMMANDS.iter().find(|u| u.0 == c.id).map(|u| u.1);
+                    out.extend(ui.or_else(|| vectorcraft_engine::find_command(&c.id).map(|e| e.label)));
+                }
+                PanelRow::Submenu(_, rows) => command_labels(rows, out),
+                _ => {}
+            }
+        }
+    }
+    let mut labels = vec![];
+    command_labels(&crate::panels::swatches::menu_rows(&app()), &mut labels);
+    assert!(labels.contains(&"Save Swatch Library…"), "{labels:?}");
     assert!(!labels.iter().any(|l| l.contains("ASE")), "{labels:?}");
 }
 

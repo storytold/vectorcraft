@@ -12,7 +12,10 @@
 //! `swatches`, `library`). `stroke`, `artboard` and `color` come from the opener.
 
 use std::hash::Hash;
+use std::sync::Arc;
 
+use craft::cms::Profile;
+use craft::cms::convert::CmykConverter;
 use craft::color_ui::ui::{ColorPickerDialog, PickedColor, PickerLibrary, PickerSwatches};
 use craft::theme::Srgba;
 use craft::ui::dialog::{DialogId, DialogResult};
@@ -26,8 +29,8 @@ use vectorcraft_engine::cmd::swatchlib;
 
 use super::preview::LivePreview;
 use crate::panels::color::{color_of_values, gamut, model_values};
-use crate::panels::color_json;
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries};
+use crate::panels::{color_json, srgba};
 use crate::{VectorcraftApp, screen_color};
 
 /// What a picker's OK writes.
@@ -77,11 +80,6 @@ fn proxy_color(app: &VectorcraftApp, stroke: bool) -> Color {
     }
 }
 
-/// `color` as the picker's encoded sRGB.
-fn srgba_of(color: &Color) -> Srgba {
-    Srgba::from_hex(&color.to_hex()).unwrap_or(Srgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 })
-}
-
 /// The colour a pick stands for in the document: its own model values when it has them (CMYK inks,
 /// Lab outside sRGB), else the display sRGB in the working RGB space.
 fn color_of(picked: &PickedColor) -> Color {
@@ -107,7 +105,7 @@ pub(crate) fn open_picker(app: &VectorcraftApp) -> Option<DialogId> {
 /// colours only, tints as their colour.
 fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
     let solid = |swatches: &[vectorcraft_color::Swatch]| -> Vec<(Label, Srgba)> {
-        swatches.iter().filter_map(|s| Some((Label::from(s.name.as_str()), srgba_of(&s.paint.color()?)))).collect()
+        swatches.iter().filter_map(|s| Some((Label::from(s.name.clone()), srgba(&s.paint.color()?)))).collect()
     };
     let mut libraries = Vec::new();
     if let Some(st) = app.session.active() {
@@ -120,9 +118,16 @@ fn swatch_view(app: &VectorcraftApp) -> PickerSwatches {
         let swatches = swatchlib::library(&app.session, &lib.id)
             .map(|(_, l)| solid(&l.swatches.iter().chain(l.groups.iter().flat_map(|g| g.swatches.iter())).cloned().collect::<Vec<_>>()))
             .unwrap_or_default();
-        libraries.push(PickerLibrary::new(Label::from(lib.name.as_str()), swatches));
+        libraries.push(PickerLibrary::new(Label::from(lib.name.clone()), swatches));
     }
     PickerSwatches::new(libraries, tl!("Open a document to see its swatches."))
+}
+
+/// The working CMYK profile as the picker's CMYK converter, so its CMYK fields follow the document's
+/// inks; `None` (the picker's built-in coated CMYK) when the profile can't link to sRGB.
+fn working_cmyk() -> Option<CmykConverter> {
+    let bytes = cms::icc_bytes(&cms::active().settings().cmyk).ok()?;
+    CmykConverter::new(Arc::new(Profile::parse(&bytes).ok()?)).ok()
 }
 
 /// `ui.colorPicker {stroke?, artboard?, color?}`: open the picker for the fill (or stroke) proxy,
@@ -145,7 +150,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (None, None) => proxy_color(app, stroke),
     };
     let dialogs = app.dialogs().ok_or("no window")?;
-    let start = srgba_of(&color);
+    let start = srgba(&color);
     let mut dialog = ColorPickerDialog::new(
         match (artboard, stroke) {
             (Some(_), _) => "artboard",
@@ -159,9 +164,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     .add_to_swatches(false)
     .gamut(gamut(app))
     .swatch_view(swatch_view(app));
-    // PLAN: assumed `cms::active().cmyk_converter() -> &CmykConverter`; the Color Picker's CMYK fields follow the document's profile.
-    if app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk) {
-        dialog = dialog.cmyk(&cms::active().cmyk_converter());
+    if app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk)
+        && let Some(converter) = working_cmyk()
+    {
+        dialog = dialog.cmyk(&converter);
     }
     if matches!(color, Color::Cmyk { .. } | Color::Lab { .. }) {
         dialog = dialog.kept(model_values(&color));

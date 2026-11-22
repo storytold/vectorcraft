@@ -20,7 +20,7 @@ use craft::color_ui::{CmykModel, GrayModel, not_web_safe, web_safe};
 use craft::draw::ui::GradientSwatch;
 use craft::theme::{ColorModel, HsbModel, LabModel, ModelValues, RgbModel, Rgba, Srgba, kept_or_converted};
 use craft::ui::choice::Swatch;
-use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
 use craft::ui::form::Field;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};

@@ -568,6 +568,7 @@ fn active_doc(app: &VectorcraftApp) -> Option<u64> {
 /// which asks for the next frame itself)
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let doc = active_doc(app);
+    let pass = pass_now(app);
     let playing = app.ui.action_playing.as_mut()?;
     if playing.stop.is_some() {
         show_stop_message(app);
@@ -578,7 +579,7 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     }
     let pause = f64::from(playing.options.seconds);
     if playing.options.speed == PlaybackSpeed::Pause {
-        if playing.next_at.is_none() && playing.played_in.is_some_and(|pass| pass_now(app) == Some(pass)) {
+        if playing.next_at.is_none() && playing.played_in.is_some_and(|played| pass == Some(played)) {
             return Some(0.0);
         }
         let due = *playing.next_at.get_or_insert(now + pause);

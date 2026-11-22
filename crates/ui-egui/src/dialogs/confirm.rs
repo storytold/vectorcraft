@@ -245,11 +245,14 @@ pub(crate) fn pump_missing_font(app: &mut VectorcraftApp, _ctx: &Context) {
     answer_missing_font_edit(app, &token.unwrap_or(Value::Null), ok);
 }
 
-/// The command and params of the confirmation open now, if one is.
+/// The confirmation open now, if one is: its message and detail as shown, and the command OK runs.
 #[cfg(test)]
-// PLAN: the prompt exposes no message text, so the question's words cannot be read back.
-pub(crate) fn open_question(app: &VectorcraftApp) -> Option<(String, Value)> {
-    app.dialogs()?.with(|host| host.get::<Question>().and_then(|q| q.0.tag_as::<(String, Value)>().cloned()))
+pub(crate) fn open_question(app: &VectorcraftApp) -> Option<(String, String, String)> {
+    app.dialogs()?.with(|host| {
+        let prompt = &host.get::<Question>()?.0;
+        let (command, _) = prompt.tag_as::<(String, Value)>()?;
+        Some((prompt.shown_message(&app.host), prompt.shown_paragraphs(&app.host).join("\n"), command.clone()))
+    })
 }
 
 /// The message open now, if one is: its message and detail.

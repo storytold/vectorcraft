@@ -12,7 +12,7 @@ use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::canvas::{CanvasTool, ToolAction, ToolContext, ToolPath, ToolPointer};
-use craft::ui::choice::{Segmented, Swatch, SwatchTable};
+use craft::ui::choice::{CellMarks, Segmented, Swatch, SwatchTable};
 use craft::ui::contract::{
     Bind, CollectionEvent, Entry, Props as _, ReorderRule, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Trigger,
 };
@@ -36,7 +36,7 @@ use super::{
     in_group, keeps_rows, mode_menu, move_bar, move_color, prominent_parts, remove_color, removed, set_base, shade_at, sliders, to_color, wheel_axes,
 };
 use crate::VectorcraftApp;
-use crate::panels::c32;
+use crate::panels::{c32, srgba};
 
 /// The `display` ids: the smooth wheel, the segmented wheel and the colour bars.
 const SMOOTH: &str = "smooth";
@@ -56,30 +56,9 @@ const BAR_ASPECT: u16 = 6;
 /// saturation clicked).
 const MENU_AT: &str = "__wheelMenu";
 
-/// What the Edit tab reads from the app, gathered by the dialog's pump each frame, so the tab itself reads no app.
-pub(super) struct EditData {
-    /// What the colour sliders and the Color Mode menu edit: the first selected row when the tab shows it, else the
-    /// base colour's row.
-    target: SliderTarget,
-}
-
-impl EditData {
-    /// The Edit tab's view of the app for the dialog's fields `d` and its `rows`.
-    pub(super) fn of(app: &VectorcraftApp, d: &Fields, rows: &[Value]) -> EditData {
-        let active = active_rows(rows);
-        let row = edit_slider_row(d, rows, &active, base_row(rows, &active));
-        EditData { target: SliderTarget::at(app, d, rows, row) }
-    }
-}
-
 /// The name of row `row` in the wheel's menus, the bars, the chips and the Prominent Colors bar: "Color N".
 pub(super) fn color_name(row: usize) -> String {
     format!("{} {}", tl!("Color"), row + 1)
-}
-
-/// `c` as the framework's colour.
-fn srgba(c: &Color) -> Srgba {
-    Srgba::from(c32(c))
 }
 
 /// The display `display` names: the smooth wheel unless it names the segmented wheel or the bars.
@@ -92,8 +71,8 @@ fn shown_display(d: &Fields) -> &'static str {
 }
 
 /// The Edit tab. Returns whether the rows changed, and the row whose new colour a colour's menu asked the Color Picker
-/// for (`false`: the picker, not Pick from Swatches).
-// PLAN: the contract passes `data: &EditData`, but `recolor::sliders` (color-w19) takes the whole `Feed`; the tab takes the `Feed` and reads `feed.edit`, so color-w19's call is `edit_tab::show(ui, &mut fields, &feed, &mut rows)`.
+/// for (`false`: the picker, not Pick from Swatches). `feed` is what the pump read of the app, which the sliders share
+/// with the Assign tab.
 pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Value>) -> (bool, Option<(usize, bool)>) {
     let linked = d.bool("linked");
     let active = active_rows(rows);
@@ -103,7 +82,8 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
     let sel = edit_slider_row(d, rows, &active, base);
     let display = shown_display(d);
     let axes = wheel_axes(d);
-    let mut changed = top_row(ui, d, &feed.edit, rows, &active, base);
+    let target = SliderTarget::at(feed, d, rows, sel);
+    let mut changed = top_row(ui, d, &target, rows, &active, base);
     tool_row(ui, d, display, axes);
 
     let shown = sel.and_then(|s| rows.get(s)).and_then(to_color);
@@ -182,7 +162,7 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
 /// The row over the wheel: Harmony Rules, the link of the harmony colours, the New Color Group menu (which files
 /// `__saveGroup` for the pump's `save_group`) and the Color Mode of the sliders. Returns whether a rule gave the rows
 /// new colours.
-fn top_row(ui: &mut Ui, d: &mut Fields, data: &EditData, rows: &mut [Value], active: &[usize], base: Option<usize>) -> bool {
+fn top_row(ui: &mut Ui, d: &mut Fields, target: &SliderTarget, rows: &mut [Value], active: &[usize], base: Option<usize>) -> bool {
     let words = Env::of(ui).words::<HarmonyWords>();
     let rules: Vec<Entry<RuleName>> = RuleName::ALL.iter().map(|&rule| Entry::new(rule, words.rule_name(rule).clone())).collect();
     let rule = d.str("rule");
@@ -223,8 +203,7 @@ fn top_row(ui: &mut Ui, d: &mut Fields, data: &EditData, rows: &mut [Value], act
             })
             .inner
             .flatten();
-        // PLAN: color-w19 — the Color Mode Select is `mode_menu(ui, d: &mut Fields, target: &SliderTarget, global: bool)`, rewritten as a `Select` and shared with the Assign tab.
-        mode_menu(ui, d, &data.target, true);
+        mode_menu(ui, d, target, true);
     });
     let mut changed = false;
     if let Some(rule) = picked {
@@ -452,7 +431,7 @@ fn shade_grid(ui: &mut Ui, c: &Color) -> Option<[f32; 2]> {
         .collect();
     let out = SwatchTable::new(tl!("Select Shade"), &cells)
         .per_row(SHADE_COLS)
-        .marked(move |&at| at == near)
+        .marks(move |&at| CellMarks::default().edge(at == near))
         .tips(true)
         .selection(Bind::given(Selection::default()))
         .show_all(ui);
@@ -501,8 +480,8 @@ fn chips(ui: &mut Ui, d: &mut Fields, rows: &mut [Value], active: &[usize], base
             .show(ui)
             .clicked();
         for (i, color, hex) in &shown {
-            let chip = Swatch::new(color_name(*i), *color).selected(Some(*i) == sel).tooltip(hex.clone());
-            let chip = if Some(*i) == base { chip.marked() } else { chip };
+            let chip =
+                Swatch::new(color_name(*i), *color).selected(Some(*i) == sel).tooltip(hex.clone()).marks(CellMarks::default().edge(Some(*i) == base));
             if chip.show(ui).clicked {
                 chosen = Some(*i);
             }
@@ -598,7 +577,6 @@ impl CanvasTool for ThemePickTool {
 /// Runs `run` with the open Recolor Artwork dialog's [`ThemePickTool`] while its Color Theme Picker is on, then files
 /// the picks the tool released into the dialog's `themePicks` and gives the tool back. Returns whether the picker was
 /// on: the canvas adapter runs the document tool only when it was not.
-// PLAN: color-w19 — `RecolorDialog` holds `theme_tool: ThemePickTool` (`Default`) and declares `pub(crate) mod edit_tab;` so canvas-w20's `tool_adapter::run` reaches this.
 pub(crate) fn with_theme_pick(app: &mut VectorcraftApp, run: impl FnOnce(&mut VectorcraftApp, &mut ThemePickTool)) -> bool {
     let Some(dialogs) = app.dialogs() else { return false };
     let taken =

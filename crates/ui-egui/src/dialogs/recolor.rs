@@ -159,10 +159,10 @@ use vectorcraft_engine::cmd::swatchlib;
 use super::host::{HeldOptions, open_held_with};
 use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::panels::c32;
 use crate::panels::color::{color_of_values, working_rgb};
 use crate::panels::library_panel;
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries, limit_key};
+use crate::panels::{c32, srgba};
 
 /// The dialog kind of Recolor Artwork.
 pub const KIND: &str = "recolor";
@@ -1416,8 +1416,6 @@ struct Feed {
     previewing: bool,
     /// Each row as the dialog shows it.
     rows: Vec<RowFeed>,
-    /// What the Edit tab reads of the app.
-    edit: edit_tab::EditData,
 }
 
 impl Feed {
@@ -1428,15 +1426,13 @@ impl Feed {
         let fixed = [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, tl!(DOCUMENT_SWATCHES))].map(|(k, n)| (k.to_owned(), n.to_owned()));
         let named = libs.iter().map(|l| (l.id.clone(), library_panel::library_name(&l.id, &l.name).to_owned()));
         let libraries = fixed.into_iter().chain(named).collect();
-        let rs = rows(d);
         Feed {
             libraries,
             first_library: libs.first().map(|l| l.id.clone()),
             groups: doc_groups(app),
             other_paints: other_paint_groups(app),
             previewing: app.session.in_interaction(),
-            rows: rs.iter().map(|r| RowFeed::of(app, d, r)).collect(),
-            edit: edit_tab::EditData::of(app, d, &rs),
+            rows: rows(d).iter().map(|r| RowFeed::of(app, d, r)).collect(),
         }
     }
 }
@@ -1589,12 +1585,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
     });
     let Some(mut work) = dialogs.with(|host| host.get_mut_by_id::<RecolorDialog>(id).map(RecolorDialog::take_work)) else { return };
-    // PLAN: the picker opens on its colour fields: `ColorRequest` cannot ask it to start on its swatches view (the
-    // `bool` beside the row; framework gap).
-    let request = work.run(app).and_then(|(row, _)| {
+    // Pick from Swatches opens the picker on its swatches view.
+    let request = work.run(app).and_then(|(row, swatches)| {
         let r = rows(&work.fields).into_iter().nth(row)?;
         let color = to_color(&r).or_else(|| from_colors(&r).first().copied()).unwrap_or_default();
-        Some(ColorRequest::new(row.to_string(), srgba(&color)))
+        let request = ColorRequest::new(row.to_string(), srgba(&color));
+        Some(if swatches { request.on_swatches() } else { request })
     });
     let previewing = preview_params(&work.fields);
     let feed = Feed::of(app, &work.fields);
@@ -1713,6 +1709,8 @@ pub(crate) struct RecolorDialog {
     color_request: Option<ColorRequest>,
     /// The row and colour the picker answered, until the pump gives the row that colour.
     picked: Option<(usize, Srgba)>,
+    /// The Color Theme Picker's canvas tool, which the canvas runs while the picker is on.
+    theme_tool: edit_tab::ThemePickTool,
 }
 
 impl RecolorDialog {
@@ -1728,6 +1726,7 @@ impl RecolorDialog {
             row_menu: None,
             color_request: None,
             picked: None,
+            theme_tool: edit_tab::ThemePickTool::default(),
         }
     }
 
@@ -1923,7 +1922,7 @@ fn body(
     Row::new().wrap(true).show(ui, |ui, _| {
         Stack::new().show(ui, |ui, _| {
             if d.str("tab") == "edit" {
-                let (edited, pick) = edit_tab::show(ui, d, &feed.edit, &mut rs);
+                let (edited, pick) = edit_tab::show(ui, d, feed, &mut rs);
                 changed = edited;
                 if pick.is_some() {
                     filed.picker = pick;
@@ -2013,11 +2012,6 @@ fn set_preset(d: &mut Fields, i: usize, first_library: Option<&str>) {
         }
         _ => {}
     }
-}
-
-/// `c` as the framework's encoded sRGB, as the canvas shows it.
-fn srgba(c: &Color) -> Srgba {
-    Srgba::from(c32(c))
 }
 
 /// `c` as the hex field's value.
@@ -2578,8 +2572,6 @@ fn global_sliders(ui: &mut Ui, d: &mut Fields, sample: Color) {
 /// The color sliders, two to a line: they edit row `row`'s new color (the others keep theirs) in
 /// the mode of [`mode_menu`], or its tint of a spot color of the library. Without a row they are
 /// disabled. Returns true when they changed a row.
-// PLAN: `edit_tab::show` gets only `&EditData` (co.A6), so the Edit tab reaches these sliders only if `EditData`
-// carries what `Feed` gives them (each row's spot and linked color); color-w20 settles which.
 fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Option<usize>) -> bool {
     let target = SliderTarget::at(feed, d, rows, row);
     let mut changed = false;

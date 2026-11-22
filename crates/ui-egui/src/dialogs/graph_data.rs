@@ -914,7 +914,7 @@ mod tests {
             Ok(f.get(path).ok_or("no such file")?.iter().copied().take(max).collect())
         }));
         let scripted = Arc::new(ScriptedFiles::new());
-        app.host = app.host.with_files(scripted.clone());
+        app.host = Arc::new(app.host.with_files(scripted.clone()));
         let mut h = harness(app);
         h.run_steps(4);
         let import = |h: &mut Harness, picked: Picked| {

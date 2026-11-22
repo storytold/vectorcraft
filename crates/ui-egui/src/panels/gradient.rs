@@ -33,13 +33,13 @@ use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Checkbox, Radio, RadioGroup, Segmented, Swatch};
-use craft::ui::contract::{Bind, EditResponse, Entry, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, EditResponse, Entry, MemoProps, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::{Divider, Icon, Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::Notice;
-use craft::ui::patterns::presets::{PresetPicker, PresetRow};
+use craft::ui::patterns::presets::{PresetPicker, PresetRow, PresetSource};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::access::PopupKind;
@@ -58,7 +58,6 @@ use super::{Live, active_paint, live_run, part_hidden, set_part_hidden};
 use crate::VectorcraftApp;
 // PLAN: assumed color-w18's `dialogs::gradient_stop::{open_at(app, index, at: Anchor), Anchor::Screen(Pos2)}` (co.A5).
 use crate::dialogs::gradient_stop::{self, Anchor};
-// PLAN: assumed widgets-w13's `edits::{apply_edits(app, &EditResponse<V>, EditPath, impl FnMut(&mut VectorcraftApp, &V, Live)), EditPath::Preview { label: String, cmd: String }}` (wg.A16).
 use crate::edits::{EditPath, apply_edits};
 // PLAN: assumed widgets-w13's `paint_preview::{paint_face(&GradientPaint) -> FacePaint, paint_rect(&ContentPainterCx, Rect, &Paint)}` (wg.S6).
 use crate::paint_preview::{paint_face, paint_rect};
@@ -379,16 +378,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The edit path of the panel's gestures: previews of `paint.editGradient` in one interaction,
-/// one undo step when the gesture ends.
-fn gradient_path() -> EditPath {
-    EditPath::Preview { label: "Gradient".into(), cmd: "paint.editGradient".into() }
-}
-
 /// Apply a number field's edits to the gradient behind the active proxy through `apply`: previewed
 /// while scrubbed or stepped, one undo step when the gesture ends. A blank value changes nothing.
 fn apply_number(app: &mut VectorcraftApp, edit: &EditResponse<Option<f64>>, mut apply: impl FnMut(&mut VectorcraftApp, f64, Live)) {
-    apply_edits(app, edit, gradient_path(), |app, value: &Option<f64>, phase| {
+    apply_edits(app, edit, EditPath::Preview, |app, value: &Option<f64>, phase| {
         if let Some(v) = *value {
             apply(app, v, phase);
         }
@@ -481,7 +474,7 @@ fn spread_select(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_gr
 const REPEAT_PRESETS: [f64; 6] = [1.0, 2.0, 3.0, 4.0, 5.0, 10.0];
 
 /// A key of the Presets picker: a library (theme) heading its presets, or a preset by name.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, MemoProps)]
 enum PresetKey {
     /// A built-in library, or (`None`) the presets saved with Save Gradient Preset….
     Library(Option<&'static str>),
@@ -497,10 +490,11 @@ fn presets_picker(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPain
     let shown = g.and_then(|g| app.session.gradient_preset_name(&g.gradient)).map(PresetKey::Preset);
     let enabled = crate::menus::enabled(app, "gradient.presets.apply");
     let rows = preset_rows(app);
+    let source = PresetSource::listed(&rows);
     let mut picked = None;
     Row::new().enabled(enabled).show(ui, |ui, _| {
         Text::new(tl!("Presets:")).shade(Shade::Muted).show(ui);
-        picked = PresetPicker::new(tl!("Presets"), Bind::given(shown.clone()), &rows, Bind::kept()).show(ui).picked;
+        picked = PresetPicker::new(tl!("Presets"), Bind::given(shown.clone()), &source, Bind::kept()).show(ui).picked;
     });
     if let Some(PresetKey::Preset(name)) = picked {
         app.run("gradient.presets.apply", json!({ "name": name })).ok();
@@ -780,7 +774,7 @@ fn stops_editor(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_gra
     if events.began() {
         app.ui.gradient_panel.begun = Some(stops.clone());
     }
-    apply_edits(app, &out.edit, gradient_path(), |app, s: &GradientStops, phase| {
+    apply_edits(app, &out.edit, EditPath::Preview, |app, s: &GradientStops, phase| {
         let base = app.ui.gradient_panel.begun.clone().unwrap_or_else(|| stops.clone());
         set_stops_keeping_models(app, &app_stops(&g.gradient, &base, s), None, phase);
     });

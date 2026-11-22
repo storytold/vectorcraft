@@ -79,9 +79,9 @@ fn the_panel_menu_states_follow_selection_recording_and_playback() {
 fn menu_insert_rows_open_their_dialog_on_the_selected_step_the_action_end_or_the_recording() {
     let place = |app: &VectorcraftApp| {
         app.dialogs().unwrap().with(|host| {
-            let stop = host.get::<RecordStopDialog>().map(|d| (d.target.set, d.target.action, Some(d.target.step)));
-            let item = host.get::<InsertMenuItemDialog>().map(|d| (d.target.set, d.target.action, Some(d.target.step)));
-            let object = host.get::<SelectObjectDialog>().map(|d| (d.target.set, d.target.action, Some(d.target.step)));
+            let stop = host.get::<RecordStopDialog>().map(|d| d.target);
+            let item = host.get::<InsertMenuItemDialog>().map(|d| d.target);
+            let object = host.get::<SelectObjectDialog>().map(|d| d.target);
             (stop, item, object)
         })
     };
@@ -95,19 +95,19 @@ fn menu_insert_rows_open_their_dialog_on_the_selected_step_the_action_end_or_the
         run(&mut app, id, &json!({})).unwrap().unwrap();
         let (stop, item, object) = place(&app);
         let opened = stop.or(item).or(object).unwrap_or_else(|| panic!("{id} opens a dialog"));
-        assert_eq!((opened.0, opened.1), (1, 0), "{id}: the end of the selected action");
-        assert_eq!(opened.2, None, "{id}: no step selected");
+        assert_eq!((opened.set, opened.action), (Some(1), Some(0)), "{id}: the end of the selected action");
+        assert_eq!(opened.step, None, "{id}: no step selected");
 
         app.ui.actions_panel.selected = Some(ActionSelection::Step(1, 0));
         run(&mut app, id, &json!({})).unwrap().unwrap();
         let (stop, item, object) = place(&app);
         let opened = stop.or(item).or(object).unwrap();
-        assert_eq!(opened.2, Some(0), "{id}: after the selected step");
+        assert_eq!(opened.step, Some(0), "{id}: after the selected step");
 
         app.ui.recording = Some((1, "New".into(), 0));
         run(&mut app, id, &json!({})).unwrap().unwrap();
         let (stop, item, object) = place(&app);
         let opened = stop.or(item).or(object).unwrap();
-        assert_eq!(opened.2, None, "{id}: a recording takes the step at its end");
+        assert_eq!(opened.step, None, "{id}: a recording takes the step at its end");
     }
 }

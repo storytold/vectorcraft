@@ -10,7 +10,7 @@
 
 use craft::behavior::IconId;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry};
+use craft::ui::contract::{Bind, Entry, Show as _};
 use craft::ui::dialog::dialog_id;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::LengthUnits;
@@ -90,7 +90,6 @@ fn orientation_row(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut Custo
     ];
     let shown = orientation(fields);
     let mut value = shown;
-    // PLAN: assumed `Segmented::show(ui)` answers an output with a `response`.
     let response = Segmented::new(tl!("Orientation:"), Bind::bound(&mut value), &entries).show(ui).response;
     if value != shown {
         fields.set("orientation", FieldValue::Json(json!(value)));

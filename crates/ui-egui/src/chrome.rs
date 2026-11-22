@@ -125,7 +125,7 @@ fn arrange_documents(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Node::Item(item) => {
                     let (id, params) = (item.command.id, item.command.params);
                     let Some((enabled, checked)) = menus::shown_state(state, &id, &params) else { continue };
-                    let mut row = MenuItem::new(crate::i18n::t_id(&id, &item.label)).enabled(enabled);
+                    let mut row = MenuItem::new(menus::shown_label(state, &id, &params, &item.label)).enabled(enabled);
                     if let Some(checked) = checked {
                         row = row.check(checked);
                     }

@@ -6,7 +6,7 @@ use craft::behavior::{CanvasView, PressPhase};
 use craft::ui::canvas::{
     Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
 };
-use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::runtime::env::Env;
 use craft::ui::style::StyleCx;
 use egui::Ui;

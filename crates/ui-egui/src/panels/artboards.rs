@@ -60,7 +60,7 @@ pub(crate) fn art_options(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// An icon button of the Control bar → whether it was clicked.
-fn icon_button(ui: &mut Ui, icon: &'static str, label: &str, enabled: bool) -> bool {
+fn icon_button(ui: &mut Ui, icon: &'static str, label: &'static str, enabled: bool) -> bool {
     IconButton::new(IconId::new(icon)).label(label).enabled(enabled).show(ui).response().clicked()
 }
 

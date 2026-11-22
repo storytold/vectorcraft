@@ -280,9 +280,11 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
     values.insert("tool".into(), json!(tool));
     let fields = form::fields_of(&params(tool, &present), &values);
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let build = {
+    let dialog = {
         let (tool, present) = (tool.to_owned(), present.clone());
-        move |fields: &mut DialogFields| ParamDialog::new(KIND, tool_options::title(&tool), params(&tool, &present)).values(Bind::bound(fields))
+        HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+            ParamDialog::new(KIND, tool_options::title(&tool), params(&tool, &present)).values(Bind::bound(fields))
+        })
     };
     let ok = {
         let (tool, present) = (tool.to_owned(), present);
@@ -292,7 +294,7 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Result<Value, String> {
             tool_options::set_options(app, &tool, values)
         }
     };
-    open_held(app, HostedParamDialog::new(&ctx, KIND, fields, build), ok).ok_or_else(|| "no window".to_string())?;
+    open_held(app, dialog, ok).ok_or_else(|| "no window".to_string())?;
     Ok(json!({ "dialog": KIND }))
 }
 

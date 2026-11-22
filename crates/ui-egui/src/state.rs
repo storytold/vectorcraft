@@ -453,10 +453,10 @@ pub struct UiState {
     #[serde(skip)]
     // PLAN: assumed `crate::panels::graphic_styles::GraphicStylesPanel` (ap.AS17 names no type; appearance-w10).
     pub graphic_styles_panel: crate::panels::graphic_styles::GraphicStylesPanel,
-    /// The symbols the Symbols panel has picked (Select All Unused, a click), by name.
+    /// The symbols the Symbols panel has picked (Select All Unused, a click), by name, with the uid
+    /// of the document they were picked in.
     #[serde(skip)]
-    // PLAN: assumed `Vec<String>` (ap.AS17 names no type; appearance-w11 replaces the `sym-unused` key with it).
-    pub symbol_picks: Vec<String>,
+    pub symbol_picks: (u64, Vec<String>),
     /// The Brushes panel's multi-selection and the click it belongs to: another document, other
     /// objects or another current brush ends it.
     #[serde(skip)]
@@ -467,10 +467,9 @@ pub struct UiState {
     /// The Brush Options dialog that is open, while it is.
     #[serde(skip)]
     pub brush_options: Option<DialogId>,
-    /// The selection of each open library panel, by panel id. Not saved.
+    /// The selection of each open library panel, by panel id: its items and folders. Not saved.
     #[serde(skip)]
-    // PLAN: assumed `HashMap<String, Selection<String>>` (ap.AS17 names no type; appearance-w17 indexes it by panel).
-    pub library_selection: HashMap<String, Selection<String>>,
+    pub library_selection: HashMap<String, Selection<crate::panels::library_panel::LibraryKey>>,
     /// The Libraries panel lists its items (on) instead of showing icons (off).
     #[serde(skip)]
     pub libraries_list_view: bool,
@@ -1342,7 +1341,7 @@ impl Default for UiState {
             stroke_panel: Default::default(),
             transparency_panel: Default::default(),
             graphic_styles_panel: Default::default(),
-            symbol_picks: Vec::new(),
+            symbol_picks: (0, Vec::new()),
             brush_selection: None,
             brushes_view: Default::default(),
             brush_options: None,

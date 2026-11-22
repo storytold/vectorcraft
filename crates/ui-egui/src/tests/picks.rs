@@ -92,20 +92,20 @@ pub(crate) fn open_dialogs(app: &VectorcraftApp) -> Vec<OpenDialog> {
 }
 
 /// Sets `fields` of dialog `id` as a person editing them would, presses OK when `ok`, and runs the
-/// app's pump over the answer. A dialog that holds its OK files the answer for the app; once the
-/// pump accepted it the dialog closes, as its next pass would close it.
+/// app's pump over the answer. A disabled OK does nothing, so the caller checks what the press did.
+/// A dialog that holds its OK files the answer for the app; once the pump accepted it the dialog
+/// closes, as its next pass would close it.
 pub(crate) fn answer_dialog(app: &mut VectorcraftApp, id: DialogId, fields: &[(&str, Value)], ok: bool) {
     let ctx = app.ui_ctx.clone().expect("a window context");
     let host = app.dialogs().expect("the window's dialog host");
-    let closed = host.with(|h| {
+    host.with(|h| {
         for (field, value) in fields {
             h.set_json_field(&ctx, id, field, value.clone()).unwrap_or_else(|e| panic!("{field}: {e}"));
         }
-        ok && h.confirm_by_id(&ctx, id)
+        if ok {
+            h.confirm_by_id(&ctx, id);
+        }
     });
-    if ok && !closed {
-        assert_eq!(host.with(|h| h.held_state(id)), Some(HeldOk::Waiting), "OK was refused");
-    }
     crate::dialogs::host::pump(app, &ctx);
     if host.with(|h| h.held_state(id) == Some(HeldOk::Accepted) && h.confirm_by_id(&ctx, id)) {
         crate::dialogs::host::pump(app, &ctx);

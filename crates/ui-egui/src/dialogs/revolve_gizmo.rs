@@ -66,9 +66,10 @@ fn lighting(fields: &DialogFields) -> bool {
     fields.text("__page") == Some("lighting")
 }
 
-/// Does the gizmo show for these values: Preview on, and on the Lighting page only while the effect takes light.
+/// Does the gizmo show for these values: on the Lighting page only while the effect takes light. Preview is the
+/// dialog's own state, which [`three_d::gizmo_shown`] reads.
 fn shown(fields: &DialogFields) -> bool {
-    fields.bool("preview").unwrap_or(false) && (!lighting(fields) || lit(fields))
+    !lighting(fields) || lit(fields)
 }
 
 /// The values the gizmo edits: the three rotations and the selected light's rotation and height, in degrees.

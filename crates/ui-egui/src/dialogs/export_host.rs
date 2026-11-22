@@ -208,7 +208,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         for action in actions {
             match (&kind, action.as_str()) {
                 (Export::Eps, "custom") => open_custom(app, id),
-                (Export::Hpgl { .. }, "penTable") => hpgl_options::pen_ask(app, id),
+                (Export::Hpgl { .. }, "penTable") => hpgl_options::pen_ask(app, id, selection),
                 _ => {}
             }
         }

@@ -695,7 +695,7 @@ fn colorization_rows() -> Vec<Param> {
         }
         let shown = Row::new()
             .show(ui, |ui, _| {
-                for c in colors {
+                for &c in &colors {
                     let [r, g, b] = c.to_rgb();
                     let well = Swatch::new(c.to_hex(), Srgba::new(r, g, b, 1.0)).marks(CellMarks::default().edge(c == key)).show(ui);
                     if well.clicked {

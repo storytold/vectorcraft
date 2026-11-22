@@ -190,8 +190,8 @@ fn edit(colors: &[&str]) -> Recolor {
 }
 
 /// Recolor Artwork open on the Assign tab of `app` (its art selected).
-fn assign(app: VectorcraftApp, open: Value) -> Recolor {
-    let mut r = open(app, open);
+fn assign(app: VectorcraftApp, params: Value) -> Recolor {
+    let mut r = open(app, params);
     r.set("method", json!("exact")).unwrap();
     r.settled();
     r
@@ -889,14 +889,16 @@ fn the_add_color_tool_on_the_brightness_wheel_adds_the_brightness_clicked() {
     let s = new_hsb(&r)[0][1];
     tap(&mut r, "Show brightness and hue on wheel");
     tap(&mut r, "Add Color Tool");
-    click(&mut r, wheel_at(&r, 120.0, 0.5));
+    let at = wheel_at(&r, 120.0, 0.5);
+    click(&mut r, at);
     let [hue, sat, b] = new_hsb(&r)[2];
     assert!((hue - 120.0).abs() < 1.0 && (sat - s).abs() < 0.01 && (b - 0.5).abs() < 0.01, "{:?}", [hue, sat, b]);
     assert_eq!(field(&r, "__sel"), json!([2]));
     // The new color is now the base color; select the first one again.
     put(&mut r, "__sel", json!([0]));
     tap(&mut r, "Show segmented color wheel");
-    click(&mut r, wheel_at(&r, 187.0, 0.95));
+    let at = wheel_at(&r, 187.0, 0.95);
+    click(&mut r, at);
     let [hue, sat, b] = *new_hsb(&r).last().unwrap();
     assert!((hue - 180.0).abs() < 1.0 && (sat - s).abs() < 0.01 && (b - 0.9).abs() < 0.01, "the patch's color: {:?}", [hue, sat, b]);
 }
@@ -983,7 +985,8 @@ fn the_add_color_tool_adds_a_row_with_no_current_colors() {
     assert_eq!(field(&r, "__sel"), json!([2]), "the new color is selected");
     assert_eq!(fills(&r.app()), fills_before, "a color with no current colors recolors no art");
     // A second click adds another color; the tool stays on.
-    click(&mut r, wheel_at(&r, 240.0, 0.75));
+    let second = wheel_at(&r, 240.0, 0.75);
+    click(&mut r, second);
     assert_eq!(field(&r, "rows").as_array().unwrap().len(), 4);
     tap(&mut r, "Add Color Tool");
     assert_eq!(field(&r, "wheelTool"), Value::Null, "a second click turns the tool off");
@@ -1010,7 +1013,8 @@ fn an_added_color_joins_the_color_group() {
     tap(&mut r, "Show segmented color wheel");
     let v = new_hsb(&r)[0][2];
     tap(&mut r, "Add Color Tool");
-    click(&mut r, wheel_at(&r, 187.0, 0.95));
+    let at = wheel_at(&r, 187.0, 0.95);
+    click(&mut r, at);
     let added = field(&r, "rows").as_array().unwrap().last().unwrap()["to"].clone();
     let [hue, s, b] = vectorcraft_engine::cmd::color_value(&added).unwrap().to_hsb();
     assert!((hue - 180.0).abs() < 1.0 && (s - 0.9).abs() < 0.01 && (b - v).abs() < 0.01, "the patch's color: {:?}", [hue, s, b]);
@@ -1133,7 +1137,8 @@ fn add_new_color_on_a_markers_line_moves_with_that_marker() {
     r.set("linked", json!(false)).unwrap();
     put(&mut r, "__sel", json!([0]));
     let hsb = new_hsb(&r);
-    right_click(&mut r, wheel_at(&r, 90.0, 0.6));
+    let at = wheel_at(&r, 90.0, 0.6);
+    right_click(&mut r, at);
     assert!(!has(&r, "Set As Base Color"), "no marker there");
     tap(&mut r, "Add New Color");
     let rows = field(&r, "rows");
@@ -1145,7 +1150,8 @@ fn add_new_color_on_a_markers_line_moves_with_that_marker() {
     assert_eq!(field(&r, "__sel"), json!([2]));
     // Halfway along the second color's line.
     let (c, _) = wheel(&r);
-    right_click(&mut r, c.lerp(marker(&r, 1), 0.5));
+    let at = c.lerp(marker(&r, 1), 0.5);
+    right_click(&mut r, at);
     tap(&mut r, "Add New Color");
     let rows = field(&r, "rows");
     assert_eq!(rows.as_array().unwrap().len(), 4);
@@ -1215,7 +1221,6 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         tap(&mut r, "Pick from Swatches");
         let (picker_id, picked_row, picked) = picker(&r).expect("Pick from Swatches opens the Color Picker");
         assert_eq!(picked_row, row.to_string(), "for the targeted row");
-        // PLAN: framework gap: `ColorRequest` cannot ask the picker to start on its swatches view (lead ruling).
         assert_eq!(picked["swatches"], json!(true), "on its swatches");
         assert_eq!(vectorcraft_engine::cmd::color_value(&picked["color"]), vectorcraft_engine::cmd::color_value(&expected));
         r.host(|host, ctx| host.cancel_by_id(ctx, picker_id));

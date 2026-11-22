@@ -115,7 +115,7 @@ fn trees(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext) ->
                 });
             }
         })
-        .response
+        .output
 }
 
 /// One tree (`key`: `pickUp` or `apply`) of checkboxes; a branch's box sets everything under it.

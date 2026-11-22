@@ -417,7 +417,7 @@ fn show_overlays(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass, view_in
             extra.extend(super::marks::live_paint_gap_overlays(app));
         }
     }
-    super::overlays::show(app, ui, space, &list, &extra);
+    super::overlays::show(app, ui, &space, &list, &extra);
 }
 
 /// Whether the canvas has a tool gesture in progress. Only the current window's body is live: panes and the other

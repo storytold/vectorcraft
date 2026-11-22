@@ -45,7 +45,7 @@ pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String
     fields.set("hasNames", count > 0);
     fields.set("names", FieldValue::List(names.into_iter().map(FieldValue::Text).collect()));
 
-    let options = |ids: [(&str, &str); 2]| ids.map(|(id, label)| (id.to_string(), label.into())).to_vec();
+    let options = |ids: [(&str, &'static str); 2]| ids.map(|(id, label)| (id.to_string(), label.into())).to_vec();
     let mut save_to = Param::new(
         "saveTo",
         tl!("Save To:"),

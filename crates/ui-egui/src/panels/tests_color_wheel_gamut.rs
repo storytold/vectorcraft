@@ -29,10 +29,9 @@ fn uncalibrated_cmyk_marks_nothing() {
     let settings = ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..ColorSettings::default() };
     assert!(Cms::new(&settings).is_ok());
     let app = app("#0000ff", "box", true);
-    // PLAN: assumed `Gamut::nearest(&self, &Color) -> Option<Color>` (co.K3) on `panels::color::gamut(app)`.
     let gamut = super::color::gamut(&app);
     for c in [Color::rgb(0.0, 0.0, 1.0), Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 0.0)] {
-        assert!(gamut.nearest(&c).is_none(), "{c:?}");
+        assert!(gamut.nearest(super::srgba(&c)).is_none(), "{c:?}");
     }
 }
 

@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash as _, Hasher as _};
+use std::ops::Deref;
 
 use craft::keymap::Mods;
 pub(super) use craft::layers::ui::filter::{FilterObject, FilterState};
@@ -9,11 +11,11 @@ use craft::layers::ui::panel::MenuTarget;
 use craft::layers::ui::tree::{
     LayerInfo, LayerKind, LayerPart, LayerProperties, LayerRowKey, LayerSelection, LayerTree, LayerView, SubRowGroup, SubRows,
 };
-use craft::ui::contract::{Entry, ReorderMove};
+use craft::ui::contract::{Entry, PlainData, ReorderMove};
 use craft::ui::list::LabelUnderline;
 use craft::ui::style::DataColor;
 use vectorcraft_doc::Guide;
-use vectorcraft_engine::DocState;
+use vectorcraft_engine::{DocState, OpenRows};
 
 use super::{Arc, Color32, Document, LiveShape, Node, NodeId, NodeKind, PanelOptions, Value, VectorcraftApp};
 
@@ -31,7 +33,16 @@ pub(super) fn painted_name(n: &Node, name: &str, lang: crate::i18n::Lang) -> Str
 /// The name the panel shows for `n` in `lang`: its XML ID while Identify Objects By is XML ID,
 /// otherwise [`painted_name`].
 pub(crate) fn shown_name(app: &VectorcraftApp, n: &Node, lang: crate::i18n::Lang) -> String {
-    let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+    listed_name(n, by_xml_id(app), lang)
+}
+
+/// Whether Identify Objects By is XML ID.
+fn by_xml_id(app: &VectorcraftApp) -> bool {
+    app.session.prefs.identify_objects_by == "xmlId"
+}
+
+/// [`shown_name`] with Identify Objects By read as `xml_id`.
+fn listed_name(n: &Node, xml_id: bool, lang: crate::i18n::Lang) -> String {
     let label = n.identify_label(xml_id);
     if xml_id { label } else { painted_name(n, &label, lang) }
 }
@@ -130,63 +141,134 @@ fn kind_of(n: &Node) -> LayerKind {
 }
 
 /// A row of the Layers panel.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PlainData)]
 pub enum RowId {
     /// A layer, sublayer, group or object.
-    Node(NodeId),
+    Node(#[plain_data(assume = "a node id is an integer")] NodeId),
     /// A ruler guide, by its index in the document's guides ([`Document::ruler_guides`]).
     Guide(usize),
     /// The spine of a blend, below the blend's key objects.
-    Spine(NodeId),
+    Spine(#[plain_data(assume = "a node id is an integer")] NodeId),
 }
 
-/// The active document as the Layers panel lists it, built per pass.
-pub(super) struct DocLayers<'a> {
-    app: &'a VectorcraftApp,
-    st: &'a DocState,
-    doc: &'a Arc<Document>,
-    opts: &'a PanelOptions,
+/// The active document as the Layers panel lists it: the tree the panel reads. The app keeps it and
+/// lists it again only when [`LayerRows::key`] changes.
+#[derive(Clone, Debug, PlainData)]
+pub(super) struct LayerRows {
+    #[plain_data(assume = "a document is never changed behind its Arc: an edit makes a new one")]
+    doc: Arc<Document>,
+    opts: PanelOptions,
+    /// Identify Objects By is XML ID.
+    xml_id: bool,
+    #[plain_data(assume = "a language is an index")]
+    lang: crate::i18n::Lang,
+    /// The rows open.
+    #[plain_data(assume = "a set of node ids and a change count")]
+    open: OpenRows,
+    /// The highlighted rows.
+    #[plain_data(assume = "node ids are integers")]
+    highlighted: Vec<NodeId>,
+    /// The current layer.
+    #[plain_data(assume = "a node id is an integer")]
+    current: Option<NodeId>,
     /// The selected ruler guides, by index.
     guides: Vec<usize>,
     /// The document's ruler guides ([`Document::ruler_guides`]).
+    #[plain_data(assume = "a guide is numbers and ids")]
     ruler: Vec<Guide>,
     /// The index of each ruler guide node among them.
+    #[plain_data(assume = "node ids are integers")]
     guide_rows: HashMap<NodeId, usize>,
     /// The selected objects.
+    #[plain_data(assume = "node ids are integers")]
     selected: HashSet<NodeId>,
+    /// The selected blends, in selection order.
+    #[plain_data(assume = "node ids are integers")]
+    blends: Vec<NodeId>,
     /// In isolation mode, the isolated node: the top row.
+    #[plain_data(assume = "a node id is an integer")]
     root: Option<NodeId>,
-    lang: crate::i18n::Lang,
+}
+
+/// [`LayerRows`] with the editing state of their document, for the panel's host code in one pass.
+pub(super) struct DocLayers<'a> {
+    st: &'a DocState,
+    rows: Cow<'a, LayerRows>,
 }
 
 impl<'a> DocLayers<'a> {
-    /// The rows of `st`, the document `app` shows.
-    pub(super) fn new(app: &'a VectorcraftApp, st: &'a DocState) -> Self {
-        let doc = &st.doc;
-        let ruler = doc.ruler_guides();
-        let guide_rows = ruler.iter().enumerate().filter_map(|(i, g)| Some((g.id?, i))).collect();
-        Self {
-            app,
-            st,
-            doc,
-            opts: &app.ui.layers_panel,
-            guides: vectorcraft_engine::cmd::guide_indexes(doc, &st.selection.guides),
-            ruler,
-            guide_rows,
-            selected: st.selection.objects.iter().copied().collect(),
-            root: st.isolation.and_then(|i| isolated_root(doc, i)).map(|(n, ..)| n.id),
-            lang: crate::i18n::current(),
-        }
+    /// The rows of `st`, the document `app` shows, listed now.
+    pub(super) fn new(app: &VectorcraftApp, st: &'a DocState) -> Self {
+        Self { st, rows: Cow::Owned(LayerRows::new(app, st)) }
     }
 
-    /// The document.
-    pub(super) fn doc(&self) -> &'a Arc<Document> {
-        self.doc
+    /// The rows of `st` as the app keeps them.
+    pub(super) fn of(st: &'a DocState, rows: &'a LayerRows) -> Self {
+        Self { st, rows: Cow::Borrowed(rows) }
     }
 
     /// The document's state.
     pub(super) fn state(&self) -> &'a DocState {
         self.st
+    }
+}
+
+impl Deref for DocLayers<'_> {
+    type Target = LayerRows;
+
+    fn deref(&self) -> &LayerRows {
+        &self.rows
+    }
+}
+
+impl LayerRows {
+    /// The rows of `st`, the document `app` shows.
+    pub(super) fn new(app: &VectorcraftApp, st: &DocState) -> Self {
+        let doc = &st.doc;
+        let ruler = doc.ruler_guides();
+        let guide_rows = ruler.iter().enumerate().filter_map(|(i, g)| Some((g.id?, i))).collect();
+        let blends = st.selection.objects.iter().copied().filter(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. })));
+        Self {
+            doc: doc.clone(),
+            opts: app.ui.layers_panel.clone(),
+            xml_id: by_xml_id(app),
+            lang: crate::i18n::current(),
+            open: st.layers_open.clone(),
+            highlighted: st.highlighted_rows(),
+            current: st.current_layer(),
+            guides: vectorcraft_engine::cmd::guide_indexes(doc, &st.selection.guides),
+            ruler,
+            guide_rows,
+            selected: st.selection.objects.iter().copied().collect(),
+            blends: blends.collect(),
+            root: st.isolation.and_then(|i| isolated_root(doc, i)).map(|(n, ..)| n.id),
+        }
+    }
+
+    /// What the rows of `st` are listed from: the document and its revision (which every edit and
+    /// selection change moves), the open rows, isolation mode, the highlighted rows and the current
+    /// layer, the Panel Options, Identify Objects By and the language.
+    pub(super) fn key(app: &VectorcraftApp, st: &DocState) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        let opts = &app.ui.layers_panel;
+        (
+            st.uid,
+            st.revision,
+            st.layers_open.generation(),
+            st.isolation,
+            &st.layer_rows,
+            st.active_layer,
+            opts,
+            by_xml_id(app),
+            crate::i18n::current(),
+        )
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// The document.
+    pub(super) fn doc(&self) -> &Arc<Document> {
+        &self.doc
     }
 
     /// In isolation mode, the isolated node, which heads the rows.
@@ -214,8 +296,7 @@ impl<'a> DocLayers<'a> {
     pub(super) fn targets(&self, target: &MenuTarget<RowId>) -> Vec<u64> {
         let Some(LayerRowKey::Layer(row)) = &target.row else { return vec![] };
         let Some(id) = self.node_of(row) else { return vec![] };
-        let rows = self.st.highlighted_rows();
-        if rows.contains(&id) { rows.iter().map(|r| r.0).collect() } else { vec![id.0] }
+        if self.highlighted.contains(&id) { self.highlighted.iter().map(|r| r.0).collect() } else { vec![id.0] }
     }
 
     /// The node row `row` stands for: a ruler guide's node, a spine's blend.
@@ -245,7 +326,7 @@ impl<'a> DocLayers<'a> {
         let around = self.doc.ancestry(group).unwrap_or_default();
         !moving.iter().any(|m| around.contains(m))
             && self.root.is_none_or(|r| around.contains(&r))
-            && super::rows::takes(g, objects, moving, self.doc)
+            && super::rows::takes(g, objects, moving, &self.doc)
     }
 
     /// The ruler guide rows of `n`, under a layer before its art, the highest `guide.list` index first.
@@ -263,7 +344,7 @@ impl<'a> DocLayers<'a> {
     /// ruler guide nodes are guide rows, not object rows), then a blend's spine, as Release leaves it.
     fn rows_in(&self, n: &Node) -> Vec<RowId> {
         let mut rows = self.guide_rows_of(n);
-        if !opens(n, self.opts) {
+        if !opens(n, &self.opts) {
             return rows;
         }
         for c in n.children().into_iter().flatten().rev() {
@@ -278,8 +359,11 @@ impl<'a> DocLayers<'a> {
     }
 
     fn node_info(&self, n: &Node) -> LayerInfo {
-        let name =
-            if self.doc.mask_edit.is_some_and(|m| m.layer == n.id) { tl!("<Opacity Mask>").to_string() } else { shown_name(self.app, n, self.lang) };
+        let name = if self.doc.mask_edit.is_some_and(|m| m.layer == n.id) {
+            tl!("<Opacity Mask>").to_string()
+        } else {
+            listed_name(n, self.xml_id, self.lang)
+        };
         let mut info = LayerInfo::new(name, kind_of(n));
         info.visible = n.visible;
         info.dimmed = !self.shown(n.id) || n.is_template();
@@ -343,7 +427,7 @@ impl<'a> DocLayers<'a> {
     }
 }
 
-impl LayerTree for DocLayers<'_> {
+impl LayerTree for LayerRows {
     type Id = RowId;
 
     /// The top rows are the layers (only the opacity mask's while one is edited), or in isolation
@@ -372,7 +456,7 @@ impl LayerTree for DocLayers<'_> {
     }
 
     fn is_open(&self, id: &RowId) -> bool {
-        matches!(id, RowId::Node(id) if self.st.layers_open.contains(*id))
+        matches!(id, RowId::Node(id) if self.open.contains(*id))
     }
 
     fn effects_open(&self, _: &RowId) -> bool {
@@ -415,14 +499,13 @@ impl LayerTree for DocLayers<'_> {
     /// The highlighted rows, else the current layer's; the selected ruler guides; the spines of the
     /// selected blends.
     fn selection(&self) -> LayerSelection<RowId> {
-        let mut rows: Vec<RowId> = self.st.highlighted_rows().into_iter().map(RowId::Node).collect();
-        let current = self.st.current_layer().map(RowId::Node);
+        let mut rows: Vec<RowId> = self.highlighted.iter().copied().map(RowId::Node).collect();
+        let current = self.current.map(RowId::Node);
         if rows.is_empty() {
             rows.extend(current);
         }
         rows.extend(self.guides.iter().map(|i| RowId::Guide(*i)));
-        let blends = self.st.selection.objects.iter().filter(|id| self.doc.node(**id).is_some_and(|n| matches!(n.kind, NodeKind::Blend { .. })));
-        rows.extend(blends.map(|id| RowId::Spine(*id)));
+        rows.extend(self.blends.iter().map(|id| RowId::Spine(*id)));
         LayerSelection::new(rows, current, LayerPart::Pixels)
     }
 
@@ -438,7 +521,7 @@ impl LayerTree for DocLayers<'_> {
         Vec::new()
     }
 
-    /// Rows land in a layer or group that takes them ([`DocLayers::lands_in`]): ruler guides only on
+    /// Rows land in a layer or group that takes them ([`LayerRows::lands_in`]): ruler guides only on
     /// a layer, never at the top level; nothing outside the isolated art; a spine never moves.
     fn accepts_drop(&self, mv: &ReorderMove<LayerRowKey<RowId>>, _: Mods) -> bool {
         let rows: Vec<RowId> = mv
@@ -466,13 +549,5 @@ impl LayerTree for DocLayers<'_> {
             Some(LayerRowKey::Layer(RowId::Node(group))) => self.lands_in(*group, &moving, objects),
             Some(_) => false,
         }
-    }
-
-    /// The rows change with the document, its open rows, isolation mode and the Panel Options.
-    fn revision(&self) -> Option<u64> {
-        let mut hasher = DefaultHasher::new();
-        (self.st.uid, self.st.revision, self.st.layers_open.generation(), self.st.isolation, self.opts.layers_only, self.opts.row_size)
-            .hash(&mut hasher);
-        Some(hasher.finish())
     }
 }

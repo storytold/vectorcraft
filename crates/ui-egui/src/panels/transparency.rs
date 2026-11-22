@@ -12,7 +12,7 @@ use craft::behavior::Mixed;
 use craft::behavior::item_source::keyed;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, SelectMode, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, CollectionEvent, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};

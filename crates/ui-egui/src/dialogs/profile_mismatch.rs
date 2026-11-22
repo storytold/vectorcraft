@@ -79,8 +79,7 @@ const ACTIONS: [(&str, ProfileAction); 5] = [
 ];
 
 /// The choices pasting offers, as (`choice`, label).
-const PASTE_CHOICES: [(&str, &str); 2] =
-    [("preserveNumbers", tl!("Preserve the color numbers")), ("convert", tl!("Convert to keep the colors' appearance"))];
+const PASTE_CHOICES: [(&str, &str); 2] = [("preserveNumbers", "Preserve the color numbers"), ("convert", "Convert to keep the colors' appearance")];
 
 /// Open `file`, read for File › Open from `path`, as `document.open` does, unless Edit › Color
 /// Settings asks about its profile ([`ReadFile::ask`]): then the dialog asks first, and the result
@@ -327,7 +326,7 @@ fn picked<'a>(choice: &'a Value, model: &str) -> &'a str {
 /// starting on its model's policy. Colors whose profile is not available can only keep their numbers.
 fn paste_dialog(ctx: &egui::Context, mismatches: &[Value]) -> HostedParamDialog {
     let start = first_choice(mismatches);
-    let options: Vec<(String, Label)> = PASTE_CHOICES.iter().map(|(value, text)| (value.to_string(), Label::from(*text))).collect();
+    let options: Vec<(String, Label)> = PASTE_CHOICES.iter().map(|(value, text)| (value.to_string(), Label::from(tl!(*text)))).collect();
     let mut params = Vec::new();
     for m in mismatches {
         let id = m["model"].as_str().unwrap_or_default();

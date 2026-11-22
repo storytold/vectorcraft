@@ -749,7 +749,7 @@ fn sections(lists: &Lists) -> Vec<PrintSection> {
         note("preserveNote", tl!("CMYK colours print with their own values; off, they go through the colour settings too.")),
     ];
     let flatteners: Vec<(String, _)> = std::iter::once((String::new(), tl!(KEEP_TRANSPARENCY).into()))
-        .chain(lists.flatteners.iter().map(|p| (p.clone(), p.as_str().into())))
+        .chain(lists.flatteners.iter().map(|p| (p.clone(), p.clone().into())))
         .collect();
     let advanced = vec![
         Param::section(tl!("Printer")),

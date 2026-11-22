@@ -4,7 +4,6 @@ use craft::behavior::{Codec, NotAValue, NumberCodec, Reader};
 use craft::ui::contract::Entry;
 use craft::ui::patterns::blend_keys::{BlendKeyEntry, BlendShortcut, blend_entries as framework_blend_entries};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind, Units};
-use craft::ui::text::NumberStepper;
 use vectorcraft_color::BlendMode;
 
 /// Every blend mode with its Shift+Alt letter, in the order of the menu.
@@ -158,8 +157,8 @@ fn step_through(v: f64, size: f64, n: f64, stops: &[f64], same: impl Fn(f64, f64
 /// The stepper of a field whose plain step stops at each of `stops` (a stroke weight at its
 /// presets: 0.52 pt goes down to 0.5 pt, not to 0 pt). `size` is the step, `shown` the text of a
 /// value, so a stop shown as the value is passed.
-pub fn stops_stepper<'a>(size: f64, stops: &'a [f64], shown: impl Fn(f64) -> String + 'a) -> NumberStepper<'a> {
-    NumberStepper::new(move |from, direction, scale| step_through(from, size * scale, f64::from(direction), stops, |a, b| shown(a) == shown(b)))
+pub fn stops_stepper<'a>(size: f64, stops: &'a [f64], shown: impl Fn(f64) -> String + 'a) -> impl Fn(f64, i32, f64) -> f64 + 'a {
+    move |from, direction, scale| step_through(from, size * scale, f64::from(direction), stops, |a, b| shown(a) == shown(b))
 }
 
 #[cfg(test)]

@@ -215,7 +215,7 @@ fn rename_opens_the_name_field_of_the_selected_object() {
     pass(&mut app, &ctx);
     assert_eq!(app.ui.layers_ui.rename, None, "the panel took the rename request");
     assert_eq!(reveal_of(&app), None, "and the reveal request");
-    apply(&mut app, LayersEvent::rename(row(a), "Sun".into()));
+    apply(&mut app, LayersEvent::rename(row(a), "Sun"));
     assert_eq!(name(&app), "Sun");
     assert_eq!(undo_len(&app), steps + 1, "one undo step");
     app.session.execute("edit.undo", &json!({})).unwrap();

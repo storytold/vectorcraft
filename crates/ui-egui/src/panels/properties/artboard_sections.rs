@@ -104,7 +104,7 @@ fn turned(landscape: bool, pw: f64, ph: f64) -> (f64, f64) {
 /// width and height of each selected artboard that is not square and not already in it. Each
 /// top-left corner stays put.
 pub(crate) fn artboard_size_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, w: f64, h: f64) {
-    let (Some(choice), _) = artboard_size_controls(app, ui, w, h, None) else { return };
+    let (Some(choice), _) = artboard_size_controls(ui, &artboard_presets(app), w, h, None) else { return };
     let scale_art = artboards::scale_art(app);
     let indices = artboards::resized_with(app, i);
     artboards::set_props(app, &indices, json!({ "scaleArt": scale_art }), |j, r| {
@@ -150,10 +150,9 @@ static LANDSCAPE: PageGlyph = PageGlyph { landscape: true };
 /// draft until OK. With `fits` (Artboard Options) the menu starts with Fit to Artwork Bounds and Fit
 /// to Selected Art, each enabled by its entry; the second return value is a chosen Fit: false for
 /// all artwork, true for selected artwork.
-// PLAN: the contract row op.A10 passes `presets` instead of `app`; the callers in the sheet pass `app`, so the presets come from `artboard_presets(app)` here.
 pub(crate) fn artboard_size_controls(
-    app: &VectorcraftApp,
     ui: &mut Ui,
+    presets: &[(&'static str, Vec<newdoc::DocSettings>)],
     w: f64,
     h: f64,
     fits: Option<[bool; 2]>,
@@ -163,7 +162,6 @@ pub(crate) fn artboard_size_controls(
         let (pw, ph) = turned(landscape, s.width, s.height);
         (pw - w).abs() < 0.01 && (ph - h).abs() < 0.01
     };
-    let presets = artboard_presets(app);
     let current = presets.iter().flat_map(|(_, l)| l).find(|s| same(s)).map_or(tl!("Custom"), |s| crate::dialogs::preset_name(&s.name)).to_string();
     // The preset's width and height as listed, or the orientation clicked, or the fit chosen.
     let mut preset = None;
@@ -181,10 +179,10 @@ pub(crate) fn artboard_size_controls(
                     }
                     craft::ui::display::Divider::horizontal().show(ui);
                 }
-                for (cat, list) in &presets {
+                for (cat, list) in presets {
                     Menu::submenu_row(ui, tl!(cat).to_string(), |ui, _| {
                         for s in list {
-                            if MenuItem::new(crate::dialogs::preset_name(&s.name)).radio_mark(same(s)).show(ui).ran {
+                            if MenuItem::new(crate::dialogs::preset_name(&s.name).to_owned()).radio_mark(same(s)).show(ui).ran {
                                 preset = Some((s.width, s.height));
                             }
                         }

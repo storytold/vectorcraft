@@ -393,8 +393,8 @@ fn grid_colors_row(setup: DocSetup) -> Param {
                         cx.pick_color(GRID_KEYS[i], srgb);
                     }
                     let edited = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
-                    if let Some(c) = edited {
-                        set_grid_entry(fields, &setup, i, &Color::rgb8(c.r, c.g, c.b));
+                    if let Some(Rgba([r, g, b, _])) = edited {
+                        set_grid_entry(fields, &setup, i, &Color::rgb8(r, g, b));
                     }
                 }
             });

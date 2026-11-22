@@ -10,16 +10,17 @@
 //! - `ui.contextMenu.list`: the canvas context menu for the current selection, flattened
 //! - `ui.tool.select {tool}`, `ui.tool.list`
 //! - `ui.pointer {events:[{kind: down|drag|up|move|doubleclick|tripleclick, x, y, backquote?, space?: "doc"|"screen"}], mods?, backquote?}`:
-//!   drive the active tool through the same path as the mouse, after the synthetic input sent
-//!   before it was applied
-//! - `ui.key {key, shift?, alt?, cmd?}` / `ui.text {text}`: synthetic keyboard input
-//! - `ui.move {x, y}` / `ui.click {x, y, button?, count?, shift?…}` / `ui.drag {x, y, toX, toY, steps?}`:
-//!   real egui pointer input in screen points (reaches every widget: panels, flyouts, dialogs)
+//!   drive the active tool through the same path as the mouse; the reply waits for an edit the
+//!   gesture started on another thread
+//! - `ui.key`, `ui.type` (`ui.text`), `ui.move`, `ui.click`, `ui.wheel`, `ui.release`, `ui.ime`,
+//!   `ui.capsLock`: real input queued on the window host ([`synthetic::input_method`]), answered
+//!   once it was processed; `ui.drag {x, y, toX, toY, steps?}` is a held click, moves and a release
+//! - `ui.find`: the controls of the window's access tree that match a name or role
 //! - `ui.set {brightness?, panel?, dockTab?, rulers?, outline?, …}`
 //! - `ui.dialog.set` / `ui.dialog.confirm` / `ui.dialog.cancel`: answered by
 //!   `craft::automation::dialogs::dialog_method` for the dialog asked for (`dialog`, default `"top"`)
-//! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, data?}` (`data: true`: the PNG
-//!   comes back as `pngBase64` as well)
+//! - `ui.resize {width, height}`, `ui.focus`, `ui.screenshot {path?, focus?}` (without a path the
+//!   PNG comes back in the reply)
 //! - `ui.render {path?, scale?, artboard?, data?, traceViews?}`: render an artboard headlessly
 //!   (`artboard`: its 0-based index, default the first; PNG with the pixels of a PNG export on
 //!   white; `traceViews: true` draws Image Trace objects in their View, as the canvas does; without
@@ -32,12 +33,14 @@
 //! - `wait: true` on `app.save` and `app.export`: the file is written before the reply, even with
 //!   Background Save or Background Export on. A `wait` other than true, false or null is refused
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use craft::automation::control::JobId;
+use craft::automation::synthetic::{self, Click, Move, Release};
+use craft::automation::{ControlRequest, Reply};
 use craft::behavior::CanvasView;
 use craft::ui::canvas::ViewTurn;
+use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::ParamsPlace;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
@@ -45,13 +48,8 @@ use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
 use crate::VectorcraftApp;
 
-/// Synthetic pointer input advances one event per frame: keep gestures and backlog modest.
+/// The most `ui.move` steps one `ui.drag` queues between its press and its release.
 pub(crate) const MAX_DRAG_STEPS: u64 = 256;
-pub(crate) const MAX_CLICK_COUNT: u64 = 16;
-pub(crate) const MAX_SYNTHETIC_EVENTS: usize = 1024;
-pub(crate) const MAX_CONTROL_REQUESTS_PER_FRAME: usize = 64;
-/// Most items one `ui.dialog.set {fields}` may store, as MCP `answer_dialog` allows.
-pub(crate) const MAX_DIALOG_FIELDS: usize = 256;
 
 fn input_count(p: &Value, key: &str, default: u64, max: u64) -> Result<usize, String> {
     let n = match p.get(key) {
@@ -61,105 +59,40 @@ fn input_count(p: &Value, key: &str, default: u64, max: u64) -> Result<usize, St
     if n > max {
         return Err(format!("`{key}` must be at most {max}"));
     }
-    // Preserve legacy zero behaviour: both a zero count and zero steps still perform once.
+    // Preserve legacy zero behaviour: zero steps still perform once.
     usize::try_from(n.max(1)).map_err(|_| format!("`{key}` is out of range"))
 }
 
-fn reserve_synthetic(app: &mut VectorcraftApp, additional: usize) -> Result<(), String> {
-    if additional > MAX_SYNTHETIC_EVENTS.saturating_sub(app.synthetic.len()) {
-        return Err(format!("synthetic input queue limit ({MAX_SYNTHETIC_EVENTS} events); retry after pending input drains"));
-    }
-    app.synthetic.try_reserve(additional).map_err(|e| format!("cannot reserve synthetic input: {e}"))
+/// The token of a reply the channel holds: a screenshot's or a `ui.pointer` wait's job. Each differs
+/// from every one handed out before, so no two pending replies share one.
+fn next_token() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
-pub type ControlResponse = Value;
-
-pub(crate) struct PendingPointerReply {
-    pub from: u64,
-    pub to: u64,
-    pub document: Option<u64>,
-    pub reply: Sender<ControlResponse>,
+/// A `ui.pointer` reply the channel holds as job `job` ([`Reply::AfterJob`]) until the events numbered
+/// `from..to` ([`vectorcraft_engine::Session::input_applied`]) have been made and the edit they started
+/// on another thread is applied, so it shows the selection after the edit.
+pub(crate) struct PointerWait {
+    job: JobId,
+    from: u64,
+    to: u64,
+    document: Option<u64>,
 }
 
-pub struct ControlRequest {
-    pub method: String,
-    pub params: Value,
-    pub reply: Sender<ControlResponse>,
-    state: Arc<AtomicU8>,
-    /// Its place in the order requests were made ([`ControlRequest::next_seq`]).
-    seq: u64,
-}
-
-/// The sequence number of the next request made.
-static NEXT_SEQ: AtomicU64 = AtomicU64::new(0);
-
-/// A request's state: waiting to run, taken by the app ([`ControlRequest::claim`]), or given up
-/// by its caller before that ([`Ticket::give_up`]). It leaves `QUEUED` once, one way or the other.
-const QUEUED: u8 = 0;
-const STARTED: u8 = 1;
-const GIVEN_UP: u8 = 2;
-
-/// The caller's side of a queued [`ControlRequest`].
-pub struct Ticket(Arc<AtomicU8>);
-
-impl Ticket {
-    /// Stop waiting for the request → `true` when it had not started, and so never runs: a caller
-    /// told "timeout" can then retry without the edit being applied twice, or applied later when
-    /// nobody expects it (#1725). `false`: the app is running it (or has); its outcome is unknown.
-    pub fn give_up(&self) -> bool {
-        self.0.compare_exchange(QUEUED, GIVEN_UP, Ordering::SeqCst, Ordering::SeqCst).is_ok()
+/// Answers each held `ui.pointer` reply whose edit is applied ([`PointerWait`]), with the selection of
+/// the document the gesture was made in. Runs once per pass, after the canvas checked on the tool.
+pub(crate) fn answer_pointer_waits(app: &mut VectorcraftApp) {
+    for wait in std::mem::take(&mut app.pointer_waits) {
+        if !app.session.input_applied(wait.from, wait.to) {
+            app.pointer_waits.push(wait);
+            continue;
+        }
+        let reply = pointer_reply_for(app, wait.document);
+        if let Some(channel) = app.channel.as_mut() {
+            channel.job_finished(wait.job, &reply);
+        }
     }
-}
-
-impl ControlRequest {
-    pub fn new(method: impl Into<String>, params: Value) -> (Self, std::sync::mpsc::Receiver<ControlResponse>) {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let seq = NEXT_SEQ.fetch_add(1, Ordering::SeqCst);
-        (Self { method: method.into(), params, reply: tx, state: Arc::new(AtomicU8::new(QUEUED)), seq }, rx)
-    }
-
-    /// The sequence number the next request made gets: every request made so far is before it.
-    pub fn next_seq() -> u64 {
-        NEXT_SEQ.load(Ordering::SeqCst)
-    }
-
-    /// Whether this request was made before the one numbered `seq`.
-    pub fn made_before(&self, seq: u64) -> bool {
-        self.seq < seq
-    }
-
-    /// The caller's handle on this request, to give it up with.
-    pub fn ticket(&self) -> Ticket {
-        Ticket(self.state.clone())
-    }
-
-    /// Whether its caller gave it up (it never runs), without taking it.
-    pub fn given_up(&self) -> bool {
-        self.state.load(Ordering::SeqCst) == GIVEN_UP
-    }
-
-    /// Take the request to run it → `false` when its caller gave it up meanwhile (don't run it).
-    pub fn claim(&self) -> bool {
-        self.state.compare_exchange(QUEUED, STARTED, Ordering::SeqCst, Ordering::SeqCst).is_ok()
-    }
-}
-
-pub enum Outcome {
-    Done(Value),
-    /// A window capture, answered once a frame was presented: written to `path`, the PNG sent
-    /// back too with `data`.
-    Screenshot {
-        path: Option<String>,
-        data: bool,
-    },
-    /// A `ui.pointer` reply ([`pointer_reply`]), sent once the events numbered `from..to`
-    /// ([`vectorcraft_engine::Session::input_applied`]) have been made and the edit they started
-    /// on another thread is applied, so it shows the selection after the edit.
-    AfterToolEdit {
-        from: u64,
-        to: u64,
-        document: Option<u64>,
-    },
 }
 
 /// The reply to `ui.pointer`: the selection, the key object and the active tool.
@@ -182,17 +115,14 @@ pub(crate) fn pointer_reply_for(app: &VectorcraftApp, document: Option<u64>) -> 
     }
 }
 
-fn ok(v: Value) -> Outcome {
-    Outcome::Done(json!({"ok": true, "result": v}))
+fn ok(v: Value) -> Reply {
+    Reply::from_result(Ok(v))
 }
-pub(crate) fn err(e: impl std::fmt::Display) -> Outcome {
-    Outcome::Done(json!({"ok": false, "error": e.to_string()}))
+pub(crate) fn err(e: impl std::fmt::Display) -> Reply {
+    Reply::from_result(Err(e.to_string()))
 }
-fn wrap(r: Result<Value, String>) -> Outcome {
-    match r {
-        Ok(v) => ok(v),
-        Err(e) => err(e),
-    }
+fn wrap(r: Result<Value, String>) -> Reply {
+    Reply::from_result(r)
 }
 
 pub fn all_commands(app: &VectorcraftApp) -> Value {
@@ -1185,30 +1115,6 @@ fn shows_folder(key: &str, written: &str) -> bool {
     !vectorcraft_engine::cmd::prefscmds::names_a_folder(key, written) || (readable(written) && readable_value(written.trim()))
 }
 
-fn key_from(name: &str) -> Option<egui::Key> {
-    egui::Key::from_name(name).or(match name.to_ascii_lowercase().as_str() {
-        "enter" | "return" => Some(egui::Key::Enter),
-        "esc" | "escape" => Some(egui::Key::Escape),
-        "delete" => Some(egui::Key::Delete),
-        "backspace" => Some(egui::Key::Backspace),
-        "left" => Some(egui::Key::ArrowLeft),
-        "right" => Some(egui::Key::ArrowRight),
-        "up" => Some(egui::Key::ArrowUp),
-        "down" => Some(egui::Key::ArrowDown),
-        "space" => Some(egui::Key::Space),
-        "tab" => Some(egui::Key::Tab),
-        _ => None,
-    })
-}
-
-/// The modifier keys a request holds down (`cmd`, `ctrl`, `alt`, `shift`; `cmd` is Command on
-/// macOS, Ctrl elsewhere).
-fn modifiers(p: &Value) -> Result<egui::Modifiers, String> {
-    let b = |n: &str| crate::menus::opt_bool(p, n).map(|on| on.unwrap_or(false));
-    let cmd = b("cmd")?;
-    Ok(egui::Modifiers { alt: b("alt")?, ctrl: b("ctrl")?, shift: b("shift")?, mac_cmd: cmd && cfg!(target_os = "macos"), command: cmd })
-}
-
 /// An optional number param of a control request as `f32`, `default` when it is omitted or null.
 fn coord(p: &Value, key: &str, default: f32) -> Result<f32, String> {
     crate::menus::opt_number(p, key).map(|n| n.map_or(default, |n| n as f32))
@@ -1245,34 +1151,28 @@ const DOCKING_ACTION: &str = "action";
 /// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
 /// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
 /// or path.
-pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Reply {
+    let method = req.method.as_str();
     if vectorcraft_engine::file_access::current().is_none() {
-        return dispatch(app, ctx, req);
+        return dispatch(app, ctx, method, &req.params);
     }
     // Pointer, key and text input does not load, close or rename a library: the libraries hidden after
     // it ran are the ones hidden before, so frequent input does not read the UI state twice.
-    let before = if INPUT_METHODS.contains(&req.method.as_str()) { Hiding::default() } else { unreadable_library_ids(app) };
+    let before = if INPUT_METHODS.contains(&method) { Hiding::default() } else { unreadable_library_ids(app) };
     let shown: Vec<_> = before.hidden.iter().map(|(id, shown)| (shown.as_str(), id.as_str())).collect();
     let mut params = req.params.clone();
     let swapped = !shown.is_empty() && names_a_loaded_library(&req.params) && swap_library_params(&mut params, &shown);
-    let ran = vectorcraft_engine::guard::catch_panic(|| {
-        if swapped {
-            let request = ControlRequest { method: req.method.clone(), params, reply: req.reply.clone(), state: req.state.clone(), seq: req.seq };
-            dispatch(app, ctx, &request)
-        } else {
-            dispatch(app, ctx, req)
-        }
-    });
-    let outcome = match ran {
-        Ok(outcome) => outcome,
+    let sent = if swapped { &params } else { &req.params };
+    let reply = match vectorcraft_engine::guard::catch_panic(|| dispatch(app, ctx, method, sent)) {
+        Ok(reply) => reply,
         Err(msg) => {
             app.session.set_replaying(false);
             err(format!("internal error: {msg} (please report this bug)"))
         }
     };
-    let Outcome::Done(mut reply) = outcome else { return outcome };
+    let Reply::Done(mut reply) = reply else { return reply };
     hide_in_reply(app, &mut reply, &req.params, before);
-    Outcome::Done(reply)
+    Reply::Done(reply)
 }
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
@@ -1400,12 +1300,13 @@ fn restore_written_paths(reply: &mut Value, kept: Vec<(String, String)>) {
 /// it is.
 pub(crate) fn hide_in_deferred_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value) {
     if vectorcraft_engine::file_access::current().is_some() {
-        hide_in_reply(app, reply, sent, Hiding::default());
+        deferred_hiding(app).hide(reply, sent);
     }
 }
 
 /// The control methods that send synthetic input.
-const INPUT_METHODS: [&str; 7] = ["ui.pointer", "ui.click", "ui.drag", "ui.move", "ui.wheel", "ui.key", "ui.text"];
+const INPUT_METHODS: [&str; 11] =
+    ["ui.pointer", "ui.click", "ui.drag", "ui.move", "ui.wheel", "ui.key", "ui.text", "ui.type", "ui.release", "ui.ime", "ui.capsLock"];
 
 /// Does a string or a key of `v`, at any depth, hold a `/`, a `\` or a `%`?
 fn holds_a_separator(v: &Value) -> bool {
@@ -1464,10 +1365,9 @@ fn collect_library_params(v: &Value, ids: &mut std::collections::BTreeSet<String
     }
 }
 
-fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
-    let p = &req.params;
+fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Value) -> Reply {
     let s = |k: &str| p.get(k).and_then(Value::as_str);
-    match req.method.as_str() {
+    match method {
         "engine.execute" | "ui.menu.invoke" | "command" => {
             let Some(id) = s("command").or(s("id")) else { return err("missing `command`") };
             let params = p.get("params").cloned().unwrap_or(json!({}));
@@ -1501,73 +1401,20 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             let groups: Vec<_> = vectorcraft_tools::TOOL_GROUPS.iter().chain(vectorcraft_tools::addons::GROUPS).copied().collect();
             ok(serde_json::to_value(groups).unwrap_or_default())
         }
-        "ui.pointer" => pointer_events(app, ctx, req),
-        "ui.key" => {
-            let Some(k) = s("key").and_then(key_from) else { return err("unknown or missing `key`") };
-            let m = match modifiers(p) {
-                Ok(m) => m,
-                Err(e) => return err(e),
-            };
-            if let Err(e) = reserve_synthetic(app, 2 + usize::from(s("text").is_some())) {
-                return err(e);
-            }
-            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: m });
-            // Typed text comes with the press, so it shares the key's frame and modifiers.
-            if let Some(t) = s("text") {
-                app.synthetic.push(egui::Event::Text(t.to_string()));
-            }
-            app.synthetic.push(egui::Event::Key { key: k, physical_key: None, pressed: false, repeat: false, modifiers: m });
-            ctx.request_repaint();
-            ok(Value::Null)
+        "ui.pointer" => pointer_events(app, ctx, p),
+        "ui.text" => synthetic_input(app, ctx, "ui.type", p),
+        "ui.drag" => match queue_drag(app, ctx, &input_params(method, p)) {
+            Ok(()) => Reply::AfterInput,
+            Err(e) => err(e),
+        },
+        "ui.click" | "ui.move" | "ui.wheel" | "ui.key" | "ui.type" | "ui.release" | "ui.ime" | "ui.capsLock" => {
+            synthetic_input(app, ctx, method, &input_params(method, p))
         }
-        "ui.move" => {
-            let pos = match coord(p, "x", 0.0).and_then(|x| Ok(egui::pos2(x, coord(p, "y", 0.0)?))) {
-                Ok(pos) => pos,
-                Err(e) => return err(e),
-            };
-            if let Err(e) = reserve_synthetic(app, 1) {
-                return err(e);
-            }
-            app.synthetic.push(egui::Event::PointerMoved(pos));
-            ctx.request_repaint();
-            ok(Value::Null)
-        }
-        "ui.click" | "ui.drag" => synthetic_click(app, ctx, req),
-        "ui.wheel" => {
-            // Mouse wheel notches over screen point (x, y): `dy` up (+) or down, `dx` sideways
-            // (`unit: "point"` for trackpad-like points), with modifiers as `ui.click` takes them.
-            let given =
-                (|| Ok::<_, String>(([coord(p, "dx", 0.0)?, coord(p, "dy", 0.0)?, coord(p, "x", 0.0)?, coord(p, "y", 0.0)?], modifiers(p)?)))();
-            let ([dx, dy, x, y], modifiers) = match given {
-                Ok(given) => given,
-                Err(e) => return err(e),
-            };
-            if let Err(e) = reserve_synthetic(app, 2) {
-                return err(e);
-            }
-            let unit = if s("unit") == Some("point") { egui::MouseWheelUnit::Point } else { egui::MouseWheelUnit::Line };
-            // Notches, not a flood: a turn stays within what a real wheel sends.
-            let delta = egui::vec2(dx, dy).clamp(egui::Vec2::splat(-100.0), egui::Vec2::splat(100.0));
-            app.synthetic.push(egui::Event::PointerMoved(egui::pos2(x, y)));
-            app.synthetic.push(egui::Event::MouseWheel {
-                unit,
-                delta,
-                phase: egui::TouchPhase::Move,
-                modifiers,
-                source: egui::MouseWheelSource::Unknown,
-            });
-            ctx.request_repaint();
-            ok(Value::Null)
-        }
-        "ui.text" => {
-            if let Err(e) = reserve_synthetic(app, 1) {
-                return err(e);
-            }
-            app.synthetic.push(egui::Event::Text(s("text").unwrap_or("").to_string()));
-            ctx.request_repaint();
-            ok(Value::Null)
-        }
-        "ui.set" => set_ui(app, req),
+        "ui.find" => match craft::automation::access::access_method(method, p, &WindowHost::of(ctx), egui::ViewportId::ROOT) {
+            Some(r) => wrap(r),
+            None => err(format!("unknown method `{method}`")),
+        },
+        "ui.set" => set_ui(app, p),
         "ui.dialog.set" | "ui.dialog.confirm" | "ui.dialog.cancel" => {
             // Create Object Mosaic and Width Point convert against the selection as it is now.
             crate::dialogs::host::sync(app);
@@ -1579,7 +1426,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             }
             // `ui.dialog.set {action}` answers the dialog after setting its fields: the app's own key, which the
             // framework's method does not take.
-            let action = if req.method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };
+            let action = if method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };
             let answer = match action.as_ref().map(Value::as_str) {
                 None => None,
                 Some(Some("confirm")) => Some("ui.dialog.confirm"),
@@ -1596,7 +1443,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                 }
                 let sets = params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog"));
                 let set = if answer.is_none() || sets {
-                    craft::automation::dialogs::dialog_method(host, ctx, &req.method, &params)
+                    craft::automation::dialogs::dialog_method(host, ctx, method, &params)
                 } else {
                     Some(Ok(Value::Null))
                 };
@@ -1609,7 +1456,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             });
             match reply {
                 Some(r) => wrap(r),
-                None => err(format!("unknown method `{}`", req.method)),
+                None => err(format!("unknown method `{method}`")),
             }
         }
         "ui.resize" => {
@@ -1629,16 +1476,15 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             if let Some(Err(e)) = s("path").map(vectorcraft_engine::file_access::check_write) {
                 return err(e);
             }
-            let flags = crate::menus::opt_bool(p, "focus").and_then(|focus| Ok((focus, crate::menus::opt_bool(p, "data")?)));
-            let (focus, data) = match flags {
-                Ok(flags) => flags,
+            let focus = match crate::menus::opt_bool(p, "focus") {
+                Ok(focus) => focus,
                 Err(e) => return err(e),
             };
             if focus.unwrap_or(true) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
             ctx.request_repaint();
-            Outcome::Screenshot { path: s("path").map(str::to_string), data: data == Some(true) }
+            Reply::screenshot(next_token(), s("path").map(str::to_string), egui::ViewportId::ROOT)
         }
         "ui.render" => {
             let given = (|| {
@@ -1708,7 +1554,6 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
             if let Some(o) = p.as_object_mut() {
                 o.remove("wait");
             }
-            let method = req.method.as_str();
             // The key check of `document.export` or `document.save` runs before the file is written.
             let checked = if method == "app.export" { "document.export" } else { "document.save" };
             if let Err(e) = crate::menus::check_params(&app.session, checked, &p) {
@@ -1742,71 +1587,6 @@ fn with_data(mut result: Value, png: Option<&[u8]>) -> Value {
         result["pngBase64"] = json!(vectorcraft_format::base64_encode(png));
     }
     result
-}
-
-/// The largest image whose PNG goes back in a `ui.screenshot` reply (`data: true`): the reply
-/// makes a straight-alpha copy, the encoded PNG and, for `data`, a base64 string (~1.33× the
-/// PNG), so this bounds that working set before any of it is allocated. A path-only capture keeps
-/// the shared 128 MiB image budget.
-pub(crate) const MAX_SCREENSHOT_PNG_REPLY_BYTES: usize = 64 * 1024 * 1024;
-
-/// The checked RGBA size of `w × h`, when it fits.
-fn screenshot_rgba_bytes(w: usize, h: usize) -> Option<usize> {
-    w.checked_mul(h).and_then(|n| n.checked_mul(4))
-}
-
-/// The reply to `ui.screenshot`: the window capture `image` written to `path`, and sent back as
-/// `pngBase64` with `data`.
-pub fn save_screenshot(app: &mut VectorcraftApp, image: &egui::ColorImage, path: Option<&str>, data: bool) -> Value {
-    save_screenshot_with_limit(app, image, path, data, MAX_SCREENSHOT_PNG_REPLY_BYTES)
-}
-
-/// [`save_screenshot`] with the inline-PNG encoding limit supplied, so a small image can exercise
-/// the over-limit path without allocating a multi-megapixel frame. The public function always uses
-/// [`MAX_SCREENSHOT_PNG_REPLY_BYTES`].
-pub(crate) fn save_screenshot_with_limit(
-    app: &mut VectorcraftApp,
-    image: &egui::ColorImage,
-    path: Option<&str>,
-    data: bool,
-    max_reply_bytes: usize,
-) -> Value {
-    let [w, h] = image.size;
-    if path.is_none() && !data {
-        return json!({"ok": true, "result": {"width": w, "height": h}});
-    }
-    // A data-only reply has no second way to deliver the image, so refuse an oversized one before
-    // allocating its working set. A request that named a path still writes that file: only the
-    // inline copy is downgraded.
-    if data && path.is_none() && screenshot_rgba_bytes(w, h).is_none_or(|bytes| bytes > max_reply_bytes) {
-        return json!({"ok": false, "error": format!(
-            "a PNG reply of this {w}×{h} screenshot would exceed the {max_reply_bytes}-byte reply-encoding limit; write it to a path instead"
-        )});
-    }
-    let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
-    let img = vectorcraft_render::Rendered { width: w as u32, height: h as u32, pixels: rgba };
-    let png = match img.to_png() {
-        Ok(png) => png,
-        Err(e) => return json!({"ok": false, "error": e}),
-    };
-    let reply_png = data && png.len() <= max_reply_bytes;
-    if data && !reply_png && path.is_none() {
-        return json!({"ok": false, "error": format!(
-            "this screenshot's PNG is {} bytes, over the {max_reply_bytes}-byte reply-encoding limit; write it to a path instead",
-            png.len()
-        )});
-    }
-    let data = reply_png.then_some(png.as_slice());
-    let Some(path) = path else {
-        return json!({"ok": true, "result": with_data(json!({"width": w, "height": h}), data)});
-    };
-    match app.services.write.as_mut() {
-        Some(wr) => match wr(path, &png) {
-            Ok(()) => json!({"ok": true, "result": with_data(json!({"path": path, "width": w, "height": h}), data)}),
-            Err(e) => json!({"ok": false, "error": e}),
-        },
-        None => json!({"ok": false, "error": "no writer configured"}),
-    }
 }
 
 #[cfg(test)]
@@ -1886,11 +1666,11 @@ fn validate_rotate_view_events(params: &Value, events: &[Value]) -> Result<(), S
 }
 
 /// `ui.pointer`: pointer events through the tools.
-fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Reply {
     let rotating = app.session.tool_id() == "rotateView";
     let before = if rotating { app.view().map(|view| view.rotation) } else { None };
-    let outcome = pointer_events_inner(app, ctx, req);
-    if rotating && matches!(&outcome, Outcome::Done(reply) if reply.get("ok").and_then(Value::as_bool) == Some(false)) {
+    let outcome = pointer_events_inner(app, ctx, p);
+    if rotating && matches!(&outcome, Reply::Done(reply) if reply.get("ok").and_then(Value::as_bool) == Some(false)) {
         // A failed packet must neither leave a partial turn nor allow a later drag to resume it.
         app.control_rotate_press = None;
         if let (Some(before), Some(view)) = (before, app.view_mut()) {
@@ -1902,8 +1682,7 @@ fn pointer_events(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRe
 }
 
 /// Apply a pointer packet after Rotate View validation; other tools retain their existing routing.
-fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
-    let p = &req.params;
+fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Reply {
     let Some(events) = p.get("events").and_then(Value::as_array) else { return err("missing `events`") };
     let rotating = app.session.tool_id() == "rotateView";
     if rotating && let Err(error) = validate_rotate_view_events(p, events) {
@@ -1982,69 +1761,82 @@ fn pointer_events_inner(app: &mut VectorcraftApp, ctx: &egui::Context, req: &Con
     // a hover is answered at once.
     let to = app.session.input_count();
     if !app.session.input_applied(from, to) {
-        return Outcome::AfterToolEdit { from, to, document: app.session.active().map(|d| d.uid) };
+        let job = next_token();
+        app.pointer_waits.push(PointerWait { job, from, to, document: app.session.active().map(|d| d.uid) });
+        return Reply::AfterJob(job);
     }
-    Outcome::Done(pointer_reply(app))
+    Reply::Done(pointer_reply(app))
 }
 
-/// `ui.click` and `ui.drag`: pointer input through egui itself.
-fn synthetic_click(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
-    let p = &req.params;
-    let s = |k: &str| p.get(k).and_then(Value::as_str);
-    // Validate the entire expansion before appending even the initial move/press.
-    let steps = if req.method == "ui.drag" {
-        match input_count(p, "steps", 8, MAX_DRAG_STEPS) {
-            Ok(n) => n,
-            Err(e) => return err(e),
+/// Where the canvas shows a document point on the screen ([`synthetic::DocumentMap`]). VectorCraft's
+/// artboards share one coordinate space: its document has one page, 0.
+fn document_map(app: &VectorcraftApp) -> impl Fn(usize, egui::Pos2) -> Option<egui::Pos2> + use<> {
+    let canvas = app.canvas_view();
+    move |page, at| canvas.filter(|_| page == 0).map(|view| view.to_screen(vectorcraft_geom::Point::new(f64::from(at.x), f64::from(at.y))))
+}
+
+/// The params of an input method in the window host's spelling: `cmd`, which agents still send, is
+/// `command`, and a wheel turn without a `unit` turns in notches of lines, as a mouse wheel does.
+fn input_params(method: &str, p: &Value) -> Value {
+    let mut p = p.clone();
+    if let Some(fields) = p.as_object_mut() {
+        if let Some(cmd) = fields.remove("cmd") {
+            fields.entry("command").or_insert(cmd);
         }
-    } else {
-        0
-    };
-    let count = match input_count(p, "count", 1, MAX_CLICK_COUNT) {
-        Ok(n) => n,
-        Err(e) => return err(e),
-    };
-    let Some(events) = count.checked_mul(2).and_then(|n| n.checked_add(steps)).and_then(|n| n.checked_add(1)) else {
-        return err("synthetic input event count is out of range");
-    };
-    // Screen-space (egui points) pointer input through egui itself: reaches every widget.
-    let drag = req.method == "ui.drag";
-    let given = (|| {
-        let a = egui::pos2(coord(p, "x", 0.0)?, coord(p, "y", 0.0)?);
-        let end = if drag { egui::pos2(coord(p, "toX", 0.0)?, coord(p, "toY", 0.0)?) } else { a };
-        Ok::<_, String>((a, end, modifiers(p)?))
-    })();
-    let (a, end, modifiers) = match given {
-        Ok(given) => given,
-        Err(e) => return err(e),
-    };
-    if let Err(e) = reserve_synthetic(app, events) {
-        return err(e);
-    }
-    let button = match s("button") {
-        Some("right") | Some("secondary") => egui::PointerButton::Secondary,
-        _ => egui::PointerButton::Primary,
-    };
-    app.synthetic.push(egui::Event::PointerMoved(a));
-    app.synthetic.push(egui::Event::PointerButton { pos: a, button, pressed: true, modifiers });
-    if req.method == "ui.drag" {
-        for i in 1..=steps {
-            let t = i as f32 / steps as f32;
-            app.synthetic.push(egui::Event::PointerMoved(a + (end - a) * t));
+        if method == "ui.wheel" {
+            fields.entry("unit").or_insert_with(|| json!("lines"));
         }
     }
-    app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
-    for _ in 1..count {
-        app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: true, modifiers });
-        app.synthetic.push(egui::Event::PointerButton { pos: end, button, pressed: false, modifiers });
+    p
+}
+
+/// Real input queued on the main window's host ([`synthetic::input_method`]); the reply waits until
+/// it was processed.
+fn synthetic_input(app: &VectorcraftApp, ctx: &egui::Context, method: &str, p: &Value) -> Reply {
+    match synthetic::input_method(method, p, &WindowHost::of(ctx), egui::ViewportId::ROOT, &document_map(app)) {
+        Some(Ok(())) => Reply::AfterInput,
+        Some(Err(e)) => err(e),
+        None => err(format!("unknown method `{method}`")),
     }
-    ctx.request_repaint();
-    ok(Value::Null)
+}
+
+/// The point and modifier fields a `ui.drag` gives each of its moves, and the point fields and the
+/// button it gives its release.
+const DRAG_MOVE_FIELDS: [&str; 8] = ["coordinates", "page", "control", "modifiers", "shift", "alt", "command", "ctrl"];
+const DRAG_RELEASE_FIELDS: [&str; 4] = ["coordinates", "page", "control", "button"];
+
+/// `ui.drag {x, y, toX, toY, steps?, button?, …}`: a held `ui.click` at the start, `steps` `ui.move`s
+/// on the way to the end (8 by default, at most [`MAX_DRAG_STEPS`]) and a `ui.release` there. The whole
+/// drag is read before any of it is queued, so a refused one queues nothing.
+fn queue_drag(app: &VectorcraftApp, ctx: &egui::Context, p: &Value) -> Result<(), String> {
+    let Some(fields) = p.as_object() else { return Err("params must be an object".into()) };
+    let steps = input_count(p, "steps", 8, MAX_DRAG_STEPS)?;
+    let start = egui::pos2(coord(p, "x", 0.0)?, coord(p, "y", 0.0)?);
+    let end = egui::pos2(coord(p, "toX", 0.0)?, coord(p, "toY", 0.0)?);
+    let params_at = |pos: egui::Pos2, keep: &dyn Fn(&str) -> bool| {
+        let mut step: serde_json::Map<String, Value> = fields.iter().filter(|(k, _)| keep(k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+        step.insert("x".into(), json!(pos.x));
+        step.insert("y".into(), json!(pos.y));
+        Value::Object(step)
+    };
+    let mut press = params_at(start, &|k: &str| !matches!(k, "toX" | "toY" | "steps"));
+    press["hold"] = json!(true);
+    let press = Click::from_params(&press)?;
+    let moves = (1..=steps)
+        .map(|i| Move::from_params(&params_at(start + (end - start) * (i as f32 / steps as f32), &|k: &str| DRAG_MOVE_FIELDS.contains(&k))))
+        .collect::<Result<Vec<_>, _>>()?;
+    let release = Release::from_params(&params_at(end, &|k: &str| DRAG_RELEASE_FIELDS.contains(&k)))?;
+    let host = WindowHost::of(ctx);
+    let map = document_map(app);
+    press.inject(&host, egui::ViewportId::ROOT, &map)?;
+    for step in &moves {
+        step.inject(&host, egui::ViewportId::ROOT, &map)?;
+    }
+    release.inject(&host, egui::ViewportId::ROOT, &map)
 }
 
 /// `ui.set`: view flags, panels and status.
-fn set_ui(app: &mut VectorcraftApp, req: &ControlRequest) -> Outcome {
-    let p = &req.params;
+fn set_ui(app: &mut VectorcraftApp, p: &Value) -> Reply {
     let s = |k: &str| p.get(k).and_then(Value::as_str);
     // A flag of the wrong type is refused before anything is set.
     let flags = ["rulers", "outline", "grid", "smartGuides", "boundingBox", "controlBar", "imageTracePreview"];

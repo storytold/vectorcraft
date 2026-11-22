@@ -1371,29 +1371,33 @@ fn doc_swatches(doc: &Document) -> impl Iterator<Item = (&String, &Paint)> {
 /// The document's swatches (its own, then its groups') as chips; a pick paints `target`. Whether a
 /// swatch was picked.
 fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) -> bool {
-    let Some(st) = app.session.active() else { return false };
-    let fns = PresetFns::<DocSwatches<'_>, String>::new(|s, _| {
-        doc_swatches(s.doc)
-            .map(|(name, paint)| {
-                let paint = paint.clone();
-                PresetRow::item(name.clone(), name.clone(), 0)
-                    .preview(ThumbAspect::SQUARE, move |painter, rect| paint_preview::paint_rect(painter, rect, &paint))
-            })
-            .collect()
-    });
-    let source = PresetSource::new(DocSwatches { uid: st.uid, revision: st.revision, doc: &st.doc }, fns);
-    let out = PresetBrowser::new(tl!("Swatches"), Bind::given(PresetState::default()), &source)
-        .tiles(PresetTiles::Chips)
-        .view_lock(PresetView::Grid)
-        .row_menu(PresetRowMenu::Off)
-        .columns(SWATCH_COLUMNS)
-        .show(ui);
-    let picked = out.events.into_iter().find_map(|event| match event {
-        PresetEvent::Select { key, .. } | PresetEvent::Activate { key, .. } => Some(key),
-        _ => None,
-    });
-    let Some(name) = picked else { return false };
-    let none = doc_swatches(&st.doc).any(|(n, p)| *n == name && p.is_none());
+    // The source borrows the document until it drops, before the pick runs its command.
+    let (name, none) = {
+        let Some(st) = app.session.active() else { return false };
+        let fns = PresetFns::<DocSwatches<'_>, String>::new(|s, _| {
+            doc_swatches(s.doc)
+                .map(|(name, paint)| {
+                    let paint = paint.clone();
+                    PresetRow::item(name.clone(), name.clone(), 0)
+                        .preview(ThumbAspect::SQUARE, move |painter, rect| paint_preview::paint_rect(painter, rect, &paint))
+                })
+                .collect()
+        });
+        let source = PresetSource::new(DocSwatches { uid: st.uid, revision: st.revision, doc: &st.doc }, fns);
+        let out = PresetBrowser::new(tl!("Swatches"), Bind::given(PresetState::default()), &source)
+            .tiles(PresetTiles::Chips)
+            .view_lock(PresetView::Grid)
+            .row_menu(PresetRowMenu::Off)
+            .columns(SWATCH_COLUMNS)
+            .show(ui);
+        let picked = out.events.into_iter().find_map(|event| match event {
+            PresetEvent::Select { key, .. } | PresetEvent::Activate { key, .. } => Some(key),
+            _ => None,
+        });
+        let Some(name) = picked else { return false };
+        let none = doc_swatches(&st.doc).any(|(n, p)| *n == name && p.is_none());
+        (name, none)
+    };
     let paint = if none { json!({"none": true}) } else { json!({ "swatch": name }) };
     let (cmd, mut params) = match target {
         Painted::Item(index) => ("appearance.setItem", json!({ "index": index })),
