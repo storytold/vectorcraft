@@ -284,6 +284,57 @@ fn a_symbol_key_from_to_primitive_counts_against_the_heap_while_the_property_is_
 }
 
 #[test]
+fn define_properties_keeps_a_symbol_key_counted_after_a_getter_deletes_it() {
+    // The second Symbol-keyed descriptor's getter deletes the first property, drops `s` and makes
+    // a string of 1,500,000 units. With `keep` (1,000,000 units) and the first Symbol's
+    // description of 2,000,000 units still counted, that string does not fit; with a short
+    // description it does.
+    let src = |description: &str, define: &str| {
+        format!(
+            "function mk(n) {{ return new Array(n + 1).join('x'); }} \
+             var keep = mk(1000000), made = null, s = Symbol({description}), props = {{}}; \
+             props[s] = {{ value: 1, enumerable: true }}; \
+             Object.defineProperty(props, Symbol('t'), {{ enumerable: true, get: function () {{ \
+               delete props[s]; s = null; made = mk(1500000); return {{ value: 2 }}; }} }}); \
+             var o = {define}; o[Object.getOwnPropertySymbols(o)[0]] + ' ' + made.length"
+        )
+    };
+    let limits = || Limits { heap_bytes: 8 << 20, fuel: 50_000_000, ..Limits::default() };
+    for define in ["Object.defineProperties({}, props)", "Object.create(null, props)"] {
+        assert_eq!(es2015(limits()).run(&src("'d'", define)), Ok(JsValue::String("1 1500000".into())), "{define}");
+        match es2015(limits()).run(&src("mk(2000000)", define)) {
+            Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => {}
+            other => panic!("{define}: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn an_operator_keeps_the_first_operand_converted_while_it_converts_the_second() {
+    // `a` converts to a Symbol with a description of 2,000,000 units that nothing else holds, and
+    // `b`'s conversion makes a string of 1,500,000 units. With `keep` (1,000,000 units) and the
+    // description still counted, that string does not fit; when `a` gives a number it does.
+    let src = |first: &str, op: &str| {
+        format!(
+            "function mk(n) {{ return new Array(n + 1).join('x'); }} \
+             var keep = mk(1000000), made = null; \
+             var a = {{}}; a[Symbol.toPrimitive] = function () {{ return {first}; }}; \
+             var b = {{}}; b[Symbol.toPrimitive] = function () {{ made = mk(1500000); return 1; }}; \
+             try {{ a {op} b; }} catch (e) {{ if (!(e instanceof TypeError)) throw e; }} \
+             made.length === 1500000"
+        )
+    };
+    let limits = || Limits { heap_bytes: 8 << 20, fuel: 50_000_000, ..Limits::default() };
+    for op in ["+", "<", ">", "<=", ">="] {
+        assert_eq!(es2015(limits()).run(&src("(Symbol(mk(2000000)), 0)", op)), Ok(JsValue::Bool(true)), "{op}");
+        match es2015(limits()).run(&src("Symbol(mk(2000000))", op)) {
+            Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => {}
+            other => panic!("{op}: {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn date_objects_convert_through_their_to_primitive_method() {
     let date = "var d = new Date(0); d.valueOf = function () { return 7; }; d.toString = function () { return 'date'; };";
     truth(&format!("{date} d + 1 === 'date1' && d * 1 === 7 && String(d) === 'date' && (d == 'date')"));

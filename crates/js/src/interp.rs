@@ -2993,7 +2993,8 @@ impl Interp {
             return self.xml_concat(a, b);
         }
         let pa = self.to_primitive(a, Hint::Default)?;
-        let pb = self.to_primitive(b, Hint::Default)?;
+        // The right side's conversion can run script, so the left side's result stays counted.
+        let pb = self.rooted(std::slice::from_ref(&pa), |i| i.to_primitive(b, Hint::Default))?;
         if matches!(pa, Value::String(_)) || matches!(pb, Value::String(_)) {
             // Both are primitives, so this converts them without running script code; a Symbol
             // throws.
@@ -3007,12 +3008,14 @@ impl Interp {
     /// The abstract relational comparison `x < y` (section 11.8.5): `None` when either side is
     /// NaN.
     fn less_than(&mut self, x: &Value, y: &Value, left_first: bool) -> JsResult<Option<bool>> {
+        // The second conversion can run script, so the first one's result stays counted.
         let (px, py) = if left_first {
             let px = self.to_primitive(x, Hint::Number)?;
-            (px, self.to_primitive(y, Hint::Number)?)
+            let py = self.rooted(std::slice::from_ref(&px), |i| i.to_primitive(y, Hint::Number))?;
+            (px, py)
         } else {
             let py = self.to_primitive(y, Hint::Number)?;
-            (self.to_primitive(x, Hint::Number)?, py)
+            (self.rooted(std::slice::from_ref(&py), |i| i.to_primitive(x, Hint::Number))?, py)
         };
         if let (Value::String(a), Value::String(b)) = (&px, &py) {
             // Both stay rooted, so the first copy is still counted while the second is made.
