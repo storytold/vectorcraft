@@ -280,7 +280,11 @@ impl CanvasTool for SessionTool<'_> {
                     (false, _, true) => EngineKey::Up,
                     (false, _, false) => EngineKey::Down,
                 };
-                self.send_key(k, tool_mods(*mods, space))
+                // An arrow the tool leaves moves the selection; with Backtick held, only its pattern paints.
+                self.send_key(k, tool_mods(*mods, space)) || {
+                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, cx.held(Key::Backtick));
+                    true
+                }
             }
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
             ToolKey::Submit => self.send_key(EngineKey::Enter, held),

@@ -52,8 +52,8 @@ impl Scene {
         app.run("select.set", json!({"ids": [fill.0, stroke.0, solid.0]})).unwrap();
         app.select_tool("selection");
         let ctx = egui::Context::default();
-        // PLAN: assumed `craft::ui::shell::{InstallSpec, ShellInfo}` and `craft::ui::testing::NoWindows` paths.
-        let spec = craft::ui::InstallSpec::new(craft::host::target::ShellInfo::default(), std::sync::Arc::new(craft::ui::testing::windows::NoWindows));
+        let spec =
+            craft::ui::InstallSpec::new(craft::host::target::ShellInfo::default(), std::sync::Arc::new(craft::ui::testing::windows::NoWindows));
         craft::ui::shell::embed::install(&ctx, spec, &vectorcraft_ui_egui::ui_fonts()).unwrap();
         let mut scene = Self { app, ctx, time: 0.0, fill, stroke, solid, other };
         for _ in 0..3 {
@@ -71,8 +71,10 @@ impl Scene {
             screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 800.0))),
             ..Default::default()
         };
+        // As the hosts run a frame: the app gives its input, and the commands the pass fired run as the next frame begins.
         craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         let mut out = self.ctx.run_ui(raw, |ui| self.app.ui(ui));
+        craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
         out.textures_delta.clear();
     }
 
