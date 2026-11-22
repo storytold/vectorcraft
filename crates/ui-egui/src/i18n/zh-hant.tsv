@@ -7105,6 +7105,7 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
 	Keep settings of its own	保存自己的設定
 	Keep a cache of its own, which you can clear	保存自己的快取，您可以清除它
+	Run on its own when the selection, a document or a layer changes	在選取範圍、文件或圖層變更時自動執行
 	Run these commands on the document: {ids}	在文件上執行這些指令：{ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」在 `commandAllowlist` 中列出了增效模組不能呼叫的 `{id}`
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`：{why}
@@ -7136,6 +7137,15 @@ axis	Y Axis	Y 軸
 @msg	only a filter declares `inputs`	只有濾鏡才能宣告 `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` 列出了未知的物件類型 `{shown}`：請使用 type、image 或 symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了兩次 `{shown}`
+@msg	`events` lists `{shown}` twice	`events` 列出了兩次 `{shown}`
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` 列出了未知的事件 `{shown}`：請使用 selection.changed、document.opened、document.saved 或 layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` 需要增效模組 API 層級 {EVENTS_API}：請設定 `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` 需要權限 `events`，而 `events` 需要 `events` 清單
+@msg	event size ({len} bytes, limit {max})	事件大小（{len} 位元組，上限 {max}）
+@msg	the module reacts to no events	此模組不回應任何事件
+@msg	vc_event returned {code}	vc_event 傳回了 {code}
+@msg	{name}: its {event} handler failed: {e}	{name}：其 {event} 處理常式失敗：{e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}：處理常式連續 {count} 次失敗，其事件已關閉，直到 VectorCraft 再次啟動
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）

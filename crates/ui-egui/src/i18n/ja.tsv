@@ -7149,6 +7149,7 @@ axis	Y Axis	Y 軸
 	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
 	Keep settings of its own	独自の設定の保持
 	Keep a cache of its own, which you can clear	消去できる独自のキャッシュの保持
+	Run on its own when the selection, a document or a layer changes	選択、ドキュメント、またはレイヤーが変わったときの自動実行
 	Run these commands on the document: {ids}	ドキュメントでのこれらのコマンドの実行: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	「{name}」は `commandAllowlist` にプラグインが呼び出せない `{id}` を挙げています
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7180,6 +7181,15 @@ axis	Y Axis	Y 軸
 @msg	only a filter declares `inputs`	`inputs` を宣言できるのはフィルターだけです
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
 @msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
+@msg	`events` lists `{shown}` twice	`events` に `{shown}` が 2 回指定されています
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` に不明なイベント `{shown}` があります。selection.changed、document.opened、document.saved、layer.changed のいずれかを使ってください
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` にはプラグイン API レベル {EVENTS_API} が必要です。`api` {EVENTS_API} を指定してください
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` には権限 `events` が必要で、`events` には `events` のリストが必要です
+@msg	event size ({len} bytes, limit {max})	イベントサイズ ({len} バイト、上限 {max})
+@msg	the module reacts to no events	このモジュールはどのイベントにも反応しません
+@msg	vc_event returned {code}	vc_event が {code} を返しました
+@msg	{name}: its {event} handler failed: {e}	{name}: {event} のハンドラーが失敗しました: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: ハンドラーが {count} 回続けて失敗したため、VectorCraft を再起動するまでイベントはオフです
 @msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)

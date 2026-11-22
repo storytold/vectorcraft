@@ -9555,6 +9555,7 @@ axis	Y Axis	Y ღერძი
 	Show its progress, see Cancel and write log lines	პროგრესის ჩვენება, გაუქმების შემჩნევა და ჟურნალის სტრიქონების ჩაწერა
 	Keep settings of its own	საკუთარი პარამეტრების შენახვა
 	Keep a cache of its own, which you can clear	საკუთარი ქეშის შენახვა, რომლის გასუფთავებაც შეგიძლიათ
+	Run on its own when the selection, a document or a layer changes	თავისით გაშვება, როცა იცვლება მონიშნული, დოკუმენტი ან შრე
 	Run these commands on the document: {ids}	ამ ბრძანებების გაშვება დოკუმენტზე: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}“ `commandAllowlist`-ში ასახელებს `{id}`-ს, რომლის გამოძახებაც პლაგინს არ შეუძლია
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -9586,6 +9587,15 @@ axis	Y Axis	Y ღერძი
 @msg	only a filter declares `inputs`	`inputs`-ის გამოცხადება მხოლოდ ფილტრს შეუძლია
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` უცნობ ობიექტის სახეობას ასახელებს `{shown}`: გამოიყენეთ type, image ან symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
+@msg	`events` lists `{shown}` twice	`events`-ში `{shown}` ორჯერაა ჩამოთვლილი
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` უცნობ მოვლენას ასახელებს `{shown}`: გამოიყენეთ selection.changed, document.opened, document.saved ან layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events`-ს სჭირდება პლაგინის API-ის დონე {EVENTS_API}: მიუთითეთ `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events`-ს სჭირდება ნებართვა `events`, ხოლო `events`-ს სჭირდება `events`-ის სია
+@msg	event size ({len} bytes, limit {max})	მოვლენის ზომა ({len} ბაიტი, ლიმიტი {max})
+@msg	the module reacts to no events	მოდული არცერთ მოვლენაზე არ რეაგირებს
+@msg	vc_event returned {code}	vc_event-მა დააბრუნა {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: მისი {event} დამმუშავებელი ვერ შესრულდა: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: მისი მოვლენები გამორთულია VectorCraft-ის ხელახლა გაშვებამდე, ზედიზედ {count} წარუმატებელი დამმუშავებლის შემდეგ
 @msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})

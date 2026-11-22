@@ -104,6 +104,9 @@ pub fn describe(p: &Plugin) -> Value {
     if m.paint_output {
         v["paintOutput"] = json!(true);
     }
+    if !m.events.is_empty() {
+        v["events"] = json!(m.events);
+    }
     if !m.command_allowlist.is_empty() {
         v["commandAllowlist"] = json!(m.command_allowlist);
     }
@@ -886,6 +889,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         s.store_disabled_plugins_in(&turn);
     }
     drop(turn);
+    s.plugins_changed_for_events();
     let mut v = describe_installed(&installed);
     if !unknown.is_empty() {
         v["unknownCommands"] = json!(unknown);
@@ -1198,12 +1202,17 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"changed": changed, "saved": saved, "disabled": safe_mode::disabled().iter().map(shown_item).collect::<Vec<_>>()}))
 }
 
-fn info(_: &mut Session, p: &Value) -> Result<Value> {
+fn info(s: &mut Session, p: &Value) -> Result<Value> {
     let plugin = plugin_by_id("plugin.info", p)?;
     let mut v = describe_installed(&plugin);
     v["manifest"] = serde_json::to_value(plugin.manifest()).unwrap_or(Value::Null);
     v["defaults"] = Value::Object(plugin.manifest().defaults());
     v["lastError"] = json!(effect::last_error(plugin.id()));
+    if !plugin.manifest().events.is_empty() {
+        let (off, last) = s.plugin_event_status(&plugin);
+        v["eventsOff"] = json!(off);
+        v["lastEventError"] = json!(last);
+    }
     Ok(v)
 }
 
@@ -1241,6 +1250,7 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     if !stored && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
     }
+    s.plugins_changed_for_events();
     Ok(json!({"removed": id}))
 }
 
@@ -1270,7 +1280,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md; events: it reacts to the events it names, see events), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), events?: [\"selection.changed\"|\"document.opened\"|\"document.saved\"|\"layer.changed\"] (the events its vc_event handler is given after each change of that kind, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1279,7 +1289,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Plug-in Info",
             [],
             None,
-            "{id} → plugin.list's entry plus {manifest, defaults, lastError (a live effect's last failure, null; for a live effect with paintOutput, its name and the refused field, such as objects[1].strokes[0].width)}",
+            "{id} → plugin.list's entry plus {manifest, defaults, lastError (a live effect's last failure, null; for a live effect with paintOutput, its name and the refused field, such as objects[1].strokes[0].width), eventsOff? (with events: true once 3 handlers in a row failed, until the app starts again or another module is installed with its id), lastEventError? (with events: its handler's last failure, null)}",
             always,
             info
         ),

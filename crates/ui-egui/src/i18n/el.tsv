@@ -7442,6 +7442,7 @@ axis	Y Axis	Άξονας Y
 	Show its progress, see Cancel and write log lines	Εμφάνιση της προόδου, αναγνώριση της ακύρωσης και εγγραφή γραμμών καταγραφής
 	Keep settings of its own	Διατήρηση δικών του ρυθμίσεων
 	Keep a cache of its own, which you can clear	Διατήρηση δικής του κρυφής μνήμης, την οποία μπορείτε να εκκαθαρίσετε
+	Run on its own when the selection, a document or a layer changes	Εκτέλεση από μόνο του όταν αλλάζει η επιλογή, ένα έγγραφο ή ένα επίπεδο
 	Run these commands on the document: {ids}	Εκτέλεση αυτών των εντολών στο έγγραφο: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	το «{name}» αναφέρει το `{id}` στο `commandAllowlist`, το οποίο ένα πρόσθετο δεν επιτρέπεται να καλέσει
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7473,6 +7474,15 @@ axis	Y Axis	Άξονας Y
 @msg	only a filter declares `inputs`	μόνο ένα φίλτρο δηλώνει `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `inputs` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
+@msg	`events` lists `{shown}` twice	το `events` αναφέρει το `{shown}` δύο φορές
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	το `events` αναφέρει άγνωστο συμβάν `{shown}`: χρησιμοποιήστε selection.changed, document.opened, document.saved ή layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	το `events` χρειάζεται το επίπεδο API προσθέτων {EVENTS_API}: δώστε `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	το `events` χρειάζεται το δικαίωμα `events`, και το `events` χρειάζεται μια λίστα `events`
+@msg	event size ({len} bytes, limit {max})	μέγεθος συμβάντος ({len} byte, όριο {max})
+@msg	the module reacts to no events	η λειτουργική μονάδα δεν αντιδρά σε κανένα συμβάν
+@msg	vc_event returned {code}	η vc_event επέστρεψε {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: ο χειριστής {event} του απέτυχε: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: τα συμβάντα του είναι απενεργοποιημένα μέχρι να ξεκινήσει ξανά το VectorCraft, μετά από {count} αποτυχημένους χειριστές στη σειρά
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	προϋπολογισμός μνήμης (το αντικείμενο {_1} χρειάζεται {size} byte εισόδου, απομένουν {left})

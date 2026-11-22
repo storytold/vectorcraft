@@ -31,12 +31,14 @@
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
 //! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
 //! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
-//! runs through `vc_run` with the command's id in `_context`.
+//! runs through `vc_run` with the command's id in `_context`. Any kind may also react to the
+//! [`events`] its manifest names, through `vc_event`, without changing the document.
 #![forbid(unsafe_code)]
 
 pub mod deferred;
 pub mod dialog;
 pub mod effect;
+pub mod events;
 pub mod export;
 pub mod host;
 pub mod import;
@@ -51,6 +53,7 @@ pub mod storage;
 pub mod wat;
 
 pub use dialog::ParamUi;
+pub use events::Event;
 pub use host::{LogLevel, LogLine, Report};
 pub use manifest::{Budget, Command, InputKind, Kind, Manifest, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, heavy_terms};

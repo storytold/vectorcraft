@@ -7437,6 +7437,7 @@ axis	Y Axis	Y tengely
 	Show its progress, see Cancel and write log lines	Megjelenítheti az előrehaladását, észlelheti a megszakítást és naplósorokat írhat
 	Keep settings of its own	Saját beállításokat tárolhat
 	Keep a cache of its own, which you can clear	Saját gyorsítótárat tárolhat, amelyet Ön kiüríthet
+	Run on its own when the selection, a document or a layer changes	Magától futhat, amikor a kijelölés, egy dokumentum vagy egy réteg megváltozik
 	Run these commands on the document: {ids}	Ezeket a parancsokat futtathatja a dokumentumon: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	a(z) „{name}” a(z) `{id}` parancsot sorolja fel a `commandAllowlist` listában, amelyet bővítmény nem hívhat meg
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7468,6 +7469,15 @@ axis	Y Axis	Y tengely
 @msg	only a filter declares `inputs`	`inputs` kulcsot csak szűrő adhat meg
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	az `inputs` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
+@msg	`events` lists `{shown}` twice	az `events` kétszer sorolja fel ezt: `{shown}`
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	az `events` ismeretlen eseményt nevez meg: `{shown}`; használja a selection.changed, document.opened, document.saved vagy layer.changed értéket
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	az `events` listához {EVENTS_API}. szintű bővítmény-API kell: adja meg az `api` {EVENTS_API} értéket
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	az `events` listához az `events` engedély szükséges, az `events` engedélyhez pedig `events` lista
+@msg	event size ({len} bytes, limit {max})	esemény mérete ({len} bájt, korlát {max})
+@msg	the module reacts to no events	a modul egyetlen eseményre sem reagál
+@msg	vc_event returned {code}	a vc_event {code} értéket adott vissza
+@msg	{name}: its {event} handler failed: {e}	{name}: a(z) {event} kezelője sikertelen volt: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: az eseményei ki vannak kapcsolva a VectorCraft következő indításáig, {count} egymást követő sikertelen kezelő után
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)

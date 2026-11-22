@@ -7464,6 +7464,7 @@ axis	Y Axis	Y-axel
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
 	Keep settings of its own	Spara egna inställningar
 	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
+	Run on its own when the selection, a document or a layer changes	Köras av sig själv när markeringen, ett dokument eller ett lager ändras
 	Run these commands on the document: {ids}	Köra dessa kommandon på dokumentet: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	”{name}” anger `{id}` i `commandAllowlist`, som ett plugin inte får anropa
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7495,6 +7496,15 @@ axis	Y Axis	Y-axel
 @msg	only a filter declares `inputs`	bara ett filter anger `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` anger en okänd objekttyp `{shown}`: använd type, image eller symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` anger `{shown}` två gånger
+@msg	`events` lists `{shown}` twice	`events` anger `{shown}` två gånger
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` anger en okänd händelse `{shown}`: använd selection.changed, document.opened, document.saved eller layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` kräver plugin-API-nivå {EVENTS_API}: ange `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` behöver behörigheten `events`, och `events` behöver en lista `events`
+@msg	event size ({len} bytes, limit {max})	händelsestorlek ({len} byte, gräns {max})
+@msg	the module reacts to no events	modulen reagerar inte på några händelser
+@msg	vc_event returned {code}	vc_event returnerade {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: dess {event}-hanterare misslyckades: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: dess händelser är avstängda tills VectorCraft startas igen, efter {count} misslyckade hanterare i rad
 @msg	`inputs` needs `api` 2 or later	`inputs` kräver `api` 2 eller senare
 @msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	minnesbudget (objekt {_1} behöver {size} byte indata, {left} återstår)

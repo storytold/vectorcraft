@@ -7519,6 +7519,7 @@ axis	Y Axis	Y-akseli
 	Show its progress, see Cancel and write log lines	Näyttää edistymisensä, havaita peruutuksen ja kirjoittaa lokirivejä
 	Keep settings of its own	Säilyttää omat asetuksensa
 	Keep a cache of its own, which you can clear	Säilyttää oman välimuistin, jonka voit tyhjentää
+	Run on its own when the selection, a document or a layer changes	Käynnistyä itsestään, kun valinta, asiakirja tai taso muuttuu
 	Run these commands on the document: {ids}	Suorittaa nämä komennot asiakirjassa: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	”{name}” luettelee `commandAllowlist`-luettelossa komennon `{id}`, jota laajennus ei saa kutsua
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7550,6 +7551,15 @@ axis	Y Axis	Y-akseli
 @msg	only a filter declares `inputs`	vain suodatin voi määrittää `inputs`-avaimen
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
+@msg	`events` lists `{shown}` twice	`events` luettelee kohteen `{shown}` kahdesti
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` nimeää tuntemattoman tapahtuman `{shown}`: käytä arvoa selection.changed, document.opened, document.saved tai layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` vaatii laajennus-API:n tason {EVENTS_API}: anna `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` tarvitsee käyttöoikeuden `events`, ja `events` tarvitsee `events`-luettelon
+@msg	event size ({len} bytes, limit {max})	tapahtuman koko ({len} tavua, raja {max})
+@msg	the module reacts to no events	moduuli ei reagoi mihinkään tapahtumaan
+@msg	vc_event returned {code}	vc_event palautti {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: sen {event}-käsittelijä epäonnistui: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: sen tapahtumat ovat pois päältä, kunnes VectorCraft käynnistyy uudelleen, {count} peräkkäin epäonnistuneen käsittelijän jälkeen
 @msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})

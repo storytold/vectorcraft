@@ -695,6 +695,15 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	only a filter declares `inputs`	kun et filter angiver `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` angiver en ukendt objekttype `{shown}`: brug type, image eller symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` angiver `{shown}` to gange
+@msg	`events` lists `{shown}` twice	`events` angiver `{shown}` to gange
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` angiver en ukendt hændelse `{shown}`: brug selection.changed, document.opened, document.saved eller layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` kræver plug-in-API-niveau {EVENTS_API}: angiv `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` kræver tilladelsen `events`, og `events` kræver en liste `events`
+@msg	event size ({len} bytes, limit {max})	hændelsesstørrelse ({len} byte, grænse {max})
+@msg	the module reacts to no events	modulet reagerer ikke på nogen hændelser
+@msg	vc_event returned {code}	vc_event returnerede {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: dens {event}-handler mislykkedes: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: dens hændelser er slået fra, indtil VectorCraft starter igen, efter {count} mislykkede handlere i træk
 @msg	`inputs` needs `api` 2 or later	`inputs` kræver `api` 2 eller nyere
 @msg	`inputs` needs the permission `doc.read`	`inputs` kræver tilladelsen `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	hukommelsesbudget (objekt {_1} kræver {size} byte input, {left} tilbage)
@@ -9609,6 +9618,7 @@ axis	Y Axis	Y-akse
 	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
 	Keep settings of its own	Gemme sine egne indstillinger
 	Keep a cache of its own, which you can clear	Gemme sin egen cache, som du kan rydde
+	Run on its own when the selection, a document or a layer changes	Køre af sig selv, når markeringen, et dokument eller et lag ændres
 	Run these commands on the document: {ids}	Køre disse kommandoer på dokumentet: {ids}
 	Clear Plug-in Cache	Ryd plug-in-cache
 # Actions panel: action sets (#3712).

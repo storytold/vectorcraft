@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
+use crate::events::{EVENTS_API, Event};
 use crate::permissions::{self, API_LEVEL, INPUTS_API, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
@@ -348,6 +349,11 @@ pub struct Manifest {
     /// lists any ([`Manifest::validate`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command_allowlist: Vec<String>,
+    /// The events it reacts to, by [`Event::name`]: only a module at `api` 2 or later whose
+    /// `permissions` list `events` lists any, and it exports `vc_event` ([`crate::events`]). Left
+    /// out or empty, it reacts to none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "event_names")]
+    pub events: Vec<String>,
 }
 
 impl Manifest {
@@ -383,6 +389,7 @@ impl Manifest {
             paint_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
+            events: Vec::new(),
         }
     }
 
@@ -440,7 +447,42 @@ impl Manifest {
         }
         self.validate_params()?;
         self.validate_commands()?;
-        self.validate_allowlist()
+        self.validate_allowlist()?;
+        self.validate_events()
+    }
+
+    /// `events` names each [`Event`] at most once, and a list needs `api` 2 or later and the
+    /// permission `events`, which needs a list.
+    fn validate_events(&self) -> Result<()> {
+        for (i, name) in self.events.iter().enumerate() {
+            let shown = permissions::display_text(name, permissions::MAX_SHOWN_FIELD);
+            if Event::parse(name).is_none() {
+                return Err(Error::Manifest(format!(
+                    "`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed"
+                )));
+            }
+            if self.events.get(..i).is_some_and(|before| before.contains(name)) {
+                return Err(Error::Manifest(format!("`events` lists `{shown}` twice")));
+            }
+        }
+        let listed = self.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == Permission::Events.name()));
+        if self.events.is_empty() == listed {
+            return Err(Error::Manifest("`events` needs the permission `events`, and `events` needs a list of `events`".into()));
+        }
+        if listed && self.api < EVENTS_API {
+            return Err(Error::Manifest(format!("`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}")));
+        }
+        Ok(())
+    }
+
+    /// The events it reacts to (`events`).
+    pub fn event_kinds(&self) -> Vec<Event> {
+        self.events.iter().filter_map(|n| Event::parse(n)).collect()
+    }
+
+    /// Does it react to `event`?
+    pub fn reacts_to(&self, event: Event) -> bool {
+        self.events.iter().any(|n| n == event.name())
     }
 
     /// `commandAllowlist` lists at most [`MAX_ALLOWED_COMMANDS`] distinct command ids
@@ -726,6 +768,17 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
 /// [`Manifest::validate_inputs`] names a wrong entry.
 fn input_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
     let wrong = || serde::de::Error::custom("`inputs` must be a list of object kinds: type, image or symbolInstance");
+    match Value::deserialize(d)? {
+        Value::Null => Ok(Vec::new()),
+        Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
+        _ => Err(wrong()),
+    }
+}
+
+/// Reads `events`: a list of names (`null`: none). Anything else is an error that names the key, as
+/// [`Manifest::validate_events`] names a wrong entry.
+fn event_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
+    let wrong = || serde::de::Error::custom("`events` must be a list of event names, such as selection.changed");
     match Value::deserialize(d)? {
         Value::Null => Ok(Vec::new()),
         Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
@@ -1392,6 +1445,52 @@ mod tests {
         let all = Manifest::parse(manifest(MAX_PARAMS, MAX_PARAMS - MAX_UNGROUPED).as_bytes()).unwrap();
         assert_eq!(all.params.len(), MAX_PARAMS);
         assert!(Manifest::parse(manifest(MAX_PARAMS + 1, MAX_PARAMS).as_bytes()).is_err(), "too many in all");
+    }
+
+    /// Any kind at `api` 2 that lists the permission `events` names the events it reacts to; an
+    /// unknown or repeated name, a list without the permission or the permission without a list,
+    /// and a list at `api` 1 are refused, and the error names the fault.
+    #[test]
+    fn events_are_listed_with_their_permission_at_api_2() {
+        let m = Manifest::parse(
+            br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"],"events":["layer.changed","selection.changed"]}"#,
+        )
+        .unwrap();
+        assert_eq!(m.event_kinds(), [Event::LayerChanged, Event::SelectionChanged]);
+        assert!(m.reacts_to(Event::SelectionChanged) && !m.reacts_to(Event::DocumentSaved));
+        assert_eq!(m.permissions(), [Permission::Events]);
+        assert_eq!(serde_json::to_value(&m).unwrap()["events"], json!(["layer.changed", "selection.changed"]));
+        let effect =
+            br#"{"id":"a","name":"x","kind":"effect","api":2,"permissions":["doc.read","effect.render","events"],"events":["document.saved"]}"#;
+        assert_eq!(Manifest::parse(effect).unwrap().event_kinds(), [Event::DocumentSaved]);
+        let importer =
+            br#"{"id":"a","name":"x","kind":"importer","api":2,"extensions":["q"],"permissions":["import.read","events"],"events":["document.opened"]}"#;
+        assert!(Manifest::parse(importer).is_ok());
+        let plain = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","events":null}"#).unwrap();
+        assert!(plain.events.is_empty() && serde_json::to_value(&plain).unwrap().get("events").is_none());
+        for (bad, says) in [
+            (
+                r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"],"events":["selection.change"]}"#,
+                "unknown event `selection.change`",
+            ),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"],"events":["layer.changed","layer.changed"]}"#,
+                "lists `layer.changed` twice",
+            ),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"events":["layer.changed"]}"#, "needs the permission `events`"),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.read"],"events":["layer.changed"]}"#,
+                "needs the permission `events`",
+            ),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"]}"#, "needs the permission `events`"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"],"events":[]}"#, "needs the permission `events`"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["events"],"events":["layer.changed"]}"#, "needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"],"events":"layer.changed"}"#, "must be a list"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["events"],"events":[1]}"#, "must be a list"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
     }
 
     #[test]

@@ -239,6 +239,7 @@ fn permission_words(name: &str, commands: &[String]) -> String {
         Some(permissions::Permission::Progress) => tl!("Show its progress, see Cancel and write log lines"),
         Some(permissions::Permission::Settings) => tl!("Keep settings of its own"),
         Some(permissions::Permission::Cache) => tl!("Keep a cache of its own, which you can clear"),
+        Some(permissions::Permission::Events) => tl!("Run on its own when the selection, a document or a layer changes"),
         None => return permissions::display_text(name, permissions::MAX_SHOWN_FIELD),
     };
     words.to_string()

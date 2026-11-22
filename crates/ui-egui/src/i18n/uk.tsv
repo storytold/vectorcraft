@@ -7056,6 +7056,7 @@ axis	Y Axis	Вісь Y
 	Show its progress, see Cancel and write log lines	Показувати свій поступ, помічати скасування і записувати рядки журналу
 	Keep settings of its own	Зберігати власні налаштування
 	Keep a cache of its own, which you can clear	Зберігати власний кеш, який можна очистити
+	Run on its own when the selection, a document or a layer changes	Запускатися самостійно, коли змінюється виділення, документ або шар
 	Run these commands on the document: {ids}	Виконувати в документі ці команди: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» вказує в `commandAllowlist` команду `{id}`, яку модуль викликати не може
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7087,6 +7088,15 @@ axis	Y Axis	Вісь Y
 @msg	only a filter declares `inputs`	`inputs` може оголошувати лише фільтр
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `inputs` указано невідомий вид об’єкта `{shown}`: використовуйте type, image або symbolInstance
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано двічі
+@msg	`events` lists `{shown}` twice	в `events` `{shown}` указано двічі
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	в `events` указано невідому подію `{shown}`: використовуйте selection.changed, document.opened, document.saved або layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	для `events` потрібен рівень API модулів {EVENTS_API}: укажіть `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	для `events` потрібен дозвіл `events`, а для `events` потрібен список `events`
+@msg	event size ({len} bytes, limit {max})	розмір події ({len} байтів, межа {max})
+@msg	the module reacts to no events	модуль не реагує на жодні події
+@msg	vc_event returned {code}	vc_event повернула {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: його обробник {event} завершився помилкою: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: його події вимкнено до наступного запуску VectorCraft після {count} невдалих обробників поспіль
 @msg	`inputs` needs `api` 2 or later	для `inputs` потрібен `api` 2 або новіший
 @msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})

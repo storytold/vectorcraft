@@ -7524,6 +7524,7 @@ axis	Y Axis	Y ekseni
 	Show its progress, see Cancel and write log lines	İlerlemesini gösterme, iptali algılama ve günlük satırları yazma
 	Keep settings of its own	Kendi ayarlarını saklama
 	Keep a cache of its own, which you can clear	Temizleyebileceğiniz kendi önbelleğini saklama
+	Run on its own when the selection, a document or a layer changes	Seçim, bir belge veya bir katman değiştiğinde kendiliğinden çalışma
 	Run these commands on the document: {ids}	Belgede şu komutları çalıştırma: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”, `commandAllowlist` içinde bir eklentinin çağıramayacağı `{id}` komutunu listeliyor
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7555,6 +7556,15 @@ axis	Y Axis	Y ekseni
 @msg	only a filter declares `inputs`	`inputs` yalnızca bir filtrede bildirilebilir
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` bilinmeyen bir nesne türü belirtiyor: `{shown}`; type, image veya symbolInstance kullanın
 @msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
+@msg	`events` lists `{shown}` twice	`events` `{shown}` değerini iki kez listeliyor
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` bilinmeyen bir olay belirtiyor: `{shown}`; selection.changed, document.opened, document.saved veya layer.changed kullanın
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` için eklenti API düzeyi {EVENTS_API} gerekir: `api` {EVENTS_API} verin
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` için `events` izni, `events` izni için de bir `events` listesi gerekir
+@msg	event size ({len} bytes, limit {max})	olay boyutu ({len} bayt, sınır {max})
+@msg	the module reacts to no events	modül hiçbir olaya tepki vermiyor
+@msg	vc_event returned {code}	vc_event {code} döndürdü
+@msg	{name}: its {event} handler failed: {e}	{name}: {event} işleyicisi başarısız oldu: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: art arda {count} işleyici başarısız olduğundan, VectorCraft yeniden başlayana kadar olayları kapalı
 @msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
