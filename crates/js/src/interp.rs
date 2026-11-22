@@ -2340,13 +2340,14 @@ impl Interp {
 
     /// Appends the elements of the value on top to the array under it: an array's elements by
     /// index (holes read as `undefined`), a string's characters by code point, and an object with
-    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel.
+    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel,
+    /// and a concatenated string's flattened copy is counted against the heap before it is made.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
         let items: Vec<Value> = match &v {
             Value::String(s) => {
-                let units = s.flat();
+                let units = crate::string_builtins::flat_charged(self, s)?;
                 let mut out = Vec::new();
                 let mut held = HeldBytes::new(self);
                 let mut i = 0;
@@ -2747,10 +2748,19 @@ impl Interp {
         let params = code.params.iter().fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
         let arguments =
             if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
+        // The array a rest parameter gets: its binding and one property for each extra argument.
+        let rest = match &code.rest {
+            Some(name) => {
+                let extra = args.len().saturating_sub(code.params.len());
+                OBJECT_BYTES.saturating_add(binding_bytes(name.len())).saturating_add(extra.saturating_mul(binding_bytes(10)))
+            }
+            None => 0,
+        };
         let need = declaration_bytes(&code)
             .saturating_add(ENV_BYTES)
             .saturating_add(params)
             .saturating_add(arguments)
+            .saturating_add(rest)
             .saturating_add(crate::class_ops::hidden_bytes(&code));
         if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
             let mark = self.temp_roots.len();
@@ -3164,24 +3174,32 @@ impl Interp {
             }
         }
         if self.options.es2015 {
-            // The test `declare` makes for a function in an object environment (section 15.1.8,
-            // step 8, CanDeclareGlobalFunction).
-            for (name, _) in &code.fun_decls {
-                let replaceable = match self.find_property(global, name)? {
-                    None => true,
-                    Some(p) if p.configurable() => true,
-                    Some(Prop::Data { flags, .. }) => flags & (WRITABLE | ENUMERABLE) == WRITABLE | ENUMERABLE,
-                    Some(_) => false,
-                };
-                if !replaceable {
-                    let ident = String::from_utf16_lossy(name);
-                    return Err(self.type_error(&format!("cannot declare function {ident}")));
-                }
-            }
+            self.check_global_functions(code)?;
         }
         for (name, constant) in lets {
             let b = Binding::lexical(*constant);
             self.env_insert(lex, name.clone(), b)?;
+        }
+        Ok(())
+    }
+
+    /// The test `declare` makes for a function in an object environment, on the global object's
+    /// own property, for every function `code` declares before any is (ECMA-262 2015 sections
+    /// 15.1.8, step 8, and 18.2.1.2, step 8, CanDeclareGlobalFunction): a function that cannot
+    /// replace its property is a `TypeError`.
+    fn check_global_functions(&mut self, code: &Code) -> JsResult<()> {
+        let global = self.global;
+        for (name, _) in &code.fun_decls {
+            let replaceable = match self.get_own_property(global, name)? {
+                None => self.object(global)?.extensible,
+                Some(p) if p.configurable() => true,
+                Some(Prop::Data { flags, .. }) => flags & (WRITABLE | ENUMERABLE) == WRITABLE | ENUMERABLE,
+                Some(_) => false,
+            };
+            if !replaceable {
+                let ident = String::from_utf16_lossy(name);
+                return Err(self.type_error(&format!("cannot declare function {ident}")));
+            }
         }
         Ok(())
     }
@@ -3219,6 +3237,9 @@ impl Interp {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
+            if var_env == self.global_env {
+                self.check_global_functions(code)?;
+            }
         }
         let lex = match code.top_scope {
             _ if !is_eval && env == self.global_lex => {
@@ -3294,7 +3315,16 @@ impl Interp {
                     None if declared => Ok(()),
                     None => self.define(object, name.clone(), Prop::Data { value: Value::Undefined, flags }),
                     Some(v) => {
-                        let existing = self.find_property(object, name)?;
+                        // ECMA-262 2015 section 8.1.1.4.18 reads the object's own property, and
+                        // section 10.5 of the 5.1 edition the property it inherits as well.
+                        let existing = if self.options.es2015 { self.get_own_property(object, name)? } else { self.find_property(object, name)? };
+                        // A new own property needs an extensible object (ECMA-262 2015 section
+                        // 8.1.1.4.16; section 8.12.9 of the 5.1 edition, step 3).
+                        let defines = existing.as_ref().is_none_or(Prop::configurable);
+                        if defines && !self.object(object)?.extensible && self.get_own_property(object, name)?.is_none() {
+                            let ident = String::from_utf16_lossy(name);
+                            return Err(self.type_error(&format!("cannot declare function {ident}")));
+                        }
                         match existing {
                             None => self.define(object, name.clone(), Prop::Data { value: v, flags }),
                             Some(p) if p.configurable() => self.define(object, name.clone(), Prop::Data { value: v, flags }),
