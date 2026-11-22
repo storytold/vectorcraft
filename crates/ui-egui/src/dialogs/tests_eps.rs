@@ -3,7 +3,7 @@
 use craft::ui::patterns::form_dialogs::DialogFields;
 use serde_json::json;
 
-use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm};
+use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm, try_set};
 use super::tests_print::press;
 use super::tests_raster_formats::fields;
 use super::*;
@@ -178,14 +178,15 @@ fn bad_custom_flattener_options_keep_the_dialog_open() {
     app.run("ui.epsOptionsDialog", json!({"path": "/out/a.eps", "overprints": "discard"})).unwrap();
     frame(&mut app);
     open_custom(&mut app);
-    set(&mut app, "gradientPpi", json!(9000));
+    // A resolution out of range is refused as it is set (the framework's `FieldRefusal::Rejects`); the dialog stays.
+    let e = try_set(&mut app, "gradientPpi", json!(9000)).unwrap_err();
+    assert!(e.contains("gradientPpi"), "{e}");
     frame(&mut app);
-    let e = try_confirm(&mut app).unwrap_err();
-    assert!(e.contains("resolutions"), "{e}");
     assert_eq!(kind(&app).as_deref(), Some(eps_options::CUSTOM_KIND));
     // Overprints decides whether overprints are kept, so OK keeps the option as it was.
     set(&mut app, "gradientPpi", json!(150));
-    set(&mut app, "preserveAlpha", json!(true));
+    // Its row is greyed out, so it refuses the change (pl.F4).
+    assert!(try_set(&mut app, "preserveAlpha", json!(true)).is_err());
     confirm(&mut app);
     frame(&mut app);
     let custom = flattener(&fields(&app));

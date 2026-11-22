@@ -227,11 +227,15 @@ fn effect_dialogs_edit_a_color_that_document_color_mode_converted() {
         app.run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
         settle(&mut app);
         // A colour row reads as the framework's `[r, g, b]`.
+        // Shift to Color's own colour row keeps the document's colour.
         let shown = fields(&app)["color"].clone();
-        let rgb: [f64; 3] = serde_json::from_value(shown.clone()).unwrap_or_else(|e| panic!("{effect}: {shown}: {e}"));
-        let shown_hex =
-            format!("#{:02x}{:02x}{:02x}", (rgb[0] * 255.0).round() as u8, (rgb[1] * 255.0).round() as u8, (rgb[2] * 255.0).round() as u8);
-        assert_eq!(shown_hex, hex.to_lowercase(), "{effect}: {shown}");
+        let shown_hex = match serde_json::from_value::<[f64; 3]>(shown.clone()) {
+            Ok(rgb) => format!("#{:02x}{:02x}{:02x}", (rgb[0] * 255.0).round() as u8, (rgb[1] * 255.0).round() as u8, (rgb[2] * 255.0).round() as u8),
+            Err(_) => {
+                serde_json::from_value::<vectorcraft_doc::color::Color>(shown.clone()).unwrap_or_else(|e| panic!("{effect}: {shown}: {e}")).to_hex()
+            }
+        };
+        assert_eq!(shown_hex.to_lowercase(), hex.to_lowercase(), "{effect}: {shown}");
         assert!(confirm(&mut app));
         assert_eq!(color(&app), converted, "{effect}");
     }
@@ -750,18 +754,22 @@ fn polar_grid_shared_cancel_reopen_zero_counts_and_failed_creation() {
 }
 
 /// Color Halftone's Max Radius is in pixels of the raster effects resolution whatever the document's units (#3260): in a
-/// document in centimetres a typed value still commits as pixels, within the documented 4 to 127 px.
+/// document in centimetres a value still commits as pixels, within the documented 4 to 127 px: the row refuses a value
+/// outside them as it is set (the framework's `FieldRefusal::Rejects`) and keeps the one it had.
 #[test]
 fn color_halftones_max_radius_stays_in_pixels_whatever_the_units() {
-    for (typed, applied) in [(10.0, 10.0), (2.0, 4.0), (500.0, 127.0), (4.5, 4.5)] {
+    for (typed, applied) in [(10.0, Some(10.0)), (2.0, None), (500.0, None), (4.5, Some(4.5))] {
         let mut app = app();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
         app.run("document.setup", json!({"units": "Centimeters"})).unwrap();
         app.run("select.all", json!({})).unwrap();
         app.run("effect.dialog", json!({"effect": "pixelate.colorHalftone"})).unwrap();
         settle(&mut app);
-        set(&mut app, "maxRadius", json!(typed));
-        assert_eq!(field(&app, "maxRadius"), Some(applied), "{typed}");
+        let before = field(&app, "maxRadius");
+        let (id, ctx) = (top(&app).0, app.ui_ctx.clone().expect("a window app"));
+        let set = app.dialogs().expect("a window app").with(|host| host.set_json_field(&ctx, id, "maxRadius", json!(typed)));
+        assert_eq!(set.is_ok(), applied.is_some(), "{typed}: {set:?}");
+        assert_eq!(field(&app, "maxRadius"), applied.or(before), "{typed}");
     }
 }
 

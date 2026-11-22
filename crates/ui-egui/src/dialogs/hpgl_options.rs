@@ -85,11 +85,9 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
 pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
     let Some(doc) = app.session.active().map(|st| st.uid) else { return };
     // Export Selection's flag in `params` says what the options plot: it is no option.
-    let (asked, params) = match io::take_selection(params) {
-        Ok(taken) => taken,
-        Err(e) => return app.status(e),
-    };
-    let selection = selection || asked;
+    let mut params = params.clone();
+    let asked = params.as_object_mut().and_then(|o| o.remove(io::EXPORT_SELECTION));
+    let selection = selection || asked == Some(json!(true));
     let mut fields = defaults();
     for given in [&app.ui.hpgl_options, &params] {
         if let Some(o) = given.as_object() {
