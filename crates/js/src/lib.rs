@@ -140,10 +140,12 @@ pub struct Options {
     /// literals, calls and `new`, `for … of`, array and object destructuring, and shorthand and
     /// computed property names. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
-    /// On, a realm also has the later editions' built-ins this engine has: `Symbol` with
-    /// Symbol-keyed properties and the iterators of arrays, strings and `arguments` objects, with
-    /// `0b` and `0o` strings converting to numbers. Off, a realm has the ES5.1 built-ins only, as
-    /// the app's scripts expect.
+    /// A realm made with it on also has the later editions' built-ins this engine has: `Symbol`
+    /// with Symbol-keyed properties and the iterators of arrays, strings and `arguments` objects.
+    /// A realm made with it off has the ES5.1 built-ins only, as the app's scripts expect. Those
+    /// built-ins are chosen when the realm is made: turning the option on or off later with
+    /// [`Realm::set_es2015`] changes the language later runs read, and does not add or remove
+    /// them. Runs with it on also convert `0b` and `0o` strings to numbers.
     pub es2015: bool,
 }
 

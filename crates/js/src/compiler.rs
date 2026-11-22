@@ -668,11 +668,22 @@ impl<'a> FnCompiler<'a> {
         r
     }
 
+    /// With [`crate::Options::es2015`], in script and eval code, sets the completion value to
+    /// `undefined` once before a loop's first test or step, so a loop whose body never completes
+    /// gives `undefined` (ECMA-262 2015 sections 13.7.2.6, 13.7.3.6, 13.7.4.8 and 13.7.5.13).
+    fn loop_completion_start(&mut self) {
+        if self.es2015 && self.kind != CodeKind::Function {
+            self.emit(Op::Undefined);
+            self.emit(Op::SetCompletion);
+        }
+    }
+
     fn loop_stmt(&mut self, id: StmtId, labels: Vec<String>) -> CResult<()> {
         let brk = self.new_label();
         let cont = self.new_label();
         match self.ast.stmt(id) {
             Some(Stmt::While { test, body }) => {
+                self.loop_completion_start();
                 self.bind(cont);
                 self.expr(*test)?;
                 self.jump(Op::JumpIfFalse, brk);
@@ -681,6 +692,7 @@ impl<'a> FnCompiler<'a> {
             }
             Some(Stmt::DoWhile { body, test }) => {
                 let top = self.new_label();
+                self.loop_completion_start();
                 self.bind(top);
                 self.loop_body(*body, labels, brk, cont)?;
                 self.bind(cont);
@@ -700,6 +712,7 @@ impl<'a> FnCompiler<'a> {
                     }
                     None => {}
                 }
+                self.loop_completion_start();
                 let head = self.new_label();
                 self.bind(head);
                 if let Some(t) = test {
@@ -747,6 +760,7 @@ impl<'a> FnCompiler<'a> {
         if per_iteration {
             self.emit(Op::CopyEnv);
         }
+        self.loop_completion_start();
         let head = self.new_label();
         self.bind(head);
         if let Some(t) = test {
@@ -779,6 +793,7 @@ impl<'a> FnCompiler<'a> {
         self.expr(object)?;
         self.emit(Op::PopEnv);
         self.env_depth -= 1;
+        self.loop_completion_start();
         self.emit(Op::ForInStart);
         let iter_depth = self.depth;
         let head = self.new_label();
@@ -817,6 +832,7 @@ impl<'a> FnCompiler<'a> {
             self.var_decls(std::slice::from_ref(d))?;
         }
         self.expr(object)?;
+        self.loop_completion_start();
         self.emit(Op::ForInStart);
         let iter_depth = self.depth;
         let head = self.new_label();

@@ -463,6 +463,15 @@ fn declaration_bytes(code: &Code) -> usize {
     code.vars.iter().fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
 }
 
+/// At least the bytes that [`Interp::block_env`] adds to the heap for `code.scopes[i]`: the
+/// environment, its names and the closures of its function declarations.
+fn scope_bytes(code: &Code, i: u32) -> usize {
+    let Some(scope) = code.scopes.get(i as usize) else { return ENV_BYTES };
+    let funcs = scope.funcs.iter().map(|(_, fi)| code.functions.get(*fi as usize).map_or(0, |f| closure_bytes(f))).sum::<usize>();
+    let names = scope.lets.iter().map(|(k, _)| k).chain(scope.funcs.iter().map(|(k, _)| k)).map(|k| binding_bytes(k.len())).sum::<usize>();
+    ENV_BYTES.saturating_add(funcs).saturating_add(names)
+}
+
 /// A call to a function written in JavaScript, ready to enter.
 struct Entry {
     callee: ObjId,
@@ -2443,8 +2452,9 @@ impl Interp {
         let frame = self.frame()?;
         let (code, params) = (frame.code.clone(), frame.env);
         // The parameters' values may have filled the room the call reserved, so the body's
-        // environment and declarations are checked against the heap again.
-        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        // environments and declarations are checked against the heap again, together.
+        let top = code.top_scope.map_or(0, |i| scope_bytes(&code, i));
+        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(top))?;
         // Each new environment is in the frame, where the collector finds it, before the next
         // allocation.
         let var_env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(params) });
@@ -2532,8 +2542,17 @@ impl Interp {
             return self.push(Value::Object(id));
         }
         let Some(t) = code.templates.get(i as usize) else { return internal("template out of range") };
-        let strings = t.cooked.len().saturating_add(t.raw.len());
-        self.reserve_heap(OBJECT_BYTES.saturating_mul(2).saturating_add(strings.saturating_mul(PROP_BYTES)))?;
+        // Both arrays with their index properties and keys, and the cooked array's `raw`, as
+        // [`Self::define`] counts them.
+        let elements = |n: usize| {
+            (0..n).map(|i| PROP_BYTES + string_bytes(index_key(u32::try_from(i).unwrap_or(u32::MAX)).len())).fold(0usize, usize::saturating_add)
+        };
+        let bytes = OBJECT_BYTES
+            .saturating_mul(2)
+            .saturating_add(elements(t.cooked.len()))
+            .saturating_add(elements(t.raw.len()))
+            .saturating_add(PROP_BYTES + string_bytes("raw".len()));
+        self.reserve_heap(bytes)?;
         let raw = self.frozen_array(&t.raw)?;
         // The raw array stays reachable while the template object is made.
         self.push(Value::Object(raw))?;
@@ -3001,9 +3020,7 @@ impl Interp {
     /// initialized and its function declarations made. Each name takes a unit of fuel.
     fn block_env(&mut self, code: &Code, i: u32, outer: EnvId) -> JsResult<EnvId> {
         let Some(scope) = code.scopes.get(i as usize) else { return internal("scope out of range") };
-        let funcs = scope.funcs.iter().map(|(_, fi)| code.functions.get(*fi as usize).map_or(0, |f| closure_bytes(f))).sum::<usize>();
-        let names = scope.lets.iter().map(|(k, _)| k).chain(scope.funcs.iter().map(|(k, _)| k)).map(|k| binding_bytes(k.len())).sum::<usize>();
-        self.reserve_heap(ENV_BYTES.saturating_add(funcs).saturating_add(names))?;
+        self.reserve_heap(scope_bytes(code, i))?;
         let mut bindings = PropMap::default();
         for (name, constant) in &scope.lets {
             self.use_fuel()?;
@@ -3249,7 +3266,10 @@ impl Interp {
 
     /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run.
     pub(crate) fn enter_global(&mut self, code: Rc<Code>, is_eval: bool) -> JsResult<()> {
-        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        // A script's `let` and `const` names are counted with its declarations, so none of them
+        // is declared unless all of them fit.
+        let top = code.top_scope.map_or(0, |i| scope_bytes(&code, i));
+        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(top))?;
         let (scope, global) = (self.global_scope(), self.global);
         let (env, var_env) = if code.strict && is_eval {
             let e = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(scope) });
@@ -3410,18 +3430,24 @@ impl Interp {
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, scope)?;
             self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
-            if on_global {
-                self.global_vars.insert(name.clone());
-            }
+            self.note_global_var(on_global, name)?;
         }
         for v in &code.vars {
             self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
-            if on_global {
-                self.global_vars.insert(v.clone());
-            }
+            self.note_global_var(on_global, v)?;
         }
         Ok(lex)
+    }
+
+    /// Adds `name`, which global code just declared, to [`Self::global_vars`] when `on_global`
+    /// and the global object has it as an own property. A `var` that an inherited property
+    /// satisfied, without one, is not added.
+    fn note_global_var(&mut self, on_global: bool, name: &Key) -> JsResult<()> {
+        if on_global && self.get_own_property(self.global, name)?.is_some() {
+            self.global_vars.insert(name.clone());
+        }
+        Ok(())
     }
 
     /// A `var` or function that eval code outside strict mode code declares must not take the name

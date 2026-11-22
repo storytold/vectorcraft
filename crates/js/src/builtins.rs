@@ -124,6 +124,11 @@ fn es2015_name_plan(interp: &Interp) -> Vec<(ObjId, Option<String>)> {
     let mut plan = Vec::new();
     for id in interp.heap.object_ids() {
         let Some(o) = interp.heap.object(id) else { continue };
+        // A function a script made non-extensible (frozen, sealed or locked) keeps its properties
+        // as they are.
+        if !o.extensible && id != thrower {
+            continue;
+        }
         let name = match &o.class {
             _ if id == thrower => String::new(),
             Class::Function(Func::Native { name, prefix, .. }) => format!("{prefix}{name}"),
@@ -136,9 +141,13 @@ fn es2015_name_plan(interp: &Interp) -> Vec<(ObjId, Option<String>)> {
 }
 
 /// Makes built-in function `f`'s `length` configurable and gives it the `name` `name`, when there
-/// is one, unless it has a `name` already. The new property's bytes are checked against the heap
-/// limit first, with `f` held as a root.
+/// is one, unless it has a `name` already. A function that is not extensible keeps its properties
+/// as they are. The new property's bytes are checked against the heap limit first, with `f` held
+/// as a root.
 fn es2015_native(interp: &mut Interp, f: ObjId, name: Option<&str>) -> JsResult<()> {
+    if !interp.object_mut(f)?.extensible {
+        return Ok(());
+    }
     if let Some(Prop::Data { flags, .. }) = interp.object_mut(f)?.props.get_mut(&key("length")) {
         *flags |= CONFIGURABLE;
     }
@@ -478,7 +487,7 @@ fn object_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResu
     interp.to_object(&v).map(Value::Object)
 }
 
-/// `Object.prototype.toString` (section 15.2.4.2). In a realm with [`crate::Options::es2015`], a
+/// `Object.prototype.toString` (section 15.2.4.2). In a run with [`crate::Options::es2015`], a
 /// string `@@toStringTag` takes the place of the class name (ECMA-262 11th edition, section
 /// 19.1.3.6).
 fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -655,8 +664,11 @@ fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let bound_this = arg(args, 0);
     let bound_args: Rc<[Value]> = args.get(1..).unwrap_or_default().into();
     // A host function's `length` is an ordinary property a script can set, so it is converted
-    // to an integer first, as later editions specify.
-    let target_length = match interp.get_from(target, &key("length"), &this)? {
+    // to an integer first, as later editions specify. With ECMAScript 2015 only an own `length` is
+    // read (ECMA-262 2020 section 19.2.3.2 step 4), so an inherited getter does not run.
+    let has_length = !interp.options.es2015 || interp.get_own_property(target, &key("length"))?.is_some();
+    let length_value = if has_length { interp.get_from(target, &key("length"), &this)? } else { Value::Undefined };
+    let target_length = match length_value {
         Value::Number(n) if n.is_nan() => 0.0,
         Value::Number(n) => n.trunc(),
         _ => 0.0,
@@ -694,13 +706,16 @@ fn bind_es2015(interp: &mut Interp, target: ObjId, bound_this: Value, bound_args
         _ => Str::from(""),
     };
     let name_len = "bound ".len().saturating_add(target_name.len());
+    // A rope name is flattened first, with the copy's bytes reserved and its units charged as fuel.
+    let target_units = crate::string_builtins::flat_charged(interp, &target_name)?;
     interp.rooted(&[Value::String(target_name.clone())], |i| {
         i.reserve_heap(
             OBJECT_BYTES + prop_bytes(&["length", "name", "caller", "arguments"]) + BOUND_ARG_BYTES * bound_args.len() + string_bytes(name_len),
         )
     })?;
+    crate::string_builtins::charge_units(interp, name_len)?;
     let mut units: Vec<u16> = "bound ".encode_utf16().collect();
-    units.extend_from_slice(&target_name.flat());
+    units.extend_from_slice(&target_units);
     let proto = interp.intrinsics.function_proto;
     let class = Class::Function(Func::Bound { target, this: bound_this, args: bound_args.clone() });
     let f = interp.heap.alloc_object(Object::new(class, Some(proto)));

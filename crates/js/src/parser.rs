@@ -835,8 +835,11 @@ impl<'s> Parser<'s> {
             self.pop_scope();
             return result;
         }
+        let mark = self.cover_inits.len();
+        self.cover_ok = self.es2015;
         let expr = self.parse_expression(true)?;
-        self.check_target(expr, "invalid left-hand side in for each loop")?;
+        self.loop_target(expr, "invalid left-hand side in for each loop", false)?;
+        self.check_cover(mark)?;
         self.parse_for_in(ForInTarget::Expr(expr), start, true)
     }
 
@@ -1662,12 +1665,24 @@ impl<'s> Parser<'s> {
     /// Records each `__proto__: value` of `properties` after the first in `proto_twice` and, in
     /// order, in `cover_inits`.
     fn note_proto_twice(&mut self, properties: &[Property]) {
-        for p in properties.iter().filter(|p| p.is_proto_setter(&self.ast)).skip(1) {
-            let at = p.span.start;
-            let i = self.cover_inits.partition_point(|&x| x < at);
-            self.cover_inits.insert(i, at);
-            self.proto_twice.insert(at);
+        // The offsets rise along the properties, so they are merged into the sorted list in one
+        // pass.
+        let twice: Vec<u32> = properties.iter().filter(|p| p.is_proto_setter(&self.ast)).skip(1).map(|p| p.span.start).collect();
+        let Some(&lowest) = twice.first() else { return };
+        let first = self.cover_inits.partition_point(|&x| x < lowest);
+        let tail = self.cover_inits.split_off(first);
+        let (mut a, mut b) = (tail.into_iter().peekable(), twice.iter().copied().peekable());
+        while let (Some(&x), Some(&y)) = (a.peek(), b.peek()) {
+            if y <= x {
+                self.cover_inits.push(y);
+                b.next();
+            } else {
+                self.cover_inits.push(x);
+                a.next();
+            }
         }
+        self.cover_inits.extend(b.chain(a));
+        self.proto_twice.extend(twice);
     }
 
     fn parse_property(&mut self) -> Result<Property> {

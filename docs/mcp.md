@@ -2667,12 +2667,15 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
-The first run in an engine decides which built-ins the engine has, and each run's script decides which syntax that
-run reads. A `.jsx` script or a `source` string that starts a new engine has no `Symbol` and no iterators of arrays,
+The first run in an engine decides whether the engine has `Symbol` and the iterators of arrays, strings and
+`arguments` objects, and each run's script decides which syntax that run reads. The built-in functions' names follow
+the rule above. A `.jsx` script or a `source` string that starts a new engine has no `Symbol` and no iterators of arrays,
 strings and `arguments` objects: `typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries`
 are not defined. A `.js` script that starts a new engine has them, through the JavaScript engine's ECMAScript 2015 mode
 (`Options::es2015` in `vectorcraft-js`), as `docs/target-app-parity.md` describes. An engine that `#targetengine` keeps
 has them only when a `.js` script started it, and then a later `.jsx` run in it has them too while it reads ES5.1 only.
+In such a `.jsx` run, `Object.prototype.toString` gives the ES5.1 result, `[object Object]` or another class name,
+and does not read `Symbol.toStringTag`.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and

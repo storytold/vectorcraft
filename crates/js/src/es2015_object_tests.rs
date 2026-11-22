@@ -164,6 +164,21 @@ fn a_destructuring_pattern_may_name_proto_twice() {
 }
 
 #[test]
+fn a_wide_pattern_may_repeat_proto_with_defaults_inside() {
+    let props = vec!["__proto__: { x = 0 }"; 2_000].join(", ");
+    truth(&format!("var x; ({{ {props} }} = {{ ['__proto__']: {{}} }}); x === 0"));
+    // In a literal, the first of the errors in source order is the one reported.
+    for (src, twice) in [
+        ("({ __proto__: 1, __proto__: 2, a: { b = 1 }, __proto__: 3 });", true),
+        ("({ a: { b = 1 }, __proto__: 1, __proto__: 2 });", false),
+        ("({ __proto__: 1, a: { b = 1 }, __proto__: 2 });", false),
+    ] {
+        let e = es().run(src).unwrap_err();
+        assert_eq!((&e.kind, e.message.contains("'__proto__' twice")), (&RunErrorKind::Syntax, twice), "{src}: {e:?}");
+    }
+}
+
+#[test]
 fn computed_names_and_methods_stay_reachable_while_they_are_defined() {
     truth_collecting(
         "var o = { ['a' + 1]: [1], ['b' + 2]() { return 2; }, get ['c' + 3]() { return 3; } }; o.a1[0] === 1 && o.b2() === 2 && o.c3 === 3",
@@ -328,6 +343,20 @@ fn built_in_names_do_not_follow_what_earlier_scripts_did_with_them() {
 }
 
 #[test]
+fn frozen_built_ins_keep_their_properties_when_the_names_are_set() {
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("var f = Object.freeze(Math.max), g = Object.preventExtensions(Math.min); true"), Ok(JsValue::Bool(true)));
+    realm.set_es2015(true);
+    let check = "f === Math.max && Object.isFrozen(f) && !f.hasOwnProperty('name') && \
+                 !Object.getOwnPropertyDescriptor(f, 'length').configurable && \
+                 !g.hasOwnProperty('name') && !Object.getOwnPropertyDescriptor(g, 'length').configurable && \
+                 Math.abs.name === 'abs'";
+    assert_eq!(realm.run(check), Ok(JsValue::Bool(true)));
+    realm.set_es2015(false);
+    assert_eq!(realm.run("Object.isFrozen(Math.max) && !Math.max.hasOwnProperty('name')"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
 fn built_in_names_that_do_not_fit_the_heap_end_the_run_and_wait_for_room() {
     let mut realm = Realm::new();
     let used = realm.interp().heap.bytes;
@@ -430,6 +459,28 @@ fn bound_and_built_in_functions_have_names() {
     truth(&name_is("Function.prototype", ""));
     truth(&name_is("Function.prototype.bind", "bind"));
     truth("Object.getOwnPropertyNames(Function).slice(0, 2).join() === 'length,name'");
+}
+
+#[test]
+fn bind_reads_only_an_own_length() {
+    truth(
+        "var read = 0; function t(a, b) {} delete t.length; \
+         Object.defineProperty(Function.prototype, 'length', { get: function () { read++; return 5; }, configurable: true }); \
+         var b = t.bind(); read === 0 && b.length === 0",
+    );
+    truth("function t(a, b) {} t.bind(null, 1).length === 1");
+}
+
+#[test]
+fn bind_charges_fuel_for_a_long_name() {
+    let mut realm = es();
+    let setup = "var s = 'x'; for (var i = 0; i < 20; i++) s += s; function t() {} function u() {} \
+                 Object.defineProperty(t, 'name', { value: s }); true";
+    assert_eq!(realm.run(setup), Ok(JsValue::Bool(true)));
+    realm.set_limits(Limits { fuel: 10_000, ..Limits::default() });
+    assert_eq!(realm.run("u.bind().name === 'bound u'"), Ok(JsValue::Bool(true)));
+    let e = realm.run("t.bind(); true").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{e:?}");
 }
 
 #[test]

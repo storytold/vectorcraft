@@ -352,13 +352,13 @@ fn a_symbol_crosses_as_the_text_string_gives_it_and_never_as_data() {
 
 #[test]
 fn checking_the_symbol_keys_of_a_value_takes_fuel() {
-    // Making the 20,000 hidden keys takes well under 3,000,000 units; the 500 crossings check
-    // 10,000,000 keys.
+    // Making the 20,000 hidden keys takes well under 3,000,000 units, in a run of its own; the 500
+    // crossings check 10,000,000 keys.
     let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { fuel: 3_000_000, ..Limits::default() });
     with_take(&mut r);
-    let src = "var v = {}; for (var i = 0; i < 20000; i++) Object.defineProperty(v, Symbol(), {value: i}); \
-               for (var j = 0; j < 500; j++) host.take(v);";
-    match r.run(src) {
+    let setup = "var v = {}; for (var i = 0; i < 20000; i++) Object.defineProperty(v, Symbol(), {value: i}); true";
+    assert_eq!(r.run(setup), Ok(JsValue::Bool(true)));
+    match r.run("for (var j = 0; j < 500; j++) host.take(v);") {
         Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
         other => panic!("{other:?}"),
     }

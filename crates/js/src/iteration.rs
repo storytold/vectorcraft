@@ -76,13 +76,18 @@ impl Interp {
         Ok(self.heap.alloc_object(Object::new(Class::IterRecord(Box::new(record)), None)))
     }
 
-    /// The record of a [`Walk`] over an array, an `arguments` object or a string, for a realm
-    /// without `Symbol.iterator`; any other value is not iterable there. A concatenated string's
-    /// flattened copy is counted against the heap before it is made.
+    /// The record of a [`Walk`] over an array, an `arguments` object, a string or a `String`
+    /// object, for a realm without `Symbol.iterator`; any other value is not iterable there. A
+    /// `String` object is converted to a string first, as the string iterator does. A
+    /// concatenated string's flattened copy is counted against the heap before it is made.
     fn walk_record(&mut self, v: &Value) -> JsResult<ObjId> {
         let walk = match v {
             Value::String(s) => Walk::String(Str::from_rc(crate::string_builtins::flat_charged(self, s)?), 0),
             Value::Object(o) if matches!(self.object(*o)?.class, Class::Array { .. } | Class::Arguments(_)) => Walk::Array(*o, 0.0),
+            Value::Object(o) if matches!(self.object(*o)?.class, Class::String(_)) => {
+                let s = self.to_str(v)?;
+                Walk::String(Str::from_rc(crate::string_builtins::flat_charged(self, &s)?), 0)
+            }
             _ => return Err(self.type_error("the value is not iterable")),
         };
         let record = IterRecord { iterator: Value::Undefined, next: Value::Undefined, done: false, walk: Some(walk) };
@@ -258,14 +263,17 @@ impl Interp {
     }
 
     /// `record exception` → throws the exception, after closing the iterator unless it is done.
-    /// What closing it throws is dropped (section 7.4.6, step 6); running out of fuel, heap or
-    /// time is not.
+    /// What closing it throws is dropped, the lookup of `return` included (ECMA-262 2023 section
+    /// 7.4.8, steps 4 to 6); running out of fuel, heap or time is not. The exception stays in its
+    /// stack slot while the iterator is closed, so [`Interp::rethrow`] finds the source position
+    /// and host mark kept for that slot.
     pub(crate) fn op_iter_close_throw(&mut self) -> JsResult<()> {
-        let exception = self.pop()?;
-        let rec = self.record_at(0)?;
-        let closed = self.rooted(std::slice::from_ref(&exception), |i| i.iter_close(rec));
-        match closed {
-            Ok(()) | Err(Abrupt::Throw(_)) => Err(self.rethrow(exception)),
+        let rec = self.record_at(1)?;
+        match self.iter_close(rec) {
+            Ok(()) | Err(Abrupt::Throw(_)) => {
+                let exception = self.pop()?;
+                Err(self.rethrow(exception))
+            }
             Err(other) => Err(other),
         }
     }
