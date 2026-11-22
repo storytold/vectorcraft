@@ -174,6 +174,12 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   Noto Sans Georgian for the Georgian interface), after the UI fonts and before the installed fonts
   `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian is fetched at startup
   and reaches the UI through `ui_fonts.rs`.
+- Document tab titles: on desktop builds, `crates/text/build.rs` also reads one row of the
+  checkout's opt-in `fonts/latin-manifest.txt`, Noto Sans Condensed SemiBold, as
+  `vectorcraft_text::CONDENSED_UI_FONT`. `theme::FONT_TAB` draws the titles in it at the
+  x-height of the interface's semibold face, so more tabs fit in the strip. Without
+  `CRAFT_FONTS_DIR`, on the web, or with a checkout that lacks the row (a build warning), tab
+  titles draw in the semibold face.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.

@@ -44,6 +44,12 @@ fn frame_sized(app: &mut VectorcraftApp, ctx: &egui::Context, size: egui::Vec2, 
     texts
 }
 
+/// The interface fonts with tab titles in the semibold face, as in a build without craft-fonts'
+/// condensed face: the tab counts below are measured in it.
+fn install_semibold_tab_fonts(ctx: &egui::Context) {
+    ctx.set_fonts(crate::theme::interface_fonts_with(None));
+}
+
 fn click(at: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
@@ -61,7 +67,7 @@ fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
     app.session.set_active(0);
     app.sync_views();
     let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    install_semibold_tab_fonts(&ctx);
     let texts = frame(&mut app, &ctx, 0.0, vec![]);
     let mut tabs: Vec<(String, egui::Rect)> = texts.into_iter().filter(|(t, _)| t.starts_with("Tab test")).collect();
     tabs.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
@@ -100,7 +106,7 @@ fn inactive_tabs_show_the_name_alone_so_more_tabs_fit() {
     app.session.set_active(0);
     app.sync_views();
     let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    install_semibold_tab_fonts(&ctx);
     let texts = frame(&mut app, &ctx, 0.0, vec![]);
     let mut tabs: Vec<(String, egui::Rect)> = texts.into_iter().filter(|(t, _)| t.starts_with("Tab test")).collect();
     tabs.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
@@ -118,6 +124,35 @@ fn inactive_tabs_show_the_name_alone_so_more_tabs_fit() {
     assert!(texts.iter().any(|(t, _)| t == "Tab test 2 @ 100 % (RGB/Preview)"), "the tooltip shows the whole title: {texts:?}");
 }
 
+/// With craft-fonts' condensed face, tab titles draw in it at the semibold face's x-height, and
+/// more tabs fit whole in the strip of a 1280 pt window than with the semibold face (#8583).
+#[test]
+fn tab_titles_in_the_condensed_face_fit_more_tabs() {
+    let Some(condensed) = vectorcraft_text::CONDENSED_UI_FONT.as_ref() else {
+        eprintln!("skipped: built without craft-fonts' condensed face (set CRAFT_FONTS_DIR to a craft-fonts checkout that has it)");
+        return;
+    };
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for i in 0..24 {
+        app.run("file.new", json!({"width": 100, "height": 100, "name": format!("Poster draft {i}")})).unwrap();
+    }
+    app.session.set_active(0);
+    app.sync_views();
+    let mut whole_tabs = |face: Option<&vectorcraft_text::CraftFont>| {
+        let ctx = egui::Context::default();
+        ctx.set_fonts(crate::theme::interface_fonts_with(face));
+        let texts = frame_sized(&mut app, &ctx, egui::vec2(1280.0, 700.0), 0.0, vec![]);
+        let whole = texts.iter().filter(|(t, _)| t.starts_with("Poster draft") && !t.ends_with('…')).count();
+        // The height of an x, in the tab font and in semibold text.
+        let x = |font: egui::FontId| ctx.fonts_mut(|f| f.layout_no_wrap("x".into(), font, egui::Color32::WHITE)).rows[0].glyphs[0].uv_rect.size.y;
+        (whole, x(crate::theme::tab_font(40.0)), x(crate::theme::semibold(40.0)))
+    };
+    let (semibold, _, _) = whole_tabs(None);
+    let (narrow, x_tab, x_semibold) = whole_tabs(Some(condensed));
+    assert!(narrow > semibold, "more tabs fit whole in the condensed face: {narrow} against {semibold}");
+    assert!((x_tab - x_semibold).abs() <= 1.0, "an x is {x_tab} pt tall in a tab title and {x_semibold} pt in semibold text");
+}
+
 /// With the last document active, the tabs from it to the end leave room before the » button, and
 /// the tab before them fills that room with its title shortened instead of the strip ending short
 /// of the » button (#8584).
@@ -132,7 +167,7 @@ fn with_the_last_document_active_the_tab_before_the_shown_ones_fills_the_room() 
     app.session.set_active(7);
     app.sync_views();
     let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    install_semibold_tab_fonts(&ctx);
     let texts = frame(&mut app, &ctx, 0.0, vec![]);
     let mut tabs: Vec<(String, egui::Rect)> = texts.into_iter().filter(|(t, _)| t.starts_with("Tab test")).collect();
     tabs.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));

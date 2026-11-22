@@ -494,16 +494,29 @@ pub fn strong_selected_text(ui: &mut egui::Ui) {
 pub const FONT_UI: &str = "ui";
 pub const FONT_UI_SEMIBOLD: &str = "ui-semibold";
 pub const FONT_MONO: &str = "mono";
+/// The family document tab titles draw in. In a build with craft-fonts' condensed face
+/// ([`vectorcraft_text::CONDENSED_UI_FONT`]), that face heads it, at the x-height of the
+/// [`FONT_UI_SEMIBOLD`] face, followed by the faces of [`FONT_UI_SEMIBOLD`] on its baseline, so
+/// more tabs fit in the strip (#8583). Without it the family is [`FONT_UI_SEMIBOLD`]'s.
+pub const FONT_TAB: &str = "tab";
 
 pub fn semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(FONT_UI_SEMIBOLD.into()))
+}
+/// A document tab's title font ([`FONT_TAB`]).
+pub fn tab_font(size: f32) -> FontId {
+    FontId::new(size, FontFamily::Name(FONT_TAB.into()))
+}
+/// Whether `family` draws semibold text and takes the bold fallback faces.
+pub(crate) fn is_semibold(family: &FontFamily) -> bool {
+    matches!(family, FontFamily::Name(name) if [FONT_UI_SEMIBOLD, FONT_TAB].contains(&&**name))
 }
 pub fn mono(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(FONT_MONO.into()))
 }
 
 /// Installs the interface's fonts and binds the families the panels and dialogs draw in
-/// ([`FONT_UI`], [`FONT_UI_SEMIBOLD`], [`FONT_MONO`]). egui 0.37 only bundles its own faces when
+/// ([`FONT_UI`], [`FONT_UI_SEMIBOLD`], [`FONT_TAB`], [`FONT_MONO`]). egui 0.37 only bundles its own faces when
 /// its `default_fonts` feature is on (this crate enables it); without any face a family lays out
 /// tofu, and the `egui_kittest` harness alone panics on a missing glyph. Every context that shows
 /// these families needs this once: [`crate::VectorcraftApp::ui`] calls it on its first pass, and
@@ -520,6 +533,11 @@ pub fn install_fonts(ctx: &egui::Context) {
 /// whether egui applied them at once or deferred them to the next pass (it must not take input
 /// or draw with fallback metrics while they are pending).
 pub fn interface_fonts() -> FontDefinitions {
+    interface_fonts_with(vectorcraft_text::CONDENSED_UI_FONT.as_ref())
+}
+
+/// [`interface_fonts`] with `condensed` as the face that heads [`FONT_TAB`].
+pub(crate) fn interface_fonts_with(condensed: Option<&vectorcraft_text::CraftFont>) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     let (ui, semi, mono) = interface_faces(&mut fonts);
     let stack = |fonts: &FontDefinitions, family: FontFamily| fonts.families.get(&family).cloned().unwrap_or_default();
@@ -529,11 +547,40 @@ pub fn interface_fonts() -> FontDefinitions {
     let family =
         |faces: Vec<&str>, fallback: &[String]| -> Vec<String> { faces.into_iter().map(str::to_owned).chain(fallback.iter().cloned()).collect() };
     fonts.families.insert(FontFamily::Proportional, family(ui.clone(), &fallback));
-    fonts.families.insert(FontFamily::Name(FONT_UI_SEMIBOLD.into()), family(semi, &fallback));
+    let semi = family(semi, &fallback);
+    let tab = tab_faces(&mut fonts, &semi, condensed);
+    fonts.families.insert(FontFamily::Name(FONT_UI_SEMIBOLD.into()), semi);
+    fonts.families.insert(FontFamily::Name(FONT_TAB.into()), tab);
     fonts.families.insert(FontFamily::Name(FONT_UI.into()), family(ui, &fallback));
     fonts.families.insert(FontFamily::Name(FONT_MONO.into()), family(mono, &mono_fallback));
     add_craft_fonts(&mut fonts);
     fonts
+}
+
+/// The faces of [`FONT_TAB`], added to `fonts`: `condensed`, scaled to the x-height of the first
+/// face of `semi` (the [`FONT_UI_SEMIBOLD`] stack), then a copy of each face of `semi` on its
+/// baseline. `semi` itself without `condensed`, or when either face's x-height can't be read.
+fn tab_faces(fonts: &mut FontDefinitions, semi: &[String], condensed: Option<&vectorcraft_text::CraftFont>) -> Vec<String> {
+    let x_height = |data: &FontData| vectorcraft_text::x_height((*data.font).as_ref(), data.index).map(|h| h * data.tweak.scale);
+    let reference = semi.first().and_then(|head| fonts.font_data.get(head)).and_then(|data| x_height(data));
+    let Some((f, reference)) = condensed.zip(reference) else { return semi.to_vec() };
+    let Some(own) = vectorcraft_text::x_height(f.bytes, 0) else { return semi.to_vec() };
+    let name = craft_font_name(f);
+    let head = FontData::from_static(f.bytes).tweak(egui::epaint::text::FontTweak { scale: reference / own, ..Default::default() });
+    // `baseline_copies` reads the head of each family it is given: here only this one.
+    let mut row = FontDefinitions::empty();
+    row.font_data.insert(name.clone(), Arc::new(head.clone()));
+    row.families.insert(FontFamily::Name(FONT_TAB.into()), vec![name.clone()]);
+    let mut faces = vec![name.clone()];
+    for face in semi {
+        let Some(data) = fonts.font_data.get(face).cloned() else { continue };
+        for (copy, data, _) in crate::ui_fonts::baseline_copies(&row, &format!("{face} / {name}"), &data) {
+            fonts.font_data.insert(copy.clone(), Arc::new(data));
+            faces.push(copy);
+        }
+    }
+    fonts.font_data.insert(name, Arc::new(head));
+    faces
 }
 
 /// The interface's own faces, added to `fonts`: the names of the regular, semibold and monospace
@@ -587,7 +634,7 @@ fn add_craft_fonts(fonts: &mut FontDefinitions) {
         }
     }
     for (family, stack) in fonts.families.iter_mut() {
-        let bold = *family == FontFamily::Name(FONT_UI_SEMIBOLD.into());
+        let bold = is_semibold(family);
         let copy = |f: &vectorcraft_text::CraftFont| {
             let name = craft_font_name(f);
             copies.get(&(family.clone(), name.clone())).cloned().unwrap_or(name)

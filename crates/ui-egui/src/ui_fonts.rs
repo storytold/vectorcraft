@@ -454,7 +454,7 @@ mod tests {
         let bottom = |g: &egui::epaint::text::Glyph| g.pos.y + g.uv_rect.offset.y + g.uv_rect.size.y;
         let glyphs = |text: &str, font: FontId| ctx.fonts_mut(|f| f.layout_no_wrap(text.into(), font, egui::Color32::WHITE)).rows[0].glyphs.clone();
         for family in families {
-            let semibold = family == FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into());
+            let semibold = crate::theme::is_semibold(&family);
             for &(regular, bold, c) in &probes {
                 let face = if semibold { bold } else { regular };
                 for size in [13.0_f32, 24.0, 40.0] {

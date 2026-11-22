@@ -12,6 +12,10 @@
 //! `fonts/<sha16>/` beside the wasm instead of embedding (`cargo xtask web-fonts` copies them
 //! there; `apps/vectorcraft-web/src/fonts.rs` fetches them). A list line the manifest lacks is left
 //! out with a warning, never an error, and never costs the desktop its fonts.
+//!
+//! On native targets it writes `CONDENSED_UI_FONT`: the condensed face document tab titles draw in
+//! (`CONDENSED_UI_FACE`), the one row it reads from the opt-in `fonts/latin-manifest.txt`. A
+//! checkout without that row leaves it `None` with a warning, never an error.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -25,7 +29,7 @@ fn main() {
     println!("cargo::rerun-if-changed=web-fonts.txt");
     println!("cargo::rerun-if-changed=build/web_fonts.rs");
     let required = std::env::var_os("CRAFT_FONTS_REQUIRED").is_some();
-    let (mut fonts, mut web) = (String::new(), String::new());
+    let (mut fonts, mut web, mut condensed) = (String::new(), String::new(), String::from("None"));
     if let Some(dir) = std::env::var_os("CRAFT_FONTS_DIR").filter(|d| !d.is_empty()).map(PathBuf::from) {
         let dir = from_workspace(dir);
         match craft_fonts(&dir) {
@@ -48,8 +52,16 @@ fn main() {
             Err(e) if required => println!("cargo::error=web-fonts.txt: {e}"),
             Err(e) => println!("cargo::warning=web build fetches no craft fonts: web-fonts.txt: {e}"),
         }
+        if std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a != "wasm32") {
+            match condensed_ui_font(&dir) {
+                Ok(entry) => condensed = format!("Some({entry})"),
+                Err(e) => println!("cargo::warning=document tabs draw in the interface face: CRAFT_FONTS_DIR={}: {e}", dir.display()),
+            }
+        }
     }
-    let src = format!("pub static CRAFT_FONTS: &[CraftFont] = &[\n{fonts}];\npub static WEB_FONTS: &[WebFont] = &[\n{web}];\n");
+    let src = format!(
+        "pub static CRAFT_FONTS: &[CraftFont] = &[\n{fonts}];\npub static WEB_FONTS: &[WebFont] = &[\n{web}];\npub static CONDENSED_UI_FONT: Option<CraftFont> = {condensed};\n"
+    );
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("craft_fonts.rs");
     // Unchanged output keeps its mtime. Rewritten just before this crate compiles, it can read as
     // newer than that compile where cargo's recorded times lose their sub-second part (ecryptfs
@@ -91,21 +103,50 @@ fn craft_fonts(dir: &Path) -> Result<String, String> {
         if wasm && !(*family == WEB_FONT.0 && *style == WEB_FONT.1) {
             continue;
         }
-        let path = dir.join(file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
-        // The manifest is supplier data: embed only regular files inside the checkout.
-        if !path.starts_with(&root) || !path.is_file() {
-            return Err(format!("{file}: not a file inside the font checkout"));
-        }
-        println!("cargo::rerun-if-changed={}", path.display());
-        let scripts: Vec<String> = scripts.split(',').map(|s| format!("{:?}", s.trim())).collect();
-        let _ = writeln!(
-            out,
-            "    CraftFont {{ family: {family:?}, style: {style:?}, scripts: &[{}], bytes: include_bytes!({:?}) }},",
-            scripts.join(", "),
-            path.display().to_string(),
-        );
+        let _ = writeln!(out, "    {},", craft_font(dir, &root, family, style, file, scripts)?);
     }
     Ok(out)
+}
+
+/// The `CraftFont { .. }` initialiser of one manifest row of the checkout `dir` (canonical `root`).
+fn craft_font(dir: &Path, root: &Path, family: &str, style: &str, file: &str, scripts: &str) -> Result<String, String> {
+    let path = dir.join(file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
+    // The manifest is supplier data: embed only regular files inside the checkout.
+    if !path.starts_with(root) || !path.is_file() {
+        return Err(format!("{file}: not a file inside the font checkout"));
+    }
+    println!("cargo::rerun-if-changed={}", path.display());
+    let scripts: Vec<String> = scripts.split(',').map(|s| format!("{:?}", s.trim())).collect();
+    Ok(format!(
+        "CraftFont {{ family: {family:?}, style: {style:?}, scripts: &[{}], bytes: include_bytes!({:?}) }}",
+        scripts.join(", "),
+        path.display().to_string(),
+    ))
+}
+
+/// The condensed craft-fonts face (family, style) document tab titles draw in, from the opt-in
+/// Latin catalog.
+const CONDENSED_UI_FACE: (&str, &str) = ("Noto Sans", "Condensed SemiBold");
+
+/// The `CraftFont { .. }` initialiser of [`CONDENSED_UI_FACE`]'s row in `fonts/latin-manifest.txt`.
+fn condensed_ui_font(dir: &Path) -> Result<String, String> {
+    let manifest = dir.join("fonts/latin-manifest.txt");
+    // A checkout without the catalog is watched through its folder, so the build runs again once
+    // the catalog appears.
+    let watched = if manifest.is_file() { manifest.clone() } else { dir.join("fonts") };
+    println!("cargo::rerun-if-changed={}", watched.display());
+    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("{}: {e} (an older craft-fonts?)", manifest.display()))?;
+    let root = dir.canonicalize().map_err(|e| format!("{}: {e}", dir.display()))?;
+    let row = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(|l| l.split(" | ").map(str::trim).collect::<Vec<_>>())
+        .find(|f| f.first() == Some(&CONDENSED_UI_FACE.0) && f.get(1) == Some(&CONDENSED_UI_FACE.1));
+    let Some([family, style, file, scripts, ..]) = row.as_deref() else {
+        return Err(format!("{} {} not in {} (an older craft-fonts?)", CONDENSED_UI_FACE.0, CONDENSED_UI_FACE.1, manifest.display()));
+    };
+    craft_font(dir, &root, family, style, file, scripts)
 }
 
 /// One `WebFont { .. }` initialiser per `web-fonts.txt` line, from its craft-fonts manifest row, and
