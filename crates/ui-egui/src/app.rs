@@ -221,6 +221,7 @@ impl VectorcraftApp {
             pending_profile_open: None,
             queued_profile_opens: Default::default(),
             pen_end: Default::default(),
+            ticked_pass: None,
             #[cfg(test)]
             now_override: None,
             #[cfg(test)]
@@ -306,6 +307,7 @@ impl VectorcraftApp {
     pub fn frame_input(&mut self, out: FrameOutput) -> FrameInput {
         // The output collects every pass of the last frame, so each fired command runs once here
         // whatever number of passes fired it.
+        if !out.fired.is_empty() || !out.delivered.is_empty() { eprintln!("TEMPDIAG fired {:?} delivered {:?}", out.fired.iter().map(|f| (&f.command, f.phase)).collect::<Vec<_>>(), out.delivered.iter().map(|f| &f.command).collect::<Vec<_>>()); }
         if let Some(ctx) = self.ui_ctx.clone() {
             for fired in &out.fired {
                 shortcuts::run_fired(self, &ctx, fired);
@@ -365,6 +367,7 @@ impl VectorcraftApp {
 
     /// [`Self::tick`]'s work.
     fn tick_frame(&mut self, ctx: &egui::Context) {
+        self.ticked_pass = Some(ctx.cumulative_pass_nr());
         let lang = self.ui_language();
         i18n::set_current(lang);
         // The engine gives new type the Japanese defaults while the UI is in Japanese.

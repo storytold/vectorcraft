@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use craft::automation::actions::{Action, ActionList, ActionStep};
-use craft::host::{Picked, ScriptedFiles};
+use craft::host::{PickKind, Picked, ScriptedFiles};
 use craft::ui::dialog::{DialogHost, HeldOk, StackDialog};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -125,11 +125,13 @@ fn install_picks(app: &mut VectorcraftApp, picks: ScriptedFiles) {
     crate::tests::picks::install_files(app, Arc::new(picks));
 }
 
-/// The most file dialogs [`with_files`] answers in one test.
-const MAX_PICKS: usize = 64;
+thread_local! {
+    /// The file service of this test's [`with_files`] and the path its dialogs pick.
+    static ANSWERING: RefCell<Option<(Arc<ScriptedFiles>, String)>> = const { RefCell::new(None) };
+}
 
 /// Files in memory for `app`: what it writes, and what it reads back. Every file dialog picks
-/// `open`, a save dialog too.
+/// `open`, a save dialog too, once [`poll_picks`] runs.
 pub(crate) fn with_files(app: &mut VectorcraftApp, open: &str) -> Rc<RefCell<BTreeMap<String, Vec<u8>>>> {
     let files = Rc::new(RefCell::new(BTreeMap::<String, Vec<u8>>::new()));
     let (w, r) = (files.clone(), files.clone());
@@ -139,17 +141,30 @@ pub(crate) fn with_files(app: &mut VectorcraftApp, open: &str) -> Rc<RefCell<BTr
         Ok(())
     }));
     app.services.read = Some(Box::new(move |path: &str| r.borrow().get(path).cloned().ok_or_else(|| "no such file".to_string())));
-    install_picks(app, ScriptedFiles::answering((0..MAX_PICKS).map(|_| Picked::Paths(vec![open.into()]))));
+    let picks = Arc::new(ScriptedFiles::held());
+    ANSWERING.set(Some((picks.clone(), open.to_string())));
+    crate::tests::picks::install_files(app, picks);
     files
 }
 
 /// Every file dialog of `app` is cancelled from now on.
 pub(crate) fn cancel_picks(app: &mut VectorcraftApp) {
+    ANSWERING.set(None);
     install_picks(app, ScriptedFiles::new());
 }
 
 /// Runs what a frame runs for the file dialogs that answered: the commands that waited for them.
 pub(crate) fn poll_picks(app: &mut VectorcraftApp) {
+    ANSWERING.with_borrow(|answering| {
+        let Some((files, path)) = answering else { return };
+        // Each poll answers every open dialog, so the open ones are the latest asked; the newest is answered first.
+        for request in files.requests().iter().rev().take(files.open()) {
+            files.answer(match request.kind {
+                PickKind::Save => Picked::Saved { path: path.into(), file_type: None },
+                _ => Picked::Paths(vec![path.into()]),
+            });
+        }
+    });
     let ctx = app.ui_ctx.clone().expect("a test app has a window");
     crate::tests::picks::poll(app, &ctx);
 }

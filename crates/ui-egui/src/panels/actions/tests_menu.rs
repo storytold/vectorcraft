@@ -14,8 +14,11 @@ use crate::dialogs::action_insert_menu_item::InsertMenuItemDialog;
 use crate::dialogs::action_select_object::SelectObjectDialog;
 use crate::dialogs::action_stop::RecordStopDialog;
 
+/// An app without the built-in set: the tests' sets and actions are the only ones, at the indices they give.
 fn app() -> VectorcraftApp {
-    VectorcraftApp::new(Session::new(), Default::default())
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui.actions.clear_all();
+    app
 }
 
 /// An app with sets "S1" and "S2" holding one action each, the second action current and selected.

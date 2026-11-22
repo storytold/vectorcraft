@@ -867,6 +867,7 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         })?;
         // The steps hold engine commands only, so nothing in them points at an action.
         let copy = app.ui.actions.duplicate_action(flat, |_, _, _| {}).map_err(list_error)?;
+        drop_function_keys(app, &[copy])?;
         // A Record Stop, Insert Menu Item or Set Selection dialog open on a later action of the set follows it down.
         retarget_step_dialogs(app, |(s, a, step)| Some((s, if s == set && a > at { a + 1 } else { a }, step)));
         retarget_batch_actions(app, |(s, a)| (s, if s == set && a > at { a + 1 } else { a }));
@@ -877,6 +878,7 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     model::edit_keeps_set_loadable(app, &name, &[], &model::stored_actions(&app.ui.actions, &name))?;
     let copy = app.ui.actions.duplicate_set(&name, |_, _, _| {}).map_err(list_error)?;
     let at = app.ui.actions.sets().iter().position(|s| *s == copy).ok_or("no such action set")?;
+    drop_function_keys(app, &model::members(&app.ui.actions, &copy))?;
     if let Some((rec, ..)) = app.ui.recording.as_mut()
         && *rec >= at
     {
@@ -888,6 +890,16 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     panel.selected = Some(ActionSelection::Set(copy.clone()));
     panel.selected_sets = vec![copy];
     Ok(json!({ "set": at }))
+}
+
+/// Takes the function keys from the actions at `copies`, so a key still plays only the original.
+fn drop_function_keys(app: &mut VectorcraftApp, copies: &[usize]) -> Result<(), String> {
+    for &index in copies {
+        let mut action = app.ui.actions.action(index).cloned().ok_or("no such action")?;
+        model::set_function_key(&mut action, None);
+        app.ui.actions.set_options(index, action.options).map_err(list_error)?;
+    }
+    Ok(())
 }
 
 /// Moves the Batch dialog's action: `f` gives the new (set, action).
@@ -916,7 +928,7 @@ fn clear_panel(app: &mut VectorcraftApp) {
 pub(super) fn replace_sets(app: &mut VectorcraftApp) {
     clear_panel(app);
     let first = app.ui.actions.sets().first().map(|s| s.to_string());
-    app.ui.actions_panel.selected_sets = first.iter().cloned().collect();
+    app.ui.actions_panel.selected = first.clone().map(ActionSelection::Set);
     app.ui.action_set = first;
 }
 
@@ -965,15 +977,20 @@ pub fn reset(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     require_idle(app)?;
     if append {
         let first = app.ui.actions.sets().len();
-        app.ui.actions.reset(model::default_sets(), true, |_, _| {});
+        // The list joins a set to one of the same name: the copy gets a free name instead.
+        let mut defaults = model::default_sets();
+        for action in &mut defaults.actions {
+            action.set = action.set.as_deref().map(|set| model::free_set_name(&app.ui.actions, set));
+        }
+        app.ui.actions.reset(defaults, true, |_, _| {});
         return Ok(json!({ "changed": true, "mode": "append", "set": first }));
     }
     let defaults = model::default_list();
     let first = defaults.sets().first().map(|s| s.to_string());
     let panel = &app.ui.actions_panel;
     let shown = app.ui.action_set == first
-        && panel.selected_sets.iter().eq(first.iter())
-        && panel.selected.is_none()
+        && panel.selected == first.clone().map(ActionSelection::Set)
+        && panel.selected_sets.is_empty()
         && panel.expanded.is_empty()
         && !set_dialog_open(app);
     if shown && app.ui.actions.actions() == defaults.actions() && app.ui.actions.sets() == defaults.sets() {

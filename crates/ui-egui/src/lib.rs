@@ -331,6 +331,8 @@ pub struct VectorcraftApp {
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
+    /// The window pass whose [`Self::tick`] ran last: work started in that pass, before its end, waits for the next.
+    pub(crate) ticked_pass: Option<u64>,
     /// A test's clock for [`Self::tick`], replacing the monotonic clock so idle scheduling can be
     /// driven one simulated frame at a time (production always leaves this `None`).
     #[cfg(test)]

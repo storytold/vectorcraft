@@ -442,9 +442,10 @@ pub fn waiting_at_stop(app: &VectorcraftApp) -> bool {
 /// The command that plays on from a stop ([`continue_playback`]).
 pub const CONTINUE_PLAYBACK: &str = "ui.action.continue";
 
-/// The window's current pass, `None` before the app has a window.
+/// The window's current pass once its tick has begun, else `None`: a step played before the tick of a pass (or with
+/// no window) lets the next tick start the pause.
 fn pass_now(app: &VectorcraftApp) -> Option<u64> {
-    app.ui_ctx.as_ref().map(egui::Context::cumulative_pass_nr)
+    app.ui_ctx.as_ref().map(egui::Context::cumulative_pass_nr).filter(|&pass| app.ticked_pass == Some(pass))
 }
 
 /// `ui.action.continue {}`: plays on from the stop the playback waits at, on the document active
