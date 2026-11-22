@@ -2633,14 +2633,20 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
   starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
-  the preset it is given holds one of them with a value other than `null`, and makes no document.
+  the preset it is given holds one of them with a value other than `null`, and makes no document. A
+  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
+  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
+  profile and the reason, and makes no document.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
   destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
   entry `[i]` gives. Each page item
   (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
-  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected`, `opacity` (0 to
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
+  or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
+  were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
   visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
@@ -2665,7 +2671,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
-  kept from an earlier run, throws `Stale page item`; `index` and `getByName` throw `Not found`; and
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
+  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
   nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
@@ -9126,7 +9137,9 @@ The profile is read on every `file.new`, so a replayed journal or a recorded act
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
 When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
 folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
+a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
+file. The
 reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
 file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
 adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
