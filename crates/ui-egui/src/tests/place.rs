@@ -60,10 +60,15 @@ fn png(w: u32, h: u32, ppi: f64) -> Vec<u8> {
     vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out, (ppi, ppi))
 }
 
-/// An app reading files from disk, in a window, with a 400×300 document.
-fn app() -> VectorcraftApp {
+/// An app reading files from disk, as the desktop host's does, in a window with no document.
+fn reading() -> VectorcraftApp {
     let services = crate::Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), services))
+}
+
+/// [`reading`] with a 400×300 document.
+fn app() -> VectorcraftApp {
+    let mut app = reading();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app
 }
@@ -434,7 +439,7 @@ fn unsupported_and_unreadable_drops_leave_the_document_open() {
 
 #[test]
 fn files_dropped_with_no_document_open_open_and_are_recent() {
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let mut app = reading();
     let ctx = window(&app);
     let dir = Folder::new("ui-place-no-document");
     let path = dir.file("open-me.png", &png(8, 8, 72.0));
