@@ -430,6 +430,8 @@ fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
     }
     let value = arg(args, 2);
     if let Step::Item(index) = step {
+        // An array item is a simple value, which takes no options.
+        only(i, options, 0, what)?;
         let v = xml_text(i, &value, what)?;
         return set_item(i, o, &ns, &name, index, v, false, what);
     }
@@ -730,14 +732,23 @@ fn lang(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
     if matches!(v, Value::Null | Value::Undefined) { Ok(String::new()) } else { xml_text(i, v, what) }
 }
 
+/// Is the property at `at` of `o` a language alternative: an `rdf:Alt` whose items, if it has any,
+/// all have a language?
+fn is_alt_text(i: &Interp, o: ObjId, at: usize) -> JsResult<bool> {
+    Ok(match meta_of(i, o)?.props.get(at).map(|p| &p.value) {
+        Some(xmp::Value::Array { form: Form::Alt, items }) => items.iter().all(|item| item.lang.is_some()),
+        _ => false,
+    })
+}
+
 fn get_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.getLocalizedText";
     let o = this_meta(i, &this, what)?;
     let (ns, name) = array_target(i, args, what)?;
     let generic = lang(i, &arg(args, 2), what)?;
     let specific = lang(i, &arg(args, 3), what)?;
-    let Some((at, form, _)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
-    if form != Form::Alt {
+    let Some((at, _, _)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
+    if !is_alt_text(i, o, at)? {
         return Err(not_alt_text(i, what, &name));
     }
     let found = match &meta_of(i, o)?.props[at].value {
@@ -762,7 +773,7 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let value = xml_text(i, &arg(args, 4), what)?;
     let found = array_items(i, o, &ns, &name, what)?;
     let at = match found {
-        Some((_, form, _)) if form != Form::Alt => return Err(not_alt_text(i, what, &name)),
+        Some((at, _, _)) if !is_alt_text(i, o, at)? => return Err(not_alt_text(i, what, &name)),
         Some((at, _, _)) => at,
         None => {
             let prop = xmp::Prop { ns: ns.clone(), name: name.clone(), value: xmp::Value::Array { form: Form::Alt, items: Vec::new() } };

@@ -142,6 +142,21 @@ fn bad_arguments_and_unbuilt_members_throw() {
         "Error: XMPMeta.getLocalizedText: subject is not a language alternative array"
     );
     assert_eq!(
+        thrown(&with_packet("m.setProperty(XMPConst.NS_DC, 'subject[1]', 'x', XMPConst.PROP_IS_ARRAY)")),
+        "RangeError: XMPMeta.setProperty: the value 0x200 is not available yet"
+    );
+    // An `rdf:Alt` with an item that has no language is not a language alternative.
+    let untagged = "var m = new XMPMeta(\"<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:dc='http://purl.org/dc/elements/1.1/'>\
+        <dc:title><rdf:Alt><rdf:li xml:lang='x-default'>a</rdf:li><rdf:li>b</rdf:li></rdf:Alt></dc:title></rdf:Description></rdf:RDF>\");";
+    assert_eq!(
+        thrown(&format!("{untagged} m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'en')")),
+        "Error: XMPMeta.getLocalizedText: title is not a language alternative array"
+    );
+    assert_eq!(
+        thrown(&format!("{untagged} m.setLocalizedText(XMPConst.NS_DC, 'title', null, 'en', 'c')")),
+        "Error: XMPMeta.setLocalizedText: title is not a language alternative array"
+    );
+    assert_eq!(
         thrown("new XMPMeta().getStructField(XMPConst.NS_DC, 'a', XMPConst.NS_DC, 'b')"),
         "Error: XMPMeta.getStructField is not available yet"
     );
