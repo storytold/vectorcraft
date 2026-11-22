@@ -38,16 +38,11 @@ fn cancel_open(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Set `fields` on the dialog on top and confirm it, as its OK does, then let the app act on the answer.
 fn confirm_open(app: &mut VectorcraftApp, ctx: &egui::Context, fields: &[(&str, Value)]) {
-    if let Some(d) = app.dialogs() {
-        d.with(|host| {
-            let Some(id) = host.open_dialogs().pop().map(|o| o.id) else { return };
-            for (name, value) in fields {
-                host.set_json_field(ctx, id, name, value.clone()).unwrap();
-            }
-            host.confirm_by_id(ctx, id);
-        });
-    }
-    crate::dialogs::host::pump(app, ctx);
+    let Some(id) = app.dialogs().and_then(|d| d.with(|host| host.open_dialogs().pop().map(|o| o.id))) else {
+        crate::dialogs::host::pump(app, ctx);
+        return;
+    };
+    crate::tests::picks::answer_dialog(app, id, fields, true);
 }
 
 /// A plain selection of `rows` as the list reports it.
@@ -819,7 +814,12 @@ fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
 
 /// A document of `boards` artboards of 100 × 50 pt with the Artboard tool chosen.
 fn menu_app(boards: usize) -> VectorcraftApp {
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    menu_app_with(boards, Default::default())
+}
+
+/// [`menu_app`] over `services`.
+fn menu_app_with(boards: usize, services: crate::Services) -> VectorcraftApp {
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": boards})).unwrap();
     app.select_tool("artboard");
     app
@@ -1025,15 +1025,15 @@ fn the_artboard_tools_menu_replays_its_cut_and_copy_in_a_new_session() {
 /// The menu's Cut and Copy publish the copied art to the system clipboard, as Edit › Cut and Copy do.
 #[test]
 fn the_artboard_tools_menu_publishes_its_cut_and_copy() {
-    let mut app = menu_app(2);
+    let mut app = menu_app_with(2, crate::tests::sysclip::fake_clipboard_services());
     let on = app.session.active().unwrap().doc.artboards[1].rect;
     app.session.execute("shape.rectangle", &json!({"x": on.x0 + 10.0, "y": on.y0 + 10.0, "width": 20, "height": 20})).unwrap();
     app.session.set_tool_option("selected", &json!([1]));
     app.view_mut().unwrap().artboard = 1;
     for label in ["Copy", "Cut"] {
-        app.clipboard_out = None;
+        app.clipboard.write_text("").unwrap();
         choose(&mut app, label);
-        assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{label}");
+        assert!(app.written_clipboard_text().is_some_and(|svg| svg.contains("<svg")), "{label}");
     }
 }
 

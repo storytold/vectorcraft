@@ -124,6 +124,12 @@ pub(super) fn fake() -> (Fake, Arc<Mutex<Board>>) {
     (Fake(board.clone()), board)
 }
 
+/// Services with a fake system clipboard, for a test elsewhere that reads what a Copy wrote
+/// through [`VectorcraftApp::written_clipboard_text`].
+pub(crate) fn fake_clipboard_services() -> Services {
+    Services { clipboard: Some(Box::new(fake().0)), ..Default::default() }
+}
+
 /// An app with a document and a fake system clipboard, the view centred on (250, 180).
 pub(super) fn app() -> (VectorcraftApp, Arc<Mutex<Board>>) {
     let (fake, board) = fake();

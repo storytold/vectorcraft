@@ -100,6 +100,15 @@ impl Rig {
         self.target(label).center()
     }
 
+    /// Where the Swatches panel's tile of swatch `name` is: a tile is named by its swatch and the colour it shows
+    /// ("Drop Red, #ff0000").
+    fn swatch(&self, name: &str) -> Pos2 {
+        let tree = self.fixture.tree();
+        let prefix = format!("{name}, ");
+        let full = tree.keys().into_iter().filter_map(|k| tree.name_of(k)).find(|n| n.starts_with(&prefix)).map(str::to_owned);
+        self.at(&full.unwrap_or_else(|| panic!("no swatch tile `{name}`")))
+    }
+
     /// The number the field named `label` shows.
     fn number(&self, label: &str) -> Option<f64> {
         self.fixture.tree().numeric_of(self.target(label).node).and_then(|n| n.value)
@@ -266,11 +275,11 @@ fn a_dropped_swatch_adds_or_recolours_a_stop() {
     app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
     let mut rig = Rig::with(app, with_swatches);
     let (a, b) = (rig.at("Color stop 1 of 2"), rig.at("Color stop 2 of 2"));
-    rig.drag(rig.at("Drop Red"), pos2((a.x + b.x) / 2.0, a.y));
+    rig.drag(rig.swatch("Drop Red"), pos2((a.x + b.x) / 2.0, a.y));
     assert_eq!(hexes(&rig.app()), ["#ffffff", "#ff0000", "#000000"]);
-    rig.drag(rig.at("Drop Red"), rig.at("Color stop 3 of 3"));
+    rig.drag(rig.swatch("Drop Red"), rig.at("Color stop 3 of 3"));
     assert_eq!(hexes(&rig.app()), ["#ffffff", "#ff0000", "#ff0000"]);
-    rig.drag(rig.at("Ink"), rig.at("Color stop 1 of 3"));
+    rig.drag(rig.swatch("Ink"), rig.at("Color stop 1 of 3"));
     let st = fill(&rig.app()).gradient.stops[0].clone();
     assert_eq!((st.swatch.as_deref(), st.tint, st.color.to_hex()), (Some("Ink"), 1.0, "#cc0066".to_string()));
     rig.app().run("swatch.edit", json!({"name": "Ink", "color": "#0066cc"})).unwrap();
@@ -288,7 +297,7 @@ fn a_color_dropped_on_the_ramp_keeps_its_model_in_a_cmyk_document() {
     app.run("swatch.new", json!({"name": "Drop Red", "color": "#ff0000", "keepModel": true})).unwrap();
     let mut rig = Rig::with(app, with_swatches);
     let (a, b) = (rig.at("Color stop 1 of 2"), rig.at("Color stop 2 of 2"));
-    rig.drag(rig.at("Drop Red"), pos2((a.x + b.x) / 2.0, a.y));
+    rig.drag(rig.swatch("Drop Red"), pos2((a.x + b.x) / 2.0, a.y));
     let stops: Vec<Color> = fill(&rig.app()).gradient.stops.iter().map(|s| s.color).collect();
     assert_eq!(stops, [Color::WHITE, Color::rgb(1.0, 0.0, 0.0), Color::BLACK]);
 }

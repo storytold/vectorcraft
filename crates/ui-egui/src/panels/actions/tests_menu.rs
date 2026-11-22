@@ -88,7 +88,9 @@ fn menu_insert_rows_open_their_dialog_on_the_selected_step_the_action_end_or_the
             (stop, item, object)
         })
     };
-    for id in ["actionsPanel.insertStop", "actionsPanel.insertMenuItem", "ui.action.selectObjectDialog"] {
+    // The panel's rows by their commands' own ids.
+    let ids = [CommandRef::from(C::InsertStop).id, CommandRef::from(C::InsertMenuItem).id, "ui.action.selectObjectDialog".to_string()];
+    for id in ids.iter().map(String::as_str) {
         let mut app = crate::testing::windowed(with_sets());
         app.ui.actions.insert_step(1, 0, craft::automation::actions::ActionStep::new("a.b", json!({}))).unwrap();
         app.ui.actions_panel.expanded.insert("A in S2".into());

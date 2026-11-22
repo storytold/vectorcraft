@@ -192,7 +192,7 @@ pub(super) fn textured(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         .flat_map(|f| vectorcraft_engine::cmd::fileio::read_extensions(f).into_iter().map(|e| e.to_string()))
         .collect();
     let exts: Vec<&str> = exts.iter().map(String::as_str).collect();
-    let picker = Param::custom("texture", lbl!("Texture:"), move |ui, fields, _| {
+    let picker = Param::custom("texture", lbl!("Texture:"), move |ui, fields, cx| {
         let size = fields.text(TEXTURE_IMAGE).and_then(texture).map(|t| t.size());
         let table = menu(size.is_some());
         let entries: Vec<Entry<String>> = table.iter().map(|(label, value)| Entry::new((*value).to_owned(), data_label(label))).collect();
@@ -203,6 +203,8 @@ pub(super) fn textured(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
             if let Some(id) = picked.value().cloned() {
                 fields.set("texture", id);
             }
+            // The pick is an edit of the rows, which the Appearance panel's editor applies.
+            cx.gesture(&picked.events);
             if let Some((w, h)) = size {
                 craft::ui::display::Text::new(format!("{w} × {h} px")).show(ui);
             }

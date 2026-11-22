@@ -874,8 +874,10 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         select(app, copy, None);
         return Ok(json!({ "set": set, "action": at + 1 }));
     }
-    // The copy is a new set, measured as Load Actions… measures one.
-    model::edit_keeps_set_loadable(app, &name, &[], &model::stored_actions(&app.ui.actions, &name))?;
+    // The copy is a new set, measured as Load Actions… measures one, under the names it gets.
+    let mut trial = app.ui.actions.clone();
+    let named = trial.duplicate_set(&name, |_, _, _| {}).map_err(list_error)?;
+    model::edit_keeps_set_loadable(app, &named, &[], &model::stored_actions(&trial, &named))?;
     let copy = app.ui.actions.duplicate_set(&name, |_, _, _| {}).map_err(list_error)?;
     let at = app.ui.actions.sets().iter().position(|s| *s == copy).ok_or("no such action set")?;
     drop_function_keys(app, &model::members(&app.ui.actions, &copy))?;

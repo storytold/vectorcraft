@@ -183,6 +183,7 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
         options: app.ui.action_playback,
         next_at: None,
         hold: false,
+        shown_in: None,
         doc: None,
         played_in: pass_now(app),
         stop: None,
@@ -292,7 +293,7 @@ fn advance(app: &mut VectorcraftApp, mut playing: Playing) -> Result<Vec<Value>,
     }
     let Some(at) = report.paused_at else { return Ok(results) };
     playing.from = at + 1;
-    playing.next_at = None;
+    (playing.next_at, playing.shown_in) = (None, None);
     // A step of the action may open, close or switch documents itself.
     playing.doc = active_doc(app);
     match stop {
@@ -525,6 +526,9 @@ pub struct Playing {
     /// before the next one runs, also when Play in the panel ran after the canvas drew and while the
     /// window is minimized or covered.
     pub(super) hold: bool,
+    /// With Step by Step, the frame whose pass showed the last step ([`playback_shown`]): the hold
+    /// ends in a later frame, not in a pass egui runs again within that frame.
+    shown_in: Option<u64>,
     /// The [`uid`](vectorcraft_engine::DocState::uid) of the document that was active after the
     /// last step played, if any.
     pub(super) doc: Option<u64>,
@@ -570,7 +574,11 @@ fn active_doc(app: &VectorcraftApp) -> Option<u64> {
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let doc = active_doc(app);
     let pass = pass_now(app);
+    let frame = app.ui_ctx.as_ref().map(egui::Context::cumulative_frame_nr);
     let playing = app.ui.action_playing.as_mut()?;
+    if playing.hold && playing.shown_in.is_some_and(|shown| frame > Some(shown)) {
+        playing.hold = false;
+    }
     if playing.stop.is_some() {
         show_stop_message(app);
         return None;
@@ -612,6 +620,18 @@ pub fn playback_held(app: &VectorcraftApp) -> bool {
 pub fn playback_drawn(app: &mut VectorcraftApp) {
     if let Some(playing) = app.ui.action_playing.as_mut().filter(|p| p.hold) {
         playing.hold = false;
+        if let Some(ctx) = &app.ui_ctx {
+            ctx.request_repaint();
+        }
+    }
+}
+
+/// Called after a UI pass that the window shows, when [`playback_held`] was true as the pass began:
+/// the Step by Step playback runs its next step in the next frame ([`playback_drawn`] there), which
+/// it asks for. A pass egui runs again in this frame runs no step.
+pub fn playback_shown(app: &mut VectorcraftApp, frame: u64) {
+    if let Some(playing) = app.ui.action_playing.as_mut().filter(|p| p.hold) {
+        playing.shown_in = Some(frame);
         if let Some(ctx) = &app.ui_ctx {
             ctx.request_repaint();
         }

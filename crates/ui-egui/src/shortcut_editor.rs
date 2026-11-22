@@ -1279,7 +1279,16 @@ fn set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         accept(&def, b)?;
     }
     let policy = if force { Policy::Steal } else { Policy::Refuse };
-    let done = keymap.set_bindings(&command, singles.into_iter().chain(holds).collect(), policy).map_err(|e| refusal(e, &keymap))?;
+    let bindings: Vec<Binding> = singles.into_iter().chain(holds).collect();
+    let done = match keymap.set_bindings(&command, bindings.clone(), policy) {
+        // An action's function key is the action's own option, not a binding to take: the command
+        // gets the chord beside it, and the action's key keeps priority.
+        Err(AssignError::Taken(holders)) if holders.iter().all(|h| h.command.id == crate::panels::actions::PLAY_ACTION) => {
+            keymap.set_bindings(&command, bindings, Policy::Keep)
+        }
+        r => r,
+    }
+    .map_err(|e| refusal(e, &keymap))?;
     let mut removed: Vec<String> = vec![];
     for h in &done.taken_from {
         let k = entry_key(&h.command);

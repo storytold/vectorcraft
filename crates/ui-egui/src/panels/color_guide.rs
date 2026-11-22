@@ -1582,6 +1582,10 @@ mod tests {
         let g = guide(&mut app);
         assert_eq!(rows.len(), g.colors.len());
         assert!(g.colors.iter().all(|c| members.contains(&c.to_hex())), "the colors are the library's");
-        assert!(dialogs.with(|host| host.confirm_by_id(&ctx, recolor.id)), "OK confirms");
+        let groups = |app: &VectorcraftApp| app.session.active().map_or(0, |st| st.doc.swatch_groups.len());
+        let before = groups(&app);
+        crate::tests::picks::answer_dialog(&mut app, recolor.id, &[], true);
+        assert!(dialogs.with(|host| host.open_dialogs().is_empty()), "OK confirms");
+        assert_eq!(groups(&app), before + 1, "OK saves the colours as a group");
     }
 }

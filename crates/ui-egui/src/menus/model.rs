@@ -165,11 +165,12 @@ fn role(title: &str) -> MenuRole {
     }
 }
 
-/// The hash of what the catalog's rows depend on, which moves its generation.
-fn generation(listed: &Listed) -> u64 {
+/// The hash of what the catalog's rows depend on, which moves its generation: `plays` are the
+/// actions' function keys, a row each.
+fn generation(listed: &Listed, plays: &[(String, craft::keymap::Chord)]) -> u64 {
     let mut h = DefaultHasher::new();
     (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), vectorcraft_text::FontDb::global().generation()).hash(&mut h);
-    listed.hash(&mut h);
+    (listed, plays).hash(&mut h);
     h.finish()
 }
 
@@ -205,7 +206,7 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let bar = MenuBar::new(menus);
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
-    match AppCatalog::new(defs, generation(&listed)) {
+    match AppCatalog::new(defs, generation(&listed, &crate::panels::actions::function_keys(&app.ui.actions))) {
         Ok(catalog) => app.menus.catalog = Some(catalog),
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),

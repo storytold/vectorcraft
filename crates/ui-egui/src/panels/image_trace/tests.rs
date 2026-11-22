@@ -1,8 +1,8 @@
 use super::*;
 use crate::panels::first_selected;
+use crate::panels::swatches::DOCUMENT_SWATCHES as DOCUMENT_SWATCHES_NAME;
 use crate::tests::panel_harness::Panel;
 use craft::behavior::Mixed;
-use crate::panels::swatches::DOCUMENT_SWATCHES as DOCUMENT_SWATCHES_NAME;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
 /// The name of the eye button next to View.
@@ -499,7 +499,8 @@ fn trace_view_and_preview_work_when_another_object_is_selected_first() {
 fn advanced_is_a_section_that_stays_as_it_was_left() {
     let mut panel = panel_over(traced_app());
     assert!(panel.app().ui.image_trace_advanced && panel.shows("Advanced") && panel.shows("Corners"), "open at first");
-    panel.click("Advanced");
+    // The section's region and heading share its name: the header's disclosure is the button.
+    panel.click_role("Advanced", craft::ui::contract::Role::BUTTON);
     assert!(!panel.app().ui.image_trace_advanced, "the header closes it");
     assert!(!panel.shows("Corners"));
     // Remembered with the UI preferences, across launches.
@@ -507,7 +508,7 @@ fn advanced_is_a_section_that_stays_as_it_was_left() {
     assert!(!saved.image_trace_advanced);
     let old: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
     assert!(old.image_trace_advanced, "open for preferences saved before the section existed");
-    panel.click("Advanced");
+    panel.click_role("Advanced", craft::ui::contract::Role::BUTTON);
     assert!(panel.app().ui.image_trace_advanced && panel.shows("Corners"));
 }
 

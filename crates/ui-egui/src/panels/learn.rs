@@ -162,7 +162,8 @@ fn skill_list(app: &mut VectorcraftApp, ui: &mut Ui) {
     let source = keyed(&keys, |key: &&'static str| *key);
     // PLAN: a single-select list keeps its last pick highlighted and reports no change when the same key is
     // picked again; the keys differ between the levels, but the list is the framework's to reset on a new view.
-    let out = List::new(tl!("Skills")).select(SelectMode::Single).show_items(ui, &source, &mut |key, _| {
+    // A few skills: the list is as tall as its rows, so Reset progress shows under them.
+    let out = List::new(tl!("Skills")).select(SelectMode::Single).natural_height(true).show_items(ui, &source, &mut |key, _| {
         let row = ListRow::new(*key);
         let Some((skill, ring)) = rings.iter().find(|(s, _)| s.id == *key) else { return row };
         let count = format!("{}/{}", ring.done, ring.total);

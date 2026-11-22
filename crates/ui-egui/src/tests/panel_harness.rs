@@ -115,6 +115,17 @@ impl Panel {
         self.after();
     }
 
+    /// Clicks the control of `role` named `name`, where nodes of other roles share the name (a section's region,
+    /// heading and disclosure button).
+    pub(crate) fn click_role(&mut self, name: &str, role: craft::ui::contract::Role) {
+        self.frame();
+        let tree = self.fixture.tree();
+        let target = self.fixture.by_role(role).into_iter().find(|t| tree.name_of(t.node) == Some(name));
+        let target = target.unwrap_or_else(|| panic!("no {role:?} named {name:?} in {:?}", self.names()));
+        self.fixture.click(&target);
+        self.after();
+    }
+
     /// Clicks the control named `name` with `mods` held.
     pub(crate) fn click_with(&mut self, name: &str, mods: Modifiers) {
         let target = self.find(name);

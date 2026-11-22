@@ -589,7 +589,7 @@ impl VectorcraftApp {
             self.perf.frame_ms = monotonic_ms() - t0;
             // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
             if step_held && !self.viewport_hidden(&ctx) {
-                crate::panels::actions::playback_drawn(self);
+                crate::panels::actions::playback_shown(self, ctx.cumulative_frame_nr());
             }
         }
         // Last, over everything: the screen colour picker's loupe and capture windows.

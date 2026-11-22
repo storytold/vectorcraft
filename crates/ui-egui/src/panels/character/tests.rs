@@ -554,9 +554,10 @@ fn a_change_runs_its_commands_with_the_panels_params() {
     assert_eq!(values(&mut app).caps, Some(Caps::Normal), "the rest of the text is unchanged");
     // The method belongs to the object: another with a different one leaves the field blank.
     let mut app = new_app();
-    let other = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
     change(&mut app, CharacterChange::AntiAlias(TextAntiAlias::Crisp));
     let first = story_selected_ids(&app);
+    // A new object is selected once made: the change above went to the first one alone, as production's steps did.
+    let other = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [first[0], other]})).unwrap();
     assert!(values(&mut app).anti_alias.is_none(), "the methods differ");
 }
