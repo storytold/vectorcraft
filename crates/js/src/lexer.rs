@@ -194,6 +194,8 @@ impl<'s> Lexer<'s> {
         self.line_start = start.saturating_sub(usize::try_from(token.column.saturating_sub(1)).unwrap_or(0));
         self.blank_line = false;
         let mut piece = self.template(start, token.line, token.column)?;
+        // A piece continued over a line ends on a new line, but not at its start.
+        self.blank_line = false;
         piece.newline_before = token.newline_before;
         Ok(piece)
     }

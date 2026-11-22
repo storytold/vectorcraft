@@ -225,12 +225,20 @@ pub(crate) struct Interp {
     pub(crate) temp_roots: Vec<Value>,
     /// Environments native code is still building.
     temp_envs: Vec<EnvId>,
+    /// Global and eval code whose frame is not pushed yet, counted against the heap.
+    temp_codes: Vec<Rc<Code>>,
     pub(crate) global: ObjId,
     pub(crate) global_env: EnvId,
     /// The declarative environment inside `global_env` that holds the `let` and `const` names of
     /// the scripts the realm runs with [`Options::es2015`]. Global code runs in it in either
     /// language, so a function made by one run sees the names a later run declares.
     pub(crate) global_lex: EnvId,
+    /// The names global code has declared with `var` or as functions on the global object, which
+    /// a later script's `let` or `const` cannot take (ECMA-262 2015 section 8.1.1.4, its
+    /// [[VarNames]]). Deleting the global object's property removes its name.
+    global_vars: std::collections::HashSet<Key>,
+    /// The [`Options::es2015`] a host set while a run was going, for the runs after it.
+    pub(crate) next_es2015: Option<bool>,
     /// The template objects tagged templates have made, by code and template index, each with
     /// its code (ECMA-262 2015 section 12.2.9.3 keeps one object for each site).
     pub(crate) template_objects: std::collections::HashMap<(usize, u32), (Rc<Code>, ObjId)>,
@@ -388,8 +396,7 @@ const NAMED_KEY_UNITS: usize = 256;
 thread_local! {
     /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
     pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-    /// Tests: [`Interp::reserve_heap`] collects garbage on every call, so anything left
-    /// unreachable from the roots while it runs is freed.
+    /// Tests: [`Interp::reserve_heap`] collects garbage each time it is called.
     pub(crate) static COLLECT_ON_RESERVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -514,9 +521,12 @@ impl Interp {
             frames: Vec::new(),
             temp_roots: Vec::new(),
             temp_envs: Vec::new(),
+            temp_codes: Vec::new(),
             global,
             global_env,
             global_lex,
+            global_vars: std::collections::HashSet::new(),
+            next_es2015: None,
             template_objects: std::collections::HashMap::new(),
             intrinsics: Intrinsics::placeholder(),
             fuel: u64::MAX,
@@ -787,6 +797,7 @@ impl Interp {
         roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
         roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
+        roots.codes.extend(self.temp_codes.iter().map(|code| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -801,8 +812,13 @@ impl Interp {
         roots.envs.push(self.global_env);
         roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
-        // A template object stays while its code can still run.
-        self.template_objects.retain(|_, (code, _)| Rc::strong_count(code) > 1);
+        // A template object stays while its code can still run: while the code has an owner other
+        // than the entries of its own sites.
+        let mut sites: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        for &(code, _) in self.template_objects.keys() {
+            *sites.entry(code).or_default() += 1;
+        }
+        self.template_objects.retain(|(site, _), (code, _)| Rc::strong_count(code) > sites.get(site).copied().unwrap_or(0));
         roots.objects.extend(self.template_objects.values().map(|&(_, id)| id));
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
@@ -1837,6 +1853,12 @@ impl Interp {
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
+                // A deleted global variable no longer stops a `let` or `const` of its name
+                // (ECMA-262 2015 section 8.1.1.4.7), and the names kept are never more than the
+                // global object's properties.
+                if id == self.global {
+                    self.global_vars.remove(k);
+                }
                 let o = self.object_mut(id)?;
                 o.props.remove(k);
                 if let Class::Arguments(map) = &mut o.class
@@ -2313,13 +2335,23 @@ impl Interp {
     // ---- ECMAScript 2015 spread and templates ----
 
     /// Appends the elements of the value on top to the array under it: an array's elements by
-    /// index (holes read as `undefined`), a string's characters by code point, and an object with
-    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel,
-    /// and a concatenated string's flattened copy is counted against the heap before it is made.
+    /// index (holes read as `undefined`), with its length read again before each one as its
+    /// iterator reads it, a string's or a `String` object's characters by code point, and an
+    /// object with a `length` by index. Any other value is a `TypeError`. Each element takes a
+    /// unit of fuel, and a concatenated string's flattened copy is counted against the heap before
+    /// it is made.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
-        let items: Vec<Value> = match &v {
+        // A `String` object iterates as the string it holds does (ECMA-262 2015 section 21.1.3.27).
+        let boxed = match &v {
+            Value::Object(o) => match &self.object(*o)?.class {
+                Class::String(s) => Some(Value::String(s.clone())),
+                _ => None,
+            },
+            _ => None,
+        };
+        let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
                 let mut out = Vec::new();
@@ -2347,18 +2379,29 @@ impl Interp {
                 let Some(n) = u32::MAX.checked_sub(current).filter(|room| n < f64::from(*room)).map(|_| n as u32) else {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
                 };
+                // An array's iterator reads its length again before each element (ECMA-262 2015
+                // section 22.1.5.2.1), so a getter that shrinks or grows the array changes the count.
+                let array = matches!(self.object(o)?.class, Class::Array { .. });
                 // The elements read so far stay reachable while a getter runs.
                 // The list is counted against the heap limit as it grows.
                 let mark = self.temp_roots.len();
                 let mut held = HeldBytes::new(self);
                 let mut read = || -> JsResult<()> {
-                    for i in 0..n {
+                    let mut i = 0;
+                    loop {
+                        let end = match &self.object(o)?.class {
+                            Class::Array { length, .. } if array => *length,
+                            _ => n,
+                        };
+                        if i >= end {
+                            return Ok(());
+                        }
                         self.use_fuel()?;
                         held.add(self, PROP_BYTES)?;
                         let item = self.get_from(o, &index_key(i), &v)?;
                         self.temp_roots.push(item);
+                        i += 1;
                     }
-                    Ok(())
                 };
                 let r = read();
                 drop(held);
@@ -2758,28 +2801,35 @@ impl Interp {
             None => 0,
         };
         let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments).saturating_add(rest);
-        if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
-            let mark = self.temp_roots.len();
-            self.temp_roots.push(Value::Object(callee));
-            self.temp_roots.push(this.clone());
-            self.temp_roots.extend(construct.map(Value::Object));
-            self.temp_roots.extend(args.iter().cloned());
-            let reserved = self.reserve_heap(need);
-            self.temp_roots.truncate(mark);
-            reserved?;
-        }
-        let this = if code.arrow {
-            if code.uses_this { self.binding_value(env, ARROW_THIS)? } else { Value::Undefined }
-        } else if code.strict {
-            this
-        } else {
-            match this {
-                Value::Undefined | Value::Null => Value::Object(self.global),
-                Value::Object(_) => this,
-                prim => Value::Object(self.to_object(&prim)?),
+        // The callee, the receiver and the arguments stay reachable until the frame holds them:
+        // the reservation and the scopes, functions and objects the call makes can collect.
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(Value::Object(callee));
+        self.temp_roots.push(this.clone());
+        self.temp_roots.extend(construct.map(Value::Object));
+        self.temp_roots.extend(args.iter().cloned());
+        let instantiate = || -> JsResult<(Value, EnvId, EnvId)> {
+            if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
+                self.reserve_heap(need)?;
             }
+            let this = if code.arrow {
+                if code.uses_this { self.binding_value(env, ARROW_THIS)? } else { Value::Undefined }
+            } else if code.strict {
+                this
+            } else {
+                match this {
+                    Value::Undefined | Value::Null => Value::Object(self.global),
+                    Value::Object(_) => this,
+                    prim => Value::Object(self.to_object(&prim)?),
+                }
+            };
+            self.temp_roots.push(this.clone());
+            let (fenv, var_env) = self.instantiate_function(&code, env, &args, callee)?;
+            Ok((this, fenv, var_env))
         };
-        let (fenv, var_env) = self.instantiate_function(&code, env, &args, callee)?;
+        let r = instantiate();
+        self.temp_roots.truncate(mark);
+        let (this, fenv, var_env) = r?;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,
@@ -3096,8 +3146,21 @@ impl Interp {
             (caller_env, caller_var_env)
         };
         self.stack.truncate(start);
-        let env = self.instantiate_global(&code, env, var_env, true)?;
+        let env = self.instantiate_pending(&code, env, var_env, true)?;
         self.push_code_frame(code, env, var_env, this, false)
+    }
+
+    /// [`Self::instantiate_global`] with `code` and its environment `env` kept reachable, and the
+    /// code counted against the heap, until its frame holds them: the scopes and functions it
+    /// makes can collect.
+    fn instantiate_pending(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+        let mark = self.temp_envs.len();
+        self.temp_envs.push(env);
+        self.temp_codes.push(code.clone());
+        let r = self.instantiate_global(code, env, var_env, is_eval);
+        self.temp_codes.pop();
+        self.temp_envs.truncate(mark);
+        r
     }
 
     /// Indirect eval and scripts: runs `code` in the global environment and returns its
@@ -3126,7 +3189,7 @@ impl Interp {
         } else {
             (scope, self.global_env)
         };
-        let env = self.instantiate_global(&code, env, var_env, is_eval)?;
+        let env = self.instantiate_pending(&code, env, var_env, is_eval)?;
         self.push_code_frame(code, env, var_env, Value::Object(global), true)
     }
 
@@ -3143,11 +3206,11 @@ impl Interp {
 
     /// Declares a script's top-level `let` and `const` names in the global scope, uninitialized
     /// (ECMA-262 2015 section 15.1.8): a name another script declared with `let` or `const`, a
-    /// non-configurable property of the global object (a `var` or a function another script
-    /// declared, or a built-in such as `undefined`) or a `var` or function of this script that
+    /// name global code declared with `var` or as a function, a non-configurable property of the
+    /// global object (such as the built-in `undefined`) or a `var` or function of this script that
     /// another script declared with `let` or `const` is a `SyntaxError`, and nothing is declared.
     /// With [`Options::es2015`], a function of this script that cannot replace a property of the
-    /// global object is a `TypeError`, also before anything is declared.
+    /// global object, or a `var` it cannot add, is a `TypeError`, also before anything is declared.
     fn declare_global_lexical(&mut self, code: &Code, lex: EnvId) -> JsResult<()> {
         let lets: &[(Key, bool)] = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[], |s| &s.lets);
         let in_lex = |interp: &Self, name: &[u16]| matches!(interp.heap.env(lex), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
@@ -3155,7 +3218,7 @@ impl Interp {
         for (name, _) in lets {
             self.use_fuel()?;
             let restricted = self.get_own_property(global, name)?.is_some_and(|p| !p.configurable());
-            if in_lex(self, name) || restricted {
+            if in_lex(self, name) || restricted || self.global_vars.contains(name) {
                 let ident = String::from_utf16_lossy(name);
                 return Err(self.throw(ErrorType::Syntax, &format!("redeclaration of '{ident}'")));
             }
@@ -3168,6 +3231,7 @@ impl Interp {
         }
         if self.options.es2015 {
             self.check_global_functions(code)?;
+            self.check_global_vars(code)?;
         }
         for (name, constant) in lets {
             let b = Binding::lexical(*constant);
@@ -3192,6 +3256,25 @@ impl Interp {
             if !replaceable {
                 let ident = String::from_utf16_lossy(name);
                 return Err(self.type_error(&format!("cannot declare function {ident}")));
+            }
+        }
+        Ok(())
+    }
+
+    /// The test for every `var` name `code` declares on the global object, made before any is
+    /// declared (ECMA-262 2015 sections 15.1.8, step 10, and 18.2.1.2, step 8,
+    /// CanDeclareGlobalVar): a name the global object does not have as its own property needs an
+    /// extensible global object, or it is a `TypeError`.
+    fn check_global_vars(&mut self, code: &Code) -> JsResult<()> {
+        let global = self.global;
+        if self.object(global)?.extensible {
+            return Ok(());
+        }
+        for name in &code.vars {
+            self.use_fuel()?;
+            if self.get_own_property(global, name)?.is_none() {
+                let ident = String::from_utf16_lossy(name);
+                return Err(self.type_error(&format!("cannot declare variable {ident}")));
             }
         }
         Ok(())
@@ -3241,6 +3324,7 @@ impl Interp {
             self.check_eval_vars(code, env, var_env)?;
             if var_env == self.global_env {
                 self.check_global_functions(code)?;
+                self.check_global_vars(code)?;
             }
         }
         let lex = match code.top_scope {
@@ -3256,15 +3340,22 @@ impl Interp {
         // over the global scope in either language, which sees the global object's names too.
         let global = var_env == self.global_env && lex == self.global_lex;
         let scope = if self.options.es2015 || global { lex } else { var_env };
+        let on_global = var_env == self.global_env;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, scope)?;
             self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
+            if on_global {
+                self.global_vars.insert(name.clone());
+            }
         }
         for v in &code.vars {
             self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
+            if on_global {
+                self.global_vars.insert(v.clone());
+            }
         }
         Ok(lex)
     }
