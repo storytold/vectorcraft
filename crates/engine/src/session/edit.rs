@@ -312,6 +312,7 @@ impl Session {
             plane_placed: false,
             copies: None,
             move_box: std::sync::OnceLock::new(),
+            keep_on_switch: false,
         });
         Ok(())
     }
@@ -506,6 +507,15 @@ impl Session {
         // the document has it again, not as a preview left it.
         self.inherit_new_art();
         Ok(())
+    }
+
+    /// Keep the open interaction's preview as one undo step, instead of canceling it, when another
+    /// document becomes active: a drag on a panel's slider, which keeps what it previewed when it
+    /// ends without a release.
+    pub fn keep_interaction_on_switch(&mut self) {
+        if let Some(it) = self.active_mut().and_then(|d| d.interaction.as_mut()) {
+            it.keep_on_switch = true;
+        }
     }
 
     pub fn in_interaction(&self) -> bool {

@@ -33,6 +33,9 @@ pub struct Interaction {
     /// The bounding box of `selection` in `doc`, measured once for a move drag
     /// ([`crate::Session::move_drag_box`]): each step offsets it by the drag's move.
     pub(crate) move_box: std::sync::OnceLock<Option<vectorcraft_doc::OrientedBox>>,
+    /// A switch to another document keeps the preview as one undo step instead of canceling it
+    /// ([`crate::Session::keep_interaction_on_switch`]).
+    pub(crate) keep_on_switch: bool,
 }
 
 /// What Object → Transform → Transform Again (⌘D) repeats ([`SessionState::last_transform`]).

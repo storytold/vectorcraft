@@ -1516,9 +1516,36 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     }
     if let Some((key, v, phase)) = slid {
         let p = aligned(app, json!({"item": item, "index": k, "params": {key: v}}));
-        super::live_run(app, SLIDE_LABEL, "effect.setParams", p, phase);
-        let owner = if phase == widgets::Live::Dragging { slide_interaction(app) } else { None };
-        set_pstate(ui.ctx(), SLIDE_OWNER, owner);
+        let hold = match pstate::<SlideHold>(ui.ctx(), SLIDE_OWNER) {
+            // A drag that previewed goes on only in the interaction it began.
+            SlideHold::Live(owner) => {
+                if slide_interaction(app).is_some_and(|now| same_slide(&owner, &now)) {
+                    SlideHold::Live(owner)
+                } else {
+                    SlideHold::Lost
+                }
+            }
+            SlideHold::Lost => SlideHold::Lost,
+            SlideHold::Idle => begin_slide(app),
+        };
+        match hold {
+            SlideHold::Live(owner) => {
+                super::live_run(app, SLIDE_LABEL, "effect.setParams", p, phase);
+                let next = if phase == widgets::Live::Dragging { SlideHold::Live(owner) } else { SlideHold::Idle };
+                set_pstate(ui.ctx(), SLIDE_OWNER, next);
+            }
+            // The slider's own interaction could not begin: a click or a key still runs its edit.
+            SlideHold::Idle => {
+                if phase == widgets::Live::Released {
+                    app.run("effect.setParams", p).ok();
+                }
+            }
+            // Another interaction is open, or replaced the drag's own: the drag leaves it alone.
+            SlideHold::Lost => {
+                let next = if phase == widgets::Live::Dragging { SlideHold::Lost } else { SlideHold::Idle };
+                set_pstate(ui.ctx(), SLIDE_OWNER, next);
+            }
+        }
     }
     if edit {
         app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
@@ -1536,8 +1563,21 @@ const SLIDER_MIN_W: f32 = 24.0;
 const SLIDE_LIVE: &str = "ap-fx-slide-live";
 
 /// The interaction that a drag on a plug-in parameter's slider in [`effect_editor`] previews in
-/// ([`slide_interaction`]).
+/// ([`SlideHold`]).
 const SLIDE_OWNER: &str = "ap-fx-slide-owner";
+
+/// Where a drag on a plug-in parameter's slider in [`effect_editor`] previews.
+#[derive(Clone, Debug, Default)]
+enum SlideHold {
+    /// No drag has previewed yet.
+    #[default]
+    Idle,
+    /// The drag previews in the interaction it began ([`slide_interaction`]).
+    Live(SlideOwner),
+    /// Another interaction was open when the drag began, or replaced the one it began: the drag
+    /// previews nothing and keeps nothing until it ends.
+    Lost,
+}
 
 /// The undo step a drag on a plug-in parameter's slider in [`effect_editor`] is kept as.
 const SLIDE_LABEL: &str = "Effect Options";
@@ -1552,6 +1592,30 @@ fn slide_interaction(app: &VectorcraftApp) -> Option<SlideOwner> {
     d.interaction.as_ref().filter(|it| it.label == SLIDE_LABEL).map(|it| (d.uid, Arc::downgrade(&it.selection)))
 }
 
+/// Whether two [`SlideOwner`]s are the same interaction.
+fn same_slide(a: &SlideOwner, b: &SlideOwner) -> bool {
+    a.0 == b.0 && a.1.ptr_eq(&b.1)
+}
+
+/// Begin the interaction a drag on a plug-in parameter's slider previews in → [`SlideHold::Live`]
+/// with it; [`SlideHold::Lost`] when another interaction is open, which beginning leaves as it is;
+/// [`SlideHold::Idle`] when it could not begin (a script runs). A switch to another document during
+/// the drag keeps what it previewed as one undo step in the document it began in.
+fn begin_slide(app: &mut VectorcraftApp) -> SlideHold {
+    let open: Option<SlideOwner> = app.session.active().and_then(|d| d.interaction.as_ref().map(|it| (d.uid, Arc::downgrade(&it.selection))));
+    if app.begin_interaction(SLIDE_LABEL).is_err() {
+        return SlideHold::Idle;
+    }
+    match slide_interaction(app) {
+        // One that was open before the drag, of the same name, is not the drag's own.
+        Some(now) if !open.is_some_and(|o| same_slide(&o, &now)) => {
+            app.session.keep_interaction_on_switch();
+            SlideHold::Live(now)
+        }
+        _ => SlideHold::Lost,
+    }
+}
+
 /// A drag on a plug-in parameter's slider that this pass did not draw (its row closed, the
 /// selection changed so the row is gone, or the panel closed), or that ended with no value to
 /// keep, reports no release: the preview it made in its own interaction is kept as one undo step
@@ -1559,9 +1623,8 @@ fn slide_interaction(app: &VectorcraftApp) -> Option<SlideOwner> {
 /// rows, and the app at the end of every pass, after the panels.
 pub(crate) fn end_stale_slide(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if pstate::<Option<u64>>(ctx, SLIDE_LIVE).is_some_and(|pass| pass != root_pass(ctx)) {
-        let owner = pstate::<Option<SlideOwner>>(ctx, SLIDE_OWNER);
-        let ours = match (owner, slide_interaction(app)) {
-            (Some((uid, snapshot)), Some((open, now))) => uid == open && snapshot.ptr_eq(&now),
+        let ours = match (pstate::<SlideHold>(ctx, SLIDE_OWNER), slide_interaction(app)) {
+            (SlideHold::Live(owner), Some(now)) => same_slide(&owner, &now),
             _ => false,
         };
         if ours {
@@ -1571,7 +1634,7 @@ pub(crate) fn end_stale_slide(app: &mut VectorcraftApp, ctx: &egui::Context) {
             app.sync_views();
         }
         set_pstate(ctx, SLIDE_LIVE, None::<u64>);
-        set_pstate(ctx, SLIDE_OWNER, None::<SlideOwner>);
+        set_pstate(ctx, SLIDE_OWNER, SlideHold::Idle);
     }
 }
 
@@ -1621,7 +1684,10 @@ fn param_slider_edit(
     // panel keeps both in view.
     let room = ui.available_width() - NUMBER_W - 2.0 * ui.spacing().item_spacing.x;
     let width = room.clamp(SLIDER_MIN_W, crate::dialogs::PARAM_SLIDER_WIDTH);
-    let (new, resp) = crate::dialogs::plugin_slider(ui, ("fx-slider", id), &p.spec, &cur, range, p.ui.step, width);
+    // The slider is a widget of its own for each document and selection, so a drag on it ends when
+    // they change and sends no more values: the objects the drag began on keep what it previewed
+    // ([`end_stale_slide`]), and the others stay as they are.
+    let (new, resp) = crate::dialogs::plugin_slider(ui, ("fx-slider", id, target), &p.spec, &cur, range, p.ui.step, width);
     let edit = if resp.drag_stopped() {
         // The value the drag ended on, kept even when its last preview waited.
         new.or(std::mem::take(&mut slide).value).map(|value| (value, widgets::Live::Released))

@@ -218,9 +218,11 @@ impl Session {
         let _ = self.give_back_tool(view);
         let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
-        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        // the rest of the batch; anything else in progress (a drag) is cancelled, except a drag on a
+        // panel's slider, which keeps its preview as one undo step there.
         if self.batch_stash.is_none() {
-            let _ = self.cancel_interaction();
+            let keep = self.active().and_then(|d| d.interaction.as_ref()).is_some_and(|it| it.keep_on_switch);
+            let _ = if keep { self.commit_interaction() } else { self.cancel_interaction() };
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
