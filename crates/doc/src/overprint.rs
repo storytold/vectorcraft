@@ -206,10 +206,15 @@ impl Document {
     }
 }
 
-/// Whether fill or stroke row `i` of an image draws: it is visible, has a paint and a visible
-/// effect, which gives a row on an image a shape of its own.
+/// Whether fill or stroke row `i` of an image draws: it is visible, has a paint (a stroke a
+/// width too) and a visible Convert to Shape or Outline Object, which gives a row on an image a
+/// shape of its own ([`crate::Effect::gives_image_shape`]).
 pub fn image_row_draws(i: &crate::AppearanceItem) -> bool {
-    i.visible() && !i.paint().is_none() && i.effects().iter().any(|e| e.visible)
+    let width = match i {
+        crate::AppearanceItem::Stroke(s) => s.width > 0.0,
+        crate::AppearanceItem::Fill(_) => true,
+    };
+    i.visible() && !i.paint().is_none() && width && i.effects().iter().any(crate::Effect::gives_image_shape)
 }
 
 /// Whether paint `paint` of blend mode `blend` darkens when `overprint` asks it to: with the
@@ -297,7 +302,7 @@ impl Document {
 /// Whether any fill or stroke of `n`'s subtree overprints, characters' too.
 fn overprints_anywhere(n: &Node) -> bool {
     n.appearance.items.iter().any(|i| i.overprint())
-        || n.colorize_overprints()
+        || n.extras().colorize_overprint
         || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
         || n.children().is_some_and(|c| c.iter().any(|c| overprints_anywhere(c)))
 }
@@ -317,7 +322,8 @@ pub fn clear_overprints(a: &mut Arc<Node>) {
             (r.style.overprint_fill, r.style.overprint_stroke) = (false, false);
         }
     }
-    if n.colorize_overprints() {
+    // Also the flag an image keeps after its color is removed.
+    if n.extras().colorize_overprint {
         n.extras_mut().colorize_overprint = false;
     }
     for c in n.children_mut().into_iter().flatten() {
@@ -495,22 +501,25 @@ mod tests {
 
     #[test]
     fn a_colorized_image_darkens_unless_its_rows_draw_an_effect() {
-        let blend = |effect: Option<bool>, overprint: bool| {
+        let blend = |effect: Option<(&str, bool)>, overprint: bool| {
             let mut n = colorized(cmyk(0.0, 0.0, 0.0, 1.0), cmyk(1.0, 0.0, 0.0, 0.0));
             if let Some(f) = n.appearance.fill_mut() {
                 f.overprint = overprint;
-                if let Some(visible) = effect {
-                    f.effects.push(crate::Effect { id: "path.offsetPath".into(), params: serde_json::json!({}), visible });
+                if let Some((id, visible)) = effect {
+                    f.effects.push(crate::Effect { id: id.into(), params: serde_json::json!({}), visible });
                 }
             }
             let mut a = Arc::new(n);
             darken_overprints(&mut a, &DiscardWhite::default());
             a.blend
         };
+        let shape = "convertToShape.rectangle";
         assert_eq!(blend(None, false), BlendMode::Darken, "a row with no effect paints nothing on an image");
-        assert_eq!(blend(Some(false), false), BlendMode::Darken, "nor one whose effect is hidden");
-        assert_eq!(blend(Some(true), false), BlendMode::Normal, "a knocking-out row drawn by its effect keeps knocking out");
-        assert_eq!(blend(Some(true), true), BlendMode::Darken, "with an overprinting row the whole image overprints");
+        assert_eq!(blend(Some((shape, false)), false), BlendMode::Darken, "nor one whose effect is hidden");
+        assert_eq!(blend(Some(("path.offsetPath", true)), false), BlendMode::Darken, "nor one whose effect gives it no shape");
+        assert_eq!(blend(Some((shape, true)), false), BlendMode::Normal, "a knocking-out row drawn by its effect keeps knocking out");
+        assert_eq!(blend(Some(("path.outlineObject", true)), false), BlendMode::Normal, "Outline Object gives a row a shape too");
+        assert_eq!(blend(Some((shape, true)), true), BlendMode::Darken, "with an overprinting row the whole image overprints");
     }
 
     #[test]
@@ -526,6 +535,16 @@ mod tests {
         assert!(OverprintBlack { remove: true, ..Default::default() }.apply_deep(&mut a, &[]) && !a.colorize_overprints());
         let mut cyan = off(colorized(cmyk(1.0, 0.0, 0.0, 0.0), Paint::None));
         assert!(!OverprintBlack::default().apply_deep(&mut cyan, &[]), "a cyan image is not black");
+    }
+
+    #[test]
+    fn clearing_overprints_clears_the_flag_of_an_image_without_a_color() {
+        let mut n = colorized(cmyk(0.0, 0.0, 0.0, 1.0), Paint::None);
+        n.extras_mut().colorize = None;
+        let mut a = Arc::new(n);
+        clear_overprints(&mut a);
+        Arc::make_mut(&mut a).extras_mut().colorize = Some(Box::new(cmyk(0.0, 0.0, 0.0, 1.0)));
+        assert!(!a.colorize_overprints(), "a color given later knocks out");
     }
 
     #[test]

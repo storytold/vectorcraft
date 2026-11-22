@@ -495,10 +495,9 @@ fn add_to_instance(n: &mut Node, fill: &[Effect], stroke: &[Effect]) {
 }
 
 /// Does effect `e` give an image's fill or stroke a shape to paint (a visible Convert to Shape or
-/// Outline Object)?
+/// Outline Object, [`Effect::gives_image_shape`])?
 fn gives_shape(e: &Effect) -> bool {
-    e.visible
-        && matches!(e.id.as_str(), "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" | "path.outlineObject")
+    e.gives_image_shape()
 }
 
 /// Does `item`, a fill or stroke of an image, paint something: does it paint and carry an effect

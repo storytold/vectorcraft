@@ -1154,7 +1154,8 @@ fn drop_own_overprints(n: &mut Node) {
                 (r.style.overprint_fill, r.style.overprint_stroke) = (false, false);
             }
         }
-        if n.colorize_overprints() {
+        // An image keeps the flag after its color is removed, and a later color would overprint.
+        if n.extras().colorize_overprint {
             n.extras_mut().colorize_overprint = false;
         }
     }
@@ -1162,7 +1163,7 @@ fn drop_own_overprints(n: &mut Node) {
 
 fn overprints(n: &Node) -> bool {
     n.appearance.items.iter().any(AppearanceItem::overprint)
-        || n.colorize_overprints()
+        || n.extras().colorize_overprint
         || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
 }
 

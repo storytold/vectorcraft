@@ -799,6 +799,32 @@ fn flattening_without_preserve_overprints_drops_a_colorized_images_overprint() {
     assert_eq!(overprints(false), [false]);
 }
 
+/// Flattening without Preserve Overprints also clears the overprint an image keeps after its
+/// color was removed, so a color given to it later knocks out.
+#[test]
+fn flattening_without_preserve_overprints_clears_an_uncolored_images_overprint() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    let square = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [square], "opacity": 50})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let Some(n) = d.node_mut(id) else { panic!("the image") };
+    n.extras_mut().colorize = None;
+    assert!(n.extras().colorize_overprint && !n.colorize_overprints(), "the flag outlives the color");
+    let mut options = crate::cmd::flatten::FlattenOptions::preset("low").unwrap();
+    (options.keeps_colorize, options.preserve_overprints) = (true, false);
+    let flat = crate::cmd::flatten::flatten_document(&d, &options).unwrap().unwrap();
+    let mut found = vec![];
+    flat.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            found.push(n.extras().colorize_overprint);
+        }
+    });
+    assert_eq!(found, [false]);
+}
+
 #[test]
 fn colorized_images_save_and_open_with_their_color() {
     let mut s = session();
