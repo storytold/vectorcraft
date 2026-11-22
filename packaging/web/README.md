@@ -36,9 +36,9 @@ files need revalidation.
 - **Content Security Policy:** a site that sends one must allow three things
   ([CSP Level 3](https://www.w3.org/TR/CSP3/)):
   - The inline `<script type="module">` that Trunk writes into `index.html` to start the app.
-    `script-src 'self'` alone blocks it, and the app does not start. A hash of that script
-    allows it, but the script changes with each build, so the hash must be taken from the
-    build you deploy.
+    `script-src 'self'` alone blocks it, and the app does not start. A hash of that script in
+    `script-src` allows it, or in `script-src-elem` when the policy sets that directive. The
+    script changes with each build, so the hash must be taken from the build you deploy.
   - WebAssembly compilation: a `script-src` needs `'wasm-unsafe-eval'`, on the page and on the
     plug-in worker files. Without it the app does not start, and plug-ins fail to install and
     run.
