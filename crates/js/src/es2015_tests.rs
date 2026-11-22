@@ -382,6 +382,23 @@ fn spreading_a_rope_counts_its_flattened_length_first() {
 }
 
 #[test]
+fn a_rest_parameter_checks_the_heap_before_its_array_is_made() {
+    // The 20,000 arguments fit in the room left over, and the rest array of them does not, so
+    // the call ends with the heap limit before the heap estimate passes it.
+    let setup = "function f(...r) { return r.length; } var big = Array(20000); 0";
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (512 << 10);
+    let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("f.apply(null, Array(10))"), Ok(JsValue::Number(10.0)));
+    let e = realm.run("f.apply(null, big)").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    assert!(realm.interp().heap.bytes <= heap_bytes, "{} > {heap_bytes}", realm.interp().heap.bytes);
+}
+
+#[test]
 fn new_scopes_survive_collections_while_they_are_made() {
     // Heaps just big enough make the collector run while function bodies and blocks set up their
     // scopes; each run gives the right total or stops at the heap limit.

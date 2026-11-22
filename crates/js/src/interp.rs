@@ -2727,7 +2727,15 @@ impl Interp {
         let params = code.params.iter().fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
         let arguments =
             if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
-        let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments);
+        // The array a rest parameter gets: its binding and one property for each extra argument.
+        let rest = match &code.rest {
+            Some(name) => {
+                let extra = args.len().saturating_sub(code.params.len());
+                OBJECT_BYTES.saturating_add(binding_bytes(name.len())).saturating_add(extra.saturating_mul(binding_bytes(10)))
+            }
+            None => 0,
+        };
+        let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments).saturating_add(rest);
         if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
             let mark = self.temp_roots.len();
             self.temp_roots.push(Value::Object(callee));
