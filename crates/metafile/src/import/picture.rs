@@ -51,6 +51,7 @@ const PATTERNS: &str = "hatched and pattern brushes are filled with their averag
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";
 const TOO_MANY: &str = "objects past the most one file may hold were left out";
 const AT_LIMIT: &str = "the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read";
+const PICT_TRUNCATED: &str = "the picture is cut short or reached a limit on what one file may hold: what came after was not read";
 
 /// Points a unit of a WMF without a placeable header (1440 units an inch).
 const WMF_UNIT: f64 = 72.0 / 1440.0;
@@ -272,7 +273,12 @@ fn average(rgba: &[u8]) -> Option<[u8; 4]> {
     }
     let a = sum[3];
     let alpha = (a / pixels.len().max(1) as u64) as u8;
-    (a > 0).then(|| [(sum[0] / a) as u8, (sum[1] / a) as u8, (sum[2] / a) as u8, alpha.max(1)])
+    (a > 0).then(|| [
+        ((sum[0] + a / 2) / a) as u8,
+        ((sum[1] + a / 2) / a) as u8,
+        ((sum[2] + a / 2) / a) as u8,
+        alpha.max(1),
+    ])
 }
 
 impl Mapper {
@@ -1229,7 +1235,7 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
 pub(crate) fn convert(pic: craft_metafile::Picture) -> crate::Picture {
     let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), (1.0, 1.0));
     if pic.truncated {
-        m.warn(AT_LIMIT);
+        m.warn(PICT_TRUNCATED);
     }
     let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
     for item in pic.items {

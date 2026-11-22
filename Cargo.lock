@@ -1251,7 +1251,7 @@ dependencies = [
 [[package]]
 name = "craft-metafile"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=0bf4cb99dabb6b6d9335771ed398e999387b0d62#0bf4cb99dabb6b6d9335771ed398e999387b0d62"
+source = "git+https://github.com/storytold/craft-libs?rev=ccd093d2316c1445ab3bdeecbecfacaaae4093d4#ccd093d2316c1445ab3bdeecbecfacaaae4093d4"
 dependencies = [
  "encoding_rs",
  "image",

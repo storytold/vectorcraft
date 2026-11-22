@@ -231,6 +231,7 @@ fn patterns_fill_with_their_average_color() {
     assert_eq!(fill_rgb(&v[0]), Some([128, 128, 128]));
     // eraseRect with an RGB background pattern.
     assert_eq!(fill_rgb(&v[1]), Some([0, 255, 0]));
+    assert!(p.warnings.iter().any(|w| w.contains("their average color")), "{:?}", p.warnings);
 }
 
 #[test]
@@ -418,11 +419,11 @@ fn pictures_cut_short_keep_what_came_before() {
     let cut = &full[..full.len() - 6];
     let p = import_pict(cut).unwrap();
     assert_eq!(paths(&p.document).len(), 1);
-    assert!(p.warnings.iter().any(|w| w.contains("limit on what one file may hold")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("cut short")), "{:?}", p.warnings);
     // A long comment longer than the file.
     let p = import_pict(&v2([0, 0, 50, 50], &[(0x31, rect(0, 0, 10, 10)), (0xA1, be(&[100, 5000]))])).unwrap();
     assert_eq!(paths(&p.document).len(), 1);
-    assert!(p.warnings.iter().any(|w| w.contains("limit on what one file may hold")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("cut short")), "{:?}", p.warnings);
     // Nothing drawn.
     let p = import_pict(&v2([0, 0, 50, 50], &[(0xA0, be(&[100]))])).unwrap();
     assert!(p.warnings.iter().any(|w| w.contains("draws nothing")), "{:?}", p.warnings);
@@ -463,7 +464,7 @@ fn regions_past_the_picture_budget_are_left_out() {
     let body = [rect(0, 0, 1, 16_000), be(&words)].concat();
     let region = [be(&[(body.len() + 2) as i16]), body].concat();
     let p = import_pict(&v2([0, 0, 300, 300], &[(0x81, region.clone()), (0x81, region.clone()), (0x81, region)])).unwrap();
-    assert!(p.warnings.iter().any(|w| w.contains("clip couldn't be applied")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("skipped")), "{:?}", p.warnings);
     let v = paths(&p.document);
     assert_eq!(v.len(), 2);
     let NodeKind::Path { path, .. } = &v[0].kind else { panic!("a path") };
