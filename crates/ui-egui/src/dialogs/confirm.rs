@@ -4,7 +4,7 @@
 //! ([`ask_missing_font_edit`]). Both texts are shown as given: callers translate their template
 //! before filling in a name, so the name is never translated.
 
-use craft::ui::dialog::{Alert, DialogResult, HostedAlert, PromptChoice, StandardPrompt, StartupStage};
+use craft::ui::dialog::{Alert, DialogHost, DialogResult, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage};
 use egui::Context;
 use serde_json::{Value, json};
 
@@ -142,7 +142,16 @@ pub fn tell(app: &mut VectorcraftApp, message: &str, detail: &str) {
     }
     told.push((message.to_string(), detail.to_string()));
     let alert = HostedAlert::new(Alert::new(message.to_string(), detail.to_string()).ok_label(tl!("Close")));
-    dialogs.with(|host| host.enqueue(StartupStage::Warning, Message(alert)));
+    dialogs.with(|host| open_or_wait(host, Message(alert)));
+}
+
+/// Opens `dialog` at once when no other dialog is open or waiting, else queues it to open after them.
+fn open_or_wait<D: StackDialog>(host: &mut DialogHost, dialog: D) {
+    if host.is_empty() {
+        host.open(dialog);
+    } else {
+        host.enqueue(StartupStage::Warning, dialog);
+    }
 }
 
 /// Ask whether to replace `files`, files that are there beside the one a save or export of the
@@ -164,7 +173,7 @@ pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[Str
     });
     // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
     // (however many messages wait: the save or export needs the answer).
-    dialogs.with(|host| host.enqueue(StartupStage::Warning, ReplaceFilesPrompt(prompt)));
+    dialogs.with(|host| open_or_wait(host, ReplaceFilesPrompt(prompt)));
 }
 
 /// Ask whether to edit type whose story is drawn in fonts that aren't available, which the Type
