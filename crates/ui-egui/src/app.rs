@@ -113,6 +113,7 @@ impl VectorcraftApp {
                 placed_keys: Default::default(),
                 view_moved: None,
                 grab: None,
+                carry_target: None,
                 last_drag: None,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),

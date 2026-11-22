@@ -3,7 +3,7 @@
 //! tab, pane or window. The drag session resolves a drop in the pass after the release; `show` applies it.
 
 use std::cell::{Cell, RefCell};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use craft::behavior::{CanvasView, CursorIcon, CursorPriority, DropOperation, Input, Metrics, Sense};
 use craft::ui::canvas::{ToolContext, ToolPointer};
@@ -31,7 +31,7 @@ use crate::place::{CanvasDrop, CanvasFiles};
 /// Artwork a Selection move carries out of its canvas: the objects the move started with (an Alt-copy's preview copies
 /// are not carried), the press point they were grabbed at, and the source's revision when the carry began, so an edited
 /// source carries nothing. A switch to another document gives the move up, which puts back the document the move started
-/// from: the art is still carried while the source holds that document.
+/// from: the art is still carried while the source has that document's content.
 #[derive(Clone, Debug)]
 pub(crate) struct CarriedArt {
     /// The source document's uid.
@@ -43,7 +43,7 @@ pub(crate) struct CarriedArt {
     /// `DocState::revision` of the source when the carry began.
     pub(crate) revision: u64,
     /// The source's document before the move began.
-    pub(crate) before: Weak<vectorcraft_doc::Document>,
+    pub(crate) before: Arc<vectorcraft_doc::Document>,
 }
 
 /// What a drop carries to `apply_drop`.
@@ -117,8 +117,9 @@ pub(crate) struct CanvasDrops<'a> {
     document: u64,
     /// `(uid, revision)` of every open document: carried art whose source is not listed unchanged is refused.
     sources: Vec<(u64, u64)>,
-    /// `(uid, document)` of every open document, for carried art whose move was given up ([`CarriedArt::before`]).
-    docs: Vec<(u64, Arc<vectorcraft_doc::Document>)>,
+    /// Whether the art being carried is taken though its source's revision moved: its move was given up and the source
+    /// has the content the move started from ([`CarriedArt::before`]), and a tab rest showed this canvas's document.
+    given_up: bool,
     out: &'a RefCell<Option<Dropped>>,
     /// The files from the OS the canvas places, and where their drop goes.
     files: (CanvasFiles<'a>, &'a RefCell<Option<CanvasDrop>>),
@@ -148,11 +149,8 @@ impl Component for CanvasDrops<'_> {
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         let rect = cx.rect;
-        let (sources, docs, view) = (&self.sources, &self.docs, &self.view);
-        let unchanged = |a: &CarriedArt| {
-            sources.contains(&(a.document, a.revision))
-                || docs.iter().any(|(uid, doc)| *uid == a.document && std::ptr::eq(a.before.as_ptr(), Arc::as_ptr(doc)))
-        };
+        let (sources, given_up, view) = (&self.sources, self.given_up, &self.view);
+        let unchanged = |a: &CarriedArt| given_up || sources.contains(&(a.document, a.revision));
         let art = Target::new(rect, view, |a: &CarriedArt| unchanged(a).then(|| Payload::Art(a.clone())));
         let mut dropped = cx.drop_target::<CarriedArt, _>(&art);
         if self.kind == BodyKind::Pane
@@ -203,10 +201,14 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
     };
     let (Some(view), Some(document)) = (view, app.session.documents().get(win.0).map(|d| d.uid)) else { return };
     let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).chain(app.canvas.panes.released_from).collect();
-    let docs = app.session.documents().iter().map(|d| (d.uid, d.doc.clone())).collect();
+    // A tab rest leaves the art to the document it showed: a target closed or left by other means takes nothing.
+    let given_up = craft::ui::runtime::drag::active::<CarriedArt>(ui.ctx()).is_some_and(|a| {
+        app.canvas.carry_target.is_none_or(|target| target == document)
+            && app.session.documents().iter().any(|d| d.uid == a.document && d.same_content(&a.before))
+    });
     let (out, files_out) = (RefCell::new(None), RefCell::new(None));
     let files = (CanvasFiles::new(app, rect, &view), &files_out);
-    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, docs, out: &out, files };
+    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, out: &out, files };
     drops.id_salt(("canvas-drops", win)).show_at(ui, rect);
     if let Some(files) = files_out.take() {
         crate::place::canvas_drop(app, ui.ctx(), files);
@@ -274,7 +276,7 @@ pub(crate) fn carried(app: &VectorcraftApp, cx: &ToolContext<'_>, pointer: &Tool
     }
     // The art the drag started with: an Alt-copy's copies, selected while it previews, are not carried.
     let grab = app.canvas.grab?;
-    Some(CarriedArt { document: st.uid, ids: it.selection.objects.clone(), grab, revision: st.revision, before: Arc::downgrade(&it.doc) })
+    Some(CarriedArt { document: st.uid, ids: it.selection.objects.clone(), grab, revision: st.revision, before: it.doc.clone() })
 }
 
 /// Runs the effect of `drop`, at the point it landed. Art of the canvas's own document resumes its move instead (a

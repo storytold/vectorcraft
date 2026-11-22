@@ -96,6 +96,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     let pressed = egui::Id::new("vectorcraft.tabPressed");
     // Art carried off the canvas that rests over a tab shows its document at once, for the art to drop in.
     let carrying = craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).is_some_and(|d| matches!(*d, PanelDrag::Art { .. }));
+    if !carrying {
+        app.canvas.carry_target = None;
+    }
     let held = !carrying && ui.input(|i| i.pointer.primary_down());
     for event in strip.show(ui).events {
         if matches!(event, DocumentTabsEvent::Reordered { .. } | DocumentTabsEvent::TornOff { .. }) {
@@ -105,7 +108,12 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             DocumentTabsEvent::Selected(w) if held => {
                 ui.data_mut(|d| d.insert_temp(pressed, w));
             }
-            DocumentTabsEvent::Selected(w) | DocumentTabsEvent::Picked(w) => doc_windows::show_window(app, w),
+            DocumentTabsEvent::Selected(w) | DocumentTabsEvent::Picked(w) => {
+                doc_windows::show_window(app, w);
+                if carrying {
+                    app.canvas.carry_target = app.session.active().map(|d| d.uid);
+                }
+            }
             DocumentTabsEvent::CloseRequested(w) => {
                 if let Err(e) = doc_windows::close_window(app, w) {
                     app.status(e);

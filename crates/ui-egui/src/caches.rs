@@ -90,6 +90,9 @@ pub struct CanvasCache {
     /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
     /// canvas drops its art there relative to the pointer (`canvas::drops`).
     pub grab: Option<Point>,
+    /// The uid of the document a tab rest showed while art carried off the canvas waits over it: only its canvas takes
+    /// the art, so a target closed or left by other means carries nothing (`canvas::drops`).
+    pub carry_target: Option<u64>,
     /// The last drag the tool was sent and the screen point it was at: when the view scrolls under the held
     /// pointer, the drag goes on at that point in the scrolled view.
     pub last_drag: Option<(egui::Pos2, vectorcraft_tools::PointerEvent)>,
