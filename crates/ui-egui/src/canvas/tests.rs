@@ -1509,6 +1509,44 @@ fn a_click_within_one_frame_ends_with_the_modifiers_of_its_release() {
     assert_eq!(click(egui::Modifiers::NONE, egui::Modifiers::ALT), Some(json!(false)), "Alt pressed after the release does not");
 }
 
+/// With Animated Zoom off, a Zoom tool click whose press and release come in one frame steps the
+/// zoom though the pointer then moves away in that frame, and a drag from the press to the release
+/// zooms to the area dragged across, in one frame or over several.
+#[test]
+fn a_zoom_click_within_one_frame_starts_where_it_was_pressed() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+    app.select_tool("zoom");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() - vec2(100.0, 50.0);
+    let to = at + vec2(100.0, 50.0);
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let area = |z0: f64| z0 * f64::from((rect.width() / 100.0).min(rect.height() / 50.0));
+    let z0 = app.view().unwrap().zoom;
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, true), button(at, false), Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true), "a click steps the zoom");
+    for one_frame in [true, false] {
+        app.view_mut().unwrap().zoom = z0;
+        frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+        if one_frame {
+            frame(&mut app, &ctx, vec![button(at, true), Event::PointerMoved(to), button(to, false)]);
+        } else {
+            frame(&mut app, &ctx, vec![button(at, true)]);
+            frame(&mut app, &ctx, vec![Event::PointerMoved(to)]);
+            frame(&mut app, &ctx, vec![button(to, false)]);
+        }
+        frame(&mut app, &ctx, vec![]);
+        let z = app.view().unwrap().zoom;
+        assert!((z - area(z0)).abs() < 1e-6, "a drag (one frame: {one_frame}) zooms to its area: {z0} → {z}, not {}", area(z0));
+    }
+}
+
 /// Space pressed after a tool drag's release, in the same frame, does not count for the drag: the
 /// Rectangle tool's last move still resizes the rectangle instead of moving it.
 #[test]

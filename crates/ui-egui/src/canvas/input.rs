@@ -120,13 +120,14 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
                 .unwrap_or(m.shift);
             ui.data_mut(|dd| dd.insert_temp(name_press_id(), (i, press_shift)));
         } else {
-            begin_drag(app, ui, &f, p);
-            // Pressed and released in this frame (a quick click or tap): the press ends now, with
+            // Pressed and released in this frame (a quick click or tap): the press starts where the
+            // button went down, not where the pointer moved to after the release, and ends now, with
             // the modifiers, Space and position of its release, not those of the next frame.
-            if !pointer.primary_down()
-                && let Some(d) = ui.data(|dd| dd.get_temp::<Drag>(drag_id()))
-            {
-                end_drag(app, ui, &f, d, egui::PointerButton::Primary, p);
+            let released = !pointer.primary_down();
+            let start = if released { press_pos(ui, egui::PointerButton::Primary).filter(|q| rect.contains(*q)).unwrap_or(p) } else { p };
+            begin_drag(app, ui, &f, start);
+            if released && let Some(d) = ui.data(|dd| dd.get_temp::<Drag>(drag_id())) {
+                end_drag(app, ui, &f, d, egui::PointerButton::Primary, start);
             }
         }
     } else if drag.is_none()
@@ -765,6 +766,16 @@ fn release_pos(ui: &Ui, button: egui::PointerButton, last: bool) -> Option<Pos2>
             _ => None,
         });
         if last { releases.next_back() } else { releases.next() }
+    })
+}
+
+/// Where `button` first went down in this frame.
+fn press_pos(ui: &Ui, button: egui::PointerButton) -> Option<Pos2> {
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::PointerButton { pos, button: b, pressed: true, .. } if *b == button => Some(*pos),
+            _ => None,
+        })
     })
 }
 
