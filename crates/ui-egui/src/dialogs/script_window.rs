@@ -108,6 +108,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
     if events.is_empty() && waiting && !typing && crate::shortcuts::pressed_anew(ui.ctx(), egui::Key::Enter) {
         events.extend(w.default_element.map(UiEvent::Click));
     }
+    if let Some(e) = keep_refused_texts(&w, d, &mut events) {
+        app.status(e);
+    }
     if events.iter().any(|e| matches!(e, UiEvent::Click(_)))
         && let Err(e) = commit_drafts(&w, d, &mut events)
     {
@@ -174,6 +177,24 @@ pub(crate) fn commit_drafts(w: &ScriptUiDialog, d: &mut Dialog, events: &mut Vec
     let at = events.iter().position(closing).unwrap_or(events.len());
     events.splice(at..at, changes);
     Ok(())
+}
+
+/// Takes out of `events` each text an edit field gave as it lost the focus that the script would
+/// refuse, and puts it back in its field, so the person can fix it. → the error of the last one.
+pub(crate) fn keep_refused_texts(w: &ScriptUiDialog, d: &mut Dialog, events: &mut Vec<UiEvent>) -> Option<String> {
+    let mut refused = None;
+    events.retain(|e| {
+        let UiEvent::Change(i, UiValue::Text(text)) = e else { return true };
+        match vectorcraft_engine::script::scriptui::check_event(w, e.clone()) {
+            Ok(_) => true,
+            Err(error) => {
+                d.fields.insert(draft_key(*i), json!(text));
+                refused = Some(error);
+                false
+            }
+        }
+    });
+    refused
 }
 
 /// The field that holds an edit field's text while it is typed.
@@ -341,7 +362,8 @@ fn edit(ui: &mut egui::Ui, d: &mut Dialog, rect: egui::Rect, (i, n, prompt): (us
         d.fields.remove(&key);
         return Some(UiEvent::Change(i, UiValue::Text(text)));
     }
-    if !r.has_focus() && !r.changed() {
+    // A text the script refused stays in the field until the person changes it.
+    if !r.has_focus() && !r.changed() && (text == n.text || n.readonly) {
         d.fields.remove(&key);
     }
     None

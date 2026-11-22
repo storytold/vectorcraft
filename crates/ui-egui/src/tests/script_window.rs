@@ -331,6 +331,28 @@ fn a_typed_text_the_script_refuses_keeps_every_field_and_queues_nothing() {
 }
 
 #[test]
+fn a_typed_text_the_script_refuses_stays_in_its_field_after_it_loses_the_focus() {
+    let mut app = app();
+    start(&mut app, "var w = new Window('dialog'); w.add('edittext', undefined, 'a'); w.add('button', undefined, 'OK'); vc.log(w.show());");
+    assert!(until_window(&mut app));
+    let w = app.session.script_window().unwrap();
+    let long = "x".repeat(16 * 1024 + 1);
+    let d = app.ui.dialog.as_mut().unwrap();
+    let mut events = vec![UiEvent::Change(1, UiValue::Text(long.clone())), UiEvent::Change(1, UiValue::Text("fine".into()))];
+    assert!(script_window::keep_refused_texts(&w, d, &mut events).is_some(), "the long text is an error");
+    assert_eq!(events, vec![UiEvent::Change(1, UiValue::Text("fine".into()))], "a text the script takes is still given");
+    assert!(d.fields.get("text1") == Some(&json!(long)), "the refused text goes back in its field");
+    frame(&mut app, Vec::new());
+    frame(&mut app, Vec::new());
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert!(d.fields.get("text1") == Some(&json!(long)), "and stays there while the field has no focus");
+    assert!(app.session.script_window().is_some(), "the script still waits");
+    assert!(give(&mut app, json!({"event": "click", "control": "OK"})).is_err(), "OK is an error until it is fixed");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
 fn cancel_on_the_quit_question_does_not_show_a_dialog_whose_show_ended() {
     let mut app = app();
     start(
