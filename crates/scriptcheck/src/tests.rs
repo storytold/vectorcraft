@@ -579,8 +579,10 @@ fn print_writes_a_file() {
         "app.documents.addDocument('Print', s, false).print(o);\n",
         "documents.addDocumentNoUI('Print').print(o);\n",
         "app.documents.addDocumentNoUI('Print').print(o);\n",
+        "documents.index(0).print(o);\n",
+        "app.documents.index('Untitled-1').print(o);\n",
     ));
-    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14][..];
+    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14, 15, 16][..];
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
 }
