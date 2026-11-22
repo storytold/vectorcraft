@@ -6573,6 +6573,21 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the script passed more data to and from commands than one run may pass	l'script ha passat més dades a les ordres i des de les ordres de les que pot passar una execució
 @msg	the script added more objects and data to the documents than one run may add	l'script ha afegit als documents més objectes i dades dels que pot afegir una execució
 @msg	{what}: the object is not a File or a Folder	{what}: l'objecte no és un File ni un Folder
+@msg	{what}: the library {name} is not available	{what}: la biblioteca {name} no està disponible
+@msg	{what} is not available yet	{what} encara no està disponible
+@msg	{what}: the value {value} is not available yet	{what}: el valor {value} encara no està disponible
+@msg	{what}: the object is not an {class} object	{what}: l'objecte no és un objecte {class}
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: el paquet XMP no és XMP ben format
+@msg	{what}: the XMP data is too large	{what}: les dades XMP són massa grans
+@msg	{what}: {name} is not a valid property name	{what}: {name} no és un nom de propietat vàlid
+@msg	{what}: the text holds a character XML does not allow	{what}: el text conté un caràcter que XML no permet
+@msg	{what}: {name} is not an array	{what}: {name} no és una matriu
+@msg	{what}: {name} is not a simple property	{what}: {name} no és una propietat simple
+@msg	{what}: {name} is not a language alternative array	{what}: {name} no és una matriu d'alternatives d'idioma
+@msg	{what}: the array index {index} is out of range	{what}: l'índex de matriu {index} és fora de l'interval
+@msg	{what}: the namespace {uri} is not registered	{what}: l'espai de noms {uri} no està registrat
+@msg	{what}: the file is closed	{what}: el fitxer està tancat
+@msg	{what}: the file cannot be updated	{what}: el fitxer no es pot actualitzar
 @msg	{what}: the count must be a finite number, 0 or more	{what}: el recompte ha de ser un nombre finit, 0 o més
 @msg	File.seek: the position must be a finite number	File.seek: la posició ha de ser un nombre finit
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: el mode ha de ser 0, 1 o 2

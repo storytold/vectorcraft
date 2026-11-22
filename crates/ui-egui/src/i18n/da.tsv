@@ -216,6 +216,21 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	the script passed more data to and from commands than one run may pass	scriptet sendte flere data til og fra kommandoer, end én kørsel må sende
 @msg	the script added more objects and data to the documents than one run may add	scriptet tilføjede flere objekter og data til dokumenterne, end én kørsel må tilføje
 @msg	{what}: the object is not a File or a Folder	{what}: objektet er ikke en File eller en Folder
+@msg	{what}: the library {name} is not available	{what}: biblioteket {name} er ikke tilgængeligt
+@msg	{what} is not available yet	{what} er endnu ikke tilgængelig
+@msg	{what}: the value {value} is not available yet	{what}: værdien {value} er endnu ikke tilgængelig
+@msg	{what}: the object is not an {class} object	{what}: objektet er ikke et {class}-objekt
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP-pakken er ikke velformet XMP
+@msg	{what}: the XMP data is too large	{what}: XMP-dataene er for store
+@msg	{what}: {name} is not a valid property name	{what}: {name} er ikke et gyldigt egenskabsnavn
+@msg	{what}: the text holds a character XML does not allow	{what}: teksten indeholder et tegn, som XML ikke tillader
+@msg	{what}: {name} is not an array	{what}: {name} er ikke en matrix
+@msg	{what}: {name} is not a simple property	{what}: {name} er ikke en simpel egenskab
+@msg	{what}: {name} is not a language alternative array	{what}: {name} er ikke en matrix af sprogalternativer
+@msg	{what}: the array index {index} is out of range	{what}: matrixindekset {index} er uden for området
+@msg	{what}: the namespace {uri} is not registered	{what}: navnerummet {uri} er ikke registreret
+@msg	{what}: the file is closed	{what}: filen er lukket
+@msg	{what}: the file cannot be updated	{what}: filen kan ikke opdateres
 @msg	{what}: the count must be a finite number, 0 or more	{what}: antallet skal være et endeligt tal, 0 eller mere
 @msg	File.seek: the position must be a finite number	File.seek: positionen skal være et endeligt tal
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: tilstanden skal være 0, 1 eller 2

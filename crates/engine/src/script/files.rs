@@ -1850,6 +1850,168 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     Ok(done(r.map_err(|_| WRITE_FAILED)))
 }
 
+/// Is `path` an XMP sidecar file, by its `.xmp` extension in any case?
+fn is_sidecar(path: &str) -> bool {
+    Path::new(path).extension().is_some_and(|e| e.eq_ignore_ascii_case("xmp"))
+}
+
+/// The text of a sidecar's bytes and its character form as `XMPFile.getPacketInfo` gives it: 0 for
+/// UTF-8, 2 for UTF-16 big-endian and 3 for UTF-16 little-endian, by its byte order mark.
+fn sidecar_text(bytes: &[u8]) -> Option<(String, u32)> {
+    let utf16 = |rest: &[u8], big: bool| {
+        let units = rest.as_chunks::<2>().0.iter().map(|&pair| if big { u16::from_be_bytes(pair) } else { u16::from_le_bytes(pair) });
+        rest.len().is_multiple_of(2).then(|| char::decode_utf16(units).collect::<Result<String, _>>().ok()).flatten()
+    };
+    match bytes {
+        [0xEF, 0xBB, 0xBF, rest @ ..] => std::str::from_utf8(rest).ok().map(|t| (t.to_string(), 0)),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, true).map(|t| (t, 2)),
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, false).map(|t| (t, 3)),
+        _ => std::str::from_utf8(bytes).ok().map(|t| (t.to_string(), 0)),
+    }
+}
+
+/// `xmpOpen(path, update, scan)`: the XMP packet of the file at `path` for `XMPFile`, read under
+/// the rules for reading; with `update`, a file that can take a packet must also be one the run may write. A `.xmp` file
+/// is read whole as its packet unless `scan`; any other file is scanned for its first UTF-8 packet.
+/// → `{packet, offset, length, writeable, sidecar, charForm}`, with `packet` null when the file has
+/// none.
+fn xmp_open(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let path = arg_text(a, 0);
+    let (update, scan) = (matches!(a.get(1), Some(Data::Bool(true))), matches!(a.get(2), Some(Data::Bool(true))));
+    let mut disk = host.disk.borrow_mut();
+    match disk.stat(&path) {
+        Ok(Some(e)) if !e.file => return Ok(error(NOT_REGULAR)),
+        Ok(Some(e)) if e.len > MAX_FILE_BYTES as u64 => return Ok(error(TOO_LARGE)),
+        Ok(Some(_)) => {}
+        Ok(None) => return Ok(error(NOT_FOUND)),
+        Err(m) => return Ok(error(m)),
+    }
+    let (real, bytes) = match disk.scope.read(Path::new(&path), MAX_FILE_BYTES) {
+        Ok(read) => read,
+        Err(ScriptRead::TooLarge) => return Ok(error(TOO_LARGE)),
+        Err(ScriptRead::Missing) => return Ok(error(NOT_FOUND)),
+        Err(ScriptRead::Refused) => return Ok(error(ACCESS_DENIED)),
+        Err(ScriptRead::Failed(_)) => return Ok(error(READ_FAILED)),
+    };
+    disk.charge_read(&real, bytes.len())?;
+    let sidecar = is_sidecar(&path) && is_sidecar(&real.to_string_lossy()) && !scan;
+    // Only a file that can take a packet needs to be one the run may write.
+    if update
+        && sidecar
+        && let Err(m) = disk.target(&path, true)
+    {
+        return Ok(error(m));
+    }
+    let number = |n: usize| Data::Number(n as f64);
+    let (packet, offset, length, writeable, char_form) = if sidecar {
+        let Some((text, form)) = sidecar_text(&bytes) else { return Ok(error(UNDECODABLE)) };
+        (Data::String(text), 0, bytes.len(), true, form)
+    } else {
+        match vectorcraft_js::find_xmp_packet(&bytes) {
+            Some(span) => match bytes.get(span.start..span.end).map(std::str::from_utf8) {
+                Some(Ok(text)) => (Data::String(text.to_string()), span.start, span.end - span.start, span.writeable, 0),
+                _ => return Ok(error(UNDECODABLE)),
+            },
+            None => (Data::Null, 0, 0, false, 0),
+        }
+    };
+    Ok(Data::Object(vec![
+        ("packet".into(), packet),
+        ("offset".into(), number(offset)),
+        ("length".into(), number(length)),
+        ("writeable".into(), Data::Bool(writeable)),
+        ("sidecar".into(), Data::Bool(sidecar)),
+        ("charForm".into(), Data::Number(f64::from(char_form))),
+    ]))
+}
+
+/// `xmpWrite(path, packet)`: the `.xmp` file at `path` replaced by `packet` in UTF-8, under the
+/// rules for writing. The packet goes to a temporary file in the same folder that then takes the
+/// file's name, when the run may write there; otherwise to the file itself. Open objects of the
+/// file hold the new bytes.
+fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let path = arg_text(a, 0);
+    let packet = arg_text(a, 1).into_bytes();
+    if !is_sidecar(&path) {
+        return Ok(error(ACCESS_DENIED));
+    }
+    if packet.len() > MAX_FILE_BYTES {
+        return Ok(error(TOO_LARGE));
+    }
+    let mut disk = host.disk.borrow_mut();
+    let target = match disk.target(&path, true) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    // A `.xmp` link that leads to another kind of file does not make that file a sidecar.
+    if !is_sidecar(&target.to_string_lossy()) {
+        return Ok(error(ACCESS_DENIED));
+    }
+    if std::fs::metadata(&target).is_ok_and(|m| !m.is_file()) {
+        return Ok(error(NOT_REGULAR));
+    }
+    // An open object of the file with changes not yet written keeps them: the packet is not written
+    // over them.
+    if disk.open.values().any(|o| o.dirty && o.holds(&target)) {
+        return Ok(error(WRITE_FAILED));
+    }
+    let holders = disk.open.values().filter(|o| o.holds(&target)).count();
+    disk.charge_write(packet.len().saturating_mul(holders.saturating_add(1)))?;
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let temp_name = |n: u32| target.with_file_name(format!(".{name}.{}.{n}.tmp", std::process::id()));
+    let first = temp_name(0);
+    let temp_allowed = disk.target(&first.to_string_lossy(), false).is_ok_and(|t| t == first);
+    // `changed` is whether the file's bytes may differ from before: after a replacement, or once a
+    // direct write has opened (and so emptied) the file.
+    let (r, changed) = if temp_allowed {
+        // The temporary file takes a name no file or link has, so only the sidecar is replaced; when
+        // none of the names is free the sidecar is left as it is.
+        // Each name is checked against the places the run may write before it is made.
+        let allowed = |t: &Path| disk.target(&t.to_string_lossy(), false).is_ok_and(|r| r == t);
+        let new_file = |t: &Path| allowed(t).then(|| std::fs::OpenOptions::new().write(true).create_new(true).open(t).ok()).flatten();
+        let Some((temp, mut out)) = (0..16).map(temp_name).find_map(|t| new_file(&t).map(|f| (t, f))) else {
+            return Ok(error(WRITE_FAILED));
+        };
+        let mut write_temp = || {
+            #[cfg(test)]
+            if XMP_WRITE_FAILS.with(std::cell::Cell::get) {
+                return Err(std::io::Error::other("write failed"));
+            }
+            std::io::Write::write_all(&mut out, &packet)
+        };
+        let r = write_temp();
+        drop(out);
+        let r = r.and_then(|()| std::fs::rename(&temp, &target)).inspect_err(|_| {
+            let _ = std::fs::remove_file(&temp);
+        });
+        let changed = r.is_ok();
+        (r, changed)
+    } else {
+        match std::fs::File::create(&target) {
+            Ok(mut f) => (std::io::Write::write_all(&mut f, &packet), true),
+            Err(e) => (Err(e), false),
+        }
+    };
+    if changed {
+        disk.wrote(&target);
+    }
+    if r.is_ok() {
+        for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
+            file.bytes.clone_from(&packet);
+            // The packet is UTF-8 without a byte order mark, so an object reading UTF-16 reads it as
+            // UTF-8 from the start.
+            if matches!(file.encoding, Encoding::Utf16Le | Encoding::Utf16Be) {
+                file.encoding = Encoding::Utf8;
+                file.name = Encoding::Utf8.name().to_string();
+                file.pos = 0;
+            }
+            file.pos = file.pos.min(packet.len());
+            file.dirty = false;
+        }
+    }
+    Ok(done(r.map_err(|_| WRITE_FAILED)))
+}
+
 /// `remove(path)`: the file, or the folder when it is empty; a link itself, never what it leads to.
 fn remove(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let mut disk = host.disk.borrow_mut();
@@ -2455,8 +2617,11 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("setHidden".into(), call(link, set_hidden)),
         ("createAlias".into(), call(link, create_alias)),
         ("pick".into(), call(link, pick)),
+        ("xmpOpen".into(), call(link, xmp_open)),
+        ("xmpWrite".into(), call(link, xmp_write)),
     ];
-    realm.define_file_classes(items)
+    realm.define_file_classes(items)?;
+    realm.define_external_object()
 }
 
 /// Tests: what the next `copy` does with its source's path, as given and as its real path, after
@@ -2476,6 +2641,8 @@ thread_local! {
     pub(crate) static BEFORE_ALIAS_LINK: std::cell::RefCell<Option<AliasHook>> = const { std::cell::RefCell::new(None) };
     /// Tests: while set, the bytes `flush` writes fail after the file was opened for them.
     pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: while set, `xmpWrite` fails after its checks and before it writes.
+    pub(crate) static XMP_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(test)]

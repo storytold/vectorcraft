@@ -253,6 +253,9 @@ pub(crate) struct Interp {
     pub(crate) install_error: Option<String>,
     /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
     pub(crate) files: Option<crate::file_classes::Classes>,
+    /// `ExternalObject` and the XMP classes it loads, once a host has added them
+    /// ([`crate::Realm::define_external_object`]).
+    pub(crate) xmp: Option<crate::xmp_classes::Classes>,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
     /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
@@ -518,6 +521,7 @@ impl Interp {
             held_bytes: 0,
             install_error: None,
             files: None,
+            xmp: None,
             date_host: crate::date_builtins::DateHost::default(),
             held: Rc::default(),
             flattened: std::cell::Cell::new(0),
@@ -774,6 +778,7 @@ impl Interp {
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
+        roots.objects.extend(self.xmp.iter().flat_map(crate::xmp_classes::Classes::objects));
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.

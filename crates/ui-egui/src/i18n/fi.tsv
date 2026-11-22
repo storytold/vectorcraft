@@ -5286,6 +5286,21 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	the script passed more data to and from commands than one run may pass	skripti välitti komennoille ja komennoilta enemmän tietoa kuin yksi ajo saa välittää
 @msg	the script added more objects and data to the documents than one run may add	skripti lisäsi asiakirjoihin enemmän objekteja ja tietoja kuin yksi ajo saa lisätä
 @msg	{what}: the object is not a File or a Folder	{what}: objekti ei ole File eikä Folder
+@msg	{what}: the library {name} is not available	{what}: kirjasto {name} ei ole käytettävissä
+@msg	{what} is not available yet	{what} ei ole vielä käytettävissä
+@msg	{what}: the value {value} is not available yet	{what}: arvo {value} ei ole vielä käytettävissä
+@msg	{what}: the object is not an {class} object	{what}: objekti ei ole {class}-objekti
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP-paketti ei ole hyvin muodostettua XMP:tä
+@msg	{what}: the XMP data is too large	{what}: XMP-tiedot ovat liian suuret
+@msg	{what}: {name} is not a valid property name	{what}: {name} ei ole kelvollinen ominaisuuden nimi
+@msg	{what}: the text holds a character XML does not allow	{what}: teksti sisältää merkin, jota XML ei salli
+@msg	{what}: {name} is not an array	{what}: {name} ei ole taulukko
+@msg	{what}: {name} is not a simple property	{what}: {name} ei ole yksinkertainen ominaisuus
+@msg	{what}: {name} is not a language alternative array	{what}: {name} ei ole kielivaihtoehtojen taulukko
+@msg	{what}: the array index {index} is out of range	{what}: taulukon indeksi {index} on alueen ulkopuolella
+@msg	{what}: the namespace {uri} is not registered	{what}: nimiavaruutta {uri} ei ole rekisteröity
+@msg	{what}: the file is closed	{what}: tiedosto on suljettu
+@msg	{what}: the file cannot be updated	{what}: tiedostoa ei voi päivittää
 @msg	{what}: the count must be a finite number, 0 or more	{what}: määrän on oltava äärellinen luku, 0 tai enemmän
 @msg	File.seek: the position must be a finite number	File.seek: sijainnin on oltava äärellinen luku
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: tilan on oltava 0, 1 tai 2

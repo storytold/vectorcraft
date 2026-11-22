@@ -72,6 +72,8 @@ mod token;
 mod value;
 mod xml;
 mod xml_builtins;
+mod xmp;
+mod xmp_classes;
 mod xpath;
 
 pub use ast::{
@@ -85,6 +87,7 @@ pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
 pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
+pub use xmp::{MAX_BYTES as XMP_MAX_BYTES, PacketSpan, find_packet as find_xmp_packet};
 
 /// How a script is read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -214,3 +217,5 @@ mod tests;
 mod text_tests;
 #[cfg(test)]
 mod xml_tests;
+#[cfg(test)]
+mod xmp_tests;

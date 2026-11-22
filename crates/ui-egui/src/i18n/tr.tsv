@@ -4789,6 +4789,21 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	the script passed more data to and from commands than one run may pass	betik, komutlara ve komutlardan bir çalıştırmanın aktarabileceğinden daha fazla veri aktardı
 @msg	the script added more objects and data to the documents than one run may add	betik, belgelere bir çalıştırmanın ekleyebileceğinden daha fazla nesne ve veri ekledi
 @msg	{what}: the object is not a File or a Folder	{what}: nesne ne File ne de Folder
+@msg	{what}: the library {name} is not available	{what}: {name} kitaplığı kullanılamıyor
+@msg	{what} is not available yet	{what} henüz kullanılamıyor
+@msg	{what}: the value {value} is not available yet	{what}: {value} değeri henüz kullanılamıyor
+@msg	{what}: the object is not an {class} object	{what}: nesne bir {class} nesnesi değil
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP paketi düzgün biçimli XMP değil
+@msg	{what}: the XMP data is too large	{what}: XMP verileri çok büyük
+@msg	{what}: {name} is not a valid property name	{what}: {name} geçerli bir özellik adı değil
+@msg	{what}: the text holds a character XML does not allow	{what}: metin XML'in izin vermediği bir karakter içeriyor
+@msg	{what}: {name} is not an array	{what}: {name} bir dizi değil
+@msg	{what}: {name} is not a simple property	{what}: {name} basit bir özellik değil
+@msg	{what}: {name} is not a language alternative array	{what}: {name} bir dil alternatifleri dizisi değil
+@msg	{what}: the array index {index} is out of range	{what}: {index} dizi dizini aralık dışında
+@msg	{what}: the namespace {uri} is not registered	{what}: {uri} ad alanı kayıtlı değil
+@msg	{what}: the file is closed	{what}: dosya kapalı
+@msg	{what}: the file cannot be updated	{what}: dosya güncellenemiyor
 @msg	{what}: the count must be a finite number, 0 or more	{what}: sayı 0 veya daha büyük, sonlu bir sayı olmalıdır
 @msg	File.seek: the position must be a finite number	File.seek: konum sonlu bir sayı olmalıdır
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: mod 0, 1 veya 2 olmalıdır

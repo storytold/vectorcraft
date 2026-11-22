@@ -4942,6 +4942,21 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	the script passed more data to and from commands than one run may pass	skriptet skickade mer data till och från kommandon än en körning får skicka
 @msg	the script added more objects and data to the documents than one run may add	skriptet lade till fler objekt och mer data i dokumenten än en körning får lägga till
 @msg	{what}: the object is not a File or a Folder	{what}: objektet är varken en File eller en Folder
+@msg	{what}: the library {name} is not available	{what}: biblioteket {name} är inte tillgängligt
+@msg	{what} is not available yet	{what} är inte tillgängligt än
+@msg	{what}: the value {value} is not available yet	{what}: värdet {value} är inte tillgängligt än
+@msg	{what}: the object is not an {class} object	{what}: objektet är inte ett {class}-objekt
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP-paketet är inte välformad XMP
+@msg	{what}: the XMP data is too large	{what}: XMP-data är för stora
+@msg	{what}: {name} is not a valid property name	{what}: {name} är inte ett giltigt egenskapsnamn
+@msg	{what}: the text holds a character XML does not allow	{what}: texten innehåller ett tecken som XML inte tillåter
+@msg	{what}: {name} is not an array	{what}: {name} är inte en matris
+@msg	{what}: {name} is not a simple property	{what}: {name} är inte en enkel egenskap
+@msg	{what}: {name} is not a language alternative array	{what}: {name} är inte en matris med språkalternativ
+@msg	{what}: the array index {index} is out of range	{what}: matrisindexet {index} ligger utanför intervallet
+@msg	{what}: the namespace {uri} is not registered	{what}: namnrymden {uri} är inte registrerad
+@msg	{what}: the file is closed	{what}: filen är stängd
+@msg	{what}: the file cannot be updated	{what}: filen kan inte uppdateras
 @msg	{what}: the count must be a finite number, 0 or more	{what}: antalet måste vara ett ändligt tal, 0 eller mer
 @msg	File.seek: the position must be a finite number	File.seek: positionen måste vara ett ändligt tal
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: läget måste vara 0, 1 eller 2

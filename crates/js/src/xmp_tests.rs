@@ -1,0 +1,322 @@
+use proptest::prelude::*;
+
+use crate::xmp::{self, Form, Registry, XmpError};
+use crate::{JsValue, Limits, Realm, RunErrorKind};
+
+fn realm() -> Realm {
+    let mut r = Realm::with_options(crate::Options::default(), Limits::default());
+    if let Err(e) = r.define_external_object() {
+        panic!("{e:?}");
+    }
+    r
+}
+
+fn run(src: &str) -> JsValue {
+    match realm().run(&format!("new ExternalObject('lib:AdobeXMPScript');\n{src}")) {
+        Ok(v) => v,
+        Err(e) => panic!("{src}\n{e:?}"),
+    }
+}
+
+fn string(src: &str) -> String {
+    match run(src) {
+        JsValue::String(s) => s,
+        other => panic!("{src}: {other:?}"),
+    }
+}
+
+fn truth(src: &str) {
+    assert_eq!(run(src), JsValue::Bool(true), "{src}");
+}
+
+/// The name and message of what `src` throws.
+fn thrown(src: &str) -> String {
+    string(&format!("try {{ {src}; 'no error' }} catch (e) {{ e.name + ': ' + e.message }}"))
+}
+
+const PACKET: &str = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:CreatorTool="Tool &amp; Co">
+   <dc:title><rdf:Alt><rdf:li xml:lang="x-default">Hello</rdf:li><rdf:li xml:lang="fr-FR">Bonjour</rdf:li></rdf:Alt></dc:title>
+   <dc:subject><rdf:Bag><rdf:li>one</rdf:li><rdf:li>two</rdf:li></rdf:Bag></dc:subject>
+   <dc:format>image/svg+xml</dc:format>
+   <ex:thing xmlns:ex="http://example.com/ns/" rdf:parseType="Resource"><ex:a>1</ex:a></ex:thing>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#;
+
+fn with_packet(src: &str) -> String {
+    format!("var m = new XMPMeta({:?});\n{src}", PACKET)
+}
+
+#[test]
+fn only_the_xmp_library_loads() {
+    let r = realm().run("typeof XMPMeta + ' ' + ExternalObject.search('lib:AdobeXMPScript') + ' ' + ExternalObject.search('lib:other')");
+    assert_eq!(r.ok(), Some(JsValue::String("undefined true false".into())));
+    let r = realm().run("try { new ExternalObject('lib:other') ; 'loaded' } catch (e) { e.name + ': ' + e.message + ' ' + typeof XMPMeta }");
+    assert_eq!(r.ok(), Some(JsValue::String("Error: ExternalObject: the library lib:other is not available undefined".into())));
+    truth("typeof XMPMeta == 'function' && typeof XMPFile == 'function' && XMPConst.ARRAY_LAST_ITEM == -1");
+    truth("var h = new ExternalObject('lib:AdobeXMPScript'); h.terminate(); typeof XMPMeta == 'function'");
+}
+
+#[test]
+fn a_packet_reads_into_properties() {
+    assert_eq!(string(&with_packet("m.getProperty(XMPConst.NS_DC, 'format').value")), "image/svg+xml");
+    assert_eq!(string(&with_packet("String(m.getProperty(XMPConst.NS_XMP, 'xmp:CreatorTool'))")), "Tool & Co");
+    assert_eq!(string(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'fr-FR')")), "Bonjour");
+    assert_eq!(string(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'de-DE')")), "Hello");
+    assert_eq!(string(&with_packet("m.getArrayItem(XMPConst.NS_DC, 'subject', XMPConst.ARRAY_LAST_ITEM).value")), "two");
+    assert_eq!(run(&with_packet("m.countArrayItems(XMPConst.NS_DC, 'subject')")), JsValue::Number(2.0));
+    assert_eq!(run(&with_packet("m.getProperty(XMPConst.NS_DC, 'title').options")), JsValue::Number(f64::from(0x200 | 0x400 | 0x800 | 0x1000)));
+    assert_eq!(run(&with_packet("m.getProperty('http://example.com/ns/', 'thing').options")), JsValue::Number(256.0));
+    assert_eq!(run(&with_packet("m.getProperty(XMPConst.NS_DC, 'creator')")), JsValue::Undefined);
+    assert_eq!(string("XMPMeta.getNamespacePrefix('http://example.com/ns/') + ''"), "undefined");
+    assert_eq!(string(&with_packet("XMPMeta.getNamespacePrefix('http://example.com/ns/')")), "ex:");
+}
+
+#[test]
+fn properties_arrays_and_namespaces_round_trip() {
+    let src = "var ns = 'http://example.com/rt/';
+        var p = XMPMeta.registerNamespace(ns, 'rt');
+        var m = new XMPMeta();
+        m.setProperty(ns, 'name', 'a <b> & \"c\"');
+        m.appendArrayItem(ns, 'list', 0, 'x', XMPConst.ARRAY_IS_ORDERED);
+        m.appendArrayItem(ns, 'list', 'y');
+        m.insertArrayItem(ns, 'list', 1, 'w');
+        m.setArrayItem(ns, 'list', 3, 'z');
+        m.setLocalizedText(ns, 'label', null, 'en-US', 'Hi');
+        m.setLocalizedText(ns, 'label', null, 'de-DE', 'Hallo');
+        var n = new XMPMeta(m.serialize());
+        var o = new XMPMeta(n.serialize(XMPConst.SERIALIZE_OMIT_PACKET_WRAPPER));
+        [p, o.getProperty(ns, 'rt:name').value, o.getProperty(ns, 'list').options, o.countArrayItems(ns, 'list'),
+         o.getArrayItem(ns, 'list', 1).value, o.getArrayItem(ns, 'list', 2).value, o.getArrayItem(ns, 'list', 3).value,
+         o.getLocalizedText(ns, 'label', null, 'x-default'), o.getLocalizedText(ns, 'label', 'de', 'de-AT'),
+         m.serialize() == n.serialize(), n.serialize().indexOf('<?xpacket') == 0,
+         o.serialize(XMPConst.SERIALIZE_OMIT_PACKET_WRAPPER).indexOf('<?xpacket')].join('|')";
+    assert_eq!(string(src), "rt:|a <b> & \"c\"|1536|3|w|x|z|Hi|Hallo|true|true|-1");
+    let src = with_packet(
+        "var n = new XMPMeta(m.serialize()); n.serialize() == m.serialize() && n.getProperty('http://example.com/ns/', 'thing').options == 256 && n.getProperty(XMPConst.NS_XMP, 'CreatorTool').value == 'Tool & Co'",
+    );
+    truth(&src);
+    truth(&with_packet(
+        "m.deleteProperty(XMPConst.NS_DC, 'format'); !m.doesPropertyExist(XMPConst.NS_DC, 'format') && m.doesPropertyExist(XMPConst.NS_DC, 'subject')",
+    ));
+    truth(&with_packet("m.deleteArrayItem(XMPConst.NS_DC, 'subject', 1); m.getArrayItem(XMPConst.NS_DC, 'subject', 1).value == 'two'"));
+    assert_eq!(string("XMPMeta.registerNamespace('http://example.com/a/', 'dc')"), "dc_1_:");
+    assert_eq!(string("XMPMeta.getNamespaceURI('dc:')"), "http://purl.org/dc/elements/1.1/");
+}
+
+/// The prefix `xmlns` and the namespace of `xmlns` attributes are refused, so no packet declares
+/// them.
+#[test]
+fn the_xmlns_prefix_and_namespace_are_refused() {
+    assert_eq!(
+        thrown("XMPMeta.registerNamespace('http://example.com/x/', 'xmlns')"),
+        "Error: XMPMeta.registerNamespace: xmlns is not a valid property name"
+    );
+    assert_eq!(
+        thrown("XMPMeta.registerNamespace('http://www.w3.org/2000/xmlns/', 'ok')"),
+        "Error: XMPMeta.registerNamespace: ok is not a valid property name"
+    );
+    truth("XMPMeta.getNamespaceURI('xmlns') === undefined && XMPMeta.getNamespacePrefix('http://www.w3.org/2000/xmlns/') === undefined");
+}
+
+#[test]
+fn bad_arguments_and_unbuilt_members_throw() {
+    assert_eq!(thrown("new XMPMeta().getProperty('http://none/', 'a')"), "Error: XMPMeta.getProperty: the namespace http://none/ is not registered");
+    assert_eq!(thrown("new XMPMeta().setProperty(XMPConst.NS_DC, '1a', 'x')"), "Error: XMPMeta.setProperty: 1a is not a valid property name");
+    assert_eq!(
+        thrown("new XMPMeta().setProperty(XMPConst.NS_DC, 'a', 'x\\u0001')"),
+        "Error: XMPMeta.setProperty: the text holds a character XML does not allow"
+    );
+    assert_eq!(thrown(&with_packet("m.setProperty(XMPConst.NS_DC, 'subject', 'x')")), "Error: XMPMeta.setProperty: subject is not a simple property");
+    assert_eq!(thrown(&with_packet("m.getArrayItem(XMPConst.NS_DC, 'format', 1)")), "Error: XMPMeta.getArrayItem: format is not an array");
+    assert_eq!(
+        thrown(&with_packet("m.insertArrayItem(XMPConst.NS_DC, 'subject', 9, 'x')")),
+        "RangeError: XMPMeta.insertArrayItem: the array index 9 is out of range"
+    );
+    assert_eq!(
+        thrown(&with_packet("m.getLocalizedText(XMPConst.NS_DC, 'subject', null, 'en')")),
+        "Error: XMPMeta.getLocalizedText: subject is not a language alternative array"
+    );
+    assert_eq!(
+        thrown("new XMPMeta().getStructField(XMPConst.NS_DC, 'a', XMPConst.NS_DC, 'b')"),
+        "Error: XMPMeta.getStructField is not available yet"
+    );
+    assert_eq!(thrown("new XMPMeta().getProperty(XMPConst.NS_DC, 'a/b')"), "RangeError: XMPMeta.getProperty: the value a/b is not available yet");
+    assert_eq!(
+        thrown("XMPMeta.prototype.getProperty.call({}, XMPConst.NS_DC, 'a')"),
+        "TypeError: XMPMeta.getProperty: the object is not an XMPMeta object"
+    );
+    assert_eq!(
+        thrown("new XMPFile('a.xmp', XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_READ)"),
+        "Error: XMPFile without File and Folder is not available yet"
+    );
+}
+
+#[test]
+fn malformed_and_huge_packets_are_refused() {
+    let malformed = [
+        "",
+        "<x:xmpmeta",
+        "<a/>",
+        "<!DOCTYPE x [<!ENTITY e 'boom'>]><rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'/>",
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description>&e;</rdf:Description></rdf:RDF>",
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Seq/></rdf:RDF>",
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description><nons>1</nons></rdf:Description></rdf:RDF>",
+    ];
+    for p in malformed {
+        assert_eq!(thrown(&format!("new XMPMeta({p:?})")), "Error: XMPMeta: the XMP packet is not well-formed XMP", "{p}");
+    }
+    let deep = format!(
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>{}{}</rdf:RDF>",
+        "<rdf:Description>".repeat(200),
+        "</rdf:Description>".repeat(200)
+    );
+    assert_eq!(xmp::parse(&deep, &mut Registry::default()), Err(XmpError::TooLarge));
+    let huge = "x".repeat(xmp::MAX_BYTES + 1);
+    assert_eq!(xmp::parse(&huge, &mut Registry::default()), Err(XmpError::TooLarge));
+    let r = realm().run("new ExternalObject('lib:AdobeXMPScript'); var s = 'xxxxxxxx'; while (s.length < 9000000) s += s; try { new XMPMeta(s); 'read' } catch (e) { e.name + ': ' + e.message }");
+    assert_eq!(r.ok(), Some(JsValue::String("RangeError: XMPMeta: the XMP data is too large".into())));
+}
+
+#[test]
+fn packets_are_found_in_file_bytes() {
+    let bytes = format!("binary\0\u{1}{PACKET}trailer");
+    let span = xmp::find_packet(bytes.as_bytes()).map(|s| (s.start, s.end, s.writeable));
+    assert_eq!(span, Some((8, 8 + PACKET.len(), true)));
+    assert_eq!(xmp::find_packet(b"<?xpacket begin='' ?> no end"), None);
+    let read_only = PACKET.replace("end=\"w\"", "end=\"r\"");
+    assert_eq!(xmp::find_packet(read_only.as_bytes()).map(|s| s.writeable), Some(false));
+    let stray = format!("<?xpacket begin='' ?> junk <?xpacket begin='' ?>{PACKET}");
+    let span = xmp::find_packet(stray.as_bytes()).map(|s| (s.start, s.end));
+    assert_eq!(span, Some((stray.len() - PACKET.len(), stray.len())), "a start with no end of its own is skipped");
+    let open_end = format!("<?xpacket begin='' ?> junk <?xpacket end= no close {PACKET}");
+    let span = xmp::find_packet(open_end.as_bytes()).map(|s| (s.start, s.end));
+    assert_eq!(span, Some((open_end.len() - PACKET.len(), open_end.len())), "a trailer that does not close before the next start is skipped");
+}
+
+/// An array whose container declares the RDF prefix itself is read as an array, also when its
+/// items are not simple.
+#[test]
+fn a_container_declaring_its_own_prefix_is_an_array() {
+    let packet = PACKET.replace(
+        "<dc:format>",
+        "<dc:creator><r:Seq xmlns:r=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><r:li r:parseType=\"Resource\"><dc:a>1</dc:a></r:li></r:Seq></dc:creator><dc:format>",
+    );
+    let o = string(&format!("String(new XMPMeta({packet:?}).getProperty(XMPConst.NS_DC, 'creator').options)"));
+    let o: u32 = o.parse().unwrap();
+    assert_eq!((o & xmp::PROP_IS_ARRAY, o & xmp::ARRAY_IS_ORDERED, o & xmp::PROP_IS_STRUCT), (xmp::PROP_IS_ARRAY, xmp::ARRAY_IS_ORDERED, 0));
+}
+
+#[test]
+fn many_properties_and_namespaces_each_read_once() {
+    let mut body = String::new();
+    for n in 0..3000 {
+        body.push_str(&format!("<n{}:p{n} xmlns:n{}='http://n/{}/'>v{n}</n{}:p{n}>", n % 500, n % 500, n % 500, n % 500));
+    }
+    body.push_str("<n0:p0 xmlns:n0='http://n/0/'>second</n0:p0>");
+    let packet = format!("<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description>{body}</rdf:Description></rdf:RDF>");
+    let mut registry = Registry::default();
+    let meta = xmp::parse(&packet, &mut registry).unwrap();
+    assert_eq!(meta.props.len(), 3000);
+    let first = meta.find("http://n/0/", "p0").and_then(|at| meta.props.get(at)).and_then(|p| p.value.text());
+    assert_eq!(first, Some("v0"), "a property given twice keeps its first value");
+    assert_eq!(registry.prefix_of("http://n/499/"), Some("n499"));
+    let again = xmp::parse(&xmp::serialize(&meta, &registry, false).unwrap(), &mut registry).unwrap();
+    assert_eq!(again, meta);
+}
+
+#[test]
+fn blank_values_and_failed_packets_keep_their_state() {
+    let rdf = "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:a='http://a/'>\
+               <a:p>  </a:p><a:q><rdf:Seq><rdf:li> \n </rdf:li></rdf:Seq></a:q></rdf:Description></rdf:RDF>";
+    let src = format!(
+        "new ExternalObject('lib:AdobeXMPScript'); var m = new XMPMeta({rdf:?}); var n = new XMPMeta(m.serialize());\n\
+         [n.getProperty('http://a/', 'p').value, n.getArrayItem('http://a/', 'q', 1).value].join('|')"
+    );
+    assert_eq!(string(&src), "  | \n ");
+    let bad = "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:b='http://b/'>\
+               <b:p>x</b:p><rdf:li/></rdf:Description></rdf:RDF>";
+    let src = format!(
+        "new ExternalObject('lib:AdobeXMPScript'); try {{ new XMPMeta({bad:?}); }} catch (e) {{}}\n\
+         String(XMPMeta.getNamespacePrefix('http://b/'))"
+    );
+    assert_eq!(string(&src), "undefined", "a packet that fails to read registers no namespace");
+}
+
+#[test]
+fn array_forms_follow_their_options() {
+    assert_eq!(Form::from_options(0x200), Form::Bag);
+    assert_eq!(Form::from_options(0x400), Form::Seq);
+    assert_eq!(Form::from_options(0x800), Form::Alt);
+}
+
+const PIECES: &[&str] = &[
+    "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>",
+    "</rdf:RDF>",
+    "<rdf:Description xmlns:a='http://a/' rdf:about='z'>",
+    "</rdf:Description>",
+    "<a:p>",
+    "</a:p>",
+    "<rdf:Bag>",
+    "</rdf:Bag>",
+    "<rdf:Alt>",
+    "</rdf:Alt>",
+    "<rdf:li xml:lang='en'>",
+    "<rdf:li>",
+    "</rdf:li>",
+    "<a:q rdf:resource='http://r/'/>",
+    "<a:s rdf:parseType='Resource'><a:t>1</a:t></a:s>",
+    "text &amp; more",
+    "&bogus;",
+    "<![CDATA[<x>]]>",
+    "<!-- c -->",
+    "<?xpacket begin=''?>",
+    "<x:xmpmeta xmlns:x='adobe:ns:meta/'>",
+    "</x:xmpmeta>",
+    "<b:r xmlns:b='http://b/' b:k='v'>",
+    "</b:r>",
+];
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Any arrangement of packet pieces reads without a panic, and what reads serializes to a packet
+    /// that reads back the same.
+    #[test]
+    fn arbitrary_packets_never_panic_and_round_trip(pieces in proptest::collection::vec(0..PIECES.len(), 0..24)) {
+        let text: String = pieces.iter().map(|&i| PIECES[i]).collect();
+        let mut registry = Registry::default();
+        if let Ok(meta) = xmp::parse(&text, &mut registry) {
+            let out = xmp::serialize(&meta, &registry, true);
+            prop_assert!(out.is_ok(), "{text}");
+            let out = out.unwrap_or_default();
+            let again = xmp::parse(&out, &mut registry);
+            prop_assert_eq!(again.as_ref().ok(), Some(&meta), "{}\n{}", text, out);
+        }
+    }
+
+    /// Arbitrary bytes never make the packet parser or scanner panic.
+    #[test]
+    fn arbitrary_bytes_never_panic(bytes in proptest::collection::vec(any::<u8>(), 0..512)) {
+        let _ = xmp::find_packet(&bytes);
+        let text = String::from_utf8_lossy(&bytes);
+        let _ = xmp::parse(&text, &mut Registry::default());
+    }
+
+    /// Arbitrary text through the script surface ends in a value or a script error, never an
+    /// internal fault.
+    #[test]
+    fn arbitrary_script_values_never_fault(name in "[a-z:\\[\\]0-9/@?]{0,12}", value in "\\PC{0,16}") {
+        let src = format!(
+            "new ExternalObject('lib:AdobeXMPScript'); var m = new XMPMeta(); try {{ m.setProperty(XMPConst.NS_DC, {name:?}, {value:?}); \
+             m.appendArrayItem(XMPConst.NS_DC, 'z', 0, {value:?}, XMPConst.PROP_IS_ARRAY); new XMPMeta(m.serialize()).getProperty(XMPConst.NS_DC, {name:?}) }} catch (e) {{ e.message }}"
+        );
+        if let Err(e) = realm().run(&src) {
+            prop_assert!(e.kind != RunErrorKind::Internal, "{src}: {e:?}");
+        }
+    }
+}

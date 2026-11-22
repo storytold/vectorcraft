@@ -5846,6 +5846,21 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	the script passed more data to and from commands than one run may pass	스크립트가 한 번의 실행에 허용된 것보다 많은 데이터를 명령과 주고받았습니다
 @msg	the script added more objects and data to the documents than one run may add	스크립트가 한 번의 실행에 허용된 것보다 많은 객체와 데이터를 문서에 추가했습니다
 @msg	{what}: the object is not a File or a Folder	{what}: 객체가 File도 Folder도 아닙니다
+@msg	{what}: the library {name} is not available	{what}: 라이브러리 {name}을(를) 사용할 수 없습니다
+@msg	{what} is not available yet	{what}은(는) 아직 사용할 수 없습니다
+@msg	{what}: the value {value} is not available yet	{what}: 값 {value}은(는) 아직 사용할 수 없습니다
+@msg	{what}: the object is not an {class} object	{what}: 객체가 {class} 객체가 아닙니다
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP 패킷이 올바른 형식의 XMP가 아닙니다
+@msg	{what}: the XMP data is too large	{what}: XMP 데이터가 너무 큽니다
+@msg	{what}: {name} is not a valid property name	{what}: {name}은(는) 올바른 속성 이름이 아닙니다
+@msg	{what}: the text holds a character XML does not allow	{what}: 텍스트에 XML이 허용하지 않는 문자가 있습니다
+@msg	{what}: {name} is not an array	{what}: {name}은(는) 배열이 아닙니다
+@msg	{what}: {name} is not a simple property	{what}: {name}은(는) 단순 속성이 아닙니다
+@msg	{what}: {name} is not a language alternative array	{what}: {name}은(는) 언어 대체 배열이 아닙니다
+@msg	{what}: the array index {index} is out of range	{what}: 배열 인덱스 {index}이(가) 범위를 벗어났습니다
+@msg	{what}: the namespace {uri} is not registered	{what}: 네임스페이스 {uri}이(가) 등록되지 않았습니다
+@msg	{what}: the file is closed	{what}: 파일이 닫혀 있습니다
+@msg	{what}: the file cannot be updated	{what}: 파일을 업데이트할 수 없습니다
 @msg	{what}: the count must be a finite number, 0 or more	{what}: 개수는 0 이상의 유한한 숫자여야 합니다
 @msg	File.seek: the position must be a finite number	File.seek: 위치는 유한한 숫자여야 합니다
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: 모드는 0, 1 또는 2여야 합니다

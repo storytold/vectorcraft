@@ -135,6 +135,29 @@ fn parse_text(i: &mut Interp, text: Value, platform: bool) -> JsResult<Value> {
     host(i, "parse", &[text, current, Value::Bool(platform)])
 }
 
+/// The platform path `x` names, as `File(x).fsName` gives it: for `XMPFile`
+/// ([`crate::xmp_classes`]).
+pub(crate) fn platform_path(i: &mut Interp, x: &Value) -> JsResult<Value> {
+    let p = parse(i, x)?;
+    i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))
+}
+
+/// Calls the host function `name` with `args`, as `File` and `Folder` call theirs: for `XMPFile`.
+pub(crate) fn call_host(i: &mut Interp, name: &str, args: &[Value]) -> JsResult<Value> {
+    host(i, name, args)
+}
+
+/// The field `name` of a record a host function gave ([`field`]): for `XMPFile`.
+pub(crate) fn record_field(i: &mut Interp, v: &Value, name: &str) -> JsResult<Value> {
+    field(i, v, name)
+}
+
+/// The count of runs the realm has begun since `File` and `Folder` were added, or `None` without
+/// them: an `XMPFile` is open only in the run that opened it.
+pub(crate) fn run_count(i: &Interp) -> Option<f64> {
+    i.files.as_ref().map(|c| c.run)
+}
+
 fn parsed(i: &mut Interp, this: &Value, what: &str, name: &str) -> JsResult<Value> {
     let (_, path) = this_path(i, this, what)?;
     let p = parse_text(i, path, true)?;

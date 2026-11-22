@@ -5566,6 +5566,21 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	the script passed more data to and from commands than one run may pass	tập lệnh đã truyền đến và từ các lệnh nhiều dữ liệu hơn mức một lần chạy được phép
 @msg	the script added more objects and data to the documents than one run may add	tập lệnh đã thêm vào tài liệu nhiều đối tượng và dữ liệu hơn mức một lần chạy được phép
 @msg	{what}: the object is not a File or a Folder	{what}: đối tượng không phải File cũng không phải Folder
+@msg	{what}: the library {name} is not available	{what}: thư viện {name} không khả dụng
+@msg	{what} is not available yet	{what} chưa khả dụng
+@msg	{what}: the value {value} is not available yet	{what}: giá trị {value} chưa khả dụng
+@msg	{what}: the object is not an {class} object	{what}: đối tượng không phải đối tượng {class}
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: gói XMP không phải XMP đúng định dạng
+@msg	{what}: the XMP data is too large	{what}: dữ liệu XMP quá lớn
+@msg	{what}: {name} is not a valid property name	{what}: {name} không phải tên thuộc tính hợp lệ
+@msg	{what}: the text holds a character XML does not allow	{what}: văn bản chứa ký tự mà XML không cho phép
+@msg	{what}: {name} is not an array	{what}: {name} không phải mảng
+@msg	{what}: {name} is not a simple property	{what}: {name} không phải thuộc tính đơn
+@msg	{what}: {name} is not a language alternative array	{what}: {name} không phải mảng phương án ngôn ngữ
+@msg	{what}: the array index {index} is out of range	{what}: chỉ số mảng {index} nằm ngoài phạm vi
+@msg	{what}: the namespace {uri} is not registered	{what}: không gian tên {uri} chưa được đăng ký
+@msg	{what}: the file is closed	{what}: tệp đã đóng
+@msg	{what}: the file cannot be updated	{what}: không thể cập nhật tệp
 @msg	{what}: the count must be a finite number, 0 or more	{what}: số lượng phải là một số hữu hạn, 0 trở lên
 @msg	File.seek: the position must be a finite number	File.seek: vị trí phải là một số hữu hạn
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: chế độ phải là 0, 1 hoặc 2

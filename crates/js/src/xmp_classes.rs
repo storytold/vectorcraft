@@ -1,0 +1,1224 @@
+//! `ExternalObject` and the XMP classes it loads, as the help pages
+//! <https://extendscript.docsforadobe.dev/integrating-external-libraries/externalobject-object/>,
+//! <https://extendscript.docsforadobe.dev/scripting-xmp/accessing-the-xmp-scripting-api/> and
+//! <https://extendscript.docsforadobe.dev/scripting-xmp/xmpscript-object-reference/> describe them,
+//! as built-ins ([`crate::Realm::define_external_object`]). The metadata itself is
+//! [`crate::xmp`].
+//!
+//! `new ExternalObject("lib:AdobeXMPScript")` defines the globals `XMPMeta`, `XMPFile` and
+//! `XMPConst` and gives a handle whose `terminate()` releases it; the globals and the objects made
+//! with them stay. Any other library name throws an `Error`, and no native code is loaded.
+//! `ExternalObject.search(name)` is true for that name alone.
+//!
+//! `XMPMeta` holds its metadata in its object. Its namespace prefixes are the realm's: those a
+//! packet declares are registered when it is read, and `XMPMeta.registerNamespace` adds others.
+//! `getNamespacePrefix` and `registerNamespace` give a prefix with its colon. Property paths are a
+//! name, `prefix:name`, and either with `[n]` (from 1) or `[last()]` for an array item. An array
+//! property holds simple items; any other value a packet holds is kept as it was written and
+//! `getProperty` gives its text, when it has one, and its options.
+//!
+//! `XMPFile` reads a file through the host functions `xmpOpen` and `xmpWrite` of `File` and
+//! `Folder` ([`crate::Realm::define_file_classes`]), so it reads and writes only where they may. A
+//! file named `.xmp` is read whole as a packet, and any other file, or any file with
+//! `OPEN_USE_PACKET_SCANNING`, is scanned for its first packet ([`crate::xmp::find_packet`]).
+//! `putXMP` keeps the packet and `closeFile` writes it.
+//!
+//! VectorCraft's own rules: only a `.xmp` file opened with `OPEN_FOR_UPDATE` takes `putXMP`;
+//! `closeFile` always replaces the file through a temporary one when the folder may hold one; an
+//! `XMPFile` is open only in the run that opened it, and a packet it kept and did not write is
+//! dropped when the run ends. A member the reference lists that is not built yet, and a flag,
+//! format or option not handled yet, throws an error that says so.
+
+use crate::builtins::{arg, data, method, native};
+use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
+use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
+use crate::value::Value;
+use crate::xmp::{self, Form, Item, Meta, Registry, Step, XmpError};
+
+/// The one library `ExternalObject` loads.
+const LIBRARY: &str = "lib:AdobeXMPScript"; // brand-ok: the library name scripts load
+
+const FILE_UNKNOWN: u32 = 0x2020_2020;
+const FILE_TEXT: u32 = 0x7465_7874;
+const FILE_XML: u32 = 0x584D_4C20;
+const OPEN_FOR_READ: u32 = 0x1;
+const OPEN_FOR_UPDATE: u32 = 0x2;
+const OPEN_ONLY_XMP: u32 = 0x4;
+const OPEN_USE_PACKET_SCANNING: u32 = 0x40;
+const CLOSE_UPDATE_SAFELY: u32 = 0x1;
+const SERIALIZE_OMIT_PACKET_WRAPPER: u32 = 0x10;
+
+const LIBRARY_SLOT: &str = "__vcLibrary";
+const PATH: &str = "__vcXmpPath";
+const FORMAT: &str = "__vcXmpFormat";
+const FLAGS: &str = "__vcXmpFlags";
+const RUN: &str = "__vcXmpRun";
+const OPEN: &str = "__vcXmpOpen";
+const PACKET: &str = "__vcXmpPacket";
+const OFFSET: &str = "__vcXmpOffset";
+const LENGTH: &str = "__vcXmpLength";
+const WRITEABLE: &str = "__vcXmpWriteable";
+const SIDECAR: &str = "__vcXmpSidecar";
+const CHAR_FORM: &str = "__vcXmpCharForm";
+const PENDING: &str = "__vcXmpPending";
+
+/// The objects of `ExternalObject` and the XMP classes, kept by the realm, and its namespaces.
+#[derive(Debug)]
+pub(crate) struct Classes {
+    ids: Ids,
+    registry: Registry,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Ids {
+    external_proto: ObjId,
+    meta: ObjId,
+    meta_proto: ObjId,
+    file: ObjId,
+    file_proto: ObjId,
+    constants: ObjId,
+    property_proto: ObjId,
+}
+
+impl Classes {
+    /// The objects a collection keeps.
+    pub(crate) fn objects(&self) -> [ObjId; 7] {
+        let i = self.ids;
+        [i.external_proto, i.meta, i.meta_proto, i.file, i.file_proto, i.constants, i.property_proto]
+    }
+}
+
+fn ids(i: &Interp) -> JsResult<Ids> {
+    i.xmp.as_ref().map(|c| c.ids).ok_or_else(|| Abrupt::Internal("ExternalObject is not installed".into()))
+}
+
+fn registry(i: &mut Interp) -> JsResult<&mut Registry> {
+    i.xmp.as_mut().map(|c| &mut c.registry).ok_or_else(|| Abrupt::Internal("ExternalObject is not installed".into()))
+}
+
+// ---- errors ----
+
+fn not_yet(i: &mut Interp, what: &str) -> Abrupt {
+    i.throw(ErrorType::Error, &format!("{what} is not available yet"))
+}
+
+fn not_handled(i: &mut Interp, what: &str, value: &str) -> Abrupt {
+    i.throw(ErrorType::Range, &format!("{what}: the value {value} is not available yet"))
+}
+
+fn wrong_object(i: &mut Interp, what: &str, class: &str) -> Abrupt {
+    i.type_error(&format!("{what}: the object is not an {class} object"))
+}
+
+/// The exception for `e`, which `what` met with the name or path `name`.
+fn xmp_error(i: &mut Interp, what: &str, e: XmpError, name: &str) -> Abrupt {
+    match e {
+        XmpError::Malformed => i.throw(ErrorType::Error, &format!("{what}: the XMP packet is not well-formed XMP")),
+        XmpError::TooLarge | XmpError::Namespaces => i.throw(ErrorType::Range, &format!("{what}: the XMP data is too large")),
+        XmpError::BadName => i.throw(ErrorType::Error, &format!("{what}: {name} is not a valid property name")),
+        XmpError::BadText => i.throw(ErrorType::Error, &format!("{what}: the text holds a character XML does not allow")),
+        XmpError::NotYet => not_handled(i, what, name),
+    }
+}
+
+fn not_array(i: &mut Interp, what: &str, name: &str) -> Abrupt {
+    i.throw(ErrorType::Error, &format!("{what}: {name} is not an array"))
+}
+
+fn not_simple(i: &mut Interp, what: &str, name: &str) -> Abrupt {
+    i.throw(ErrorType::Error, &format!("{what}: {name} is not a simple property"))
+}
+
+fn not_alt_text(i: &mut Interp, what: &str, name: &str) -> Abrupt {
+    i.throw(ErrorType::Error, &format!("{what}: {name} is not a language alternative array"))
+}
+
+fn out_of_range(i: &mut Interp, what: &str, index: i64) -> Abrupt {
+    i.throw(ErrorType::Range, &format!("{what}: the array index {index} is out of range"))
+}
+
+fn unregistered(i: &mut Interp, what: &str, uri: &str) -> Abrupt {
+    i.throw(ErrorType::Error, &format!("{what}: the namespace {uri} is not registered"))
+}
+
+// ---- small helpers ----
+
+fn text(i: &mut Interp, v: &Value) -> JsResult<String> {
+    Ok(i.to_str(v)?.to_rust_string())
+}
+
+/// A string argument's value as plain text, refused when it holds a character XML does not allow.
+fn xml_text(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
+    let s = text(i, v)?;
+    if !xmp::is_text(&s) {
+        return Err(xmp_error(i, what, XmpError::BadText, ""));
+    }
+    Ok(s)
+}
+
+/// A flags argument: `undefined` and `null` are 0, any other value a whole number from 0 to
+/// 2^32 - 1, refused with a `RangeError` otherwise.
+fn flags(i: &mut Interp, v: &Value, what: &str) -> JsResult<u32> {
+    if matches!(v, Value::Undefined | Value::Null) {
+        return Ok(0);
+    }
+    let n = i.to_number(v)?;
+    if n.fract() != 0.0 || !(0.0..=f64::from(u32::MAX)).contains(&n) {
+        let shown = crate::number::to_string(n);
+        return Err(not_handled(i, what, &shown));
+    }
+    Ok(n as u32)
+}
+
+/// Refuses the bits of `value` outside `allowed`, naming the first.
+fn only(i: &mut Interp, value: u32, allowed: u32, what: &str) -> JsResult<()> {
+    let extra = value & !allowed;
+    if extra != 0 {
+        let bit = 1u32 << extra.trailing_zeros();
+        return Err(not_handled(i, what, &format!("0x{bit:X}")));
+    }
+    Ok(())
+}
+
+/// Takes fuel for reading or writing `bytes` bytes of XMP.
+fn spend(i: &mut Interp, bytes: usize) -> JsResult<()> {
+    crate::regexp_vm::use_fuel_n(i, 1 + bytes as u64 / 256)
+}
+
+fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
+    Ok(match i.get_own_property(o, &key(name))? {
+        Some(Prop::Data { value, .. }) => value,
+        _ => Value::Undefined,
+    })
+}
+
+fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
+    if let Value::String(s) = &value {
+        i.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(PROP_BYTES + string_bytes(s.len())))?;
+    }
+    i.define(o, key(name), Prop::Data { value, flags: HIDDEN })
+}
+
+/// A string value, charged to the heap.
+fn string(i: &mut Interp, s: &str) -> JsResult<Value> {
+    let bytes = string_bytes(s.encode_utf16().count());
+    i.reserve_heap(bytes)?;
+    i.heap.bytes = i.heap.bytes.saturating_add(bytes);
+    Ok(Value::str(s))
+}
+
+/// A new ordinary object with the prototype `proto` and the read-only data properties `fields`.
+fn record(i: &mut Interp, proto: Option<ObjId>, fields: Vec<(&'static str, Value)>) -> JsResult<Value> {
+    i.rooted(&fields.iter().map(|(_, v)| v.clone()).collect::<Vec<_>>(), |i| {
+        i.reserve_heap(OBJECT_BYTES + PROP_BYTES * fields.len())?;
+        let o = i.heap.alloc_object(Object::new(Class::Ordinary, proto.or(Some(i.intrinsics.object_proto))));
+        for (name, value) in &fields {
+            i.define(o, key(name), Prop::Data { value: value.clone(), flags: ENUMERABLE })?;
+        }
+        Ok(Value::Object(o))
+    })
+}
+
+// ---- ExternalObject ----
+
+fn external_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let name = text(i, &arg(args, 0))?;
+    if name != LIBRARY {
+        let name: String = name.chars().take(200).collect();
+        let what = "ExternalObject";
+        return Err(i.throw(ErrorType::Error, &format!("{what}: the library {name} is not available")));
+    }
+    let ids = ids(i)?;
+    let global = i.global;
+    data(i, global, "XMPMeta", Value::Object(ids.meta), HIDDEN)?;
+    data(i, global, "XMPFile", Value::Object(ids.file), HIDDEN)?;
+    data(i, global, "XMPConst", Value::Object(ids.constants), HIDDEN)?;
+    i.reserve_heap(OBJECT_BYTES + PROP_BYTES)?;
+    let o = i.heap.alloc_object(Object::new(Class::Ordinary, Some(ids.external_proto)));
+    i.rooted(&[Value::Object(o)], |i| set_slot(i, o, LIBRARY_SLOT, Value::str(LIBRARY)))?;
+    Ok(Value::Object(o))
+}
+
+fn external_search(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    Ok(Value::Bool(text(i, &arg(args, 0))? == LIBRARY))
+}
+
+fn external_terminate(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let handle = this.as_object().filter(|&o| matches!(slot(i, o, LIBRARY_SLOT), Ok(Value::String(_))));
+    let Some(o) = handle else { return Err(wrong_object(i, "ExternalObject.terminate", "ExternalObject")) };
+    set_slot(i, o, LIBRARY_SLOT, Value::Bool(false))?;
+    Ok(Value::Undefined)
+}
+
+// ---- XMPMeta ----
+
+fn is_meta(i: &Interp, v: &Value) -> Option<ObjId> {
+    v.as_object().filter(|&o| matches!(i.heap.object(o).map(|ob| &ob.class), Some(Class::Xmp(_))))
+}
+
+fn this_meta(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
+    match is_meta(i, this) {
+        Some(o) => Ok(o),
+        None => Err(wrong_object(i, what, "XMPMeta")),
+    }
+}
+
+fn meta_of(i: &Interp, o: ObjId) -> JsResult<&Meta> {
+    match i.heap.object(o).map(|ob| &ob.class) {
+        Some(Class::Xmp(m)) => Ok(m),
+        _ => Err(Abrupt::Internal("an XMPMeta lost its metadata".into())),
+    }
+}
+
+/// Changes the metadata of `o` with `f`, given `grow`, the most bytes the change adds, and charges
+/// the heap for what it added or frees what it took out.
+fn change<T>(i: &mut Interp, o: ObjId, grow: usize, f: impl FnOnce(&mut Meta, &Registry) -> T) -> JsResult<T> {
+    i.reserve_heap(grow)?;
+    let Some(c) = i.xmp.as_ref() else { return Err(Abrupt::Internal("ExternalObject is not installed".into())) };
+    let Some(Class::Xmp(m)) = i.heap.object_mut(o).map(|ob| &mut ob.class) else {
+        return Err(Abrupt::Internal("an XMPMeta lost its metadata".into()));
+    };
+    let before = m.heap_bytes();
+    let r = f(m, &c.registry);
+    let after = m.heap_bytes();
+    i.heap.bytes = if after >= before { i.heap.bytes.saturating_add(after - before) } else { i.heap.bytes.saturating_sub(before - after) };
+    Ok(r)
+}
+
+/// A new `XMPMeta` holding `meta`.
+fn new_meta(i: &mut Interp, meta: Meta) -> JsResult<Value> {
+    let ids = ids(i)?;
+    let bytes = meta.heap_bytes();
+    i.reserve_heap(OBJECT_BYTES.saturating_add(bytes))?;
+    let o = i.heap.alloc_object(Object::new(Class::Xmp(Box::new(meta)), Some(ids.meta_proto)));
+    i.heap.bytes = i.heap.bytes.saturating_add(bytes);
+    Ok(Value::Object(o))
+}
+
+/// The metadata of the packet `text`, read for `what`.
+fn parse_packet(i: &mut Interp, what: &str, text: &str) -> JsResult<Meta> {
+    spend(i, text.len())?;
+    let r = xmp::parse(text, registry(i)?);
+    r.map_err(|e| xmp_error(i, what, e, ""))
+}
+
+fn meta_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let meta = match arg(args, 0) {
+        Value::Undefined => Meta::default(),
+        Value::Object(o) if matches!(i.heap.object(o).map(|ob| &ob.class), Some(Class::Array { .. })) => {
+            return Err(not_yet(i, "new XMPMeta(buffer)"));
+        }
+        v => {
+            let packet = text(i, &v)?;
+            parse_packet(i, "XMPMeta", &packet)?
+        }
+    };
+    new_meta(i, meta)
+}
+
+/// The namespace argument `v`, refused when it is not registered.
+fn namespace(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
+    let uri = text(i, v)?;
+    if registry(i)?.prefix_of(&uri).is_none() {
+        return Err(unregistered(i, what, &uri));
+    }
+    Ok(uri)
+}
+
+/// The namespace and path arguments at `at`: the namespace, the property name and its step.
+fn target(i: &mut Interp, args: &[Value], at: usize, what: &str) -> JsResult<(String, String, Step)> {
+    let ns = namespace(i, &arg(args, at), what)?;
+    let path = text(i, &arg(args, at + 1))?;
+    let r = xmp::parse_path(&path, &ns, registry(i)?);
+    match r {
+        Ok((name, step)) => Ok((ns, name, step)),
+        Err(e) => Err(xmp_error(i, what, e, &path)),
+    }
+}
+
+/// The index an item position names in an array of `len` items: -1 is the last.
+fn position(index: i64, len: usize) -> Option<usize> {
+    let i = if index == -1 { len } else { usize::try_from(index).ok()? };
+    (1..=len).contains(&i).then(|| i - 1)
+}
+
+/// An item position argument: a whole number from 1, or -1 for the last.
+fn item_index(i: &mut Interp, v: &Value, what: &str) -> JsResult<i64> {
+    let n = i.to_number(v)?;
+    if n.fract() != 0.0 || !(n == -1.0 || (1.0..=1e15).contains(&n)) {
+        return Err(out_of_range(i, what, if n.is_finite() { n as i64 } else { 0 }));
+    }
+    Ok(n as i64)
+}
+
+/// An `XMPProperty` for `path` in `ns`.
+fn property(i: &mut Interp, ns: &str, path: &str, value: Option<&str>, options: u32, locale: &str) -> JsResult<Value> {
+    let proto = ids(i)?.property_proto;
+    let ns = string(i, ns)?;
+    let path = i.rooted(std::slice::from_ref(&ns), |i| string(i, path))?;
+    let value = match value {
+        Some(v) => i.rooted(&[ns.clone(), path.clone()], |i| string(i, v))?,
+        None => Value::Undefined,
+    };
+    let locale = i.rooted(&[ns.clone(), path.clone(), value.clone()], |i| string(i, locale))?;
+    let fields = vec![("namespace", ns), ("path", path), ("value", value), ("options", Value::Number(f64::from(options))), ("locale", locale)];
+    record(i, Some(proto), fields)
+}
+
+fn property_to_string(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let v = match this.as_object() {
+        Some(o) => slot(i, o, "value")?,
+        None => Value::Undefined,
+    };
+    if matches!(v, Value::Undefined) { Ok(Value::str("")) } else { Ok(Value::String(i.to_str(&v)?)) }
+}
+
+fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.getProperty";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name, step) = target(i, args, 0, what)?;
+    if !matches!(arg(args, 2), Value::Undefined) {
+        let v = text(i, &arg(args, 2))?;
+        return Err(not_handled(i, what, &v));
+    }
+    let path = text(i, &arg(args, 1))?;
+    let found = {
+        let m = meta_of(i, o)?;
+        m.find(&ns, &name).map(|at| m.props[at].value.clone())
+    };
+    let Some(value) = found else { return Ok(Value::Undefined) };
+    match step {
+        Step::Whole => property(i, &ns, &path, value.text(), value.options(), ""),
+        Step::Item(index) => match value {
+            xmp::Value::Array { items, .. } => match position(index, items.len()).and_then(|p| items.get(p)) {
+                Some(item) => property(i, &ns, &path, Some(&item.text), 0, item.lang.as_deref().unwrap_or("")),
+                None => Ok(Value::Undefined),
+            },
+            _ => Err(not_array(i, what, &name)),
+        },
+    }
+}
+
+fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.setProperty";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name, step) = target(i, args, 0, what)?;
+    let options = flags(i, &arg(args, 3), what)?;
+    only(i, options, xmp::PROP_IS_ARRAY | xmp::ARRAY_IS_ORDERED | xmp::ARRAY_IS_ALTERNATIVE, what)?;
+    if !matches!(arg(args, 4), Value::Undefined) {
+        let v = text(i, &arg(args, 4))?;
+        return Err(not_handled(i, what, &v));
+    }
+    let value = arg(args, 2);
+    if let Step::Item(index) = step {
+        let v = xml_text(i, &value, what)?;
+        return set_item(i, o, &ns, &name, index, v, false, what);
+    }
+    if options != 0 {
+        // An array is made empty; one that exists is left as it is.
+        if !matches!(value, Value::Undefined | Value::Null) {
+            let v = text(i, &value)?;
+            return Err(not_handled(i, what, &v));
+        }
+        let kind = {
+            let m = meta_of(i, o)?;
+            m.find(&ns, &name).map(|at| matches!(m.props[at].value, xmp::Value::Array { .. }))
+        };
+        return match kind {
+            Some(true) => Ok(Value::Undefined),
+            Some(false) => Err(not_array(i, what, &name)),
+            None => {
+                let prop = xmp::Prop { ns, name, value: xmp::Value::Array { form: Form::from_options(options), items: Vec::new() } };
+                change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop)).map(|()| Value::Undefined)
+            }
+        };
+    }
+    let v = xml_text(i, &value, what)?;
+    let simple = {
+        let m = meta_of(i, o)?;
+        m.find(&ns, &name).map(|at| (at, matches!(m.props[at].value, xmp::Value::Simple { .. })))
+    };
+    let new = xmp::Value::Simple { text: v, uri: false };
+    match simple {
+        Some((_, false)) => Err(not_simple(i, what, &name)),
+        Some((at, true)) => {
+            let grow = 96 + new.text().map_or(0, str::len);
+            change(i, o, grow, |m, _| {
+                if let Some(p) = m.props.get_mut(at) {
+                    p.value = new;
+                }
+            })
+        }
+        None => {
+            let prop = xmp::Prop { ns, name, value: new };
+            change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop))
+        }
+    }
+    .map(|()| Value::Undefined)
+}
+
+fn delete_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.deleteProperty";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name, step) = target(i, args, 0, what)?;
+    match step {
+        Step::Whole => {
+            let at = meta_of(i, o)?.find(&ns, &name);
+            if let Some(at) = at {
+                change(i, o, 0, |m, _| m.props.remove(at))?;
+            }
+            Ok(Value::Undefined)
+        }
+        Step::Item(index) => delete_item(i, o, &ns, &name, index, what, true),
+    }
+}
+
+fn does_property_exist(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.doesPropertyExist";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name, step) = target(i, args, 0, what)?;
+    let m = meta_of(i, o)?;
+    let exists = match (m.find(&ns, &name).map(|at| &m.props[at].value), step) {
+        (None, _) => false,
+        (Some(_), Step::Whole) => true,
+        (Some(xmp::Value::Array { items, .. }), Step::Item(index)) => position(index, items.len()).is_some(),
+        (Some(_), Step::Item(_)) => false,
+    };
+    Ok(Value::Bool(exists))
+}
+
+/// The items of the array `name` in `ns` of `o`, `None` when it has no such property, refused when
+/// the property is not an array.
+fn array_items(i: &mut Interp, o: ObjId, ns: &str, name: &str, what: &str) -> JsResult<Option<(usize, Form, usize)>> {
+    let found = {
+        let m = meta_of(i, o)?;
+        m.find(ns, name).map(|at| match &m.props[at].value {
+            xmp::Value::Array { form, items } => Some((at, *form, items.len())),
+            _ => None,
+        })
+    };
+    match found {
+        None => Ok(None),
+        Some(Some(a)) => Ok(Some(a)),
+        Some(None) => Err(not_array(i, what, name)),
+    }
+}
+
+/// The array name argument at `at` after the namespace: a whole property.
+fn array_target(i: &mut Interp, args: &[Value], what: &str) -> JsResult<(String, String)> {
+    let (ns, name, step) = target(i, args, 0, what)?;
+    if step != Step::Whole {
+        let path = text(i, &arg(args, 1))?;
+        return Err(not_handled(i, what, &path));
+    }
+    Ok((ns, name))
+}
+
+fn count_array_items(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.countArrayItems";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let n = array_items(i, o, &ns, &name, what)?.map_or(0, |(_, _, len)| len);
+    Ok(Value::Number(n as f64))
+}
+
+fn get_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.getArrayItem";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let index = item_index(i, &arg(args, 2), what)?;
+    let Some((at, _, len)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
+    let Some(p) = position(index, len) else { return Ok(Value::Undefined) };
+    let item = match &meta_of(i, o)?.props[at].value {
+        xmp::Value::Array { items, .. } => items.get(p).cloned(),
+        _ => None,
+    };
+    let Some(item) = item else { return Ok(Value::Undefined) };
+    let path = format!("{}[{}]", text(i, &arg(args, 1))?, p + 1);
+    property(i, &ns, &path, Some(&item.text), 0, item.lang.as_deref().unwrap_or(""))
+}
+
+fn does_array_item_exist(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.doesArrayItemExist";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let index = item_index(i, &arg(args, 2), what)?;
+    let len = array_items(i, o, &ns, &name, what)?.map_or(0, |(_, _, len)| len);
+    Ok(Value::Bool(position(index, len).is_some()))
+}
+
+/// The item options argument: 0 alone, for a simple item.
+fn item_options(i: &mut Interp, v: &Value, what: &str) -> JsResult<()> {
+    let options = flags(i, v, what)?;
+    only(i, options, 0, what)
+}
+
+/// Adds `value` to the array `name` in `ns` of `o` at the position `index` (from 1; one past the
+/// last appends), making the array in `form` when it has none.
+#[allow(clippy::too_many_arguments)]
+fn insert_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: Option<i64>, value: String, form: Option<Form>, what: &str) -> JsResult<Value> {
+    let found = array_items(i, o, ns, name, what)?;
+    let len = found.map_or(0, |(_, _, len)| len);
+    let p = match index {
+        None => len,
+        Some(-1) => len,
+        Some(n) => match usize::try_from(n) {
+            Ok(n) if (1..=len + 1).contains(&n) => n - 1,
+            _ => return Err(out_of_range(i, what, n)),
+        },
+    };
+    let grow = 48 + value.len();
+    match found {
+        Some((at, _, _)) => change(i, o, grow, |m, _| {
+            if let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|pr| &mut pr.value) {
+                items.insert(p.min(items.len()), Item { text: value, lang: None });
+            }
+        })?,
+        None => {
+            let Some(form) = form else { return Err(not_array(i, what, name)) };
+            let prop = xmp::Prop {
+                ns: ns.to_string(),
+                name: name.to_string(),
+                value: xmp::Value::Array { form, items: vec![Item { text: value, lang: None }] },
+            };
+            change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop))?;
+        }
+    }
+    Ok(Value::Undefined)
+}
+
+/// Replaces the item at `index` of the array `name` in `ns` of `o` with `value`, or appends it at
+/// one past the last when `append` allows.
+#[allow(clippy::too_many_arguments)]
+fn set_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: i64, value: String, append: bool, what: &str) -> JsResult<Value> {
+    let Some((at, _, len)) = array_items(i, o, ns, name, what)? else { return Err(not_array(i, what, name)) };
+    let p = match position(index, len) {
+        Some(p) => p,
+        None if append && usize::try_from(index).is_ok_and(|n| n == len + 1) => {
+            return insert_item(i, o, ns, name, Some(index), value, None, what);
+        }
+        None => return Err(out_of_range(i, what, index)),
+    };
+    let grow = 48 + value.len();
+    change(i, o, grow, |m, _| {
+        if let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|pr| &mut pr.value)
+            && let Some(item) = items.get_mut(p)
+        {
+            item.text = value;
+        }
+    })?;
+    Ok(Value::Undefined)
+}
+
+/// Deletes the item at `index` of the array `name` in `ns` of `o`; a missing item or array is left
+/// as it is when `quiet`.
+fn delete_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: i64, what: &str, quiet: bool) -> JsResult<Value> {
+    let found = array_items(i, o, ns, name, what)?;
+    let target = found.and_then(|(at, _, len)| position(index, len).map(|p| (at, p)));
+    match target {
+        Some((at, p)) => {
+            change(i, o, 0, |m, _| {
+                if let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|pr| &mut pr.value)
+                    && p < items.len()
+                {
+                    items.remove(p);
+                }
+            })?;
+            Ok(Value::Undefined)
+        }
+        None if quiet => Ok(Value::Undefined),
+        None => Err(out_of_range(i, what, index)),
+    }
+}
+
+fn append_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.appendArrayItem";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    // `itemOptions` may be left out: a string or `null` third argument is the item's value.
+    let (value, array_options) = match arg(args, 2) {
+        Value::Number(_) => {
+            item_options(i, &arg(args, 2), what)?;
+            (arg(args, 3), arg(args, 4))
+        }
+        v => (v, arg(args, 3)),
+    };
+    let array_options = flags(i, &array_options, what)?;
+    only(i, array_options, xmp::PROP_IS_ARRAY | xmp::ARRAY_IS_ORDERED | xmp::ARRAY_IS_ALTERNATIVE, what)?;
+    let value = if matches!(value, Value::Null | Value::Undefined) { String::new() } else { xml_text(i, &value, what)? };
+    let form = (array_options != 0).then(|| Form::from_options(array_options));
+    insert_item(i, o, &ns, &name, None, value, form, what)
+}
+
+fn insert_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.insertArrayItem";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let index = item_index(i, &arg(args, 2), what)?;
+    let value = xml_text(i, &arg(args, 3), what)?;
+    item_options(i, &arg(args, 4), what)?;
+    insert_item(i, o, &ns, &name, Some(index), value, None, what)
+}
+
+fn set_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.setArrayItem";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let index = item_index(i, &arg(args, 2), what)?;
+    let value = xml_text(i, &arg(args, 3), what)?;
+    item_options(i, &arg(args, 4), what)?;
+    set_item(i, o, &ns, &name, index, value, true, what)
+}
+
+fn delete_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.deleteArrayItem";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let index = item_index(i, &arg(args, 2), what)?;
+    delete_item(i, o, &ns, &name, index, what, false)
+}
+
+/// Does language tag `lang` match `want`, ignoring case?
+fn same_lang(lang: Option<&str>, want: &str) -> bool {
+    lang.is_some_and(|l| l.eq_ignore_ascii_case(want))
+}
+
+/// The item of `items` for `specific`, else one whose language starts with `generic`, else the
+/// `x-default` item, else the first.
+fn pick_lang<'a>(items: &'a [Item], generic: &str, specific: &str) -> Option<&'a Item> {
+    let generic_match = |i: &&Item| {
+        !generic.is_empty()
+            && i.lang.as_deref().is_some_and(|l| {
+                l.eq_ignore_ascii_case(generic)
+                    || l.len() > generic.len()
+                        && l.get(..generic.len()).is_some_and(|p| p.eq_ignore_ascii_case(generic))
+                        && l.as_bytes().get(generic.len()) == Some(&b'-')
+            })
+    };
+    items
+        .iter()
+        .find(|i| same_lang(i.lang.as_deref(), specific))
+        .or_else(|| items.iter().find(generic_match))
+        .or_else(|| items.iter().find(|i| same_lang(i.lang.as_deref(), "x-default")))
+        .or_else(|| items.first())
+}
+
+/// A language argument: `null` and `undefined` are empty.
+fn lang(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
+    if matches!(v, Value::Null | Value::Undefined) { Ok(String::new()) } else { xml_text(i, v, what) }
+}
+
+fn get_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.getLocalizedText";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let generic = lang(i, &arg(args, 2), what)?;
+    let specific = lang(i, &arg(args, 3), what)?;
+    let Some((at, form, _)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
+    if form != Form::Alt {
+        return Err(not_alt_text(i, what, &name));
+    }
+    let found = match &meta_of(i, o)?.props[at].value {
+        xmp::Value::Array { items, .. } => pick_lang(items, &generic, &specific).map(|i| i.text.clone()),
+        _ => None,
+    };
+    match found {
+        Some(t) => string(i, &t),
+        None => Ok(Value::Undefined),
+    }
+}
+
+fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.setLocalizedText";
+    let o = this_meta(i, &this, what)?;
+    let (ns, name) = array_target(i, args, what)?;
+    let specific = lang(i, &arg(args, 3), what)?;
+    if specific.is_empty() || specific.contains(char::is_whitespace) {
+        return Err(not_handled(i, what, &specific));
+    }
+    let value = xml_text(i, &arg(args, 4), what)?;
+    let found = array_items(i, o, &ns, &name, what)?;
+    let at = match found {
+        Some((_, form, _)) if form != Form::Alt => return Err(not_alt_text(i, what, &name)),
+        Some((at, _, _)) => at,
+        None => {
+            let prop = xmp::Prop { ns: ns.clone(), name: name.clone(), value: xmp::Value::Array { form: Form::Alt, items: Vec::new() } };
+            change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop))?;
+            meta_of(i, o)?.find(&ns, &name).unwrap_or(0)
+        }
+    };
+    let grow = 2 * (64 + value.len() + specific.len());
+    change(i, o, grow, |m, _| {
+        let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|p| &mut p.value) else { return };
+        set_lang(items, &specific, value);
+    })?;
+    Ok(Value::Undefined)
+}
+
+/// Sets the item of `items` in `specific` to `value`. VectorCraft's own rule: the `x-default` item
+/// is first; it is added with the value when there is none, and follows a change to an item that
+/// had the same text.
+fn set_lang(items: &mut Vec<Item>, specific: &str, value: String) {
+    let default = items.iter().position(|i| same_lang(i.lang.as_deref(), "x-default"));
+    if specific.eq_ignore_ascii_case("x-default") {
+        match default {
+            Some(d) => {
+                if let Some(item) = items.get_mut(d) {
+                    item.text = value;
+                }
+            }
+            None => items.insert(0, Item { text: value, lang: Some("x-default".into()) }),
+        }
+        return;
+    }
+    let old = items.iter().position(|i| same_lang(i.lang.as_deref(), specific));
+    let follows = match (old, default) {
+        (Some(o), Some(d)) => items.get(o).map(|i| &i.text) == items.get(d).map(|i| &i.text),
+        (None, Some(_)) => false,
+        (_, None) => true,
+    };
+    match old {
+        Some(o) => {
+            if let Some(item) = items.get_mut(o) {
+                item.text.clone_from(&value);
+            }
+        }
+        None => items.push(Item { text: value.clone(), lang: Some(specific.to_string()) }),
+    }
+    match default {
+        Some(d) if follows => {
+            if let Some(item) = items.get_mut(d) {
+                item.text = value;
+            }
+        }
+        None => items.insert(0, Item { text: value, lang: Some("x-default".into()) }),
+        Some(_) => {}
+    }
+}
+
+/// The packet `o` serializes to with the serialize options argument `v`.
+fn serialized(i: &mut Interp, o: ObjId, v: &Value, what: &str) -> JsResult<String> {
+    let options = flags(i, v, what)?;
+    only(i, options, SERIALIZE_OMIT_PACKET_WRAPPER, what)?;
+    let r = {
+        let Some(c) = i.xmp.as_ref() else { return Err(Abrupt::Internal("ExternalObject is not installed".into())) };
+        xmp::serialize(meta_of(i, o)?, &c.registry, options & SERIALIZE_OMIT_PACKET_WRAPPER == 0)
+    };
+    let s = r.map_err(|e| xmp_error(i, what, e, ""))?;
+    spend(i, s.len())?;
+    Ok(s)
+}
+
+fn serialize(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.serialize";
+    let o = this_meta(i, &this, what)?;
+    // Padding, indent, newline and base indent are not handled yet.
+    for (n, a) in args.iter().enumerate().skip(1) {
+        if !matches!(a, Value::Undefined) {
+            let name = ["", "padding", "indent", "newline", "baseIndent"].get(n).copied().unwrap_or("argument");
+            return Err(not_yet(i, &format!("XMPMeta.serialize {name}")));
+        }
+    }
+    let s = serialized(i, o, &arg(args, 0), what)?;
+    string(i, &s)
+}
+
+fn register_namespace(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPMeta.registerNamespace";
+    let uri = text(i, &arg(args, 0))?;
+    let prefix = text(i, &arg(args, 1))?;
+    let r = registry(i)?.register(&uri, &prefix);
+    match r {
+        Ok(p) => string(i, &format!("{p}:")),
+        Err(e) => Err(xmp_error(i, what, e, &prefix)),
+    }
+}
+
+fn get_namespace_prefix(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let uri = text(i, &arg(args, 0))?;
+    let found = registry(i)?.prefix_of(&uri).map(|p| format!("{p}:"));
+    match found {
+        Some(p) => string(i, &p),
+        None => Ok(Value::Undefined),
+    }
+}
+
+fn get_namespace_uri(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let prefix = text(i, &arg(args, 0))?;
+    let prefix = prefix.strip_suffix(':').unwrap_or(&prefix).to_string();
+    let found = registry(i)?.uri_of(&prefix).map(str::to_string);
+    match found {
+        Some(u) => string(i, &u),
+        None => Ok(Value::Undefined),
+    }
+}
+
+/// Defines functions that throw that they are not available yet.
+macro_rules! not_yet_fns {
+    ($($f:ident => $name:literal,)*) => {
+        $(fn $f(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
+            Err(not_yet(i, $name))
+        })*
+    };
+}
+
+not_yet_fns! {
+    meta_iterator => "XMPMeta.iterator",
+    meta_serialize_to_array => "XMPMeta.serializeToArray",
+    meta_dump_object => "XMPMeta.dumpObject",
+    meta_sort => "XMPMeta.sort",
+    meta_get_struct_field => "XMPMeta.getStructField",
+    meta_set_struct_field => "XMPMeta.setStructField",
+    meta_delete_struct_field => "XMPMeta.deleteStructField",
+    meta_does_struct_field_exist => "XMPMeta.doesStructFieldExist",
+    meta_get_qualifier => "XMPMeta.getQualifier",
+    meta_set_qualifier => "XMPMeta.setQualifier",
+    meta_delete_qualifier => "XMPMeta.deleteQualifier",
+    meta_does_qualifier_exist => "XMPMeta.doesQualifierExist",
+    meta_dump_namespaces => "XMPMeta.dumpNamespaces",
+    meta_register_alias => "XMPMeta.registerAlias",
+    meta_resolve_alias => "XMPMeta.resolveAlias",
+    meta_dump_aliases => "XMPMeta.dumpAliases",
+    meta_delete_alias => "XMPMeta.deleteAlias",
+    meta_delete_namespace => "XMPMeta.deleteNamespace",
+    file_get_format_info => "XMPFile.getFormatInfo",
+}
+
+// ---- XMPFile ----
+
+/// The `XMPFile` `this`, refused when it is not one.
+fn this_file(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
+    if let Some(o) = this.as_object()
+        && matches!(slot(i, o, PATH)?, Value::String(_))
+    {
+        return Ok(o);
+    }
+    Err(wrong_object(i, what, "XMPFile"))
+}
+
+/// The `XMPFile` `this` while it is open in this run, refused when it is closed.
+fn open_file(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
+    let o = this_file(i, this, what)?;
+    let this_run = matches!(slot(i, o, RUN)?, Value::Number(n) if Some(n) == crate::file_classes::run_count(i));
+    if !this_run || !slot(i, o, OPEN)?.truthy() {
+        return Err(i.throw(ErrorType::Error, &format!("{what}: the file is closed")));
+    }
+    Ok(o)
+}
+
+fn file_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile";
+    if i.files.is_none() {
+        return Err(not_yet(i, "XMPFile without File and Folder"));
+    }
+    let format = match arg(args, 1) {
+        Value::Undefined | Value::Null => FILE_UNKNOWN,
+        v => flags(i, &v, what)?,
+    };
+    if ![FILE_UNKNOWN, FILE_TEXT, FILE_XML].contains(&format) {
+        return Err(not_handled(i, what, &format!("0x{format:08X}")));
+    }
+    let open_flags = flags(i, &arg(args, 2), what)?;
+    only(i, open_flags, OPEN_FOR_READ | OPEN_FOR_UPDATE | OPEN_ONLY_XMP | OPEN_USE_PACKET_SCANNING, what)?;
+    let update = open_flags & OPEN_FOR_UPDATE != 0;
+    let scan = open_flags & OPEN_USE_PACKET_SCANNING != 0;
+    let path = crate::file_classes::platform_path(i, &arg(args, 0))?;
+    let r = i.rooted(std::slice::from_ref(&path), |i| {
+        crate::file_classes::call_host(i, "xmpOpen", &[path.clone(), Value::Bool(update), Value::Bool(scan)])
+    })?;
+    let keep = [path.clone(), r.clone()];
+    i.rooted(&keep, |i| {
+        let error = crate::file_classes::record_field(i, &r, "error")?;
+        if let Value::String(_) = error {
+            let m = text(i, &error)?;
+            return Err(i.throw(ErrorType::Error, &m));
+        }
+        let field = |i: &mut Interp, name: &str| crate::file_classes::record_field(i, &r, name);
+        let sidecar = field(i, "sidecar")?.truthy();
+        let reported = if format == FILE_UNKNOWN && sidecar { FILE_XML } else { format };
+        let file_proto = ids(i)?.file_proto;
+        i.reserve_heap(OBJECT_BYTES + 12 * PROP_BYTES)?;
+        let o = i.heap.alloc_object(Object::new(Class::Ordinary, Some(file_proto)));
+        i.rooted(&[Value::Object(o)], |i| {
+            let packet = field(i, "packet")?;
+            let fields = [
+                (PATH, path.clone()),
+                (FORMAT, Value::Number(f64::from(reported))),
+                (FLAGS, Value::Number(f64::from(open_flags))),
+                (RUN, crate::file_classes::run_count(i).map_or(Value::Undefined, Value::Number)),
+                (OPEN, Value::Bool(true)),
+                (PACKET, if matches!(packet, Value::String(_)) { packet } else { Value::Null }),
+                (OFFSET, field(i, "offset")?),
+                (LENGTH, field(i, "length")?),
+                (WRITEABLE, Value::Bool(field(i, "writeable")?.truthy())),
+                (SIDECAR, Value::Bool(sidecar)),
+                (CHAR_FORM, field(i, "charForm")?),
+            ];
+            for (name, value) in fields {
+                set_slot(i, o, name, value)?;
+            }
+            Ok(Value::Object(o))
+        })
+    })
+}
+
+fn get_xmp(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile.getXMP";
+    let o = open_file(i, &this, what)?;
+    let pending = slot(i, o, PENDING)?;
+    let packet = if matches!(pending, Value::String(_)) { pending } else { slot(i, o, PACKET)? };
+    if !matches!(packet, Value::String(_)) {
+        return Ok(Value::Null);
+    }
+    let text = text(i, &packet)?;
+    let meta = if text.trim().is_empty() { Meta::default() } else { parse_packet(i, what, &text)? };
+    new_meta(i, meta)
+}
+
+fn get_packet_info(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile.getPacketInfo";
+    let o = open_file(i, &this, what)?;
+    let packet = slot(i, o, PACKET)?;
+    if !matches!(packet, Value::String(_)) {
+        return Ok(Value::Null);
+    }
+    let char_form = slot(i, o, CHAR_FORM)?;
+    // The padding is counted in bytes: two for each character of a UTF-16 packet.
+    let unit = if matches!(char_form, Value::Number(n) if n == 2.0 || n == 3.0) { 2 } else { 1 };
+    let pad = crate::xmp::pad_size(&text(i, &packet)?) * unit;
+    let fields = vec![
+        ("charForm", char_form),
+        ("length", slot(i, o, LENGTH)?),
+        ("offset", slot(i, o, OFFSET)?),
+        ("packet", packet),
+        ("padSize", Value::Number(pad as f64)),
+        ("writeable", slot(i, o, WRITEABLE)?),
+    ];
+    record(i, None, fields)
+}
+
+fn get_file_info(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile.getFileInfo";
+    let o = open_file(i, &this, what)?;
+    let fields = vec![
+        ("filePath", slot(i, o, PATH)?),
+        ("format", slot(i, o, FORMAT)?),
+        ("handlerFlags", Value::Number(0.0)),
+        ("openFlags", slot(i, o, FLAGS)?),
+    ];
+    record(i, None, fields)
+}
+
+/// Can `o` take a packet: opened for update, and a `.xmp` file?
+fn can_update(i: &Interp, o: ObjId) -> JsResult<bool> {
+    let open_flags = match slot(i, o, FLAGS)? {
+        Value::Number(n) => n as u32,
+        _ => 0,
+    };
+    Ok(open_flags & OPEN_FOR_UPDATE != 0 && slot(i, o, SIDECAR)?.truthy())
+}
+
+/// The packet the argument `v` of `putXMP` or `canPutXMP` gives: an `XMPMeta` serialized with its
+/// wrapper, or a string, which must be a packet that can be read.
+fn packet_arg(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
+    if let Some(m) = is_meta(i, v) {
+        return serialized(i, m, &Value::Undefined, what);
+    }
+    if let Value::Object(o) = v
+        && matches!(i.heap.object(*o).map(|ob| &ob.class), Some(Class::Array { .. }))
+    {
+        return Err(not_yet(i, &format!("{what}(buffer)")));
+    }
+    let s = text(i, v)?;
+    if s.len() > xmp::MAX_BYTES {
+        return Err(xmp_error(i, what, XmpError::TooLarge, ""));
+    }
+    // A packet is checked by reading it into a copy of the realm's namespaces, so checking it
+    // registers nothing.
+    let mut scratch = registry(i)?.clone();
+    spend(i, s.len())?;
+    xmp::parse(&s, &mut scratch).map_err(|e| xmp_error(i, what, e, ""))?;
+    Ok(s)
+}
+
+fn can_put_xmp(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile.canPutXMP";
+    let o = open_file(i, &this, what)?;
+    if !can_update(i, o)? {
+        return Ok(Value::Bool(false));
+    }
+    let packet = packet_arg(i, &arg(args, 0), what);
+    match packet {
+        Ok(_) => Ok(Value::Bool(true)),
+        Err(Abrupt::Throw(_)) => Ok(Value::Bool(false)),
+        Err(e) => Err(e),
+    }
+}
+
+fn put_xmp(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile.putXMP";
+    let o = open_file(i, &this, what)?;
+    if !can_update(i, o)? {
+        return Err(i.throw(ErrorType::Error, &format!("{what}: the file cannot be updated")));
+    }
+    let packet = packet_arg(i, &arg(args, 0), what)?;
+    let v = string(i, &packet)?;
+    i.rooted(std::slice::from_ref(&v), |i| set_slot(i, o, PENDING, v.clone()))?;
+    Ok(Value::Undefined)
+}
+
+fn close_file(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let what = "XMPFile.closeFile";
+    let o = this_file(i, &this, what)?;
+    let close_flags = flags(i, &arg(args, 0), what)?;
+    only(i, close_flags, CLOSE_UPDATE_SAFELY, what)?;
+    let this_run = matches!(slot(i, o, RUN)?, Value::Number(n) if Some(n) == crate::file_classes::run_count(i));
+    let pending = slot(i, o, PENDING)?;
+    if this_run && slot(i, o, OPEN)?.truthy() && matches!(pending, Value::String(_)) {
+        let path = slot(i, o, PATH)?;
+        let r = i.rooted(&[path.clone(), pending.clone()], |i| crate::file_classes::call_host(i, "xmpWrite", &[path.clone(), pending.clone()]))?;
+        let error = i.rooted(std::slice::from_ref(&r), |i| crate::file_classes::record_field(i, &r, "error"))?;
+        if let Value::String(_) = error {
+            // The file stays open with its packet, so a later `closeFile` tries again.
+            let m = text(i, &error)?;
+            return Err(i.throw(ErrorType::Error, &m));
+        }
+    }
+    set_slot(i, o, PENDING, Value::Undefined)?;
+    set_slot(i, o, OPEN, Value::Bool(false))?;
+    Ok(Value::Undefined)
+}
+
+// ---- install ----
+
+/// A data property of `XMPConst`: read-only, enumerable.
+fn constant(i: &mut Interp, on: ObjId, name: &str, value: Value) -> JsResult<()> {
+    data(i, on, name, value, ENUMERABLE)
+}
+
+fn constants(i: &mut Interp) -> JsResult<ObjId> {
+    let o = i.new_object();
+    i.rooted(&[Value::Object(o)], |i| {
+        let namespaces = [
+            ("NS_DC", xmp::DC),
+            ("NS_RDF", xmp::RDF),
+            ("NS_XML", xmp::XML),
+            ("NS_XMP", xmp::XMP),
+            ("NS_XMP_RIGHTS", xmp::XMP_RIGHTS),
+            ("NS_PDF", xmp::PDF),
+            ("NS_PHOTOSHOP", xmp::PHOTOSHOP), // brand-ok: the constant's name in the reference
+        ];
+        for (name, uri) in namespaces {
+            constant(i, o, name, Value::str(uri))?;
+        }
+        let numbers: [(&str, f64); 14] = [
+            ("FILE_UNKNOWN", f64::from(FILE_UNKNOWN)),
+            ("FILE_TEXT", f64::from(FILE_TEXT)),
+            ("FILE_XML", f64::from(FILE_XML)),
+            ("OPEN_FOR_READ", f64::from(OPEN_FOR_READ)),
+            ("OPEN_FOR_UPDATE", f64::from(OPEN_FOR_UPDATE)),
+            ("OPEN_ONLY_XMP", f64::from(OPEN_ONLY_XMP)),
+            ("OPEN_USE_PACKET_SCANNING", f64::from(OPEN_USE_PACKET_SCANNING)),
+            ("CLOSE_UPDATE_SAFELY", f64::from(CLOSE_UPDATE_SAFELY)),
+            ("SERIALIZE_OMIT_PACKET_WRAPPER", f64::from(SERIALIZE_OMIT_PACKET_WRAPPER)),
+            ("PROP_IS_ARRAY", f64::from(xmp::PROP_IS_ARRAY)),
+            ("PROP_IS_STRUCT", f64::from(xmp::PROP_IS_STRUCT)),
+            ("ARRAY_IS_ORDERED", f64::from(xmp::ARRAY_IS_ORDERED)),
+            ("ARRAY_IS_ALTERNATIVE", f64::from(xmp::ARRAY_IS_ALTERNATIVE)),
+            ("ARRAY_LAST_ITEM", -1.0),
+        ];
+        for (name, n) in numbers {
+            constant(i, o, name, Value::Number(n))?;
+        }
+        i.object_mut(o)?.extensible = false;
+        Ok(o)
+    })
+}
+
+fn meta_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
+    method(i, proto, "getProperty", get_property, 2)?;
+    method(i, proto, "setProperty", set_property, 3)?;
+    method(i, proto, "deleteProperty", delete_property, 2)?;
+    method(i, proto, "doesPropertyExist", does_property_exist, 2)?;
+    method(i, proto, "countArrayItems", count_array_items, 2)?;
+    method(i, proto, "getArrayItem", get_array_item, 3)?;
+    method(i, proto, "appendArrayItem", append_array_item, 3)?;
+    method(i, proto, "insertArrayItem", insert_array_item, 4)?;
+    method(i, proto, "setArrayItem", set_array_item, 4)?;
+    method(i, proto, "deleteArrayItem", delete_array_item, 3)?;
+    method(i, proto, "doesArrayItemExist", does_array_item_exist, 3)?;
+    method(i, proto, "getLocalizedText", get_localized_text, 4)?;
+    method(i, proto, "setLocalizedText", set_localized_text, 5)?;
+    method(i, proto, "serialize", serialize, 0)?;
+    method(i, proto, "iterator", meta_iterator, 0)?;
+    method(i, proto, "serializeToArray", meta_serialize_to_array, 0)?;
+    method(i, proto, "dumpObject", meta_dump_object, 0)?;
+    method(i, proto, "sort", meta_sort, 0)?;
+    method(i, proto, "getStructField", meta_get_struct_field, 4)?;
+    method(i, proto, "setStructField", meta_set_struct_field, 5)?;
+    method(i, proto, "deleteStructField", meta_delete_struct_field, 4)?;
+    method(i, proto, "doesStructFieldExist", meta_does_struct_field_exist, 4)?;
+    method(i, proto, "getQualifier", meta_get_qualifier, 4)?;
+    method(i, proto, "setQualifier", meta_set_qualifier, 5)?;
+    method(i, proto, "deleteQualifier", meta_delete_qualifier, 4)?;
+    method(i, proto, "doesQualifierExist", meta_does_qualifier_exist, 4)?;
+    method(i, ctor, "registerNamespace", register_namespace, 2)?;
+    method(i, ctor, "getNamespacePrefix", get_namespace_prefix, 1)?;
+    method(i, ctor, "getNamespaceURI", get_namespace_uri, 1)?;
+    method(i, ctor, "dumpNamespaces", meta_dump_namespaces, 0)?;
+    method(i, ctor, "registerAlias", meta_register_alias, 5)?;
+    method(i, ctor, "resolveAlias", meta_resolve_alias, 2)?;
+    method(i, ctor, "dumpAliases", meta_dump_aliases, 0)?;
+    method(i, ctor, "deleteAlias", meta_delete_alias, 2)?;
+    method(i, ctor, "deleteNamespace", meta_delete_namespace, 1)
+}
+
+fn file_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
+    method(i, proto, "getXMP", get_xmp, 0)?;
+    method(i, proto, "putXMP", put_xmp, 1)?;
+    method(i, proto, "canPutXMP", can_put_xmp, 1)?;
+    method(i, proto, "getPacketInfo", get_packet_info, 0)?;
+    method(i, proto, "getFileInfo", get_file_info, 0)?;
+    method(i, proto, "closeFile", close_file, 1)?;
+    method(i, ctor, "getFormatInfo", file_get_format_info, 1)
+}
+
+/// Links the constructor `ctor` and its prototype `proto`, without making it a global.
+fn link(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
+    data(i, ctor, "prototype", Value::Object(proto), 0)?;
+    data(i, proto, "constructor", Value::Object(ctor), HIDDEN)
+}
+
+/// Adds the global `ExternalObject`, which defines `XMPMeta`, `XMPFile` and `XMPConst` when a
+/// script loads the XMP library ([`crate::Realm::define_external_object`]).
+pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
+    let object_proto = i.intrinsics.object_proto;
+    i.reserve_heap(4 * OBJECT_BYTES)?;
+    let external_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
+    let meta_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
+    let file_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
+    let property_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
+    let keep = [external_proto, meta_proto, file_proto, property_proto].map(Value::Object);
+    i.rooted(&keep, |i| {
+        let meta = native(i, "XMPMeta", meta_ctor, 1, NativeKind::Plain, true)?;
+        i.rooted(&[Value::Object(meta)], |i| {
+            let file = native(i, "XMPFile", file_ctor, 3, NativeKind::Plain, true)?;
+            i.rooted(&[Value::Object(file)], |i| {
+                let constants = constants(i)?;
+                i.xmp = Some(Classes {
+                    ids: Ids { external_proto, meta, meta_proto, file, file_proto, constants, property_proto },
+                    registry: Registry::default(),
+                });
+                link(i, meta, meta_proto)?;
+                link(i, file, file_proto)?;
+                meta_members(i, meta, meta_proto)?;
+                file_members(i, file, file_proto)?;
+                method(i, property_proto, "toString", property_to_string, 0)?;
+                let external = native(i, "ExternalObject", external_ctor, 1, NativeKind::Plain, true)?;
+                crate::builtins::constructor(i, "ExternalObject", external, external_proto)?;
+                method(i, external, "search", external_search, 1)?;
+                method(i, external_proto, "terminate", external_terminate, 0)
+            })
+        })
+    })
+}

@@ -3051,6 +3051,42 @@ VectorCraft writes files by these rules of its own:
   `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
   built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
 
+`new ExternalObject("lib:AdobeXMPScript")` defines the globals `XMPMeta`, `XMPFile` and `XMPConst`
+([the help page](https://extendscript.docsforadobe.dev/scripting-xmp/xmpscript-object-reference/)); any other library
+name throws `ExternalObject: the library … is not available`, and no native library is loaded. VectorCraft's own
+rules for these objects:
+
+- `XMPMeta` reads a packet given as a string (`new XMPMeta(packet)`) and writes one with `serialize(options?)`, with
+  the packet wrapper unless `XMPConst.SERIALIZE_OMIT_PACKET_WRAPPER` is given. It has `getProperty`, `setProperty`,
+  `deleteProperty`, `doesPropertyExist`, `countArrayItems`, `getArrayItem`, `appendArrayItem`, `insertArrayItem`,
+  `setArrayItem`, `deleteArrayItem`, `doesArrayItemExist`, `getLocalizedText` and `setLocalizedText`, and the
+  functions `XMPMeta.registerNamespace`, `getNamespacePrefix` and `getNamespaceURI`. A path is a property name,
+  `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. Arrays hold simple items; a structure
+  or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options.
+  Namespaces a packet declares are registered with the prefix it gives them, or `prefix_1_` when that prefix names
+  another namespace.
+- `XMPFile(path, format, openFlags)` reads a file through the same places as `File`, so a path outside them, a
+  missing file and a file over 8 MiB throw the `File` messages (`Script file access denied`, `Script file does not
+  exist`, `Script file exceeds 8 MiB`). A `.xmp` file is read whole as its packet (a link counts by the file it leads to,
+  when it is opened and again when it is written); any other file, and any file with
+  `XMPConst.OPEN_USE_PACKET_SCANNING`, is scanned for its first UTF-8 packet and is read only. Only a `.xmp` file
+  opened with `XMPConst.OPEN_FOR_UPDATE`, without packet scanning, takes `putXMP`, and opening one that way where
+  the script may not write throws `Script file access denied`; other files open read only with that flag.
+  After `putXMP`, `closeFile()` writes the packet in
+  UTF-8 through a temporary file in the same folder when the script may write there, otherwise straight to the file;
+  when no temporary name is free, nothing is written. A failed write throws and keeps the file open with its
+  packet. While an open `File` of the same file holds changes it has not written, `closeFile()` throws
+  `Script file could not be written` and the `File` keeps its changes. `getXMP`, `getPacketInfo`, `getFileInfo` and `canPutXMP` are available. An `XMPFile` is open only in the
+  run that opened it.
+- A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
+  and one nested more than 64 elements deep throws. Members of the help page that are not built yet (iterators,
+  structure fields, qualifiers, aliases, sorting, byte-array packets and `XMPFile.getFormatInfo`) throw
+  `… is not available yet`, and so does a flag, format or path form that is not handled yet.
+
+```json
+{"name":"run_command","arguments":{"command":"script.run","params":{"source":"new ExternalObject('lib:AdobeXMPScript'); var m = new XMPMeta(); m.setProperty(XMPConst.NS_DC, 'format', 'image/svg+xml'); vc.log(m.serialize());"}}}
+```
+
 `script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file}`, with `code`
 the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
 grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later

@@ -5917,6 +5917,21 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	the script passed more data to and from commands than one run may pass	スクリプトが 1 回の実行で許されるより多くのデータをコマンドとやり取りしました
 @msg	the script added more objects and data to the documents than one run may add	スクリプトが 1 回の実行で許されるより多くのオブジェクトとデータをドキュメントに追加しました
 @msg	{what}: the object is not a File or a Folder	{what}: オブジェクトは File でも Folder でもありません
+@msg	{what}: the library {name} is not available	{what}: ライブラリ {name} は利用できません
+@msg	{what} is not available yet	{what} はまだ利用できません
+@msg	{what}: the value {value} is not available yet	{what}: 値 {value} はまだ利用できません
+@msg	{what}: the object is not an {class} object	{what}: オブジェクトは {class} オブジェクトではありません
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP パケットが整形式の XMP ではありません
+@msg	{what}: the XMP data is too large	{what}: XMP データが大きすぎます
+@msg	{what}: {name} is not a valid property name	{what}: {name} は有効なプロパティ名ではありません
+@msg	{what}: the text holds a character XML does not allow	{what}: テキストに XML で使えない文字が含まれています
+@msg	{what}: {name} is not an array	{what}: {name} は配列ではありません
+@msg	{what}: {name} is not a simple property	{what}: {name} は単純なプロパティではありません
+@msg	{what}: {name} is not a language alternative array	{what}: {name} は言語の代替配列ではありません
+@msg	{what}: the array index {index} is out of range	{what}: 配列のインデックス {index} が範囲外です
+@msg	{what}: the namespace {uri} is not registered	{what}: 名前空間 {uri} は登録されていません
+@msg	{what}: the file is closed	{what}: ファイルは閉じています
+@msg	{what}: the file cannot be updated	{what}: ファイルを更新できません
 @msg	{what}: the count must be a finite number, 0 or more	{what}: 数は 0 以上の有限の数値にしてください
 @msg	File.seek: the position must be a finite number	File.seek: 位置は有限の数値にしてください
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: モードは 0, 1 または 2 にしてください

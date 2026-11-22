@@ -5013,6 +5013,21 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	the script made more host calls than one run may make	le script a fait plus d’appels à l’hôte qu’une exécution ne peut en faire
 @msg	the script passed more data to and from commands than one run may pass	le script a transmis plus de données vers et depuis les commandes qu’une exécution ne peut en transmettre
 @msg	the script added more objects and data to the documents than one run may add	le script a ajouté aux documents plus d’objets et de données qu’une exécution ne peut en ajouter
+@msg	{what}: the library {name} is not available	{what} : la bibliothèque {name} n’est pas disponible
+@msg	{what} is not available yet	{what} n’est pas encore disponible
+@msg	{what}: the value {value} is not available yet	{what} : la valeur {value} n’est pas encore disponible
+@msg	{what}: the object is not an {class} object	{what} : l’objet n’est pas un objet {class}
+@msg	{what}: the XMP packet is not well-formed XMP	{what} : le paquet XMP n’est pas du XMP bien formé
+@msg	{what}: the XMP data is too large	{what} : les données XMP sont trop volumineuses
+@msg	{what}: {name} is not a valid property name	{what} : {name} n’est pas un nom de propriété valide
+@msg	{what}: the text holds a character XML does not allow	{what} : le texte contient un caractère que XML n’autorise pas
+@msg	{what}: {name} is not an array	{what} : {name} n’est pas un tableau
+@msg	{what}: {name} is not a simple property	{what} : {name} n’est pas une propriété simple
+@msg	{what}: {name} is not a language alternative array	{what} : {name} n’est pas un tableau d’alternatives linguistiques
+@msg	{what}: the array index {index} is out of range	{what} : l’index de tableau {index} est hors limites
+@msg	{what}: the namespace {uri} is not registered	{what} : l’espace de noms {uri} n’est pas enregistré
+@msg	{what}: the file is closed	{what} : le fichier est fermé
+@msg	{what}: the file cannot be updated	{what} : le fichier ne peut pas être mis à jour
 @msg	{what}: the object is not a File or a Folder	{what} : l’objet n’est ni un File ni un Folder
 @msg	{what}: the count must be a finite number, 0 or more	{what} : le nombre doit être un nombre fini, 0 ou plus
 @msg	File.seek: the position must be a finite number	File.seek : la position doit être un nombre fini

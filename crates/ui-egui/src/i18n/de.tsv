@@ -4953,6 +4953,21 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	the script passed more data to and from commands than one run may pass	das Skript hat mehr Daten an Befehle und von Befehlen übergeben, als ein Lauf übergeben darf
 @msg	the script added more objects and data to the documents than one run may add	das Skript hat den Dokumenten mehr Objekte und Daten hinzugefügt, als ein Lauf hinzufügen darf
 @msg	{what}: the object is not a File or a Folder	{what}: Das Objekt ist weder ein File noch ein Folder
+@msg	{what}: the library {name} is not available	{what}: Die Bibliothek {name} ist nicht verfügbar
+@msg	{what} is not available yet	{what} ist noch nicht verfügbar
+@msg	{what}: the value {value} is not available yet	{what}: Der Wert {value} ist noch nicht verfügbar
+@msg	{what}: the object is not an {class} object	{what}: Das Objekt ist kein {class}-Objekt
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: Das XMP-Paket ist kein wohlgeformtes XMP
+@msg	{what}: the XMP data is too large	{what}: Die XMP-Daten sind zu groß
+@msg	{what}: {name} is not a valid property name	{what}: {name} ist kein gültiger Eigenschaftsname
+@msg	{what}: the text holds a character XML does not allow	{what}: Der Text enthält ein Zeichen, das XML nicht zulässt
+@msg	{what}: {name} is not an array	{what}: {name} ist kein Array
+@msg	{what}: {name} is not a simple property	{what}: {name} ist keine einfache Eigenschaft
+@msg	{what}: {name} is not a language alternative array	{what}: {name} ist kein Array mit Sprachalternativen
+@msg	{what}: the array index {index} is out of range	{what}: Der Array-Index {index} liegt außerhalb des Bereichs
+@msg	{what}: the namespace {uri} is not registered	{what}: Der Namensraum {uri} ist nicht registriert
+@msg	{what}: the file is closed	{what}: Die Datei ist geschlossen
+@msg	{what}: the file cannot be updated	{what}: Die Datei kann nicht aktualisiert werden
 @msg	{what}: the count must be a finite number, 0 or more	{what}: Die Anzahl muss eine endliche Zahl sein, 0 oder mehr
 @msg	File.seek: the position must be a finite number	File.seek: Die Position muss eine endliche Zahl sein
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: Der Modus muss 0, 1 oder 2 sein

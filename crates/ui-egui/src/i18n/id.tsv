@@ -159,6 +159,21 @@
 @msg	the script passed more data to and from commands than one run may pass	skrip mengirim lebih banyak data ke dan dari perintah daripada yang boleh dikirim satu proses
 @msg	the script added more objects and data to the documents than one run may add	skrip menambahkan lebih banyak objek dan data ke dokumen daripada yang boleh ditambahkan satu proses
 @msg	{what}: the object is not a File or a Folder	{what}: objek bukan File atau Folder
+@msg	{what}: the library {name} is not available	{what}: pustaka {name} tidak tersedia
+@msg	{what} is not available yet	{what} belum tersedia
+@msg	{what}: the value {value} is not available yet	{what}: nilai {value} belum tersedia
+@msg	{what}: the object is not an {class} object	{what}: objek bukan objek {class}
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: paket XMP bukan XMP yang tersusun dengan benar
+@msg	{what}: the XMP data is too large	{what}: data XMP terlalu besar
+@msg	{what}: {name} is not a valid property name	{what}: {name} bukan nama properti yang valid
+@msg	{what}: the text holds a character XML does not allow	{what}: teks berisi karakter yang tidak diizinkan XML
+@msg	{what}: {name} is not an array	{what}: {name} bukan larik
+@msg	{what}: {name} is not a simple property	{what}: {name} bukan properti sederhana
+@msg	{what}: {name} is not a language alternative array	{what}: {name} bukan larik alternatif bahasa
+@msg	{what}: the array index {index} is out of range	{what}: indeks larik {index} di luar rentang
+@msg	{what}: the namespace {uri} is not registered	{what}: ruang nama {uri} tidak terdaftar
+@msg	{what}: the file is closed	{what}: berkas tertutup
+@msg	{what}: the file cannot be updated	{what}: berkas tidak dapat diperbarui
 @msg	{what}: the count must be a finite number, 0 or more	{what}: jumlah harus berupa angka berhingga, 0 atau lebih
 @msg	File.seek: the position must be a finite number	File.seek: posisi harus berupa angka berhingga
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: mode harus 0, 1 atau 2

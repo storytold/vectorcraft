@@ -504,6 +504,18 @@ impl Realm {
         }
     }
 
+    /// Adds the global `ExternalObject`. `new ExternalObject("lib:AdobeXMPScript")` defines the
+    /// globals `XMPMeta`, `XMPFile` and `XMPConst`; any other library name throws. `XMPFile` reads
+    /// and writes files through the host functions `xmpOpen` and `xmpWrite` of
+    /// [`Realm::define_file_classes`], which the host adds first; without `File` and `Folder`,
+    /// `XMPFile` throws. An `XMPFile` is open only in the run that opened it.
+    pub fn define_external_object(&mut self) -> Result<(), RunError> {
+        match crate::xmp_classes::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
     /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
     /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught

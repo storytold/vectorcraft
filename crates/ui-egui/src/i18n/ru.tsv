@@ -5067,6 +5067,21 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	the script passed more data to and from commands than one run may pass	скрипт передал командам и получил от них больше данных, чем разрешено одному запуску
 @msg	the script added more objects and data to the documents than one run may add	скрипт добавил в документы больше объектов и данных, чем разрешено одному запуску
 @msg	{what}: the object is not a File or a Folder	{what}: объект не является ни File, ни Folder
+@msg	{what}: the library {name} is not available	{what}: библиотека {name} недоступна
+@msg	{what} is not available yet	{what} пока недоступно
+@msg	{what}: the value {value} is not available yet	{what}: значение {value} пока недоступно
+@msg	{what}: the object is not an {class} object	{what}: объект не является объектом {class}
+@msg	{what}: the XMP packet is not well-formed XMP	{what}: пакет XMP не является правильно построенным XMP
+@msg	{what}: the XMP data is too large	{what}: данные XMP слишком велики
+@msg	{what}: {name} is not a valid property name	{what}: {name} не является допустимым именем свойства
+@msg	{what}: the text holds a character XML does not allow	{what}: текст содержит символ, недопустимый в XML
+@msg	{what}: {name} is not an array	{what}: {name} не является массивом
+@msg	{what}: {name} is not a simple property	{what}: {name} не является простым свойством
+@msg	{what}: {name} is not a language alternative array	{what}: {name} не является массивом языковых вариантов
+@msg	{what}: the array index {index} is out of range	{what}: индекс массива {index} вне диапазона
+@msg	{what}: the namespace {uri} is not registered	{what}: пространство имен {uri} не зарегистрировано
+@msg	{what}: the file is closed	{what}: файл закрыт
+@msg	{what}: the file cannot be updated	{what}: файл нельзя обновить
 @msg	{what}: the count must be a finite number, 0 or more	{what}: количество должно быть конечным числом, 0 или больше
 @msg	File.seek: the position must be a finite number	File.seek: позиция должна быть конечным числом
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: режим должен быть 0, 1 или 2

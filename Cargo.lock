@@ -7031,6 +7031,7 @@ name = "vectorcraft-js"
 version = "0.24.1"
 dependencies = [
  "chrono",
+ "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0)",
  "getrandom 0.4.3",
  "proptest",
  "unicode-properties",

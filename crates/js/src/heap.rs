@@ -246,6 +246,8 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// An `XMPMeta` object and its metadata ([`crate::xmp_classes`]).
+    Xmp(Box<crate::xmp::Meta>),
 }
 
 /// What an XML value is.
@@ -309,7 +311,7 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) => "Object",
+            Class::XmlFilter(_) | Class::Xmp(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
             Class::Ordinary | Class::ForIn(_) => "Object",
@@ -680,6 +682,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
+        Class::Xmp(meta) => extra = meta.heap_bytes(),
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * o.props.len() + extra
