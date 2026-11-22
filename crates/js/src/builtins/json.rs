@@ -570,6 +570,8 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
 /// result is the object's [[PrimitiveValue]] (sections 8.6.2 and 9.9), the value that
 /// `Number.prototype.valueOf` (15.7.4.4), `Number.prototype.toString` (15.7.4.2) and
 /// `String.prototype.toString` (15.5.4.2) return. Otherwise ToPrimitive calls the method found.
+/// An `@@toPrimitive` method on the object, in a realm with [`crate::Options::es2015`], is called
+/// before either (ECMA-262 11th edition, section 7.1.1).
 fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult<Option<Value>> {
     let Value::Object(o) = v else { return Ok(None) };
     let (primitive, proto, string) = match interp.heap.object(*o).map(|x| &x.class) {
@@ -578,7 +580,11 @@ fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult
         _ => return Ok(None),
     };
     let (hint, name) = if string { (Hint::String, "toString") } else { (Hint::Number, "valueOf") };
-    let p = if reaches_prototype(interp, *o, proto, name)? { primitive } else { interp.to_primitive(v, hint)? };
+    let p = match interp.exotic_to_primitive(*o, v, hint)? {
+        Some(p) => p,
+        None if reaches_prototype(interp, *o, proto, name)? => primitive,
+        None => interp.ordinary_to_primitive(*o, v, hint)?,
+    };
     Ok(Some(if string { Value::String(interp.to_str(&p)?) } else { Value::Number(interp.to_number(&p)?) }))
 }
 

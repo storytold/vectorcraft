@@ -220,6 +220,70 @@ fn an_array_iterator_keeps_its_object_while_reading_its_length_runs_script() {
 }
 
 #[test]
+fn binary_and_octal_strings_are_numbers_in_an_es2015_realm_only() {
+    for length in ["0b10", "0o2", "2"] {
+        let src = format!(
+            "var it = Array.prototype.values.call({{0: 'first', 1: 'second', length: '{length}'}}); \
+             var a = it.next(), b = it.next(); a.value + ' ' + b.value + ' ' + it.next().done"
+        );
+        assert_eq!(string(&src), "first second true", "{length}");
+    }
+    truth("Number('0b101') === 5 && +'0O17' === 15 && '0b11' == 3 && isNaN('0b2') && isNaN('-0o1')");
+    let src = "isNaN(Number('0b10')) && isNaN(+'0o2') && '0b1' != 1";
+    assert_eq!(Realm::with_options(Options::default(), Limits::default()).run(src), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn json_calls_the_to_primitive_method_of_a_wrapper() {
+    let hook = "w[Symbol.toPrimitive] = function (hint) { return hint === 'number' ? 2 : 'b'; };";
+    truth(&format!("var w = new String('x'); {hook} JSON.stringify(w) === '\"b\"'"));
+    truth(&format!("var w = new String('x'); delete String.prototype.toString; {hook} JSON.stringify(w) === '\"b\"'"));
+    truth(&format!("var w = new String('x'); {hook} JSON.stringify({{a: 1, b: 2}}, [w]) === '{{\"b\":2}}'"));
+    truth(&format!("var w = new Number(5); {hook} JSON.stringify([w], null, w) === '[\\n  2\\n]'"));
+    truth("JSON.stringify([new String('x'), new Number(1)], null, new Number(1)) === '[\\n \"x\",\\n 1\\n]'");
+}
+
+#[test]
+fn a_host_function_returns_a_symbol_only_in_an_es2015_realm() {
+    let symbol = |_: &[JsValue]| -> Result<JsValue, String> { Ok(JsValue::Symbol(Some("from host".into()))) };
+    let mut realm = es2015(Limits::default());
+    realm.define_function("make", symbol);
+    assert_eq!(realm.run("var s = make(); typeof s === 'symbol' && String(s) === 'Symbol(from host)' && s !== make()"), Ok(JsValue::Bool(true)));
+    let mut realm = Realm::with_options(Options::default(), Limits::default());
+    realm.define_function("make", symbol);
+    let src = "try { make(); 'none'; } catch (e) { (e instanceof TypeError) + ' ' + typeof Symbol; }";
+    assert_eq!(realm.run(src), Ok(JsValue::String("true undefined".into())));
+}
+
+#[test]
+fn a_host_symbol_description_counts_against_the_heap_before_it_is_made() {
+    let mut realm = es2015(Limits { heap_bytes: 1 << 20, ..Limits::default() });
+    realm.define_function("make", |_| Ok(JsValue::Symbol(Some("d".repeat(1 << 20)))));
+    match realm.run("make()") {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+    let mut realm = es2015(Limits { heap_bytes: 1 << 20, ..Limits::default() });
+    realm.define_function("make", |_| Ok(JsValue::Symbol(Some("d".repeat(1_000)))));
+    assert_eq!(realm.run("make().description.length"), Ok(JsValue::Number(1_000.0)));
+}
+
+#[test]
+fn a_symbol_lookup_takes_fuel_for_each_prototype() {
+    // Building the chain takes about 20,000 units; each lookup of an absent Symbol walks all 2,000
+    // prototypes, so the 100 lookups take 200,000 more.
+    let src = "var s = Symbol(), o = {}; for (var i = 0; i < 2000; i++) o = Object.create(o); \
+               for (var j = 0; j < 100; j++) s in o;";
+    match es2015(Limits { fuel: 150_000, ..Limits::default() }).run(src) {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+    let src = "var s = Symbol(), root = {}, o = root; root[s] = 'found'; for (var i = 0; i < 50; i++) o = Object.create(o); \
+               o[s] === 'found' && s in o && !o.hasOwnProperty(s)";
+    truth(src);
+}
+
+#[test]
 fn iterator_steps_take_fuel() {
     let mut realm = es2015(Limits { fuel: 5_000, ..Limits::default() });
     let src = "var a = []; a.length = 1e9; var it = a.values(); while (!it.next().done) {}";

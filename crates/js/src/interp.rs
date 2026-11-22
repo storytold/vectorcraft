@@ -2776,11 +2776,17 @@ impl Interp {
         if let Some(r) = self.exotic_to_primitive(*o, v, hint)? {
             return Ok(r);
         }
+        self.ordinary_to_primitive(*o, v, hint)
+    }
+
+    /// [[DefaultValue]] (section 8.12.8) of the object `o`, which is `v`: ToPrimitive without the
+    /// `@@toPrimitive` method.
+    pub(crate) fn ordinary_to_primitive(&mut self, o: ObjId, v: &Value, hint: Hint) -> JsResult<Value> {
         // Without a hint, a Date object converts as with the String hint.
-        let date = hint == Hint::Default && matches!(self.heap.object(*o).map(|ob| &ob.class), Some(Class::Date(_)));
+        let date = hint == Hint::Default && matches!(self.heap.object(o).map(|ob| &ob.class), Some(Class::Date(_)));
         let order = if hint == Hint::String || date { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
         for name in order {
-            let f = self.get_from(*o, &key(name), v)?;
+            let f = self.get_from(o, &key(name), v)?;
             if self.is_callable(&f) {
                 let r = self.call(&f, v, &[])?;
                 if !matches!(r, Value::Object(_)) {
@@ -2791,6 +2797,8 @@ impl Interp {
         Err(self.type_error("cannot convert the object to a primitive value"))
     }
 
+    /// ToNumber (section 9.3). In a realm with [`crate::Options::es2015`], a string may also be a
+    /// `0b` or `0o` literal (ECMA-262 11th edition, section 7.1.3.1).
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_number(&mut self, v: &Value) -> JsResult<f64> {
         Ok(match v {
@@ -2798,7 +2806,7 @@ impl Interp {
             Value::Null => 0.0,
             Value::Bool(b) => f64::from(u8::from(*b)),
             Value::Number(n) => *n,
-            Value::String(s) => string_to_number(&flat_charged(self, s)?),
+            Value::String(s) => string_to_number(&flat_charged(self, s)?, self.options.es2015),
             Value::Symbol(_) => return Err(self.type_error("cannot convert a Symbol value to a number")),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::Number)?;
@@ -3035,7 +3043,7 @@ impl Interp {
                 | (Value::Symbol(_), Value::Symbol(_))
                 | (Value::Object(_), Value::Object(_)) => return Ok(strict_eq(&x, &y)),
                 (Value::Number(n), Value::String(s)) | (Value::String(s), Value::Number(n)) => {
-                    return Ok(*n == string_to_number(&flat_charged(self, s)?));
+                    return Ok(*n == string_to_number(&flat_charged(self, s)?, self.options.es2015));
                 }
                 (Value::Bool(v), _) => x = Value::Number(f64::from(u8::from(*v))),
                 (_, Value::Bool(v)) => y = Value::Number(f64::from(u8::from(*v))),
@@ -3105,9 +3113,10 @@ impl Interp {
         }
     }
 
-    /// A host value as a JavaScript value. A string is charged to the heap, and one that does not
-    /// fit in it ends the run with the heap limit. Everything the caller still needs must be
-    /// reachable from the roots.
+    /// A host value as a JavaScript value. A string or a Symbol's description is charged to the
+    /// heap before it is built, and one that does not fit in it ends the run with the heap limit.
+    /// A Symbol in a realm without [`crate::Options::es2015`] throws a `TypeError`. Everything the
+    /// caller still needs must be reachable from the roots.
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn from_js_value(&mut self, v: crate::JsValue) -> JsResult<Value> {
         Ok(match v {
@@ -3122,12 +3131,15 @@ impl Interp {
                 Value::str(&s)
             }
             crate::JsValue::Object(_) => Value::Object(self.new_object()),
+            crate::JsValue::Symbol(_) if !self.options.es2015 => {
+                return Err(self.type_error("a host function returned a Symbol in a realm without Symbol"));
+            }
             crate::JsValue::Symbol(description) => {
-                let units: Option<Vec<u16>> = description.map(|d| d.encode_utf16().collect());
-                let bytes = crate::heap::SYMBOL_BYTES + units.as_ref().map_or(0, |u| string_bytes(u.len()));
+                let bytes = crate::heap::SYMBOL_BYTES + description.as_ref().map_or(0, |d| string_bytes(d.encode_utf16().count()));
                 self.reserve_heap(bytes)?;
                 self.heap.bytes += bytes;
-                Value::Symbol(crate::symbol::Sym::new(units.map(Str::from_units), false))
+                let description = description.map(|d| Str::from_units(d.encode_utf16().collect()));
+                Value::Symbol(crate::symbol::Sym::new(description, false))
             }
         })
     }

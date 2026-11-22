@@ -55,8 +55,9 @@
 //! and iterator objects with a `next` method from `Array.prototype.values`, `keys`, `entries` and
 //! `@@iterator`, `String.prototype[@@iterator]` (by code point) and every `arguments` object. A
 //! Symbol converted to a string or a number without `String(symbol)` or `toString` throws a
-//! `TypeError`. Every iterator step takes fuel, and every Symbol and registry entry counts against
-//! the heap limit.
+//! `TypeError`. A string converts to a number in the `0b` and `0o` forms as well. Every iterator
+//! step and every prototype a Symbol-keyed lookup passes takes fuel, and every Symbol and registry
+//! entry counts against the heap limit.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -113,8 +114,9 @@ pub struct Options {
     /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
     pub e4x: bool,
     /// Give a realm the later editions' built-ins this engine has: `Symbol` with Symbol-keyed
-    /// properties and the iterators of arrays, strings and `arguments` objects. Off, a realm has
-    /// the ES5.1 built-ins only, as the app's scripts expect.
+    /// properties and the iterators of arrays, strings and `arguments` objects, with `0b` and `0o`
+    /// strings converting to numbers. Off, a realm has the ES5.1 built-ins only, as the app's
+    /// scripts expect.
     pub es2015: bool,
 }
 
