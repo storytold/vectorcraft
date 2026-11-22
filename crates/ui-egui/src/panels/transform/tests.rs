@@ -1,7 +1,7 @@
 use vectorcraft_doc::Unit;
 
 use super::*;
-use crate::panels::tests_units::{cancel_dialog, confirm_dialog, run_menu, set_dialog_field};
+use crate::panels::tests_units::{cancel_dialog, confirm_dialog, set_dialog_field};
 use crate::tests::panel_harness::Panel;
 
 fn panel(app: VectorcraftApp) -> Panel {
@@ -118,7 +118,14 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
 fn rotate_bounding_box_menu_item_turns_the_box_by_the_dialog_angle() {
     let mut app = new_app();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
-    run_menu(&mut app, "object.rotateBoundingBox");
+    // The menu item as a click runs it: its params ask for the angle in a dialog.
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Object", "Transform"] && e.label == "Rotate Bounding Box…")
+        .expect("menu item");
+    let (id, p) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    app.adopt_context(&crate::testing::ui_context());
+    crate::menus::invoke(&mut app, &id, p);
     set_dialog_field(&mut app, "angle", json!(90));
     let bounds = |app: &VectorcraftApp| {
         let st = app.session.doc().unwrap();
@@ -534,6 +541,8 @@ fn the_control_bar_fields_use_the_shared_reference_point() {
         app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap();
         app.ui.transform_panel.reference_point = refi;
         let mut p = Panel::new(app, bar);
+        // The Control bar spans the window.
+        p.room(egui::vec2(1600.0, 200.0));
         let (before, undo) = (revision(&p), steps(&p));
         assert_eq!((p.value("X position"), p.value("Y position")), (Some(pt(x)), Some(pt(y))), "reference {refi}");
         assert_eq!(revision(&p), before, "reference {refi}: choosing the point leaves the art");
@@ -901,7 +910,8 @@ fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
     app.replay("shape.rectangle", rect.clone()).unwrap();
     show_on_shape_creation(&mut app, &ctx);
     assert!(!visible(&app), "saved steps");
-    // A dialog that is canceled draws nothing; OK draws the shape.
+    // A dialog that is canceled draws nothing; OK draws the shape. The dialogs open in the window.
+    app.adopt_context(&ctx);
     app.run("tool.select", json!({"tool": "ellipse"})).unwrap();
     crate::dialogs::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
     cancel_dialog(&mut app);

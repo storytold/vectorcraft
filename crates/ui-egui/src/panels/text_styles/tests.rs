@@ -895,6 +895,8 @@ fn capture_during_live_typing(redefine: bool) {
     app.session.select_tool("type", Default::default()).unwrap();
     app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
     assert_eq!(text_editing(&app), Some((id, 0, 6)));
+    // The canvas's text editor takes the keyboard in the first frame that shows it.
+    key_frame(&mut app, &ctx, Vec::new());
     key_frame(&mut app, &ctx, vec![egui::Event::Text("Typed".into())]);
     assert_eq!(text_runs(&app, id), vec![("Typed".into(), 18.0, link.clone())]);
     assert_eq!(text_editing(&app), Some((id, 5, 5)));

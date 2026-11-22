@@ -372,7 +372,8 @@ fn new_swatch_dialog_prefills_the_active_colour_and_saves_into_the_selected_grou
     assert!(!dialog_open(&app, key) && doc(&app).swatch("New Gradient Swatch 1").is_some());
     new_swatch(&mut app, &[], none());
     assert_eq!(dialog_field(&app, key, "name"), json!("New Gradient Swatch 2"));
-    assert_ne!(dialog_field(&app, key, "__paint"), Value::Null);
+    // A gradient has only its name to set: the dialog keeps its paint for OK.
+    assert_eq!((dialog_field(&app, key, "type"), dialog_field(&app, key, "color")), (Value::Null, Value::Null));
     dialog_frame(&mut app, &ctx);
     confirm(&mut app, key);
     assert!(doc(&app).swatch("New Gradient Swatch 2").is_some_and(|w| matches!(w.paint, Paint::Gradient(_))));

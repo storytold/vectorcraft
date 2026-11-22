@@ -63,7 +63,7 @@ fn the_achromatopsia_chip_is_the_gray_of_the_colors_lightness() {
 #[test]
 fn a_gray_fill_is_the_same_gray_in_every_chip() {
     let cms = cms::active();
-    let gray = Color::rgb(0.5, 0.5, 0.5);
+    let gray = Color::from_hex("#808080").unwrap();
     let want = hex(cms.display_rgb(&gray));
     for (name, sim) in NAMES.iter().zip(vision_colors(&cms, &gray)) {
         assert_eq!(hex(sim), want, "{name} shows {want}");

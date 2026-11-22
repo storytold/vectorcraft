@@ -1061,7 +1061,8 @@ fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
         for (name, panel) in &mut panels {
             run(&mut panel.app(), id, p.clone());
             panel.frame();
-            let shown = panel.value("Opacity").unwrap_or_default();
+            // Appearance's Opacity row shows its percent as trailing text, which describes the row.
+            let shown = panel.value("Opacity").filter(|v| !v.is_empty()).or_else(|| panel.description("Opacity")).unwrap_or_default();
             assert!(shown.contains(want), "{name} shows {want}: {shown}");
             assert!(!shown.contains(not), "{name} no longer shows {not}: {shown}");
         }
@@ -1126,7 +1127,8 @@ fn right_clicking_root_object_row_exposes_clear_and_reduce_appearance() {
     panel.secondary_click("Rectangle");
     assert_eq!(panel.app().session.appearance_item(), None, "the object row is picked");
     assert!(panel.shows("Clear Appearance") && panel.shows("Reduce to Basic Appearance"));
-    panel.click("Clear Appearance");
+    // The menu's item, not the footer's button of the same name.
+    panel.click_menu_item("Clear Appearance");
     let cleared = vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0);
     assert_eq!(first_selected(&panel.app()).unwrap().appearance, cleared);
     run(&mut panel.app(), "edit.undo", json!({}));
