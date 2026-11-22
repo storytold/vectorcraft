@@ -3319,9 +3319,10 @@ mod tests {
     fn a_plugin_command_result_shows_the_plugins_translation() {
         use vectorcraft_plugins::wat as tpl;
         let id = "test.UI.palette_translated";
+        // Names no other test's plug-in has, since tests running beside this one share the registry.
         let manifest = format!(
-            r#"{{"id":"{id}","name":"Tidy","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Grow"}}],
-                "translations":{{"de":{{"name":"Aufräumen","commands":{{"grow":{{"label":"Wachsen"}}}}}}}}}}"#
+            r#"{{"id":"{id}","name":"Groom","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Expand Rim"}}],
+                "translations":{{"de":{{"name":"Pflegen","commands":{{"grow":{{"label":"Erweitern"}}}}}}}}}}"#
         );
         vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
         let key = format!("plugin.{id}.grow");
@@ -3332,9 +3333,9 @@ mod tests {
         let (de, fr) = (shown("de"), shown("fr"));
         vectorcraft_plugins::registry::remove(id);
         let (de, object, plugins) = de.expect("the command is a result");
-        assert_eq!(de, format!("{object} › {plugins} › Aufräumen › Wachsen"));
+        assert_eq!(de, format!("{object} › {plugins} › Pflegen › Erweitern"));
         let (fr, object, plugins) = fr.expect("the command is a result");
-        assert_eq!(fr, format!("{object} › {plugins} › Tidy › Grow"));
+        assert_eq!(fr, format!("{object} › {plugins} › Groom › Expand Rim"));
     }
 
     /// A plug-in command whose plug-in translates its name and label into English shows the

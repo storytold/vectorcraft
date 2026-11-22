@@ -64,9 +64,6 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Entries<T> {
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("an object")
             }
-            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(Entries::default())
-            }
             fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> std::result::Result<Self::Value, A::Error> {
                 let mut seen = HashSet::new();
                 let mut out = Vec::new();
@@ -516,6 +513,12 @@ mod tests {
             (r#"{"de":{"name":7}}"#, "manifest"),
             (r#"["de"]"#, "manifest"),
             (r#""de""#, "manifest"),
+            ("null", "expected an object"),
+            (r#"{"de":null}"#, "manifest"),
+            (r#"{"de":{"params":null}}"#, "expected an object"),
+            (r#"{"de":{"groups":null}}"#, "expected an object"),
+            (r#"{"de":{"commands":null}}"#, "expected an object"),
+            (r#"{"de":{"params":{"mode":{"options":null}}}}"#, "expected an object"),
         ] {
             let e = Manifest::parse(with(translations).as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{translations}: {e}");
