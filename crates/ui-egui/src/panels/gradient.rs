@@ -744,10 +744,12 @@ fn app_stops(g: &Gradient, base: &[GradientStop], s: &GradientStops) -> Vec<Grad
 fn stops_editor(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: bool) {
     let stops = &g.gradient.stops;
     let base = app.ui.gradient_panel.begun.clone().unwrap_or_else(|| stops.clone());
-    // The ramp and new stops sample the app's own gradient (its method, its colour models).
-    let sampler = |s: &GradientStops, t: f32| {
-        let mut shown = g.gradient.clone();
-        shown.stops = app_stops(&g.gradient, &base, s);
+    // The ramp and new stops sample the app's own gradient (its method, its colour models). The
+    // editor's sampler is a `'static` closure, so it owns its copy of the gradient.
+    let gradient = g.gradient.clone();
+    let sampler = move |s: &GradientStops, t: f32| {
+        let mut shown = gradient.clone();
+        shown.stops = app_stops(&gradient, &base, s);
         let (c, o) = shown.sample(t);
         srgba(&c, o)
     };
@@ -800,7 +802,6 @@ fn stops_editor(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_gra
         }
     }
     if let Some(request) = &out.color_requested {
-        // PLAN: assumed color-w7's `StopColor::rect: Option<Rect>`, the requesting stop chip's rect (decisions: stop popover anchor).
         let at = request.rect.map_or(out.edit.response.rect.left_bottom(), |r| r.left_bottom());
         open_popover(app, request.index, at);
     }
