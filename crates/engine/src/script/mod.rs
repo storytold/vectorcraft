@@ -630,7 +630,7 @@ impl World {
 /// The commands that can change the clipboard and still fail, or still be put back because their
 /// result cannot reach the script, and that do not put it back themselves. The clipboard can hold
 /// a great deal, so a savepoint copies it only for these.
-const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "command.batch", "edit.cut"];
+const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "artboard.copy", "artboard.cut", "command.batch", "edit.copy", "edit.cut"];
 
 /// The commands that remove a document's undo history, or the document: a savepoint keeps a whole
 /// copy of the histories for these. Any other command that removes or changes a step under the

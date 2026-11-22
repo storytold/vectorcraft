@@ -521,11 +521,13 @@ fn a_copy_or_cut_the_run_puts_back_is_not_reported() {
     let r = run(
         &mut s,
         "try { vc.run('command.batch', {commands: [{command: 'edit.copy', params: {}}]}); } catch (e) { vc.log(e.name); }\
-         try { vc.run('edit.cut'); } catch (e) { vc.log(e.name); }",
+         try { vc.run('edit.cut'); } catch (e) { vc.log(e.name); }\
+         try { vc.run('edit.copy'); } catch (e) { vc.log(e.name); }\
+         try { vc.run('artboard.copy', {indices: [0]}); } catch (e) { vc.log(e.name); }",
     );
     crate::script::TEST_RESULT_BYTES.with(|b| b.set(None));
     let r = r.unwrap();
-    assert_eq!(r["log"], json!(["RangeError", "RangeError"]), "{r}");
+    assert_eq!(r["log"], json!(["RangeError", "RangeError", "RangeError", "RangeError"]), "{r}");
     assert_eq!(r.get("copied"), None, "{r}");
     assert_eq!(s.copies, copies);
     assert!(s.clipboard_copied);
