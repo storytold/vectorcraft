@@ -162,13 +162,15 @@ impl Edit {
             }
             let Some(picked) = self.grab.anchors(cx) else { return out };
             // A drag on one of several selected anchors moves them all; a drag on a segment moves
-            // its two ends alone.
+            // its two ends alone and leaves that segment selected, not its ends as anchors.
             let already = match self.grab {
                 Grab::Anchor { .. } => cx.selection.partial(id).is_some_and(|s| picked.iter().all(|a| s.contains(a))),
-                Grab::Segment { .. } => {
+                Grab::Segment { si, seg, .. } => {
                     cx.selection.objects == [id]
                         && cx.selection.anchors.len() == 1
                         && cx.selection.partial(id).is_some_and(|s| s.len() == picked.len() && picked.iter().all(|a| s.contains(a)))
+                        && cx.selection.segments.len() == 1
+                        && cx.selection.segments.get(&id).is_some_and(|s| s.len() == 1 && s.contains(&(si, seg)))
                 }
             };
             let moving = if already {

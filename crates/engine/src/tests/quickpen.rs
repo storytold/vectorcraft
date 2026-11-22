@@ -1135,6 +1135,28 @@ fn a_segment_drag_moves_only_its_ends() {
     assert_eq!(paths(&s).len(), 1);
 }
 
+/// A drag on a segment whose two ends are already selected as anchors selects the segment, so
+/// Delete then cuts that connection and keeps both anchors.
+#[test]
+fn a_segment_drag_from_its_selected_ends_selects_the_segment() {
+    let mut s = session();
+    let pieces = json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}, {"x": 400, "y": 100}]);
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), pieces);
+    click(&mut s, 200.0, 100.0);
+    shift_click(&mut s, 300.0, 100.0);
+    let picked = s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked, [(0, 1), (0, 2)]);
+    press(&mut s, &[(250.0, 100.0), (250.0, 120.0), (250.0, 150.0)]);
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 150.0), pt(400.0, 100.0)]);
+    let segments = s.doc().unwrap().selection.segments.get(&id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(segments, [(0, 1)], "the segment is selected");
+    s.execute("edit.clear", &json!({})).unwrap();
+    let left: Vec<Point> = paths(&s).iter().flat_map(|(_, pd)| pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
+    for p in [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 150.0), pt(400.0, 100.0)] {
+        assert!(left.contains(&p), "{p:?} stays: {left:?}");
+    }
+}
+
 /// A click on an open end of another path, in front of the selected path, that lies on a segment
 /// of the selected path goes on drawing from that end.
 #[test]
