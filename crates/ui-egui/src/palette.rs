@@ -106,6 +106,9 @@ struct Draft {
     label: String,
     /// Does the label translate? An installed filter plug-in's name does not.
     translates: bool,
+    /// Is this a plug-in command, whose label and plug-in name come from the plug-in's own
+    /// translations?
+    plugin_command: bool,
     id: String,
     shortcut: String,
     /// Has [`distinct_names`] given the result its [`context`]?
@@ -120,6 +123,7 @@ impl Draft {
             path: path.to_string(),
             label: label.to_string(),
             translates: true,
+            plugin_command: false,
             id,
             shortcut: shortcut.to_string(),
             in_context: false,
@@ -130,6 +134,20 @@ impl Draft {
     /// The name in `lang`: the path's segments and the label translate on their own, and the id
     /// follows in parentheses when the result shows it.
     fn name(&self, lang: crate::i18n::Lang) -> String {
+        // A plug-in command shows its label and its plug-in's name as its menu item does.
+        if self.plugin_command
+            && let Some((plugin, command)) = vectorcraft_engine::cmd::plugin::command_of(&self.id)
+        {
+            let m = plugin.manifest();
+            let path = if self.in_context {
+                shown_label(lang, &self.path)
+            } else {
+                let top = self.path.rsplit_once(" › ").map_or("", |(top, _)| top);
+                format!("{} › {}", shown_label(lang, top), m.shown_name(lang.code()))
+            };
+            let name = format!("{path} › {}", m.shown_command_label(&command, lang.code()));
+            return if self.keyed { format!("{name} ({})", self.id) } else { name };
+        }
         // A built-in effect's label translates by its effect id first, as the Effect menu's does.
         let label = match self.id.strip_prefix("effect:") {
             _ if !self.translates => self.label.as_str(),
@@ -158,8 +176,12 @@ fn drafts() -> Vec<Draft> {
             && !ui_ids.contains(c.id)
             && (!crate::shortcut_editor::needs_a_value(c.id) || PICK_RUNS.contains(&c.id))
     };
-    for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c)).chain(plugin_commands) {
+    for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c)) {
         out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("")));
+    }
+    for c in plugin_commands {
+        let draft = Draft::new(&c.menu.join(" › "), c.label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or(""));
+        out.push(Draft { plugin_command: true, ..draft });
     }
     // `plugin.dialog` runs nothing without an id: [`build`] lists each filter instead. A script of
     // the Scripts folder runs from File › Scripts, by its path. A UI command that wraps an engine
@@ -266,9 +288,10 @@ fn distinct_names(drafts: &mut [Draft], langs: &[crate::i18n::Lang]) {
 }
 
 /// A palette label in `lang`: each `›`-separated menu segment and the command label translate on
-/// their own.
+/// their own, except a plug-in's name and items after Object › Plug-ins or Effect › Plug-ins
+/// ([`crate::dialogs::plugin::translate_path`]).
 fn shown_label(lang: crate::i18n::Lang, label: &str) -> String {
-    label.split(" › ").map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ")
+    crate::dialogs::plugin::translate_path(label, |s| crate::i18n::tr(lang, s))
 }
 
 /// The label of the item of the menu bar that runs `e`, in `lang`, as the menu bar draws it
@@ -3257,6 +3280,46 @@ mod tests {
         assert_eq!((d.kind.as_str(), d.str("__plugin")), ("plugin", two.to_string()));
         vectorcraft_plugins::registry::remove(one);
         vectorcraft_plugins::registry::remove(two);
+    }
+
+    /// A plug-in command's result shows its label and its plug-in's name in the language the
+    /// plug-in translates them into, and the manifest's own text in a language it doesn't.
+    #[test]
+    fn a_plugin_command_result_shows_the_plugins_translation() {
+        use vectorcraft_plugins::wat as tpl;
+        let id = "test.UI.palette_translated";
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Tidy","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Grow"}}],
+                "translations":{{"de":{{"name":"Aufräumen","commands":{{"grow":{{"label":"Wachsen"}}}}}}}}}}"#
+        );
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let key = format!("plugin.{id}.grow");
+        let shown = |code: &str| {
+            let lang = Lang::from_code(code).unwrap();
+            build(lang).into_iter().find(|e| e.id == key).map(|e| (e.shown, crate::i18n::tr(lang, "Object"), crate::i18n::tr(lang, "Plug-ins")))
+        };
+        let (de, fr) = (shown("de"), shown("fr"));
+        vectorcraft_plugins::registry::remove(id);
+        let (de, object, plugins) = de.expect("the command is a result");
+        assert_eq!(de, format!("{object} › {plugins} › Aufräumen › Wachsen"));
+        let (fr, object, plugins) = fr.expect("the command is a result");
+        assert_eq!(fr, format!("{object} › {plugins} › Tidy › Grow"));
+    }
+
+    /// A plug-in's name in the path of its own item, in the submenu a plug-in with commands gets,
+    /// stays as the plug-in gives it where it matches text the app translates ("Open" in German).
+    #[test]
+    fn a_plugin_submenu_name_is_not_translated_by_the_app() {
+        use vectorcraft_plugins::wat as tpl;
+        let id = "test.UI.palette_submenu_name";
+        let manifest = format!(r#"{{"id":"{id}","name":"Open","version":"1","kind":"filter","commands":[{{"id":"go","label":"Go"}}]}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let de = Lang::from_code("de").unwrap();
+        let shown = build(de).into_iter().find(|e| e.id == format!("plugin:{id}")).map(|e| e.shown);
+        vectorcraft_plugins::registry::remove(id);
+        assert_ne!(crate::i18n::tr(de, "Open"), "Open", "German translates the app's Open");
+        let path = format!("{} › {}", crate::i18n::tr(de, "Object"), crate::i18n::tr(de, "Plug-ins"));
+        assert_eq!(shown, Some(format!("{path} › Open › Open")));
     }
 
     /// Of the engine commands the palette listed before, it leaves out only the ones

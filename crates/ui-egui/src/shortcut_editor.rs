@@ -385,15 +385,20 @@ pub struct Entry {
 pub(crate) struct Snapshot {
     /// The plug-in revision read before the menus were walked.
     pub revision: u64,
+    /// The UI language the menus were walked in, which names plug-in items in a plug-in's own
+    /// translations.
+    pub lang: &'static str,
     pub effects: Arc<[EffectItem]>,
     pub filters: Arc<[FilterItem]>,
     pub entries: Arc<[Entry]>,
 }
 
 /// The entries for the plug-ins installed now: rebuilt when a plug-in is installed or removed, so
-/// a live-effect or filter plug-in installed later has its row, and one removed has none.
+/// a live-effect or filter plug-in installed later has its row, and one removed has none, and when
+/// the UI language changes, so plug-in items show the plug-in's text in it.
 pub(crate) fn snapshot() -> Arc<Snapshot> {
     static LAST: Mutex<Option<Arc<Snapshot>>> = Mutex::new(None);
+    let lang = crate::i18n::current().code();
     let mut revision = menus::plugin_revision();
     let last = LAST.lock().unwrap_or_else(|e| e.into_inner()).clone();
     // A test's walk hook runs even when a snapshot of this revision is already stored.
@@ -406,13 +411,13 @@ pub(crate) fn snapshot() -> Arc<Snapshot> {
     };
     #[cfg(not(test))]
     let hooked = false;
-    if let Some(s) = last.filter(|s| s.revision == revision && !hooked) {
+    if let Some(s) = last.filter(|s| s.revision == revision && s.lang == lang && !hooked) {
         return s;
     }
     // When a plug-in is installed or removed during the walk, the entries may not match
     // `revision`, and the keymap cached for it would lack rows or hold extra ones. The menus are
     // walked again at the new revision, and a snapshot that still doesn't match is not cached.
-    let mut s = build_snapshot(revision);
+    let mut s = build_snapshot(revision, lang);
     for _ in 0..8 {
         let now = menus::plugin_revision();
         if now == revision {
@@ -424,13 +429,14 @@ pub(crate) fn snapshot() -> Arc<Snapshot> {
             return s;
         }
         revision = now;
-        s = build_snapshot(revision);
+        s = build_snapshot(revision, lang);
     }
     s
 }
 
-/// The snapshot of the menus as they are now, under plug-in revision `revision`.
-fn build_snapshot(revision: u64) -> Arc<Snapshot> {
+/// The snapshot of the menus as they are now, under plug-in revision `revision`, walked in UI
+/// language `lang`.
+fn build_snapshot(revision: u64, lang: &'static str) -> Arc<Snapshot> {
     // Built without the lock held: the Effect menu is walked anew.
     #[cfg(test)]
     if let Some(f) = tests::WHILE_WALKING.take() {
@@ -456,17 +462,22 @@ fn build_snapshot(revision: u64) -> Arc<Snapshot> {
             is_tool: false,
             shows_key: false,
         }))
-        .chain(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| Entry {
-            key: c.id.into(),
-            label: c.label.into(),
-            group: c.menu.join(" › "),
-            is_tool: false,
-            shows_key: false,
+        .chain(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| {
+            // A plug-in command's label and its plug-in's name in `lang`, as its menu shows them.
+            let (label, group) = match vectorcraft_engine::cmd::plugin::command_of(c.id) {
+                Some((plugin, command)) => {
+                    let m = plugin.manifest();
+                    let path: Vec<String> = c.menu.iter().take(2).map(|s| s.to_string()).chain([m.shown_name(lang)]).collect();
+                    (m.shown_command_label(&command, lang), path.join(" › "))
+                }
+                None => (c.label.to_string(), c.menu.join(" › ")),
+            };
+            Entry { key: c.id.into(), label, group, is_tool: false, shows_key: false }
         }))
         .chain(tail.iter().cloned())
         .collect();
     distinct_names(&mut entries);
-    Arc::new(Snapshot { revision, effects, filters, entries: entries.into() })
+    Arc::new(Snapshot { revision, lang, effects, filters, entries: entries.into() })
 }
 
 /// Every tool, command and panel the editor can give a shortcut; [`listed`] says which it lists.
@@ -647,15 +658,19 @@ pub fn filter_shortcut(id: &str) -> Option<&'static str> {
     effective(&format!("plugin:{id}"))
 }
 
-/// Entry `e`'s label in the UI language. A plug-in's own name is not translated.
+/// Entry `e`'s label in the UI language. A plug-in's own name and its commands' labels, already in
+/// the UI language from the plug-in's translations, are not translated again.
 pub(crate) fn shown_label(e: &Entry) -> &str {
-    let plugin = e.key.starts_with("plugin:") || e.key.strip_prefix("effect:").and_then(vectorcraft_plugins::effect::plugin_id).is_some();
+    let plugin = e.key.starts_with("plugin:")
+        || vectorcraft_engine::cmd::plugin::is_command_id(&e.key)
+        || e.key.strip_prefix("effect:").and_then(vectorcraft_plugins::effect::plugin_id).is_some();
     if plugin { &e.label } else { tl!(&e.label) }
 }
 
-/// A menu path in the UI language, one segment at a time.
+/// A menu path in the UI language, one segment at a time; a plug-in's name after Object › Plug-ins
+/// or Effect › Plug-ins stays as the plug-in gives it ([`crate::dialogs::plugin::translate_path`]).
 pub(crate) fn shown_group(group: &str) -> String {
-    group.split(" › ").map(|s| tl!(s)).collect::<Vec<_>>().join(" › ")
+    crate::dialogs::plugin::translate_path(group, |s| tl!(s))
 }
 
 /// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu, and

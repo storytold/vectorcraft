@@ -243,11 +243,12 @@ fn built_in_effect(id: &str) -> bool {
 }
 
 /// [`effect_label`] as shown: a built-in effect's in the UI language (an `@id` row for the
-/// effect's id wins over the plain row of its English label), a plug-in's as it is.
+/// effect's id wins over the plain row of its English label), a plug-in's by the name the plug-in
+/// gives in the UI language ([`crate::dialogs::plugin::effect_name`]).
 pub(crate) fn shown_effect_label(id: &str) -> String {
     match catalog().iter().find(|c| c.0 == id) {
         Some(c) => crate::i18n::t_id(id, &c.1).to_string(),
-        None => effect_label(id),
+        None => crate::dialogs::plugin::effect_name(id).unwrap_or_else(|| effect_label(id)),
     }
 }
 
@@ -1396,10 +1397,14 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
             }
             let ui_keys = manifest.and_then(|m| m.param(key)).map(|p| &p.ui);
             ui.horizontal(|ui| {
-                let label = ui_keys.and_then(|u| u.label.clone()).unwrap_or_else(|| param_label(key, built_in));
+                // A plug-in's label and help in the UI language, escaped as its dialog shows them.
+                let label = manifest.and_then(|m| crate::dialogs::form::plugin_param_label(m, key)).unwrap_or_else(|| param_label(key, built_in));
                 let label_node =
                     ui.add_sized(vec2(84.0, 22.0), egui::Label::new(egui::RichText::new(label.as_str()).size(11.5).color(t.text)).truncate());
-                let label_node = if let Some(help) = ui_keys.and_then(|u| u.help.as_deref()) { label_node.on_hover_text(help) } else { label_node };
+                let label_node = match manifest.and_then(|m| crate::dialogs::form::plugin_param_help(m, key)) {
+                    Some(help) => label_node.on_hover_text(help),
+                    None => label_node,
+                };
                 // The row's actual label node names its fields, including a plug-in's plain text
                 // and number fields (egui 0.37's strict a11y gate).
                 ui.label_inputs_by(label_node.id, |ui| {
@@ -1815,8 +1820,11 @@ fn delete_selected(app: &mut VectorcraftApp, ui: &Ui, node: Option<&Node>, sel: 
 /// opens the effect dialog.
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
-    let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
-    // Built-in effects in the UI language; a plug-in's by the name it gives.
+    let plugins: Vec<_> = vectorcraft_effects::plugin_effects()
+        .into_iter()
+        .map(|e| (e.id.to_string(), crate::dialogs::plugin::effect_item_label(&e).trim_end_matches('…').to_string(), catalog_entry(e).2))
+        .collect();
+    // Built-in effects in the UI language; a plug-in's by the name it gives in it.
     let built_in = catalog().iter().map(|(id, label, menu)| (id, tl!(label), menu));
     for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.as_str(), menu))) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());

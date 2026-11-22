@@ -2017,6 +2017,19 @@ fn a_heavy_filter_installs_once_the_user_agrees() {
     assert!(install(&mut s, DESATURATE).get("budget").is_none());
 }
 
+/// The refusal of a heavy filter names it as prompts show text: a right-to-left override in its
+/// name is escaped, so it can't reorder the message around it.
+#[test]
+fn a_heavy_filter_refusal_escapes_its_name() {
+    let mut s = session();
+    // The override as a JSON escape in the manifest.
+    let rlo = format!("\\u{:04X}", 0x202E);
+    let manifest = format!(r#"{{"id":"test.engine.heavy.name","name":"Route{rlo}txt.exe","version":"1","kind":"filter","budget":"heavy"}}"#);
+    let module = wat::parse_str(tpl::spinning(&manifest, 1, r#"{"objects":[]}"#)).unwrap();
+    let e = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap_err().to_string();
+    assert!(e.contains("“Route\\u{202E}txt.exe” asks for a heavy budget"), "{e}");
+}
+
 #[test]
 fn invalid_install_flags_are_refused() {
     let mut s = session();

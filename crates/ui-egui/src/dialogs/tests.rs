@@ -720,6 +720,7 @@ impl PluginIntField {
             paint_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
+            translations: Default::default(),
         };
         let mut f = PluginIntField { ctx, d: Dialog::new(plugin::KIND, json!({ "seed": start })), m, pos: egui::Pos2::ZERO };
         fn number_rect(shape: &egui::Shape, text: &str) -> Option<egui::Rect> {
@@ -817,6 +818,75 @@ fn plugin_color_parameter_shows_a_color_button() {
         out.textures_delta.clear();
         assert!(out.shapes.iter().any(|s| filled(&s.shape, want)), "{cur}");
     }
+}
+
+/// Every text `shape` draws.
+fn drawn_texts(shape: &egui::Shape, out: &mut Vec<String>) {
+    match shape {
+        egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+        egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| drawn_texts(s, out)),
+        _ => {}
+    }
+}
+
+/// A plug-in's dialog shows the text its manifest's `translations` give in the UI language (the
+/// heading, a label, a group heading and a choice's label) and its own text in any other language;
+/// the choice still passes its value. Plug-in text with a right-to-left override is drawn escaped.
+#[test]
+fn plugin_dialogs_show_the_plugins_text_in_the_ui_language() {
+    let id = "test.dialogs.translated";
+    // The override as a JSON escape in the manifest.
+    let rlo = format!("\\u{:04X}", 0x202E);
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Tidy","kind":"filter","params":{{
+            "mode":{{"type":"choice","options":["soft","hard"],"label":"Mode","group":"Shape","help":"How hard."}},
+            "flip":{{"type":"bool","label":"Flip{rlo}txt"}}}},
+            "commands":[{{"id":"grow","label":"Grow","params":{{"by":{{"type":"number","min":0,"max":10,"default":2,"label":"By"}}}}}}],
+            "translations":{{"de":{{"name":"Aufräumen","params":{{"mode":{{"label":"Modus","options":{{"soft":"Weich"}}}}}},
+                "groups":{{"Shape":"Form"}},"commands":{{"grow":{{"label":"Wachsen","params":{{"by":{{"label":"Um"}}}}}}}}}}}}}}"#
+    );
+    let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let installed = vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let drawn = |lang: &str, m: &vectorcraft_plugins::Manifest, fields: serde_json::Value| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).expect("language registered"));
+        let mut d = Dialog::new(plugin::KIND, fields);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            form::schema_rows(ui, &mut d, m);
+        });
+        out.textures_delta.clear();
+        let mut texts = Vec::new();
+        out.shapes.iter().for_each(|s| drawn_texts(&s.shape, &mut texts));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        texts
+    };
+    let m = installed.manifest();
+    let de = drawn("de", m, json!({"mode": "soft"}));
+    for text in ["Modus:", "Weich", "Form", "Flip\\u{202E}txt:"] {
+        assert!(de.iter().any(|t| t == text), "{text} in German: {de:?}");
+    }
+    assert!(!de.iter().any(|t| t == "Mode:" || t == "soft" || t == "Shape"), "{de:?}");
+    let en = drawn("en", m, json!({"mode": "soft"}));
+    for text in ["Mode:", "soft", "Shape"] {
+        assert!(en.iter().any(|t| t == text), "{text} in English: {en:?}");
+    }
+    assert!(!en.iter().chain(&de).any(|t| t.contains('\u{202E}')), "the override is never drawn as one");
+    // The heading follows the language it is drawn in, for the filter and for its command.
+    let own = Dialog::new(plugin::KIND, json!({"__plugin": id, "__label": "Tidy"}));
+    let command = Dialog::new(plugin::KIND, json!({"__plugin": id, "__label": "Grow", "__command": format!("plugin.{id}.grow")}));
+    let heading = |lang: &str, d: &Dialog| {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(lang).unwrap());
+        let shown = (plugin::SPEC.heading)(d);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        shown
+    };
+    assert_eq!((heading("de", &own), heading("en", &own)), ("Aufräumen".to_string(), "Tidy".to_string()));
+    assert_eq!((heading("de", &command), heading("fr", &command)), ("Wachsen".to_string(), "Grow".to_string()));
+    let grow = m.for_command(m.command("grow").unwrap());
+    assert!(drawn("de", &grow, json!({})).iter().any(|t| t == "Um:"));
+    vectorcraft_plugins::registry::remove(id);
 }
 
 #[test]

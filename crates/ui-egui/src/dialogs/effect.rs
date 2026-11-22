@@ -68,11 +68,12 @@ fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, 
 }
 
 /// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
-/// without its trailing ellipsis. A plug-in effect's name is shown as it is.
+/// without its trailing ellipsis. A plug-in effect's name is the plug-in's in the UI language
+/// ([`super::plugin::effect_name`]).
 fn heading_label(d: &Dialog) -> String {
     let label = d.str("__label");
     if vectorcraft_plugins::effect::plugin_id(&d.str("__effect")).is_some() {
-        return label;
+        return super::plugin::effect_name(&d.str("__effect")).unwrap_or(label);
     }
     let dotted = format!("{label}…");
     let shown = tl!(&dotted);
@@ -648,8 +649,11 @@ pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'
 /// CMYK). `None` for a parameter that is not one of these lists.
 pub(crate) fn shown_choices(effect: &str, key: &str, params: &Map<String, Value>, cmyk: bool) -> Option<Vec<(String, String)>> {
     if let Some(plugin) = vectorcraft_plugins::effect::installed(effect) {
-        return plugin.manifest().param(key).and_then(|p| match &p.spec {
-            vectorcraft_plugins::ParamSpec::Choice { options, .. } => Some(options.iter().map(|o| (o.clone(), o.clone())).collect()),
+        let m = plugin.manifest();
+        return m.param(key).and_then(|p| match &p.spec {
+            vectorcraft_plugins::ParamSpec::Choice { options, .. } => {
+                Some(options.iter().map(|o| (form::plugin_option_label(m, key, o), o.clone())).collect())
+            }
             _ => None,
         });
     }

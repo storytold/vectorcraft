@@ -615,7 +615,8 @@ fn typed_number(x: f64) -> Value {
 /// page. Parameters outside any group come first, then each group as a section that folds
 /// ([`Manifest::sections`]); a parameter whose `visibleWhen` the values don't meet is left out
 /// ([`Manifest::visible`]). Returns true when a value changed. Labels, choices, groups and help are
-/// the plug-in's text, shown as they are. A plug-in may declare more parameters
+/// the plug-in's text in the UI language ([`vectorcraft_plugins::translations`]), with control and
+/// bidirectional characters escaped ([`plugin_text`]). A plug-in may declare more parameters
 /// ([`MAX_PARAMS`](vectorcraft_plugins::manifest::MAX_PARAMS)) than the window has room for, and
 /// the rows then scroll ([`super::modal::scrolled_rows`]).
 pub(super) fn schema_fields(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> bool {
@@ -640,7 +641,7 @@ pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (b
     // down the dialog; the rows outside groups make up for the indent of a group's rows.
     let font = egui::TextStyle::Body.resolve(ui.style());
     let label_width = (m.params.iter().filter(|(k, _)| visible.contains(k.as_str())))
-        .map(|(k, p)| ui.painter().layout_no_wrap(param_label(k, p), font.clone(), egui::Color32::WHITE).size().x)
+        .map(|(k, _)| ui.painter().layout_no_wrap(param_label(m, k), font.clone(), egui::Color32::WHITE).size().x)
         .fold(0.0, f32::max);
     let indent = if sections.iter().any(|(group, _)| group.is_some()) { ui.spacing().indent } else { 0.0 };
     super::modal::scrolled_rows(ui, "plugin-fields", |ui| {
@@ -653,7 +654,7 @@ pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (b
                 let grid = egui::Grid::new(("plugin-grid", section)).num_columns(2).spacing([12.0, 8.0]).min_col_width(label_width);
                 grid.show(ui, |ui| {
                     for (k, p) in shown {
-                        let (row_changed, opened) = param_row(ui, d, k, p);
+                        let (row_changed, opened) = param_row(ui, d, m, k, p);
                         changed |= row_changed;
                         help = help.take().or(opened);
                         ui.end_row();
@@ -663,7 +664,9 @@ pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (b
             match group {
                 None => rows(ui, label_width + indent),
                 Some(g) => {
-                    egui::CollapsingHeader::new(g).id_salt(("plugin-group", g)).default_open(true).show(ui, |ui| rows(ui, label_width));
+                    // The section is kept by the manifest's group, whatever language heads it.
+                    let heading = plugin_text(m.group_in(g, plugin_lang()));
+                    egui::CollapsingHeader::new(heading).id_salt(("plugin-group", g)).default_open(true).show(ui, |ui| rows(ui, label_width));
                 }
             }
         }
@@ -671,18 +674,56 @@ pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (b
     (changed, help)
 }
 
-/// The label of parameter `k`'s row: its manifest `label`, else its name spaced out.
-fn param_label(k: &str, p: &Param) -> String {
-    p.ui.label.as_ref().map_or_else(|| humanize(k), |l| format!("{l}:"))
+/// The UI language's code, which a plug-in's translations are looked up under.
+fn plugin_lang() -> &'static str {
+    crate::i18n::current().code()
+}
+
+/// Plug-in text `s` as a dialog shows it: each line with its control and bidirectional characters
+/// escaped ([`vectorcraft_plugins::permissions::display_text`]), so a label or help can't reorder
+/// the text around it.
+fn plugin_text(s: &str) -> String {
+    let lines: Vec<String> =
+        s.split('\n').map(|l| vectorcraft_plugins::permissions::display_text(l, vectorcraft_plugins::dialog::MAX_HELP)).collect();
+    lines.join("\n")
+}
+
+/// Parameter `k`'s `label` in manifest `m`, in the UI language as dialogs show it ([`plugin_text`]);
+/// `None` when it gives none.
+pub(crate) fn plugin_param_label(m: &Manifest, k: &str) -> Option<String> {
+    m.param_label_in(k, plugin_lang()).map(plugin_text)
+}
+
+/// Parameter `k`'s `help` in manifest `m`, in the UI language as dialogs show it.
+pub(crate) fn plugin_param_help(m: &Manifest, k: &str) -> Option<String> {
+    m.param_help_in(k, plugin_lang()).map(plugin_text)
+}
+
+/// The label of value `option` of choice `k` in manifest `m`, in the UI language as dialogs show it.
+pub(crate) fn plugin_option_label(m: &Manifest, k: &str, option: &str) -> String {
+    plugin_text(m.option_label_in(k, option, plugin_lang()))
+}
+
+/// The label of parameter `k`'s row in manifest `m`: its `label` in the UI language, else its name
+/// spaced out.
+fn param_label(m: &Manifest, k: &str) -> String {
+    plugin_param_label(m, k).map_or_else(|| humanize(k), |l| format!("{l}:"))
 }
 
 /// One row of [`schema_fields`]: parameter `k`'s label and value field → whether the value changed,
 /// and the help page asked for.
-fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Option<String>) {
+fn param_row(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest, k: &str, p: &Param) -> (bool, Option<String>) {
     let t = Tokens::get(ui.ctx());
-    let label = param_label(k, p);
+    let label = param_label(m, k);
     let shown_label = ui.label(egui::RichText::new(&label).color(t.text));
-    let shown_label = if let Some(help) = &p.ui.help { shown_label.on_hover_text(help) } else { shown_label };
+    let shown_label = match plugin_param_help(m, k) {
+        Some(help) => shown_label.on_hover_text(help),
+        None => shown_label,
+    };
+    let choices: Vec<String> = match &p.spec {
+        ParamSpec::Choice { options, .. } => options.iter().map(|o| plugin_option_label(m, k, o)).collect(),
+        _ => Vec::new(),
+    };
     let cur = d.fields.get(k).cloned().unwrap_or_else(|| p.spec.default_value());
     let unit = p.ui.unit.as_deref().unwrap_or_default();
     let suffix = unit_suffix(unit);
@@ -691,7 +732,7 @@ fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Op
         .horizontal(|ui| {
             // The row's painted label names every input in its value column (egui 0.37's strict
             // accessibility gate), not only the first one.
-            let (new, in_field) = ui.label_inputs_by(shown_label.id, |ui| value_field(ui, k, &label, &p.spec, &cur, &suffix));
+            let (new, in_field) = ui.label_inputs_by(shown_label.id, |ui| value_field(ui, k, &label, &p.spec, &choices, &cur, &suffix));
             if !in_field && !unit.is_empty() {
                 ui.label(egui::RichText::new(unit).color(t.text_dim));
             }
@@ -707,10 +748,10 @@ fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Op
     (changed, opened)
 }
 
-/// The field of parameter `k`'s value `cur` (a checkbox is called by the row's `label`) → the new
-/// value when it changed, and whether the field shows `suffix` (numbers do; the other fields leave
-/// the unit to a label after them).
-fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &Value, suffix: &str) -> (Option<Value>, bool) {
+/// The field of parameter `k`'s value `cur` (a checkbox is called by the row's `label`; a choice
+/// shows `choices`, the label of each option in order) → the new value when it changed, and whether
+/// the field shows `suffix` (numbers do; the other fields leave the unit to a label after them).
+fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, choices: &[String], cur: &Value, suffix: &str) -> (Option<Value>, bool) {
     match spec {
         ParamSpec::Number { min, max, .. } => {
             let x = cur.as_f64().unwrap_or(*min);
@@ -737,9 +778,10 @@ fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &
             (crate::widgets::check_box(ui, label, b, true).then(|| json!(!b)), false)
         }
         ParamSpec::Choice { options, .. } => {
-            let labels: Vec<&str> = options.iter().map(String::as_str).collect();
-            let chosen =
-                crate::widgets::dropdown_names_named(ui, ("plugin-choice", k), Some(label), cur.as_str().unwrap_or_default(), &labels, 140.0);
+            let labels: Vec<&str> = choices.iter().map(String::as_str).collect();
+            // The option chosen now, by its label in `choices`.
+            let shown = options.iter().position(|o| Some(o.as_str()) == cur.as_str()).and_then(|i| labels.get(i).copied()).unwrap_or_default();
+            let chosen = crate::widgets::dropdown_names_named(ui, ("plugin-choice", k), Some(label), shown, &labels, 140.0);
             (chosen.and_then(|i| options.get(i)).map(|o| json!(o)), false)
         }
         ParamSpec::Text { max_length, .. } => {

@@ -279,12 +279,25 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         install["hash"] = info["hash"].clone();
     }
     let shown = |k: &str, max: usize| permissions::display_text(info[k].as_str().unwrap_or_default(), max);
-    let name = shown("name", permissions::MAX_SHOWN_NAME);
-    let identity = [
-        crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))]),
-        crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]),
-    ]
-    .join("\n");
+    // The question names the plug-in in the UI language when its manifest translates the name, and
+    // then also gives the manifest's own name; both are fixed while the question is asked.
+    let own_name = shown("name", permissions::MAX_SHOWN_NAME);
+    let translations: vectorcraft_plugins::translations::Translations = serde_json::from_value(info["translations"].clone()).unwrap_or_default();
+    let name = translations
+        .name_in(crate::i18n::current().code())
+        .map(|n| permissions::display_text(n.trim(), permissions::MAX_SHOWN_NAME))
+        .unwrap_or_else(|| own_name.clone());
+    let id_lines = |id_line: String| {
+        let mut lines = vec![id_line];
+        if name != own_name {
+            lines.push(crate::i18n::fmt(tl!("Manifest name: {name}"), &[("name", &own_name)]));
+        }
+        lines
+    };
+    let id_line = crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))]);
+    let mut identity = id_lines(id_line.clone());
+    identity.push(crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]));
+    let identity = identity.join("\n");
     let takes_place = tl!("This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.");
     if asks_replace {
         install["replace"] = json!(true);
@@ -294,7 +307,7 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
     let asked = info["permissions"].as_array().cloned().unwrap_or_default();
     let mut paragraphs = vec![];
     if needs_grant {
-        let mut lines = vec![crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))])];
+        let mut lines = id_lines(id_line);
         let version = shown("version", permissions::MAX_SHOWN_FIELD);
         if !version.is_empty() {
             lines.push(crate::i18n::fmt(tl!("Version: {version}"), &[("version", &version)]));
