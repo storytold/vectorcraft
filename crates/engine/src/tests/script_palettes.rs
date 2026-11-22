@@ -154,6 +154,32 @@ fn a_list_change_that_waited_while_the_list_changed_ends_its_run() {
 }
 
 #[test]
+fn a_list_change_for_an_item_a_run_removed_since_ends_its_run() {
+    let mut s = one_doc();
+    run_in_app(
+        &mut s,
+        "#targetengine shrink\nvar p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); \
+         l.onChange = function () { vc.log(String(l.selection)); }; p.show();",
+    );
+    let id = only_palette(&s);
+    assert_eq!(run(&mut s, "#targetengine shrink\nconfirm('Go?'); l.removeAll(); l.add('item', 'a');").unwrap()["running"], true);
+    assert!(pump(&mut s).is_none());
+    assert_eq!(s.script_palette_event(id, UiEvent::Change(1, crate::script::UiValue::Index(Some(1)))), Ok(Waiting::Added));
+    assert!(s.script_answer(DialogAnswer::Confirm(true)));
+    pump(&mut s).unwrap().unwrap();
+    assert!(s.script_palette_start().expect("the change starts its run").is_ok());
+    let e = pump(&mut s).unwrap().unwrap_err().to_string();
+    assert!(e.contains("a palette's list changed before the person's choice was taken"), "{e}");
+    assert_eq!(run(&mut s, "#targetengine shrink\nconfirm('Go?'); l.add('item', 'c'); l.enabled = false;").unwrap()["running"], true);
+    assert!(pump(&mut s).is_none());
+    assert_eq!(s.script_palette_event(id, UiEvent::Change(1, crate::script::UiValue::Index(Some(0)))), Ok(Waiting::Added));
+    assert!(s.script_answer(DialogAnswer::Confirm(true)));
+    pump(&mut s).unwrap().unwrap();
+    assert!(s.script_palette_start().is_none(), "a change of a list a run changed and disabled since is dropped");
+    assert_eq!(s.script_palette_events_waiting(), 0);
+}
+
+#[test]
 fn a_click_that_waited_while_a_run_added_a_control_before_it_reaches_its_button() {
     let mut s = one_doc();
     run_in_app(
@@ -172,6 +198,28 @@ fn a_click_that_waited_while_a_run_added_a_control_before_it_reaches_its_button(
     assert_eq!(s.script_palettes()[0].dialog.find("Last"), Some(4), "the added button comes before Last in the list of controls");
     assert!(s.script_palette_start().expect("the click starts its run").is_ok());
     assert_eq!(pump(&mut s).unwrap().unwrap()["log"], json!(["last"]));
+}
+
+#[test]
+fn a_waiting_click_on_a_button_a_handler_disabled_is_dropped() {
+    let mut s = one_doc();
+    run_in_app(
+        &mut s,
+        "#targetengine switches\nvar p = new Window('palette'); var off = p.add('button', undefined, 'Off'); \
+         var go = p.add('button', undefined, 'Go'); off.onClick = function () { go.enabled = false; vc.log('off'); }; \
+         go.onClick = function () { vc.log('go'); }; p.show();",
+    );
+    let id = only_palette(&s);
+    assert_eq!(run(&mut s, "confirm('Go?');").unwrap()["running"], true);
+    assert!(pump(&mut s).is_none());
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(1)), Ok(Waiting::Added));
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(2)), Ok(Waiting::Added));
+    assert!(s.script_answer(DialogAnswer::Confirm(true)));
+    pump(&mut s).unwrap().unwrap();
+    assert!(s.script_palette_start().expect("the first click starts its run").is_ok());
+    assert_eq!(pump(&mut s).unwrap().unwrap()["log"], json!(["off"]));
+    assert!(s.script_palette_start().is_none(), "the click on the button the handler disabled does not run");
+    assert_eq!(s.script_palette_events_waiting(), 0);
 }
 
 #[test]

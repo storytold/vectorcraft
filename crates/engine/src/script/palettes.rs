@@ -184,13 +184,31 @@ impl Palettes {
 
     /// The oldest waiting event whose palette is still shown, given to the control at its place in
     /// the palette as the runs since left it, and that palette. An event whose control the palette
-    /// no longer has is dropped.
+    /// no longer has, or that the control can no longer take ([`scriptui::check_event`]), for
+    /// example because a handler disabled or hid it, is dropped.
     fn next(&mut self) -> Option<(ScriptPalette, Queued)> {
         while let Some(mut q) = self.waiting.pop_front() {
             let Some(p) = self.list.iter().find(|p| p.id == q.palette && p.visible) else { continue };
             if let Some(c) = control_of(&mut q.event) {
                 let Some(at) = p.dialog.control_at(&q.place) else { continue };
                 *c = at;
+            }
+            // A list's change whose list a run changed since goes to its run, which ends with the
+            // error that says so, when the list can still take a change: the choice is checked
+            // without its item, which the list may no longer have.
+            let list_changed = match (&q.event, &q.list) {
+                (UiEvent::Change(c, UiValue::Index(_)), Some((_, revision))) => {
+                    p.dialog.nodes.get(*c).is_some_and(|n| n.revision != *revision).then_some(*c)
+                }
+                _ => None,
+            };
+            if let Some(c) = list_changed {
+                if scriptui::check_event(&p.dialog, UiEvent::Change(c, UiValue::Index(None))).is_err() {
+                    continue;
+                }
+            } else {
+                let Ok(event) = scriptui::check_event(&p.dialog, q.event) else { continue };
+                q.event = event;
             }
             return Some((p.clone(), q));
         }

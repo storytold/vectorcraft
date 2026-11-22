@@ -2989,7 +2989,8 @@ the same controls, handlers and limits:
   goes on, the event waits and runs after it; events run one at a time, oldest first. While an event waits, a
   newer click on the same control, change of the same control or close of the same palette takes its place,
   with the newer value. A waiting click or change, and a text typed in a field, stay with their control when a
-  run adds controls before it; a waiting event whose control is gone is dropped. A list's change ends its run
+  run adds controls before it. A waiting event whose control is gone, or that its control can no longer take
+  because a handler disabled or hid it, is dropped. A list's change ends its run
   with an error when a script added or removed the list's items after the person chose, even if the list again
   holds the same texts. A text typed in a palette's field that is longer than 16 KiB stays in the field with the error in the status bar, and a click or close waits
   until it is fixed. An error in a handler ends that run like any failed run, puts the documents back, and
