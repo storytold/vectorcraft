@@ -10,12 +10,16 @@
 //! named by `path` that only an importer can read is read no further than that. Its objects become
 //! a new document whose artboard is their bounds, and nothing opens when the importer fails,
 //! declines, is cancelled or returns objects that don't pass the checks a filter's output does.
+//! An importer at plug-in API level 4 may also return point type, embedded images, top-level
+//! layers and artboards (its manifest's `outputKinds`): the artboards it returns replace the one
+//! around the art.
 
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_doc::{Document, MAX_COORD};
-use vectorcraft_geom::Rect;
+use vectorcraft_doc::{CharStyle, Document, ImageObject, LAYER_COLORS, LayerColor, MAX_COORD, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_geom::{Point, Rect};
+use vectorcraft_plugins::import::ImportObject;
 use vectorcraft_plugins::{Plugin, export, import, objects};
 
 use super::super::{Result, bad, str_param};
@@ -135,22 +139,152 @@ pub(super) fn load(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value) -> Resu
     let mut doc = Document::new(1.0, 1.0);
     let layer = doc.layers.first().map(|l| l.id);
     let admit = |fx: &[vectorcraft_doc::Effect], n: &vectorcraft_doc::Node| crate::cmd::plugin::admit_effects_for(C, fx, n);
-    let ids =
-        objects::apply_output(&mut doc, &[], imported.objects, layer, &admit).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
-    if let (Some(bounds), Some(board)) = (doc.bounds_of(&ids, true), doc.artboards.first_mut()) {
-        board.rect = artboard_rect(bounds);
+    let open_err = |e: vectorcraft_plugins::Error| err(format!("can't open `{}`: {e}", file_name(name)));
+    let mut warnings = Vec::new();
+    let (ids, artboards) = if imported.paths_only() {
+        let paths = imported.objects.into_iter().filter_map(|o| if let ImportObject::Path(o) = o { Some(o) } else { None }).collect();
+        (objects::apply_output(&mut doc, &[], paths, layer, &admit).map_err(open_err)?, Vec::new())
+    } else {
+        let ids = build(&mut doc, imported.objects, imported.layers, &admit, &mut warnings)
+            .map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
+        (ids, imported.artboards)
+    };
+    if artboards.is_empty() {
+        if let (Some(bounds), Some(board)) = (doc.bounds_of(&ids, true), doc.artboards.first_mut()) {
+            board.rect = artboard_rect(bounds);
+        }
+    } else {
+        set_artboards(&mut doc, artboards);
     }
     doc.title = file_name(name);
-    Ok(Loaded {
-        doc,
-        format,
-        warnings: imported.warnings,
-        restored: false,
-        converted: false,
-        preview_only: false,
-        editing_data: false,
-        native_pdf_compatible: None,
-    })
+    warnings.splice(0..0, imported.warnings);
+    Ok(Loaded { doc, format, warnings, restored: false, converted: false, preview_only: false, editing_data: false, native_pdf_compatible: None })
+}
+
+/// Puts `objects`, what an importer at plug-in API level 4 returned, into `doc`, a new document of
+/// one layer: in `layers`, bottom first, each holding the objects it lists in their order, or all in
+/// that one layer when there are none. Paths are made as a filter's new ones are (their effects let
+/// in by `admit`), type is laid out, and each image is stored in the document as a PNG of its
+/// pixels. A warning for type whose font isn't there, or doesn't have its style, goes to `warnings`.
+/// Returns the objects' ids in order.
+fn build(
+    doc: &mut Document,
+    objects: Vec<ImportObject>,
+    layers: Vec<import::OutLayer>,
+    admit: objects::AdmitEffects,
+    warnings: &mut Vec<String>,
+) -> std::result::Result<Vec<NodeId>, String> {
+    let count = objects.len();
+    let first = doc.layers.first().map(|l| (**l).clone());
+    let first = first.unwrap_or_else(|| Node::layer(doc.alloc_id(), "Layer 1", LayerColor::Preset(0)));
+    let mut owner = vec![0usize; count];
+    for (li, l) in layers.iter().enumerate() {
+        for &k in &l.objects {
+            if let Some(o) = owner.get_mut(k) {
+                *o = li;
+            }
+        }
+    }
+    let mut members: Vec<Vec<Arc<Node>>> = vec![Vec::new(); layers.len().max(1)];
+    let mut ids = Vec::with_capacity(count);
+    let mut fonts = std::collections::BTreeSet::new();
+    for (i, o) in objects.into_iter().enumerate() {
+        let at = format!("objects[{i}]");
+        let node = match o {
+            ImportObject::Path(o) => objects::new_object(doc, o, &at, admit).map_err(|e| e.to_string())?,
+            ImportObject::Type(t) => {
+                let node = type_node(doc, t);
+                if let NodeKind::Text(t) = &node.kind {
+                    fonts.extend(t.runs.iter().flat_map(crate::cmd::fonts::run_fonts));
+                }
+                node
+            }
+            ImportObject::Image(im) => image_node(doc, im).map_err(|e| e.to_string())?,
+        };
+        ids.push(node.id);
+        if let Some(list) = owner.get(i).and_then(|&li| members.get_mut(li)) {
+            list.push(Arc::new(node));
+        }
+    }
+    let built: Vec<Arc<Node>> = if layers.is_empty() {
+        let mut layer = first;
+        if let Some(children) = layer.children_mut() {
+            *children = members.into_iter().next().unwrap_or_default();
+        }
+        vec![Arc::new(layer)]
+    } else {
+        layers
+            .into_iter()
+            .zip(members)
+            .enumerate()
+            .map(|(li, (l, children))| {
+                let mut layer = Node::layer(doc.alloc_id(), &l.name, LayerColor::Preset((li % LAYER_COLORS.len()) as u8));
+                layer.visible = l.visible;
+                layer.locked = l.locked;
+                if let Some(c) = layer.children_mut() {
+                    *c = children;
+                }
+                Arc::new(layer)
+            })
+            .collect()
+    };
+    doc.layers = built;
+    warnings.extend(crate::cmd::fonts::set_font_warning(fonts));
+    Ok(ids)
+}
+
+/// Point type `t` as a new node of `doc`, in [Normal Character Style] with the face, size and fill
+/// `t` gives, laid out.
+fn type_node(doc: &mut Document, t: import::OutType) -> Node {
+    let mut style = crate::cmd::textstyles::normal_char_style(doc);
+    style.font_version = None;
+    style.font_axes.clear();
+    style.font_family = t.font_family;
+    match t.font_style {
+        Some(s) => style.font_style = s,
+        None => {
+            style.font_style = CharStyle::default().font_style;
+            crate::cmd::textedit::fit_font_style(&mut style);
+        }
+    }
+    style.size = t.font_size;
+    if let Some(fill) = t.fill {
+        style.fill = fill;
+    }
+    let mut text = TextObject::point(Point::ZERO, &t.text, style);
+    text.xf = t.transform;
+    text.para = crate::cmd::create::new_type_para();
+    text.system_layout = doc.setup.system_layout;
+    crate::cmd::typecmd::refresh_bounds(&mut text);
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(text)));
+    n.name = t.name;
+    n
+}
+
+/// Image `im` as a new node of `doc`, its pixels stored in `doc` as a PNG.
+fn image_node(doc: &mut Document, im: import::OutImage) -> Result<Node> {
+    let pixels = image::RgbaImage::from_raw(im.width, im.height, im.rgba).ok_or_else(|| err("the image's pixels don't match its size"))?;
+    let stored = super::load::as_png(pixels, None, None)?;
+    let image = ImageObject {
+        key: stored.key.clone(),
+        width: stored.width,
+        height: stored.height,
+        xf: im.transform,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    doc.images.insert(stored.key, stored.blob);
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(image)));
+    n.name = im.name;
+    Ok(n)
+}
+
+/// Gives `doc` the artboards `boards` an importer returned, in order, in place of its one.
+fn set_artboards(doc: &mut Document, boards: Vec<import::OutArtboard>) {
+    let Some(template) = doc.artboards.first().cloned() else { return };
+    doc.artboards =
+        boards.into_iter().zip(1u32..).map(|(b, id)| vectorcraft_doc::Artboard { id, name: b.name, rect: b.rect, ..template.clone() }).collect();
 }
 
 /// The artboard of art with bounds `r`: `r` within ±[`MAX_COORD`], at least 1 pt wide and high

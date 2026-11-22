@@ -101,6 +101,9 @@ pub fn describe(p: &Plugin) -> Value {
     if !m.inputs.is_empty() {
         v["inputs"] = json!(m.inputs);
     }
+    if !m.output_kinds.is_empty() {
+        v["outputKinds"] = json!(m.output_kinds);
+    }
     if m.paint_output {
         v["paintOutput"] = json!(true);
     }

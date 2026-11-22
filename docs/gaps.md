@@ -905,6 +905,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   It is given at most 128 MiB of the file and returns paths and compound paths, checked as a filter's output is, which
   become a new document; nothing opens when it fails, declines or is cancelled. Engine, unit and headless Open With
   regressions.
+- **Done:** importer output kinds. An importer at plug-in API level 4 whose manifest lists `outputKinds` may also
+  return point type, embedded RGBA images, top-level layers and artboards; content of a kind it doesn't list, and output
+  past the limits on layers, artboards, text and pixels, opens nothing. Engine and unit regressions.
 - **Done:** exporter plug-ins (`"kind": "exporter"`). A plug-in adds a write-only file format that File › Export ›
   Export As lists after the built-in ones and `document.export` writes (`plugin.<id>`, or a path ending in one of its
   extensions). It is given the document as the native file's JSON and its parameters, with a larger budget than a

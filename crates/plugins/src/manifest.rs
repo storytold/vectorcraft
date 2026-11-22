@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, INPUTS_API, PROGRESS_API, Permission};
+use crate::permissions::{self, API_LEVEL, INPUTS_API, OUTPUT_KINDS_API, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -90,6 +90,41 @@ impl InputKind {
     /// The kind named `name`.
     pub fn parse(name: &str) -> Option<InputKind> {
         InputKind::ALL.into_iter().find(|k| k.name() == name)
+    }
+}
+
+/// A kind of content an importer may return besides paths and compound paths (its manifest's
+/// `outputKinds`, plug-in API level 4). Output holding a kind its manifest doesn't list is refused
+/// ([`crate::import::decode_with`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum OutputKind {
+    /// Point type: its text, font family and style, size and fill.
+    Type,
+    /// An embedded image: its size in pixels and its RGBA pixels.
+    Image,
+    /// Top-level layers: their names, whether they show and are locked, and the objects each holds.
+    Layer,
+    /// Artboards: their names and rectangles.
+    Artboard,
+}
+
+impl OutputKind {
+    /// Every kind, in the order the docs list them.
+    pub const ALL: [OutputKind; 4] = [OutputKind::Type, OutputKind::Image, OutputKind::Layer, OutputKind::Artboard];
+
+    /// Its name in `outputKinds`. A type or an image object's `type` in the output is this name too.
+    pub fn name(self) -> &'static str {
+        match self {
+            OutputKind::Type => "type",
+            OutputKind::Image => "image",
+            OutputKind::Layer => "layer",
+            OutputKind::Artboard => "artboard",
+        }
+    }
+
+    /// The kind named `name`.
+    pub fn parse(name: &str) -> Option<OutputKind> {
+        OutputKind::ALL.into_iter().find(|k| k.name() == name)
     }
 }
 
@@ -326,6 +361,11 @@ pub struct Manifest {
     /// lists them. Left out or empty, it is given paths and compound paths alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "input_names")]
     pub inputs: Vec<String>,
+    /// The kinds of content an importer returns besides paths and compound paths, by
+    /// [`OutputKind::name`]: only an importer at `api` 4 or later lists them. Left out or empty, it
+    /// returns paths and compound paths alone.
+    #[serde(default, rename = "outputKinds", skip_serializing_if = "Vec::is_empty", deserialize_with = "output_kind_names")]
+    pub output_kinds: Vec<String>,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
@@ -377,6 +417,7 @@ impl Manifest {
             api: 1,
             permissions: None,
             inputs: Vec::new(),
+            output_kinds: Vec::new(),
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
@@ -422,6 +463,7 @@ impl Manifest {
             return Err(Error::Manifest(format!("permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
         self.validate_inputs()?;
+        self.validate_output_kinds()?;
         if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
             return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
         }
@@ -516,6 +558,35 @@ impl Manifest {
             return Err(Error::Manifest("`inputs` needs the permission `doc.read`".into()));
         }
         Ok(())
+    }
+
+    /// `outputKinds` names each [`OutputKind`] at most once, and only an importer at `api`
+    /// [`OUTPUT_KINDS_API`] or later lists any.
+    fn validate_output_kinds(&self) -> Result<()> {
+        if self.output_kinds.is_empty() {
+            return Ok(());
+        }
+        if self.kind != Kind::Importer {
+            return Err(Error::Manifest("only an importer declares `outputKinds`".into()));
+        }
+        for (i, name) in self.output_kinds.iter().enumerate() {
+            let shown = permissions::display_text(name, permissions::MAX_SHOWN_FIELD);
+            if OutputKind::parse(name).is_none() {
+                return Err(Error::Manifest(format!("`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard")));
+            }
+            if self.output_kinds.get(..i).is_some_and(|before| before.contains(name)) {
+                return Err(Error::Manifest(format!("`outputKinds` lists `{shown}` twice")));
+            }
+        }
+        if self.api < OUTPUT_KINDS_API {
+            return Err(Error::Manifest(format!("`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}")));
+        }
+        Ok(())
+    }
+
+    /// The kinds of content besides paths and compound paths an importer returns (`outputKinds`).
+    pub fn output_kinds(&self) -> Vec<OutputKind> {
+        self.output_kinds.iter().filter_map(|n| OutputKind::parse(n)).collect()
     }
 
     /// A filter or a live effect lists at most [`MAX_COMMANDS`] commands, each with a distinct
@@ -726,6 +797,17 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
 /// [`Manifest::validate_inputs`] names a wrong entry.
 fn input_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
     let wrong = || serde::de::Error::custom("`inputs` must be a list of object kinds: type, image or symbolInstance");
+    match Value::deserialize(d)? {
+        Value::Null => Ok(Vec::new()),
+        Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
+        _ => Err(wrong()),
+    }
+}
+
+/// Reads `outputKinds`: a list of names (`null`: none). Anything else is an error that names the
+/// key, as [`Manifest::validate_output_kinds`] names a wrong entry.
+fn output_kind_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
+    let wrong = || serde::de::Error::custom("`outputKinds` must be a list of kinds: type, image, layer or artboard");
     match Value::deserialize(d)? {
         Value::Null => Ok(Vec::new()),
         Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
@@ -1119,9 +1201,49 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["settings"]}"#, "`settings` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["doc.read","cache"]}"#, "`cache` needs plug-in API level 2"),
-            (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":5}"#, "`api` is 5"),
             (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
             (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
+    /// An importer at `api` 4 lists the kinds it returns besides paths (`outputKinds`), each once;
+    /// another kind of plug-in, an earlier level, an unknown kind or a repeat is refused naming
+    /// `outputKinds`. Left out or empty, it lists none and isn't written back.
+    #[test]
+    fn an_importer_at_api_4_lists_the_kinds_it_returns() {
+        let m = Manifest::parse(
+            br#"{"id":"a","name":"x","kind":"importer","api":4,"extensions":["tst"],"outputKinds":["type","image","layer","artboard"]}"#,
+        )
+        .unwrap();
+        assert_eq!(m.output_kinds(), OutputKind::ALL);
+        assert_eq!(serde_json::to_value(&m).unwrap()["outputKinds"], json!(["type", "image", "layer", "artboard"]));
+        assert_eq!(m.permissions(), [Permission::ImportRead]);
+        for none in [
+            r#"{"id":"a","name":"x","kind":"importer","extensions":["tst"]}"#,
+            r#"{"id":"a","name":"x","kind":"importer","api":4,"extensions":["tst"],"outputKinds":[]}"#,
+            r#"{"id":"a","name":"x","kind":"importer","extensions":["tst"],"outputKinds":null}"#,
+        ] {
+            let m = Manifest::parse(none.as_bytes()).unwrap();
+            assert!(m.output_kinds().is_empty(), "{none}");
+            assert!(serde_json::to_value(&m).unwrap().get("outputKinds").is_none(), "{none}");
+        }
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"importer","extensions":["tst"],"outputKinds":["type"]}"#, "`outputKinds` needs plug-in API level 4"),
+            (r#"{"id":"a","name":"x","kind":"importer","api":2,"extensions":["tst"],"outputKinds":["layer"]}"#, "give `api` 4"),
+            (r#"{"id":"a","name":"x","kind":"importer","api":3,"extensions":["tst"],"outputKinds":["image"]}"#, "give `api` 4"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":4,"outputKinds":["type"]}"#, "only an importer declares `outputKinds`"),
+            (
+                r#"{"id":"a","name":"x","kind":"exporter","api":4,"extensions":["tst"],"outputKinds":["image"]}"#,
+                "only an importer declares `outputKinds`",
+            ),
+            (r#"{"id":"a","name":"x","kind":"importer","api":4,"extensions":["tst"],"outputKinds":["text"]}"#, "unknown kind `text`"),
+            (r#"{"id":"a","name":"x","kind":"importer","api":4,"extensions":["tst"],"outputKinds":["image","image"]}"#, "lists `image` twice"),
+            (r#"{"id":"a","name":"x","kind":"importer","api":4,"extensions":["tst"],"outputKinds":"type"}"#, "`outputKinds` must be a list"),
+            (r#"{"id":"a","name":"x","kind":"importer","api":4,"extensions":["tst"],"outputKinds":[1]}"#, "`outputKinds` must be a list"),
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
