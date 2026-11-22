@@ -472,7 +472,7 @@ fn tool_home(app: &VectorcraftApp, tool: &str) -> String {
     });
     let active = app.session.tool_id();
     let custom = |shown: bool| {
-        app.ui.custom_toolbars.iter().filter(|b| b.shown == shown).find_map(|bar| {
+        app.ui.custom_toolbars.iter().filter(|b| crate::custom_toolbars::is_on(&app.ui, b) == shown).find_map(|bar| {
             let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
             let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
             if tools.len() > 1 && tools.first().is_some_and(|first| crate::toolbar::is_floating(app, Some(&bar.name), first)) {

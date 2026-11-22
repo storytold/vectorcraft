@@ -339,16 +339,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if std::mem::take(&mut app.ui.discover.focus) {
         focus::request(ui.ctx(), FocusTarget::Id(field.response.id));
     }
-    if query != app.ui.discover.query
-        && let Err(e) = app.run("help.discover.search", json!({"query": query}))
-    {
-        app.status(e);
-    }
+    // Escape closes the panel and keeps the query the search field clears with it, so Help opens on it again.
     if field.escaped {
         if let Err(e) = app.run("window.panel.close", json!({"panel": ID})) {
             app.status(e);
         }
         return;
+    }
+    if query != app.ui.discover.query
+        && let Err(e) = app.run("help.discover.search", json!({"query": query}))
+    {
+        app.status(e);
     }
     let mut chosen = None;
     let mut home = false;

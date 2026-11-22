@@ -464,8 +464,9 @@ pub(crate) fn reveal_panel(app: &mut VectorcraftApp, panel: &str) -> Result<Valu
         }
         return Ok(json!({"open": panel}));
     }
-    let id = normalize(panel).ok_or_else(|| format!("unknown panel `{panel}`"))?;
-    place_panel(app, id)
+    // A tool rail (the Tools panel, a toolbar made with New Toolbar) comes back as a Window-menu panel does.
+    let id = panel_id(panel).ok_or_else(|| format!("unknown panel `{panel}`"))?;
+    place_panel(app, &id)
 }
 
 /// `window.collapseDock {collapsed?}`: collapse every dock column of panels to icons, or expand the

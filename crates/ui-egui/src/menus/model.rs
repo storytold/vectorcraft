@@ -184,6 +184,22 @@ fn hash_listed_names(ui: &UiState, h: &mut DefaultHasher) {
     }
 }
 
+/// The prefixes of linked command sets made for other apps, which VectorCraft does not route: their keys (Shift+=
+/// and Alt+Shift+letters for blend modes, Cmd+[ and Cmd+] for layer order, Cmd+G and F3 for a find bar, Insert for
+/// warp pins, a rich text editor's Cmd+Enter and Cmd+Shift+B, which the Type tool's editor has) are VectorCraft's own
+/// commands' keys, so the catalog drops them.
+const UNROUTED_SETS: [&str; 6] = ["blendMode.", "layersPanel.", "find.", "pinWarp.", "perspectiveWarp.", "textEditor."];
+
+/// The commands of [`UNROUTED_SETS`] that come with default keys.
+static UNROUTED: std::sync::LazyLock<Vec<String>> = std::sync::LazyLock::new(|| {
+    craft::ui::runtime::commands::sets()
+        .into_iter()
+        .flat_map(|set| (set.defs)().unwrap_or_default())
+        .filter(|def| !def.defaults.is_empty() && UNROUTED_SETS.iter().any(|prefix| def.command.id.starts_with(prefix)))
+        .map(|def| def.command.id)
+        .collect()
+});
+
 fn rebuild(app: &mut VectorcraftApp, target: Target) {
     // The Symbols panel menu's states read the selection's instances from the walk this keeps.
     crate::panels::symbols::cache_instances(app);
@@ -207,7 +223,7 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
     match AppCatalog::new(defs, generation(&listed, &crate::panels::actions::function_keys(&app.ui.actions))) {
-        Ok(catalog) => app.menus.catalog = Some(catalog),
+        Ok(catalog) => app.menus.catalog = Some(UNROUTED.iter().fold(catalog, |catalog, id| catalog.replace_defaults(id.as_str(), Vec::new()))),
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),
     }
@@ -259,14 +275,19 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
         }
         let shown = display_label(app, id, &d.label);
         if shown != d.label {
-            state = state.title(shown);
+            state = state.title(shown.clone());
         }
-        if let Some(reason) = Some(enabled).filter(|e| !e).and_then(|_| why_off(app, id).flatten()) {
+        if let Some(reason) = Some(enabled).filter(|e| !e).and_then(|_| off_reason(app, id, &shown)) {
             state = state.hint(reason);
         }
         states.set(d.command.clone(), state);
     }
     defs
+}
+
+/// What a dimmed row named `label` says: the engine's reason, else that the command is not available right now.
+fn off_reason(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> {
+    why_off(app, id).map(|why| why.unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now"))))
 }
 
 /// The tree turned into the bar's nodes, with the state of every item it keeps.
@@ -332,7 +353,7 @@ impl Build<'_> {
         } else if enabled {
             None
         } else {
-            why_off(self.app, id).flatten()
+            off_reason(self.app, id, &self.item_title(id, params, &item.label))
         };
         if let Some(tip) = tip {
             state = state.hint(tip.clone());
@@ -361,7 +382,6 @@ impl Build<'_> {
         let run_with = |mods: Mods, p: Value| Alternate::new(mods, CommandRef::with_params(id, p));
         let held = |shift: bool, alt: bool| Mods { cmd: false, ctrl: false, alt, shift };
         match id {
-            "object.unlockAll" | "object.showAll" => item.alternate(run_with(held(true, true), json!({ "scope": "group" }))),
             "ui.expandDialog" => item.alternate(run_with(held(false, true), json!({ "immediate": true }))),
             crate::addons::select::link_status::COMMAND => {
                 item.alternate(run_with(held(true, false), crate::addons::select::link_status::with_shift(params.clone())))

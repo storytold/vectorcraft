@@ -42,6 +42,15 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
         app.status(why);
         return;
     }
+    // While a tool's gesture runs, keys run no command; the active tool's own shortcut, between clicks, chooses it
+    // again, which ends the gesture.
+    if fired.source == FireSource::Key && fired.phase != FirePhase::Release && crate::canvas::busy_tool(app) {
+        let active = app.session.tool_id().to_owned();
+        if command.id.strip_prefix("tool:") == Some(active.as_str()) && !app.session.pointer_held() {
+            app.select_tool(&active);
+        }
+        return;
+    }
     if let Some(tool) = command.id.strip_prefix("tool:") {
         match fired.phase {
             FirePhase::Release => held_tool::release(app, ctx, fired),

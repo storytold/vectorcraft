@@ -99,7 +99,9 @@ impl Trailing {
             Trailing::Arrange => arrange_documents(app, ui),
             Trailing::Search => {
                 // PLAN: assumed `Button::command` is bound by a `&str` command id; the command opens the palette.
+                // Named as production's field, not after the command's menu row.
                 Button::command(PALETTE)
+                    .label(tl!("Search commands"))
                     .icon(IconSpec::svg(IconId::new("search")))
                     .variant(Variant::SECONDARY)
                     .align(HAlign::Start)

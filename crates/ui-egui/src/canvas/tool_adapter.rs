@@ -144,6 +144,68 @@ impl<'a> SessionTool<'a> {
         apply_requests(&mut app, r);
         true
     }
+
+    /// Enter that the tool does not claim, while no gesture runs: it takes what the tool asks of the UI (Rotate,
+    /// Scale, Reflect and Shear open their dialog), and with a selection tool it opens the Move dialog, as a
+    /// double-click on the tool's button does. Taken only when a dialog opened, so that Enter is not also its OK.
+    fn enter(&self, mods: Mods) -> bool {
+        let mut app = self.app();
+        if app.session.tool_busy() {
+            return false;
+        }
+        let open = |app: &VectorcraftApp| app.dialogs().map_or(0, |d| d.with(|h| h.open_dialogs().len()));
+        let before = open(&app);
+        let r = app.session.tool_key(EngineKey::Enter, mods, self.view);
+        apply_requests(&mut app, r);
+        let tool = app.session.tool_id().to_owned();
+        if open(&app) == before && vectorcraft_tools::catalog::is_selection_tool(&tool) {
+            // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
+            let _ = crate::toolbar::open_options(&mut app, &tool);
+        }
+        open(&app) > before
+    }
+
+    /// A key the tool does not claim while its gesture runs: arrows and digits still reach it, with no modifier (a
+    /// grid's rows and columns, the Perspective Selection tool's planes); other keys do nothing then.
+    fn busy_key(&self, key: EngineKey) -> bool {
+        let mut app = self.app();
+        if !busy_tool(&app) {
+            return false;
+        }
+        if matches!(key, EngineKey::Left | EngineKey::Right | EngineKey::Up | EngineKey::Down | EngineKey::Digit(_)) {
+            let r = app.session.tool_key(key, Mods::default(), self.view);
+            apply_requests(&mut app, r);
+        }
+        true
+    }
+
+    /// While the gesture runs, the active tool's own shortcut chooses it again between clicks, which ends the gesture
+    /// (W with the Blend tool's first pick held finishes the blend); any other plain key does nothing.
+    fn again(&self, chord: Chord) -> bool {
+        let mut app = self.app();
+        if !busy_tool(&app) {
+            return false;
+        }
+        let active = format!("tool:{}", app.session.tool_id());
+        let own = app.ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).is_some_and(|keymap| {
+            match keymap.lookup(&chord, false, &craft::keymap::Active::NONE) {
+                craft::keymap::Lookup::Run(command) => command.id == active,
+                craft::keymap::Lookup::Cycle(commands) => commands.iter().any(|command| command.id == active),
+                _ => false,
+            }
+        });
+        if own && !app.session.pointer_held() {
+            let tool = app.session.tool_id().to_owned();
+            app.select_tool(&tool);
+        }
+        true
+    }
+}
+
+/// Whether the active tool's gesture runs (a press, an open pick or loop), outside text editing: production gave the
+/// keys to the tool then and ran no shortcut.
+pub(crate) fn busy_tool(app: &VectorcraftApp) -> bool {
+    app.session.tool_busy() && !app.session.tool_wants_text()
 }
 
 /// The engine's key for the letter or digit key `key`, from its physical name (`KeyA`, `Digit5`).
@@ -157,6 +219,10 @@ fn engine_key(chord: Chord) -> Option<(EngineKey, bool)> {
         Key::Tab => (EngineKey::Tab, shift),
         Key::Home => (EngineKey::Home, shift),
         Key::End => (EngineKey::End, shift),
+        Key::Left => (EngineKey::Left, shift),
+        Key::Right => (EngineKey::Right, shift),
+        Key::Up => (EngineKey::Up, shift),
+        Key::Down => (EngineKey::Down, shift),
         key => {
             let name = key.code_name();
             if let Some(letter) = name.strip_prefix("Key").and_then(|l| l.chars().next()) {
@@ -306,6 +372,10 @@ impl CanvasTool for SessionTool<'_> {
             _ => &[],
         };
         let mut claims = ToolClaims::NONE.keys(keys);
+        // While a gesture runs the plain keys are the tool's: no single-key shortcut runs then.
+        if busy_tool(&app) {
+            claims = claims.keyboard();
+        }
         if claim(&mut app, EngineKey::Delete) {
             claims = claims.deletes();
         }
@@ -326,7 +396,7 @@ impl CanvasTool for SessionTool<'_> {
                     (false, _, true) => (EngineKey::Up, Key::Up),
                     (false, _, false) => (EngineKey::Down, Key::Down),
                 };
-                if self.send_key(k, tool_mods(*mods, space)) {
+                if self.send_key(k, tool_mods(*mods, space)) || self.busy_key(k) {
                     return true;
                 }
                 // An arrow an application command is bound to runs it, as production's keymap ran it first; one it
@@ -345,16 +415,29 @@ impl CanvasTool for SessionTool<'_> {
                 !bound
             }
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
-            ToolKey::Submit => self.send_key(EngineKey::Enter, held),
+            ToolKey::Submit => self.send_key(EngineKey::Enter, held) || self.enter(held),
             ToolKey::Cancel => {
                 // In Presentation Mode Escape leaves the mode: the tool takes none.
                 if self.app().ui.screen_mode == 3 {
                     return false;
                 }
                 let ends = self.app().session.tool_ends_on_escape(self.view);
-                self.send_key(EngineKey::Escape, held) || ends
+                if self.send_key(EngineKey::Escape, held) {
+                    return true;
+                }
+                // What Escape ends (a loop, a path being drawn, a running gesture) gets it whether or not the tool
+                // claims it.
+                let mut app = self.app();
+                if !ends && !app.session.tool_busy() {
+                    return false;
+                }
+                let r = app.session.tool_key(EngineKey::Escape, held, self.view);
+                apply_requests(&mut app, r);
+                true
             }
-            ToolKey::Kept(chord) => engine_key(*chord).is_some_and(|(k, shift)| self.send_key(k, Mods { shift, ..held })),
+            ToolKey::Kept(chord) => {
+                engine_key(*chord).is_some_and(|(k, shift)| self.send_key(k, Mods { shift, ..held }) || self.busy_key(k)) || self.again(*chord)
+            }
             ToolKey::AltTap => self.send_key(EngineKey::AltTap, held),
             _ => false,
         }

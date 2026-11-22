@@ -932,9 +932,11 @@ fn properties_delete(bar: &mut Shown, shown: &str) -> Target {
     delete
 }
 
-/// A press and release of `key` through the window's whole frame, as the keyboard sends it.
+/// A press and release of `key` through the window's whole frame, as the keyboard sends it. The window's first frame
+/// builds its keymap and the keys the tool claims, as a running window has them before any key.
 fn key_through_the_app(app: &mut crate::VectorcraftApp, key: egui::Key, modifiers: egui::Modifiers) {
     let ctx = crate::testing::ui_context();
+    crate::tests_synthetic::key_frame(app, &ctx, vec![]);
     let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
     crate::tests_synthetic::key_frame(app, &ctx, vec![event(true)]);
     crate::tests_synthetic::key_frame(app, &ctx, vec![event(false)]);

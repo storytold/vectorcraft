@@ -271,8 +271,12 @@ fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     let on = app.session.active().is_some_and(|d| d.global_edit.is_some());
     let label = tl!("Global Edit Options");
     ranked(ui, rank::DETAIL, |ui| {
-        let options = IconButton::new(IconId::new("chevron-down")).label(label).enabled(!on).popup(PopupKind::Menu).show(ui);
-        Menu::new(label).opened_by(&options, Trigger::Click).show(ui, |ui, _| crate::panels::properties::global_edit_options(app, ui));
+        let options = IconButton::new(IconId::new("chevron-down")).label(label).enabled(!on).show(ui);
+        // Properties' popover with the bar's own flag: closed while Global Edit is on, and it stays closed after.
+        let id = options.response.id.with("open");
+        let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+        crate::panels::properties::global_edit_popover(app, ui, &options.response, &mut open);
+        ui.data_mut(|d| d.insert_temp(id, open));
     });
 }
 
@@ -377,7 +381,8 @@ fn trailing_select_similar(app: &mut VectorcraftApp, ui: &mut Ui) {
         let options = IconButton::new(IconId::new("chevron-down")).label(label).enabled(enabled).popup(PopupKind::Menu).show(ui);
         Menu::new(label).opened_by(&options, Trigger::Click).show(ui, |ui, _| {
             for &(by, on) in &kept {
-                if MenuItem::new(similar_label(by)).check(on).show(ui).ran {
+                // A menu row reads `&` as its mnemonic marker: `&&` is the character.
+                if MenuItem::new(similar_label(by).replace('&', "&&")).check(on).show(ui).ran {
                     params = Some(json!({ "by": by }));
                 }
             }

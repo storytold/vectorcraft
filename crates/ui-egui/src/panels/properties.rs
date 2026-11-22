@@ -261,7 +261,7 @@ mod object_sections;
 mod transform_section;
 mod type_sections;
 
-pub(crate) use appearance_section::{GlobalEditKey, global_edit_options};
+pub(crate) use appearance_section::{GlobalEditKey, global_edit_popover};
 pub(crate) use artboard_sections::{ArtboardSizeChoice, artboard_presets, artboard_size_controls, artboard_size_row};
 pub use transform_section::transform_section;
 pub use type_sections::type_sections;

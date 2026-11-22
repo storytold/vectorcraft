@@ -83,9 +83,11 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
                 && crate::custom_toolbars::drawer_target(&app.ui).map(crate::custom_toolbars::key)
                     == p.get("toolbar").and_then(Value::as_str).map(crate::custom_toolbars::key)
         }
-        "window.toolbar.custom" => {
-            p.get("name").and_then(Value::as_str).and_then(|name| crate::custom_toolbars::find(&app.ui, name)).is_some_and(|b| b.shown)
-        }
+        "window.toolbar.custom" => p
+            .get("name")
+            .and_then(Value::as_str)
+            .and_then(|name| crate::custom_toolbars::find(&app.ui, name))
+            .is_some_and(|b| crate::custom_toolbars::is_on(&app.ui, b)),
         "window.floatTools" => {
             let tool = p.get("tool").and_then(Value::as_str).unwrap_or("");
             let toolbar = p.get("toolbar").and_then(Value::as_str);

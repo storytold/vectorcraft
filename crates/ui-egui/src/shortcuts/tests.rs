@@ -56,6 +56,14 @@ fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) {
     key_frame(app, &ctx, events);
 }
 
+/// Gives the current document's canvas the keyboard, as a press on it does, and runs the frame that applies it: the
+/// keys a tool claims reach the canvas that has the keyboard, and these tests drive the gesture past the canvas.
+fn focus_canvas(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let win = crate::doc_windows::current(app).expect("a document window");
+    craft::ui::runtime::focus::request(ctx, craft::ui::runtime::focus::FocusTarget::Id(crate::canvas::canvas_id(win)));
+    key_frame(app, ctx, vec![]);
+}
+
 /// `n` empty frames, `0.05` s each.
 fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, n: usize) {
     for _ in 0..n {
@@ -132,6 +140,8 @@ fn dialog_field(app: &VectorcraftApp, key: &str) -> Option<Value> {
 /// OK (`ok`) or Cancel in the window's top dialog, and the app's pump over the answer.
 pub(super) fn close_top_dialog(app: &mut VectorcraftApp, ok: bool) {
     let ctx = app.ui_ctx.clone().expect("a window context");
+    // A dialog opened after the window's pass shows in its next one, and only a shown dialog takes an answer.
+    key_frame(app, &ctx, vec![]);
     let id = crate::tests::picks::open_dialogs(app).pop().expect("a dialog is open").id;
     let host = app.dialogs().expect("the window's dialog host");
     assert!(host.with(|h| if ok { h.confirm_by_id(&ctx, id) } else { h.cancel_by_id(&ctx, id) }), "the dialog stayed open");
@@ -313,7 +323,9 @@ fn the_blend_tool_shortcut_finishes_the_blend() {
 #[test]
 fn the_pen_shortcut_ends_the_path_being_drawn() {
     use vectorcraft_tools::{PointerEvent, PointerKind};
-    let mut app = new_app();
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    ready(&mut app);
     app.select_tool("pen");
     let click = |app: &mut VectorcraftApp, x: f64| {
         let v = app.view_info();
@@ -325,11 +337,11 @@ fn the_pen_shortcut_ends_the_path_being_drawn() {
         path.map(|pd| pd.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
     };
     click(&mut app, 100.0);
-    click(&mut app, 190.0);
+    click(&mut app, 200.0);
     let first = app.session.active().unwrap().selection.objects[0];
     frame(&mut app, typed(Key::P, Modifiers::NONE, "p"));
     assert_eq!(app.session.tool_id(), "pen");
-    click(&mut app, 150.0);
+    click(&mut app, 300.0);
     assert_eq!(anchors(&app, first), Some(vec![2]), "the path keeps its two anchors");
     let second = app.session.active().unwrap().selection.objects[0];
     assert_ne!(second, first, "the click starts a new path");
@@ -716,7 +728,8 @@ fn cmd_alt_shift_j_opens_average_and_join() {
     let before = app.session.doc().unwrap().doc.clone();
     let j = || tap(Key::J, cmd() | Modifiers::ALT | Modifiers::SHIFT);
     frame(&mut app, j());
-    assert_eq!(dialog_kind(&app).as_deref(), Some("averageJoin"));
+    // A dialog is keyed by the command its OK runs.
+    assert_eq!(dialog_kind(&app).as_deref(), Some("path.averageJoin"));
     close_top_dialog(&mut app, false);
     assert!(dialog_kind(&app).is_none());
     assert_eq!(app.session.doc().unwrap().doc, before, "Cancel changes nothing");
@@ -1051,6 +1064,7 @@ fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
     let grid = |app: &mut VectorcraftApp, keys: &[Key]| {
         app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
         app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+        focus_canvas(app, &ctx);
         for &key in keys {
             key_frame(app, &ctx, press(key, Modifiers::NONE));
         }
@@ -1076,6 +1090,7 @@ fn grid_drag_letters_take_plain_and_shift_presses() {
     let ctx = ready(&mut app);
     app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
     app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
+    focus_canvas(&mut app, &ctx);
     let skews = |app: &VectorcraftApp| (app.session.tool_options()["radialSkew"].clone(), app.session.tool_options()["concentricSkew"].clone());
     key_frame(&mut app, &ctx, press(Key::V, Modifiers::NONE));
     assert_eq!(skews(&app), (json!(10.0), json!(0.0)));
@@ -1135,6 +1150,7 @@ fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open(
     for (x, y) in [(80.0, 80.0), (140.0, 80.0), (300.0, 300.0)] {
         click(&mut app, x, y);
     }
+    focus_canvas(&mut app, &ctx);
     key_frame(&mut app, &ctx, tap(Key::Backspace, Modifiers::NONE));
     assert!(app.session.active().unwrap().doc.node(id).is_some(), "Backspace leaves the selected art");
     click(&mut app, 300.0, 300.0);
@@ -1147,6 +1163,7 @@ fn polygonal_lasso_takes_backspace_delete_enter_and_escape_while_a_loop_is_open(
     for (x, y) in [(80.0, 80.0), (140.0, 80.0), (300.0, 300.0)] {
         click(&mut app, x, y);
     }
+    focus_canvas(&mut app, &ctx);
     key_frame(&mut app, &ctx, tap(Key::Backspace, Modifiers::NONE));
     click(&mut app, 80.0, 140.0);
     key_frame(&mut app, &ctx, tap(Key::Enter, Modifiers::NONE));
@@ -1394,13 +1411,13 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
     assert_eq!(dialog_kind(&app), None, "nothing is selected");
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 30})).unwrap();
     for (tool, dialog) in [
-        ("selection", "move"),
-        ("directSelection", "move"),
-        ("groupSelection", "move"),
-        ("rotate", "rotate"),
-        ("scale", "scale"),
-        ("reflect", "reflect"),
-        ("shear", "shear"),
+        ("selection", "object.move"),
+        ("directSelection", "object.move"),
+        ("groupSelection", "object.move"),
+        ("rotate", "object.rotate"),
+        ("scale", "object.scale"),
+        ("reflect", "object.reflect"),
+        ("shear", "object.shear"),
     ] {
         app.select_tool(tool);
         let before = steps(&app);
@@ -1411,7 +1428,7 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
         assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
         // With its default values only Reflect changes the art.
         key_frame(&mut app, &ctx, enter());
-        let after = (before.0 + usize::from(dialog == "reflect"), before.1 + 1);
+        let after = (before.0 + usize::from(dialog == "object.reflect"), before.1 + 1);
         assert_eq!((dialog_kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
     }
     app.select_tool("rectangle");
@@ -1444,7 +1461,7 @@ fn enter_after_a_drag_repeats_its_offset() {
     assert!(step > 0.0);
     key_frame(&mut app, &ctx, vec![]);
     key_frame(&mut app, &ctx, enter());
-    assert_eq!(dialog_kind(&app).as_deref(), Some("move"), "Enter opens Move");
+    assert_eq!(dialog_kind(&app).as_deref(), Some("object.move"), "Enter opens Move");
     assert_eq!(dialog_field(&app, "dx").and_then(|v| v.as_f64()).map(f64::round), Some(step));
     set_top_field(&mut app, "copy", json!(true));
     key_frame(&mut app, &ctx, enter());

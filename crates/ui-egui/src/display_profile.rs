@@ -13,7 +13,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use craft::cms::{Builtin, Profile};
+use craft::cms::Profile;
 use craft::color_ui::display::{DisplayTransform, check_monitor};
 use craft::color_ui::ui::ProfileWords;
 use serde_json::{Value, json};
@@ -260,7 +260,10 @@ pub fn check_profile(icc: &[u8]) -> Result<(), String> {
 fn build(icc: &[u8]) -> Result<DisplayTransform, String> {
     check_profile(icc)?;
     let monitor = Profile::parse(icc).map_err(|e| e.to_string())?;
-    DisplayTransform::new(Arc::new(Builtin::Srgb.profile().clone()), Arc::new(monitor)).map_err(|e| e.to_string())
+    // The canvas holds the document's sRGB: a monitor profile of that sRGB converts nothing.
+    let srgb = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::SRGB).map_err(|e| e.to_string())?;
+    let source = Profile::parse(&srgb).map_err(|e| e.to_string())?;
+    DisplayTransform::new(Arc::new(source), Arc::new(monitor)).map_err(|e| e.to_string())
 }
 
 /// One opaque sRGB color through `t`.

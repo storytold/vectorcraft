@@ -99,13 +99,18 @@ fn set_field(app: &VectorcraftApp, key: &str, value: serde_json::Value) {
     app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, id, key, value)).unwrap_or_else(|e| panic!("{key}: {e}"));
 }
 
-/// Answers the open tool-options dialog with OK or Cancel; the frame's pump takes the answer.
+/// Answers the open tool-options dialog with OK or Cancel; the frame's pump takes the answer. A held OK files the
+/// answer for the pump and the dialog closes once the pump accepted it.
 fn answer(app: &mut VectorcraftApp, ok: bool) {
     let (id, _) = tool_dialog(app).expect("the dialog is open");
     let ctx = app.ui_ctx.clone().expect("a window");
-    let taken = app.dialogs().expect("a window").with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
-    assert!(taken, "the dialog took the answer");
-    crate::dialogs::host::pump(app, &ctx);
+    if ok {
+        crate::tests::picks::answer_dialog(app, id, &[], true);
+    } else {
+        app.dialogs().expect("a window").with(|host| host.cancel_by_id(&ctx, id));
+        crate::dialogs::host::pump(app, &ctx);
+    }
+    assert!(tool_dialog(app).is_none_or(|(open, _)| open != id), "the dialog took the answer");
 }
 
 /// A double-click on a tool's button opens what `open_options` opens: the artboard's, a graph's and the tools' dialogs

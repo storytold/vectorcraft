@@ -71,6 +71,11 @@ pub(crate) fn panel_id(id: u32) -> String {
     format!("toolbar:{id}")
 }
 
+/// Whether `bar` is on, as Window › Toolbars checks it: its panel is in the layout, though Tab may hide it for now.
+pub(crate) fn is_on(ui: &UiState, bar: &CustomToolbar) -> bool {
+    panel_docking::layout_of(ui).contains(&panel_id(bar.id))
+}
+
 /// The toolbar named `name`, whatever its case.
 pub(crate) fn find<'a>(ui: &'a UiState, name: &str) -> Option<&'a CustomToolbar> {
     let k = key(name);

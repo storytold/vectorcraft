@@ -314,12 +314,16 @@ fn discover_finds_commands_by_their_shown_menu_label() {
 fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
     // Help searches in the window's interface language.
     let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
+    // The keymap is the window's: its frame builds it, and builds it again with the shortcuts as they changed.
+    let ctx = app.ui_ctx.clone().unwrap();
+    app_frame(&mut app, &ctx, vec![]);
     let found = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
     assert_eq!(found["results"][index]["shortcut"], "Cmd+N");
     app.run("help.discover.choose", json!({"index": index})).unwrap();
     app.run("window.panel.close", json!({"panel": "discover"})).unwrap();
     app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F9"})).unwrap();
+    app_frame(&mut app, &ctx, vec![]);
 
     let reopened = app.run("help.discover", json!({})).unwrap();
     assert_eq!(reopened["query"], "file.newDialog");
@@ -331,6 +335,7 @@ fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
     assert_eq!(picked["location"]["shortcut"], "Cmd+Alt+Shift+F9");
 
     app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    app_frame(&mut app, &ctx, vec![]);
     let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
     // PLAN: assumed `keymap::chord_text(&str) -> String`, the text the chord shows as
     assert!(text.contains(&crate::keymap::chord_text("Cmd+Alt+Shift+F8")), "{text}");

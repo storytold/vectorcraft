@@ -6,6 +6,13 @@ use craft::menu::{Item, ItemRole, Platforms};
 
 use crate::i18n::LangExt as _;
 
+/// `label` running `id`, and with Shift+Alt held as it is chosen, `id` within the selected object's group.
+fn within_group(label: &'static str, id: &'static str) -> Node {
+    let held = craft::keymap::Mods { cmd: false, ctrl: false, alt: true, shift: true };
+    let group = craft::ui::menu::Alternate::new(held, CommandRef::with_params(id, json!({ "scope": "group" })));
+    Node::Item(Item::new(CommandRef::with_params(id, serde_json::Value::Null), label).alternate(group))
+}
+
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
 /// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels
@@ -220,7 +227,7 @@ pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static st
                     "Lock",
                     vec![c("Selection", "object.lock"), c("All Artwork Above", "object.lock.above"), c("Other Layers", "object.lock.otherLayers")],
                 ),
-                c("Unlock All", "object.unlockAll"),
+                within_group("Unlock All", "object.unlockAll"),
                 sub(
                     "Hide",
                     vec![
@@ -230,7 +237,7 @@ pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static st
                         c("Unselected Artwork", "object.hide.unselected"),
                     ],
                 ),
-                c("Show All", "object.showAll"),
+                within_group("Show All", "object.showAll"),
                 Sep,
                 c("Expand…", "ui.expandDialog"),
                 c("Expand Appearance", "effect.expandAppearance"),
