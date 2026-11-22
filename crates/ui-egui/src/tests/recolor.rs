@@ -2157,14 +2157,18 @@ fn a_one_color_job_limited_to_document_swatches_links_gray_art_to_the_ink() {
         for (i, c) in before.iter().enumerate().filter(|(i, _)| !grays.contains(i)) {
             assert_eq!(after[i].0, c.0, "{kind}: black and white are kept");
         }
-        if linked {
-            for &a in &grays {
-                for &b in &grays {
-                    if gray(&before[a].0) < gray(&before[b].0) {
-                        assert!(after[a].2 >= after[b].2, "{kind}: a darker gray takes more ink: {:?} {:?}", after[a], after[b]);
+        for &a in &grays {
+            for &b in &grays {
+                if gray(&before[a].0) < gray(&before[b].0) {
+                    if linked {
+                        assert!(after[a].2 > after[b].2, "{kind}: a darker gray takes more ink: {:?} {:?}", after[a], after[b]);
+                    } else {
+                        assert_ne!(after[a].0, after[b].0, "{kind}: grays of different lightness get different colors: {a} {b}");
                     }
                 }
             }
+        }
+        if linked {
             app.run("swatch.edit", json!({"name": "Ink", "color": "cmyk 100 0 0 0"})).unwrap();
             let edited = art_paints(&app);
             for &i in &grays {
