@@ -167,7 +167,7 @@ puts it (or in its plug-in's submenu) as well.
   object or has a key other than `menu` and `when`, an unknown `menu` or `when`, `"layerRow"` for the canvas and a
   menu named twice are refused when the module is installed. A plug-in may list at most 8 commands in each context
   menu; the module is refused otherwise. Each error names the command and the key.
-- `plugin.list` gives the command's `menu` with its `context`.
+- `plugin.list` gives the command's `menu` with its `context`, and so does the `manifest` that `plugin.info` gives.
 - At `api` 1 the key is ignored, as the rest of `menu` is.
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every

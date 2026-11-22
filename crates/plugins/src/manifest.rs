@@ -411,7 +411,7 @@ pub struct Param {
 /// plug-in's name (Effect › Plug-ins for a live effect's), or in the menu its `menu` names, runs it
 /// as the command `plugin.<plug-in id>.<id>`, and calls the plug-in's `vc_run` with
 /// `_context.command` set to `id` and the parameters it declares.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Command {
     /// `[a-z][a-z0-9_]*`, at most [`MAX_COMMAND_ID`] characters, unique within the manifest.
     pub id: String,
@@ -423,7 +423,7 @@ pub struct Command {
     pub params: Vec<(String, Param)>,
     /// The menu it is listed in instead of the plug-in's submenu (`menu`, read at
     /// [`crate::permissions::MENU_API`] and later).
-    #[serde(rename = "menu", skip_deserializing, skip_serializing_if = "Option::is_none")]
+    #[serde(skip)]
     pub place: Option<MenuPlace>,
     /// The context menus that also list it (`menu.context`, read at
     /// [`crate::permissions::MENU_API`] and later), at most one entry per menu.
@@ -432,6 +432,34 @@ pub struct Command {
     /// Each `menu` value the manifest gives, until [`Manifest::parse`] reads them.
     #[serde(skip)]
     pub(crate) declared_menu: Vec<Value>,
+}
+
+/// A command as its manifest gives it: `id`, `label`, `params` and, when it has a place or context
+/// menus, `menu` with its `path`, `after` and `context`.
+impl Serialize for Command {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        fn params<S: serde::Serializer>(p: &&[(String, Param)], s: S) -> std::result::Result<S::Ok, S::Error> {
+            params_as_object(p, s)
+        }
+        #[derive(Serialize)]
+        struct Menu<'a> {
+            #[serde(flatten)]
+            place: Option<&'a MenuPlace>,
+            #[serde(skip_serializing_if = "<[_]>::is_empty")]
+            context: &'a [ContextPlace],
+        }
+        #[derive(Serialize)]
+        struct Shown<'a> {
+            id: &'a str,
+            label: &'a str,
+            #[serde(serialize_with = "params")]
+            params: &'a [(String, Param)],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            menu: Option<Menu<'a>>,
+        }
+        let menu = (self.place.is_some() || !self.context.is_empty()).then_some(Menu { place: self.place.as_ref(), context: &self.context });
+        Shown { id: &self.id, label: &self.label, params: &self.params, menu }.serialize(s)
+    }
 }
 
 impl Command {
@@ -1635,6 +1663,14 @@ mod tests {
         let both = Manifest::parse(with(2, r#"{"path":["Select"],"context":[{"menu":"layers","when":"layerRow"}]}"#).as_bytes()).unwrap();
         assert_eq!(both.commands[0].place, Some(MenuPlace { path: &["Select"], after: None }));
         assert_eq!(both.commands[0].context, vec![ContextPlace { menu: ContextMenu::Layers, when: Some(ContextWhen::LayerRow) }]);
+        // The manifest a plug-in's info gives carries the context menus, with or without a place.
+        assert_eq!(
+            serde_json::to_value(&both.commands[0]).unwrap()["menu"],
+            json!({"path": ["Select"], "context": [{"menu": "layers", "when": "layerRow"}]})
+        );
+        assert_eq!(serde_json::to_value(c).unwrap()["menu"], json!({"context": [{"menu": "canvas", "when": "typeObject"}, {"menu": "layers"}]}));
+        let plain = Manifest::parse(with(2, r#"{"context":[]}"#).as_bytes()).unwrap();
+        assert!(serde_json::to_value(&plain.commands[0]).unwrap().get("menu").is_none(), "no place and no context menu: no `menu`");
         assert!(Manifest::parse(with(2, r#"{"context":[]}"#).as_bytes()).unwrap().commands[0].context.is_empty());
         assert!(Manifest::parse(with(1, r#"{"context":[{"menu":"sky"}]}"#).as_bytes()).unwrap().commands[0].context.is_empty(), "ignored at level 1");
 
