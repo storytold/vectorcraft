@@ -537,6 +537,21 @@ fn an_edit_keeps_direct_selected_anchors() {
 }
 
 #[test]
+fn selecting_an_item_keeps_the_direct_selected_anchors_of_others() {
+    let (mut s, a, b) = doc();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.add", &json!({"ids": [b.0]})).unwrap();
+    let anchors = s.active().unwrap().selection.anchors.clone();
+    assert!(anchors.contains_key(&a));
+    log(&mut s, "app.activeDocument.pageItems[1].selected = false;");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.anchors.clone()), (vec![a], anchors.clone()));
+    log(&mut s, "app.activeDocument.pageItems[1].selected = true;");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.clone(), sel.anchors.get(&a)), (vec![a, b], anchors.get(&a)));
+}
+
+#[test]
 fn an_edit_keeps_the_order_of_a_mixed_selection() {
     let (mut s, a, b) = doc();
     rect(&mut s, 200.0, 200.0, 20.0, 20.0);

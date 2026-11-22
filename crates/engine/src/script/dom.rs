@@ -1373,7 +1373,27 @@ fn item_set_selected(h: &Host, a: &[Data]) -> Answer {
     } else {
         ids.retain(|i| *i != item.id);
     }
-    set_selection(h, item.doc, ids)
+    // The direct-selected anchors and segments of the other objects stay selected.
+    let partial = with_doc(h, item.doc, |_, st| {
+        let sel = &st.selection;
+        let plain = sel.target.is_none() && sel.symbol_part.is_none() && sel.on_path_member.is_none() && sel.slices.is_empty();
+        (plain && ids.iter().any(|i| sel.anchors.contains_key(i) || sel.segments.contains_key(i))).then(|| {
+            let mut next = sel.clone();
+            next.objects.clone_from(&ids);
+            next.anchors.retain(|i, _| ids.contains(i));
+            next.segments.retain(|i, _| ids.contains(i));
+            next.key = next.key.filter(|k| ids.contains(k));
+            next.key_anchor = next.key_anchor.filter(|(k, _)| ids.contains(k));
+            (st.doc.clone(), next)
+        })
+    });
+    match partial {
+        Some((doc, next)) => {
+            on_doc(h, item.doc.uid, false, |h| restore_selection(h, &doc, &next))?;
+            Ok(Data::Undefined)
+        }
+        None => set_selection(h, item.doc, ids),
+    }
 }
 
 /// The item's geometric bounds (`visual`: its visible bounds) in document coordinates and the

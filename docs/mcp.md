@@ -2672,7 +2672,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
-  nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  nothing changed. Assigning a page item's `selected` leaves the direct-selected anchors and segments of the other
+  selected objects selected. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
