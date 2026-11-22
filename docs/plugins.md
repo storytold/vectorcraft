@@ -67,8 +67,8 @@ ellipsis. A run counts once it succeeds: from its menu item, its dialog's OK, a 
 `command.batch` step (each such step in the order the batch ran them, so the last one runs again), an Action Batch (`action.batch`) step once a file or data set
 ran it, and a background run once its
 result is applied. A preview, Cancel, a failed or canceled run, a plug-in's own commands and live effects don't count,
-and neither does a batch step whose filter the batch installed when a later step of the batch installs, removes or
-reloads plug-ins. Both items are grayed out with no document open, before any filter ran, and once the filter that
+and neither does a batch step whose filter the batch installed when a later step of the batch installs or removes
+that same plug-in, or reloads plug-ins. Both items are grayed out with no document open, before any filter ran, and once the filter that
 ran last was removed, installed again (the same module too) or no longer takes those parameters as they are;
 installing another plug-in keeps them. They don't need a selection: a filter given no objects can still add new ones. The parameters are
 kept for the session only, for at most 64 filters. Where the two items sit, when they are grayed out and how long the
