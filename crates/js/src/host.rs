@@ -362,6 +362,12 @@ impl Interp {
             Data::Object(items) if self.write_hosted && matches!(items.as_slice(), [(k, _)] if k == crate::HOST_REF_KEY) => {
                 self.write_host_ref(&Data::Object(items))?
             }
+            Data::Object(items) if self.write_hosted && matches!(items.as_slice(), [(k, Data::String(_))] if k == crate::FILE_REF_KEY) => {
+                match items.into_iter().next() {
+                    Some((_, Data::String(path))) => self.write_file_ref(&path)?,
+                    _ => Value::Undefined,
+                }
+            }
             Data::Object(items) => self.write_container(items.into_iter().map(|(k, d)| (Slot::Name(k), d)).collect(), false, depth, frozen)?,
         })
     }

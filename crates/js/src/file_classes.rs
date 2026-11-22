@@ -49,9 +49,9 @@ impl Classes {
     }
 }
 
-/// The one key of the [`crate::Data`] object that stands for a `File` given to a member of a host
-/// class ([`crate::HostClass`]), with the file's path in the host's platform form as its value. A
-/// plain object a script made that carries the key is refused.
+/// The one key of the [`crate::Data`] object that stands for a `File` given to or by a member of a
+/// host class ([`crate::HostClass`]), with the file's path in the host's platform form as its value.
+/// A plain object a script made that carries the key is refused.
 pub const FILE_REF_KEY: &str = "\u{0}fileRef";
 
 /// The path of the `File` that `d` stands for ([`FILE_REF_KEY`]).
@@ -77,6 +77,12 @@ impl Interp {
             Class::FsEntry(s) => Some(crate::Data::Object(vec![(FILE_REF_KEY.to_string(), crate::Data::String(s.to_rust_string()))])),
             _ => None,
         })
+    }
+
+    /// A new `File` for `path`, the path a [`file_ref_path`] value a host function gives back holds.
+    pub(crate) fn write_file_ref(&mut self, path: &str) -> JsResult<Value> {
+        let Some(proto) = self.files.as_ref().map(|c| c.file_proto) else { return Err(self.type_error("File is not available")) };
+        instance(self, proto, Value::str(path))
     }
 }
 

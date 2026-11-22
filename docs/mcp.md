@@ -2719,6 +2719,47 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
   pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.print(options?)` runs `file.print` on the document, with the options a script assigned over the
+  document's print settings, which stay as they are, and adds no undo step
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/PrintOptions/).
+  `options` is a `new PrintOptions()`, whose `jobOptions`, `colorManagementOptions`, `colorSeparationOptions`,
+  `coordinateOptions`, `flattenerOptions`, `fontOptions`, `pageMarksOptions`, `paperOptions` and `postScriptOptions`
+  are `new PrintJobOptions()`, `new PrintColorManagementOptions()`, `new PrintColorSeparationOptions()`,
+  `new PrintCoordinateOptions()`, `new PrintFlattenerOptions()`, `new PrintFontOptions()`,
+  `new PrintPageMarksOptions()`, `new PrintPaperOptions()` and `new PrintPostScriptOptions()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PrintJobOptions/ and the pages beside it). Each property reads as
+  its help page's default until it is assigned, and a `PrintOptions` holds its option objects by reference, so a change
+  made after the assignment is printed. `print` maps `printPreset` (a print preset's name) and `flattenerPreset`;
+  `copies` (1 to 999), `collate`, `reversePages`, `designation`, `printAllArtboards`, `artboardRange`,
+  `printAsBitmap` and `file` of the job; `colorProfileMode` (`SOURCEPROFILE` and `CUSTOMPROFILE`), `intent` and
+  `name` (an RGB or CMYK profile) of color management; `colorSeparationMode` (`COMPOSITE` and
+  `HOSTBASEDSEPARATION`), `convertSpotColors` and `overPrintBlack`; `emulsion`, `fitToPage`, `horizontalScale` and
+  `verticalScale` (1 to 1000), `orientation`, `position` and `tiling`; `overprint` of the flattener; `colorBars`,
+  `pageInfoMarks`, `registrationMarks`, `trimMarks`, `pageMarksType` and `trimMarksWeight`; `name`, `width`,
+  `height` and `transverse` of the paper; and `negativePrinting` and `postScriptLevel` (`PSLEVEL2` and `PSLEVEL3`).
+  `app.printPresetsList` gives the print presets' names, `[Default]` first, and `app.PPDFileList` is empty.
+  The enumerations `PrintColorProfile`, `PrintColorIntent`, `PrintColorSeparationMode`, `PrintOrientation`,
+  `PrintPosition`, `PrintTiling`, `PrintArtworkDesignation`, `PrintingBounds`, `PrintFontDownloadMode`,
+  `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
+  strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
+  names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
+  assigned, a print-ready PDF otherwise. Without a file it throws `Printing to a printer is not available to scripts
+  yet`, and `app.printerList` throws an error that says it is not available yet. `fitToPage` set to true wins over
+  the scale factors and the tiling mode. With `printAllArtboards` false, `artboardRange` picks the artboards, and
+  without a range every artboard prints. With one of `horizontalScale` and `verticalScale` assigned, the other keeps
+  the document's saved value. `print` throws before anything is written when an assigned `artboardRange` names an
+  artboard the document does not have, also with `printAllArtboards` true, when `printPreset` or `flattenerPreset`
+  is not a preset's name (any case), when `colorManagementOptions.name` is not an RGB or CMYK profile's name (any
+  case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`
+  and `width` or `height` is assigned above 0. An assigned name that is empty or only
+  spaces, or holds `/`, `\` or a control character, throws too, and each checked name is sent without the spaces
+  around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
+  `PrintingBounds.ARTWORKBOUNDS`, `INRIPSEPARATION`, `PSLEVEL1` or a scale above 1000, throws an error that says it
+  is not available yet. Each value is checked when it is assigned: a wrong type, a number that is not finite or is
+  out of range, a string longer than 4,096 bytes, an option object of the wrong class or from an earlier run, and a
+  path given as a string all throw. A run makes at most 256 option objects. Each warning `file.print` gives goes to
+  the Script Console as a line that starts with `Document.print: `. `vc.run` still cannot run `file.print` or
+  `print.*`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

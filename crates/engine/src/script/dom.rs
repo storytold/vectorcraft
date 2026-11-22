@@ -38,6 +38,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod print;
 mod save_open;
 
 /// The error for a member read or called with no document open.
@@ -96,6 +97,8 @@ pub(super) struct State {
     saving: Cell<bool>,
     /// `app.userInteractionLevel` ([`save_open`]).
     save_options: save_open::State,
+    /// The print option objects ([`print`]).
+    printing: print::State,
 }
 
 impl State {
@@ -1711,7 +1714,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS.iter().chain(save_open::ENUMS) {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(print::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
@@ -1726,6 +1729,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     ]);
     application.push(later(l, "Application", "beep"));
     application.extend(save_open::application_members(l));
+    application.extend(print::application_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -1771,6 +1775,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .map(|m| later(l, "Document", m)),
     );
     document.extend(save_open::document_members(l));
+    document.extend(print::document_members(l));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -1836,6 +1841,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     classes.push(class("PageItem", None, page_item, None));
     classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
     classes.extend(save_open::classes(l));
+    classes.extend(print::classes(l));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])
 }

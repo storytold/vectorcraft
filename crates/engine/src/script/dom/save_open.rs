@@ -548,18 +548,18 @@ fn typename(d: &Data) -> Option<&str> {
 // ---- Files ----
 
 /// The path of the `File` argument `d`, or a `TypeError` naming the method.
-fn file_path<'a>(d: &'a Data, method: &str) -> std::result::Result<&'a str, HostError> {
+pub(super) fn file_path<'a>(d: &'a Data, method: &str) -> std::result::Result<&'a str, HostError> {
     vectorcraft_js::file_ref_path(d).ok_or_else(|| HostError::Type(format!("{method} needs a File")))
 }
 
 /// The error a refused path throws: the `File` error and the path.
-fn refused(message: &str, path: &str) -> HostError {
+pub(super) fn refused(message: &str, path: &str) -> HostError {
     HostError::Error(format!("{message}: {path}"))
 }
 
 /// Runs `f` with the commands' reads and writes held to the script's own grants
 /// ([`super::super::files::Disk::exact`]).
-fn exactly(h: &Host, f: impl FnOnce() -> Answer) -> Answer {
+pub(super) fn exactly(h: &Host, f: impl FnOnce() -> Answer) -> Answer {
     h.disk.borrow_mut().exact = true;
     let r = f();
     h.disk.borrow_mut().exact = false;
@@ -567,7 +567,7 @@ fn exactly(h: &Host, f: impl FnOnce() -> Answer) -> Answer {
 }
 
 /// The path to give a command for the real path `real`.
-fn plain(real: std::path::PathBuf) -> String {
+pub(super) fn plain(real: std::path::PathBuf) -> String {
     crate::cmd::findfiles::plain(real).to_string_lossy().into_owned()
 }
 
