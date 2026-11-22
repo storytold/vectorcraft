@@ -521,7 +521,30 @@ fn file_place_without_the_dialog_takes_the_pdf_text_preference() {
     let placed = st.doc.node(st.selection.objects[0]).unwrap();
     assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "linked: {:?}", placed.kind);
 
+    // `file.place` reads an empty password as none, so the page stays linked.
+    crate::place::run(&mut app, &json!({"path": path, "password": "", "showImportOptions": false})).unwrap();
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "an empty password: linked: {:?}", placed.kind);
+
     set_pdf_text(&mut app, "text");
     crate::place::run(&mut app, &embedded).unwrap();
     assert_eq!(type_objects(&app), 2, "Editable: page 1's type object");
+}
+
+/// With Show Import Options off, an encrypted PDF placed with an empty `password` asks for its
+/// password, as one placed without a `password` does.
+#[test]
+fn an_empty_password_asks_for_the_password_of_an_encrypted_pdf() {
+    let mut app = app();
+    let bytes = pdf(&[PdfPage::new(120.0, 60.0, "1 0 0 rg 0 0 20 20 re f")], Some("pw"));
+    place(&mut app, &bytes, json!({"password": "", "showImportOptions": false})).unwrap();
+    assert_eq!((field(&app, "__locked"), field(&app, "__passwordOnly")), (json!(true), json!(true)));
+    frame(&mut app);
+    set(&mut app, "password", json!("pw"));
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let st = app.session.active().unwrap();
+    let b = st.doc.node(st.selection.objects[0]).and_then(|n| n.geometric_bounds()).unwrap();
+    assert!((b.width() - 120.0).abs() < 0.01, "placed once unlocked: {}", b.width());
 }
