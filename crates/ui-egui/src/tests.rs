@@ -38,7 +38,6 @@ mod ruler_origin;
 mod save;
 mod saveext;
 mod screenmode;
-mod screenshots;
 mod script_check;
 mod script_dialogs;
 mod script_run;

@@ -8,6 +8,8 @@
 //! dialog stays open.
 
 use std::borrow::Cow;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash as _, Hasher as _};
 
 use craft::behavior::{DisplayOrder, ItemSource, Selection};
 use craft::ui::buttons::Button;
@@ -87,9 +89,10 @@ pub struct Row {
     haystack: String,
 }
 
-/// The rows in `lang`, for menus that name fonts in English when `english_names` is set.
-pub(crate) fn build(lang: Lang, english_names: bool) -> Vec<Row> {
-    menus::insertable_items(english_names)
+/// The rows in `lang`, for menus that name fonts in English when `english_names` is set and list
+/// the `listed` names.
+pub(crate) fn build(lang: Lang, english_names: bool, listed: &menus::Listed) -> Vec<Row> {
+    menus::insertable_items(english_names, listed)
         .into_iter()
         .map(|item| {
             let english = item.path.iter().chain(std::iter::once(&item.label)).map(String::as_str).collect::<Vec<_>>().join(" › ");
@@ -105,8 +108,9 @@ pub(crate) fn build(lang: Lang, english_names: bool) -> Vec<Row> {
 }
 
 /// What the rows were built from: the language, the installed plug-ins, the font name setting, the
-/// loaded fonts, whether the installed fonts are cataloged and the saved proof setups.
-pub(crate) type RowsKey = (&'static str, u64, bool, u64, bool, u64);
+/// loaded fonts, whether the installed fonts are cataloged, the saved proof setups and the names the
+/// menus list ([`menus::Listed`]).
+pub(crate) type RowsKey = (&'static str, u64, bool, u64, bool, u64, u64);
 
 /// The rows that every word of `find` matches, in menu order.
 fn matches<'a>(rows: &'a [Row], find: &str) -> impl Iterator<Item = &'a Row> {
@@ -183,6 +187,11 @@ impl InsertMenuItemDialog {
             generation,
             cataloged,
             crate::dialogs::proof_setup::saved_revision(),
+            {
+                let mut h = DefaultHasher::new();
+                menus::Listed::of(app).hash(&mut h);
+                h.finish()
+            },
         )
     }
 
@@ -207,7 +216,7 @@ impl InsertMenuItemDialog {
 /// in progress.
 pub fn open(app: &mut VectorcraftApp, target: Option<(usize, usize)>, step: Option<usize>) {
     let key = InsertMenuItemDialog::rows_key(app);
-    let rows = build(crate::i18n::current(), app.session.prefs.font_names_in_english);
+    let rows = build(crate::i18n::current(), app.session.prefs.font_names_in_english, &menus::Listed::of(app));
     let dialog = InsertMenuItemDialog {
         id: dialog_id(KEY),
         target: Target::new(target, step),
@@ -338,7 +347,7 @@ mod tests {
 
     #[test]
     fn find_picks_the_one_match_and_notes_none_or_several() {
-        let rows = build(Lang::EN, true);
+        let rows = build(Lang::EN, true, &menus::Listed::default());
         let mut f = fields("object group", "");
         find(&rows, &mut f);
         assert_eq!((f.note, f.command.as_str()), (FindNote::Several, ""), "Group and Ungroup both match");
@@ -356,7 +365,7 @@ mod tests {
     /// Pattern's Make and Edit Pattern and the saved-selection, saved-view and recent-font items.
     #[test]
     fn the_list_holds_only_menu_items_that_can_be_steps() {
-        let items = menus::insertable_items(true);
+        let items = menus::insertable_items(true, &menus::Listed::default());
         assert!(items.len() > 100, "only {} items", items.len());
         for item in &items {
             let in_app = menus::plays_in_app(&item.command);
@@ -409,8 +418,9 @@ mod tests {
     /// and the items that ask for values first.
     #[test]
     fn every_view_item_the_app_runs_is_listed() {
-        let items = menus::insertable_items(true);
-        let view = menus::menu_tree_named(true).into_iter().find(|(title, _)| *title == "View").map(|(_, nodes)| nodes).unwrap();
+        let items = menus::insertable_items(true, &menus::Listed::default());
+        let view =
+            menus::menu_tree_named(true, &menus::Listed::default()).into_iter().find(|(title, _)| *title == "View").map(|(_, nodes)| nodes).unwrap();
         fn walk<'a>(nodes: &'a [Node], out: &mut Vec<(&'a str, &'a str)>) {
             for node in nodes {
                 match node {
@@ -435,7 +445,7 @@ mod tests {
     #[test]
     fn rows_show_the_translated_path_and_match_english_shown_text_and_ids() {
         let de = Lang::from_code("de").unwrap();
-        let rows = build(de, true);
+        let rows = build(de, true, &menus::Listed::default());
         let group = rows.iter().find(|r| r.command == "object.group").unwrap();
         assert_eq!(group.shown, format!("{} › {}", crate::i18n::tr(de, "Object"), crate::i18n::tr(de, "Group")));
         for words in ["object group", group.shown.as_str(), "object.group"] {

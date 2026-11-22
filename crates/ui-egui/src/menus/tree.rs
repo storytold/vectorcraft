@@ -10,11 +10,34 @@ use crate::i18n::LangExt as _;
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
 /// `english_names` is Preferences › Type › Show Font Names in English (the Type → Font labels
 /// follow it; tests use the default `true`).
+/// The fixed rows only: none of the [`Listed`] names.
 pub fn menu_tree() -> Vec<(&'static str, Vec<Node>)> {
-    menu_tree_named(true)
+    menu_tree_named(true, &Listed::default())
 }
 
-pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Node>)> {
+/// The names the menus list as rows of their own after their fixed rows.
+#[derive(Default, Hash)]
+pub struct Listed {
+    /// Window › Workspace: the saved workspaces.
+    pub workspaces: Vec<String>,
+    /// Window › Toolbars: the toolbars made with New Toolbar.
+    pub toolbars: Vec<String>,
+    /// Effect › SVG Filters: the active document's filters that are not a default's.
+    pub svg_filters: Vec<String>,
+}
+
+impl Listed {
+    /// The names `app` holds now.
+    pub fn of(app: &crate::VectorcraftApp) -> Listed {
+        Listed {
+            workspaces: app.ui.workspaces.set.saved.iter().map(|w| w.name.clone()).collect(),
+            toolbars: app.ui.custom_toolbars.iter().map(|b| b.name.clone()).collect(),
+            svg_filters: app.session.active().map(|st| crate::dialogs::svg_filter::own_names(&st.doc.svg_filters)).unwrap_or_default(),
+        }
+    }
+}
+
+pub fn menu_tree_named(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec<Node>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (
@@ -557,7 +580,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Node>)> {
             v.extend(SAVED_SELECTION_IDS.iter().map(|id| c("Saved Selection", id)));
             v
         }),
-        ("Effect", effect_menu()),
+        ("Effect", effect_menu(&listed.svg_filters)),
         ("View", {
             let mut v = vec![
                 c("Outline", "view.outline"),
@@ -681,14 +704,14 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Node>)> {
                     ]);
                     arrange
                 }),
-                sub("Workspace", crate::workspaces::menu_items()),
+                sub("Workspace", crate::workspaces::menu_items(&listed.workspaces)),
                 Sep,
                 c("Control", "window.control"),
                 c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
                 c("Quick Pen Toolbar", "window.quickPenToolbar"),
                 c("Tools", "window.toolbar"),
-                sub("Toolbars", crate::custom_toolbars::menu_items()),
+                sub("Toolbars", crate::custom_toolbars::menu_items(&listed.toolbars)),
                 Sep,
             ];
             let lang = crate::i18n::current();
@@ -863,7 +886,7 @@ fn app_menu() -> Vec<Node> {
                 Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings);
             // Only the first page carries Preferences' shortcut.
             if i == 0 {
-                item.shortcut = super::shortcut_of("edit.preferences").and_then(crate::keymap::stored::parse_vc);
+                item.shortcut = crate::shortcut_editor::default_command_shortcut("edit.preferences").and_then(crate::keymap::stored::parse_vc);
             }
             Node::Item(item)
         })

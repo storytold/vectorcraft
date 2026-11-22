@@ -76,6 +76,11 @@ fn app_with_a_selected_rectangle() -> VectorcraftApp {
     app
 }
 
+/// The shortcut the menu item running `id` with `params` shows, as of the last frame's keymap.
+fn item_shortcut(app: &VectorcraftApp, id: &str, params: Value) -> Option<String> {
+    crate::menus::item_shortcut(app, id, &params).map(|c| c.to_string())
+}
+
 /// Gives `id` the chord `shortcut`, taking it from any command that holds it.
 fn bind(app: &mut VectorcraftApp, id: &str, shortcut: &str) {
     app.run("shortcuts.set", json!({"id": id, "shortcut": shortcut, "force": true})).unwrap();
@@ -1470,9 +1475,9 @@ fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
     let mut app = app_with_a_selected_rectangle();
     assert!(!listed(&mut app, "effect:distort.transform").is_empty(), "Transform is listed");
     bind(&mut app, "effect:distort.transform", "Cmd+Alt+Shift+F11");
-    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({"effect": "distort.transform"})), Some("Cmd+Alt+Shift+F11"));
     frame(&mut app, tap(Key::F11, cmd() | Modifiers::ALT | Modifiers::SHIFT));
     assert_eq!(dialog_field(&app, "__effect"), Some(json!("distort.transform")), "{:?}", dialog_kind(&app));
+    assert_eq!(item_shortcut(&app, "effect.dialog", json!({"effect": "distort.transform"})).as_deref(), Some("Cmd+Alt+Shift+F11"));
 }
 
 /// A live-effect plug-in installed later takes a shortcut of its own, and the key applies the effect.
@@ -1494,17 +1499,17 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
     install("{}");
     app.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     assert_eq!(listed(&mut app, effect), vec![(key.to_string(), json!(chord))]);
-    assert_eq!(crate::menus::item_shortcut("effect.apply", &json!({ "effect": effect })), Some(chord));
     frame(&mut app, f6());
     assert_eq!(effects(&app), 1, "the key applies the effect");
+    assert_eq!(item_shortcut(&app, "effect.apply", json!({ "effect": effect })).as_deref(), Some(chord));
     // Removed: no row and no key; the saved shortcut is the effect's again when it comes back.
     vectorcraft_plugins::registry::remove(plugin);
     assert_eq!(listed(&mut app, effect), vec![]);
     install(r#"{"wiggle":{"type":"bool"}}"#);
     assert_eq!(listed(&mut app, effect), vec![(key.to_string(), json!(chord))]);
-    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({ "effect": effect })), Some(chord));
     frame(&mut app, f6());
     assert_eq!(dialog_field(&app, "__effect"), Some(json!(effect)), "{:?}", dialog_kind(&app));
+    assert_eq!(item_shortcut(&app, "effect.dialog", json!({ "effect": effect })).as_deref(), Some(chord));
     vectorcraft_plugins::registry::remove(plugin);
 }
 
@@ -1527,10 +1532,10 @@ fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     assert_eq!(listed(&mut app, "test.ui.key_filter-"), vec![(key_one.clone(), Value::Null), (key_two.clone(), Value::Null)]);
     app.run("shortcuts.set", json!({"id": key_two, "shortcut": chord})).unwrap();
     assert_eq!(listed(&mut app, "test.ui.key_filter-"), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
-    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": two })), Some(chord));
-    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": one })), None);
     frame(&mut app, f7());
     assert_eq!(dialog_field(&app, "__plugin"), Some(json!(two)), "the filter's dialog opens");
+    assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": two })).as_deref(), Some(chord));
+    assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": one })), None);
     close_top_dialog(&mut app, false);
     // Removed: no row and no key; back under another name and without parameters it runs at once.
     vectorcraft_plugins::registry::remove(two);
@@ -1562,16 +1567,17 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
     vectorcraft_plugins::registry::install_bytes(&wasm("Original", "{}")).unwrap();
     app.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     vectorcraft_plugins::registry::install_bytes(&wasm("Replaced", with_params)).unwrap();
-    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": id })), Some(chord));
     frame(&mut app, f6());
     assert_eq!(dialog_field(&app, "__plugin"), Some(json!(id)), "the replaced filter has parameters");
+    assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": id })).as_deref(), Some(chord));
     close_top_dialog(&mut app, false);
     let folder = std::env::temp_dir().join(format!("vectorcraft-ui-filter-shortcut-{}", std::process::id()));
     std::fs::create_dir_all(&folder).unwrap();
     std::fs::write(folder.join("filter.wasm"), wasm("Reloaded", with_params)).unwrap();
     app.run("plugin.reload", json!({ "path": folder.display().to_string() })).unwrap();
     std::fs::remove_dir_all(&folder).ok();
-    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": id })), Some(chord));
+    frame(&mut app, vec![]);
+    assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": id })).as_deref(), Some(chord));
     let mut empty = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     empty.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     frame(&mut empty, f6());

@@ -20,6 +20,7 @@ use crate::panels::color::gamut;
 pub const KIND: &str = "newSwatch";
 
 /// The open New Swatch dialog: the held dialog and the default name, which follows the colour until it is edited.
+#[derive(Clone, Debug)]
 pub(crate) struct Open {
     /// The held dialog.
     pub(crate) id: DialogId,

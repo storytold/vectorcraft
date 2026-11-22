@@ -2,7 +2,7 @@ use super::context::context_items;
 use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, spelling_item_label, unlock_item_label};
 use super::slots::{recent_readable, recent_slot};
 use super::state::{shortcut_of, shown_state};
-use super::tree::menu_tree_named;
+use super::tree::{Listed, menu_tree_named};
 use super::{Node, Serialize, TODO, Value, VectorcraftApp};
 
 /// The label of the menu item that runs `id` with `p` and reads `label` in English, as the menus
@@ -32,7 +32,7 @@ pub struct MenuEntry {
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
+    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english, &Listed::of(app)) {
         flatten(app, vec![title.to_string()], vec![crate::i18n::t(title).to_string()], &items, &mut out);
     }
     out
@@ -137,8 +137,9 @@ pub fn insertable(title: &str, label: &str, id: &str, p: &Value) -> bool {
 }
 
 /// Every menu item that can be a step of an action ([`insertable`]), in menu order. An item that
-/// shows in two places is listed in both. `english_names` is as [`menu_tree_named`] takes it.
-pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
+/// shows in two places is listed in both. `english_names` and `listed` are as [`menu_tree_named`]
+/// takes them.
+pub fn insertable_items(english_names: bool, listed: &Listed) -> Vec<InsertableItem> {
     fn walk(title: &'static str, path: &mut Vec<String>, nodes: &[Node], out: &mut Vec<InsertableItem>) {
         for node in nodes {
             match node {
@@ -159,7 +160,7 @@ pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
         }
     }
     let mut out = vec![];
-    for (title, nodes) in menu_tree_named(english_names) {
+    for (title, nodes) in menu_tree_named(english_names, listed) {
         walk(title, &mut vec![title.to_string()], &nodes, &mut out);
     }
     out
@@ -196,7 +197,7 @@ pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String
                     command: Some(id.to_string()),
                     params: p.clone(),
                     enabled,
-                    shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
+                    shortcut: item_shortcut(app, id, p).or_else(|| shortcut_of(app, id)).map(|c| c.to_string()).unwrap_or_default(),
                     shown_path: shown.clone(),
                 })
             }

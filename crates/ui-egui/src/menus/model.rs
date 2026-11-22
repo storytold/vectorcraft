@@ -16,7 +16,7 @@ use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
-use super::{TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
+use super::{Listed, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
 use crate::i18n::LangExt as _;
 use crate::{UiState, VectorcraftApp};
 
@@ -155,10 +155,10 @@ fn role(title: &str) -> MenuRole {
 }
 
 /// The hash of what the catalog's rows depend on, which moves its generation.
-fn generation(ui: &UiState) -> u64 {
+fn generation(listed: &Listed) -> u64 {
     let mut h = DefaultHasher::new();
     (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), vectorcraft_text::FontDb::global().generation()).hash(&mut h);
-    hash_listed_names(ui, &mut h);
+    listed.hash(&mut h);
     h.finish()
 }
 
@@ -173,8 +173,9 @@ fn hash_listed_names(ui: &UiState, h: &mut DefaultHasher) {
 }
 
 fn rebuild(app: &mut VectorcraftApp, target: Target) {
+    let listed = Listed::of(app);
     let mut build = Build { app, lang: crate::i18n::current(), states: CommandStates::new(), refs: Vec::new() };
-    let menus: Vec<Menu> = menu_tree_named(app.session.prefs.font_names_in_english)
+    let menus: Vec<Menu> = menu_tree_named(app.session.prefs.font_names_in_english, &listed)
         .into_iter()
         .map(|(title, nodes)| {
             let shown = build.title(title, true);
@@ -191,7 +192,7 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let bar = MenuBar::new(menus);
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
-    match AppCatalog::new(defs, generation(&app.ui)) {
+    match AppCatalog::new(defs, generation(&listed)) {
         Ok(catalog) => app.menus.catalog = Some(catalog),
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),

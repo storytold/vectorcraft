@@ -381,7 +381,7 @@ fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
 /// then a separator; the menus list it once.
 #[test]
 fn help_starts_with_search_commands() {
-    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     let tree = menu_tree();
     let help = &tree.iter().find(|(title, _)| *title == "Help").expect("Help menu").1;
     assert!(
@@ -391,7 +391,8 @@ fn help_starts_with_search_commands() {
     );
     assert!(matches!(help[1], Node::Separator), "{:?}", help[1]);
     assert!(enabled(&app, "help.commandPalette"));
-    assert!(shortcut_of("help.commandPalette").is_some(), "the search's shortcut shows next to the item");
+    crate::tests_synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+    assert!(shortcut_of(&app, "help.commandPalette").is_some(), "the search's shortcut shows next to the item");
     fn count(nodes: &[Node]) -> usize {
         nodes
             .iter()
@@ -571,7 +572,7 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     assert_eq!(items, [("Center on Top", ids[0]), ("Center on Bottom", ids[1])]);
     let palette = crate::palette::items();
     for (label, id) in items {
-        assert!(palette.iter().any(|(l, i, _)| l == &format!("Type › Type on a Path › {label}") && i == id), "{label}");
+        assert!(palette.iter().any(|(l, i)| l == &format!("Type › Type on a Path › {label}") && i == id), "{label}");
     }
     let line = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
     let open = app.run("text.createInPath", json!({"path": line, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();

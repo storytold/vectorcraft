@@ -240,7 +240,7 @@ fn the_view_menu_lists_the_status_bar_angles_and_checks_the_current_one() {
 /// filled in, and OK turns the view to the angle entered.
 #[test]
 fn rotate_view_without_an_angle_asks_for_one() {
-    assert!(crate::palette::items().iter().any(|(label, id, _)| (label.as_str(), id.as_str()) == ("Rotate View", "view.rotate")));
+    assert!(crate::palette::items().iter().any(|(label, id)| (label.as_str(), id.as_str()) == ("Rotate View", "view.rotate")));
     let mut app = with_document();
     app.run("view.rotate", json!({"angle": 30})).unwrap();
     menus::invoke(&mut app, "view.rotate", json!({}));

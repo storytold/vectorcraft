@@ -50,7 +50,7 @@ impl Kind {
 }
 
 /// What the two styles panels keep between frames.
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct StylesPanels {
     pub char: StylesPanel,
     pub para: StylesPanel,
@@ -66,7 +66,7 @@ impl StylesPanels {
 }
 
 /// One panel's highlight. Names are the stored form: row ids are list positions, rebuilt every pass.
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct StylesPanel {
     /// The uid of the document the highlight was made in.
     document: Option<u64>,

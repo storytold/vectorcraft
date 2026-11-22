@@ -517,6 +517,13 @@ impl Session {
         }
     }
 
+    /// Runs `f` with the context the tools read for the active document seen through `view`, for code
+    /// outside the engine that draws on the tools' geometry (the canvas's selection widgets).
+    /// `R::default()` with no document open.
+    pub fn with_tool_context<R: Default>(&mut self, view: ViewInfo, f: impl FnOnce(&ToolContext) -> R) -> R {
+        self.with_tool_cx(view, |_, cx| f(cx))
+    }
+
     /// The error of a tool that panicked in the last [`Self::with_tool_cx`] call, if any.
     fn take_tool_panic(&mut self) -> Result<()> {
         self.tool_panic.take().map_or(Ok(()), Err)

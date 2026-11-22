@@ -12,7 +12,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use craft::behavior::dock::{NamedWorkspace, Workspace as DockWorkspace, WorkspaceChrome, WorkspaceError, WorkspaceKeeps, WorkspaceSet};
 use craft::keymap::CommandRef;
@@ -504,30 +503,16 @@ pub fn rename(ui: &mut UiState, from: &str, to: &str) -> Result<(), String> {
     Ok(())
 }
 
-// ---------- menu support (menu_tree has no app access) ----------
+// ---------- the menu ----------
 
-crate::shortcut_editor::ui_mirror!(fn names_store() -> Vec<&'static str>);
-
-/// Mirror the user workspace names for the (static) menu tree.
-pub fn sync(ui: &UiState) {
-    let saved = &ui.workspaces.set.saved;
-    let same = names_store().read().map(|v| v.len() == saved.len() && v.iter().zip(saved).all(|(a, b)| *a == b.name)).unwrap_or(true);
-    if !same {
-        if let Ok(mut v) = names_store().write() {
-            *v = saved.iter().map(|w| crate::shortcut_editor::intern(&w.name)).collect();
-        }
-        crate::shortcut_editor::GENERATION.fetch_add(1, Ordering::Relaxed);
-    }
-}
-
-/// Window → Workspace submenu items.
-pub fn menu_items() -> Vec<crate::menus::Node> {
+/// Window → Workspace submenu items: the built-in workspaces, the saved ones (`saved`) and the
+/// workspace commands.
+pub fn menu_items(saved: &[String]) -> Vec<crate::menus::Node> {
     use crate::menus::{Node, Sep, c, named};
     let mut v: Vec<Node> = builtins().into_iter().map(|b| named(b.name, "window.workspace", json!({"name": b.name}))).collect();
-    let custom = names_store().read().map(|v| v.clone()).unwrap_or_default();
-    if !custom.is_empty() {
+    if !saved.is_empty() {
         v.push(Sep);
-        v.extend(custom.into_iter().map(|n| named(n, "window.workspace", json!({"name": n}))));
+        v.extend(saved.iter().map(|n| named(n.as_str(), "window.workspace", json!({"name": n}))));
     }
     v.push(Sep);
     v.push(c("Reset Essentials", "window.workspace.reset"));

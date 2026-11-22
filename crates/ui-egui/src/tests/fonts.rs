@@ -38,4 +38,3 @@ fn type_font_menu_lists_every_available_family() {
     }
     panic!("the fonts kept changing");
 }
-

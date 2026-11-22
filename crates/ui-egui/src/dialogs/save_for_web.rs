@@ -632,3 +632,8 @@ fn finish(app: &mut VectorcraftApp, result: SaveForWebResult) {
         app.status(e);
     }
 }
+
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod tests_table;

@@ -19,7 +19,7 @@ use crate::VectorcraftApp;
 
 /// What the panel's menu sets: the scope and the category shown. Neither is saved with the
 /// preferences.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DocInfoView {
     /// Only the selection's objects are counted.
     pub selection_only: bool,

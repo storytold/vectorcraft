@@ -110,7 +110,7 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     assert_eq!(entries[0].path, ["Object", "Path"]);
     assert!(!entries[0].enabled, "an object selection is not enough");
     assert!(!labels(&menus::context_items(&app)).iter().any(|l| l == LABEL));
-    assert!(crate::palette::items().iter().any(|(_, cmd, _)| cmd == "path.removeAnchors"));
+    assert!(crate::palette::items().iter().any(|(_, cmd)| cmd == "path.removeAnchors"));
 
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": id.0, "anchors": [[0, 1]]})).unwrap();

@@ -9,8 +9,8 @@ use craft::ui::shell::WindowDialogs;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::tests_export::{answer_saves, save_panel};
 use super::*;
+use crate::dialogs::tests_export::{answer_saves, save_panel};
 use crate::{Services, VectorcraftApp};
 
 pub(super) type Log = Rc<RefCell<Vec<String>>>;
@@ -220,7 +220,7 @@ fn opening_uses_the_active_artboard_in_a_multiselection_and_preserves_other_sett
     app.run("tool.setOption", json!({"key": "selected", "value": [1, 0]})).unwrap();
     assert_eq!(app.view().unwrap().artboard, 1);
     assert_eq!(crate::panels::artboards::picked(&app, 2), [0, 1]);
-    let mut expected = serde_json::to_value(super::save_for_web::options_of(&saved)).unwrap();
+    let mut expected = serde_json::to_value(options_of(&saved)).unwrap();
     expected["artboard"] = json!(1);
     app.run("file.saveForWeb", json!({})).unwrap();
     for key in ["quality", "width", "metadata", "artboard"] {
@@ -710,7 +710,7 @@ fn optimize_to_file_size_takes_the_settings_that_fit() {
     let quality = fields(&app)["quality"].as_u64().unwrap();
     assert!(quality < 100, "{found}");
     assert!(fields(&app).get("optimizeK").is_none(), "the rows closed");
-    assert!(save_for_web::optimized_result(&app.web_export.optimized, &save_for_web::art_key(&app)).is_some());
+    assert!(optimized_result(&app.web_export.optimized, &art_key(&app)).is_some());
     // Save writes the size found.
     save(&mut app);
     let written = std::fs::read(dir.join("Untitled-1.jpg")).unwrap();
@@ -721,7 +721,7 @@ fn optimize_to_file_size_takes_the_settings_that_fit() {
     // decides the slices Save writes, and leaves the revision as it is) or a selected slice.
     let plant = |app: &mut VectorcraftApp| {
         let mut current = found.clone();
-        current["art"] = json!(save_for_web::art_key(app));
+        current["art"] = json!(art_key(app));
         app.web_export.optimized = Some(current);
         frame(app);
         assert!(app.web_export.optimized.is_some(), "the result holds for the art it measured");

@@ -506,7 +506,7 @@ pub fn insert_menu_item(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
         Some(v) if v.is_object() => v.clone(),
         Some(_) => return Err("`params` must be an object".into()),
     };
-    let items = crate::menus::insertable_items(app.session.prefs.font_names_in_english);
+    let items = crate::menus::insertable_items(app.session.prefs.font_names_in_english, &crate::menus::Listed::of(app));
     if !items.iter().any(|item| item.command == command && item.params == params) {
         return Err("no menu item that can be inserted runs this command".into());
     }

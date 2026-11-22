@@ -5,8 +5,8 @@ use vectorcraft_engine::cmd::webexport;
 
 use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, PALETTE_COLOR_KEY, TableOrder};
 
-use super::save_for_web::color_table::{apply, marks, restore, shift};
-use super::tests_save_for_web::{app, frame, host, save, set};
+use super::color_table::{apply, marks, restore, shift};
+use super::tests::{app, frame, host, save, set};
 
 const A: [u8; 3] = [0x00, 0x00, 0x00];
 const B: [u8; 3] = [0x11, 0x11, 0x11];

@@ -21,7 +21,6 @@
 //! makes a new one, and Delete deletes it).
 
 use std::collections::BTreeSet;
-use std::sync::atomic::Ordering;
 
 use craft::behavior::IconId;
 use craft::behavior::dock::{Action, DockEdge};
@@ -488,31 +487,14 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 
 // ---------- the menu ----------
 
-crate::shortcut_editor::ui_mirror!(fn names_store() -> Vec<&'static str>);
-
-/// Mirror the toolbars' names for the (static) menu tree.
-pub fn sync(ui: &UiState) {
-    let same = names_store()
-        .read()
-        .map(|v| v.len() == ui.custom_toolbars.len() && v.iter().zip(&ui.custom_toolbars).all(|(a, b)| *a == b.name))
-        .unwrap_or(true);
-    if !same {
-        if let Ok(mut v) = names_store().write() {
-            *v = ui.custom_toolbars.iter().map(|b| crate::shortcut_editor::intern(&b.name)).collect();
-        }
-        crate::shortcut_editor::GENERATION.fetch_add(1, Ordering::Relaxed);
-    }
-}
-
 /// Window › Toolbars: Advanced, Double Column and Compact Tools, the toolbars made with New
-/// Toolbar (each checked while it shows), New Toolbar… and Manage Toolbars….
-pub fn menu_items() -> Vec<crate::menus::Node> {
+/// Toolbar (`names`, each checked while it shows), New Toolbar… and Manage Toolbars….
+pub fn menu_items(names: &[String]) -> Vec<crate::menus::Node> {
     use crate::menus::{Sep, c, named};
     let mut v =
         vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns"), c("Compact Tools", "window.toolbarCompact"), Sep];
-    let names = names_store().read().map(|v| v.clone()).unwrap_or_default();
     if !names.is_empty() {
-        v.extend(names.into_iter().map(|n| named(n, "window.toolbar.custom", json!({ "name": n }))));
+        v.extend(names.iter().map(|n| named(n.as_str(), "window.toolbar.custom", json!({ "name": n }))));
         v.push(Sep);
     }
     v.push(c("New Toolbar…", "window.toolbar.new"));
@@ -571,8 +553,11 @@ mod tests {
 
     /// The items of Window › Toolbars: (label, command id, params).
     fn toolbars_menu(app: &VectorcraftApp) -> Vec<(String, String, Value)> {
-        sync(&app.ui);
-        let window = crate::menus::menu_tree().into_iter().find(|(m, _)| *m == "Window").map(|(_, items)| items).unwrap();
+        let window = crate::menus::menu_tree_named(true, &crate::menus::Listed::of(app))
+            .into_iter()
+            .find(|(m, _)| *m == "Window")
+            .map(|(_, items)| items)
+            .unwrap();
         let Some(items) = window.into_iter().find_map(|n| match n {
             Node::Submenu { label, children, .. } if label == "Toolbars" => Some(children),
             _ => None,

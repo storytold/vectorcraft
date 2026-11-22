@@ -360,7 +360,8 @@ fn push_app_data(app: &VectorcraftApp) {
     }
     let key = InsertMenuItemDialog::rows_key(app);
     if dialogs.with(|host| host.get::<InsertMenuItemDialog>().is_some_and(|dialog| dialog.built_from() != Some(key))) {
-        let rows = super::action_insert_menu_item::build(crate::i18n::current(), app.session.prefs.font_names_in_english);
+        let rows =
+            super::action_insert_menu_item::build(crate::i18n::current(), app.session.prefs.font_names_in_english, &crate::menus::Listed::of(app));
         dialogs.with(|host| {
             if let Some(dialog) = host.get_mut::<InsertMenuItemDialog>() {
                 dialog.set_rows(key, rows);

@@ -2466,6 +2466,6 @@ mod tests {
         let entry = entries().iter().find(|e| e.key == "document.setUnits").cloned().expect("the editor has a row for it");
         assert!(!listed(&Overrides::default(), &entry) && listed(&saved, &entry));
         assert!(needs_a_value("document.setUnits"));
-        assert!(crate::palette::items().iter().all(|(_, id, _)| id != "document.setUnits"));
+        assert!(crate::palette::items().iter().all(|(_, id)| id != "document.setUnits"));
     }
 }

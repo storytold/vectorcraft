@@ -221,7 +221,7 @@ fn script_and_folder_names_are_shown_as_they_are_in_every_language() {
     write(&dir, "Zed/All Artboards.js", "");
     read(&app);
     assert!(!menus::menu_strings().contains("All Artboards") && !menus::menu_strings().contains("Zed"));
-    assert!(!crate::palette::items().iter().any(|(_, id, _)| id == scripts_menu::COMMAND), "a script runs from its menu item");
+    assert!(!crate::palette::items().iter().any(|(_, id)| id == scripts_menu::COMMAND), "a script runs from its menu item");
     let _ = std::fs::remove_dir_all(dir);
 }
 

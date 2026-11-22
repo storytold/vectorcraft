@@ -61,7 +61,7 @@ const FOOTER: [(Act, &str, &str); 5] = [
 ];
 
 /// The panel's options (panel menu).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct Options {
     pub(super) show: &'static str,
     pub(super) sort: Option<&'static str>,
@@ -86,7 +86,7 @@ type NestedPicks = Option<((u64, Vec<u64>), Vec<u64>)>;
 /// What the panel keeps for the session: its options, the rows it last fetched, the request to
 /// show an image, the rows picked outside the layer tree, the list's selection (its lead and
 /// anchor) and the row whose menu is open.
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct LinksModel {
     pub(super) options: Options,
     pub(super) cache: Arc<Cache>,
@@ -98,7 +98,7 @@ pub(crate) struct LinksModel {
 }
 
 /// `links.list` and the first selected image's `links.info`, with what they were fetched for.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct Cache {
     /// (document uid, revision, show, sort, Show DCS Transparency Interactions).
     key: Option<(u64, u64, &'static str, Option<&'static str>, bool)>,

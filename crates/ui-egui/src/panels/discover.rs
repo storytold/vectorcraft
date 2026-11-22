@@ -95,7 +95,11 @@ fn refresh(app: &mut VectorcraftApp) {
                 hit.english_path = entry.path.clone();
                 hit.label = menus::shown_label(app, &hit.id, &hit.params, &hit.english_label);
                 hit.path = entry.shown_path.clone();
-                hit.shortcut = menus::item_shortcut(&hit.id, &hit.params).or_else(|| menus::shortcut_of(&hit.id)).unwrap_or_default().into();
+                hit.shortcut = menus::item_shortcut(app, &hit.id, &hit.params)
+                    .or_else(|| menus::shortcut_of(app, &hit.id))
+                    .map(|c| c.to_string())
+                    .unwrap_or_default()
+                    .into();
             }
             _ => {}
         }

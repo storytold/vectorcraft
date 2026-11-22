@@ -204,19 +204,18 @@ pub fn hint_strings() -> Vec<&'static str> {
     v
 }
 
-pub(super) fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
-    let search;
-    let segments = match hint_for(tool) {
-        Some(s) => s,
-        None => {
-            search = match menus::shortcut_of("help.commandPalette") {
-                Some(sc) => [(tl!("Press "), false), (sc, true), (tl!(" to search every command"), false)],
-                None => [(tl!("Use "), false), (tl!("Help › Search Commands…"), true), (tl!(" to search every command"), false)],
-            };
-            &search
-        }
-    };
-    shown_segments(segments)
+pub(super) fn hint_segments(app: &VectorcraftApp, tool: &str) -> Vec<(Cow<'static, str>, bool)> {
+    if let Some(segments) = hint_for(tool) {
+        return shown_segments(segments);
+    }
+    match menus::shortcut_of(app, "help.commandPalette") {
+        Some(chord) => vec![
+            (Cow::Borrowed(tl!("Press ")), false),
+            (Cow::Owned(chord.display(crate::keymap::platform())), true),
+            (Cow::Borrowed(tl!(" to search every command")), false),
+        ],
+        None => shown_segments(&[(tl!("Use "), false), (tl!("Help › Search Commands…"), true), (tl!(" to search every command"), false)]),
+    }
 }
 
 /// The hint bar's segments for `tool` as [`hint_segments`] shows them, the Zoom tool's for animated
@@ -254,7 +253,7 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         None => {
             let tool = app.session.tool_id();
             let hint = if tool == "zoom" && crate::canvas::animated_zoom(&app.session.prefs) { ANIMATED_ZOOM_HINT } else { tool };
-            hint_segments(hint)
+            hint_segments(app, hint)
         }
     };
     Bar::new(tl!("Help Bar"), BarKind::Status).show(ui, |ui, _| {

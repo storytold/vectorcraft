@@ -110,8 +110,9 @@ const RASTER_MENUS: [(&str, &[&str]); 10] = [
     ("Video", &["Effect", "Video"]),
 ];
 
-/// The Effect menu, built from the effects catalogue (vector effects), plus raster effects.
-pub(super) fn effect_menu() -> Vec<Node> {
+/// The Effect menu, built from the effects catalogue (vector effects), plus raster effects. SVG
+/// Filters lists the document's own filters `svg_filters` after the defaults.
+pub(super) fn effect_menu(svg_filters: &[String]) -> Vec<Node> {
     let cat = vectorcraft_effects::effect_catalog();
     let mut out = vec![
         c("Apply Last Effect", "effect.applyLast"),
@@ -160,8 +161,7 @@ pub(super) fn effect_menu() -> Vec<Node> {
         }
         // Apply SVG Filter…, Import SVG Filter… and the document's filters.
         if sub_name == "SVG Filters" {
-            // PLAN: effects-w17 may give `menu_items` the document's filter names; the no-argument call is kept.
-            out.push(sub(sub_name, crate::dialogs::svg_filter::menu_items()));
+            out.push(sub(sub_name, crate::dialogs::svg_filter::menu_items(svg_filters)));
             continue;
         }
         let items = items_at(&["Effect", sub_name], true);

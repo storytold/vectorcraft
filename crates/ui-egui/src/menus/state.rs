@@ -2,6 +2,8 @@ use super::run::{normalize_panel, toolbar_double, toolbar_panel};
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::{Brightness, Value, VectorcraftApp};
 use crate::i18n::LangExt as _;
+use craft::keymap::Chord;
+use craft::ui::runtime::commands;
 
 /// Checked state for toggle items.
 pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
@@ -182,9 +184,11 @@ pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()
 }
 
-/// Effective shortcut of a command: the user's override (Edit → Keyboard Shortcuts) or the default.
-pub fn shortcut_of(id: &str) -> Option<&'static str> {
-    crate::shortcut_editor::command_shortcut(id)
+/// The shortcut entry `key` ([`crate::keymap`]'s entry keys) shows: its first single-press binding in
+/// the window's keymap, under the user's set in use (Edit → Keyboard Shortcuts). `None` before the
+/// window's first frame.
+pub fn shortcut_of(app: &VectorcraftApp, key: &str) -> Option<Chord> {
+    commands::chord(app.ui_ctx.as_ref()?, &crate::keymap::command_of(key))
 }
 
 /// Is a command currently enabled?

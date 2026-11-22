@@ -74,7 +74,6 @@ fn slice_menu_items_follow_the_state() {
     assert_eq!(crate::menus::checked(&app, "view.slices.lock", &json!({})), Some(true));
 }
 
-
 #[test]
 fn the_slice_tools_are_real_tools() {
     let mut app = app();

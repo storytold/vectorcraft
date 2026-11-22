@@ -902,7 +902,7 @@ fn insert_menu_item_refuses_what_no_menu_item_runs_and_changes_nothing() {
 /// artboard to both.
 #[test]
 fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
-    for item in crate::menus::insertable_items(false) {
+    for item in crate::menus::insertable_items(false, &crate::menus::Listed::default()) {
         let (mut app, _) = app_with_three_moves();
         app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": item.command, "params": item.params})).unwrap();
         let held = steps(&app, 0, 0)[3].1.clone();
@@ -963,7 +963,7 @@ fn an_inserted_pathfinder_effect_item_keeps_the_pathfinder_options_of_its_insert
 #[test]
 fn every_pathfinder_effect_item_step_holds_the_options_its_click_applies() {
     let options = json!({"precision": 0.25, "removeRedundantPoints": false, "removeUnpainted": true});
-    let items: Vec<_> = crate::menus::insertable_items(false)
+    let items: Vec<_> = crate::menus::insertable_items(false, &crate::menus::Listed::default())
         .into_iter()
         .filter(|item| {
             item.command == "effect.apply"

@@ -112,7 +112,6 @@ struct Draft {
     /// Does the label translate? An installed filter plug-in's name does not.
     translates: bool,
     id: String,
-    shortcut: String,
     /// Has [`distinct_names`] given the result its [`context`]?
     in_context: bool,
     /// Does the result show its id after its name?
@@ -120,16 +119,8 @@ struct Draft {
 }
 
 impl Draft {
-    fn new(path: &str, label: &str, id: String, shortcut: &str) -> Draft {
-        Draft {
-            path: path.to_string(),
-            label: label.to_string(),
-            translates: true,
-            id,
-            shortcut: shortcut.to_string(),
-            in_context: false,
-            keyed: false,
-        }
+    fn new(path: &str, label: &str, id: String) -> Draft {
+        Draft { path: path.to_string(), label: label.to_string(), translates: true, id, in_context: false, keyed: false }
     }
 
     /// The name in `lang`: the path's segments and the label translate on their own, and the id
@@ -164,7 +155,7 @@ fn drafts() -> Vec<Draft> {
             && (!crate::shortcut_editor::needs_a_value(c.id) || PICK_RUNS.contains(&c.id))
     };
     for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c)).chain(plugin_commands) {
-        out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string(), menus::shortcut_of(c.id).unwrap_or("")));
+        out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string()));
     }
     // `plugin.dialog` runs nothing without an id: [`named_drafts`] lists each filter instead. A
     // script of the Scripts folder runs from File › Scripts, by its path. The palette's own toggle
@@ -175,31 +166,31 @@ fn drafts() -> Vec<Draft> {
         let engine = WRAPPED.iter().find(|(_, ui)| *ui == c.0).map_or(c.0, |(engine, _)| *engine);
         let engine = vectorcraft_engine::find_command(engine);
         let path = engine.map(|e| e.menu.join(" › ")).unwrap_or_default();
-        out.push(Draft::new(&path, c.1, c.0.to_string(), menus::shortcut_of(c.0).unwrap_or("")));
+        out.push(Draft::new(&path, c.1, c.0.to_string()));
     }
     for tool in vectorcraft_tools::catalog::all_tools() {
-        out.push(Draft::new("", tool.label, format!("tool:{}", tool.id), crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or("")));
+        out.push(Draft::new("", tool.label, format!("tool:{}", tool.id)));
     }
     // A panel's result shows the panel, as `window.panel` does without `toggle`, under Window ›
     // Show Panel.
     for (id, label) in crate::state::all_panels() {
-        out.push(Draft::new(PANEL_PATH, label, format!("panel:{id}"), crate::shortcut_editor::panel_shortcut(id).unwrap_or("")));
+        out.push(Draft::new(PANEL_PATH, label, format!("panel:{id}")));
     }
     // An Effect menu item runs what its item runs; a live-effect plug-in's name does not translate.
     for e in crate::shortcut_editor::effect_items().iter() {
         out.push(Draft {
             translates: vectorcraft_plugins::effect::plugin_id(&e.effect).is_none(),
-            ..Draft::new(&e.group, &e.label, format!("effect:{}", e.effect), crate::shortcut_editor::effect_shortcut(&e.effect).unwrap_or(""))
+            ..Draft::new(&e.group, &e.label, format!("effect:{}", e.effect))
         });
     }
     out
 }
 
-/// Everything the palette searches: (label, command id or `tool:<id>`, shortcut). Labels are the
-/// English names before [`distinct_names`] makes them distinct.
-// PLAN: the shortcut text stays the editor's lookup: `ResolvedCommand::chord` needs a context, which `items` (no params, 7 test readers) has none of; shortcuts-w7 decides which lookup survives
-pub fn items() -> Vec<(String, String, String)> {
-    drafts().into_iter().map(|d| (d.name(crate::i18n::Lang::EN), d.id, d.shortcut)).collect()
+/// Everything the palette searches: (label, command id or `tool:<id>`). Labels are the English
+/// names before [`distinct_names`] makes them distinct; a result's shortcut is its command's in the
+/// window's keymap.
+pub fn items() -> Vec<(String, String)> {
+    drafts().into_iter().map(|d| (d.name(crate::i18n::Lang::EN), d.id)).collect()
 }
 
 /// The menu path a result shows when its name is another result's: its [`CONTEXTS`] path, Tools
@@ -305,10 +296,11 @@ fn item_label(lang: crate::i18n::Lang, id: &str, menu_item: &str) -> String {
 /// translated ([`distinct_names`]).
 fn named_drafts(lang: Lang) -> Vec<Draft> {
     let mut drafts = drafts();
-    drafts.extend(crate::shortcut_editor::filter_items().iter().map(|f| Draft {
-        translates: false,
-        ..Draft::new(&f.group, &f.label, format!("plugin:{}", f.id), crate::shortcut_editor::filter_shortcut(&f.id).unwrap_or(""))
-    }));
+    drafts.extend(
+        crate::shortcut_editor::filter_items()
+            .iter()
+            .map(|f| Draft { translates: false, ..Draft::new(&f.group, &f.label, format!("plugin:{}", f.id)) }),
+    );
     distinct_names(&mut drafts, &[Lang::EN, lang]);
     drafts
 }
@@ -885,7 +877,7 @@ mod tests {
     #[test]
     fn the_palette_lists_cancel_key_object_once() {
         let items = items();
-        let ids: Vec<&str> = items.iter().filter(|(label, ..)| label == "Cancel Key Object").map(|(_, id, _)| id.as_str()).collect();
+        let ids: Vec<&str> = items.iter().filter(|(label, ..)| label == "Cancel Key Object").map(|(_, id)| id.as_str()).collect();
         assert_eq!(ids, ["select.key"]);
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         let commands = crate::control::all_commands(&app);
@@ -912,8 +904,8 @@ mod tests {
             let spec = vectorcraft_engine::command_specs().iter().find(|c| c.id == *engine).unwrap_or_else(|| panic!("{engine} is a command"));
             let wrapper = menus::UI_COMMANDS.iter().find(|c| c.0 == *ui).unwrap_or_else(|| panic!("{ui} is a UI command"));
             assert_eq!(spec.label, wrapper.1, "{engine} and {ui} share a name");
-            assert!(items.iter().all(|(_, id, _)| id != engine), "{engine} is left out");
-            let listed: Vec<&str> = items.iter().filter(|(_, id, _)| id == ui).map(|(label, ..)| label.as_str()).collect();
+            assert!(items.iter().all(|(_, id)| id != engine), "{engine} is left out");
+            let listed: Vec<&str> = items.iter().filter(|(_, id)| id == ui).map(|(label, ..)| label.as_str()).collect();
             let path: String = spec.menu.iter().map(|m| format!("{m} › ")).collect();
             assert_eq!(listed, [format!("{path}{}", wrapper.1)], "{ui} is listed once, with {engine}'s menu path");
         }
@@ -975,7 +967,7 @@ mod tests {
     fn a_pick_of_an_asset_export_command_opens_its_panel() {
         let showing = |app: &VectorcraftApp| crate::panel_docking::showing(&app.ui, crate::panels::asset_export::ID);
         for id in ASSET_EXPORT {
-            assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
+            assert!(items().iter().any(|(_, item)| item == id), "{id} is in the palette");
             let mut app = app_on(Session::new());
             app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
             app.ui.status.clear();
@@ -1027,7 +1019,7 @@ mod tests {
             ("object.path.smooth", crate::dialogs::smooth_slider::showing),
         ];
         for (id, opened) in expected {
-            assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
+            assert!(items().iter().any(|(_, item)| item == id), "{id} is in the palette");
             let mut app = app_on(Fixture::Single.session());
             app.ui.status.clear();
             let before = app.session.active().unwrap().history.undo.len();
@@ -1068,7 +1060,7 @@ mod tests {
             walk(&menu.children, &mut rows);
         }
         let mut checked: Vec<(String, CommandRef)> = vec![];
-        for (_, id, _) in items() {
+        for (_, id) in items() {
             let of_id: Vec<&CommandRef> = rows.iter().map(|it| &it.command).filter(|c| c.id == id).collect();
             let Some(first) = of_id.first() else { continue };
             if first.params.as_object().is_none_or(serde_json::Map::is_empty) || of_id.iter().any(|c| c.params != first.params) {
@@ -1129,7 +1121,7 @@ mod tests {
     #[test]
     fn a_pick_of_a_command_without_a_dialog_runs_at_once() {
         for id in ["object.group", "paint.swap"] {
-            assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
+            assert!(items().iter().any(|(_, item)| item == id), "{id} is in the palette");
             let mut app = app_on(Fixture::Multi.session());
             let before = app.session.active().unwrap().history.undo.len();
             pick(&mut app, id);
@@ -1442,7 +1434,7 @@ mod tests {
     /// in each catalog with complete menus. Each command [`CONTEXTS`] names is a result.
     #[test]
     fn the_paths_of_results_that_share_a_name_translate() {
-        let ids: Vec<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        let ids: Vec<String> = items().into_iter().map(|(_, id)| id).collect();
         for (id, _) in CONTEXTS {
             assert!(ids.iter().any(|i| i == id), "{id} is a result");
         }
@@ -1543,7 +1535,7 @@ mod tests {
             .iter()
             .filter(|c| !vectorcraft_engine::cmd::is_alias(c.id) && !WRAPPED.iter().any(|(e, _)| *e == c.id) && !ui_ids.contains(c.id))
             .collect();
-        let listed: std::collections::HashSet<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        let listed: std::collections::HashSet<String> = items().into_iter().map(|(_, id)| id).collect();
         let dropped: Vec<&vectorcraft_engine::CommandSpec> = before.iter().copied().filter(|c| !listed.contains(c.id)).collect();
         let ids: Vec<&str> = dropped.iter().map(|c| c.id).collect();
         for id in ["document.json", "brush.unused", "symbol.unused", "transparency.set"] {
@@ -1615,7 +1607,7 @@ mod tests {
     /// between Begin Undo Group and End Undo Group are one undo step.
     #[test]
     fn a_pick_of_a_session_command_runs_it() {
-        let ids: Vec<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        let ids: Vec<String> = items().into_iter().map(|(_, id)| id).collect();
         let mut app = app_on(Fixture::Single.session());
         let pick_listed = |app: &mut VectorcraftApp, id: &str| {
             assert!(ids.iter().any(|i| i == id), "{id} is a result");
@@ -1673,7 +1665,7 @@ mod tests {
     /// engine commands they wrap are not.
     #[test]
     fn the_wrapping_ui_commands_stay_listed() {
-        let ids: std::collections::HashSet<String> = items().into_iter().map(|(_, id, _)| id).collect();
+        let ids: std::collections::HashSet<String> = items().into_iter().map(|(_, id)| id).collect();
         for (engine, ui) in WRAPPED {
             assert!(ids.contains(*ui) && !ids.contains(*engine), "{ui} listed, {engine} not");
         }
@@ -2026,7 +2018,7 @@ mod tests {
     #[test]
     fn tools_are_never_dimmed_and_panels_are_in_presentation_mode() {
         let mut window = Window::new();
-        let tools: Vec<String> = items().into_iter().map(|(_, id, _)| id).filter(|id| id.starts_with("tool:")).collect();
+        let tools: Vec<String> = items().into_iter().map(|(_, id)| id).filter(|id| id.starts_with("tool:")).collect();
         assert!(!tools.is_empty());
         assert!(tools.iter().all(|id| window.resolved(id).enabled), "{tools:?}");
         assert!(window.resolved("panel:layers").enabled);
@@ -2059,8 +2051,7 @@ mod tests {
     #[test]
     fn no_reason_shows_a_command_id() {
         let window = Window::on(Session::new());
-        let reasons: Vec<(String, String)> =
-            items().into_iter().filter_map(|(_, id, _)| hint_of(&window.resolved(&id)).map(|why| (id, why))).collect();
+        let reasons: Vec<(String, String)> = items().into_iter().filter_map(|(_, id)| hint_of(&window.resolved(&id)).map(|why| (id, why))).collect();
         assert!(reasons.len() > 100, "with no document most results can't run: {}", reasons.len());
         for (id, why) in &reasons {
             let command = crate::keymap::command_of(id).id;

@@ -234,11 +234,6 @@ mod tests_hpgl;
 mod tests_tiff_bmp_tga;
 
 #[cfg(test)]
-mod tests_save_for_web;
-#[cfg(test)]
-mod tests_save_for_web_table;
-
-#[cfg(test)]
 mod tests_psd;
 
 #[cfg(test)]

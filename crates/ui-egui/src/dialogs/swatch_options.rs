@@ -41,6 +41,7 @@ pub const KIND: &str = "swatchOptions";
 pub(super) const NO_WINDOW: &str = "no window";
 
 /// The open Swatch Options dialog: the held dialog, the swatch it edits and the parameters its preview last ran with.
+#[derive(Clone, Debug)]
 pub(crate) struct Open {
     /// The held dialog.
     pub(crate) id: DialogId,

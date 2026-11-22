@@ -3,6 +3,7 @@ use super::state::{hidden_when_disabled, shortcut_of};
 use super::tree::menu_tree;
 use super::ui_commands::UI_COMMANDS;
 use super::{Node, TODO, Value, VectorcraftApp};
+use craft::keymap::Chord;
 
 /// Label for toggles whose text flips (Outline/Preview, Hide/Show …).
 pub fn dynamic_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
@@ -237,19 +238,21 @@ pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
 /// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
-pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
-    match (id, p.get("panel").and_then(Value::as_str)) {
-        ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
-        ("effect.dialog" | "effect.apply", _) => p.get("effect").and_then(Value::as_str).and_then(crate::shortcut_editor::effect_shortcut),
-        ("plugin.dialog", _) => p.get("id").and_then(Value::as_str).and_then(crate::shortcut_editor::filter_shortcut),
+pub fn item_shortcut(app: &VectorcraftApp, id: &str, p: &Value) -> Option<Chord> {
+    let field = |name: &str| p.get(name).and_then(Value::as_str);
+    let key = match (id, field("panel")) {
+        ("window.panel", Some(panel)) => format!("panel:{panel}"),
+        ("effect.dialog" | "effect.apply", _) => format!("effect:{}", field("effect")?),
+        ("plugin.dialog", _) => format!("plugin:{}", field("id")?),
         // The Artboard tool's canvas menu passes the point its Paste goes to.
-        ("edit.paste", _) => shortcut_of(id),
+        ("edit.paste", _) => id.to_string(),
         // That menu's Cut and Copy: with the tool chosen, the keys run `edit.cut` and `edit.copy`, which do the same.
-        ("artboard.cut", _) => shortcut_of("edit.cut"),
-        ("artboard.copy", _) => shortcut_of("edit.copy"),
-        _ if p.is_null() => shortcut_of(id),
-        _ => None,
-    }
+        ("artboard.cut", _) => "edit.cut".to_string(),
+        ("artboard.copy", _) => "edit.copy".to_string(),
+        _ if p.is_null() => id.to_string(),
+        _ => return None,
+    };
+    shortcut_of(app, &key)
 }
 
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
