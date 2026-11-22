@@ -5461,3 +5461,67 @@ fn a_checked_module_installs_without_running_its_code() {
     assert!(s.execute("plugin.inspect", &json!({"dataBase64": vectorcraft_format::base64_encode(&other)})).is_err());
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
+
+/// A run that holds the documents and ends before it changed anything leaves the document's
+/// revision as it was, so another run made away from the session on that document still applies;
+/// one whose calls changed the selection moves it on, so the restored document redraws.
+#[test]
+fn a_calling_run_that_ends_unchanged_keeps_the_revision() {
+    use cmd::plugin::FilterRun;
+    let (plain, caller) = ("test.engine.keeprev.plain", "test.engine.keeprev.caller");
+    let mut s = session();
+    install_wat(&mut s, &tpl::returning(&tpl::manifest(plain, "filter", "{}"), r#"{"objects":[]}"#));
+    install_select_all_then_remove(&mut s, caller);
+    let (a, _) = (rect(&mut s, 10.0, "#ff0000"), rect(&mut s, 40.0, "#00ff00"));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let first = FilterRun::prepare(&s, &json!({"id": plain})).unwrap();
+    // It fails before its first call.
+    FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": caller})).unwrap();
+    s.end_plugin_calls();
+    assert!(first.current(&s), "nothing changed: the other run still applies");
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": caller})).unwrap();
+    run_job_away(&mut s, &job);
+    s.end_plugin_calls();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert!(!first.current(&s), "its call changed the selection, which was put back");
+    run(&mut s, "plugin.remove", json!({"id": plain}));
+    run(&mut s, "plugin.remove", json!({"id": caller}));
+}
+
+/// The output of a run that holds the documents applies only through the command and the params
+/// it was started with: `plugin.run` for other objects is refused and leaves the run holding them.
+#[test]
+fn a_held_run_applies_only_with_the_params_it_was_started_with() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.heldparams";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let (a, b) = (rect(&mut s, 10.0, "#ff0000"), rect(&mut s, 40.0, "#00ff00"));
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id, "ids": [a.0]})).unwrap();
+    let output = run_job_away(&mut s, &job);
+    s.hand_in_plugin_calls(output.clone());
+    assert!(matches!(s.execute("plugin.run", &json!({"id": id, "ids": [b.0]})), Err(EngineError::PluginBusy)));
+    assert!(s.plugin_calls_open());
+    assert!(s.doc().unwrap().doc.node(a).is_some() && s.doc().unwrap().doc.node(b).is_some(), "nothing applied");
+    s.hand_in_plugin_calls(output);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": [a.0]}));
+    assert!(!s.plugin_calls_open());
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_some());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A clipboard import is refused while a run holds the documents: the run's end would put back the
+/// clipboard it started with.
+#[test]
+fn a_clipboard_import_is_refused_while_a_run_holds_the_documents() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.heldclipboard";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    rect(&mut s, 10.0, "#ff0000");
+    FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})).unwrap();
+    assert!(matches!(s.execute("clipboard.importText", &json!({"text": "Hello"})), Err(EngineError::PluginBusy)));
+    s.end_plugin_calls();
+    run(&mut s, "clipboard.importText", json!({"text": "Hello"}));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}

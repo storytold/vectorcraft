@@ -26,7 +26,7 @@ use crate::{Error, Limits, Plugin, Result};
 
 /// The version of these messages, which [`FromWorker::Ready`] gives: a page and a worker of other
 /// builds (a worker file a browser kept from before an update) don't run plug-ins together.
-pub const PROTOCOL: u64 = 1;
+pub const PROTOCOL: u64 = 2;
 
 /// What the page asks the worker to do.
 #[derive(Clone, Debug, PartialEq)]
@@ -188,7 +188,8 @@ impl ToWorker {
             ToWorker::Run { module, manifest, input, params, limits, calls } => {
                 pack(json!({"kind": "run", "limits": limits_json(limits), "calls": calls}), &[module, manifest, input, params])
             }
-            ToWorker::Answer(Ok(result)) => pack(json!({"kind": "answer", "result": result}), &[]),
+            // The result goes in a blob of its own, so it may nest as deep as a command's result.
+            ToWorker::Answer(Ok(result)) => pack(json!({"kind": "answer"}), &[result.to_string().as_bytes()]),
             ToWorker::Answer(Err(f)) => pack(json!({"kind": "answer", "failure": {"code": f.code, "why": f.why}}), &[]),
         }
     }
@@ -203,8 +204,8 @@ impl ToWorker {
                 let limits = limits_from(h.get("limits")?)?;
                 Some(ToWorker::Run { module, manifest, input, params, limits, calls: h.get("calls")?.as_bool()? })
             }
-            ("answer", 0) => match (h.get("result"), h.get("failure")) {
-                (Some(result), None) => Some(ToWorker::Answer(Ok(result.clone()))),
+            ("answer", n) => match (blobs.pop(), h.get("failure")) {
+                (Some(result), None) if n == 1 => Some(ToWorker::Answer(Ok(serde_json::from_slice(&result).ok()?))),
                 (None, Some(f)) => {
                     let code = i32::try_from(f.get("code")?.as_i64()?).ok()?;
                     Some(ToWorker::Answer(Err(CallFailure { code, why: f.get("why")?.as_str()?.to_string() })))
@@ -224,7 +225,8 @@ impl FromWorker {
             FromWorker::Checked(Ok(manifest)) => pack(json!({"kind": "checked"}), &[manifest]),
             FromWorker::Checked(Err(e)) => pack(json!({"kind": "checked", "error": error_json(e)}), &[]),
             FromWorker::Progress { done, total } => pack(json!({"kind": "progress", "done": done, "total": total}), &[]),
-            FromWorker::Call { command, args } => pack(json!({"kind": "call", "command": command, "args": args}), &[]),
+            // The arguments go in a blob of their own, so they may nest as deep as a call's arguments.
+            FromWorker::Call { command, args } => pack(json!({"kind": "call", "command": command}), &[args.to_string().as_bytes()]),
             FromWorker::Done(out, lines) => {
                 let lines: Vec<Value> = lines.iter().map(|l| json!([level_name(l.level), l.text])).collect();
                 match out {
@@ -244,7 +246,9 @@ impl FromWorker {
             ("checked", 1, None) => Some(FromWorker::Checked(Ok(blobs.pop()?))),
             ("checked", 0, Some(e)) => Some(FromWorker::Checked(Err(error_from(e)?))),
             ("progress", 0, None) => Some(FromWorker::Progress { done: h.get("done")?.as_u64()?, total: h.get("total")?.as_u64()? }),
-            ("call", 0, None) => Some(FromWorker::Call { command: h.get("command")?.as_str()?.to_string(), args: h.get("args")?.clone() }),
+            ("call", 1, None) => {
+                Some(FromWorker::Call { command: h.get("command")?.as_str()?.to_string(), args: serde_json::from_slice(&blobs.pop()?).ok()? })
+            }
             ("done", n, e) => {
                 let mut lines = Vec::new();
                 for l in h.get("lines")?.as_array()? {
@@ -431,6 +435,20 @@ mod tests {
         for m in from {
             assert_eq!(FromWorker::decode(&m.encode()), Some(m));
         }
+    }
+
+    /// A call's arguments and a command's result read back at the deepest nesting a JSON parse
+    /// takes: the message adds no level around them.
+    #[test]
+    fn arguments_and_results_as_deep_as_json_takes_read_back() {
+        let nested = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
+        let deepest = (1..512).take_while(|&n| serde_json::from_str::<Value>(&nested(n)).is_ok()).last().unwrap();
+        assert!(deepest < 511, "the parse has a depth limit");
+        let value: Value = serde_json::from_str(&nested(deepest)).unwrap();
+        let call = FromWorker::Call { command: "select.all".into(), args: value.clone() };
+        assert_eq!(FromWorker::decode(&call.encode()), Some(call));
+        let answer = ToWorker::Answer(Ok(value));
+        assert_eq!(ToWorker::decode(&answer.encode()), Some(answer));
     }
 
     #[test]

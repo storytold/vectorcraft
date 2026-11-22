@@ -795,6 +795,149 @@ fn a_worker_inbox_is_bounded() {
     assert!(app.plugin_runs.running.is_empty() && fake.worker(2).terminated.get(), "a message it can't read");
 }
 
+/// Installs filter `id`, which calls `select.all` and then returns `output`, granted as the user
+/// would grant it.
+fn install_caller(app: &mut VectorcraftApp, id: &str, output: &str) {
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"]}}"#);
+    let imports = r#"(import "env" "vc_call" (func $vc_call (param i32 i32 i32 i32) (result i32)))
+  (data (i32.const 0x2000) "select.all")
+  (data (i32.const 0x2100) "{}")"#;
+    let first = "(drop (call $vc_call (i32.const 0x2000) (i32.const 10) (i32.const 0x2100) (i32.const 2)))";
+    let wasm = wat::parse_str(tpl::with_imports(&manifest, imports, first, output)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).unwrap();
+}
+
+/// A dialog that some other part of the app opened.
+fn open_dialog(app: &mut VectorcraftApp) {
+    app.ui.dialog = Some(crate::state::Dialog::new("test.other", json!({})));
+}
+
+/// While a dialog is open, a command call waiting in the inbox is not answered, so it doesn't keep
+/// the run, and its hold on the documents, past the run's deadline.
+#[test]
+fn on_the_web_a_call_waiting_under_a_dialog_ends_at_the_time_budget() {
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.callunderdialog";
+    install_caller(&mut app, id, TRIANGLE);
+    let doc = app.session.doc().unwrap().doc.clone();
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert!(app.session.plugin_calls_open());
+    open_dialog(&mut app);
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    // The worker runs it to its command call, which waits for the dialog.
+    fake.serve(0);
+    fake.clock.set(vectorcraft_plugins::Limits::default().wall_time_ms as f64 + plugin_runs::GRACE_MS);
+    plugin_runs::poll(&mut app);
+    assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get());
+    assert!(!app.session.plugin_calls_open(), "the documents are free again");
+    assert_eq!(app.session.doc().unwrap().doc, doc);
+}
+
+/// A run whose document changes is stopped at once, also while a dialog is open.
+#[test]
+fn on_the_web_an_edit_ends_the_worker_while_a_dialog_is_open() {
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.staleunderdialog";
+    install_light(&mut app, id, false, "{}", "");
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    open_dialog(&mut app);
+    plugin_runs::poll(&mut app);
+    assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get(), "stopped once the document changed");
+    assert_eq!(app.ui.status, format!("“Test {id}” stopped: the document or the plug-in changed meanwhile: run it again"));
+}
+
+/// A module checked while a run holds the documents installs once the run ends, without asking
+/// for it again.
+#[test]
+fn on_the_web_a_checked_install_waits_for_the_run_that_holds_the_documents() {
+    let (mut app, fake) = web_app();
+    let (id, caller) = ("test.ui.web.installwaits", "test.ui.web.installwaits.caller");
+    install_caller(&mut app, caller, TRIANGLE);
+    let module = wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), TRIANGLE)).unwrap();
+    let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    assert_eq!(r, json!({"pending": true}));
+    app.run("plugin.dialog", json!({"id": caller})).unwrap();
+    assert!(app.session.plugin_calls_open());
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(registry::get(id).is_none(), "not while the run holds the documents");
+    assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
+    plugin_runs::poll(&mut app);
+    assert!(registry::get(id).is_some(), "{}", app.ui.status);
+    registry::remove(id);
+}
+
+/// The progress window shows the run that holds the documents at once, with Cancel only, also when
+/// a run that started before it is running.
+#[test]
+fn on_the_web_the_progress_window_shows_the_run_that_holds_the_documents_first() {
+    let (mut app, _fake) = web_app();
+    let (plain, caller) = ("test.ui.web.showplain", "test.ui.web.showholder");
+    install_light(&mut app, plain, false, "{}", "");
+    install_caller(&mut app, caller, TRIANGLE);
+    app.run("plugin.dialog", json!({"id": plain})).unwrap();
+    app.run("plugin.dialog", json!({"id": caller})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    progress(&mut app, &ctx, 0.0); // a new window measures itself unseen first
+    let texts = progress(&mut app, &ctx, 0.1);
+    assert!(texts.contains(&format!("Running “Test {caller}”…")), "{texts}");
+    assert!(texts.contains("Cancel") && !texts.contains("Continue in Background"), "{texts}");
+    app.run("plugin.cancelRuns", json!({})).unwrap();
+}
+
+/// While a script runs, a worker run still gets its request and its time budget still ends it, and
+/// no other run starts in a worker.
+#[test]
+fn on_the_web_a_worker_run_is_ended_at_its_time_budget_while_a_script_runs() {
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.underscript";
+    install_light(&mut app, id, false, "{}", "");
+    app.session.prefs.show_external_script_warning = false;
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    fake.ready(0);
+    crate::menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "while (true) {}"})).unwrap().unwrap();
+    assert!(app.session.script_running());
+    app.poll_finished_work();
+    assert_eq!(fake.worker(0).sent.borrow().len(), 1, "the run is posted while the script runs");
+    assert!(app.run("plugin.dialog", json!({"id": id})).is_err(), "no new worker run");
+    fake.clock.set(vectorcraft_plugins::Limits::default().wall_time_ms as f64 + plugin_runs::GRACE_MS);
+    app.poll_finished_work();
+    assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get());
+    app.run("script.stop", json!({})).unwrap();
+    while app.session.script_running() {
+        crate::script_runs::poll(&mut app);
+    }
+}
+
+/// A recovery round waits while a run holds the documents, since a run that fails or is canceled
+/// undoes its edits, and runs once the run ends.
+#[test]
+fn recovery_copies_wait_for_the_run_that_holds_the_documents() {
+    let store = std::sync::Arc::new(vectorcraft_engine::cmd::recovery::MemoryStore::default());
+    let services = crate::Services { recovery_store: Some(store), ..Default::default() };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.session.allow_plugin_grants_from_requests();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    let id = "test.ui.recovery.holds";
+    install_caller(&mut app, id, r#"{"objects":[]}"#);
+    app.session.prefs.autosave_interval = 2;
+    assert_eq!(crate::recovery::tick(&mut app, 10.0), 0);
+    vectorcraft_engine::cmd::plugin::FilterRun::begin_calls(&mut app.session, "plugin.run", &json!({"id": id})).unwrap();
+    assert_eq!(crate::recovery::tick(&mut app, 130.0), 0, "not while the run holds the documents");
+    app.session.end_plugin_calls();
+    assert_eq!(crate::recovery::tick(&mut app, 131.0), 1);
+    registry::remove(id);
+}
+
 /// `CRAFT_UI_HEAVY_FILTER_WASM=<folder>` writes a heavy test filter to install in the app
 /// (`order-paths-test-filter.wasm`): it computes until it is cancelled or its budget runs out, so
 /// its progress window stays up for a picture.

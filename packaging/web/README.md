@@ -33,9 +33,11 @@ files need revalidation.
   `vectorcraft-web-<hash>` `.wasm` and `.js` files, and `no-cache` on `index.html` and the
   `vectorcraft-plugin-worker` files. The page refuses a cached worker whose messages differ from
   its own, and plug-ins then fail to install and run until the browser fetches the new worker.
-- **Content Security Policy:** a site that sends one needs `worker-src 'self'` (or a `script-src`
-  that allows the site's own scripts) for the plug-in worker. Without it the app runs, and plug-ins
-  fail to install and run.
+- **Content Security Policy:** a site that sends one needs `worker-src 'self'` for the plug-in
+  worker. Without `worker-src`, the browser uses `child-src`, then `script-src`, then
+  `default-src` ([CSP Level 3](https://www.w3.org/TR/CSP3/)), so a `script-src` that allows the
+  site's own scripts is enough only when the policy sets neither `worker-src` nor `child-src`.
+  When the policy blocks the worker, the app runs, and plug-ins fail to install and run.
 - **HTTPS:** WebGPU (and the clipboard) only work in a secure context, which means `https://`
   or `http://localhost`. Over plain HTTP elsewhere, the app falls back to WebGL2.
 - **No special isolation headers:** VectorCraft doesn't use `SharedArrayBuffer`, so it doesn't

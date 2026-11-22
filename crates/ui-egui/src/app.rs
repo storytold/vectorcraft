@@ -260,9 +260,11 @@ impl VectorcraftApp {
 /// called from the host's `eframe::App` impl.
 impl VectorcraftApp {
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
-    /// every change to the documents ends in a busy error until the script ends.
+    /// every change to the documents ends in a busy error until the script ends. Plug-in worker runs
+    /// are still read then, so Cancel and their time budgets still end them ([`plugin_runs::poll`]).
     pub(crate) fn poll_finished_work(&mut self) {
         if self.session.script_running() {
+            plugin_runs::poll(self);
             return;
         }
         background::poll(self);

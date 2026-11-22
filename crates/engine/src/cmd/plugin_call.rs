@@ -528,9 +528,15 @@ impl Transaction {
             Err(e) => {
                 let open = std::mem::replace(&mut s.docs, start);
                 for st in &mut s.docs {
-                    // Past the newest revision the document reached, so the restored one redraws.
-                    let newest = open.iter().filter(|d| d.uid == st.uid).map(|d| d.revision).max().unwrap_or(st.revision);
-                    st.revision = newest.max(st.revision).saturating_add(1);
+                    // Past the newest revision the document reached, so the restored one redraws. A
+                    // document the transaction left as it was keeps its revision, so a run made
+                    // away from the session on it still applies.
+                    let reached: Vec<_> = open.iter().filter(|d| d.uid == st.uid).collect();
+                    let unchanged = !reached.is_empty() && reached.iter().all(|d| d.revision == st.revision && d.selection == st.selection);
+                    if !unchanged {
+                        let newest = reached.iter().map(|d| d.revision).max().unwrap_or(st.revision);
+                        st.revision = newest.max(st.revision).saturating_add(1);
+                    }
                     crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection);
                 }
                 s.active = active;

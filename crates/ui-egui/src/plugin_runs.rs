@@ -18,7 +18,7 @@
 //!
 //! The web build has no threads. There the app runs every filter it starts here in a Web Worker
 //! of its own ([`Workers`], [`vectorcraft_plugins::worker`]), and it checks a module being installed
-//! in one too ([`check_install`]), so a plug-in never runs on the page. The page posts the module,
+//! in one too ([`check_install`]), so neither runs plug-in code on the page. The page posts the module,
 //! the input, the parameters and the limits, and reads the replies each frame ([`poll`]) from a
 //! bounded inbox ([`Inbox`]). Cancel terminates the worker at once, and so does a run past its
 //! time budget ([`GRACE_MS`] after the worker should have ended it) and a run whose document or
@@ -161,8 +161,9 @@ impl InWorker {
     }
 
     /// While a dialog is open, its answer waits in its inbox: this posts its request once it is
-    /// ready → why it must end now (it failed, or its deadline passed with no answer waiting), if it
-    /// must.
+    /// ready → why it must end now (it failed, or its deadline passed with no final answer waiting),
+    /// if it must. A command call waiting is not answered then, so it doesn't keep the run past its
+    /// deadline.
     fn watch(&mut self, now: f64) -> Option<String> {
         while matches!(self.inbox.borrow().messages.front(), Some(FromWorker::Ready { .. })) {
             if let Err(e) = self.next(f64::NEG_INFINITY) {
@@ -173,7 +174,8 @@ impl InWorker {
         if let Some(e) = inbox.error.take() {
             return Some(e);
         }
-        (now >= self.deadline && inbox.messages.is_empty()).then(|| vectorcraft_plugins::Error::Limit("time budget".into()).to_string())
+        let answered = inbox.messages.iter().any(|m| matches!(m, FromWorker::Done(..) | FromWorker::Checked(_)));
+        (now >= self.deadline && !answered).then(|| vectorcraft_plugins::Error::Limit("time budget".into()).to_string())
     }
 }
 
@@ -334,6 +336,10 @@ pub fn start_command(app: &mut VectorcraftApp, id: &str, p: Value) -> Result<Val
 /// worker of its own. A filter that calls commands holds the documents until it ends
 /// ([`FilterRun::begin_calls`]).
 fn start_in_worker(app: &mut VectorcraftApp, c: &str, p: Value) -> Result<Value, String> {
+    // Its output could not apply before the script ends.
+    if app.session.script_running() {
+        return Err(EngineError::Busy.to_string());
+    }
     if app.plugin_runs.in_workers() >= MAX_WORKERS || app.session.plugin_calls_open() {
         return Err(EngineError::PluginBusy.to_string());
     }
@@ -416,12 +422,14 @@ fn now(app: &VectorcraftApp) -> f64 {
 /// active document, which a run's result changes; the results wait until it is closed. Worker runs
 /// and install checks are read from their inboxes, and their command calls are made; a checked
 /// install waits for the dialog too, since it may ask in one. While a dialog is open, a worker
-/// still gets its request, and Cancel and a passed deadline still end it.
+/// still gets its request, and Cancel, a passed deadline and a change to its document still end
+/// it. While a script runs, the runs wait as they do for a dialog: every change to the documents
+/// is refused until it ends.
 pub fn poll(app: &mut VectorcraftApp) {
     poll_checks(app);
     let mut i = 0;
     while let Some(r) = app.plugin_runs.running.get(i) {
-        let dialog = app.ui.dialog.is_some();
+        let dialog = app.ui.dialog.is_some() || app.session.script_running();
         let ended = match &r.backend {
             Backend::Thread(_) if dialog => None,
             Backend::Worker(..) if dialog => watch_worker(app, i),
@@ -455,15 +463,19 @@ enum Ended {
     Worker(Option<Result<Vec<u8>, String>>),
 }
 
-/// Worker run `i` while a dialog is open ([`InWorker::watch`]) → how it ended, if Cancel or its
-/// deadline ended it.
+/// Worker run `i` while a dialog is open ([`InWorker::watch`]) → how it ended, if Cancel, its
+/// deadline or a change to its document or its plug-in ended it.
 fn watch_worker(app: &mut VectorcraftApp, i: usize) -> Option<Ended> {
     let t = now(app);
     let r = app.plugin_runs.running.get_mut(i)?;
     if r.progress.cancelled() {
         return Some(Ended::Worker(Some(Err(EngineError::Cancelled.to_string()))));
     }
-    let Backend::Worker(worker, _) = &mut r.backend else { return None };
+    let Backend::Worker(worker, run) = &mut r.backend else { return None };
+    // As in [`poll_worker`]: its output can't apply.
+    if run.as_ref().is_some_and(|run| !run.current(&app.session)) {
+        return Some(Ended::Worker(None));
+    }
     if worker.held.is_some() {
         return None;
     }
@@ -572,13 +584,13 @@ fn finish_worker(app: &mut VectorcraftApp, r: Running, out: Option<Result<Vec<u8
 }
 
 /// Reads the install checks' inboxes, and goes on with each checked install; while a dialog is
-/// open (one an install before it opened to ask, too), only a failed or overdue check ends
-/// ([`InWorker::watch`]).
+/// open (one an install before it opened to ask, too), a run holds the documents or a script runs,
+/// only a failed or overdue check ends ([`InWorker::watch`]), and a checked install waits.
 fn poll_checks(app: &mut VectorcraftApp) {
     let t = now(app);
     let mut i = 0;
     while let Some(c) = app.plugin_runs.checks.get_mut(i) {
-        let dialog = app.ui.dialog.is_some();
+        let dialog = app.ui.dialog.is_some() || app.session.plugin_calls_open() || app.session.script_running();
         let checked = loop {
             if dialog {
                 break c.worker.watch(t).map(Err);
@@ -686,7 +698,9 @@ pub fn holds_documents(app: &VectorcraftApp) -> bool {
 /// a run that holds the documents, whose window has Cancel only). Not while a dialog or the export
 /// progress window is open: never two modals at once.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(first) = app.plugin_runs.running.iter().find(|r| r.shown()) else { return };
+    // The run that holds the documents comes first: only its Cancel goes through.
+    let runs = &app.plugin_runs.running;
+    let Some(first) = runs.iter().find(|r| r.shown() && r.holds()).or_else(|| runs.iter().find(|r| r.shown())) else { return };
     let now = ctx.input(|i| i.time);
     let since = ctx.data_mut(|m| {
         let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("plugin-run-seen"), || (first.id, now));

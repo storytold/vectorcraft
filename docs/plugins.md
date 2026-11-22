@@ -194,19 +194,25 @@ how much there is only once the run has ended.
 
 ### The web build
 
-The web build checks plug-ins and runs filters in Web Workers, so a plug-in's code never runs on the page. Trunk
+The web build checks plug-ins in Web Workers, and runs there the filters and plug-in commands that the menus and
+their dialogs start, so that code of a plug-in does not run on the page (the last item below lists the runs that
+still do). Trunk
 builds the worker, `vectorcraft-plugin-worker` (`apps/vectorcraft-plugin-worker`), beside the app, and the page starts
 one worker for each check and each run (`vectorcraft_plugins::worker` describes the messages).
 
 - **Installing.** Install Plug-in… and File › Open send the module to a worker, which loads it as the desktop app
   does: its start function, `vc_abi_version` and `vc_manifest` run there. The page then makes the checks that run
   none of the module's code and installs it with the manifest the worker read. A module that fails in the worker is
-  not installed, and the status bar says why.
+  not installed, and the status bar says why. `ui.installPlugin` with module bytes that no worker has checked yet
+  returns `{"pending": true}` while the worker checks them, before it is known whether the install needs approval.
+  The install then goes on in the app: an approval question, if one is needed, shows in its dialog, and the reply
+  to that `ui.installPlugin` does not report it.
 - **Running a filter.** A filter's item in Object › Plug-ins, a plug-in command, or OK in their dialog, runs the
   filter in a worker, shown in the status bar and the progress window as a heavy filter is. The dialogs have no
   Preview. A command's run is one undo step named after the command, as on the desktop. The page terminates the
   worker at once on Cancel, when the document or the plug-in changes before the run ends (the status bar says to run
-  it again), and 5 s past the run's time budget when the worker has not answered (`Limit("time budget")`).
+  it again), and 5 s past the run's time budget when the worker has not answered (`Limit("time budget")`). The
+  budget counts from when the page starts the worker, so the worker's start-up counts toward it.
 - **Command calls.** A filter that calls commands sends each call to the page, which makes it and sends back the
   answer before the filter goes on. The calls and the output are one undo step. While it runs, every other command
   and edit is refused with "a plug-in is running: cancel it or wait for it to finish", and the progress window shows

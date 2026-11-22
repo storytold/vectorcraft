@@ -176,8 +176,10 @@ pub struct FilterJob {
 /// The run of a filter that calls commands that holds the documents ([`FilterRun::begin_calls`]):
 /// the run, what its calls keep fixed, and its open undo step.
 pub(crate) struct Calling {
-    /// The command that applies its output: `plugin.run`, or the plug-in command it runs.
+    /// The command that applies its output: `plugin.run`, or the plug-in command it runs, and the
+    /// params it was started with, which that command must be given.
     cmd: String,
+    params: Value,
     run: FilterRun,
     calls: super::plugin_call::Calls,
     tx: super::plugin_call::Transaction,
@@ -350,7 +352,7 @@ impl FilterRun {
         let may = r.plugin.manifest().permissions();
         let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
         let job = r.job();
-        s.plugin_calling = Some(Calling { cmd: c.to_string(), run: r, calls, tx });
+        s.plugin_calling = Some(Calling { cmd: c.to_string(), params: p.clone(), run: r, calls, tx });
         Ok(job)
     }
 
@@ -473,13 +475,14 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Ends the run that holds the documents ([`FilterRun::begin_calls`]) when command `c` (with params
-/// `p`) is the one that applies its output and `handed` is that output: applied in the run's own
-/// undo step → the command's result. Any other command is refused while a run holds them. `None`:
-/// no run holds them.
+/// `p`, the params the run was started with) is the one that applies its output and `handed` is
+/// that output: applied in the run's own undo step, to the objects the run was given → the
+/// command's result. Any other command, or other params, is refused while a run holds them.
+/// `None`: no run holds them.
 fn end_held(s: &mut Session, c: &str, p: &Value, handed: &mut Option<HandedIn>) -> Option<Result<Value>> {
     let held = s.plugin_calling.take()?;
     let serial = held.run.plugin.serial();
-    let same = held.cmd == c && (c != "plugin.run" || plugin_by_id(c, p).is_ok_and(|plugin| plugin.serial() == serial));
+    let same = held.cmd == c && *p == held.params && (c != "plugin.run" || plugin_by_id(c, p).is_ok_and(|plugin| plugin.serial() == serial));
     let mine = handed.take().filter(|h| same && (h.serial, &h.input, &h.params) == (serial, &held.run.input, &held.run.params));
     let Some(h) = mine else {
         s.plugin_calling = Some(held);

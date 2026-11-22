@@ -65,8 +65,10 @@ impl Session {
             return Err(EngineError::Busy);
         }
         // While a plug-in run that calls commands holds the documents, only queries run, and the
-        // command that applies its output.
-        if self.depth == 0 && self.plugin_calls_open() && !self.plugin_calls_end_with(id) && spec.journal && !JOURNALED_READS.contains(&id) {
+        // command that applies its output. A clipboard import is refused too: the run's end would put
+        // back the clipboard it started with.
+        let changes = (spec.journal && !JOURNALED_READS.contains(&id)) || id.starts_with("clipboard.import");
+        if self.depth == 0 && self.plugin_calls_open() && !self.plugin_calls_end_with(id) && changes {
             return Err(EngineError::PluginBusy);
         }
         // A step of a batch a script runs is held to the same rule as the script's own commands.
