@@ -69,6 +69,14 @@ pub(super) fn click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Po
     }
 }
 
+/// Right-click at `pos` over three frames of `f` (hover, press, release).
+pub(super) fn right_click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) {
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+        frame_events(ctx, app, vec![e], &mut f);
+    }
+}
+
 /// The rect of the first drawn text equal to `s`.
 pub(super) fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
     texts.iter().find(|(t, _)| t == s).unwrap_or_else(|| panic!("`{s}` not drawn: {texts:?}")).1
@@ -1074,9 +1082,49 @@ fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
                 }
                 "image" => {
                     let mut png = Vec::new();
-                    image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))
-                        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-                        .unwrap();
+                    {
+                        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))).into();
+                        let (__w, __h) = (__dyn.width(), __dyn.height());
+                        let (__layout, __sample, __raw) = match __dyn {
+                            image::DynamicImage::ImageLuma8(b) => {
+                                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageLumaA8(b) => {
+                                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageRgb8(b) => {
+                                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageRgba8(b) => {
+                                (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageLuma16(b) => (
+                                craft_image_codecs::ChannelLayout::Gray,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageLumaA16(b) => (
+                                craft_image_codecs::ChannelLayout::GrayA,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageRgb16(b) => (
+                                craft_image_codecs::ChannelLayout::Rgb,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageRgba16(b) => (
+                                craft_image_codecs::ChannelLayout::Rgba,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+                        };
+                        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+                        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                            .map(|__b| png.extend_from_slice(&__b))
+                    }
+                    .unwrap();
                     app.run(
                         "file.place",
                         json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false, "at": [30, 70]}),
@@ -2023,4 +2071,238 @@ fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
         let texts = frame_events(&ctx, &mut app, vec![], show);
         assert!(!texts.iter().any(|(t, _)| t == "Dashed Line"), "{link}: the popup closed");
     }
+}
+
+/// `first_selected` gives the `Arc` the document holds for the first selected object, nested in a
+/// group too, not a copy of it; nothing with nothing selected or no document open.
+#[test]
+fn first_selected_is_the_node_the_document_holds() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    assert!(first_selected(&app).is_none(), "no document");
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    let b = run(&mut app, "shape.ellipse", json!({"x": 70, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    let held = |app: &VectorcraftApp, id: &Value| layers::node_arc(&app.session.active().unwrap().doc, NodeId(id.as_u64().unwrap())).unwrap();
+    run(&mut app, "select.set", json!({ "ids": [a, b] }));
+    let id = app.session.active().unwrap().selection.objects[0];
+    let first = first_selected(&app).expect("a selected object");
+    assert_eq!(first.id, id, "the first of the selection");
+    assert!(Arc::ptr_eq(&first, &held(&app, &json!(id.0))), "the first selected object, as the document holds it");
+    run(&mut app, "object.group", json!({}));
+    run(&mut app, "select.set", json!({ "ids": [a] }));
+    assert!(Arc::ptr_eq(&first_selected(&app).expect("the rectangle"), &held(&app, &a)), "a node inside a group");
+    run(&mut app, "select.none", json!({}));
+    assert!(first_selected(&app).is_none(), "nothing selected");
+}
+
+/// Properties, Appearance and Transparency show the selected object's current opacity after an
+/// edit and after Undo, never an earlier one.
+#[test]
+fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let panels: [(&str, Panel); 3] = [("Properties", properties::show), ("Appearance", appearance::show), ("Transparency", transparency::show)];
+    let mut app = app_with_rect();
+    // One context per panel, kept across the edits, as the app keeps its own.
+    let ctxs: Vec<egui::Context> = panels.iter().map(|_| egui::Context::default()).collect();
+    let shows = |app: &mut VectorcraftApp, want: &str, not: &str| {
+        for ((name, panel), ctx) in panels.iter().zip(&ctxs) {
+            let texts = frame_in(ctx, app, *panel);
+            assert!(texts.iter().any(|t| t.contains(want)), "{name} shows {want}: {texts:?}");
+            assert!(!texts.iter().any(|t| t.contains(not)), "{name} no longer shows {not}: {texts:?}");
+        }
+    };
+    run(&mut app, "transparency.set", json!({"opacity": 60}));
+    shows(&mut app, "60%", "35%");
+    run(&mut app, "transparency.set", json!({"opacity": 35}));
+    shows(&mut app, "35%", "60%");
+    run(&mut app, "edit.undo", json!({}));
+    shows(&mut app, "60%", "35%");
+}
+
+/// Right-clicking a stroke row selects it and exposes the context menu.
+#[test]
+fn right_clicking_a_stroke_row_selects_it_and_exposes_context_menu() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    assert_eq!(app.session.appearance_item(), None);
+    let stroke = row_point(&ctx, &mut app, "Stroke:", 0);
+    right_click(&ctx, &mut app, stroke, appearance::show);
+    assert_eq!(app.session.appearance_item(), Some(1), "right-clicking stroke row selected it");
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Duplicate Stroke"), "menu has Duplicate Stroke: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Delete Stroke"), "menu has Delete Stroke: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Hide Stroke"), "menu has Hide Stroke: {texts:?}");
+}
+
+/// Clicking "Duplicate Stroke" duplicates the stroke in one undo step.
+#[test]
+fn clicking_duplicate_stroke_duplicates_the_stroke_with_one_undo_step() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    assert_eq!(stack_items(&app), [(true, None), (false, Some(1.0))]);
+    let stroke = row_point(&ctx, &mut app, "Stroke:", 0);
+    right_click(&ctx, &mut app, stroke, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let dup = text_rect(&texts, "   Duplicate Stroke").center();
+    click(&ctx, &mut app, dup, appearance::show);
+    let items = stack_items(&app);
+    assert_eq!(items.len(), 3, "now 3 items: {items:?}");
+    assert_eq!(items.iter().filter(|(f, _)| !*f).count(), 2, "now 2 strokes: {items:?}");
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(stack_items(&app), [(true, None), (false, Some(1.0))], "undo restored original appearance stack");
+}
+
+/// Clicking "Delete Effect" removes the effect from the object's appearance.
+#[test]
+fn clicking_delete_effect_removes_the_effect_from_appearance() {
+    let mut app = app_with_rect();
+    run(&mut app, "effect.apply", json!({"effect": "stylize.dropShadow"}));
+    assert_eq!(object_effects(&app), ["stylize.dropShadow"]);
+    let ctx = egui::Context::default();
+    let shadow = row_point(&ctx, &mut app, "Drop Shadow", 0);
+    right_click(&ctx, &mut app, shadow, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Edit Effect…"), "menu has Edit Effect…");
+    assert!(texts.iter().any(|(t, _)| t == "   Duplicate Effect"), "menu has Duplicate Effect");
+    assert!(texts.iter().any(|(t, _)| t == "   Delete Effect"), "menu has Delete Effect");
+    assert!(texts.iter().any(|(t, _)| t == "   Hide Effect"), "menu has Hide Effect");
+    let del = text_rect(&texts, "   Delete Effect").center();
+    click(&ctx, &mut app, del, appearance::show);
+    assert!(object_effects(&app).is_empty(), "effect removed from appearance: {:?}", object_effects(&app));
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(object_effects(&app), ["stylize.dropShadow"], "undo restored effect");
+}
+
+/// Right-clicking the root object row exposes Clear Appearance and Reduce to Basic Appearance.
+#[test]
+fn right_clicking_root_object_row_exposes_clear_and_reduce_appearance() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    appearance::select_row(&mut app, &ctx, appearance::Sel::Item(1));
+    assert_eq!(app.session.appearance_item(), Some(1));
+    let root = row_point(&ctx, &mut app, "Rectangle", 0);
+    right_click(&ctx, &mut app, root, appearance::show);
+    assert_eq!(app.session.appearance_item(), None, "selecting root resets item selection");
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Clear Appearance"), "menu has Clear Appearance: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Reduce to Basic Appearance"), "menu has Reduce to Basic Appearance: {texts:?}");
+    let clear = text_rect(&texts, "   Clear Appearance").center();
+    click(&ctx, &mut app, clear, appearance::show);
+    assert_eq!(
+        first_selected(&app).unwrap().appearance,
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0)
+    );
+    // One undo step restores original appearance.
+    run(&mut app, "edit.undo", json!({}));
+    assert_ne!(
+        first_selected(&app).unwrap().appearance,
+        vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 1.0)
+    );
+}
+
+/// Right-clicking directly on a row's label link (text rectangle) selects that row and opens the context menu.
+#[test]
+fn right_clicking_item_and_effect_labels_directly_selects_row_and_opens_menu() {
+    let mut app = app_with_rect();
+    run(&mut app, "effect.apply", json!({"effect": "stylize.dropShadow"}));
+    let ctx = egui::Context::default();
+    assert_eq!(app.session.appearance_item(), None);
+
+    // Right-click directly on the "Stroke:" label rect.
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let stroke_label = text_rect(&texts, "Stroke:").center();
+    right_click(&ctx, &mut app, stroke_label, appearance::show);
+    assert_eq!(app.session.appearance_item(), Some(1), "right-clicking stroke label selected the stroke row");
+    let menu_texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(menu_texts.iter().any(|(t, _)| t == "   Duplicate Stroke"), "menu contains Duplicate Stroke: {menu_texts:?}");
+
+    // Dismiss popup.
+    let _ = frame_events(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        appearance::show,
+    );
+
+    // Right-click directly on the "Drop Shadow" effect label rect.
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    let effect_label = text_rect(&texts, "Drop Shadow").center();
+    right_click(&ctx, &mut app, effect_label, appearance::show);
+    let menu_texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(menu_texts.iter().any(|(t, _)| t == "   Duplicate Effect"), "menu contains Duplicate Effect: {menu_texts:?}");
+    assert!(menu_texts.iter().any(|(t, _)| t == "   Edit Effect…"), "menu contains Edit Effect…: {menu_texts:?}");
+}
+
+/// Reduce to Basic Appearance is enabled when any selected subject needs reduction.
+#[test]
+fn reduce_to_basic_enabled_when_any_selected_subject_needs_reduction() {
+    let mut app = app_with_rect();
+    let rect1 = first_selected(&app).unwrap().id.0;
+    // Create second rect and add an extra stroke to it so it is non-basic.
+    let rect2 = run(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+    run(&mut app, "appearance.addStroke", json!({}));
+
+    // Select only rect1 (which is basic).
+    run(&mut app, "select.set", json!({"ids": [rect1]}));
+    let ctx = drop_ctx();
+    let root = row_point(&ctx, &mut app, "Rectangle", 0);
+    right_click(&ctx, &mut app, root, appearance::show);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| appearance::show(&mut app, ui));
+    out.textures_delta.clear();
+    let is_disabled = out
+        .platform_output
+        .accesskit_update
+        .as_ref()
+        .and_then(|u| u.nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.contains("Reduce to Basic Appearance"))))
+        .is_some_and(|(_, n)| n.is_disabled());
+    assert!(is_disabled, "Reduce to Basic Appearance is disabled when all selected subjects are basic");
+    // Dismiss the menu with Escape.
+    let _ = frame_events(
+        &ctx,
+        &mut app,
+        vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        appearance::show,
+    );
+
+    // Select both rect1 (basic) and rect2 (non-basic). Both are rectangles so object_label is "Rectangle".
+    run(&mut app, "select.set", json!({"ids": [rect1, rect2]}));
+    let root = row_point(&ctx, &mut app, "Rectangle", 0);
+    right_click(&ctx, &mut app, root, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Reduce to Basic Appearance"), "Reduce to Basic Appearance is present: {texts:?}");
+    let reduce = text_rect(&texts, "   Reduce to Basic Appearance").center();
+    click(&ctx, &mut app, reduce, appearance::show);
+
+    // Both rectangles should now have basic appearance.
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.node(vectorcraft_doc::NodeId(rect1)).unwrap().appearance.is_basic(), "rect1 reduced to basic");
+    assert!(doc.node(vectorcraft_doc::NodeId(rect2)).unwrap().appearance.is_basic(), "rect2 reduced to basic");
+}
+
+/// Right-clicking an active multi-selection of appearance items shows plural "Duplicate Items" and "Delete Items".
+#[test]
+fn right_clicking_multi_selected_items_shows_plural_duplicate_and_delete() {
+    let mut app = app_with_rect();
+    let ctx = egui::Context::default();
+    frame_in(&ctx, &mut app, appearance::show);
+
+    let stroke = row_point(&ctx, &mut app, "Stroke:", 0);
+    let fill = row_point(&ctx, &mut app, "Fill:", 0);
+
+    // Multi-select both stroke (item 1) and fill (item 0) using Command-click.
+    click_mod(&ctx, &mut app, stroke, egui::Modifiers::NONE);
+    click_mod(&ctx, &mut app, fill, egui::Modifiers::COMMAND);
+
+    right_click(&ctx, &mut app, stroke, appearance::show);
+    let texts = frame_events(&ctx, &mut app, vec![], appearance::show);
+    assert!(texts.iter().any(|(t, _)| t == "   Duplicate Items"), "shows Duplicate Items: {texts:?}");
+    assert!(texts.iter().any(|(t, _)| t == "   Delete Items"), "shows Delete Items: {texts:?}");
+
+    // Clicking Duplicate Items duplicates both items in one undo step.
+    let dup = text_rect(&texts, "   Duplicate Items").center();
+    click(&ctx, &mut app, dup, appearance::show);
+    assert_eq!(stack_items(&app).len(), 4, "both items duplicated");
+
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(stack_items(&app).len(), 2, "undo restores 2 items");
 }

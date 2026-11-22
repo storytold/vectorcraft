@@ -644,6 +644,32 @@ fn envelope_top_object_shares_a_side_by_control_polygon_length() {
 }
 
 #[test]
+fn envelope_top_object_keeps_its_look_when_anchors_are_added() {
+    // Add Anchor Points splits each segment of the top object in two without changing its shape.
+    // The top curve's parameter runs fast at its start, so its halves have control polygons of
+    // different lengths; the envelope still bends the two rectangles as the unsplit curve does.
+    let made = |add_anchors: bool| {
+        let mut s = session();
+        let left = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+        let right = rect(&mut s, 200.0, 100.0, 100.0, 100.0);
+        let d = "M400 100 C520 40 590 70 600 100 L600 200 L400 200 Z";
+        let t = id_of(&s.execute("path.create", &json!({ "d": d })).unwrap());
+        if add_anchors {
+            sel(&mut s, &[t]);
+            s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+            assert_eq!(node(&s, t).path_data().map(|p| p.anchor_count()), Some(8));
+        }
+        sel(&mut s, &[left, right, t]);
+        let e = id_of(&s.execute("object.envelope.makeWithTopObject", &json!({})).unwrap());
+        all_anchors(&live::expand_live(&node(&s, e)))
+    };
+    let (plain, split) = (made(false), made(true));
+    assert_eq!(plain.len(), split.len());
+    let off = plain.iter().zip(&split).map(|(p, q)| p.distance(*q)).fold(0.0, f64::max);
+    assert!(off < 1e-6, "the art moves by up to {off} pt");
+}
+
+#[test]
 fn envelope_release_and_expand() {
     let mut s = session();
     let a = text_rect(&mut s);
@@ -1499,7 +1525,41 @@ fn two_colour_image(s: &mut Session, clear_right: bool, linked: bool) -> NodeId 
     let right = image::Rgba([0, 0, 255, if clear_right { 0 } else { 255 }]);
     let img = image::RgbaImage::from_fn(8, 4, |x, _| if x < 4 { image::Rgba([255, 0, 0, 255]) } else { right });
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, sel| {
         d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(png));
         let id = d.alloc_id();
@@ -1569,9 +1629,9 @@ fn cmyk_mesh(create: Value) -> (Session, NodeId) {
     (s, a)
 }
 
-/// The fill colours `document.exportPdf {standard: pdfX4}` writes (`… scn` operands, and the
-/// corner colours of its gradient meshes, which are patch shadings, as PDF import reads them
-/// back), and its warnings.
+/// The fill colours `document.exportPdf {standard: pdfX4}` writes (`… scn` and DeviceCMYK
+/// `c m y k k` operands, and the corner colours of its gradient meshes, which are patch shadings,
+/// as PDF import reads them back), and its warnings.
 fn pdf_fill_colours(s: &mut Session) -> (Vec<Vec<f32>>, Vec<String>) {
     let v = s.execute("document.exportPdf", &json!({"standard": "pdfX4", "compression": {"compressText": false}})).unwrap();
     let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
@@ -1584,6 +1644,11 @@ fn pdf_fill_colours(s: &mut Session) -> (Vec<Vec<f32>>, Vec<String>) {
                 let nums: Vec<f32> = words[..i].iter().rev().map_while(|x| x.parse().ok()).collect();
                 // A pattern (`/P0 scn`) has no colour of its own.
                 if !nums.is_empty() {
+                    out.push(nums.into_iter().rev().collect());
+                }
+            } else if *w == "k" {
+                let nums: Vec<f32> = words[..i].iter().rev().take(4).map_while(|x| x.parse().ok()).collect();
+                if nums.len() == 4 {
                     out.push(nums.into_iter().rev().collect());
                 }
             }

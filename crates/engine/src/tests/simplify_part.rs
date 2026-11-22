@@ -73,8 +73,8 @@ fn simplify_refits_only_the_run_between_direct_selected_anchors() {
     assert_eq!(out["after"].as_u64(), Some(len as u64));
     assert!(len < 101 - 30, "{len}");
     let end = len - 41;
-    assert_eq!(sp.anchors[..20], original.anchors[..20], "the anchors before the run");
-    assert_eq!(sp.anchors[end + 1..], original.anchors[61..], "the anchors after the run");
+    assert_eq!(sp.anchors.to_vec()[..20], original.anchors.to_vec()[..20], "the anchors before the run");
+    assert_eq!(sp.anchors.to_vec()[end + 1..], original.anchors.to_vec()[61..], "the anchors after the run");
     assert_eq!((sp.anchors[20].p, sp.anchors[20].h_in), (original.anchors[20].p, original.anchors[20].h_in));
     assert_eq!((sp.anchors[end].p, sp.anchors[end].h_out), (original.anchors[60].p, original.anchors[60].h_out));
     for i in 0..20 {
@@ -100,7 +100,7 @@ fn separate_runs_on_one_path_simplify_independently_in_one_step() {
         let id = wave(&mut s);
         select_anchors(&mut s, id, ranges);
         s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
-        path_of(&s, id).subpaths[0].anchors.clone()
+        path_of(&s, id).subpaths[0].anchors.to_vec()
     };
     let (first, second) = (alone(&[(10, 30)]), alone(&[(60, 80)]));
     let mut s = session();
@@ -110,44 +110,97 @@ fn separate_runs_on_one_path_simplify_independently_in_one_step() {
     let undo = undo_len(&s);
     s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
     assert_eq!(undo_len(&s), undo + 1, "one undo step");
-    let both = path_of(&s, id).subpaths[0].anchors.clone();
+    let both = path_of(&s, id).subpaths[0].anchors.to_vec();
     // Where old anchor 30 is in the first result, and old anchor 80 in the second.
     let (a30, a80) = (first.len() - 71, second.len() - 21);
     assert!(a30 < 30 && a80 < 80, "both runs lose anchors");
     let mid = a30 + 30;
     assert_eq!(both[..=a30], first[..=a30]);
-    assert_eq!(both[a30 + 1..mid], original.anchors[31..60], "the anchors between the runs");
+    assert_eq!(both[a30 + 1..mid], original.anchors.to_vec()[31..60], "the anchors between the runs");
     assert_eq!(both[mid..], second[60..]);
     let sel: BTreeSet<_> = (10..=a30).chain(mid..=mid + a80 - 60).map(|i| (0, i)).collect();
     assert_eq!(s.doc().unwrap().selection.anchors.get(&id), Some(&sel));
 }
 
+/// The points of a closed 80-gon of radius 100 round (300, 300), starting at (400, 300).
+fn eighty_gon() -> Vec<(f64, f64)> {
+    (0..80).map(|i| (f64::from(i) * std::f64::consts::TAU / 80.0).sin_cos()).map(|(y, x)| (300.0 + 100.0 * x, 300.0 + 100.0 * y)).collect()
+}
+
 /// On a closed 80-gon, a run from anchor 70 through the start point to anchor 10 simplifies as one
-/// run: anchor 0 goes, anchors 11–69 stay exactly as they were (the path now starts at anchor 10),
-/// anchors 10 and 70 stay where they were with their outer handles, and the path stays closed.
+/// run: anchor 0 goes, and the path starts at a new anchor where the refitted run passes nearest
+/// it; anchors 11–69 stay exactly as they were, anchors 10 and 70 stay where they were with their
+/// outer handles, the path stays closed, and the refitted run stays direct-selected.
 #[test]
 fn a_run_across_the_start_of_a_closed_path_simplifies_as_one() {
     let mut s = session();
-    let pts: Vec<(f64, f64)> =
-        (0..80).map(|i| (f64::from(i) * std::f64::consts::TAU / 80.0).sin_cos()).map(|(y, x)| (300.0 + 100.0 * x, 300.0 + 100.0 * y)).collect();
-    let id = polyline(&mut s, &pts, true);
+    let id = polyline(&mut s, &eighty_gon(), true);
     let original = path_of(&s, id).subpaths[0].clone();
     select_anchors(&mut s, id, &[(70, 79), (0, 10)]);
     s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
     let sp = path_of(&s, id).subpaths[0].clone();
     assert!(sp.closed);
     assert!(sp.anchors.len() < 80 - 10, "{}", sp.anchors.len());
-    assert!(!sp.anchors.iter().any(|a| a.p == original.anchors[0].p), "anchor 0 was inside the run");
-    assert_eq!(sp.anchors[1..60], original.anchors[11..70]);
-    assert_eq!((sp.anchors[0].p, sp.anchors[0].h_out), (original.anchors[10].p, original.anchors[10].h_out));
-    assert_eq!((sp.anchors[60].p, sp.anchors[60].h_in), (original.anchors[70].p, original.anchors[70].h_in));
-    for i in 0..60 {
-        assert_eq!(sp.segment(i), original.segment(10 + i));
-    }
+    let moved = sp.anchors[0].p.distance(original.anchors[0].p);
+    assert!(moved <= 1.0 + 1e-9, "the start moved {moved} pt");
     let n = sp.anchors.len();
-    assert!(worst_offset(&original, (70..80).chain(0..10), &sp, 60..n) <= 1.0 + 1e-6);
-    let sel: BTreeSet<_> = std::iter::once((0, 0)).chain((60..n).map(|i| (0, i))).collect();
+    let k = sp.anchors.iter().position(|a| a.p == original.anchors[10].p).unwrap();
+    let mut turned = sp.clone();
+    turned.anchors.rotate_left(k);
+    assert_eq!(turned.anchors.to_vec()[1..60], original.anchors.to_vec()[11..70]);
+    assert_eq!((turned.anchors[0].p, turned.anchors[0].h_out), (original.anchors[10].p, original.anchors[10].h_out));
+    assert_eq!((turned.anchors[60].p, turned.anchors[60].h_in), (original.anchors[70].p, original.anchors[70].h_in));
+    for i in 0..60 {
+        assert_eq!(turned.segment(i), original.segment(10 + i));
+    }
+    assert!(worst_offset(&original, (70..80).chain(0..10), &turned, 60..n) <= 1.0 + 1e-6);
+    let sel: BTreeSet<_> = (0..=k).chain(k + 60..n).map(|i| (0, i)).collect();
     assert_eq!(s.doc().unwrap().selection.anchors.get(&id), Some(&sel));
+}
+
+/// Smooth of a direct-selected run across the start of a closed 80-gon starts the path near where it
+/// started too, with fewer anchors.
+#[test]
+fn smoothing_a_run_across_the_start_keeps_the_start() {
+    let mut s = session();
+    let id = polyline(&mut s, &eighty_gon(), true);
+    let original = path_of(&s, id).subpaths[0].clone();
+    select_anchors(&mut s, id, &[(70, 79), (0, 10)]);
+    s.execute("object.path.smooth", &json!({"level": 50})).unwrap();
+    let sp = path_of(&s, id).subpaths[0].clone();
+    assert!(sp.closed && sp.anchors.len() < 80, "{}", sp.anchors.len());
+    let moved = sp.anchors[0].p.distance(original.anchors[0].p);
+    assert!(moved <= 5.0, "the start moved {moved} pt, to {:?}", sp.anchors[0].p);
+}
+
+/// A dashed closed path keeps its start, where its dashes begin, through Simplify and through
+/// Smooth: a loop of radius 50 round (300, 300) with a needle out to (550, 300), starting on the far
+/// side of the loop at (250, 300). Its stroke stays as it was, and each command is one undo step.
+#[test]
+fn a_dashed_closed_path_keeps_its_start_through_simplify_and_smooth() {
+    let mut s = session();
+    let at = |deg: f64| (300.0 + 50.0 * deg.to_radians().cos(), 300.0 + 50.0 * deg.to_radians().sin());
+    let pts: Vec<(f64, f64)> =
+        (0..=20).map(|i| at(180.0 + 8.95 * f64::from(i))).chain([(550.0, 300.0)]).chain((0..20).map(|i| at(1.0 + 8.95 * f64::from(i)))).collect();
+    let id = polyline(&mut s, &pts, true);
+    s.execute("stroke.set", &json!({"ids": [id.0], "weight": 2, "dash": [10, 5]})).unwrap();
+    let stroke = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    let style = stroke(&s);
+    let original = path_of(&s, id).subpaths[0].clone();
+    // (command, params, how far the start may move: Simplify's tolerance, or Smooth's smoothing and tolerance)
+    let commands = [("object.path.simplify", json!({"tolerance": 1}), 1.0 + 1e-9), ("object.path.smooth", json!({"level": 50}), 5.0)];
+    for (command, params, limit) in commands {
+        let steps = undo_len(&s);
+        s.execute(command, &params).unwrap();
+        assert_eq!(undo_len(&s), steps + 1, "{command}");
+        let sp = path_of(&s, id).subpaths[0].clone();
+        assert!(sp.closed && sp.anchors.len() < original.anchors.len(), "{command}: {}", sp.anchors.len());
+        let moved = sp.anchors[0].p.distance(original.anchors[0].p);
+        assert!(moved <= limit, "{command}: the start moved {moved} pt, to {:?}", sp.anchors[0].p);
+        assert_eq!(stroke(&s), style, "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(path_of(&s, id).subpaths[0], original, "{command}");
+    }
 }
 
 /// Segments picked with the Direct Selection tool simplify the same way, and stay picked as
@@ -162,8 +215,8 @@ fn picked_segments_simplify_and_stay_picked() {
     s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
     let sp = path_of(&s, id).subpaths[0].clone();
     let end = sp.anchors.len() - 41;
-    assert_eq!(sp.anchors[..20], original.anchors[..20]);
-    assert_eq!(sp.anchors[end + 1..], original.anchors[61..]);
+    assert_eq!(sp.anchors.to_vec()[..20], original.anchors.to_vec()[..20]);
+    assert_eq!(sp.anchors.to_vec()[end + 1..], original.anchors.to_vec()[61..]);
     let sel = &s.doc().unwrap().selection;
     assert_eq!(sel.segments.get(&id), Some(&(20..end).map(|i| (0, i)).collect()));
     assert_eq!(sel.anchors.get(&id), Some(&(20..=end).map(|i| (0, i)).collect()));
@@ -200,8 +253,8 @@ fn slider_preview_and_auto_simplify_only_the_run() {
         let previewed = path_of(&s, id);
         let sp = &previewed.subpaths[0];
         assert!(sp.anchors.len() < 101, "{p}");
-        assert_eq!(sp.anchors[..20], original.anchors[..20], "{p}");
-        assert_eq!(sp.anchors[sp.anchors.len() - 40..], original.anchors[61..], "{p}");
+        assert_eq!(sp.anchors.to_vec()[..20], original.anchors.to_vec()[..20], "{p}");
+        assert_eq!(sp.anchors.to_vec()[sp.anchors.len() - 40..], original.anchors.to_vec()[61..], "{p}");
         s.execute("edit.undo", &json!({})).unwrap();
         s.execute("object.path.simplify", &p).unwrap();
         assert_eq!(path_of(&s, id), previewed, "{p}");

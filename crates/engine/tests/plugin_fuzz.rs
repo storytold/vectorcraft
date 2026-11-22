@@ -883,9 +883,10 @@ proptest! {
     }
 
     /// A plug-in that calls the storage imports with hostile keys (`..`, separators, device names,
-    /// control characters, too long), values, lengths and pointers in and out of its memory runs to
-    /// an output, never a panic; every call returns a length or a storage code, and the settings and
-    /// cache of another plug-in in the same store stay as they were.
+    /// control characters, too long), values, lengths up to about 1 MiB and pointers in and out of
+    /// its memory runs to an output, or on a small budget to its instruction budget, never a panic;
+    /// every call returns a length or a storage code, and the settings and cache of another plug-in
+    /// in the same store stay as they were.
     #[test]
     fn hostile_storage_arguments_never_crash(
         calls in prop::collection::vec(
@@ -894,11 +895,12 @@ proptest! {
                 prop_oneof![any::<i32>(), 0x1ff00..0x20100i32, Just(0x2000)],
                 prop_oneof![any::<i32>(), 0..80i32],
                 prop_oneof![any::<i32>(), 0x1ff00..0x20100i32, Just(0x3000)],
-                prop_oneof![any::<i32>(), 0..5000i32],
+                prop_oneof![any::<i32>(), 0..5000i32, 0..1_100_000i32],
             ),
             0..16,
         ),
         key in prop::collection::vec(prop_oneof![Just(b'a'), Just(b'.'), Just(b'/'), Just(b'\\'), Just(b'_'), any::<u8>()], 0..80),
+        fuel in prop::option::of(1_000..200_000u64),
     ) {
         use vectorcraft_plugins::host::STORAGE_BUDGET;
         use vectorcraft_plugins::storage::Meter;
@@ -936,23 +938,38 @@ proptest! {
             .collect();
         let text: String = key.iter().map(|b| format!("\\{b:02x}")).collect();
         let imports = format!(r#"{} (data (i32.const 0x2000) "{text}")"#, tpl::STORAGE_IMPORTS);
-        let wasm = wat::parse_str(tpl::with_imports(&storing("fuzz.storage"), &imports, &format!("(local $r i32) {body}"), r#"{"objects":[]}"#)).unwrap();
+        // 64 more pages hold the values of the large writes.
+        let wasm = wat::parse_str(tpl::with_imports(
+            &storing("fuzz.storage"),
+            &imports,
+            &format!("(local $r i32) (drop (memory.grow (i32.const 64))) {body}"),
+            r#"{"objects":[]}"#,
+        ))
+        .unwrap();
         // A failed case leaves its module installed, and the cases that shrink it install others
         // under the same id.
         let r = catch_quiet(|| {
             s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}))
                 .map_err(|e| e.to_string())?;
             let p = vectorcraft_plugins::registry::get("fuzz.storage").ok_or("not installed")?;
-            p.run(b"{\"objects\":[]}", b"{}").map_err(|e| e.to_string())
+            // A small budget runs out on the bytes the storage calls move.
+            let limits = Limits { fuel_base: fuel.unwrap_or(p.limits().fuel_base), fuel_per_byte: 0, ..p.limits().clone() };
+            p.run_limited(b"{\"objects\":[]}", b"{}", &limits).map_err(|e| e.to_string())
         });
         let out = r.map_err(|msg| TestCaseError::fail(format!("panicked on {calls:?}: {msg}")))?;
-        prop_assert!(out.is_ok(), "{:?}", out);
+        prop_assert!(
+            out.is_ok() || (fuel.is_some() && out == Err(Error::Limit("instruction budget".into()).to_string())),
+            "{:?} on {:?} instructions",
+            out,
+            fuel
+        );
         prop_assert_eq!(theirs.setting("mine", m).unwrap(), Some(b"kept".to_vec()));
         prop_assert_eq!(theirs.cache_entry("mine", m).unwrap(), Some(b"kept".to_vec()));
         prop_assert_eq!(theirs.cache_bytes(), 4);
-        // The host names every file: the store holds the two modules, their grants and their folders.
+        // The host names every file: the store holds the two modules, their grants, their folders and
+        // the file windows lock while they change the store.
         let names = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(Result::ok).map(|e| e.file_name()).collect::<Vec<_>>();
-        prop_assert!(names(&folder).len() <= 4, "{:?}", names(&folder));
+        prop_assert!(names(&folder).len() <= 5, "{:?}", names(&folder));
         prop_assert!(names(&folder.join("storage")).len() <= 2, "{:?}", names(&folder.join("storage")));
         let _ = s.execute("plugin.remove", &json!({"id": "fuzz.storage"}));
         let _ = s.execute("plugin.remove", &json!({"id": "fuzz.storage.other"}));

@@ -671,6 +671,48 @@ fn character_ruby_and_path_handle_refuse_a_param_of_the_wrong_type() {
     s.execute("text.setPathHandle", &handle(Value::Null)).unwrap();
 }
 
+/// Range edits, Set Text, area and on-path type and the glyph commands refuse a param of the wrong
+/// type with an error naming the param, and leave the document and the undo history as they were:
+/// text that is not a string, a byte offset that is fractional or negative, and a point that is not
+/// two numbers. Null counts as a param left out, which keeps its default.
+#[test]
+fn text_edits_refuse_a_param_of_the_wrong_type() {
+    use crate::tests::not_refused;
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    let frame = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let line = s.execute("path.create", &json!({"anchors": [{"x": 100, "y": 400}, {"x": 400, "y": 400}]})).unwrap()["id"].clone();
+    let string = |k: &str| format!("`{k}` must be a string");
+    let whole = "`start` must be a whole number".to_string();
+    let point = "`at` must be a point: [x, y]".to_string();
+    let calls: Vec<(String, Value, String)> = [
+        ("text.editRange", json!({"id": id.0, "start": 0, "end": 1, "insert": 5}), string("insert")),
+        ("text.editRange", json!({"id": id.0, "start": 0, "end": 3, "insert": ["x"]}), string("insert")),
+        ("text.setText", json!({"ids": [id.0], "text": true}), string("text")),
+        ("text.createInPath", json!({"path": frame, "mode": 1}), string("mode")),
+        ("text.createInPath", json!({"path": frame, "text": true}), string("text")),
+        ("text.createInPath", json!({"path": line, "mode": "onPath", "text": "a", "at": [1, "y"]}), point.clone()),
+        ("text.createInPath", json!({"path": line, "mode": "onPath", "at": [100]}), point.clone()),
+        ("text.createInPath", json!({"path": frame, "text": "a", "at": "start"}), point),
+        ("text.touchType", json!({"id": id.0, "start": 1.5, "dy": 2}), whole.clone()),
+        ("text.touchType", json!({"id": id.0, "start": -1, "dy": 2}), whole.clone()),
+        ("text.glyphAlternates", json!({"id": id.0, "start": 1.5}), whole.clone()),
+        ("text.setGlyphAlternate", json!({"id": id.0, "start": -1, "gid": null}), whole),
+    ]
+    .into_iter()
+    .map(|(cmd, p, msg)| (cmd.to_string(), p, msg))
+    .collect();
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    // Null keeps each default: nothing inserted, area type with no text, no start point.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 1, "insert": null})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "bc");
+    let r = s.execute("text.createInPath", &json!({"path": frame, "mode": null, "text": null, "at": null})).unwrap();
+    let t = obj(&s, NodeId(r["id"].as_u64().unwrap()));
+    assert!(matches!(t.kind, TextKind::Area { .. }) && t.plain_text().is_empty(), "{:?}", t.kind);
+    s.execute("text.createInPath", &json!({"path": line, "mode": "onPath", "text": "a", "at": [100, 400]})).unwrap();
+}
+
 /// Where each glyph of type object `id` is drawn from (its origin in font units), document space.
 fn glyph_pens(s: &Session, id: NodeId) -> Vec<(usize, Point)> {
     let t = obj(s, id);
@@ -722,6 +764,44 @@ fn touch_type_moves_one_character_and_leaves_the_others_where_they_are() {
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 9, "dy": 1})).is_err(), "no character there");
     // A 32-bit build read 2^32 + 1 as character 1.
     assert!(s.execute("text.touchType", &json!({"id": id.0, "start": (1u64 << 32) + 1, "dy": 1})).is_err(), "no character there");
+}
+
+/// Touch Type does not change a character of type on an open path that is not drawn because it
+/// falls before the path's start; a drawn character of the same type still changes.
+#[test]
+fn touch_type_refuses_a_character_before_an_open_paths_start() {
+    let mut s = session();
+    let pid = s.execute("path.create", &json!({"d": "M100 300 L500 300"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Hidden", "size": 12, "at": [100, 300]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("type.pathOptions", &json!({"start": -0.02})).unwrap();
+    let steps = undo_labels(&s).len();
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": 2})).is_err(), "the H is not drawn");
+    assert_eq!(undo_labels(&s).len(), steps);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 5, "dy": 2})).unwrap();
+    // An All Caps ß is two glyphs: with the first before the path's start and the second drawn, it
+    // still changes.
+    let pid = s.execute("path.create", &json!({"d": "M100 400 L500 400"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "ße", "size": 40, "at": [100, 400]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let adv = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id)).glyphs[0].advance;
+    s.execute("type.pathOptions", &json!({"start": -1.2 * adv / 400.0})).unwrap();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(&s, id));
+    assert!(lay.glyphs[0].byte == 0 && lay.glyphs[1].byte == 0 && lay.glyphs[0].off_path && !lay.glyphs[1].off_path);
+    let drawn = |s: &Session| {
+        let t = obj(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let g = lay.glyphs.iter().rfind(|g| g.byte == 0 && !g.off_path).unwrap();
+        t.xf * (g.xf * Point::ZERO)
+    };
+    let before = drawn(&s);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": 2})).unwrap();
+    // The drawn glyph rises 2 points.
+    let after = drawn(&s);
+    assert!((after.x - before.x).abs() < 1e-6 && (after.y - (before.y - 2.0)).abs() < 1e-6, "{before:?} -> {after:?}");
 }
 
 /// Touch Type on the first character of a list item moves that character and leaves the bullet
@@ -2251,6 +2331,41 @@ fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, Strin
     (s, a, b, story)
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert`) after Select All in threaded
+/// text replaces the whole story, every frame's text, as one undo step.
+#[test]
+fn insert_character_replaces_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "\u{2028}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+}
+
+/// When `type.insert` at the caret in the first frame of threaded text pushes the caret's place on
+/// into the next frame, the Type tool's caret goes there with it, and typing goes after the
+/// insertion.
+#[test]
+fn insert_character_moves_the_caret_with_the_text_it_flows_on() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let first = obj(&s, a).plain_text();
+    // Before the last word of the first frame: two line breaks there push the line after the
+    // first one on into the second frame.
+    let at = first.trim_end().rfind(' ').map_or(0, |k| k + 1);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": at, "caret": at}));
+    for _ in 0..2 {
+        s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    }
+    assert!(obj(&s, a).plain_text().len() < at + 6, "the second break flows on into the second frame");
+    s.tool_text("X", ViewInfo::default()).unwrap();
+    let want = format!("{}\u{2028}\u{2028}X{}", &story[..at], &story[at..]);
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), want);
+}
+
 #[test]
 fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
@@ -2263,6 +2378,36 @@ fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
     assert!(obj(&s, a).plain_text().contains('\n') && obj(&s, b).plain_text().contains('\n'));
+}
+
+#[test]
+fn remove_breaks_of_the_whole_story_takes_locked_and_hidden_frames() {
+    for command in ["object.lock", "object.hide"] {
+        for held_first in [false, true] {
+            let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+            let (held, other) = if held_first { (a, b) } else { (b, a) };
+            let unrelated = s.execute("text.create", &json!({"x": 10, "y": 500, "text": "One\nTwo", "size": 12})).unwrap()["id"].as_u64().unwrap();
+            let unrelated = NodeId(unrelated);
+            s.execute(command, &json!({"ids": [held.0]})).unwrap();
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+            s.select_tool("type", ViewInfo::default()).unwrap();
+            s.set_tool_option("textSelection", &json!({"editing": other.0, "anchor": 0, "caret": 0}));
+            assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+            let case = format!("{command}, held first: {held_first}");
+            let steps = undo_labels(&s).len();
+            let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+            assert_eq!(undo_labels(&s).len(), steps + 1, "{case}: one undo step");
+            assert!(r["ids"].as_array().unwrap().contains(&json!(held.0)), "{case}: the held frame is changed");
+            let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+            assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "{case}: every frame's returns go");
+            assert_eq!(obj(&s, unrelated).plain_text(), "One\nTwo", "{case}: other type is as it was");
+            // No return is left: another call fails and adds no undo step.
+            assert!(s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).is_err());
+            assert_eq!(undo_labels(&s).len(), steps + 1, "{case}: no undo step when nothing changes");
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story, "{case}: undo restores the text");
+        }
+    }
 }
 
 #[test]
@@ -2306,41 +2451,72 @@ fn convert_to_text_takes_the_whole_story_that_select_all_selected() {
     }
 }
 
+/// Whether no paragraph of type `id` is a list.
+fn no_list(s: &Session, id: NodeId) -> bool {
+    let t = obj(s, id);
+    (0..t.paragraph_count()).all(|k| t.para_at(k).list.is_none())
+}
+
+/// The bullets held as characters in the frames `ids`.
+fn bullet_chars(s: &Session, ids: &[NodeId]) -> usize {
+    ids.iter().map(|id| obj(s, *id).plain_text().matches("\u{2022}\t").count()).sum()
+}
+
 #[test]
-fn convert_to_text_of_the_whole_story_leaves_a_locked_frame() {
-    // Over MCP without ids, and as the Paragraph panel sends it, with every frame of the story.
-    for named in [false, true] {
-        let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
-        s.execute("object.lock", &json!({"ids": [b.0]})).unwrap();
-        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
-        s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": 0, "caret": 0}));
-        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
-        // The first frame ends with a paragraph return, so the paragraph that starts the locked
-        // frame takes in the first frame's empty last part and starts its text there.
-        let in_a = obj(&s, a).plain_text();
-        assert!(in_a.ends_with('\n'));
-        let own = in_a.split('\n').filter(|piece| !piece.is_empty()).count();
-        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
-        let r = s.execute("text.convertListToText", &p).unwrap();
-        assert_eq!(r["ids"], json!([a.0]), "only the editable frame is changed (ids named: {named})");
-        assert_eq!(r["converted"], json!(own), "only the paragraphs whose text starts in the editable frame convert");
-        assert!(r["inserted"].as_array().unwrap().iter().all(|i| i["id"] == json!(a.0)));
-        let (ta, tb) = (obj(&s, a), obj(&s, b));
-        assert!(ta.plain_text().contains("\u{2022}\t"), "the editable frame is converted");
-        let markers = ta.plain_text().matches("\u{2022}\t").count() + tb.plain_text().matches("\u{2022}\t").count();
-        assert_eq!(markers, own, "the locked frame's first paragraph keeps its list");
-        // The converted text is longer, so the story flows on into the locked frame; its own
-        // paragraphs stay a list.
-        let last = tb.paragraph_count() - 2;
-        assert!(tb.para_at(last).list.is_some(), "the locked frame's paragraphs stay a list (ids named: {named})");
-        assert!(!tb.plain_text().ends_with("\u{2022}\tAlpha beta.\n"));
-        assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+fn convert_to_text_of_the_whole_story_converts_locked_and_hidden_frames() {
+    // Over MCP without ids, as the Paragraph panel sends it with every frame of the story, and with
+    // ids naming only the held frame.
+    for command in ["object.lock", "object.hide"] {
+        for held_first in [false, true] {
+            for call in ["none", "story", "held"] {
+                let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+                let (held, other) = if held_first { (a, b) } else { (b, a) };
+                let unrelated =
+                    s.execute("text.create", &json!({"x": 10, "y": 500, "text": "One\nTwo", "size": 12})).unwrap()["id"].as_u64().unwrap();
+                let unrelated = NodeId(unrelated);
+                s.execute("text.setFormat", &json!({"ids": [unrelated.0], "list": "bullet"})).unwrap();
+                let unrelated_before = obj(&s, unrelated);
+                s.execute(command, &json!({"ids": [held.0]})).unwrap();
+                s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+                s.select_tool("type", ViewInfo::default()).unwrap();
+                s.set_tool_option("textSelection", &json!({"editing": other.0, "anchor": 0, "caret": 0}));
+                assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+                let case = format!("{command}, held first: {held_first}, ids: {call}");
+                let p = match call {
+                    "none" => json!({}),
+                    "story" => json!({"ids": [a.0, b.0]}),
+                    _ => json!({"ids": [held.0]}),
+                };
+                let steps = undo_labels(&s).len();
+                let r = s.execute("text.convertListToText", &p).unwrap();
+                assert_eq!(undo_labels(&s).len(), steps + 1, "{case}: one undo step");
+                assert!(r["ids"].as_array().unwrap().contains(&json!(held.0)), "{case}: the held frame is changed");
+                assert!(no_list(&s, held), "{case}: the held frame leaves its list");
+                assert_eq!(obj(&s, unrelated), unrelated_before, "{case}: other type is as it was");
+                if call == "held" {
+                    // The other frame's paragraphs whose text starts there keep their list.
+                    assert!(!no_list(&s, other), "{case}: the frame not named keeps its list");
+                    continue;
+                }
+                assert!(no_list(&s, other), "{case}: the other frame leaves its list");
+                assert_eq!(bullet_chars(&s, &[a, b]), 12, "{case}: each paragraph's bullet is held once as characters");
+                assert!(s.tool_options().get("story").is_some(), "{case}: the whole story stays selected");
+                // Nothing is a list any more: another call changes nothing and adds no undo step.
+                s.execute("text.convertListToText", &p).unwrap();
+                assert_eq!(undo_labels(&s).len(), steps + 1, "{case}: no undo step when nothing changes");
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story, "{case}: undo restores the text");
+                assert!(!no_list(&s, a) && !no_list(&s, b), "{case}: undo restores the lists");
+            }
+        }
     }
 }
 
 #[test]
-fn convert_to_text_of_the_whole_story_leaves_a_paragraph_that_starts_in_a_locked_frame() {
-    for named in [false, true] {
+fn convert_to_text_of_the_whole_story_converts_a_paragraph_that_runs_across_a_locked_frame() {
+    // The paragraph that runs from the first frame into the second starts in the locked frame, or
+    // ends in it.
+    for (named, lock_first) in [(false, true), (true, true), (false, false), (true, false)] {
         let mut s = session();
         let story = format!("Alpha beta.\nAlpha beta.\n{}end.\nAlpha beta.\nAlpha beta.\n", "Gamma delta ".repeat(40));
         let a = NodeId(
@@ -2354,22 +2530,23 @@ fn convert_to_text_of_the_whole_story_leaves_a_paragraph_that_starts_in_a_locked
         s.execute("text.setFormat", &json!({"ids": [a.0, b.0], "list": "bullet"})).unwrap();
         let in_a = obj(&s, a).plain_text();
         assert!(!in_a.ends_with('\n') && !obj(&s, b).plain_text().starts_with('\n'), "a paragraph runs on from the first frame into the second");
-        s.execute("object.lock", &json!({"ids": [a.0]})).unwrap();
-        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        let (locked, other) = if lock_first { (a, b) } else { (b, a) };
+        s.execute("object.lock", &json!({"ids": [locked.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
         s.select_tool("type", ViewInfo::default()).unwrap();
-        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        s.set_tool_option("textSelection", &json!({"editing": other.0, "anchor": 0, "caret": 0}));
         assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        let case = format!("ids named: {named}, first frame locked: {lock_first}");
         let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
         let r = s.execute("text.convertListToText", &p).unwrap();
-        assert_eq!(r["ids"], json!([b.0]), "only the editable frame is changed (ids named: {named})");
-        // The two paragraphs that start in the editable frame, and the empty one that ends the story.
-        assert_eq!(r["converted"], json!(3), "only the paragraphs that start in the editable frame convert");
+        assert_eq!(r["ids"], json!([a.0, b.0]), "{case}: both frames are changed");
+        // The five paragraphs with text, and the empty one that ends the story.
+        assert_eq!(r["converted"], json!(6), "{case}: every paragraph of the story converts");
         let (ta, tb) = (obj(&s, a), obj(&s, b));
-        assert_eq!(ta.plain_text(), in_a, "the locked frame's text is as it was");
-        assert!((0..ta.paragraph_count()).all(|k| ta.para_at(k).list.is_some()), "the locked frame stays a list");
-        assert!(tb.para_at(0).list.is_some(), "the paragraph the locked frame starts stays a list");
-        assert!(!tb.plain_text().starts_with('\u{2022}'));
-        assert_eq!(tb.plain_text().matches("\u{2022}\t").count(), 2);
+        assert!(no_list(&s, a) && no_list(&s, b), "{case}: the story leaves its list");
+        assert_eq!(bullet_chars(&s, &[a, b]), 5, "{case}: each paragraph's bullet is held once as characters");
+        assert!(ta.plain_text().contains("\u{2022}\tGamma"), "{case}: the paragraph across the frames takes its bullet where its text starts");
+        assert!(!tb.plain_text().starts_with('\u{2022}'), "{case}");
     }
 }
 
@@ -3036,6 +3213,41 @@ fn a_previewed_transform_while_typing_keeps_the_typing() {
     s.tool_text("!", v).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "Hello world!");
     assert!((left(&s, id) - 400.0).abs() < 1e-6);
+}
+
+/// With Performance › Real-time Drawing and Editing off, the typing is applied when its session
+/// ends. Ending it for another edit applies it first, as a step of its own: a dialog or a panel
+/// beginning its preview, the font menus ([`Session::keep_typing`]), a paint for the selected
+/// characters.
+#[test]
+fn ending_deferred_typing_for_another_edit_keeps_the_typing() {
+    let typed = |end: &dyn Fn(&mut Session)| {
+        let mut s = session();
+        s.prefs.real_time_drawing = false;
+        let v = ViewInfo::default();
+        let id = text(&mut s, "Hello");
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        click(&mut s, b.x1 - 1.0, b.center().y);
+        s.tool_text(" world", v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), "Hello", "the typing waits for its session to end");
+        let steps = undo_labels(&s).len();
+        end(&mut s);
+        assert_eq!(obj(&s, id).plain_text(), "Hello world");
+        assert_eq!(undo_labels(&s)[steps], "Typing", "{:?}", undo_labels(&s));
+    };
+    typed(&|s| {
+        assert!(s.begin_interaction_warned("Fill Color").unwrap().is_empty());
+        s.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        s.commit_interaction().unwrap();
+    });
+    typed(&|s| {
+        assert!(s.keep_typing().unwrap().is_empty());
+        assert!(!s.in_interaction());
+    });
+    typed(&|s| {
+        s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    });
 }
 
 /// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the
@@ -3926,4 +4138,67 @@ fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
     assert!(t.runs[1].style.stroke.is_none(), "the rest of the type keeps its stroke");
     let labels = undo_labels(&s);
     assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
+}
+
+/// Redefines `[Normal Character Style]` with `fill` (`charStyle.setAttrs`).
+fn set_normal_fill(s: &mut Session, fill: vectorcraft_color::Paint) {
+    let attrs = crate::cmd::textstyles::char_attrs(&CharStyle { fill, ..CharStyle::default() });
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"fill": attrs["fill"]}})).unwrap();
+}
+
+/// #7975: type the Type tool starts is filled as [Normal Character Style] is, black unless it was
+/// redefined, not with the current fill a shape left behind.
+#[test]
+fn new_type_takes_the_normal_character_style_fill_not_the_current_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the current fill is red");
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    s.tool_text("Black", v).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(obj(&s, id).runs[0].style.fill, Paint::solid(Color::BLACK));
+    // A redefined [Normal Character Style] gives new type its fill.
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    set_normal_fill(&mut s, blue.clone());
+    let made = s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Blue"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, blue);
+    // A color given to the command still wins.
+    let made = s.execute("text.create", &json!({"x": 100, "y": 400, "text": "Green", "color": "#00ff00"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+}
+
+/// A client answers the question a Type tool click asks about type in a missing font through
+/// `tool.setOption {key: "missingFontEdit", value: {token, ok}}`: OK starts the edit at the next poll.
+#[test]
+fn tool_set_option_answers_the_missing_font_question() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Hello", "size": 20, "font": "Missing Test Family 8408"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let (a, b) = vectorcraft_text::caret_position(&vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t), 2);
+    let at = t.xf * a.midpoint(b);
+    let mut asked = vec![];
+    for k in [PointerKind::Down, PointerKind::Up] {
+        asked.extend(s.pointer(&PointerEvent::new(k, at.x + 0.1, at.y), v).unwrap());
+    }
+    let token = asked
+        .iter()
+        .find_map(|r| match r {
+            UiRequest::Dialog(k, p) if k == "missingFontEdit" => p["token"].as_u64(),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("the missing-font question: {asked:?}"));
+    assert!(!s.tool_wants_text());
+    s.set_tool_option_cmd(&json!({"key": "missingFontEdit", "value": {"token": token, "ok": true}})).unwrap();
+    s.tool_poll(v, false).unwrap();
+    assert!(s.tool_wants_text());
+    assert_eq!(s.tool_options()["editing"], json!(id.0));
 }

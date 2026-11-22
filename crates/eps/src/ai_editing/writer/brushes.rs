@@ -23,7 +23,7 @@ use super::{Writer, Xy};
 use crate::ai_ops;
 use crate::ps;
 
-pub(in crate::ai_editing) const BRUSHES: &str = "Pattern and Bristle brushes, Art brushes that don't stretch their art along the path from left to right at 100% unflipped without overlap, Scatter and Art brushes in Tints and Shades or Hue Shift, brushes whose art holds an empty path or group or more than paths, compound paths and groups with one solid fill and one plain stroke each, brushes whose names hold a slash or repeat an earlier brush's name, brushes that would open with other settings, brushes past the number or the amount of art one file's brushes can hold, and every brush on a large canvas are left out of the Brushes panel in the editing data for other apps";
+pub(in crate::ai_editing) const BRUSHES: &str = "Pattern and Bristle brushes, Art brushes that don't run their art from left to right, that overlap or whose width follows the pen, Scatter and Art brushes in Tints and Shades or Hue Shift, brushes whose art or its opacity masks' art holds an empty path or group or more than paths, compound paths and groups with one solid fill and one plain stroke each, or opacity masks on a compound path's members or more than seven deep in one another's art, brushes whose names hold a slash or repeat an earlier brush's name, brushes that would open with other settings, brushes past the number or the amount of art one file's brushes can hold, and every brush on a large canvas are left out of the Brushes panel in the editing data for other apps";
 
 /// Most brushes written (the reader's limit).
 const MAX_BRUSHES: usize = 4096;
@@ -96,6 +96,7 @@ fn code(v: Variation) -> f64 {
         Variation::Fixed => 0.0,
         Variation::Random => 1.0,
         Variation::Pressure => 2.0,
+        Variation::StylusWheel => 3.0,
         Variation::Tilt => 4.0,
         Variation::Bearing => 5.0,
         Variation::Rotation => 6.0,
@@ -145,36 +146,106 @@ fn scatter_params(s: &Scatter, art: &str) -> Option<String> {
     Some(format!("2 /{art}/ 5 0 0 0 / {}", nums6(&numbers)))
 }
 
-/// An Art brush's parameters, its art the section `art`: `None` for options the reader doesn't read
-/// (it reads an Art brush that stretches its art along the path from left to right at 100%,
-/// unflipped, without overlap, in Tints or keeping its colors).
-fn art_params(a: &ArtBrush, art: &str) -> Option<String> {
-    let plain = a.direction == Direction::LeftToRight
-        && matches!(a.scale, ArtScale::Stretch)
-        && a.width == 100.0
-        && a.width_mode.is_none()
-        && !a.flip_along
-        && !a.flip_across
-        && !a.overlap;
-    if !plain {
+/// An Art brush's settings as its parameters' numbers 2 to 15 give them and a brushed stroke's filter
+/// holds them ([`ART_SETTINGS`]): `None` for options the reader doesn't read (it reads an Art brush
+/// that runs its art from left to right without overlap, at a fixed width, in Tints or keeping its
+/// colors). The guides of Stretch Between Guides are the lengths of the art before the first and
+/// after the second, measured before the art is flipped along the path.
+fn art_settings(a: &ArtBrush) -> Option<[f64; 14]> {
+    if a.direction != Direction::LeftToRight || a.width_mode.is_some() || a.overlap {
         return None;
     }
-    let c = colorization_code(a.colorization)?;
-    let numbers = [1.0, c, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+    let length = a.art.geometric_bounds().map_or(0.0, |b| b.width());
+    let (proportional, segmented, before, after) = match a.scale {
+        ArtScale::Stretch => (0.0, 0.0, 0.0, 0.0),
+        ArtScale::Proportional => (1.0, 0.0, 0.0, 0.0),
+        ArtScale::BetweenGuides { start, end } if start < end => {
+            let (before, after) = (start * length, (1.0 - end) * length);
+            let (before, after) = if a.flip_along { (after, before) } else { (before, after) };
+            (0.0, 1.0, before, after)
+        }
+        ArtScale::BetweenGuides { .. } => return None,
+    };
+    let scaling = a.width / 100.0;
+    let flip = |on: bool| f64::from(u8::from(on));
+    Some([
+        colorization_code(a.colorization)?,
+        scaling,
+        0.0,
+        1.0,
+        flip(a.flip_along),
+        flip(a.flip_across),
+        proportional,
+        scaling,
+        scaling,
+        0.0,
+        segmented,
+        before,
+        after,
+        1.0,
+    ])
+}
+
+/// The entries of a brushed stroke's filter that hold an Art brush's settings, in the order of
+/// [`art_settings`], with how each is written.
+const ART_SETTINGS: [(&str, &str); 14] = [
+    ("Colorization", "Int"),
+    ("Scaling", "Real"),
+    ("Spacing", "Real"),
+    ("Adjustment", "Int"),
+    ("Counterclockwise", "Int"),
+    ("UpsideDown", "Int"),
+    ("Proportional", "Bool"),
+    ("MinScaling", "Real"),
+    ("MaxScaling", "Real"),
+    ("ScaleYDependsOn", "Int"),
+    ("Segmented", "Bool"),
+    ("StartSegmentLength", "Real"),
+    ("EndSegmentLength", "Real"),
+    ("FoldAdjustment", "Bool"),
+];
+
+/// An Art brush's parameters, its art the section `art`: `None` for options the reader doesn't read
+/// ([`art_settings`]).
+fn art_params(a: &ArtBrush, art: &str) -> Option<String> {
+    let settings = art_settings(a)?;
+    let mut numbers = vec![1.0];
+    numbers.extend(settings);
     Some(format!("2 / {art}/ / / / / 0 0/ 5 0 0 0 /  {}", nums6(&numbers)))
 }
 
+/// Most opacity masks in one another's art in a brush's art: a brush's art section writes its art
+/// one level inside, and masks at [`super::MAX_NEST`] levels are left out ([`super::DEEP_MASKS`]).
+const MAX_MASK_NEST: u32 = super::MAX_NEST - 1;
+
 /// Is `art` written as the reader reads it back, within a brush: paths and compound paths with
 /// points and groups with members (not clipping, without paint of their own), each opaque in the
-/// normal blending mode, without effects or opacity masks, with at most one fill and one plain
-/// stroke (no brush, width profile, arrowheads, alignment off the path or dashes fitted to corners)
-/// over it, each in a color or none? A path without points isn't written ([`Writer::plain_object`]).
+/// normal blending mode, without effects, with at most one fill and one plain stroke (no brush,
+/// width profile, arrowheads, alignment off the path or dashes fitted to corners) over it, each in a
+/// color or none, and opacity masks whose art is such art too, at most [`MAX_MASK_NEST`] deep and
+/// none on a compound path's members? A path without points isn't written
+/// ([`Writer::plain_object`]).
 fn plain_art(art: &Node) -> bool {
+    plain_within(art, MAX_MASK_NEST)
+}
+
+/// Does no object of `art` have an opacity mask?
+fn unmasked(art: &Node) -> bool {
+    let mut unmasked = true;
+    art.walk(&mut |n| unmasked &= n.extras().mask.is_none());
+    unmasked
+}
+
+/// [`plain_art`] with at most `masks` opacity masks in one another's art.
+fn plain_within(art: &Node, masks: u32) -> bool {
     let mut plain = true;
     art.walk(&mut |n| {
         let kind = match &n.kind {
             NodeKind::Path { path, guide: false, clipping: false, .. } => path.subpaths.iter().any(|sp| !sp.anchors.is_empty()),
-            NodeKind::Compound { .. } => super::compound_path(n).subpaths.iter().any(|sp| !sp.anchors.is_empty()),
+            // A compound path is written as one path of its members' subpaths, without their masks.
+            NodeKind::Compound { children, .. } => {
+                children.iter().all(|c| unmasked(c)) && super::compound_path(n).subpaths.iter().any(|sp| !sp.anchors.is_empty())
+            }
             NodeKind::Group { children, clip: false } => !children.is_empty(),
             _ => false,
         };
@@ -198,7 +269,7 @@ fn plain_art(art: &Node) -> bool {
             && order
             && quiet
             && n.appearance.effects.is_empty()
-            && n.extras().mask.is_none()
+            && n.extras().mask.as_deref().is_none_or(|m| masks > 0 && plain_within(&m.art, masks - 1))
             && n.opacity >= 1.0
             && n.blend == BlendMode::Normal;
     });
@@ -209,8 +280,13 @@ fn plain_art(art: &Node) -> bool {
 /// compound path with the subpaths of all its members as one path ([`super::compound_path`]), is
 /// written as one path when it has one subpath with points and as a compound path when it has more
 /// ([`Writer::plain_object`]); the reader reads that compound path as one path for each subpath,
-/// each with the object's paint.
+/// each with the object's paint. An opacity mask's art is written shown ([`Writer::mask`]).
 fn as_read(art: &mut Node) {
+    if let Some(m) = art.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        let mask_art = Arc::make_mut(&mut m.art);
+        mask_art.visible = true;
+        as_read(mask_art);
+    }
     let (subpaths, rule) = match &art.kind {
         NodeKind::Path { path, rule, .. } => (path.subpaths.clone(), *rule),
         NodeKind::Compound { rule, .. } => (super::compound_path(art).subpaths, *rule),
@@ -326,11 +402,12 @@ impl Writer<'_> {
     fn brush_out(&mut self, b: &Brush) -> Option<BrushOut> {
         let plugin = crate::import::brush_plugin_name(&b.kind);
         let section = format!("Brush Art {}", self.brush_set.sections + 1);
-        // The art as the reader reads it: a section is read with y down, and an Art brush's art is
-        // turned over after that (its section's y up is the right of the path).
+        // The art as the reader reads it: a section is read with y down, and a Scatter or Art
+        // brush's art is turned over after that (its section's y up is down the page in each
+        // Scatter copy and the right of the path in Art).
         let (params, art) = match &b.kind {
             BrushKind::Calligraphic(c) => (calligraphic_params(c), None),
-            BrushKind::Scatter(s) => (scatter_params(s, &section)?, Some((s.art.clone(), Affine::FLIP_Y))),
+            BrushKind::Scatter(s) => (scatter_params(s, &section)?, Some((s.art.clone(), Affine::IDENTITY))),
             BrushKind::Art(a) => (art_params(a, &section)?, Some((a.art.clone(), Affine::IDENTITY))),
             BrushKind::Pattern(_) | BrushKind::Bristle(_) => return None,
         };
@@ -341,7 +418,7 @@ impl Writer<'_> {
                 }
                 let mut read = a.clone();
                 if *to_section == Affine::IDENTITY {
-                    read.transform(Affine::FLIP_Y, false);
+                    crate::import::turn_brush_art_over(&mut read);
                 }
                 as_read(&mut read);
                 Some(read)
@@ -373,11 +450,14 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state.take(),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             (self.block_start, self.block_end),
             // The art is the brush's own: not on `%_` lines, in a drawn look or in a symbol that
             // first uses the brush.
             (std::mem::take(&mut self.hidden), std::mem::take(&mut self.in_look), std::mem::take(&mut self.in_symbol)),
+            // The layers' objects written with art styles, by id: none of them is the brush's art,
+            // which may hold objects with the same ids.
+            std::mem::take(&mut self.styled),
         );
         (self.to_art, self.grad_space, self.canvas, self.block_end) = (to_section, to_section, to_section, usize::MAX);
         self.state(false, false);
@@ -410,9 +490,10 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state,
             self.gs,
-            self.clip,
+            (self.clip, self.shown),
             (self.block_start, self.block_end),
             (self.hidden, self.in_look, self.in_symbol),
+            self.styled,
         ) = saved;
         let text = std::mem::replace(&mut self.body, body);
         if !std::mem::replace(&mut self.warnings, warnings).is_empty() {
@@ -458,25 +539,10 @@ impl Writer<'_> {
                 d.push_str("0 /Int (AngleRelativeTo) ,\n");
                 "(Calligraphic Brush) /Title ,\n"
             }
-            BrushKind::Art(_) => {
+            BrushKind::Art(a) => {
                 d.push_str("15 /Int (Adobe Effect Expand Before Version) ,\n"); // brand-ok: the entry's name in the files
-                for (key, value, kind) in [
-                    ("StartSegmentLength", "0", "Real"),
-                    ("EndSegmentLength", "0", "Real"),
-                    ("Counterclockwise", "0", "Int"),
-                    ("MinScaling", "1", "Real"),
-                    ("MaxScaling", "1", "Real"),
-                    ("Colorization", "1", "Int"),
-                    ("Spacing", "0", "Real"),
-                    ("Adjustment", "1", "Int"),
-                    ("Proportional", "0", "Bool"),
-                    ("Segmented", "0", "Bool"),
-                    ("UpsideDown", "0", "Int"),
-                    ("FoldAdjustment", "1", "Bool"),
-                    ("ScaleYDependsOn", "0", "Int"),
-                    ("Scaling", "1", "Real"),
-                ] {
-                    let _ = writeln!(d, "{value} /{kind} ({key}) ,");
+                for ((key, kind), value) in ART_SETTINGS.iter().zip(art_settings(a)?) {
+                    let _ = writeln!(d, "{} /{kind} ({key}) ,", nums6(&[value]));
                 }
                 "(Art Brush) /Title ,\n"
             }
@@ -501,14 +567,14 @@ impl Writer<'_> {
     /// Does the reader read the brushed strokes of style text `text` with their brushes on them?
     pub(super) fn brushed_style_reads(&mut self, text: &str) -> bool {
         self.brush_set();
-        let section = super::styles::known_style("x", text);
+        let Some(parsed) = self.styles.parsed.get(text) else { return false };
         let written = &self.brush_set.written;
         let read = self.brush_set.read.get_or_insert_with(|| {
             let brushes: Vec<(&str, &str, &str, Option<&Node>)> =
                 written.iter().map(|b| (b.plugin, b.brush.name.as_str(), b.params.as_str(), b.art.as_ref())).collect();
             crate::import::BrushesRead::new(&brushes)
         });
-        read.style_reads(section.as_bytes(), "x")
+        read.style_reads(parsed)
     }
 
     /// The brushes' art in a non-printing block, then the brush manager's order and the brushes in

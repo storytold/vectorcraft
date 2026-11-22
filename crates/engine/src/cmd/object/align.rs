@@ -218,12 +218,32 @@ pub(super) fn align(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let m = measure(s, p, "object.align")?;
     let (h, v) = direction(p, "object.align")?;
-    choice(p, "object.align", "to", &["selection", "artboard", "key"])?;
+    let to = choice(p, "object.align", "to", &["selection", "artboard", "key", "auto"])?;
     check_switches(p, &["patterns"], "object.align")?;
     check_numbers(p, &["artboard"], "object.align")?;
     if h.is_none() && v.is_none() {
         return Err(bad("object.align", "give horizontal or vertical"));
     }
+    // Resolve only the explicit automatic target at this step, without changing the caller's
+    // parameters or selection. The existing reference/anchor/guide paths receive a concrete target.
+    let automatic_params = if to == Some("auto") {
+        let selection = &s.doc()?.selection;
+        let to = if selection.has_key() {
+            "key"
+        } else if selection.anchors.is_empty() && selection.len() == 1 {
+            "artboard"
+        } else {
+            "selection"
+        };
+        let Some(mut params) = p.as_object().cloned() else {
+            return Err(bad("object.align", "expected an object of align parameters"));
+        };
+        params.insert("to".into(), Value::String(to.into()));
+        Some(Value::Object(params))
+    } else {
+        None
+    };
+    let p = automatic_params.as_ref().unwrap_or(p);
     // Anchor points selected with Direct Selection align themselves, as in Illustrator (#1180).
     if !s.doc()?.selection.anchors.is_empty() {
         return align_anchors(s, p, &ids, (h, v));
@@ -292,8 +312,22 @@ fn guide_moves(s: &Session, p: &Value, r: Rect, h: Option<&str>, v: Option<&str>
         .collect())
 }
 
+/// The key anchor ([`vectorcraft_doc::Selection::key_anchor`]) when Align and Distribute act on the
+/// selected anchor points and align to the key ([`align_to`]): the path and the point.
+fn key_anchor(s: &Session, p: &Value) -> Option<(NodeId, (usize, usize))> {
+    (align_to(s, p) == Some("key")).then(|| s.doc().ok()?.selection.key_anchor).flatten()
+}
+
+/// Where the key anchor of [`key_anchor`] is.
+fn key_anchor_point(s: &Session, p: &Value) -> Option<Point> {
+    key_anchor(s, p)?;
+    let st = s.doc().ok()?;
+    st.selection.key_anchor_point(&st.doc)
+}
+
 /// [`align`] of the selected anchor points (whole paths among them give all theirs): each point
-/// moves to the edge or centre of the points' bounds, or of the artboard with Align To Artboard.
+/// moves to the edge or centre of the points' bounds, of the artboard with Align To Artboard, or to
+/// the key anchor when aligning to it.
 fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&str>, Option<&str>)) -> Result<Value> {
     let targets = crate::cmd::path::anchor_targets(s)?;
     let d = &s.doc()?.doc;
@@ -304,9 +338,10 @@ fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&st
     let Some(bounds) = pts.iter().skip(1).fold(pts.first().map(|q| Rect::from_points(*q, *q)), |b, q| b.map(|b| b.union_pt(*q))) else {
         return ok();
     };
-    // shortcut: no key anchor yet, so Align To Key Object aligns to the points' bounds as Selection does
-    // (or to a key guide).
-    let (r, along_x, along_y) = align_reference(s, p, ids, Measure::default(), Some(bounds))?;
+    // Aligning to the key, the points go to the key anchor, which stays where it is. Without one,
+    // a key object aligns them to their bounds as Selection does (a key guide lines them up on it).
+    let own = key_anchor_point(s, p).map_or(bounds, |k| Rect::from_points(k, k));
+    let (r, along_x, along_y) = align_reference(s, p, ids, Measure::default(), Some(own))?;
     let (h, v) = (h.filter(|_| along_x), v.filter(|_| along_y));
     let target = |q: Point| {
         let x = match h {
@@ -410,9 +445,10 @@ fn apply_spaced(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], horiz: 
 
 /// [`distribute`] and [`distribute_spacing`] of the selected anchor points (whole paths among them
 /// give all theirs): the points between the first and the last along the axis are spaced evenly,
-/// or `gap` apart from the first. A point has no size, so every Distribute option of an axis
-/// gives the same result.
-fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64>) -> Result<Value> {
+/// or `gap` apart from the first. With a gap and a key anchor `key` among them, the key anchor stays
+/// where it is and the others are placed `gap` apart outward from it, in their order along the
+/// axis. A point has no size, so every Distribute option of an axis gives the same result.
+fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64>, key: Option<(NodeId, (usize, usize))>) -> Result<Value> {
     let targets = crate::cmd::path::anchor_targets(s)?;
     let d = &s.doc()?.doc;
     let along = |q: Point| if horiz { q.x } else { q.y };
@@ -431,8 +467,11 @@ fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64
         return ok();
     }
     let step = gap.unwrap_or((last - first) / (pts.len() - 1) as f64);
+    // The point the spacing starts from: the key anchor with a gap, else the first point.
+    let (from, at_from) =
+        gap.and(key).and_then(|(kid, (ksi, kai))| pts.iter().position(|q| (q.0, q.1, q.2) == (kid, ksi, kai))).map_or((0, first), |k| (k, pts[k].3));
     let moves: Vec<(NodeId, usize, usize, f64)> =
-        pts.iter().enumerate().map(|(i, &(id, si, ai, at))| (id, si, ai, first + step * i as f64 - at)).collect();
+        pts.iter().enumerate().map(|(i, &(id, si, ai, at))| (id, si, ai, at_from + step * (i as f64 - from as f64) - at)).collect();
     if moves.iter().all(|m| m.3.abs() <= 1e-9) {
         return ok();
     }
@@ -466,11 +505,13 @@ pub(super) fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let m = measure(s, p, "object.distribute")?;
     let board = distribute_to(s, p, &ids, m, "object.distribute")?;
     let spacing = spacing(p, "object.distribute")?;
-    // Anchor points selected with Direct Selection are distributed themselves, as Align aligns them.
+    // Anchor points selected with Direct Selection are distributed themselves, as Align aligns them;
+    // with a key anchor, a spacing places them from it.
     if !s.doc()?.selection.anchors.is_empty() {
+        let key = key_anchor(s, p);
         return match direction(p, "object.distribute")? {
             (None, None) => Err(bad("object.distribute", "give horizontal or vertical")),
-            (h, _) => distribute_anchors(s, "Distribute", h.is_some(), None),
+            (h, _) => distribute_anchors(s, "Distribute", h.is_some(), spacing.filter(|_| key.is_some()), key),
         };
     }
     let (horiz, key): (bool, fn(&Rect, bool) -> f64) = match direction(p, "object.distribute")? {
@@ -543,7 +584,8 @@ pub(super) fn distribute_spacing(s: &mut Session, p: &Value) -> Result<Value> {
     let board = distribute_to(s, p, &ids, m, "object.distributeSpacing")?;
     let spacing = spacing(p, "object.distributeSpacing")?;
     if !s.doc()?.selection.anchors.is_empty() {
-        return distribute_anchors(s, "Distribute Spacing", horiz, spacing);
+        let key = key_anchor(s, p);
+        return distribute_anchors(s, "Distribute Spacing", horiz, spacing, key);
     }
     // The selected guides across the axis are spaced with the objects, as items with no size (#1597).
     let mut items = spaced_items(s, &ids, m, horiz)?;

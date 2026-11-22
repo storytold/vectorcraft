@@ -198,14 +198,24 @@ pub fn export(doc: &Document, opts: &HpglOptions) -> Result<HpglOutput, String> 
     Ok(export_regions(doc, opts, &[opts.region])?.pop().unwrap_or_default())
 }
 
+/// An error unless a plot can cover `region`: its corners are finite and it has a width and a
+/// height (either corner may come first).
+pub fn check_region(region: Rect) -> Result<(), String> {
+    let r = region.abs();
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+        return Err("the export region is empty".into());
+    }
+    Ok(())
+}
+
 /// Write the visible art of `doc` over each of `regions` as an HP-GL plot, one per region, as
 /// [`export`] does with `opts.region`. The plots share one pen numbering, so a color is the same
 /// pen in each, and one point budget.
 pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> Result<Vec<HpglOutput>, String> {
-    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
-    if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
-        return Err("the export region is empty".into());
+    for r in regions {
+        check_region(*r)?;
     }
+    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
     if !TOLERANCE_RANGE.contains(&opts.tolerance) {
         return Err("the curve tolerance must be from 0.01 to 10 points".into());
     }
@@ -524,47 +534,13 @@ fn plain(by_pen: &[Vec<Vec<(i64, i64)>>]) -> Vec<u8> {
 
 /// HP-GL/2: `IN;`, the palette, each pen's paths as one `PE`, `PU;SP0;`.
 fn encoded(by_pen: &[Vec<Vec<(i64, i64)>>], pens: &[[u8; 3]]) -> Vec<u8> {
-    let mut out = b"IN;".to_vec();
-    if !pens.is_empty() {
-        // Pens 1 to n on a plotter, and on a raster device (whose pens are 0 to NP − 1) too.
-        let np = (pens.len() + 1).next_power_of_two().max(2);
-        out.extend(format!("NP{np};").bytes());
-        for (i, [r, g, b]) in pens.iter().enumerate() {
-            out.extend(format!("PC{},{r},{g},{b};", i + 1).bytes());
-        }
-    }
-    let mut at: Option<(i64, i64)> = None;
-    for (i, paths) in by_pen.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-        out.extend(format!("PU;SP{};PE", i + 1).bytes());
-        for path in paths {
-            for (k, &p) in path.iter().enumerate() {
-                if k == 0 {
-                    out.push(b'<');
-                }
-                // The first move of the plot is absolute, and so is one longer than the range a
-                // device takes for each number; every other is relative.
-                match at.map(|a| (p.0 - a.0, p.1 - a.1)).filter(|d| d.0.abs() <= MAX_COORD && d.1.abs() <= MAX_COORD) {
-                    None => {
-                        out.push(b'=');
-                        pe_number(&mut out, p.0);
-                        pe_number(&mut out, p.1);
-                    }
-                    Some((dx, dy)) => {
-                        pe_number(&mut out, dx);
-                        pe_number(&mut out, dy);
-                    }
-                }
-                at = Some(p);
-            }
-        }
-        out.push(b';');
-    }
-    out.extend(b"PU;SP0;");
-    out
+    let pens: Vec<_> = pens.iter().enumerate().map(|(index, &rgb)| craft_plotter::hpgl::write::Pen { number: index + 1, rgb }).collect();
+    craft_plotter::hpgl::write::write_hpgl2(&pens, by_pen)
 }
 
 /// `v` as a base-64 PE number: the sign in the low bit, the low digits from 63 up and the last
 /// digit from 191 up.
+#[cfg(test)]
 fn pe_number(out: &mut Vec<u8>, v: i64) {
     let mut n = (v.unsigned_abs() << 1) | u64::from(v < 0);
     while n >= 64 {
@@ -596,6 +572,9 @@ struct Walk<'a> {
     clips: Vec<Region>,
     /// The points those masks hold ([`MAX_MASK_POINTS`]).
     mask_points: usize,
+    /// Set while the stroke pieces of a clipping path whose fill paints are drawn: they close, as
+    /// its fill closes its outline.
+    closing: bool,
     runs: Vec<Run>,
     points: usize,
     clip_tests: u64,
@@ -624,6 +603,7 @@ impl<'a> Walk<'a> {
             tolerance,
             clips: vec![],
             mask_points: 0,
+            closing: false,
             runs: vec![],
             points: 0,
             clip_tests: 0,
@@ -827,7 +807,9 @@ impl<'a> Walk<'a> {
         let mut paint = first.clip_paint();
         // A stroke at 0% opacity isn't drawn, so the clipping path is drawn in its fill.
         let type_stroke = |s: &Node| matches!(&s.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.has_stroke()));
-        paint.stroke = paint.stroke.filter(|s| top_stroke(s).is_some() || type_stroke(s));
+        // The strokes of a clipping path whose stroke effects were applied are a group of pieces,
+        // which effects around it may have put in groups of their own.
+        paint.stroke = paint.stroke.filter(|s| top_stroke(s).is_some() || type_stroke(s) || strokes_in_pieces(s));
         if paint.stroke.is_none()
             && let Some(fill) = &paint.fill
         {
@@ -852,9 +834,16 @@ impl<'a> Walk<'a> {
             None => {}
         }
         // Drawn whole where its stroke paints: a fill closes its outline, and type's characters
-        // without a stroke are drawn too.
-        if paint.stroke.is_some() {
-            self.node(first, false);
+        // without a stroke are drawn too. Pieces of a clipping path whose fill and stroke effects
+        // were applied are drawn in its stroke pieces alone, closed where its fill paints.
+        if let Some(stroke) = &paint.stroke {
+            if first.extras().clip_pieces {
+                let closing = std::mem::replace(&mut self.closing, paint.fill.as_ref().is_some_and(fills_in_pieces));
+                self.node(stroke, false);
+                self.closing = closing;
+            } else {
+                self.node(first, false);
+            }
         }
     }
 
@@ -874,7 +863,8 @@ impl<'a> Walk<'a> {
 
     /// A path drawn in its color: the topmost stroke's that paints, else the topmost fill's that
     /// paints (visible, with a paint and some opacity). A filled path's every subpath is closed,
-    /// as its fill closes it, also when its stroke gives the color.
+    /// as its fill closes it, also when its stroke gives the color, and so is each stroke piece
+    /// of a clipping path whose fill paints ([`Walk::closing`]).
     fn shape(&mut self, n: &Node, bp: &BezPath) {
         if bp.elements().is_empty() {
             return;
@@ -896,7 +886,7 @@ impl<'a> Walk<'a> {
             (None, None) => return,
         };
         let rgb = self.flat(paint);
-        self.draw(rgb, bp, fill.is_some());
+        self.draw(rgb, bp, fill.is_some() || self.closing);
     }
 
     /// `bp` drawn in `rgb`: flattened (with `close` every subpath closed), then cut and added.
@@ -949,10 +939,8 @@ impl<'a> Walk<'a> {
                     end(&mut cur, &mut out, false);
                     cur.push(p);
                 }
-                PathEl::LineTo(p) => {
-                    if cur.last() != Some(&p) {
-                        cur.push(p);
-                    }
+                PathEl::LineTo(p) if cur.last() != Some(&p) => {
+                    cur.push(p);
                 }
                 PathEl::ClosePath => {
                     let s = cur.first().copied();
@@ -1022,6 +1010,26 @@ impl<'a> Walk<'a> {
 
 fn overlaps(a: Rect, b: Rect) -> bool {
     a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
+}
+
+/// Whether a plot draws nothing of `n` wherever it is, apart from what every export leaves out
+/// (hidden objects, guides and template layers): an object at 0% opacity, a non-printing layer, a
+/// placed image, a gradient mesh whose every point is at 0% opacity, or a path or compound path
+/// without effects whose fills and strokes paint nothing. An image or a mesh in `doc` with a
+/// visible Crop Marks effect, or with a Vector Halftone effect that makes dots, is not one of them.
+/// A clipping path still clips when the plot draws nothing of it.
+pub fn plots_nothing(doc: &Document, n: &Node) -> bool {
+    let unpainted = || n.appearance.effects.is_empty() && top_stroke(n).is_none() && top_fill(n).is_none();
+    let dots = || vectorcraft_effects::addons::halftone::halftone_art(doc, n).is_some_and(|g| g.children().is_some_and(|c| !c.is_empty()));
+    let adds_art = || vectorcraft_effects::has_crop_marks(n) || dots();
+    n.opacity <= 0.0
+        || match &n.kind {
+            NodeKind::Layer { printable, .. } => !printable,
+            NodeKind::Image(_) => !adds_art(),
+            NodeKind::Mesh(m) => !adds_art() && m.points.iter().all(|p| p.opacity <= 0.0),
+            NodeKind::Path { .. } | NodeKind::Compound { .. } => unpainted(),
+            _ => false,
+        }
 }
 
 /// `nodes` (the children of a clipping container when `clipping`) without the layers and
@@ -1124,6 +1132,18 @@ fn top_stroke(n: &Node) -> Option<&StrokeLayer> {
         AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0 && s.opacity > 0.0 => Some(s),
         _ => None,
     })
+}
+
+/// Whether a member of `n`, at any depth of its groups, has a stroke that paints ([`top_stroke`]),
+/// with it and the groups around it shown and not fully transparent.
+fn strokes_in_pieces(n: &Node) -> bool {
+    n.children().is_some_and(|ch| ch.iter().filter(|c| c.visible && c.opacity > 0.0).any(|c| top_stroke(c).is_some() || strokes_in_pieces(c)))
+}
+
+/// Whether a member of `n`, at any depth of its groups, has a fill that paints ([`top_fill`]),
+/// with it and the groups around it shown and not fully transparent.
+fn fills_in_pieces(n: &Node) -> bool {
+    n.children().is_some_and(|ch| ch.iter().filter(|c| c.visible && c.opacity > 0.0).any(|c| top_fill(c).is_some() || fills_in_pieces(c)))
 }
 
 /// The paint of the topmost fill of `n` that paints: visible, with a paint and some opacity.

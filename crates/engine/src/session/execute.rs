@@ -1,7 +1,28 @@
 use super::{
-    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
-    strip_replay_only, waits_for_tool_edit,
+    CommandSpec, DRAWS_SHAPE, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, TAKES_GUIDE_IDS, Value, cmd,
+    find_command, given_ids, guard, strip_replay_only, waits_for_tool_edit,
 };
+
+/// A command's result `r` with the warnings of the previews that settling an interaction applied
+/// before it ran: `previewWarning` holds them, and `warning` too when the command gives none of its
+/// own, so the status bar shows the command's own warning when there is one. A null result becomes
+/// an object holding them; any other result that isn't an object is returned as it is.
+fn with_settled_warnings(mut r: Value, settled: &[String]) -> Value {
+    if settled.is_empty() {
+        return r;
+    }
+    if r.is_null() {
+        r = Value::Object(serde_json::Map::new());
+    }
+    if let Value::Object(m) = &mut r {
+        let w = Value::String(settled.join("; "));
+        if m.get("warning").is_none_or(Value::is_null) {
+            m.insert("warning".into(), w.clone());
+        }
+        m.insert("previewWarning".into(), w);
+    }
+    r
+}
 
 impl Session {
     /// `spec`'s `enabled` with `ids` selected instead of the selection, which is then put back.
@@ -54,7 +75,14 @@ impl Session {
             self.finish_tool_edit_later()?;
         }
         let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
-        let r = self.execute_spec(spec, id, params);
+        // A preview that a top-level command applied first (a drag with Real-time Drawing off, kept
+        // before Undo) reports its warning in the command's result.
+        let r = if self.depth == 0 {
+            let (r, settled) = self.collect_settled_warnings(|s| s.execute_spec(spec, id, params));
+            r.map(|v| with_settled_warnings(v, &settled))
+        } else {
+            self.execute_spec(spec, id, params)
+        };
         self.reading = outer;
         r
     }
@@ -87,7 +115,7 @@ impl Session {
             if id == "effect.refreshDeferred" {
                 cmd::given_object_ids(params, id)?;
             } else {
-                cmd::given_objects(self, params, id)?;
+                cmd::given_nodes(self, params, id, TAKES_GUIDE_IDS.contains(&id))?;
             }
         }
         if SELECTS_GIVEN_IDS.contains(&id) {
@@ -106,7 +134,8 @@ impl Session {
         // whichever tool is chosen.
         let given = given_ids(spec.params, params);
         // The guide commands take ruler guides by index; an object command given one's id is refused.
-        if let (Some(ids), Some(st)) = (&given, self.active())
+        if !TAKES_GUIDE_IDS.contains(&id)
+            && let (Some(ids), Some(st)) = (&given, self.active())
             && let Some(guide) = ids.iter().find(|i| st.doc.node(**i).is_some_and(|n| n.is_ruler_guide()))
         {
             let value = guide.0;
@@ -168,6 +197,10 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        // Colors are drawn and converted through the profiles of the document in front now, also
+        // after an undone or redone Assign Profile, a failed or panicked command's documents put
+        // back, and a batch step, before the next step converts through them.
+        self.sync_front_profiles();
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
             // A failed or panicked command's documents are put back: type is drawn in their
@@ -209,6 +242,7 @@ impl Session {
         let journaled = spec.journal || (self.depth == 0 && std::mem::take(&mut self.journal_query));
         if journaled && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
             let p = self.noted(params);
+            self.note_shape_drawn(id, &p);
             self.journal.push((id.to_string(), p));
         }
         if self.depth == 0 {
@@ -278,6 +312,32 @@ impl Session {
     /// Whether saved steps are playing ([`Session::set_replaying`]).
     pub fn replaying(&self) -> bool {
         self.replaying
+    }
+
+    /// Note that journal entry `id` with `params` drew a shape ([`DRAWS_SHAPE`], also on the active
+    /// perspective plane as `perspective.draw` naming one, and as a step of `command.batch`), unless
+    /// saved steps are playing or a script runs.
+    pub(crate) fn note_shape_drawn(&mut self, id: &str, params: &Value) {
+        let shape = |id: &str| DRAWS_SHAPE.contains(&id);
+        let draws = |id: &str, params: Option<&Value>| {
+            shape(id) || (id == "perspective.draw" && params.and_then(|p| p.get("command")).and_then(Value::as_str).is_some_and(shape))
+        };
+        let in_batch = || {
+            params.get("commands").and_then(Value::as_array).is_some_and(|steps| {
+                steps.iter().any(|step| step.get("command").and_then(Value::as_str).is_some_and(|c| draws(c, step.get("params"))))
+            })
+        };
+        if !self.replaying && !self.script_in_run && (draws(id, Some(params)) || (id == "command.batch" && in_batch())) {
+            self.shape_drawn = true;
+        }
+    }
+
+    /// Whether a shape was drawn since the last call: a drag of a shape tool that was committed, OK
+    /// in its dialog, or a [`DRAWS_SHAPE`] command (alone or as a batch step). Saved steps that play
+    /// ([`Session::replay`]) and a script's commands do not count. A frontend that shows the
+    /// Transform panel after a new shape asks this.
+    pub fn take_shape_drawn(&mut self) -> bool {
+        std::mem::take(&mut self.shape_drawn)
     }
 
     /// The journal from entry `start` on, as an action records it: without the params that only
@@ -362,5 +422,27 @@ impl Session {
             st.sync_new_art();
         }
         r
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::with_settled_warnings;
+
+    /// The command's own warning stays the one the status bar shows, and the settled preview's is
+    /// kept beside it; a null result holds the preview's; other results are left as they are.
+    #[test]
+    fn settled_warnings_join_the_result() {
+        let settled = ["a".to_string(), "b".to_string()];
+        assert_eq!(
+            with_settled_warnings(json!({"ran": 1, "warning": "own"}), &settled),
+            json!({"ran": 1, "warning": "own", "previewWarning": "a; b"})
+        );
+        assert_eq!(with_settled_warnings(json!({"warning": null}), &settled), json!({"warning": "a; b", "previewWarning": "a; b"}));
+        assert_eq!(with_settled_warnings(json!(null), &settled[..1]), json!({"warning": "a", "previewWarning": "a"}));
+        assert_eq!(with_settled_warnings(json!([1]), &settled), json!([1]));
+        assert_eq!(with_settled_warnings(json!({"ran": 1}), &[]), json!({"ran": 1}));
     }
 }

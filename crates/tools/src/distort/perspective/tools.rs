@@ -289,6 +289,9 @@ impl Tool for PerspectiveSelectionTool {
                     _ => vec![],
                 }
             }
+            // Automatic Plane Positioning: Shift held over an anchor point of art in perspective or
+            // over a gridline intersection, with no button down. During a drag Shift constrains.
+            (PointerKind::Move, SelDrag::Idle) if m.shift => super::infer::hover_action(cx, &g, p).into_iter().collect(),
             (_, d) => {
                 self.drag = d;
                 vec![]
@@ -296,7 +299,8 @@ impl Tool for PerspectiveSelectionTool {
         }
     }
     /// Escape during a move, a resize or a plane widget drag cancels it: the objects and the plane
-    /// go back to the start of the drag.
+    /// go back to the start of the drag. With no drag, Escape puts a plane that Automatic Plane
+    /// Positioning holds back in its place.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         if key == ToolKey::Escape && self.busy() {
             self.measure = None;
@@ -304,6 +308,9 @@ impl Tool for PerspectiveSelectionTool {
                 SelDrag::Move { began: false, .. } => vec![],
                 _ => vec![Action::Cancel],
             };
+        }
+        if key == ToolKey::Escape && PerspectiveGrid::current(cx.doc).inferred.is_some() {
+            return vec![Action::Exec("perspective.plane.infer".into(), json!({"clear": true}))];
         }
         if let (ToolKey::Digit(5), SelDrag::Move { perp, began, shift, .. }) = (key, &mut self.drag) {
             *perp = !*perp;

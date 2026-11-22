@@ -104,6 +104,35 @@ fn the_profiles_of_one_object_share_one_budget() {
 }
 
 #[test]
+fn with_graphics_a_ring_at_the_face_limit_still_takes_the_edge_its_cut_adds() {
+    // A closed many-sided ring, 50 clear of the axis, with the middle of an edge at the middle of
+    // its outer side and, with an even number of edges, at the middle of its inner side.
+    let ring = |edges: usize| {
+        let anchors = (0..edges)
+            .map(|i| {
+                let (s, c) = ((i as f64 + 0.5) * std::f64::consts::TAU / edges as f64).sin_cos();
+                Anchor::corner(Point::new(300.0 + 100.0 * c, 100.0 * s))
+            })
+            .collect();
+        PathData::new(vec![SubPath::new(anchors, true)])
+    };
+    // Tilted, so the flat edges at the top and bottom draw faces too.
+    let plain = Revolve { offset: 50.0, rotation_x: -20.0, ..Revolve::default() };
+    let mapped = Revolve { map_surface: true, ..plain };
+    // 1,280 edges of 128 faces each are the most that fit, with graphics or without.
+    for o in [plain, mapped] {
+        assert_eq!(revolve_curve_samples([&ring(1280)], o), Ok(CURVE_SAMPLES));
+        assert!(revolve_curve_samples([&ring(1281)], o).unwrap_err().contains("reduce Segments"));
+    }
+    let faces = revolved(&ring(1280), plain).unwrap();
+    assert_eq!(faces.len(), MAX_REVOLVE_FACES);
+    assert!(faces.iter().all(|f| f.surface.is_none()));
+    // With graphics the side is cut in the middle of the inner edge, which makes one edge more:
+    // its faces are taken past the limit.
+    assert_eq!(revolved(&ring(1280), mapped).unwrap().len(), MAX_REVOLVE_FACES + 128);
+}
+
+#[test]
 fn deeply_nested_contours_stop_the_search_for_holes() {
     // Concentric triangles: each tests every contour outside it.
     let triangle = |r: f64| {

@@ -94,9 +94,20 @@ pub(crate) fn dialog_reject_commit_flag() -> egui::Id {
     egui::Id::unique("dialog-reject-commit")
 }
 
-/// Suppress confirming an open dialog on Enter during this frame when an invalid value was committed.
+/// The pass (`cumulative_pass_nr`) in which a field last rejected an invalid commit: a click on a
+/// dialog's OK whose press came at or before it doesn't confirm the dialog.
+pub(crate) fn dialog_reject_pass() -> egui::Id {
+    egui::Id::unique("dialog-reject-pass")
+}
+
+/// Suppress confirming an open dialog on Enter during this frame, or by the click on OK that took
+/// the focus from the field, when an invalid value was committed.
 pub(crate) fn reject_dialog_commit(ctx: &egui::Context) {
-    ctx.data_mut(|d| d.insert_temp(dialog_reject_commit_flag(), true));
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| {
+        d.insert_temp(dialog_reject_commit_flag(), true);
+        d.insert_temp(dialog_reject_pass(), pass);
+    });
 }
 
 /// The app sets this at the start of each frame: while a dialog is open, Shift+Enter in a field
@@ -189,7 +200,11 @@ pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
             d.remove_temp::<egui::Pos2>(press_pos);
         });
     }
-    if !(resp.gained_focus() && !pressed || resp.double_clicked() || clicked_focus && !dragged) {
+    // Returning from a transient menu resumes its saved caret/selection. This is not the
+    // keyboard focus that starts a new numeric edit; pointer taps/double-clicks still select all.
+    // The menu helper's data borrow ends here, before TextEdit's state is loaded below.
+    let restored_focus = crate::menus::restoring_field_focus(ui.ctx(), resp.id);
+    if !(resp.gained_focus() && !pressed && !restored_focus || resp.double_clicked() || clicked_focus && !dragged) {
         return;
     }
     if let Some(st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {

@@ -192,9 +192,143 @@ fn fit_steps_take_the_batchs_artboard_and_actions_leave_out_their_index() {
     assert_eq!(action, [fit("artboard.fitToArt"), fit("artboard.fitToArt"), fit("artboard.fitToSelection")]);
 }
 
+/// A document of three artboards with art of its own on each → its artboards before any fit.
+fn three_artboards_with_art(s: &mut Session) -> Vec<vectorcraft_geom::Rect> {
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 3, "created": null})).unwrap();
+    for (x, h) in [(10, 30), (130, 20), (250, 40)] {
+        s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
+    }
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect()
+}
+
+/// The artboards of [`three_artboards_with_art`], each fitted to its art.
+fn three_fitted_artboards() -> [vectorcraft_geom::Rect; 3] {
+    let rect = vectorcraft_geom::Rect::new;
+    [rect(10.0, 10.0, 30.0, 40.0), rect(130.0, 10.0, 150.0, 30.0), rect(250.0, 10.0, 270.0, 50.0)]
+}
+
+/// A Fit to Artwork Bounds step that names neither `index` nor `indices`, while the Artboard tool
+/// is chosen with several artboards selected, fits each of those (not the batch's artboard), as the
+/// command does on its own; a step's own `index` or `indices` wins, and with one artboard or none
+/// selected the step takes the batch's artboard.
+#[test]
+fn a_batch_fit_step_uses_the_artboard_tool_selection() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let fit = |params: Value| json!({"artboard": 1, "commands": [{"command": "artboard.fitToArt", "params": params}]});
+    let session = |picks: &Value| {
+        let mut s = Session::new();
+        let was = three_artboards_with_art(&mut s);
+        s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+        s.set_tool_option("selected", picks);
+        (s, was)
+    };
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({}))).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]], "artboards 1 and 3, the selected ones, and not the batch's artboard 2");
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({"index": 1}))).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "a step's own index");
+    let (mut s, was) = session(&json!([2, 0]));
+    s.execute("command.batch", &fit(json!({"indices": [1, 2]}))).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], fitted[2]], "a step's own indices");
+    for picks in [json!([2]), json!([])] {
+        let (mut s, was) = session(&picks);
+        s.execute("command.batch", &fit(json!({}))).unwrap();
+        assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "the batch's artboard with {picks} selected");
+    }
+}
+
+/// The journal records the artboards a batch's Fit to Artwork Bounds step took from the Artboard
+/// tool, so a replay in a new session fits the same ones; an action leaves them out and fits the
+/// artboards selected when it plays.
+#[test]
+fn a_batch_fit_selection_replays_but_an_action_uses_the_current_selection() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([0, 2]));
+    let start = s.journal.len();
+    let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]]);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({"indices": [0, 2]})));
+    let r = replayed(&s);
+    assert_ne!(r.tool_id(), "artboard", "the new session's tool selects no artboards");
+    assert_eq!(boards(&r), boards(&s), "the replay fits the recorded artboards");
+    let action = s.journal_for_action(start);
+    assert_eq!(action, [("command.batch".to_string(), json!({"commands": steps}))]);
+    // Played on a fresh copy of the document with other artboards selected.
+    let mut a = Session::new();
+    three_artboards_with_art(&mut a);
+    a.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    a.set_tool_option("selected", &json!([1, 2]));
+    a.execute("command.batch", &json!({"artboard": 0, "commands": action[0].1["commands"]})).unwrap();
+    assert_eq!(boards(&a), [was[0], fitted[1], fitted[2]], "the action fits the artboards selected when it plays");
+}
+
+/// The journal records the `index` a batch's Fit to Artwork Bounds step took from the batch's
+/// `artboard`, or the command's default (the first artboard) when the batch names none, so a replay
+/// fits that artboard even when the Artboard tool then has several selected.
+#[test]
+fn a_batch_fit_step_records_the_batchs_artboard() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let steps = json!([{"command": "artboard.fitToArt", "params": {}}]);
+    for (batch, index, picks) in [(json!({"artboard": 1, "commands": steps}), 1, json!([0, 2])), (json!({"commands": steps}), 0, json!([1, 2]))] {
+        let mut s = Session::new();
+        let was = three_artboards_with_art(&mut s);
+        let start = s.journal.len();
+        s.execute("command.batch", &batch).unwrap();
+        let mut want = was.clone();
+        want[index] = fitted[index];
+        assert_eq!(boards(&s), want, "{batch}");
+        let (id, p) = s.journal.last().unwrap().clone();
+        assert_eq!((id.as_str(), &p["commands"][0]["params"]), ("command.batch", &json!({ "index": index })));
+        let mut r = Session::new();
+        for (n, (id, p)) in s.journal.iter().enumerate() {
+            if n == start {
+                r.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+                r.set_tool_option("selected", &picks);
+            }
+            r.execute(id, p).unwrap();
+        }
+        assert_eq!(boards(&r), want, "{batch}: the replay fits artboard {index}, not the selected ones");
+        assert_eq!(s.journal_for_action(start), [("command.batch".to_string(), json!({"commands": steps}))]);
+    }
+}
+
+/// A batch step with `"params": null` gets the Artboard tool's selected artboards, or else the
+/// batch's `artboard`, as a step without params does.
+#[test]
+fn a_batch_fit_step_with_null_params_gets_the_artboards() {
+    let fitted = three_fitted_artboards();
+    let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let steps = json!([{"command": "artboard.fitToArt", "params": null}]);
+    let mut s = Session::new();
+    let was = three_artboards_with_art(&mut s);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([2, 0]));
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [fitted[0], was[1], fitted[2]], "the selected artboards");
+    let (_, p) = s.journal.last().unwrap().clone();
+    assert_eq!(p["commands"][0]["params"], json!({"indices": [0, 2]}));
+    let mut s = Session::new();
+    three_artboards_with_art(&mut s);
+    s.execute("command.batch", &json!({"artboard": 1, "commands": steps})).unwrap();
+    assert_eq!(boards(&s), [was[0], fitted[1], was[2]], "the batch's artboard");
+}
+
 #[test]
 fn a_save_records_its_date_and_replays_it() {
-    let path = vectorcraft_testkit::temp_dir("journal-save").join("a.vectorcraft").to_string_lossy().into_owned();
+    let dir = vectorcraft_testkit::TempDir::new("journal-save");
+    let path = dir.join("a.vectorcraft").to_string_lossy().into_owned();
     let mut s = Session::new();
     s.execute("file.new", &json!({"created": null})).unwrap();
     s.execute("document.save", &json!({"path": path})).unwrap();
@@ -209,7 +343,6 @@ fn a_save_records_its_date_and_replays_it() {
     assert_eq!(s.doc().unwrap().doc.metadata.modified, Some(2_000_000_000));
     assert!(s.execute("document.save", &json!({"path": path, "modified": "today"})).is_err());
     // Save As stamps the same way; Save a Copy leaves the document's dates (and records none).
-    let dir = vectorcraft_testkit::temp_dir("journal-save");
     s.execute("file.saveAs", &json!({"path": dir.join("b.vectorcraft").to_string_lossy(), "modified": 2_000_000_100})).unwrap();
     assert_eq!(s.journal.last().unwrap().1["modified"], json!(2_000_000_100));
     s.execute("file.saveCopy", &json!({"path": dir.join("c.vectorcraft").to_string_lossy()})).unwrap();
@@ -235,7 +368,8 @@ fn replayed(s: &Session) -> Session {
 
 #[test]
 fn a_save_in_a_batch_records_its_date_and_replays_it() {
-    let path = vectorcraft_testkit::temp_dir("journal-batch").join("a.vectorcraft").to_string_lossy().into_owned();
+    let dir = vectorcraft_testkit::TempDir::new("journal-batch");
+    let path = dir.join("a.vectorcraft").to_string_lossy().into_owned();
     let mut s = Session::new();
     s.execute("file.new", &json!({"created": 1_000_000_000})).unwrap();
     let rect = json!({"x": 10, "y": 10, "width": 50, "height": 40});
@@ -272,7 +406,7 @@ fn a_batch_step_records_what_it_took_from_the_preferences() {
     ]);
     s.execute("command.batch", &json!({ "commands": steps })).unwrap();
     let p = &s.journal.last().unwrap().1;
-    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false}));
+    assert_eq!(p["commands"][2]["params"], json!({"sx": 300, "strokes": true, "corners": false, "basis": "box"}));
     // Replayed with other preferences, the scale still scales the stroke.
     let r = replayed(&s);
     assert!(!r.prefs.scale_strokes);
@@ -477,15 +611,18 @@ fn edit_copy_and_cut_read_the_recorded_artboards() {
         s.execute("select.none", &json!({})).unwrap();
         assert!(matches!(s.execute(id, &json!({})), Err(crate::EngineError::Disabled(..))), "{id}");
         let before = documents(&s);
-        for bad in [
-            json!({"selectedArtboards": [9]}),
-            json!({"selectedArtboards": []}),
-            json!({"selectedArtboards": "1"}),
-            json!({"selectedArtboards": null}),
-            json!({"selectedArtboards": [1], "art": "yes"}),
+        for (bad, want) in [
+            (json!({"selectedArtboards": [9]}), "no such artboard"),
+            (json!({"selectedArtboards": []}), "`selectedArtboards` must be a non-empty list of artboard indices"),
+            (json!({"selectedArtboards": "1"}), "`selectedArtboards` must be a list of artboard indices"),
+            (json!({"selectedArtboards": null}), "`selectedArtboards` must be a list of artboard indices"),
+            (json!({"selectedArtboards": [1, "0"]}), "`selectedArtboards` must contain whole numbers"),
+            (json!({"selectedArtboards": [1, -1]}), "`selectedArtboards` must contain whole numbers"),
+            (json!({"selectedArtboards": [1], "art": "yes"}), "`art` must be true or false"),
         ] {
             let err = s.execute(id, &bad).unwrap_err().to_string();
-            assert!(err.contains(id) || err.contains("no such artboard"), "{id} {bad}: {err}");
+            assert!(err.ends_with(want), "{id} {bad}: {err}");
+            assert!(err.contains(id) || want == "no such artboard", "{id} {bad}: {err}");
             assert_eq!(documents(&s), before, "{id} {bad}");
             assert!(s.clipboard.artboards.is_empty(), "{id} {bad}");
         }
@@ -617,7 +754,8 @@ fn a_failed_batch_closes_the_documents_it_opened_and_restores_the_ones_it_closed
 
 #[test]
 fn a_failed_batch_brings_back_a_document_it_reverted() {
-    let path = vectorcraft_testkit::temp_dir("journal-batch").join("revert.vectorcraft").to_string_lossy().into_owned();
+    let dir = vectorcraft_testkit::TempDir::new("journal-batch");
+    let path = dir.join("revert.vectorcraft").to_string_lossy().into_owned();
     let mut s = Session::new();
     s.execute("file.new", &json!({"created": null})).unwrap();
     s.execute("document.save", &json!({"path": path, "modified": null})).unwrap();
@@ -1151,4 +1289,133 @@ fn a_failed_preview_is_not_journaled_at_commit() {
     assert!(s.preview("no.such.command", &json!({})).is_err());
     s.commit_interaction().unwrap();
     assert_eq!(s.journal.len(), journal);
+}
+
+/// `take_shape_drawn` is true once after a shape tool's drag is released, a shape command runs (alone
+/// or as a batch step), and false after a drag in progress, a canceled or failed one, a click (which
+/// opens the tool's dialog), other commands and saved steps that play.
+#[test]
+fn take_shape_drawn_follows_the_shapes_that_were_drawn() {
+    use vectorcraft_tools::{Action, PointerEvent, PointerKind};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    assert!(!s.take_shape_drawn(), "a new document draws no shape");
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    for (tool, kind) in [
+        ("rectangle", "Rectangle"),
+        ("roundedRectangle", "Rectangle"),
+        ("ellipse", "Ellipse"),
+        ("polygon", "Polygon"),
+        ("star", "Star"),
+        ("lineSegment", "Line"),
+    ] {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 50.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 120.0, 110.0), v).unwrap();
+        assert!(!s.take_shape_drawn(), "{tool}: a drag in progress");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 150.0, 130.0), v).unwrap();
+        assert!(s.take_shape_drawn(), "{tool} ({kind}): the released drag");
+        assert!(!s.take_shape_drawn(), "{tool}: once");
+        // Nothing selected, so the next press is not on the new shape's bounding box.
+        s.execute("select.none", &json!({})).unwrap();
+        // A click asks for the tool's dialog and draws nothing yet.
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 200.0), v).unwrap();
+        assert!(!s.take_shape_drawn(), "{tool}: a click");
+    }
+    // A canceled drag, and a drag whose preview failed.
+    let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
+    s.apply_actions(vec![Action::Begin("Rectangle".into()), Action::Preview("shape.rectangle".into(), rect.clone()), Action::Cancel]).unwrap();
+    assert!(!s.take_shape_drawn(), "a canceled drag");
+    let bad = json!({"x": 10, "y": 10, "width": "wide", "height": 30});
+    s.apply_actions(vec![Action::Begin("Rectangle".into()), Action::Preview("shape.rectangle".into(), bad.clone()), Action::Commit]).unwrap();
+    assert!(!s.take_shape_drawn(), "a failed drag");
+    // Commands: each shape command, a failed one, a batch with and without a shape, other edits.
+    for (id, p) in [
+        ("shape.rectangle", rect.clone()),
+        ("shape.ellipse", rect.clone()),
+        ("shape.polygon", json!({"cx": 100, "cy": 100, "radius": 30})),
+        ("shape.star", json!({"cx": 100, "cy": 100, "radius1": 30, "radius2": 15, "points": 5})),
+        ("shape.line", json!({"x1": 0, "y1": 0, "x2": 50, "y2": 50})),
+    ] {
+        s.execute(id, &p).unwrap();
+        assert!(s.take_shape_drawn(), "{id}");
+    }
+    assert!(s.execute("shape.rectangle", &bad).is_err());
+    assert!(!s.take_shape_drawn(), "a failed command");
+    s.execute(
+        "command.batch",
+        &json!({"commands": [{"command": "shape.ellipse", "params": rect}, {"command": "object.move", "params": {"dx": 5, "dy": 0}}]}),
+    )
+    .unwrap();
+    assert!(s.take_shape_drawn(), "a batch that draws");
+    s.execute("command.batch", &json!({"commands": [{"command": "object.move", "params": {"dx": 5, "dy": 0}}]})).unwrap();
+    assert!(!s.take_shape_drawn(), "a batch that draws nothing");
+    s.execute("shape.rectangularGrid", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(!s.take_shape_drawn(), "other commands, undo and redo");
+    // Saved steps that play.
+    s.replay("shape.rectangle", &rect).unwrap();
+    s.replay(
+        "command.batch",
+        &json!({"commands": [{"command": "shape.star", "params": {"cx": 50, "cy": 50, "radius1": 20, "radius2": 10, "points": 5}}]}),
+    )
+    .unwrap();
+    assert!(!s.take_shape_drawn(), "saved steps");
+    // A script's commands.
+    let count = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let shapes = count(&s);
+    s.execute("script.run", &json!({"source": "vc.run('shape.rectangle', {x:100,y:0,width:5,height:5});", "name": "t.js"})).unwrap();
+    assert_eq!(count(&s), shapes + 1, "the script drew");
+    assert!(!s.take_shape_drawn(), "a script");
+}
+
+/// With the perspective grid shown and a plane active, a shape tool's drag journals
+/// `perspective.draw` naming the shape command: `take_shape_drawn` is true for a Rectangle drawn on
+/// the plane and for `perspective.draw` naming a shape command (alone or as a batch step), and false
+/// for one naming a shape outside [`crate::DRAWS_SHAPE`].
+#[test]
+fn take_shape_drawn_counts_shapes_drawn_in_perspective() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut s, _) = super::persp_select::persp_session();
+    s.execute("perspective.grid.show", &json!({"visible": true})).unwrap();
+    s.execute("perspective.plane.set", &json!({"plane": "left"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.take_shape_drawn();
+    let v = crate::tooling::ViewInfo { smart_guides: false, ..Default::default() };
+    s.select_tool("rectangle", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 350.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 380.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 410.0), v).unwrap();
+    assert_eq!(s.journal.last().unwrap().0, "perspective.draw");
+    assert!(s.take_shape_drawn(), "a Rectangle drawn on the plane");
+    let rect = json!({"x": 260, "y": 360, "width": 30, "height": 30});
+    s.execute("perspective.draw", &json!({"command": "shape.rectangle", "params": rect})).unwrap();
+    assert!(s.take_shape_drawn(), "perspective.draw naming shape.rectangle");
+    s.execute("command.batch", &json!({"commands": [{"command": "perspective.draw", "params": {"command": "shape.ellipse", "params": rect}}]}))
+        .unwrap();
+    assert!(s.take_shape_drawn(), "a batch step drawing in perspective");
+    s.execute("perspective.draw", &json!({"command": "shape.flare", "params": {"cx": 300, "cy": 380, "diameter": 40}})).unwrap();
+    assert!(!s.take_shape_drawn(), "perspective.draw naming a flare");
+}
+
+/// Show on Shape Creation (`showOnShapeCreation`) is off until set, is set and read through
+/// `prefs.set` and `prefs.get`, refuses a value that is not a boolean, and is kept with the saved
+/// preferences.
+#[test]
+fn show_on_shape_creation_is_a_saved_preference() {
+    let mut s = Session::new();
+    assert!(!s.prefs.show_on_shape_creation);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showOnShapeCreation"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "showOnShapeCreation", "value": true})).unwrap();
+    assert!(s.prefs.show_on_shape_creation);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showOnShapeCreation"})).unwrap(), json!(true));
+    assert!(s.execute("prefs.set", &json!({"key": "showOnShapeCreation", "value": "yes"})).is_err());
+    assert!(s.prefs.show_on_shape_creation, "a refused value changes nothing");
+    let saved = serde_json::to_value(&s.prefs).unwrap();
+    assert_eq!(saved["showOnShapeCreation"], json!(true));
+    let read: Prefs = serde_json::from_value(saved).unwrap();
+    assert!(read.show_on_shape_creation);
 }

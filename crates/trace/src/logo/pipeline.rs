@@ -6,7 +6,7 @@ use super::march::{area2, contours};
 use super::outline::{Stats, Style, fit_outline};
 use super::palette::{WHITE_MIN, auto_palette, flat_fraction, fold_tones, parse_hex, unexplained_colours};
 use super::restore::RestoreParams;
-use super::unmix::{Px, count_ambiguous, unmix};
+use super::unmix::{Px, Switched, count_ambiguous, unmix};
 use crate::{Raster, TraceError, TraceParams, TraceResult, TracedPath};
 use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath};
 
@@ -20,7 +20,7 @@ const FIELD_CELLS_MAX: usize = 6_000_000;
 const MIN_FLAT: f64 = 0.93;
 /// Most outlines of one colour (above the noise threshold) we will fit; more is refused, not truncated.
 const MAX_LOOPS_PER_CLASS: usize = if cfg!(test) { 500 } else { 20_000 };
-/// Most distinct pixel values `unmix` may have to work on (those that are not exactly one color). A busier image is
+/// Most distinct pixel values `unmix` may have to work on (`count_ambiguous`). A busier image is
 /// averaged down further first, which bounds the time on pathological input.
 const EDGE_BUDGET: usize = 150_000;
 /// Palette colours closer than this (RGB distance) are one colour.
@@ -320,27 +320,33 @@ fn keep_shape(s: &Shape, map: &ToSource, kept: &mut Vec<Kept>, anchors_made: &mu
 
 /// A hard-edged source (a GIF, say) has no anti-aliasing to read an edge position from, and its
 /// outlines would follow the pixel staircase. Blurring the coverage by under a pixel gives the
-/// outline a smooth edge to find. Sources with plenty of blended edge pixels are left alone.
-fn soften_if_aliased(planes: &mut [Vec<f32>], w: usize, h: usize) -> bool {
+/// outline a smooth edge to find. Sources with plenty of blended edge pixels are left alone. The
+/// pixels that took another mix than their best one (`switched`) are judged by their best mix.
+fn soften_if_aliased(planes: &mut [Vec<f32>], switched: &Switched, w: usize, h: usize) -> bool {
     let n = w * h;
-    let dominant: Vec<usize> =
-        (0..n).map(|i| (0..planes.len()).max_by(|&a, &b| plane_at(planes, a, i).total_cmp(&plane_at(planes, b, i))).unwrap_or(0)).collect();
-    let (mut boundary, mut blended) = (0usize, 0usize);
-    for y in 0..h {
-        for x in 0..w {
-            let i = y * w + x;
-            let d = dominant.get(i).copied().unwrap_or(0);
-            let strongest = (0..planes.len()).map(|c| plane_at(planes, c, i)).fold(0.0f32, f32::max);
-            if strongest < 0.9 {
-                blended += 1;
-            }
-            let differs = |j: usize| dominant.get(j).is_some_and(|&o| o != d);
-            if (x + 1 < w && differs(i + 1)) || (y + 1 < h && differs(i + w)) {
-                boundary += 1;
+    let aliased = {
+        let at = |c: usize, i: usize| match switched.binary_search_by_key(&i, |&(j, _)| j) {
+            Ok(s) => switched.get(s).and_then(|(_, col)| col.get(c)).copied().unwrap_or(0.0),
+            Err(_) => plane_at(planes, c, i),
+        };
+        let dominant: Vec<usize> = (0..n).map(|i| (0..planes.len()).max_by(|&a, &b| at(a, i).total_cmp(&at(b, i))).unwrap_or(0)).collect();
+        let (mut boundary, mut blended) = (0usize, 0usize);
+        for y in 0..h {
+            for x in 0..w {
+                let i = y * w + x;
+                let d = dominant.get(i).copied().unwrap_or(0);
+                let strongest = (0..planes.len()).map(|c| at(c, i)).fold(0.0f32, f32::max);
+                if strongest < 0.9 {
+                    blended += 1;
+                }
+                let differs = |j: usize| dominant.get(j).is_some_and(|&o| o != d);
+                if (x + 1 < w && differs(i + 1)) || (y + 1 < h && differs(i + w)) {
+                    boundary += 1;
+                }
             }
         }
-    }
-    let aliased = boundary > 0 && blended * 4 < boundary;
+        boundary > 0 && blended * 4 < boundary
+    };
     if aliased {
         for p in planes.iter_mut() {
             blur_plane(p, w, h, 0.8);
@@ -437,26 +443,27 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
     let mut classes = classes_for(&palette, own_white || merge_white.is_some());
     // A very busy image is averaged down further until the unmixing work is bounded.
     for _ in 0..6 {
-        if count_ambiguous(&pix, &classes) <= EDGE_BUDGET || w * h <= 16_384 {
+        if count_ambiguous(&pix, w, h, &classes) <= EDGE_BUDGET || w * h <= 16_384 {
             break;
         }
         (pix, w, h, factor) = working_copy(img, factor * 2);
     }
-    let (mut planes, residual) = unmix(&pix, w, h, &classes);
-    let mut planes = if params.logo_colors.is_empty() && palette.len() < MAX_COLOURS {
+    let (mut planes, residual, switched) = unmix(&pix, w, h, &classes);
+    let (mut planes, mut switched) = if params.logo_colors.is_empty() && palette.len() < MAX_COLOURS {
         // Colours too small to be found at first show up as pixels nothing explains: add them.
         let extra = unexplained_colours(&pix, w, h, &residual, &palette);
         if extra.is_empty() {
-            planes
+            (planes, switched)
         } else {
             palette.extend(extra.into_iter().take(MAX_COLOURS - palette.len()));
             // (A colour nothing explained may be one more tone of a colour that is there.)
             palette = fold_tones(&pix, palette);
             classes = classes_for(&palette, own_white);
-            unmix(&pix, w, h, &classes).0
+            let (planes, _, switched) = unmix(&pix, w, h, &classes);
+            (planes, switched)
         }
     } else {
-        std::mem::take(&mut planes)
+        (std::mem::take(&mut planes), switched)
     };
     if let Some(to) = merge_white
         && palette.len() < planes.len()
@@ -467,10 +474,18 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
                 *t += *v;
             }
         }
+        for (_, col) in &mut switched {
+            if palette.len() < col.len() {
+                let white_weight = col.remove(palette.len());
+                if let Some(t) = col.get_mut(to) {
+                    *t += white_weight;
+                }
+            }
+        }
     }
     // Without a white class, `white` is an index no class has.
     let (white, transparent) = if own_white { (palette.len(), palette.len() + 1) } else { (usize::MAX, palette.len()) };
-    let aliased = soften_if_aliased(&mut planes, w, h);
+    let aliased = soften_if_aliased(&mut planes, &switched, w, h);
     if own_white {
         fill_knockouts(&mut planes, w, h, white, transparent);
     }
