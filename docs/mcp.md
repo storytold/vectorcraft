@@ -2751,7 +2751,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   that maps the image's pixels, row 0 at the top, to script coordinates, and a distorted image has none. Assigning
   `matrix` runs `object.transform`; a value that is not finite, a matrix with no area and one that puts a corner of
   the image outside the canvas throw an error with nothing changed. `boundingBox` is the pixel rectangle at one point
-  a pixel. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a file is dropped at the
+  a pixel. `removeAll()` refuses images as `pageItems.removeAll()` refuses objects, and so throws `cannot delete
+  objects on a locked artboard` and deletes nothing when an image is on one. Assigning `file` or `matrix` checks the
+  item before the value, so a stale item throws `Stale page item` and an `add()` result without a file throws
+  `PlacedItem.file is required` whatever the value. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a file is dropped at the
   end of the run. `contentVariable`, `trace`, `colorants`, `colorize` and `overprint` are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.

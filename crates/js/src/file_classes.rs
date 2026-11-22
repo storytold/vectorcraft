@@ -195,10 +195,20 @@ fn parsed(i: &mut Interp, this: &Value, what: &str, name: &str) -> JsResult<Valu
 
 /// A new object with prototype `proto` for the path `fs`, already in the platform's form.
 fn instance(i: &mut Interp, proto: ObjId, fs: Value) -> JsResult<Value> {
+    new_instance(i, proto, fs, false)
+}
+
+/// [`instance`], which also charges the heap for the string of `fs` when `charge_path` is set, for
+/// a path string made for the new object alone.
+fn new_instance(i: &mut Interp, proto: ObjId, fs: Value, charge_path: bool) -> JsResult<Value> {
     let Value::String(path) = fs.clone() else { return Err(i.type_error("File: the host gave no path")) };
     let line_feed = host_value(i, "lineFeed")?;
     i.rooted(&[fs, line_feed.clone()], |i| {
-        i.reserve_heap(OBJECT_BYTES + 5 * PROP_BYTES + string_bytes(path.len()))?;
+        let path_bytes = string_bytes(path.len());
+        i.reserve_heap(OBJECT_BYTES + 5 * PROP_BYTES + path_bytes)?;
+        if charge_path {
+            i.heap.bytes = i.heap.bytes.saturating_add(path_bytes);
+        }
         let o = i.heap.alloc_object(Object::new(Class::FsEntry(path.clone()), Some(proto)));
         i.rooted(&[Value::Object(o)], |i| {
             set_slot(i, o, ERROR, Value::str(""))?;
@@ -1153,10 +1163,11 @@ pub fn file_ref(path: &str) -> crate::Data {
 }
 
 impl Interp {
-    /// A new `File` for `path`, which a member of a host class gave ([`file_ref`]).
+    /// A new `File` for `path`, which a member of a host class gave ([`file_ref`]). The new string
+    /// of the path is charged to the heap, as [`crate::Data::String`] is when it is written.
     pub(crate) fn write_file_ref(&mut self, path: &str) -> JsResult<Value> {
         let proto = classes(self)?.file_proto;
-        instance(self, proto, Value::str(path))
+        new_instance(self, proto, Value::str(path), true)
     }
 }
 

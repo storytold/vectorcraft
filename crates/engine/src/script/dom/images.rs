@@ -40,8 +40,9 @@ use vectorcraft_geom::{Affine, Point};
 use vectorcraft_js::{Data, HostClass, HostError, HostMember, file_ref, file_ref_path, host_ref, host_ref_parts};
 
 use super::{
-    Answer, Coords, Doc, Host, Item, Link, NOT_FOUND, STALE_ITEM, all_editable, arg, class, command, doc_of, doc_ref, edit_item, editable, find_doc,
-    float, frame, get, item_of, item_ref, later, method, named, num, on_doc, page_items, property, text, typename_of, whole, with_doc,
+    Answer, Coords, Doc, Host, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, all_editable, arg, class, command, doc_of, doc_ref, edit_item,
+    editable, find_doc, float, frame, get, item_of, item_ref, later, method, named, num, on_doc, page_items, property, text, typename_of, whole,
+    with_doc,
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
@@ -218,18 +219,25 @@ fn list_index(h: &Host, a: &[Data], placed: bool) -> Answer {
 }
 
 /// `removeAll()`: deletes every image of the collection in one command. A hidden or locked one, or
-/// one in a hidden or locked layer or group, stops it before anything is deleted.
+/// one in a hidden or locked layer or group, stops it before anything is deleted, and so does one on
+/// a locked artboard.
 fn list_remove_all(h: &Host, a: &[Data], placed: bool) -> Answer {
     let doc = list_doc(h, a, placed)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = images(h, st, placed)?;
         let whole = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !whole(i)).map(|i| i.0).take(20).collect();
-        Ok::<_, HostError>((ids, refused))
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        Ok::<_, HostError>((ids, refused, on_locked))
     })?;
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
@@ -374,6 +382,7 @@ fn placed_set_file(h: &Host, a: &[Data]) -> Answer {
     };
     let k = slot_of(h, run, uid, slot)?;
     if h.dom.images.pending.borrow().get(k).is_some_and(|p| p.bound.is_some()) {
+        this_of(h, a, "PlacedItem")?;
         return Err(HostError::Error(FILE_READ_ONLY.into()));
     }
     let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
@@ -469,8 +478,8 @@ fn area_of(m: Affine) -> bool {
 /// A matrix with no area, one that puts a corner of the image outside the canvas, or a distorted
 /// image is refused before anything changes; the matrix the image has already changes nothing.
 fn set_matrix(h: &Host, a: &[Data], cls: &str) -> Answer {
-    let m = matrix_value(arg(a, 1))?;
     let item = this_of(h, a, cls)?;
+    let m = matrix_value(arg(a, 1))?;
     let delta = with_doc(h, item.doc, |_, st| {
         let Some((n, im)) = st.doc.node(item.id).and_then(|n| if let NodeKind::Image(im) = &n.kind { Some((n, im)) } else { None }) else {
             return Err(HostError::Error(STALE_ITEM.into()));
