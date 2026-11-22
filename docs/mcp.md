@@ -7206,8 +7206,10 @@ round, such as a rectangle, stays as it is. Closed paths stay closed and open pa
 reaches the first or last anchor of an open path, the curve there leaves or arrives along the smoothed path within
 `radius` of that end rather than along the first or last segment, so a jagged end turns with the rest of the path; it
 keeps the segment's direction when the smoothed path there turns back by 90° or more. Where the stretch ends inside a
-path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
-direction.
+path, the curve keeps the direction of the part outside the drag. A segment leading out of the stretch that is within
+`radius` of the drag for no more than 1/64 of `radius` from the stretch's anchor is left as it is, and the stretch ends
+at that anchor, so a call that reaches an anchor an earlier call added at the edge of its reach does not split the
+segment beyond it again (the 1/64 share is VectorCraft's own value). `object.path.smooth` and Simplify keep each end's direction.
 
 `path.smoothRegion` keeps an anchor as a corner where the path turns by more than 57.5° (an angle inside the corner
 under 122.5°) at the anchor and also over `radius` and over twice `radius` on either side of it (on a closed path that the drag reaches all the
