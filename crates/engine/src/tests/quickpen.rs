@@ -821,6 +821,23 @@ fn a_segment_drag_moves_only_its_ends() {
     assert_eq!(paths(&s).len(), 1);
 }
 
+/// A click on an open end of another path, in front of the selected path, that lies on a segment
+/// of the selected path goes on drawing from that end.
+#[test]
+fn an_open_end_on_a_selected_segment_continues_its_path() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 300.0), json!([{"x": 300, "y": 300}]));
+    let r = s.execute("shape.line", &json!({"x1": 200, "y1": 200, "x2": 200, "y2": 300})).unwrap();
+    let other = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    click(&mut s, 200.0, 300.0);
+    click(&mut s, 250.0, 250.0);
+    let all = paths(&s);
+    assert_eq!(all.len(), 2, "no new path");
+    let ends: Vec<Point> = all.iter().find(|(id, _)| *id == other).unwrap().1.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(200.0, 200.0), pt(200.0, 300.0), pt(250.0, 250.0)]);
+}
+
 /// Escape during a drag puts the anchor back, and the release then changes nothing.
 #[test]
 fn escape_takes_back_an_anchor_drag() {

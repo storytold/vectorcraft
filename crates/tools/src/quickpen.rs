@@ -449,7 +449,10 @@ impl QuickPenTool {
             self.press = Some(Press { at: p, dragged: false, begun: true });
             return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false)), drawn()];
         }
-        if let Some(grab) = edit::grab_at(cx, p, tol) {
+        // An anchor of a selected path comes first, then an open end, then a selected path's
+        // segment.
+        let grab = edit::grab_at(cx, p, tol);
+        if let Some(grab @ Grab::Anchor { .. }) = grab {
             self.edit = Some(Edit::new(cx, grab, p, shift));
             return vec![];
         }
@@ -457,6 +460,10 @@ impl QuickPenTool {
             && cx.doc.is_editable(id)
         {
             return self.continue_path(cx, id, si, at_first);
+        }
+        if let Some(grab) = grab {
+            self.edit = Some(Edit::new(cx, grab, p, shift));
+            return vec![];
         }
         self.start_path(cx, p)
     }
@@ -789,10 +796,14 @@ impl Tool for QuickPenTool {
         if let Some(e) = &self.edit {
             return if e.began { Cursor::Move } else { edit::cursor(cx, e.grab) };
         }
-        if let Some(grab) = edit::grab_at(cx, p, tol) {
+        let grab = edit::grab_at(cx, p, tol);
+        if let Some(grab @ Grab::Anchor { .. }) = grab {
             return edit::cursor(cx, grab);
         }
-        if open_end_at(cx, p, tol, None).is_some() { Cursor::PenContinue } else { Cursor::Pen }
+        if open_end_at(cx, p, tol, None).is_some() {
+            return Cursor::PenContinue;
+        }
+        grab.map_or(Cursor::Pen, |grab| edit::cursor(cx, grab))
     }
 
     fn options(&self) -> Value {
