@@ -2622,9 +2622,17 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
 parameters, and spread in array literals, calls and `new`. Spread reads arrays, strings (by code point) and objects
 with a `length` property, by index, and throws a `TypeError` for any other value; that rule is VectorCraft's own
-until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+until iterators are added. A `.js` script also has generator functions (ECMA-262 11th edition, sections 14.4 and 25.4,
+https://262.ecma-international.org/11.0/): `function*` declarations and expressions, `*name() {…}` methods in object
+literals, `yield`, and `yield*`, which passes `next`, `throw` and `return` on to the iterator it delegates to. Calling
+a generator function returns a generator object whose `next`, `return` and `throw` run its body to the next `yield`;
+`return` runs the body's `finally` blocks, and resuming a generator while its body runs throws a `TypeError`. Each
+resumption takes fuel and counts against the call depth. A generator function called in an engine that
+`#targetengine` kept from a `.jsx` run throws a `TypeError`, since that engine was made without the ECMAScript 2015
+built-ins. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there; there
+`yield` is a name like any other. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can

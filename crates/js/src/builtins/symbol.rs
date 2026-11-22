@@ -44,13 +44,16 @@ pub(super) fn install(interp: &mut Interp, object_ctor: ObjId) -> JsResult<()> {
     method(interp, object_ctor, "getOwnPropertySymbols", get_own_property_symbols, 1)?;
     let function_proto = interp.intrinsics.function_proto;
     let has_instance = sym_method(interp, function_proto, has_instance, "[Symbol.hasInstance]", function_has_instance, 1, 0)?;
-    // The iterator prototypes and `%ArrayProto_values%` are set when the iterators are installed.
+    // The iterator and generator prototypes and `%ArrayProto_values%` are set when the iterators
+    // and generators are installed.
     interp.symbols.objects = Some(Es2015Objects {
         symbol_proto: proto,
         array_iterator_proto: proto,
         string_iterator_proto: proto,
         array_values: has_instance,
         has_instance,
+        generator_proto: proto,
+        generator_function_proto: function_proto,
     });
     Ok(())
 }

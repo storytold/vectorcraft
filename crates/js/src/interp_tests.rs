@@ -983,6 +983,7 @@ fn code(ops: Vec<Op>) -> Code {
         arrow: false,
         uses_this: false,
         param_init: false,
+        generator: false,
     }
 }
 

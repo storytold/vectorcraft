@@ -54,8 +54,17 @@
 //! functions (section 14.2), template literals and tagged templates (sections 12.2.9 and
 //! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
 //! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays, strings (by code point) and objects
-//! with a `length`, by index; other values are a `TypeError`. Destructuring, `for … of`, classes,
-//! generators and modules stay syntax errors.
+//! with a `length`, by index; other values are a `TypeError`. Destructuring, `for … of`, classes
+//! and modules stay syntax errors.
+//!
+//! With [`Options::es2015`], the parser and the realm also have generators (ECMA-262 11th edition,
+//! sections 14.4 and 25.4): `function*` declarations and expressions, `*name() {…}` methods in
+//! object literals, `yield` and `yield*`, which passes `next`, `throw` and `return` on to the
+//! iterator it delegates to, and generator objects with `next`, `return` and `throw` from
+//! `%GeneratorPrototype%`, reached through `%GeneratorFunction%`. Outside a generator function's
+//! body and parameters, `yield` stays an identifier in sloppy code. A generator's suspended frame
+//! lives in the heap, each resumption takes fuel and counts against the frame limit, and resuming a
+//! generator while its body runs is a `TypeError`.
 //!
 //! With [`Options::es2015`], the realm also has `Symbol` (ECMA-262 11th edition, section 19.4,
 //! <https://262.ecma-international.org/11.0/>): `Symbol.for` and `Symbol.keyFor` over a registry
@@ -80,6 +89,7 @@ mod compiler;
 mod date_builtins;
 mod error;
 mod file_classes;
+mod generator;
 mod heap;
 mod host;
 mod interp;
@@ -240,6 +250,8 @@ mod builtins_tests;
 mod es2015_tests;
 #[cfg(test)]
 mod extension_tests;
+#[cfg(test)]
+mod generator_tests;
 #[cfg(test)]
 mod host_tests;
 #[cfg(test)]

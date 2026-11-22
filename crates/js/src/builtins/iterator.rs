@@ -78,7 +78,7 @@ fn return_this(_: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Va
 }
 
 /// CreateIterResultObject (section 7.4.7): `{ value, done }`.
-fn iter_result(interp: &mut Interp, value: Value, done: bool) -> JsResult<Value> {
+pub(crate) fn iter_result(interp: &mut Interp, value: Value, done: bool) -> JsResult<Value> {
     interp.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(OBJECT_BYTES + 2 * PROP_BYTES))?;
     let proto = interp.intrinsics.object_proto;
     let o = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));

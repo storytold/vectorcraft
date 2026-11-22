@@ -44,6 +44,10 @@
 //! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
 //! that parse as ES5. Its failures go to `symbol-failures.txt`.
 //!
+//! Another reads and runs the tests of generator functions, `yield` and the generator objects (the
+//! folders [`GENERATOR_FOLDERS`] names) in a realm with [`Options::es2015`], negative parse tests
+//! included. Its failures go to `generators-failures.txt`.
+//!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
 //! [`MAX_FILE_BYTES`] before reading it. A folder or file it cannot read fails the test.
@@ -907,6 +911,102 @@ fn run_symbol_built_ins(dir: &Path) {
         println!("could not write {}: {e}", path.display());
     }
     println!("test262 Symbol and iterators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// The folders of the tests of generator functions, `yield` and the generator objects, which run
+/// in a realm with [`Options::es2015`].
+const GENERATOR_FOLDERS: &[&str] = &[
+    "language/statements/generators",
+    "language/expressions/generators",
+    "language/expressions/yield",
+    "built-ins/GeneratorPrototype",
+    "built-ins/GeneratorFunction",
+];
+
+#[test]
+fn es2015_generators_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 generators: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_generators(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under each folder [`GENERATOR_FOLDERS`] names in a realm with
+/// [`Options::es2015`]: those whose feature tags are all `generators` or in [`ES2015_FEATURES`] or
+/// [`SYMBOL_FEATURES`]. A negative parse test must give a `SyntaxError`; the others run as
+/// [`run_tagged_tests`] runs them. Prints the counts of each folder and writes the failures to
+/// `generators-failures.txt` beside the suite.
+fn run_generators(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let allowed = |f: &str| f == "generators" || ES2015_FEATURES.contains(&f) || SYMBOL_FEATURES.contains(&f);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in GENERATOR_FOLDERS {
+        let root = or_fail(inside(dir, &format!("test/{folder}")));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let mut counts = RunCounts::default();
+        for path in or_fail(test_files(&root)) {
+            let source = or_fail(read_source(&path));
+            let meta = meta(&source);
+            let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+            let expect_error = meta.negative_phase.as_deref() == Some("parse");
+            let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+            if has("module")
+                || has("async")
+                || meta.negative_phase.as_deref() == Some("resolution")
+                || !meta.features.iter().all(|f| allowed(f))
+                || (!expect_error && needs_missing_builtin_in(&[&source, &includes], &missing, &options))
+            {
+                counts.skipped += 1;
+                continue;
+            }
+            counts.tests += 1;
+            let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+            for &strict in modes(&meta) {
+                let mode = if strict { "strict" } else { "sloppy" };
+                if expect_error {
+                    let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+                    if parse(&text, &options).is_ok() {
+                        counts.failed += 1;
+                        counts.failures.push_str(&format!("{rel} ({mode}): parsed; a SyntaxError was expected\n"));
+                    } else {
+                        counts.passed += 1;
+                    }
+                    continue;
+                }
+                let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+                let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+                let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+                match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), &options)) {
+                    Ok(Ok(())) => counts.passed += 1,
+                    Ok(Err(why)) => {
+                        counts.failed += 1;
+                        counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                    }
+                    Err(_) => {
+                        counts.failed += 1;
+                        counts.panicked += 1;
+                        counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                    }
+                }
+            }
+        }
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no generator tests ran under {}", dir.display());
+    let path = dir.join("generators-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 generators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
     assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
 }
 
