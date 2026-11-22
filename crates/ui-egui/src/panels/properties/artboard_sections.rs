@@ -216,8 +216,10 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
     Field::new(tl!("Fill:")).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             let paint = color.map_or(Paint::None, |c| Paint::Solid(Srgba::from_rgb_array(c.to_rgb())));
-            // A click only reports: the app's Color Picker opens, not the chip's own popover.
-            let chip = PaintChip::new(tl!("Fill"), Bind::given(paint), Srgba::rgb(0.0, 0.0, 0.0)).popover(false).show(ui);
+            // A click only reports: the app's Color Picker opens, not the chip's own popover. The chip is named apart from
+            // the list beside it.
+            let name = crate::i18n::fmt(tl!("{row} swatch"), &[("row", tl!("Fill"))]);
+            let chip = PaintChip::new(name, Bind::given(paint), Srgba::rgb(0.0, 0.0, 0.0)).popover(false).show(ui);
             pick = chip.clicked.is_some();
             let list = Select::new(tl!("Fill"), Bind::given(current), &entries).placeholder(tl!("Custom")).show(ui);
             match list.value().copied() {

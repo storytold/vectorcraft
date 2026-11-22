@@ -106,7 +106,7 @@ fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() != "width" && WidthProfile::id_of(profile) == "uniform" {
         return;
     }
-    Field::new(tl!("Profile:")).show(ui, |ui, _| stroke::profile_select(app, ui));
+    Field::new(tl!("Profile")).show(ui, |ui, _| stroke::profile_select(app, ui));
 }
 
 /// The Fill and Stroke rows, with the Control bar's widgets: the chips (a click opens the

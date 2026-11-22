@@ -110,8 +110,11 @@ fn highlight_made(app: &mut VectorcraftApp, kind: Kind, names: Vec<String>) {
 }
 
 /// Duplicates the styles `names` (`charStyle.duplicate`, `paraStyle.duplicate`) in one undo step
-/// and highlights the copies.
+/// and highlights the copies; none runs nothing.
 fn duplicate(app: &mut VectorcraftApp, kind: Kind, names: &[String]) {
+    if names.is_empty() {
+        return;
+    }
     let p = kind.prefix();
     let made = if let [name] = names {
         app.run(&format!("{p}.duplicate"), json!({ "name": name })).map(|r| vec![r])

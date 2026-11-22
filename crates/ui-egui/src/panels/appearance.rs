@@ -392,6 +392,8 @@ const POPUP_W: f32 = 260.0;
 const POPUP_MIN_TALL: f32 = 200.0;
 /// The columns of the swatch popover's chips.
 const SWATCH_COLUMNS: u16 = 12;
+/// The rows of chips the swatch popover shows before its grid scrolls inside the popover's own scroll.
+const SWATCH_ROWS: u16 = 12;
 /// The width and height of a stroke row's profile picture, as its aspect.
 const PROFILE_ASPECT: (u16, u16) = (14, 5);
 
@@ -1391,6 +1393,7 @@ fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) -> bool
             .view_lock(PresetView::Grid)
             .row_menu(PresetRowMenu::Off)
             .columns(SWATCH_COLUMNS)
+            .max_rows(SWATCH_ROWS)
             .show(ui);
         let picked = out.events.into_iter().find_map(|event| match event {
             PresetEvent::Select { key, .. } | PresetEvent::Activate { key, .. } => Some(key),
