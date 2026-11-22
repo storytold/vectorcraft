@@ -72,7 +72,7 @@ fn check_tool_switch_cancels(app: &mut VectorcraftApp, widget: Widget, at: Pos2,
     advance(app, &mut held, widget, Gesture::Press(v.to_doc(at)), Mods::default());
     advance(app, &mut held, widget, Gesture::Move(v.to_doc(q)), Mods::default());
     assert_ne!(*app.session.active().unwrap().doc, *before, "the drag previews");
-    app.select_tool("direct");
+    app.select_tool("directSelection");
     let visible = shown(app);
     let l = layout(app, visible);
     end_hidden(app, &mut held, &l);
@@ -249,7 +249,7 @@ fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
     let mut app = app();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
     app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
-    app.select_tool("direct");
+    app.select_tool("directSelection");
     let l = layout(&mut app, Show { nine: true, selecting: false, shaper: false, trace: false });
     assert_eq!(l.nine.len(), 4, "the guides show with any tool");
     let lines = |app: &VectorcraftApp| app.session.active().unwrap().doc.edited_nine_slice().unwrap().lines();
