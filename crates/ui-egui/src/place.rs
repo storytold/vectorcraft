@@ -2,19 +2,24 @@
 //! window, the loaded place cursor and the Control bar's image details. The engine places
 //! (`file.place`, `file.place.queue`); this gathers the files and options.
 
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use craft::behavior::CanvasView;
+use craft::behavior::{Input, Metrics, Sense};
 use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::{Button, Link};
 use craft::ui::contract::DropOperation;
-use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, Trigger, clicked};
+use craft::ui::contract::{Common, Component, Cx, MeasureCx, Pointer as _, Props, Role, Show as _, ShowContainer as _, Trigger, clicked};
 use craft::ui::display::{Badge, Picture, PictureSize, Shade, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem};
+use craft::ui::popover::WholeWindow;
 use craft::ui::primitives::textures::Revision;
 use craft::ui::runtime::drag::{DropMark, DropTarget as FilesTarget, OsFile, OsFiles};
+use craft::ui::style::{ComponentStyle, StyleCx};
+use egui::{Response, Vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::cmd::fileio;
@@ -819,14 +824,19 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
 // PLAN: `DropOperation` has no Shift, so the held modifiers of the drop's frame are read here.
 pub fn canvas_drop(app: &mut VectorcraftApp, ctx: &egui::Context, dropped: CanvasDrop) {
     let shift = ctx.input(|i| i.modifiers.shift);
-    let at = dropped.at;
-    let files = dropped
-        .files
+    os_drop(app, dropped.files, DropSpot::Canvas(dropped.at), shift);
+}
+
+/// Files the OS dropped at `spot`, each placed or opened as [`VectorcraftApp::drop_target`] says for it, Shift held
+/// when `shift`.
+pub(crate) fn os_drop(app: &mut VectorcraftApp, files: Vec<OsFile>, spot: DropSpot, shift: bool) {
+    let files = files
         .into_iter()
         .filter_map(|f| {
-            let target = app.drop_target(&f.name, DropSpot::Canvas(at), shift);
+            let target = app.drop_target(&f.name, spot, shift);
             let path = f.path.map(|p| p.to_string_lossy().into_owned());
-            // A file the platform gave neither a path nor bytes for (the web reads them after the drop) has nothing to place.
+            // A file the platform gave neither a path nor bytes for (the web reads them after the drop) has nothing to
+            // open or place.
             let bytes = match (&path, f.bytes) {
                 (None, Some(bytes)) => bytes.to_vec(),
                 (None, None) => return None,
@@ -836,6 +846,64 @@ pub fn canvas_drop(app: &mut VectorcraftApp, ctx: &egui::Context, dropped: Canva
         })
         .collect();
     drop_files(app, files);
+}
+
+/// The style of the window's file catcher: it paints nothing of its own.
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+#[non_exhaustive]
+pub struct WindowFilesStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+}
+
+/// The catcher of the files the OS drops on the app's window where no canvas takes them.
+#[derive(Component, Props)]
+pub(crate) struct WindowFiles<'a> {
+    #[common]
+    common: Common,
+    out: &'a RefCell<Option<OsFiles>>,
+}
+
+impl Component for WindowFiles<'_> {
+    const ROLE: Role = Role::None;
+    const PARTS: bool = false;
+    const STOPS: bool = false;
+    const INPUT: Input = Input::Display;
+    const SHOWS_LABEL: bool = false;
+    const OVERLAYS: bool = false;
+    type Style = WindowFilesStyle;
+    type Output = Response;
+
+    fn style(_: &StyleCx<'_>, _: WindowFilesStyleKey) -> WindowFilesStyle {
+        WindowFilesStyle { metrics: Metrics::new() }
+    }
+
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {
+        Vec2::ZERO
+    }
+
+    fn sense(&self) -> Sense {
+        Sense::empty()
+    }
+
+    fn update(&mut self, cx: &mut Cx<'_, Self>) {
+        *self.out.borrow_mut() = cx.window_drop_target::<OsFiles, _>(&WholeWindow::new(cx.rect));
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> Response {
+        cx.response.clone()
+    }
+}
+
+/// Opens the files dropped on the window off every canvas, as a drop on a panel or the tab bar does
+/// ([`DropSpot::Elsewhere`]); a canvas's own target takes the files it places.
+pub(crate) fn window_files(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    let out = RefCell::new(None);
+    WindowFiles { common: Common::new(), out: &out }.id_salt("window-files").show_at(ui, ui.max_rect());
+    if let Some(dropped) = out.take() {
+        let shift = ui.ctx().input(|i| i.modifiers.shift);
+        os_drop(app, dropped.files, DropSpot::Elsewhere, shift);
+    }
 }
 
 /// A file dropped on the window: its name, path (when it has one) and bytes.

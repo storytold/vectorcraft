@@ -1182,27 +1182,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         }
         // PLAN: `DockEvent::PanelCommand` (Move Panel To…, Move Group To…) needs a destination picker over `Layout::move_targets`; no sheet row builds it.
     }
-    // Shift as the frame holds it: the window system sends a file drag no key events, and a second
-    // pass of the frame reads the same state.
-    let shift = ctx.input(|i| i.modifiers.shift);
-    // PLAN: the file-to-`DropFile` mapping repeats `place::canvas_drop`'s (files-w14); one shared converter in place.rs would serve both.
-    let files: Vec<(crate::place::DropTarget, crate::place::DropFile)> = output
-        .window_files
-        .into_iter()
-        .filter_map(|file| {
-            let target = app.drop_target(&file.name, crate::place::DropSpot::Unknown, shift);
-            let path = file.path.map(|p| p.to_string_lossy().into_owned());
-            // A file the platform gave neither a path nor bytes for has nothing to open.
-            let bytes = match (&path, file.bytes) {
-                (None, Some(bytes)) => bytes.to_vec(),
-                (None, None) => return None,
-                (Some(_), _) => Vec::new(),
-            };
-            Some((target, (file.name, path, bytes)))
-        })
-        .collect();
-    if !files.is_empty() {
-        crate::place::drop_files(app, files);
+    if !output.window_files.is_empty() {
+        // Shift as the frame holds it: the window system sends a file drag no key events, and a second pass of the
+        // frame reads the same state.
+        let shift = ctx.input(|i| i.modifiers.shift);
+        crate::place::os_drop(app, output.window_files, crate::place::DropSpot::Unknown, shift);
     }
     if output.float_space.is_some() {
         app.dock_rt.space = output.float_space;
