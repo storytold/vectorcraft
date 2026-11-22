@@ -2624,8 +2624,9 @@ parameters, spread in array literals, calls and `new`, `for`-`of` loops, array a
 `let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
 and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
 `for`-`of` and array patterns use the iterator protocol. A loop or pattern left early, by `break`, `return`, a
-`continue` to an outer loop or an exception, calls the iterator's `return` method when it has one; an iterator whose
-`next()` throws or says it is done is not closed. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
+`continue` to an outer loop or an exception, calls the iterator's `return` method when it has one. An iterator is not
+closed when its `next()` throws or gives a result that is not an object, when reading the result's `done` or `value`
+throws, or when the result says it is done. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
 (`{ a, ...rest }`, ECMAScript 2018) are syntax errors. In an engine that `#targetengine` keeps and a `.jsx` script
 started, which has no `Symbol`, spread, `for`-`of` and array patterns read arrays, `arguments` objects and strings
 (by code point), by index, and throw a `TypeError` for any other value; that rule is VectorCraft's own. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and

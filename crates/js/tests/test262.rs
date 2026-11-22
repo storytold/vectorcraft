@@ -42,7 +42,7 @@
 //! Another test runs the tests of `Symbol`, `Object.getOwnPropertySymbols` and the iterators of
 //! arrays and strings (the folders [`SYMBOL_BUILT_INS`] names) in a realm with
 //! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
-//! that parse as ES5. Its failures go to `symbol-failures.txt`.
+//! that parse with that option. Its failures go to `symbol-failures.txt`.
 //!
 //! The last test reads the tests of `for-of` and destructuring (the folders
 //! [`FOR_OF_AND_PATTERN_FOLDERS`] names) with [`Options::es2015`]: tests of any edition whose
@@ -1043,7 +1043,7 @@ fn run_tagged_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, options: &
         }
         let tagged_elsewhere = meta.features.iter().any(|f| !features.contains(&f.as_str()));
         let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
-        if tagged_elsewhere || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&[&source, &includes], missing) {
+        if tagged_elsewhere || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin_in(&[&source, &includes], missing, options) {
             counts.skipped += 1;
             continue;
         }
