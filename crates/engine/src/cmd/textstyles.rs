@@ -1270,11 +1270,11 @@ fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
     };
     let path = str_param(p, "path");
     let too_large = || bad(c, format!("the file is larger than {} MB", MAX_LOAD_BYTES >> 20));
-    let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
-        (Some(path), ..) => super::fileio::read_file_head(path, MAX_LOAD_BYTES + 1)?,
-        (None, Some(text), _) => text.as_bytes().to_vec(),
+    let bytes: std::borrow::Cow<[u8]> = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::fileio::read_file_head(path, MAX_LOAD_BYTES + 1)?.into(),
+        (None, Some(text), _) => text.as_bytes().into(),
         (None, None, Some(b64)) if b64.len() > MAX_LOAD_BYTES / 3 * 4 + 4 => return Err(too_large()),
-        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?,
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?.into(),
         _ => return Err(bad(c, "give `path`, `data` or `dataBase64`")),
     };
     if bytes.len() > MAX_LOAD_BYTES {

@@ -165,6 +165,7 @@ impl Session {
             script_runs: 0,
             script_frames: false,
             script_high_water: Default::default(),
+            script_style_trail: Vec::new(),
             script_in_run: false,
             script_copy_first: cfg!(target_arch = "wasm32"),
         }

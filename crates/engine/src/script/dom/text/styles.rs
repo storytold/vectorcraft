@@ -75,12 +75,19 @@ pub(super) struct StyleState {
 }
 
 /// Marks stale each style object whose style the command just run removed or renamed, so a style
-/// removed and made again under its name by later commands is another style. A document whose
-/// style lists did not change is not checked again.
+/// removed and made again under its name by later commands, or by later steps of the same batch,
+/// is another style. A document whose style lists did not change is not checked again.
 pub(in crate::script) fn after_command(h: &Host) {
+    let trail = std::mem::take(&mut h.session.borrow_mut().script_style_trail);
     let mut slots = h.dom.text.styles.slots.borrow_mut();
     if !slots.iter().any(|s| s.live) {
         return;
+    }
+    for (uid, reverts, c, p) in &trail {
+        for slot in slots.iter_mut().filter(|x| x.live && x.uid == *uid) {
+            let list = if slot.para { p } else { c };
+            slot.live = slot.reverts == *reverts && (slot.name == normal(slot.para) || list.iter().any(|d| d.name == slot.name));
+        }
     }
     let s = h.session.borrow();
     let mut seen = h.dom.text.styles.seen.borrow_mut();
@@ -173,6 +180,10 @@ fn stale() -> HostError {
     HostError::Error(STALE_STYLE.into())
 }
 
+fn held_too_many() -> HostError {
+    HostError::Range(format!("a script can name at most {MAX_HELD} styles in one run"))
+}
+
 /// The style object for the style `name` of the document `uid`: the same slot as every other
 /// object naming it in this run.
 fn style_ref(h: &Host, uid: u64, para: bool, name: &str) -> Answer {
@@ -182,7 +193,7 @@ fn style_ref(h: &Host, uid: u64, para: bool, name: &str) -> Answer {
         Some(i) => i,
         None => {
             if slots.len() >= MAX_HELD {
-                return Err(HostError::Range(format!("a script can name at most {MAX_HELD} styles in one run")));
+                return Err(held_too_many());
             }
             slots.push(Slot { uid, reverts, para, name: name.to_string(), live: true });
             slots.len() - 1
@@ -414,6 +425,18 @@ fn char_value(h: &Host, attr: Attr, m: &Map<String, Value>) -> Data {
             None => Data::Undefined,
         },
     }
+}
+
+/// The `typename` of a style's `characterAttributes`, which throws once the style is gone.
+fn attrs_typename_char(h: &Host, a: &[Data]) -> Answer {
+    attrs_of(h, a, false)?;
+    Ok(text("CharacterAttributes"))
+}
+
+/// The `typename` of a style's `paragraphAttributes`, which throws once the style is gone.
+fn attrs_typename_para(h: &Host, a: &[Data]) -> Answer {
+    attrs_of(h, a, true)?;
+    Ok(text("ParagraphAttributes"))
 }
 
 fn read_char(h: &Host, a: &[Data], attr: Attr) -> Answer {
@@ -651,6 +674,10 @@ fn list_add(h: &Host, a: &[Data]) -> Answer {
     if with_doc(h, doc, |_, st| has_style(st, para, &name)) {
         return Err(HostError::Error(format!("a style named {name} already exists")));
     }
+    // The new style needs a slot of its own: a run that names as many styles as it may adds none.
+    if h.dom.text.styles.slots.borrow().len() >= MAX_HELD {
+        return Err(held_too_many());
+    }
     run(h, doc, para, "new", &json!({"name": name, "attrs": {}}))?;
     // An object of a removed style of this name stays stale.
     forget(h, doc.uid, para, std::slice::from_ref(&name));
@@ -738,9 +765,9 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             Some(function(l, list_at)),
         )
     };
-    let mut chars = named(vec![("typename", typename_of("CharacterAttributes"))]);
+    let mut chars = named(vec![("typename", get(l, attrs_typename_char))]);
     chars.extend(char_members(l));
-    let mut paras = named(vec![("typename", typename_of("ParagraphAttributes"))]);
+    let mut paras = named(vec![("typename", get(l, attrs_typename_para))]);
     paras.extend(para_members(l));
     vec![
         style(false),

@@ -309,6 +309,10 @@ pub struct Session {
     pub script_frames: bool,
     /// Each open document's highest next id a run has seen, by [`DocState::uid`].
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
+    /// The style lists each step of a batch a script runs left in a document whose lists it
+    /// changed: its uid, revert count, and character and paragraph style lists
+    /// ([`script::note_style_lists`]).
+    pub(crate) script_style_trail: Vec<script::StyleLists>,
     /// While a slice of a script runs in this session.
     pub(crate) script_in_run: bool,
     /// Write recovery copies of the unsaved documents before a run, and don't start without them.

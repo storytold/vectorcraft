@@ -165,6 +165,19 @@ fn a_renamed_style_keeps_its_object_and_a_removed_style_is_stale() {
         ),
     );
     assert!(e.contains("Stale style"), "{e}");
+    // So is a style removed and made again by the steps of one batch.
+    let e = failure(
+        &mut s,
+        &format!(
+            "{DOC} var a = cs.getByName('B'); vc.run('command.batch', {{commands: [{{command: 'charStyle.delete', params: {{name: 'B'}}}}, \
+             {{command: 'charStyle.new', params: {{name: 'B', attrs: {{}}}}}}]}}); a.name;"
+        ),
+    );
+    assert!(e.contains("Stale style"), "{e}");
+    // The attributes object of a removed style throws for its typename too.
+    let e =
+        failure(&mut s, &format!("{DOC} var t = cs.getByName('B').characterAttributes; vc.log(t.typename); cs.getByName('B').remove(); t.typename;"));
+    assert!(e.contains("Stale style"), "{e}");
     // A style renamed by a command is stale too, and its text keeps its look after a removal.
     let e = failure(&mut s, &format!("{DOC} var a = cs.getByName('B'); vc.run('charStyle.rename', {{name: 'B', to: 'C'}}); a.name;"));
     assert!(e.contains("Stale style"), "{e}");
@@ -359,6 +372,14 @@ fn a_run_names_at_most_4096_styles() {
     assert_eq!(out, [json!(false), json!(4101)]);
     let e = failure(&mut s, &format!("{DOC} for (var i = 0; i < 4097; i++) cs[i].name;"));
     assert!(e.contains("4096 styles"), "{e}");
+    // `add` with every slot taken adds no style; with one slot left it adds the style.
+    let out = log(
+        &mut s,
+        &format!("{DOC} for (var i = 0; i < 4096; i++) cs[i]; try {{ cs.add('New'); }} catch (e) {{ vc.log(e.message); }} vc.log(cs.length);"),
+    );
+    assert_eq!(out, [json!("a script can name at most 4096 styles in one run"), json!(4101)]);
+    let out = log(&mut s, &format!("{DOC} for (var i = 0; i < 4095; i++) cs[i]; vc.log(cs.add('New').name); vc.log(cs.length);"));
+    assert_eq!(out, [json!("New"), json!(4102)]);
 }
 
 /// A script loads styles from a file only where it may read files; a file outside that is refused.

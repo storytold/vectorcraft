@@ -845,6 +845,9 @@ fn loading_refuses_a_file_larger_than_64_mb() {
     let b64 = "A".repeat(MAX_LOAD_BYTES / 3 * 4 + 8);
     let r = s.execute("paraStyle.load", &json!({"dataBase64": b64}));
     assert!(r.as_ref().is_err_and(|e| e.to_string().contains("larger than 64 MB")), "{r:?}");
+    let text = " ".repeat(MAX_LOAD_BYTES + 1);
+    let r = s.execute("textStyle.loadAll", &json!({"data": text}));
+    assert!(r.as_ref().is_err_and(|e| e.to_string().contains("larger than 64 MB")), "{r:?}");
     assert_eq!(s.doc().unwrap().doc, before);
 }
 

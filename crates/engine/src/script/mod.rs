@@ -1236,6 +1236,7 @@ fn note_ids(s: &mut Session) {
 /// it, for a result that cannot cross to the script.
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
+    s.script_style_trail.clear();
     let mutating = waits_for_tool_edit(id);
     // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
     let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
@@ -1351,6 +1352,27 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         dom::after_command(host);
     }
     crossed.map(|data| (data, value))
+}
+
+/// A document's uid, revert count, and character and paragraph style lists.
+pub(crate) type StyleLists =
+    (u64, u64, vectorcraft_doc::Shared<Vec<vectorcraft_doc::TextStyleDef>>, vectorcraft_doc::Shared<Vec<vectorcraft_doc::TextStyleDef>>);
+
+/// After a step of a batch a script runs: notes the style lists of each document whose lists or
+/// revert count the step changed, so the style objects see a style the batch removed and made
+/// again under its name as another style ([`dom::after_command`]).
+pub(crate) fn note_style_lists(s: &mut Session) {
+    for st in &s.docs {
+        let last = s.script_style_trail.iter().rev().find(|(uid, ..)| *uid == st.uid);
+        let same = last.is_some_and(|(_, reverts, c, p)| {
+            *reverts == st.reverts
+                && vectorcraft_doc::Shared::ptr_eq(c, &st.doc.char_styles)
+                && vectorcraft_doc::Shared::ptr_eq(p, &st.doc.para_styles)
+        });
+        if !same {
+            s.script_style_trail.push((st.uid, st.reverts, st.doc.char_styles.clone(), st.doc.para_styles.clone()));
+        }
+    }
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits

@@ -13112,7 +13112,8 @@ uses, in panel order and never the Normal style, and the panel highlights them; 
 (Load Character Styles… and Load Paragraph Styles… in the panel menus, where `ui.loadCharStyles` and
 `ui.loadParaStyles` pick the file) copy the styles of that kind from another document VectorCraft opens (`path`, `data`
 or `dataBase64`), and `textStyle.loadAll` (Load All Styles…, `ui.loadAllStyles`) copies both kinds, each in one undo
-step. A file larger than 64 MB is refused without being read in full. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
+step. A file larger than 64 MB is refused without being read in full. The 64 MB limit also applies to `data` and to the
+decoded bytes of `dataBase64`; a `dataBase64` string too long to decode to 64 MB or less is refused before it is decoded. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
 either kind that type in those patterns and symbols is set in, come along as Paste brings those of pasted type; a global or spot color whose name the document gives another color
 is the document's. A loaded style that is the same as the style of
 its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The
