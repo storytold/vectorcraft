@@ -1342,7 +1342,7 @@ dependencies = [
 [[package]]
 name = "craft-stream-codecs"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
+source = "git+https://github.com/storytold/craft-libs?rev=d20a82481b1f7b1d32c818b19c620338af9755d3#d20a82481b1f7b1d32c818b19c620338af9755d3"
 dependencies = [
  "fax",
  "hayro-ccitt",
@@ -2634,7 +2634,7 @@ dependencies = [
 [[package]]
 name = "hayro-jbig2"
 version = "0.3.0"
-source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
+source = "git+https://github.com/storytold/craft-libs?rev=d20a82481b1f7b1d32c818b19c620338af9755d3#d20a82481b1f7b1d32c818b19c620338af9755d3"
 dependencies = [
  "fearless_simd",
  "hayro-ccitt",
