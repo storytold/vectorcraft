@@ -5081,7 +5081,7 @@ of knocking them out. `object.setOverprint {fill?, stroke?, item?, ids?}` sets i
 characters too; `item` aims at one appearance item) and `attributes.info {ids?}` reads it back (`null` where the
 objects differ). Overprint Preview (`view.overprintPreview`) and Separations Preview show it; rendering approximates
 it by darkening (the stronger ink of each plate wins, so a colour overprinting itself stays that colour). While either
-preview is on, the canvas around the artboards is white instead of the pasteboard color and the artboards draw no
+preview is on and the artboards show, the canvas around the artboards is white instead of the pasteboard color and the artboards draw no
 shadows; turning it off brings both back. Older files that listed Overprint Black objects in the document get the flags on load.
 PDF export writes them with `advanced.overprint: "preserve"` (the default): each overprinting fill and stroke sets a
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
