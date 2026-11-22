@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Color Table",
             [],
             None,
-            "{path?: the .act file (.act is added to a name without an extension), …the settings of document.exportForWeb (preset?, format?: gif|png8…), slice?: n (1-based, from slice.list; default the whole image)} write the GIF or PNG-8 color table the preview shows as a color table file: 772 bytes, the colors as written (red, green, blue) in file order, zero bytes up to 256 colors, then the number of colors and the transparent entry's index (65535 for none), two bytes each, most significant byte first → {path, colors (how many), transparentIndex (null for none), bytes, warnings}; no path → {dataBase64, colors, transparentIndex, bytes, warnings}. jpg and png24 are an error; the document and the settings do not change",
+            "{path?: the .act file (.act is added to a name without an extension), …the settings of document.exportForWeb (preset?, format?: gif|png8…), slice?: n (1-based, from slice.list, among the slices `slices` names; default the whole image, whatever `slices` is)} write the GIF or PNG-8 color table the preview shows as a color table file: 772 bytes, the colors as written (red, green, blue) in file order, zero bytes up to 256 colors, then the number of colors and the transparent entry's index (65535 for none), two bytes each, most significant byte first → {path, colors (how many), transparentIndex (null for none), bytes, warnings}; no path → {dataBase64, colors, transparentIndex, bytes, warnings}. jpg and png24 are an error; the document and the settings do not change",
             has_doc,
             save_color_table
         ),
@@ -1214,7 +1214,7 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
     if !(kbps.is_finite() && kbps > 0.0) {
         return Err(bad(P, format!("kbps must be a positive number, not {kbps}")));
     }
-    let Shown { o, images, warnings } = shown(s, &settings, p, P)?;
+    let Shown { o, images, warnings } = shown(s, &settings, p, P, true)?;
     let mut out = json!({
         "format": settings.format.id(), "width": o.width, "height": o.height, "bytes": o.bytes.len(),
         "seconds": download_seconds(o.bytes.len(), kbps), "kbps": kbps, "slices": images, "warnings": warnings,
@@ -1241,7 +1241,7 @@ fn preview(s: &mut Session, p: &Value) -> Result<Value> {
 /// The file Save writes with some settings, as the preview shows it.
 struct Shown {
     o: Optimized,
-    /// The images an export writes.
+    /// The images an export writes (0 when they were not counted).
     images: usize,
     /// The export's warnings.
     warnings: Vec<&'static str>,
@@ -1249,8 +1249,9 @@ struct Shown {
 
 /// What Save writes with `settings` for the whole image, or for the slice `p.slice` names (1-based,
 /// from `slice.list`), for the command `cmd`. A `slice` that is not a whole number from 1 up is an
-/// error.
-fn shown(s: &mut Session, settings: &WebSettings, p: &Value, cmd: &str) -> Result<Shown> {
+/// error. With `count_images` false and no `slice`, the slices are not looked up: `images` is 0,
+/// and selected slices with none selected are not an error.
+fn shown(s: &mut Session, settings: &WebSettings, p: &Value, cmd: &str, count_images: bool) -> Result<Shown> {
     let slice = match p.get("slice") {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_u64().filter(|n| *n >= 1).ok_or_else(|| bad(cmd, "`slice` is a slice number from `slice.list`"))?),
@@ -1261,9 +1262,17 @@ fn shown(s: &mut Session, settings: &WebSettings, p: &Value, cmd: &str) -> Resul
     let r = render(doc, settings).map_err(|e| bad(cmd, e))?;
     let warnings = undecoded(failed);
     let areas = doc.slice_layout();
-    let selected = super::slices::selected_slices(doc, &st.selection);
-    let cells = cells(&areas, &selected, settings, &r).map_err(|e| bad(cmd, e))?;
-    let images = cells.iter().filter(|c| c.area.id.and_then(|id| doc.slice_options(id)).is_none_or(|o| o.kind == SliceKind::Image)).count().max(1);
+    let cells = if count_images || slice.is_some() {
+        let selected = super::slices::selected_slices(doc, &st.selection);
+        cells(&areas, &selected, settings, &r).map_err(|e| bad(cmd, e))?
+    } else {
+        vec![]
+    };
+    let images = if count_images {
+        cells.iter().filter(|c| c.area.id.and_then(|id| doc.slice_options(id)).is_none_or(|o| o.kind == SliceKind::Image)).count().max(1)
+    } else {
+        0
+    };
     let o = match slice {
         Some(n) => {
             let c =
@@ -1371,7 +1380,7 @@ fn save_color_table(s: &mut Session, p: &Value) -> Result<Value> {
     let path = text_param(p, "path", P)?
         .filter(|p| !p.trim().is_empty())
         .map(|p| if std::path::Path::new(p).extension().is_none() { format!("{p}.{COLOR_TABLE_EXT}") } else { p.to_string() });
-    let Shown { o, warnings, .. } = shown(s, &settings, p, P)?;
+    let Shown { o, warnings, .. } = shown(s, &settings, p, P, false)?;
     let bytes = act_bytes(&o.colors);
     let mut out = json!({
         "colors": o.colors.len().min(256),

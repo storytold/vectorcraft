@@ -10573,7 +10573,9 @@ the GIF or PNG-8 color table the preview shows as a color table file (`.act`) in
 specification gives (https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/): 256 entries of three bytes (red,
 green, blue) in file order, with zero bytes after the colors used, then the number of colors used and the index of the
 transparent entry, two bytes each with the most significant byte first. The file is always 772 bytes, and the index is
-65535 when the table has no transparent entry. A color shifted by hand is written as its new color. `.act` is added to
+65535 when the table has no transparent entry. A color shifted by hand is written as its new color. Without `slice`
+the file holds the whole image's table, also when `slices` is `selected` and no slice is selected; a `slice` is looked
+up among the slices `slices` names. `.act` is added to
 a `path` without an extension, and without `path` the file comes back as `dataBase64`. The reply is `{path, colors,
 transparentIndex, bytes, warnings}` (`transparentIndex` is null when there is none). JPEG and PNG-24 are errors, and the
 document and the settings do not change. Load Color Table… is `webExport.loadColorTable {path | dataBase64,

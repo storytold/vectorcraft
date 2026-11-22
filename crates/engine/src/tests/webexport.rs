@@ -1101,6 +1101,29 @@ fn save_color_table_writes_the_path_and_refuses_bad_params() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// With Save for Web set to the selected slices and none selected, Save Color Table still writes
+/// the whole image's table, the one the dialog's preview shows. A `slice` is still looked up among
+/// the selected slices.
+#[test]
+fn save_color_table_of_the_whole_image_needs_no_selected_slice() {
+    let mut s = two_colours();
+    let slice = run(&mut s, "object.slice.create", json!({"x": 0, "y": 0, "width": 20, "height": 30}))["id"].as_u64().unwrap();
+    run(&mut s, "object.slice.select", json!({}));
+    let p = json!({"format": "gif", "dither": "none", "transparency": false});
+    let (_, whole) = color_table_file(&mut s, merge(&p, json!({"slices": "none"})));
+    let (v, bytes) = color_table_file(&mut s, merge(&p, json!({"slices": "selected"})));
+    assert_eq!(bytes, whole, "{v}");
+    let number = run(&mut s, "slice.list", json!({}))["slices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["id"].as_u64() == Some(slice))
+        .map(|l| l["number"].clone())
+        .unwrap();
+    let e = s.execute("document.exportForWeb.saveColorTable", &merge(&p, json!({"slices": "selected", "slice": number}))).unwrap_err().to_string();
+    assert!(e.contains("no selected slice"), "{e}");
+}
+
 /// The preview refuses a `slice` that is not a slice number instead of previewing the whole image.
 #[test]
 fn preview_refuses_a_slice_that_is_not_a_number() {
