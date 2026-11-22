@@ -382,6 +382,31 @@ fn image_capture_exact_clip_bounds_and_matte() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Bounds that miss every object still give an image of that area, blank or transparent.
+#[test]
+fn image_capture_of_bounds_without_art_is_blank() {
+    let base = folder("empty");
+    let (mut s, dir) = capture_doc(&base);
+    // x 300 to 350 and y 100 to 50 (Y up): below and right of both rectangles.
+    let f = |n: &str| quoted(&dir.join(n));
+    let source = format!(
+        "var d = app.activeDocument, o = new ImageCaptureOptions(); o.resolution = 72;\
+         d.imageCapture(new File({}), [300, 100, 350, 50], o);\
+         o.transparency = true; d.imageCapture(new File({}), [300, 100, 350, 50], o);",
+        f("blank.png"),
+        f("clear.png")
+    );
+    let undo = undo_steps(&s);
+    script(&mut s, &base, &source);
+    for (name, blank) in [("blank.png", [255, 255, 255, 255]), ("clear.png", [0, 0, 0, 0])] {
+        let img = png(&dir.join(name));
+        assert_eq!((img.width(), img.height()), (50, 50), "{name}");
+        assert!(img.pixels().all(|p| p.0 == blank), "{name}: every pixel is {blank:?}");
+    }
+    assert_eq!(undo_steps(&s), undo, "a capture changes nothing in the document");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn capture_rejects_64mp_and_side_limit_before_render() {
     let base = folder("huge");

@@ -39,6 +39,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
     ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
     ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
+    ("Document.prototype.imageCapture", "app.activeDocument.imageCapture(f);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -145,21 +146,18 @@ const INSIDE: &[(&str, &str)] = &[
     ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
     ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
-    ("", "AntiAliasingMethod ImageCaptureOptions RasterizationColorModel RasterizeOptions"),
+    // The enumerations of rasterizing and the document's rasterize and window capture methods.
+    ("", "AntiAliasingMethod RasterizationColorModel"),
     ("Document.prototype.", "rasterize windowCapture windowCapture="),
-    ("ImageCaptureOptions.", "prototype"),
-    ("ImageCaptureOptions.prototype.", "constructor"),
-    ("RasterizeOptions.", "prototype"),
-    ("RasterizeOptions.prototype.", "constructor"),
     ("AntiAliasingMethod.", "ARTOPTIMIZED None TYPEOPTIMIZED"),
     ("RasterizationColorModel.", "BITMAP DEFAULTCOLORMODEL GRAYSCALE"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
-/// and the save and export option classes.
+/// and the save, export, rasterize and image capture option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
      PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
-     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
+     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions ImageCaptureOptions RasterizeOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

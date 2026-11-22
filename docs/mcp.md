@@ -2749,7 +2749,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   as `"AntiAliasingMethod.TYPEOPTIMIZED"`.
   VectorCraft's own rules: `clipBounds` is `[left, top, right, bottom]` in the run's script coordinates, as
   `geometricBounds` gives them, and bounds whose right edge is not right of the left one, or whose bottom edge is not
-  below the top one, throw an error. `rasterize` takes one page item or a list of at most 10,000; an object of another
+  below the top one, throw an error. For bounds that miss all the art, `rasterize` throws an error and `imageCapture`
+  writes a blank image of that area. `rasterize` takes one page item or a list of at most 10,000; an object of another
   document, one listed twice, one inside another listed one, a path of a compound path, and one that is locked or in
   a locked layer or group throw an error, and nothing changes. It keeps the selection, less the art it replaces. With
   `clippingMask` the `RasterItem` is the image inside its clip group. `transparency` wins over `backgroundBlack`, and

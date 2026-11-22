@@ -543,6 +543,21 @@ fn save_as_and_export_file_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// A document's `imageCapture` writes the file it is given, with or without bounds and options, and
+/// called by its name in brackets; `rasterize` stays inside the document.
+#[test]
+fn image_capture_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument.imageCapture(f);\n",
+        "var d = app.activeDocument; d.imageCapture(f, [0, 0, 10, 10], new ImageCaptureOptions());\n",
+        "d['imageCapture'](f);\n",
+        "d.rasterize(d.pageItems[0]);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[2, 3, 4][..])]);
+}
+
 /// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
 /// too; reading the method without calling it does not.
 #[test]
