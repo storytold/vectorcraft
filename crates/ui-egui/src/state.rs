@@ -670,6 +670,11 @@ pub struct UiState {
     /// Not saved.
     #[serde(skip)]
     pub status_notes: Option<(String, Vec<String>)>,
+    /// What the startup scripts' round under way left out ([`crate::script_runs`]): the runs that
+    /// could not start and the notes on the Startup Scripts folder, shown again when its last run
+    /// ends. Not saved.
+    #[serde(skip)]
+    pub startup_notes: Vec<String>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
@@ -1369,6 +1374,7 @@ impl Default for UiState {
             replace_font_warning: None,
             last_find: None,
             status_notes: None,
+            startup_notes: Vec::new(),
             palette_open: false,
             palette_query: String::new(),
             palette_toggled: false,

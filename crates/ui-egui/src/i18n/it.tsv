@@ -4973,6 +4973,7 @@ axis	Both	Entrambi
 	Some scripts were not listed	Alcuni script non sono stati elencati
 	The Scripts folder cannot be read	Impossibile leggere la cartella Scripts
 @msg	The Startup Scripts folder cannot be read	Impossibile leggere la cartella Startup Scripts
+@msg	The Startup Scripts folder was not read in full	La cartella Startup Scripts non è stata letta per intero
 	Loading scripts…	Caricamento degli script…
 	The Scripts folder is still being read	La cartella Scripts è ancora in lettura
 @msg	the script's run is no longer available	l'esecuzione dello script non è più disponibile

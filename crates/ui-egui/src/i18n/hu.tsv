@@ -5767,6 +5767,7 @@ imageTrace	Outline	Körvonal
 	Some scripts were not listed	Néhány szkript nem szerepel a listában
 	The Scripts folder cannot be read	A Scripts mappa nem olvasható
 @msg	The Startup Scripts folder cannot be read	A Startup Scripts mappa nem olvasható
+@msg	The Startup Scripts folder was not read in full	A Startup Scripts mappa nem lett teljesen beolvasva
 	Loading scripts…	Szkriptek betöltése…
 	The Scripts folder is still being read	A Scripts mappa olvasása még tart
 @msg	the script's run is no longer available	a parancsfájl futása már nem érhető el

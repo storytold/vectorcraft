@@ -6442,6 +6442,7 @@ digits	Malayalam	Malaiàlam
 	Some scripts were not listed	Alguns scripts no s'han llistat
 	The Scripts folder cannot be read	No es pot llegir la carpeta Scripts
 @msg	The Startup Scripts folder cannot be read	No es pot llegir la carpeta Startup Scripts
+@msg	The Startup Scripts folder was not read in full	La carpeta Startup Scripts no s'ha llegit sencera
 	Loading scripts…	S’estan carregant els scripts…
 	The Scripts folder is still being read	Encara s’està llegint la carpeta Scripts
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible

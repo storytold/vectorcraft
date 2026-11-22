@@ -4957,6 +4957,7 @@ axis	Both	Обидві
 	Some scripts were not listed	Деякі сценарії не показано
 	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
 @msg	The Startup Scripts folder cannot be read	Не вдалося прочитати папку Startup Scripts
+@msg	The Startup Scripts folder was not read in full	Папку Startup Scripts прочитано не повністю
 	Loading scripts…	Завантаження сценаріїв…
 	The Scripts folder is still being read	Папка Scripts ще читається
 @msg	the script's run is no longer available	виконання скрипта більше не доступне

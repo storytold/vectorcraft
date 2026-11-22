@@ -5155,6 +5155,7 @@ imageTrace	Outline	Ääriviiva
 	Some scripts were not listed	Kaikkia komentosarjoja ei ole lueteltu
 	The Scripts folder cannot be read	Scripts-kansiota ei voi lukea
 @msg	The Startup Scripts folder cannot be read	Startup Scripts -kansiota ei voi lukea
+@msg	The Startup Scripts folder was not read in full	Startup Scripts -kansiota ei luettu kokonaan
 	Loading scripts…	Ladataan komentosarjoja…
 	The Scripts folder is still being read	Scripts-kansiota luetaan vielä
 @msg	the script's run is no longer available	komentosarjan suoritus ei ole enää käytettävissä

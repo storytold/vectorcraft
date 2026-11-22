@@ -2617,6 +2617,7 @@ font-technology	Variable	Променливи
 	Some scripts were not listed	Някои скриптове не са изброени
 	The Scripts folder cannot be read	Папката Scripts не може да бъде прочетена
 @msg	The Startup Scripts folder cannot be read	Папката Startup Scripts не може да бъде прочетена
+@msg	The Startup Scripts folder was not read in full	Папката Startup Scripts не беше прочетена изцяло
 	Loading scripts…	Зареждане на скриптовете…
 	The Scripts folder is still being read	Папката Scripts все още се чете
 	Other Script…	Друг скрипт…

@@ -717,6 +717,19 @@ fn compound_shape_no_area_warning_is_translated() {
     }
 }
 
+/// The status bar's notes for a Startup Scripts folder that was not read in full or that cannot be
+/// read, which the message scan doesn't read, are translated in each language of
+/// [`COMPLETE_MESSAGES`].
+#[test]
+fn startup_scripts_folder_notes_are_translated() {
+    for note in [crate::script_runs::STARTUP_TRUNCATED, crate::script_runs::STARTUP_UNREADABLE] {
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            assert_ne!(message(lang, note), note, "{code}: {note}");
+        }
+    }
+}
+
 /// The Save PDF dialog's Save Summary… button and `ui.pdfSummary.save`'s error when no such
 /// dialog is open.
 #[test]

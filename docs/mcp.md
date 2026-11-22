@@ -3174,8 +3174,12 @@ The rest of this section is VectorCraft's own rules:
 
 - Only the folder's own `.jsx` files run, never its subfolders. Links, names that start with a dot, files Windows marks
   hidden or system, names longer than 255 bytes and other file types are left out. A listing stops at 2,048 folder
-  entries, 512 scripts or 250 ms. A folder that is missing runs nothing. At launch, when the folder is there and cannot
-  be read, or a file is where the folder should be, the status bar says that the folder cannot be read.
+  entries or 250 ms and holds at most 512 scripts. When it stops at a limit, leaves out scripts past 512 or skips an
+  entry it cannot read, the status bar says that the folder was not read in full. A folder that is missing runs
+  nothing. At launch and before a chosen script, when the folder is there and cannot be read, or a file is where the
+  folder should be, the status bar says that the folder cannot be read.
+- These two notes, and the names of startup scripts that could not start, stay in the status bar after the last run
+  ends: the status bar shows the first of them, and its hover lists them all, then the last run's message.
 - The scripts run one at a time, sorted by name without regard to case, then by name. Each runs as `script.run` runs a
   file, with the same limits, and each that changes a document adds its own Run Script undo step. The chosen script
   runs after the last of them.

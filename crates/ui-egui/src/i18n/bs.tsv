@@ -65,6 +65,7 @@
 	Some scripts were not listed	Neke skripte nisu navedene
 	The Scripts folder cannot be read	Folder Scripts se ne može pročitati
 @msg	The Startup Scripts folder cannot be read	Folder Startup Scripts se ne može pročitati
+@msg	The Startup Scripts folder was not read in full	Folder Startup Scripts nije pročitan u potpunosti
 	Loading scripts…	Učitavanje skripti…
 	The Scripts folder is still being read	Folder Scripts se još čita
 	Other Script…	Druga skripta…

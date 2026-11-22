@@ -46,13 +46,56 @@ pub fn poll(app: &mut VectorcraftApp) {
         }
         Err(e) => failed(app, e.to_string()),
     }
+    startup_failures(app);
     app.sync_views();
 }
 
-/// Shows each run `script.startup.run` queued that could not start.
+/// Shows each run `script.startup.run` queued that could not start ([`add_notes`]), and once the
+/// round has no run left, the round's notes again ([`end_round`]).
 fn startup_failures(app: &mut VectorcraftApp) {
-    for (name, error) in app.session.take_startup_failures() {
-        app.status(format!("{name}: {error}"));
+    let failures: Vec<String> = app.session.take_startup_failures().into_iter().map(|(name, error)| format!("{name}: {error}")).collect();
+    if app.session.script_running() {
+        add_notes(app, failures);
+    } else {
+        app.ui.startup_notes.extend(failures);
+        end_round(app);
+    }
+}
+
+/// Adds `notes` to those of the startup scripts' round under way and shows them all
+/// ([`show_notes`]); a round with no run left keeps none.
+fn add_notes(app: &mut VectorcraftApp, notes: Vec<String>) {
+    if notes.is_empty() {
+        return;
+    }
+    app.ui.startup_notes.extend(notes);
+    show_notes(app, app.ui.startup_notes.clone());
+    if !app.session.script_running() {
+        app.ui.startup_notes.clear();
+    }
+}
+
+/// When the startup scripts' round has notes and its last run has ended: shows them again, before
+/// the message that run ended with and its own notes, so a later message does not hide them.
+fn end_round(app: &mut VectorcraftApp) {
+    if app.ui.startup_notes.is_empty() {
+        return;
+    }
+    let mut notes = std::mem::take(&mut app.ui.startup_notes);
+    match app.ui.status_notes.take() {
+        Some((status, more)) if status == app.ui.status && more == notes => {}
+        Some((status, more)) if status == app.ui.status && !more.is_empty() => notes.extend(more),
+        _ if app.ui.status.is_empty() || notes.contains(&app.ui.status) => {}
+        _ => notes.push(app.ui.status.clone()),
+    }
+    show_notes(app, notes);
+}
+
+/// Shows the first of `notes` in the status bar, and keeps them all for its hover, which lists
+/// them when there are several. Without notes the status bar keeps its message.
+fn show_notes(app: &mut VectorcraftApp, notes: Vec<String>) {
+    if let Some(first) = notes.first().cloned() {
+        crate::io::show_with_notes(app, first, notes);
     }
 }
 
@@ -90,39 +133,55 @@ fn ask(app: &mut VectorcraftApp) -> bool {
 
 /// Runs the script of `params` (`script.run`'s) that the person chose from File › Scripts, after
 /// the startup scripts when General › Run Startup Scripts is on (`script.startup.run`). A startup
-/// script that cannot start shows in the status bar.
+/// script that cannot start, a listing of the Startup Scripts folder that was not read in full, and
+/// a folder that is there and cannot be read show in the status bar ([`reply_notes`]).
 pub(crate) fn run_chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     if app.session.startup_skip().is_some() {
         return app.run("script.run", params);
     }
     let reply = app.run("script.startup.run", json!({"reason": "menu", "then": params}))?;
-    reply_failures(app, &reply);
+    reply_notes(app, &reply);
     Ok(reply)
 }
 
-/// Shows each startup script that a `script.startup.run` reply names under `failed`: the queued
-/// runs that could not start before the first one did.
-fn reply_failures(app: &mut VectorcraftApp, reply: &Value) {
-    for failed in reply["failed"].as_array().into_iter().flatten() {
-        let (name, error) = (failed["name"].as_str().unwrap_or_default(), failed["error"].as_str().unwrap_or_default());
-        app.status(format!("{name}: {error}"));
+/// Starts the notes of a startup scripts' round with what its `script.startup.run` reply says was
+/// left out ([`add_notes`]): each startup script it names under `failed` (the queued runs that
+/// could not start before the first one did), then a listing that was not read in full
+/// (`truncated`) or a folder that cannot be read (`unreadable`). The notes show again when the
+/// round's last run ends ([`end_round`]).
+pub(crate) fn reply_notes(app: &mut VectorcraftApp, reply: &Value) {
+    app.ui.startup_notes.clear();
+    let mut notes: Vec<String> = reply["failed"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|failed| format!("{}: {}", failed["name"].as_str().unwrap_or_default(), failed["error"].as_str().unwrap_or_default()))
+        .collect();
+    if reply["truncated"] == true {
+        notes.push(STARTUP_TRUNCATED.to_string());
     }
+    if reply["unreadable"] == true {
+        notes.push(STARTUP_UNREADABLE.to_string());
+    }
+    add_notes(app, notes);
 }
 
+/// The status bar's note when a listing of the Startup Scripts folder stopped at a limit, left out
+/// scripts past its limit or skipped an entry it could not read.
+pub(crate) const STARTUP_TRUNCATED: &str = "The Startup Scripts folder was not read in full";
+/// The status bar's note when the Startup Scripts folder is there and cannot be read.
+pub(crate) const STARTUP_UNREADABLE: &str = "The Startup Scripts folder cannot be read";
+
 /// When the app has started, out of Safe Mode: the startup scripts run when General › Run Startup
-/// Scripts is on (`script.startup.run`). A failure to start them, or a Startup Scripts folder that
-/// is there and cannot be read, shows in the status bar.
+/// Scripts is on (`script.startup.run`). A failure to start them, a listing of the folder that was
+/// not read in full, or a Startup Scripts folder that is there and cannot be read shows in the
+/// status bar ([`reply_notes`]).
 pub fn run_at_launch(app: &mut VectorcraftApp) {
     if app.session.startup_skip().is_some() {
         return;
     }
     match app.run("script.startup.run", json!({"reason": "launch"})) {
-        Ok(reply) => {
-            reply_failures(app, &reply);
-            if reply["unreadable"] == true {
-                app.status("The Startup Scripts folder cannot be read");
-            }
-        }
+        Ok(reply) => reply_notes(app, &reply),
         Err(e) => app.status(e),
     }
 }

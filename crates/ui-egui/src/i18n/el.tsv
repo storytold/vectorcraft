@@ -2638,6 +2638,7 @@ axis	Both	Και τα δύο
 	Some scripts were not listed	Ορισμένα σενάρια δεν εμφανίζονται στη λίστα
 	The Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Scripts
 @msg	The Startup Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Startup Scripts
+@msg	The Startup Scripts folder was not read in full	Ο φάκελος Startup Scripts δεν διαβάστηκε πλήρως
 	Loading scripts…	Φόρτωση σεναρίων…
 	The Scripts folder is still being read	Ο φάκελος Scripts διαβάζεται ακόμα
 @msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη

@@ -4896,6 +4896,7 @@ axis	Both	Les deux
 	Some scripts were not listed	Certains scripts ne sont pas répertoriés
 	The Scripts folder cannot be read	Impossible de lire le dossier Scripts
 @msg	The Startup Scripts folder cannot be read	Impossible de lire le dossier Startup Scripts
+@msg	The Startup Scripts folder was not read in full	Le dossier Startup Scripts n’a pas été lu en entier
 	Loading scripts…	Chargement des scripts…
 	The Scripts folder is still being read	Le dossier Scripts est encore en cours de lecture
 @msg	the script's run is no longer available	l’exécution du script n’est plus disponible

@@ -821,6 +821,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Some scripts were not listed	Nogle scripter blev ikke vist
 	The Scripts folder cannot be read	Mappen Scripts kan ikke læses
 @msg	The Startup Scripts folder cannot be read	Mappen Startup Scripts kan ikke læses
+@msg	The Startup Scripts folder was not read in full	Mappen Startup Scripts blev ikke læst helt
 	Loading scripts…	Indlæser scripter…
 	The Scripts folder is still being read	Mappen Scripts læses stadig
 	Other Script…	Andet script…

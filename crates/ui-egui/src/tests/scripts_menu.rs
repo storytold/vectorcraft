@@ -679,11 +679,14 @@ fn a_menu_run_after_a_first_startup_script_that_cannot_start_shows_it_and_runs_t
     app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
     app.status("before");
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
-    assert_eq!(app.ui.status, format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE));
+    let shown = format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE);
+    assert_eq!(app.ui.status, shown);
     finish(&mut app);
     assert_eq!(started(&app), ["0.jsx", "chosen"]);
     assert_eq!(objects(&app), 2);
-    assert_eq!(app.ui.status, "Ran chosen");
+    // The failure stays in sight when the chosen script ends, with its message in the hover.
+    assert_eq!(app.ui.status, shown);
+    assert_eq!(app.ui.status_notes, Some((shown.clone(), vec![shown, "Ran chosen".to_string()])));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -727,6 +730,81 @@ fn a_startup_scripts_folder_that_cannot_be_read_shows_in_the_status_bar_at_launc
     assert_eq!(app.ui.status, "The Startup Scripts folder cannot be read");
     let de = crate::i18n::Lang::from_code("de").unwrap();
     assert_eq!(crate::i18n::message(de, &app.ui.status), "Der Ordner „Startup Scripts“ kann nicht gelesen werden");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_menu_run_with_a_startup_scripts_folder_that_cannot_be_read_says_so_and_runs_the_chosen_script() {
+    let dir = folder("startup-menu-unreadable");
+    let mut app = app(&dir);
+    let startup = dir.join("Startup Scripts");
+    std::fs::write(&startup, "not a folder").unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    app.status("before");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    let note = script_runs::STARTUP_UNREADABLE.to_string();
+    assert_eq!(app.ui.status, note);
+    finish(&mut app);
+    assert_eq!(started(&app), ["chosen"]);
+    assert_eq!(app.ui.status, note, "the note stays in sight when the chosen script ends");
+    assert_eq!(app.ui.status_notes, Some((note.clone(), vec![note, "Ran chosen".to_string()])));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// `dir`'s `Startup Scripts` folder, attached to `app`, holding one more entry than a listing reads
+/// and no script.
+fn overfull_startup_folder(app: &mut VectorcraftApp, dir: &std::path::Path) {
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    for n in 0..=vectorcraft_engine::script::folder::Limits::default().entries {
+        std::fs::write(startup.join(format!("{n}.txt")), "").unwrap();
+    }
+    app.session.attach_startup_scripts_dir(startup);
+}
+
+#[test]
+fn a_startup_scripts_folder_not_read_in_full_shows_in_the_status_bar_at_launch_and_after_a_menu_run() {
+    let dir = folder("startup-truncated");
+    let mut app = app(&dir);
+    overfull_startup_folder(&mut app, &dir);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let note = "The Startup Scripts folder was not read in full";
+    app.status("before");
+    script_runs::run_at_launch(&mut app);
+    assert_eq!(app.ui.status, note);
+    assert!(!app.session.script_running());
+    app.status("before");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    assert_eq!(app.ui.status, note);
+    finish(&mut app);
+    assert_eq!(started(&app), ["chosen"]);
+    assert_eq!(app.ui.status, note, "the note stays in sight when the chosen script ends");
+    assert_eq!(app.ui.status_notes, Some((note.to_string(), vec![note.to_string(), "Ran chosen".to_string()])));
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_ne!(crate::i18n::message(de, note), note, "the note is translated");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn startup_scripts_that_cannot_start_and_a_folder_not_read_in_full_all_stay_in_the_status_bar() {
+    let dir = folder("startup-notes");
+    let mut app = app(&dir);
+    app.status("before");
+    let reply = json!({
+        "failed": [{"name": "0.jsx", "error": "too large"}, {"name": "1.jsx", "error": "cannot be read"}],
+        "truncated": true,
+        "unreadable": false,
+    });
+    script_runs::reply_notes(&mut app, &reply);
+    let notes = vec!["0.jsx: too large".to_string(), "1.jsx: cannot be read".to_string(), script_runs::STARTUP_TRUNCATED.to_string()];
+    assert_eq!(app.ui.status, "0.jsx: too large", "the first note shows");
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)), "the hover lists every note");
+    // A reply with nothing left out keeps the message.
+    script_runs::reply_notes(&mut app, &json!({"failed": [], "truncated": false, "unreadable": false}));
+    assert_eq!(app.ui.status, "0.jsx: too large");
     let _ = std::fs::remove_dir_all(dir);
 }
 

@@ -666,6 +666,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Some scripts were not listed	Sommige scripts zijn niet weergegeven
 	The Scripts folder cannot be read	De map Scripts kan niet worden gelezen
 @msg	The Startup Scripts folder cannot be read	De map Startup Scripts kan niet worden gelezen
+@msg	The Startup Scripts folder was not read in full	De map Startup Scripts is niet volledig gelezen
 	Loading scripts…	Scripts laden…
 	The Scripts folder is still being read	De map Scripts wordt nog gelezen
 	Other Script…	Ander script…

@@ -5250,6 +5250,7 @@ imageTrace	Outline	Obrys
 	Some scripts were not listed	Některé skripty nebyly uvedeny
 	The Scripts folder cannot be read	Složku Scripts nelze přečíst
 @msg	The Startup Scripts folder cannot be read	Složku Startup Scripts nelze přečíst
+@msg	The Startup Scripts folder was not read in full	Složka Startup Scripts nebyla přečtena celá
 	Loading scripts…	Načítání skriptů…
 	The Scripts folder is still being read	Složka Scripts se stále načítá
 @msg	the script's run is no longer available	běh skriptu již není k dispozici

@@ -4373,6 +4373,7 @@ arrowhead	Feather	પીંછું
 	The Print Tiling tool placed the pages.	પ્રિન્ટ ટાઇલિંગ ટૂલે પૃષ્ઠો ગોઠવ્યાં.
 	The Scripts folder cannot be read	સ્ક્રિપ્ટ્સ ફોલ્ડર વાંચી શકાતું નથી
 @msg	The Startup Scripts folder cannot be read	Startup Scripts ફોલ્ડર વાંચી શકાતું નથી
+@msg	The Startup Scripts folder was not read in full	Startup Scripts ફોલ્ડર પૂરેપૂરું વાંચી શકાયું નથી
 	Loading scripts…	સ્ક્રિપ્ટ લોડ થઈ રહી છે…
 	The Scripts folder is still being read	સ્ક્રિપ્ટ્સ ફોલ્ડર હજી વંચાઈ રહ્યું છે
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	જ્યારે VECTORCRAFT_TITLEBAR એન્વાયર્નમેન્ટ વેરિએબલ સેટ હોય ત્યારે તે ટાઇટલ બાર પસંદ કરે છે.

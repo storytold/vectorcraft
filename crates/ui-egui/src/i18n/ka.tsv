@@ -8468,6 +8468,7 @@ imageTrace	Outline	კონტური
 	Some scripts were not listed	ზოგიერთი სკრიპტი არ არის ჩამოთვლილი
 	The Scripts folder cannot be read	Scripts საქაღალდის წაკითხვა შეუძლებელია
 @msg	The Startup Scripts folder cannot be read	Startup Scripts საქაღალდის წაკითხვა შეუძლებელია
+@msg	The Startup Scripts folder was not read in full	Startup Scripts საქაღალდე ბოლომდე ვერ წაიკითხა
 	Loading scripts…	სკრიპტების ჩატვირთვა…
 	The Scripts folder is still being read	Scripts საქაღალდე ჯერ კიდევ იკითხება
 @msg	the script's run is no longer available	სკრიპტის გაშვება აღარ არის ხელმისაწვდომი

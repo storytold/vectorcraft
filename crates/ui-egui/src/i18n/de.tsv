@@ -4835,6 +4835,7 @@ theme	Appearance	Erscheinungsbild
 	Some scripts were not listed	Einige Skripte wurden nicht aufgeführt
 	The Scripts folder cannot be read	Der Ordner „Scripts“ kann nicht gelesen werden
 @msg	The Startup Scripts folder cannot be read	Der Ordner „Startup Scripts“ kann nicht gelesen werden
+@msg	The Startup Scripts folder was not read in full	Der Ordner „Startup Scripts“ wurde nicht vollständig gelesen
 	Loading scripts…	Skripte werden geladen…
 	The Scripts folder is still being read	Der Ordner „Scripts“ wird noch gelesen
 @msg	the script's run is no longer available	der Lauf des Skripts ist nicht mehr verfügbar

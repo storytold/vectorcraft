@@ -5435,6 +5435,7 @@ theme	Appearance	Giao diện
 	Some scripts were not listed	Một số tập lệnh không được liệt kê
 	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
 @msg	The Startup Scripts folder cannot be read	Không thể đọc thư mục Startup Scripts
+@msg	The Startup Scripts folder was not read in full	Không đọc được toàn bộ thư mục Startup Scripts
 	Loading scripts…	Đang tải tập lệnh…
 	The Scripts folder is still being read	Thư mục Scripts vẫn đang được đọc
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
