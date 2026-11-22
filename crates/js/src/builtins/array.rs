@@ -340,16 +340,17 @@ fn typed_locale_item(interp: &mut Interp, v: Value) -> JsResult<Option<Str>> {
     locale_call(interp, v, true)
 }
 
-/// Calls the element's `toLocaleString`, looked up on its object, with the value itself as `this`
-/// when `on_value` is true and with the object otherwise.
+/// Calls the element's `toLocaleString`, looked up on its object. With `on_value`, the value
+/// itself is `this` for the lookup's getter and for the call (Invoke, section 7.3.18); otherwise
+/// the object is.
 fn locale_call(interp: &mut Interp, v: Value, on_value: bool) -> JsResult<Option<Str>> {
     if v.is_nullish() {
         return Ok(None);
     }
     let e = interp.to_object(&v)?;
-    let f = interp.get_from(e, &crate::heap::key("toLocaleString"), &Value::Object(e))?;
-    require_callable(interp, &f, "an element's toLocaleString")?;
     let this = if on_value { v } else { Value::Object(e) };
+    let f = interp.get_from(e, &crate::heap::key("toLocaleString"), &this)?;
+    require_callable(interp, &f, "an element's toLocaleString")?;
     let s = interp.call(&f, &this, &[])?;
     interp.to_str(&s).map(Some)
 }

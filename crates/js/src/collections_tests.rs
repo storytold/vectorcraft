@@ -416,6 +416,14 @@ fn typed_array_methods() {
         ),
         "number,number;object"
     );
+    // A getter for the method gets the number as `this` too (Invoke, section 7.3.18).
+    assert_eq!(
+        string(
+            "Object.defineProperty(Number.prototype, 'toLocaleString', {get: function () { 'use strict'; var t = typeof this; \
+             return function () { return t; }; }}); new Uint8Array([7]).toLocaleString() + ';' + [7].toLocaleString()"
+        ),
+        "number;object"
+    );
     truth(
         "Object.getPrototypeOf(Int8Array) === Object.getPrototypeOf(Float64Array) && Object.getPrototypeOf(Int8Array.prototype) !== Object.prototype",
     );
