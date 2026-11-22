@@ -1,6 +1,6 @@
 //! Edit → Edit Colors → Recolor with Preset: before Recolor Artwork opens on a preset (an n-color
 //! job or Color Library), this dialog asks whether to limit the new colors to a swatch library
-//! (`ui.recolorDialog {preset: true, colors?, library?}`). OK opens Recolor Artwork with the
+//! (`ui.recolorDialog {preset: true, colors?, library?}`, without `group`). OK opens Recolor Artwork with the
 //! preset's colors and the library chosen (None: no limit); Cancel opens nothing.
 //!
 //! Fields: `colors` (the preset's count, null for Color Library) and `limitTo` (a library id,
@@ -26,6 +26,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     if st.selection.is_empty() {
         return Err("select artwork to recolor".into());
+    }
+    if p.get("group").is_some_and(|g| !g.is_null()) {
+        return Err("`group` does not apply to a preset".into());
     }
     let colors = count(p.get("colors"))?;
     let limit = library_param(app, p)?;

@@ -2012,6 +2012,7 @@ fn recolor_with_preset_asks_for_a_library_first() {
     art(&mut app, &["#333333", "#999999"]);
     assert!(app.run("ui.recolorDialog", json!({"colors": 1, "preset": 1})).is_err(), "`preset` is true or false");
     assert!(app.run("ui.recolorDialog", json!({"colors": 0, "preset": true})).is_err(), "a preset has at least one color");
+    assert!(app.run("ui.recolorDialog", json!({"colors": 1, "preset": true, "group": "Grays"})).is_err(), "a preset takes no group");
     assert_eq!(dialog_kind(&app), None);
     let entries = crate::menus::menu_entries(&app);
     let presets: Vec<Value> =
