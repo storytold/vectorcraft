@@ -973,9 +973,11 @@ impl Tool for ShapeTool {
     fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
         !self.through.is_empty()
     }
-    /// The pointer left the canvas: the circle's preview through it goes.
+    /// The pointer left the canvas: the circle's preview through it and the Smart Guide of the
+    /// hover go.
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.hover = None;
+        self.snap.clear();
     }
     /// An edit, Undo or Redo made outside the tool, or another document, drops the points placed
     /// for a circle.
