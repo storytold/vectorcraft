@@ -6654,6 +6654,48 @@ fn a_stroke_over_an_open_shapes_ends_closes_it_along_the_stroke() {
     }
 }
 
+/// A tall bump redrawn over most of an open line replaces that part: the ends beyond it stay and
+/// the line stays open, as there is no opening for the stroke to close.
+#[test]
+fn a_tall_redraw_over_most_of_an_open_line_keeps_its_ends() {
+    for reversed in [false, true] {
+        let mut s = session();
+        let id = line(&mut s, 100.0, 300.0, 700.0, 300.0);
+        let mut bump =
+            vec![json!([200, 300]), json!([250, 226]), json!([325, 148]), json!([400, 120]), json!([475, 148]), json!([550, 226]), json!([600, 300])];
+        if reversed {
+            bump.reverse();
+        }
+        s.execute("path.freehand", &json!({"points": bump, "redraw": {"id": id.0, "within": 12}})).unwrap();
+        let sp = &path(&s, id).subpaths[0];
+        assert!(!sp.closed, "reversed {reversed}: still open");
+        assert!(ends_at(sp, Point::new(100.0, 300.0), Point::new(700.0, 300.0), 1e-6), "reversed {reversed}: both ends stay: {sp:?}");
+        assert!(kurbo::Shape::bounding_box(&path(&s, id).to_bezpath()).y0 < 135.0, "reversed {reversed}: the bump");
+    }
+}
+
+/// A tall arch over one long side of a thin closed shape replaces that side: the result is the
+/// bigger of the two shapes the stroke could make, not the arch alone.
+#[test]
+fn a_tall_arch_over_a_thin_shapes_side_keeps_the_shape() {
+    for reversed in [false, true] {
+        let mut s = session();
+        let id = rect(&mut s, 100.0, 300.0, 600.0, 60.0);
+        let mut arch =
+            vec![json!([130, 300]), json!([197, 216]), json!([265, 144]), json!([400, 80]), json!([535, 144]), json!([603, 216]), json!([670, 300])];
+        if reversed {
+            arch.reverse();
+        }
+        s.execute("path.freehand", &json!({"points": arch, "redraw": {"id": id.0, "within": 12}})).unwrap();
+        let sp = &path(&s, id).subpaths[0];
+        assert!(sp.closed, "reversed {reversed}");
+        for corner in [(100.0, 300.0), (700.0, 300.0), (700.0, 360.0), (100.0, 360.0)] {
+            assert!(sp.anchors.iter().any(|a| near(a.p, Point::new(corner.0, corner.1))), "reversed {reversed}: {corner:?} kept: {sp:?}");
+        }
+        assert!(kurbo::Shape::bounding_box(&path(&s, id).to_bezpath()).y0 < 95.0, "reversed {reversed}: the arch");
+    }
+}
+
 /// A stroke that comes back near the path, within Edit selected paths within but not on it, joins
 /// it again: the shape stays one closed path, and the stroke's end bends onto it, so no anchor
 /// lies off the stroke's way back.
