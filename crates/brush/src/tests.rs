@@ -2218,6 +2218,22 @@ fn pattern_brush_scale_from_the_pen_fits_start_and_end_tiles_where_the_scale_fal
         let r = out.first().and_then(Node::geometric_bounds);
         assert!(r.is_some_and(|r| near(r.x0, span.0, 1e-6) && near(r.x1, span.1, 1e-6)), "start {start}: {r:?}");
     }
+    // 400 % at the start, 100 % from 15 to 20 pt, 400 % from 40 pt on, mirrored for the end: a 30 pt
+    // tile at 100 % fits at its middle, although at the scale at its first length's middle it is as
+    // long as that length.
+    for (start, points, span) in [
+        (true, vec![(0.0, 1.0), (0.15, 0.0), (0.2, 0.0), (0.4, 1.0), (1.0, 1.0)], (0.0, 30.0)),
+        (false, vec![(0.0, 1.0), (0.6, 1.0), (0.8, 0.0), (0.85, 0.0), (1.0, 1.0)], (70.0, 100.0)),
+    ] {
+        let mut b = scaled_pattern(PatternFit::Stretch, false, 100.0, Some(Variation::Pressure), Some(400.0));
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            let tile = Some(rect_art(30.0, 4.0));
+            (p.start, p.end) = if start { (tile, None) } else { (None, tile) };
+        }
+        let out = stroke_pieces(&doc, &b, &bp, &pressed(points));
+        let r = out.first().and_then(Node::geometric_bounds);
+        assert!(r.is_some_and(|r| near(r.x0, span.0, 1e-6) && near(r.x1, span.1, 1e-6)), "start {start}: {r:?}");
+    }
 }
 
 /// On a closed path, a tile that Approximate Path starts before the path's start takes the scale
@@ -2247,6 +2263,47 @@ fn pattern_brush_scale_from_the_pen_wraps_before_a_closed_paths_start() {
         }
     }
     assert!(before > 0, "no first tile starts before the path's start");
+}
+
+/// On a closed path, a tile over the path's start follows the scale on both sides of the start,
+/// even when the scale is the same at the tile's ends, its middle and every pen sample within it.
+#[test]
+fn pattern_brush_scale_from_the_pen_changes_where_a_closed_path_wraps_round() {
+    let doc = Document::new(1.0, 1.0);
+    let mut b = scaled_pattern(PatternFit::Approximate, false, 100.0, Some(Variation::Pressure), Some(300.0));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.side = rect_art(54.0, 4.0);
+    }
+    // A closed path 256 pt long without corners, from (0, 0) along +x: its sides in each quarter
+    // turn, and the same turned three more times.
+    let quarter = [(28.0, 0.0), (12.0, 5.0), (4.0, 3.0), (3.0, 4.0), (5.0, 12.0)];
+    let mut bp = BezPath::new();
+    let mut at = (0.0, 0.0);
+    bp.move_to(at);
+    for turn in 0..4 {
+        for &(x, y) in &quarter {
+            let (dx, dy) = match turn {
+                0 => (x, y),
+                1 => (-y, x),
+                2 => (-x, -y),
+                _ => (y, -x),
+            };
+            at = (at.0 + dx, at.1 + dy);
+            if at != (0.0, 0.0) {
+                bp.line_to(at);
+            }
+        }
+    }
+    bp.close_path();
+    // 100 % up to 4 pt before the end, rising to 300 % at the end. Approximate Path places five
+    // 54 pt tiles, the first from 7 pt before the start: at 100 % at both its ends, its middle and
+    // the samples at 4 pt before the start and at the start, but larger from 4 pt before it.
+    let st = pressed(vec![(0.0, 0.0), (252.0 / 256.0, 0.0), (1.0, 1.0)]);
+    let out = stroke_pieces(&doc, &b, &bp, &st);
+    let Some(first) = out.first().and_then(Node::geometric_bounds) else { panic!("no tiles") };
+    // The 4 pt tall tile is 2 pt either side of the path at 100 %, and 5 pt at 1 pt before the
+    // start, where the scale is 250 %.
+    assert!(first.y0 < -3.5, "{first:?}");
 }
 
 /// Definitions from files and commands are kept within their ranges.

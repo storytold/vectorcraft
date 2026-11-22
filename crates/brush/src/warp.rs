@@ -649,7 +649,8 @@ fn tile_on(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, cross: f64) -> Opti
 /// A tile placed on [s0, s1] of the track, `k(s)` across at arc length `s` when the scale varies
 /// (`marks`: the arc lengths of the recorded pen samples in order, between which the scale runs
 /// in a straight line), else `k` at the middle of the span across all of it ([`tile_on`]), as it
-/// is too when the scale is the same at both ends of the span and at every sample within it.
+/// is too when the scale is the same at both ends of the span, at every sample within it and, at
+/// a closed track's start within it, on both sides of the start.
 fn tile_scaled(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, k: &dyn Fn(f64) -> f64, marks: Option<&[f64]>) -> Option<Node> {
     let mid = k((s0 + s1) / 2.0);
     // Only the samples within the span are looked at.
@@ -658,7 +659,12 @@ fn tile_scaled(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, k: &dyn Fn(f64)
         let to = from + marks[from..].partition_point(|&s| s < s1);
         marks[from..to].iter().all(|&s| k(s) == mid)
     };
-    let even = |marks: &[f64]| k(s0) == mid && k(s1) == mid && within(marks);
+    // A closed track's scale goes from the one at its end to the one at its start where it wraps
+    // round, so a span over its start (or a track's length before or after it) takes both.
+    let l = t.len();
+    let seam = t.closed && l > 0.0 && (s0 / l).ceil() <= (s1 / l).floor();
+    let ends = || !seam || (k(0.0) == mid && k(l) == mid);
+    let even = |marks: &[f64]| k(s0) == mid && k(s1) == mid && within(marks) && ends();
     if mid <= 0.0 || marks.is_none_or(even) {
         return tile_on(t, tile, s0, s1, mid);
     }
@@ -728,13 +734,14 @@ fn pattern_scale(pb: &PatternBrush, weight: f64, stroke: &StrokeLayer) -> (f64, 
 /// tried in order (evenly spaced ones, and `breaks`, the lengths whose middle falls on a recorded
 /// pen sample), and the range between the last one the tile is too long for and the first one it
 /// fits is halved. A tile that fits at no length up to `room` gets the length it needs at `room`,
-/// longer than `room`.
-fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64, breaks: &[f64]) -> f64 {
+/// longer than `room`. `breaks` is `None` when the scale is the same along the whole track, and
+/// the tile then takes its length at that scale.
+fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64, breaks: Option<&[f64]>) -> f64 {
     let length = |w: f64| width * k_mid(w);
     let first = length(0.0);
-    if length(first) == first || room.is_nan() || room <= 0.0 {
+    let Some(breaks) = breaks.filter(|_| !room.is_nan() && room > 0.0) else {
         return first;
-    }
+    };
     let mut tries: Vec<f64> = (1..=END_SCAN_STEPS).map(|i| room * i as f64 / END_SCAN_STEPS as f64).collect();
     tries.extend(breaks.iter().copied().filter(|&w| w > 0.0 && w < room));
     tries.sort_by(f64::total_cmp);
@@ -1171,8 +1178,8 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &Str
                 && let Some(st) = &start
             {
                 // As long as the scale at its middle.
-                let breaks: Vec<f64> = marks.iter().flatten().map(|&m| 2.0 * (m - a)).collect();
-                let w = end_tile_length(st.1.width(), b - a, &|w| ks(a + w / 2.0), &breaks);
+                let breaks: Option<Vec<f64>> = marks.as_ref().map(|m| m.iter().map(|&m| 2.0 * (m - a)).collect());
+                let w = end_tile_length(st.1.width(), b - a, &|w| ks(a + w / 2.0), breaks.as_deref());
                 if b - a > w {
                     out.take(tile_scaled(&t, st, a, a + w, &ks, marks.as_deref()));
                     a += w;
@@ -1182,8 +1189,8 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &Str
                 && ri + 1 == nruns
                 && let Some(en) = &end
             {
-                let breaks: Vec<f64> = marks.iter().flatten().map(|&m| 2.0 * (b - m)).collect();
-                let w = end_tile_length(en.1.width(), b - a, &|w| ks(b - w / 2.0), &breaks);
+                let breaks: Option<Vec<f64>> = marks.as_ref().map(|m| m.iter().map(|&m| 2.0 * (b - m)).collect());
+                let w = end_tile_length(en.1.width(), b - a, &|w| ks(b - w / 2.0), breaks.as_deref());
                 if b - a > w {
                     out.take(tile_scaled(&t, en, b - w, b, &ks, marks.as_deref()));
                     b -= w;
