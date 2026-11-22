@@ -374,10 +374,19 @@ impl Coll {
         }
         moved.push(live);
         self.entries.retain(Option::is_some);
+        // The storage the holes held is released along with their charge.
+        self.entries.shrink_to_fit();
+        self.index.shrink_to_fit();
         for slot in self.index.values_mut() {
             *slot = moved.get(*slot).copied().unwrap_or(*slot);
         }
         moved
+    }
+
+    /// The positions the entries and the index have room for, for tests.
+    #[cfg(test)]
+    pub(crate) fn capacity(&self) -> (usize, usize) {
+        (self.entries.capacity(), self.index.capacity())
     }
 }
 
@@ -777,6 +786,11 @@ impl Heap {
                 && let Class::WeakMap(w) | Class::WeakSet(w) = &mut o.class
             {
                 w.entries.retain(|k, _| marks.get(*k as usize).copied().unwrap_or(false));
+                // Only the entries left are charged, and a table with far more room than entries
+                // releases the extra room.
+                if w.entries.capacity() > 2 * w.entries.len() + 16 {
+                    w.entries.shrink_to_fit();
+                }
                 live += WEAK_ENTRY_BYTES * w.entries.len();
             }
         }

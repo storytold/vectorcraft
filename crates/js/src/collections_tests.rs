@@ -236,6 +236,36 @@ fn a_collection_removes_holes_and_moves_live_iterators() {
     assert_eq!(rest, JsValue::String("180,182,184,186,188,190,192,194,196,198".into()));
 }
 
+#[test]
+fn a_collection_releases_the_storage_of_removed_entries() {
+    let mut realm = realm();
+    realm
+        .run(
+            "var m = new Map(), wm = new WeakMap(), kept = {};
+             for (var i = 0; i < 1000; i++) m.set(i, i);
+             m.clear(); m.set('a', 1);
+             (function () { for (var i = 0; i < 1000; i++) wm.set({}, i); })();
+             wm.set(kept, 1);",
+        )
+        .unwrap();
+    let m = global_object(&mut realm, "m");
+    let wm = global_object(&mut realm, "wm");
+    realm.interp().collect_garbage();
+    match realm.interp().heap.object(m).map(|o| &o.class) {
+        Some(Class::Map(c)) => {
+            let (entries, index) = c.capacity();
+            assert_eq!(c.slots(), 1);
+            assert!(entries < 64 && index < 64, "{entries} {index}");
+        }
+        _ => panic!("not a Map"),
+    }
+    match realm.interp().heap.object(wm).map(|o| &o.class) {
+        Some(Class::WeakMap(w)) => assert!(w.entries.len() == 1 && w.entries.capacity() < 64, "{}", w.entries.capacity()),
+        _ => panic!("not a WeakMap"),
+    }
+    assert_eq!(realm.run("m.get('a') + wm.get(kept)").unwrap(), JsValue::Number(2.0));
+}
+
 // ---- ArrayBuffer ----
 
 #[test]
@@ -319,7 +349,7 @@ fn numeric_names_are_elements_or_nothing() {
     truth(
         "var a = new Int8Array(2); a['-0'] = 1; a[1.5] = 1; a['-0'] === undefined && a[1.5] === undefined && Object.getOwnPropertyNames(a).length === 2",
     );
-    truth("Int8Array.prototype[0] = 'p'; var a = new Int8Array(1); var r = a[3] === undefined && a[0] === 0; delete Int8Array.prototype[0]; r");
+    truth("Int8Array.prototype[3] = 'p'; var a = new Int8Array(1); var r = a[3] === undefined && a[0] === 0; delete Int8Array.prototype[3]; r");
     truth("var a = new Int8Array(1); a.foo = 1; a['01'] = 2; a.foo === 1 && a['01'] === 2");
     // The value is converted before the index is checked (section 9.4.5.9), so an ignored write still converts it.
     truth(
@@ -378,6 +408,14 @@ fn typed_array_methods() {
     truth("Uint8Array.from({length: 2, 0: 1, 1: 2}, function (v, i) { return v * 10 + i; }).join() === '10,21'");
     truth("Int16Array.from('12').join() === '1,2' && Float32Array.of(1, 2.5).join() === '1,2.5'");
     truth("new Int8Array([1, 2]).toString === Array.prototype.toString && String(new Int8Array([1, 2])) === '1,2'");
+    // A typed array calls each element's toLocaleString on the number (section 22.2.3.27); an array
+    // calls it on the element's object (section 15.4.4.3).
+    assert_eq!(
+        string(
+            "Number.prototype.toLocaleString = function () { 'use strict'; return typeof this; }; new Uint8Array([7, 8]).toLocaleString() + ';' + [7].toLocaleString()"
+        ),
+        "number,number;object"
+    );
     truth(
         "Object.getPrototypeOf(Int8Array) === Object.getPrototypeOf(Float64Array) && Object.getPrototypeOf(Int8Array.prototype) !== Object.prototype",
     );
@@ -388,6 +426,19 @@ fn typed_array_methods() {
     throws("Int8Array.from.call({}, [1])", "TypeError");
     // The source's length is read before the constructor is checked to be a typed array's.
     throws("Object.getPrototypeOf(Int8Array).from({get length() { throw new RangeError('first'); }})", "RangeError");
+    // A receiver that is not a constructor is refused before the source is read (section 22.2.2.1 step 2).
+    throws("Int8Array.from.call(ArrayBuffer.isView, {get length() { throw new RangeError('first'); }})", "TypeError");
+    // Any other constructor makes the result (TypedArrayCreate, section 22.2.4.6), which must be a
+    // typed array with room for every element.
+    truth(
+        "var lens = []; function C(n) { lens.push(n); return new Int16Array(n + 1); } \
+         var a = Uint8Array.from.call(C, [300, 2]), b = Int8Array.of.call(C, 7), c = Int8Array.from.call(C, 'xy', function (v) { return v.length; }); \
+         a instanceof Int16Array && a.join() === '300,2,0' && b.join() === '7,0' && c.join() === '1,1,0' && lens.join() === '2,1,2'",
+    );
+    truth("var B = Int8Array.bind(null); Int8Array.of.call(B, 1, 2).join() === '1,2'");
+    throws("Int8Array.from.call(function () { return new Int8Array(1); }, [1, 2])", "TypeError");
+    throws("Int8Array.of.call(function () {}, 1)", "TypeError");
+    throws("Int8Array.of.call(Math.max, 1)", "TypeError");
     truth("var a = new Int8Array([1, 2]); var b = new Uint8Array(a); b[0] = 9; a[0] === 1 && b.join() === '9,2'");
     // A copy to the same element type keeps every bit, a signaling NaN's included.
     truth(
@@ -398,6 +449,30 @@ fn typed_array_methods() {
          new DataView(g.buffer).getUint32(8, true) === 0x7f800001",
     );
     assert_eq!(string("var a = new Uint8Array([1, 2, 3, 4, 5]); a.set(a.subarray(2), 1); a.join()"), "1,3,4,5,5");
+    assert_eq!(
+        string("var b = new ArrayBuffer(4); var a = new Int8Array(b); a.set([1, 2]); new Uint16Array(b).set(a.subarray(0, 2)); a.join()"),
+        "1,0,2,0"
+    );
+    assert_eq!(string("var a = new Int8Array(3); a.set(new Uint8Array([200, 1]), 1); a.join()"), "0,-56,1");
+}
+
+#[test]
+fn derived_buffers_and_typed_arrays_read_the_constructor_first() {
+    // SpeciesConstructor (section 7.3.20) reads `constructor` before the result is made, and
+    // before filter's callback runs.
+    for call in ["a.slice()", "a.subarray(0)", "a.map(function (v) { return v; })", "a.filter(function () { n++; })", "a.buffer.slice(0)"] {
+        let getter = format!(
+            "var n = 0; var a = new Int8Array([1, 2]); var g = {{get: function () {{ throw new RangeError('c'); }}}}; \
+             Object.defineProperty(a, 'constructor', g); Object.defineProperty(a.buffer, 'constructor', g); {call}"
+        );
+        throws(&getter, "RangeError");
+        throws(&format!("var n = 0; var a = new Int8Array([1, 2]); a.constructor = 1; a.buffer.constructor = null; {call}"), "TypeError");
+    }
+    truth("var n = 0; var a = new Int8Array([1, 2]); a.constructor = 1; try { a.filter(function () { n++; }); } catch (e) {} n === 0");
+    truth(
+        "var a = new Int8Array([1, 2]); a.constructor = undefined; a.buffer.constructor = undefined; a.slice().join() === '1,2' && a.subarray(1)[0] === 2 && a.buffer.slice(1).byteLength === 1",
+    );
+    truth("var a = new Int8Array([1, 2]); a.constructor = Array; a.map(function (v) { return v; }) instanceof Int8Array");
 }
 
 #[test]
@@ -409,4 +484,17 @@ fn typed_array_work_takes_fuel() {
     assert_eq!(limit(&fuel, "new ArrayBuffer(1 << 20).slice(0)"), LimitKind::Fuel);
     assert_eq!(limit(&fuel, "new Uint8Array({length: 1 << 20})"), LimitKind::Fuel);
     assert_eq!(limit(&fuel, "new Float64Array(1 << 16).sort(function (a, b) { return a - b; })"), LimitKind::Fuel);
+    // A sort of 2^16 equal elements makes 2^19 comparisons, and reading and writing back its
+    // elements takes 2^17 units more.
+    let sort = "new Uint8Array(1 << 16).sort(); 'sorted'";
+    assert_eq!(limit(&Limits { fuel: 600_000, ..Limits::default() }, sort), LimitKind::Fuel);
+    let mut enough = Realm::with_options(es2015(), Limits { fuel: 700_000, ..Limits::default() });
+    assert_eq!(enough.run(sort).unwrap(), JsValue::String("sorted".into()));
+}
+
+#[test]
+fn a_copy_between_buffers_holds_no_snapshot() {
+    let mut realm = Realm::with_options(es2015(), Limits { heap_bytes: 6 << 20, ..Limits::default() });
+    let r = realm.run("var a = new Uint8Array(1 << 20), b = new Int8Array(1 << 20); a[5] = 200; b.set(a); b[5]");
+    assert_eq!(r.unwrap(), JsValue::Number(-56.0));
 }

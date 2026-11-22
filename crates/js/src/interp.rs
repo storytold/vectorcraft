@@ -2239,6 +2239,20 @@ impl Interp {
         v.as_object().and_then(|o| self.heap.object(o)).is_some_and(|o| matches!(o.class, Class::Function(_)))
     }
 
+    /// Whether `new` can construct with `v` (section 7.2.4): a function written in JavaScript, a
+    /// built-in constructor, or a bound function whose target is one, as `op_new` accepts.
+    pub(crate) fn is_constructor(&self, v: &Value) -> bool {
+        let mut f = v.as_object();
+        while let Some(o) = f {
+            match self.heap.object(o).map(|o| &o.class) {
+                Some(Class::Function(Func::Closure { .. } | Func::Native { constructor: true, .. })) => return true,
+                Some(Class::Function(Func::Bound { target, .. })) => f = Some(*target),
+                _ => return false,
+            }
+        }
+        false
+    }
+
     fn func_of(&self, v: &Value) -> Option<Func> {
         match &self.heap.object(v.as_object()?)?.class {
             Class::Function(f) => Some(f.clone()),
@@ -2578,6 +2592,53 @@ impl Interp {
         self.reentry -= 1;
         self.stack.truncate(saved);
         r
+    }
+
+    /// Constructs with `f` as `new f(...args)` does (`[[Construct]]`, sections 13.2.2 and
+    /// 15.3.4.5.2), for a built-in that constructs with a value it is given.
+    pub(crate) fn construct(&mut self, f: &Value, args: &[Value]) -> JsResult<Value> {
+        if self.reentry >= self.limits.reentry {
+            return Err(Abrupt::Limit(LimitKind::Reentry));
+        }
+        let saved = self.stack.len();
+        self.stack.push(f.clone());
+        self.stack.extend(args.iter().cloned());
+        self.reentry += 1;
+        let r = self.construct_rooted(f.clone(), args.to_vec(), saved);
+        self.reentry -= 1;
+        self.stack.truncate(saved);
+        r
+    }
+
+    fn construct_rooted(&mut self, mut f: Value, mut args: Vec<Value>, saved: usize) -> JsResult<Value> {
+        // The bound function on the stack keeps its arguments reachable.
+        while let Some(Func::Bound { target, args: bound_args, .. }) = self.func_of(&f) {
+            self.use_fuel()?;
+            let mut all = bound_args.to_vec();
+            all.append(&mut args);
+            args = all;
+            f = Value::Object(target);
+        }
+        match self.func_of(&f) {
+            Some(Func::Closure { code, env }) => {
+                let Some(callee) = f.as_object() else { return internal("callee is not an object") };
+                let proto = match self.get_from(callee, &key("prototype"), &f)? {
+                    Value::Object(p) => p,
+                    _ => self.intrinsics.object_proto,
+                };
+                let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+                self.stack.truncate(saved);
+                self.enter_function(Entry { callee, code, env, this: Value::Object(obj), args }, Some(obj), true)?;
+                self.execute()
+            }
+            Some(Func::Native { f: native, constructor: true, .. }) => {
+                let held = self.held_bytes;
+                let r = native(self, Value::Undefined, &args, true);
+                self.held_bytes = held;
+                r
+            }
+            _ => Err(self.type_error("the value is not a constructor")),
+        }
     }
 
     fn call_rooted(&mut self, f: Value, this: Value, args: Vec<Value>, saved: usize) -> JsResult<Value> {

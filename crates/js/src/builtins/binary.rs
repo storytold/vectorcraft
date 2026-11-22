@@ -15,8 +15,9 @@
 //! every buffer's bytes are checked against the heap before they are allocated. Every element
 //! a method visits takes a unit of fuel, and a sort's comparisons take one each.
 //!
-//! The language has no iterators yet, so constructing from an object and `%TypedArray%.from`
-//! read an array, a string (by code point) or an object with a `length`, by index.
+//! The language has no iterators yet, so constructing from an object reads an array or an object
+//! with a `length`, by index, and `%TypedArray%.from` reads those or a string, by code point. A
+//! constructor given a primitive string reads it as a length.
 
 use super::collections::{for_each_item, getter, length_of, new_iter, new_proto};
 use super::{arg, array, data, method, native, require_callable, to_integer};
@@ -462,12 +463,24 @@ fn relative(interp: &mut Interp, v: &Value, len: usize, default: usize) -> JsRes
     Ok(r as usize)
 }
 
+/// The `constructor` steps of SpeciesConstructor (section 7.3.20): reads `o.constructor` and
+/// throws a `TypeError` when it is neither `undefined` nor an object. The language has no
+/// `@@species`, so the result is always made with the intrinsic constructor.
+fn species_check(interp: &mut Interp, o: ObjId, name: &str) -> JsResult<()> {
+    let c = interp.get_from(o, &key("constructor"), &Value::Object(o))?;
+    if matches!(c, Value::Undefined | Value::Object(_)) {
+        return Ok(());
+    }
+    Err(interp.type_error(&format!("{name}: the constructor property is not an object")))
+}
+
 /// `ArrayBuffer.prototype.slice` (section 24.1.4.3).
 fn buffer_slice(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let o = this_buffer(interp, &this, "slice")?;
     let len = buffer_len(interp, o);
     let first = relative(interp, &arg(args, 0), len, 0)?;
     let last = relative(interp, &arg(args, 1), len, len)?;
+    species_check(interp, o, "ArrayBuffer.prototype.slice")?;
     let count = last.saturating_sub(first);
     // Each copied byte takes a unit of fuel, charged before the copy is made.
     for _ in 0..count {
@@ -705,21 +718,31 @@ typed_ctors! {
     float64_ctor, Float64;
 }
 
-/// The element type of the typed array constructor `this`, as `from` and `of` need.
-fn ctor_elem(interp: &mut Interp, this: &Value, name: &str) -> JsResult<Elem> {
+/// TypedArrayCreate (section 22.2.4.6), as `from` and `of` need: a new typed array of `len`
+/// elements made by the constructor `c`. One of the nine typed array constructors makes it
+/// directly; any other constructor is called, and its result must be a typed array with at
+/// least `len` elements.
+fn typed_create(interp: &mut Interp, c: &Value, len: u64, name: &str) -> JsResult<(ObjId, View)> {
     let ctors = interp.intrinsics.es2015.typed_ctors;
-    if let Some(o) = this.as_object()
-        && let Some(i) = ctors.iter().position(|c| *c == o)
-        && let Some(elem) = Elem::ALL.get(i)
-    {
-        return Ok(*elem);
-    }
-    Err(interp.type_error(&format!("TypedArray.{name} must be called on a typed array constructor")))
+    let elem = c.as_object().and_then(|o| ctors.iter().position(|t| *t == o)).and_then(|i| Elem::ALL.get(i).copied());
+    let ta = match elem {
+        Some(elem) => new_typed(interp, elem, len)?,
+        None => {
+            #[allow(clippy::cast_precision_loss)]
+            let made = interp.construct(c, &[Value::Number(len as f64)])?;
+            match made.as_object() {
+                Some(o) if view_of(interp, o).is_some_and(|v| v.length as u64 >= len) => o,
+                _ => return Err(interp.type_error(&format!("TypedArray.{name}: the constructor did not make a typed array long enough"))),
+            }
+        }
+    };
+    let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
+    Ok((ta, view))
 }
 
 /// `%TypedArray%.from(source, mapFn, thisArg)` (section 22.2.2.1).
 fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    if !interp.is_callable(&this) {
+    if !interp.is_constructor(&this) {
         return Err(interp.type_error("TypedArray.from must be called on a typed array constructor"));
     }
     let map_fn = arg(args, 1);
@@ -734,9 +757,7 @@ fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
         let src = interp.to_object(&source)?;
         let src_value = Value::Object(src);
         let len = length_of(interp, src)?;
-        let elem = ctor_elem(interp, &this, "from")?;
-        let ta = interp.rooted(std::slice::from_ref(&src_value), |interp| new_typed(interp, elem, len))?;
-        let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
+        let (ta, view) = interp.rooted(std::slice::from_ref(&src_value), |interp| typed_create(interp, &this, len, "from"))?;
         return interp.rooted(&[Value::Object(ta), src_value.clone()], |interp| {
             for i in 0..len {
                 interp.use_fuel()?;
@@ -760,10 +781,8 @@ fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
     });
     let result = gathered.and_then(|()| {
         let items: Vec<Value> = interp.temp_roots.get(mark..).map(<[Value]>::to_vec).unwrap_or_default();
-        let elem = ctor_elem(interp, &this, "from")?;
-        let ta = new_typed(interp, elem, items.len() as u64)?;
+        let (ta, view) = typed_create(interp, &this, items.len() as u64, "from")?;
         interp.temp_roots.push(Value::Object(ta));
-        let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
         for (i, item) in items.into_iter().enumerate() {
             interp.use_fuel()?;
             #[allow(clippy::cast_precision_loss)]
@@ -780,9 +799,10 @@ fn typed_from(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
 
 /// `%TypedArray%.of(...items)` (section 22.2.2.2).
 fn typed_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let elem = ctor_elem(interp, &this, "of")?;
-    let ta = new_typed(interp, elem, args.len() as u64)?;
-    let view = view_of(interp, ta).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
+    if !interp.is_constructor(&this) {
+        return Err(interp.type_error("TypedArray.of must be called on a typed array constructor"));
+    }
+    let (ta, view) = typed_create(interp, &this, args.len() as u64, "of")?;
     interp.rooted(&[Value::Object(ta)], |interp| {
         for (i, v) in args.iter().enumerate() {
             interp.use_fuel()?;
@@ -862,7 +882,7 @@ generic_methods! {
     ta_reduce, "reduce", array::reduce;
     ta_reduce_right, "reduceRight", array::reduce_right;
     ta_reverse, "reverse", array::reverse;
-    ta_to_locale_string, "toLocaleString", array::to_locale_string;
+    ta_to_locale_string, "toLocaleString", array::typed_to_locale_string;
 }
 
 fn iter_of(interp: &mut Interp, this: &Value, kind: IterKind, name: &str) -> JsResult<Value> {
@@ -927,10 +947,11 @@ fn find_index(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
 
 /// `map` (section 22.2.3.18): a new typed array of the same type holding each callback result.
 fn map(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let (_, view) = this_typed(interp, &this, "map")?;
+    let (o, view) = this_typed(interp, &this, "map")?;
     let f = arg(args, 0);
     require_callable(interp, &f, "the callback")?;
     let this_arg = arg(args, 1);
+    species_check(interp, o, "TypedArray.prototype.map")?;
     let out = new_typed(interp, view.elem, view.length as u64)?;
     let dst = view_of(interp, out).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
     interp.rooted(&[Value::Object(out)], |interp| {
@@ -958,10 +979,11 @@ fn typed_from_values(interp: &mut Interp, elem: Elem, values: &[f64]) -> JsResul
 
 /// `filter` (section 22.2.3.9).
 fn filter(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let (_, view) = this_typed(interp, &this, "filter")?;
+    let (o, view) = this_typed(interp, &this, "filter")?;
     let f = arg(args, 0);
     require_callable(interp, &f, "the callback")?;
     let this_arg = arg(args, 1);
+    species_check(interp, o, "TypedArray.prototype.filter")?;
     let mut held = crate::interp::HeldBytes::new(interp);
     let mut kept = Vec::new();
     for i in 0..view.length {
@@ -981,10 +1003,11 @@ fn filter(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
 
 /// `slice(start, end)` (section 22.2.3.23): a copy of the range in a new buffer.
 fn slice(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let (_, view) = this_typed(interp, &this, "slice")?;
+    let (o, view) = this_typed(interp, &this, "slice")?;
     let start = relative(interp, &arg(args, 0), view.length, 0)?;
     let end = relative(interp, &arg(args, 1), view.length, view.length)?;
     let count = end.saturating_sub(start);
+    species_check(interp, o, "TypedArray.prototype.slice")?;
     let out = new_typed(interp, view.elem, count as u64)?;
     let dst = view_of(interp, out).ok_or_else(|| Abrupt::Internal("not a typed array".into()))?;
     copy_elements(interp, &view, start, &dst, 0, count)?;
@@ -993,9 +1016,10 @@ fn slice(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
 
 /// `subarray(begin, end)` (section 22.2.3.26): a new view on the same buffer.
 fn subarray(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let (_, view) = this_typed(interp, &this, "subarray")?;
+    let (o, view) = this_typed(interp, &this, "subarray")?;
     let begin = relative(interp, &arg(args, 0), view.length, 0)?;
     let end = relative(interp, &arg(args, 1), view.length, view.length)?;
+    species_check(interp, o, "TypedArray.prototype.subarray")?;
     interp.rooted(std::slice::from_ref(&this), |i| i.reserve_heap(OBJECT_BYTES + VIEW_BYTES))?;
     let sub = View { buffer: view.buffer, offset: view.offset + begin * view.elem.size(), length: end.saturating_sub(begin), elem: view.elem };
     let proto = typed_proto(interp, view.elem);
@@ -1004,8 +1028,8 @@ fn subarray(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResu
 
 /// `set(source, offset)` (section 22.2.3.22): writes a typed array's elements, or an array-like
 /// object's elements converted with ToNumber, starting at `offset`. A source that does not fit
-/// is a `RangeError`. A typed array source is read in full before anything is written, so a
-/// source on the same buffer copies correctly.
+/// is a `RangeError`. A typed array source on the same buffer is read in full before anything is
+/// written, so it copies correctly.
 fn set(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let (_, view) = this_typed(interp, &this, "set")?;
     let offset = to_integer(interp, &arg(args, 1))?;
@@ -1031,6 +1055,16 @@ fn set(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Va
     let count = usize::try_from(src_len).unwrap_or(0);
     if let Some(src) = src_view.filter(|src| src.elem == view.elem) {
         copy_elements(interp, &src, 0, &view, offset, count)?;
+        return Ok(Value::Undefined);
+    }
+    if let Some(src) = src_view.filter(|src| src.buffer != view.buffer) {
+        // On another buffer, the writes do not change the source, so each element is written as
+        // it is read.
+        for i in 0..count {
+            interp.use_fuel()?;
+            let n = at(interp, &src, i);
+            write(interp, &view, offset + i, n);
+        }
         return Ok(Value::Undefined);
     }
     if let Some(src) = src_view {
@@ -1134,6 +1168,10 @@ fn sort(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<V
     let (_, view) = this_typed(interp, &this, "sort")?;
     let mut held = crate::interp::HeldBytes::new(interp);
     held.add(interp, view.length.saturating_mul(16))?;
+    // Each element is read and written back: two units of fuel, charged before the sort starts.
+    for _ in 0..view.length.saturating_mul(2) {
+        interp.use_fuel()?;
+    }
     let mut values: Vec<f64> = (0..view.length).map(|i| at(interp, &view, i)).collect();
     merge_sort(interp, &mut values, &compare)?;
     for (i, n) in values.into_iter().enumerate() {
