@@ -220,6 +220,16 @@ fn a_dynamic_instance_keeps_its_changes_through_the_guides() {
     assert_ne!(fills[0].as_deref(), Some("#ff0000"), "only the changed object");
 }
 
+/// A press on the edited symbol's 9-slice guide at `from` dragged to `to`, run as the canvas's
+/// selection widgets run it; the caller ends it with `finish` or `cancel`.
+pub(super) fn guide_drag(s: &mut Session, v: ViewInfo, from: Point, to: Point) -> vectorcraft_tools::nineslice::GuideDrag {
+    let press = PointerEvent::new(PointerKind::Down, from.x, from.y);
+    let mut d = s.with_tool_context(v, |cx| vectorcraft_tools::nineslice::GuideDrag::hit(cx, &press)).expect("a guide at the press");
+    let acts = s.with_tool_context(v, |cx| d.drag(cx, to));
+    s.apply_actions(acts).unwrap();
+    d
+}
+
 /// The boxes of the paths a symbol instance `id` draws, placed through its symbol's guides.
 fn placed_boxes(s: &Session, id: NodeId) -> Vec<Rect> {
     let d = &s.doc().unwrap().doc;
@@ -247,9 +257,8 @@ fn a_guide_dragged_on_the_canvas_changes_how_a_scaled_instance_draws() {
     // that span to the left of the left guide.
     let (from, right) = (mid(&e, NineSliceGuide::Left), mid(&e, NineSliceGuide::Right));
     let to = from + (from - right) * 0.4;
-    s.pointer(&PointerEvent::new(PointerKind::Down, from.x + 1.0, from.y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y), v).unwrap();
+    let d = guide_drag(&mut s, v, Point::new(from.x + 1.0, from.y), to);
+    s.apply_actions(d.finish()).unwrap();
     s.execute("symbol.exitEditing", &json!({})).unwrap();
     let boxes = placed_boxes(&s, id);
     assert_eq!(boxes.len(), 3, "{boxes:?}");
@@ -316,9 +325,8 @@ fn a_guide_dragged_past_the_arts_edge_lies_outside_it() {
     // The guides lie a quarter in from each edge, so the art's left edge lies half the guides'
     // distance to the left of the left guide, and 25 % outside it lies as far again.
     let to = l - (r - l);
-    s.pointer(&PointerEvent::new(PointerKind::Down, l + 1.0, y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Drag, to, y), v).unwrap();
-    s.pointer(&PointerEvent::new(PointerKind::Up, to, y), v).unwrap();
+    let d = guide_drag(&mut s, v, Point::new(l + 1.0, y), Point::new(to, y));
+    s.apply_actions(d.finish()).unwrap();
     let g = s.doc().unwrap().doc.symbol_nine_slice("Panel").unwrap();
     assert!((g.left + 0.25).abs() < 1e-9, "{g:?}");
     let e = s.doc().unwrap().doc.edited_nine_slice().unwrap();

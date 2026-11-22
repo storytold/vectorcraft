@@ -366,12 +366,18 @@ fn shaper_widget_switches_between_face_selection_and_construction_mode() {
             s.pointer(&PointerEvent::new(kind, p.x, p.y), v).unwrap();
         }
     };
+    // A click on the widget, as the canvas's selection widgets run it before the tool.
+    let widget_click = |s: &mut Session, p: Point| {
+        let acts: Vec<_> = s.with_tool_context(v, |cx| vectorcraft_tools::shaperwidget::click(cx, p).into_iter().collect());
+        assert!(!acts.is_empty(), "the click is on the widget");
+        s.apply_actions(acts).unwrap();
+    };
     for tool in ["shaper", "selection"] {
         s.select_tool(tool, v).unwrap();
         s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
         let w = widget(&s);
         assert!(!w.construction);
-        click(&mut s, w.at);
+        widget_click(&mut s, w.at);
         assert_eq!(s.doc().unwrap().isolation, Some(sources), "{tool}");
         assert!(widget(&s).construction);
         if tool == "shaper" {
@@ -388,7 +394,7 @@ fn shaper_widget_switches_between_face_selection_and_construction_mode() {
         assert_eq!(fill(&s, g, 15.0, 50.0).as_deref(), Some("#ff0000"));
         let w = widget(&s);
         assert!(w.construction);
-        click(&mut s, w.at);
+        widget_click(&mut s, w.at);
         assert_eq!(s.doc().unwrap().isolation, None, "{tool}");
         assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
         s.execute("object.move", &json!({"dx": -10, "dy": 0})).unwrap();

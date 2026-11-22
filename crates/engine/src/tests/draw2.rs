@@ -5107,10 +5107,8 @@ fn the_pen_continues_any_open_path_and_joins_another() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
     assert_eq!(s.cursor(Point::new(300.0, 200.0), none, v), Cursor::PenJoin);
     assert_eq!(s.cursor(Point::new(350.0, 200.0), none, v), Cursor::PenDrawing, "the middle of the other path");
-    // #1009: Use Precise Cursors makes the join pointer a crosshair too.
-    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": true})).unwrap();
-    assert_eq!(s.cursor(Point::new(300.0, 200.0), none, v), Cursor::Crosshair);
-    s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
+    // #1009: Use Precise Cursors makes the join pointer a crosshair too (the canvas applies `Cursor::precise`).
+    assert_eq!(s.cursor(Point::new(300.0, 200.0), none, v).precise(), Cursor::Crosshair);
     assert_eq!(gesture(&mut s, &[(300.0, 200.0)], none), 1);
     let pts = |s: &Session, id| path(s, id).subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|x| (x.p.x, x.p.y))).collect::<Vec<_>>();
     assert_eq!(pts(&s, a), [(100.0, 100.0), (200.0, 100.0), (300.0, 200.0), (400.0, 200.0)]);
