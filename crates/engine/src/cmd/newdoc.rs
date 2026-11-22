@@ -984,13 +984,18 @@ impl Session {
         let file = path.to_string_lossy().to_string();
         // Checked before the file is looked for, so a request that may not read the folder learns
         // nothing of its files, nor where the folder is.
+        // A script's gate does not apply to reads of the app's own folder; the automation roots in
+        // force still do.
         let denied = |_| PROFILE_DENIED.to_string();
-        crate::file_access::check_read(&file).map_err(denied)?;
-        if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
-            return Ok(None);
-        }
-        crate::file_access::check_read(&file).map_err(denied)?;
-        let bytes = crate::store::read_capped(&path, MAX_PROFILE_BYTES)?;
+        let read = crate::file_access::app_folder_read(|| {
+            crate::file_access::check_read(&file).map_err(denied)?;
+            if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+                return Ok(None);
+            }
+            crate::file_access::check_read(&file).map_err(denied)?;
+            crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)
+        })?;
+        let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs
         // them, so the new document's assigned profiles draw and are saved with it.
         let (mut doc, _, warnings) = super::fileio::native_file(&bytes).map_err(|e| e.to_string())?;
