@@ -895,6 +895,41 @@ fn on_the_web_a_failed_check_ends_while_a_run_holds_the_documents() {
     app.run("plugin.cancelRuns", json!({})).unwrap();
 }
 
+/// An edit the active tool computes on another thread (a Shape Builder merge) is applied before a
+/// worker run is given the document, so the run sees it and its output still applies.
+#[test]
+fn on_the_web_a_worker_run_starts_after_the_tool_edit_in_progress() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.tooledit";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"commands":[{{"id":"same","label":"Same"}}]}}"#
+    );
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, TRIANGLE)).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap();
+    // 40 overlapping squares, which the Shape Builder merges on another thread.
+    let ids: Vec<_> = (0..40)
+        .map(|k| app.run("shape.rectangle", json!({"x": f64::from(k) * 10.0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].clone())
+        .collect();
+    app.run("select.set", json!({ "ids": ids })).unwrap();
+    let v = app.view_info();
+    app.session.select_tool("shapeBuilder", v).unwrap();
+    app.session.pointer(&PointerEvent::new(PointerKind::Move, 15.0, 10.0), v).unwrap();
+    app.session.tool_poll(v, true).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        app.session.pointer(&PointerEvent::new(kind, 15.0, 10.0), v).unwrap();
+    }
+    assert!(app.session.tool_editing(), "the merge is being computed");
+    assert_eq!(app.run(&format!("plugin.{id}.same"), json!({})).unwrap()["background"], true);
+    assert!(!app.session.tool_editing(), "the merge applied before the run was given the document");
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(app.plugin_runs.running.is_empty());
+    assert_eq!(app.session.doc().unwrap().history.undo.last().unwrap().label, "Same", "{}", app.ui.status);
+}
+
 /// The progress window shows the run that holds the documents at once, with Cancel only, also when
 /// a run that started before it is running.
 #[test]

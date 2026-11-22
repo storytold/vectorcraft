@@ -795,12 +795,20 @@ impl Session {
         self.plugin_calling.is_some()
     }
 
-    /// Keeps the edit in progress (a drag, a preview, typing) as its own undo step, as a run that
-    /// calls commands does before it starts, so a run made away from the session is given the
-    /// document with it and applies as an undo step of its own → whether that changed the document
-    /// or the selection.
+    /// Applies the edit the active tool computes on another thread (a Shape Builder merge), as a
+    /// command that edits waits for it, and keeps the edit in progress (a drag, a preview, typing)
+    /// as its own undo step, as a run that calls commands does before it starts, so a run made away
+    /// from the session is given the document with them and applies as an undo step of its own →
+    /// whether that changed the document or the selection.
     pub fn settle_for_plugin_run(&mut self) -> Result<bool> {
-        super::plugin_call::settle(self)
+        let before = self.active().map(|d| (Arc::clone(&d.doc), d.selection.clone()));
+        self.finish_tool_edit_later()?;
+        let finished = match (&before, self.active()) {
+            (Some((doc, selection)), Some(d)) => !Arc::ptr_eq(doc, &d.doc) || *selection != d.selection,
+            (None, None) => false,
+            _ => true,
+        };
+        Ok(super::plugin_call::settle(self)? || finished)
     }
 
     /// Is command `id` the one that applies the output of the run that holds the documents?
