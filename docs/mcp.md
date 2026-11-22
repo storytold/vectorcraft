@@ -2753,9 +2753,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   the image outside the canvas throw an error with nothing changed. `boundingBox` is the pixel rectangle at one point
   a pixel. `removeAll()` refuses images as `pageItems.removeAll()` refuses objects, and so throws `cannot delete
   objects on a locked artboard` and deletes nothing when an image is on one. Assigning `file` or `matrix` checks the
-  item before the value, so a stale item throws `Stale page item` and an `add()` result without a file throws
-  `PlacedItem.file is required` whatever the value. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a file is dropped at the
-  end of the run. `contentVariable`, `trace`, `colorants`, `colorize` and `overprint` are not available yet.
+  item before the value, so a stale item throws `Stale page item` whatever the value. Assigning `matrix` to an `add()`
+  result without a file throws `PlacedItem.file is required` whatever the value, and assigning `file` to one checks
+  the file and places the image. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a
+  file is dropped at the end of the run. `contentVariable`, `trace`, `colorants`, `colorize` and `overprint` are not
+  available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
