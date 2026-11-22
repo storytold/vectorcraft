@@ -552,7 +552,7 @@ mod tests {
 
     /// An app with a 100 × 50 pt embedded image selected.
     fn app_with_image() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
         app.run("paint.setStroke", json!({"none": true})).unwrap();

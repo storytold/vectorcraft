@@ -339,7 +339,7 @@ mod tests {
         for n in names {
             std::fs::write(dir.join(n), png([200, 0, 0])).unwrap();
         }
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         (app, dir)
@@ -363,7 +363,6 @@ mod tests {
         p.to_string_lossy().into_owned()
     }
 
-    // PLAN: assumed `app.ui_ctx` readable from tests (the window's context).
     fn ctx(app: &VectorcraftApp) -> egui::Context {
         app.ui_ctx.clone().expect("a window")
     }

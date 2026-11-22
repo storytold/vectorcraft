@@ -11,14 +11,7 @@ use crate::i18n::LangExt as _;
 /// The window the tests draw in.
 pub(super) const SCREEN: egui::Vec2 = egui::vec2(1600.0, 1100.0);
 
-/// `app` shown in a window of its own: its context is the one every frame of the test runs on, so focus and drags last
-/// from frame to frame, and the access tree is on for the tests that find a control by its role.
-pub(super) fn window(mut app: VectorcraftApp) -> VectorcraftApp {
-    let ctx = crate::testing::ui_context();
-    ctx.enable_accesskit();
-    app.ui_ctx = Some(ctx);
-    app
-}
+pub(super) use crate::testing::windowed as window;
 
 pub(super) fn app() -> VectorcraftApp {
     let mut app = window(VectorcraftApp::new(Session::new(), Default::default()));

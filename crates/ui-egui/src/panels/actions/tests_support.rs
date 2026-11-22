@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use craft::automation::actions::{Action, ActionList, ActionStep};
-use craft::host::{Host, Picked, ScriptedFiles};
+use craft::host::{Picked, ScriptedFiles};
 use craft::ui::dialog::{DialogHost, HeldOk, StackDialog};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -119,11 +119,8 @@ pub(crate) fn saved_sets(app: &VectorcraftApp) -> Value {
 }
 
 /// Puts `picks` in place of the file service of `app`'s window.
-fn install_picks(app: &VectorcraftApp, picks: ScriptedFiles) {
-    let ctx = app.ui_ctx.clone().expect("a test app has a window");
-    // PLAN: assumed, as `tests::picks::scripted` (files-w7), that the app's context carries its host (hub-w1).
-    let host = Host::try_of_ctx(&ctx).expect("the app's context carries its host");
-    host.with_files(Arc::new(picks)).install(&ctx);
+fn install_picks(app: &mut VectorcraftApp, picks: ScriptedFiles) {
+    crate::tests::picks::install_files(app, Arc::new(picks));
 }
 
 /// The most file dialogs [`with_files`] answers in one test.

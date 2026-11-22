@@ -706,9 +706,8 @@ mod tests {
     use vectorcraft_engine::Session;
 
     /// An app with one 200 × 150 artboard on a window with a dialog host.
-    // PLAN: assumed `VectorcraftApp::new` gives `dialogs()` a host; otherwise the shared test app of the dialogs tests.
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
         app
     }

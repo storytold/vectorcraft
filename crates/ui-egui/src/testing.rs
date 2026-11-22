@@ -16,6 +16,16 @@ pub(crate) fn install(ctx: &egui::Context) {
     set_input(ctx, FrameInput::new(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)));
 }
 
+/// `app` shown in a window of its own: its context is the one every frame of the test runs on, so its dialogs open on
+/// the window's host, focus and drags last from frame to frame, and the access tree is on for the tests that find a
+/// control by its role.
+pub(crate) fn windowed(mut app: crate::VectorcraftApp) -> crate::VectorcraftApp {
+    let ctx = ui_context();
+    ctx.enable_accesskit();
+    app.ui_ctx = Some(ctx);
+    app
+}
+
 /// A context with the runtime, the app's interface fonts and its root theme installed.
 pub(crate) fn ui_context() -> egui::Context {
     let ctx = egui::Context::default();

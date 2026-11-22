@@ -156,7 +156,7 @@ fn list_events_and_menu_rows_reach_their_commands() {
 /// and an explicit artboard still wins.
 #[test]
 fn all_on_active_artboard_takes_the_active_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
     let mut rect = |x| app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     let (a, b) = (rect(10), rect(130));
@@ -178,7 +178,7 @@ fn all_on_active_artboard_takes_the_active_artboard() {
 #[test]
 fn fit_to_artwork_bounds_and_selected_art_resize_the_active_artboard() {
     for id in ["artboard.fitToArt", "artboard.fitToSelection"] {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
         // Partly on artboard 1 and partly on artboard 2.
         app.session.execute("shape.rectangle", &json!({"x": 90, "y": 10, "width": 60, "height": 30})).unwrap();
@@ -197,7 +197,7 @@ fn fit_to_artwork_bounds_and_selected_art_resize_the_active_artboard() {
 /// Bounds fits each of them to the art on it and leaves artboard 2 as it was.
 #[test]
 fn fit_to_artwork_bounds_fits_each_selected_artboard_to_its_own_art() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
     for (x, h) in [(10, 30), (130, 20), (250, 40)] {
         app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
@@ -219,7 +219,7 @@ fn fit_to_artwork_bounds_fits_each_selected_artboard_to_its_own_art() {
 /// as it was.
 #[test]
 fn a_batchs_fit_to_artwork_bounds_step_fits_each_selected_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
     for (x, h) in [(10, 30), (130, 20), (250, 40)] {
         app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": h})).unwrap();
@@ -268,7 +268,7 @@ fn shift_clicking_rows_selects_several_artboards() {
 /// order, in one undo step. With one artboard selected, Rename gives it the name as typed.
 #[test]
 fn the_panel_menus_rename_numbers_several_selected_artboards() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     for x in [400, 800, 1200] {
         app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
@@ -296,7 +296,7 @@ fn the_panel_menus_rename_numbers_several_selected_artboards() {
 /// that artboard, not the active one.
 #[test]
 fn the_panel_menus_rename_opens_on_a_selected_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
     app.select_tool("artboard");
     select(&mut app, 1);
@@ -314,7 +314,7 @@ fn the_panel_menus_rename_opens_on_a_selected_artboard() {
 /// one the tool then has active.
 #[test]
 fn paste_and_cut_with_the_artboard_tool_make_its_artboard_active() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
     app.select_tool("artboard");
     select(&mut app, 1);
@@ -334,7 +334,7 @@ fn paste_and_cut_with_the_artboard_tool_make_its_artboard_active() {
 /// selected, on the active one.
 #[test]
 fn in_place_pastes_put_a_copy_on_each_artboard_the_artboard_tool_selects() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
     let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.origin()).collect();
     let r = app.run("shape.rectangle", json!({"x": boards[0].x + 10.0, "y": boards[0].y + 20.0, "width": 5, "height": 5})).unwrap()["id"].clone();
@@ -359,7 +359,7 @@ fn in_place_pastes_put_a_copy_on_each_artboard_the_artboard_tool_selects() {
 /// then has active the active one.
 #[test]
 fn the_artboard_tools_options_make_its_artboard_active() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
     app.select_tool("artboard");
     app.run("tool.setOption", json!({"key": "selected", "value": [2, 0]})).unwrap();
@@ -373,7 +373,7 @@ fn the_artboard_tools_options_make_its_artboard_active() {
 /// tool's artboards keeps the active artboard, and Copy and Paste make the pasted one active.
 #[test]
 fn a_batch_in_one_document_makes_the_artboard_tools_artboard_active() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
     app.select_tool("artboard");
     select(&mut app, 1);
@@ -389,7 +389,7 @@ fn a_batch_in_one_document_makes_the_artboard_tools_artboard_active() {
 /// switches to the tool's, as choosing the document's tab does.
 #[test]
 fn switching_documents_with_the_artboard_tool_keeps_the_active_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
     app.select_tool("artboard");
     select(&mut app, 2);
@@ -404,7 +404,7 @@ fn switching_documents_with_the_artboard_tool_keeps_the_active_artboard() {
 /// tool's artboard 1 makes the new first artboard active, as Cut on its own makes it.
 #[test]
 fn a_batch_that_switches_documents_and_back_keeps_the_active_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 3})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
@@ -430,7 +430,7 @@ fn a_batch_that_switches_documents_and_back_keeps_the_active_artboard() {
 /// artboard and for the row's artboard, and leave the tool as it is.
 #[test]
 fn the_panel_menus_artboard_options_opens_the_active_artboards_options() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
     select(&mut app, 1);
@@ -454,7 +454,7 @@ fn the_panel_menus_artboard_options_opens_the_active_artboards_options() {
 /// active artboard's copy active.
 #[test]
 fn the_panel_menus_duplicate_artboards_copies_every_selected_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     for x in [400, 800] {
         app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
@@ -481,7 +481,7 @@ fn the_panel_menus_duplicate_artboards_copies_every_selected_artboard() {
 /// one selected.
 #[test]
 fn the_panel_menus_new_artboard_makes_the_new_artboard_active() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
     app.view_mut().unwrap().artboard = 0;
     run(&mut app, "ui.artboards.new", &json!({})).unwrap().unwrap();
@@ -507,7 +507,7 @@ fn the_panel_menus_new_artboard_makes_the_new_artboard_active() {
 /// rectangles, in one undo step, as Object › Artboards › Convert to Artboards does.
 #[test]
 fn the_panel_menus_convert_to_artboards_converts_the_selected_objects() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     for x in [10, 60] {
         app.session.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 20, "height": 30})).unwrap();
@@ -538,7 +538,7 @@ fn boards(app: &VectorcraftApp) -> (Vec<vectorcraft_geom::Rect>, usize, Vec<Stri
 /// step: about its center, and from its top-left corner once the top-left point is chosen.
 #[test]
 fn the_control_bar_resizes_the_active_artboard_about_the_reference_point() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 100, "units": "Points", "artboards": 2})).unwrap();
     app.select_tool("artboard");
     select(&mut app, 1);
@@ -567,7 +567,7 @@ fn the_control_bar_resizes_the_active_artboard_about_the_reference_point() {
 /// selected.
 #[test]
 fn choosing_the_artboard_tool_starts_it_on_the_active_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     for x in [400, 800] {
         app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
@@ -598,7 +598,7 @@ fn choosing_the_artboard_tool_starts_it_on_the_active_artboard() {
 /// active artboard; a plain New adds an empty one.
 #[test]
 fn dragging_a_row_onto_new_artboard_duplicates_it() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     apply(&mut app, vec![PageListEvent::new_row(Some(0), false)]);
@@ -648,7 +648,7 @@ fn the_row_menus_rename_opens_the_rename_dialog_for_the_selected_artboards() {
 /// becomes the active one; a locked artboard can be renamed too.
 #[test]
 fn the_row_menu_renames_the_right_clicked_artboard_with_any_tool() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": 3})).unwrap();
     app.session.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
     select(&mut app, 0);
@@ -667,7 +667,7 @@ fn the_row_menu_renames_the_right_clicked_artboard_with_any_tool() {
 /// locked artboard.
 #[test]
 fn the_lock_column_locks_and_unlocks_an_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.session.execute("artboard.new", &json!({"x": 400, "y": 0, "width": 200, "height": 150})).unwrap();
     select(&mut app, 1);
@@ -688,7 +688,7 @@ fn the_lock_column_locks_and_unlocks_an_artboard() {
 /// refuses the change. A name typed for them goes to the locked one too.
 #[test]
 fn a_new_size_for_the_selected_artboards_leaves_a_locked_one() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     for x in [400, 800] {
         app.session.execute("artboard.new", &json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
@@ -713,7 +713,7 @@ fn a_new_size_for_the_selected_artboards_leaves_a_locked_one() {
 /// step and makes it the active one.
 #[test]
 fn alt_clicking_new_artboard_opens_artboard_options_for_the_new_artboard() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
     select(&mut app, 0);
@@ -752,7 +752,7 @@ fn alt_clicking_new_artboard_opens_artboard_options_for_the_new_artboard() {
 /// artboard its default name, and with the Artboard tool in use the tool moves to the new artboard.
 #[test]
 fn new_artboard_options_with_an_empty_name_add_the_default_name() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     let ctx = crate::testing::ui_context();
     assert!(app.run("ui.newArtboard", json!({})).is_err(), "no document");
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
@@ -769,7 +769,7 @@ fn new_artboard_options_with_an_empty_name_add_the_default_name() {
 /// left active.
 #[test]
 fn delete_empty_artboards_deletes_the_empty_ones_and_selects_one_left() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 150})).unwrap();
     for x in [400, 800] {
         app.run("artboard.new", json!({"x": x, "y": 0, "width": 200, "height": 150})).unwrap();
@@ -793,7 +793,7 @@ fn delete_empty_artboards_deletes_the_empty_ones_and_selects_one_left() {
 /// locks the selected one (the others stay free), Unlock All frees every artboard.
 #[test]
 fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 100, "height": 100, "units": "Points", "artboards": 3})).unwrap();
     let locked = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.locked).collect::<Vec<_>>();
     let run = |app: &mut VectorcraftApp, menu: &str, label: &str| {
@@ -818,7 +818,7 @@ fn the_artboard_tools_context_menu_locks_and_unlocks_artboards() {
 
 /// A document of `boards` artboards of 100 × 50 pt with the Artboard tool chosen.
 fn menu_app(boards: usize) -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": boards})).unwrap();
     app.select_tool("artboard");
     app
@@ -1189,6 +1189,6 @@ fn select_all_artboards_chooses_the_tool_and_needs_a_document() {
     app.select_tool("selection");
     assert_eq!(app.run("artboard.selectAll", json!({})).unwrap()["selected"], json!([0, 1]));
     assert_eq!(app.session.tool_id(), "artboard");
-    let mut empty = VectorcraftApp::new(Session::new(), Default::default());
+    let mut empty = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     assert_eq!(empty.run("artboard.selectAll", json!({})).unwrap_err(), "no document");
 }

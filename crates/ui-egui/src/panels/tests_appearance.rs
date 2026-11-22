@@ -12,7 +12,7 @@ use crate::tests::panel_harness::Panel;
 use crate::tests::synthetic::key_frame;
 
 pub(super) fn app_with_rect() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 100}))["id"].clone();
     run(&mut app, "select.set", json!({ "ids": [id] }));
@@ -411,7 +411,7 @@ fn effect_rows_dropped_on_delete_or_duplicate() {
 /// A row dropped on something that is not a button changes nothing either, and the next drop still works.
 #[test]
 fn contents_rows_and_drops_elsewhere_change_nothing() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     run(&mut app, "file.new", json!({"width": 100, "height": 100}));
     let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
     let b = run(&mut app, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}))["id"].clone();
@@ -690,7 +690,7 @@ fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
         |image: &Image| (0..image.width).rev().find(|&x| (0..image.height).any(|y| image.over_white(x, y).iter().any(|&c| c < 245))).unwrap();
     for kind in ["object", "fill", "stroke", "group", "layer", "text", "image"] {
         for preview in [true, false] {
-            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
             app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
             match kind {
                 "text" => {
@@ -825,7 +825,7 @@ fn fill_and_stroke_labels_are_links_and_their_empty_space_only_highlights() {
 #[test]
 fn after_a_contents_click_delete_removes_nothing() {
     let group = || {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         run(&mut app, "file.new", json!({"width": 100, "height": 100}));
         let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
         let b = run(&mut app, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}))["id"].clone();
@@ -835,7 +835,7 @@ fn after_a_contents_click_delete_removes_nothing() {
         app
     };
     let type_object = || {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         run(&mut app, "file.new", json!({"width": 100, "height": 100}));
         let t = run(&mut app, "text.create", json!({"x": 10, "y": 50, "text": "Hi"}))["id"].clone();
         run(&mut app, "select.set", json!({"ids": [t]}));
@@ -925,7 +925,7 @@ fn a_row_link_to_a_panel_in_sight_opens_no_popup() {
 /// "row link to popup": on a type object "Characters" is a link to the Character panel.
 #[test]
 fn characters_opens_the_character_panel() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     run(&mut app, "file.new", json!({"width": 100, "height": 100}));
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 60, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [t]}));
@@ -1024,7 +1024,7 @@ fn a_drop_on_delete_above_the_active_effect_keeps_the_highlight_on_its_rows() {
 /// group too, not a copy of it; nothing with nothing selected or no document open.
 #[test]
 fn first_selected_is_the_node_the_document_holds() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     assert!(first_selected(&app).is_none(), "no document");
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();

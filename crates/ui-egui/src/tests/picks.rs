@@ -64,10 +64,8 @@ pub(crate) fn scripted_sheets(app: &mut VectorcraftApp, on: bool) -> Picker {
 /// [`scripted`] with `files` as the app's file service: the app's host carries it, and so does the
 /// window's context, as a frame installs the app's host there.
 fn scripted_files(app: &mut VectorcraftApp, files: ScriptedFiles) -> Picker {
-    let ctx = app.ui_ctx.get_or_insert_with(crate::testing::ui_context).clone();
     let files = Arc::new(files);
-    app.host = Arc::new(app.host.with_files(files.clone()));
-    Host::clone(&app.host).install(&ctx);
+    install_files(app, files.clone());
     let written = Rc::new(RefCell::new(Vec::new()));
     let w = written.clone();
     app.services.read.get_or_insert_with(|| Box::new(|_: &str| Ok(SVG.to_vec())));
@@ -78,6 +76,14 @@ fn scripted_files(app: &mut VectorcraftApp, files: ScriptedFiles) -> Picker {
         given.as_mut().map_or(Ok(()), |write| write(path, bytes))
     }));
     Picker { files, written }
+}
+
+/// Makes `files` the file service of `app`'s host and of its window's context, as a frame installs the app's host
+/// there; an app without a window gets one.
+pub(crate) fn install_files(app: &mut VectorcraftApp, files: Arc<ScriptedFiles>) {
+    let ctx = app.ui_ctx.get_or_insert_with(crate::testing::ui_context).clone();
+    app.host = Arc::new(app.host.with_files(files));
+    Host::clone(&app.host).install(&ctx);
 }
 
 /// Run what the frame runs for the picks: their continuations, then the saves.

@@ -778,7 +778,7 @@ mod tests {
     }
 
     fn app_with(csv: &str, ty: &str) -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let id =
             app.run("graph.create", json!({"type": ty, "x": 0, "y": 0, "width": 200, "height": 150, "csv": csv})).unwrap()["id"].as_u64().unwrap();

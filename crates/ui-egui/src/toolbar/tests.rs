@@ -76,11 +76,7 @@ fn cells(app: &VectorcraftApp, ctx: &egui::Context, nodes: &[Node]) -> Vec<egui:
     found
 }
 
-/// `app` with a window to host its dialogs in.
-fn windowed(mut app: VectorcraftApp) -> VectorcraftApp {
-    app.ui_ctx = Some(crate::testing::ui_context());
-    app
-}
+use crate::testing::windowed;
 
 /// The open tool-options dialog: its id and the fields automation reads.
 fn tool_dialog(app: &VectorcraftApp) -> Option<(DialogId, serde_json::Value)> {

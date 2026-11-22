@@ -8,11 +8,7 @@ use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
 
-/// `app` with a window, so its dialogs open on the host.
-pub(super) fn windowed(mut app: VectorcraftApp) -> VectorcraftApp {
-    app.ui_ctx = Some(crate::testing::ui_context());
-    app
-}
+pub(super) use crate::testing::windowed;
 
 fn app() -> (VectorcraftApp, NodeId) {
     let mut app = windowed(VectorcraftApp::new(Session::new(), Default::default()));

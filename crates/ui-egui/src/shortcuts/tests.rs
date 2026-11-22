@@ -63,9 +63,12 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, n: usize) {
     }
 }
 
+/// An app with a 200 × 200 document whose window has drawn its first frame, which builds the keymap the shortcut
+/// commands edit.
 fn new_app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    ready(&mut app);
     app
 }
 
@@ -73,6 +76,7 @@ fn app_with_a_selected_rectangle() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 30})).unwrap();
+    ready(&mut app);
     app
 }
 

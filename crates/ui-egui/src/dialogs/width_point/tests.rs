@@ -5,7 +5,7 @@ use vectorcraft_tools::{PointerEvent, PointerKind};
 
 /// A 10 pt line from (100, 150) to (300, 150) with a 4 + 4 pt width point in the middle.
 fn app() -> (VectorcraftApp, u64) {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let id = app.run("shape.line", json!({"x1": 100, "y1": 150, "x2": 300, "y2": 150})).unwrap()["id"].as_u64().unwrap();
     app.run("stroke.set", json!({"ids": [id], "weight": 10})).unwrap();

@@ -136,7 +136,7 @@ mod tests {
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app
     }
