@@ -2069,7 +2069,7 @@ arrowhead	Feather	இறகு
 @msg	`count` must be a whole number from 1 to 96	`count` 1 முதல் 96 வரையிலான ஒரு முழு எண்ணாக இருக்க வேண்டும்
 @msg	`size` must be small, medium or large	`size` small, medium அல்லது large ஆக இருக்க வேண்டும்
 @msg	`text` must be a string of at most 100 characters	`text` அதிகபட்சம் 100 எழுத்துகள் கொண்ட உரைச்சரமாக இருக்க வேண்டும்
-@msg	Retype: select outlined text (paths or compound paths)	மறுதட்டச்சு செய்: வெளிரேகையாக்கப்பட்ட உரையைத் தேர்ந்தெடுக்கவும் (பாதைகள் அல்லது கூட்டுப் பாதைகள்)
+@msg	Retype: select outlined text (paths or compound paths)	மறுதட்டச்சு: வெளிரேகையாக்கப்பட்ட உரையைத் தேர்ந்தெடுக்கவும் (பாதைகள் அல்லது கூட்டுப் பாதைகள்)
 	Find Fonts	எழுத்துருக்களைக் கண்டுபிடி
 	Find Fonts in Folder…	கோப்புறையில் எழுத்துருக்களைக் கண்டுபிடி…
 	Find in Folder…	கோப்புறையில் கண்டுபிடி…
