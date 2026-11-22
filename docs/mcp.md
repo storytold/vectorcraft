@@ -13313,12 +13313,13 @@ one) again with the saved parameters changed by `params` and replaces its art, p
 transformed since it was drawn (stroke weights, effect distances and pattern tiles included), as one undo step named
 Edit Generated Art; parameters that change nothing run nothing, make no undo step and return `changed: false`. An
 object whose plug-in isn't installed or is a plug-in of another kind, or whose saved plug-in id, parameters, transforms or
-scales are damaged, is an error naming the plug-in, and its art stays as it is. `plugin.generatedInfo {id?}`
+scales are damaged, is an error (naming the plug-in when it is missing or of another kind), and its art stays as it is. `plugin.generatedInfo {id?}`
 returns `{id, plugin, name, params, state, installed}`, with `state` `"intact"`, `"damaged"` or `"changed"` (its art
 doesn't match the hash its file gave). `object.expand` makes a generated art object an ordinary group. The native file
 keeps each object's plug-in id, name, parameters, transforms and scales and a SHA-256 of its art (a generated art object
 inside another one's art is saved as plain art); `document.open` never runs a
-plug-in, and its `warnings` name the plug-in of each object it can't draw again. `plugin.run` of a generator is an error
+plug-in, and its `warnings` name the plug-in of each object whose plug-in is missing or of another kind or whose art
+changed, and say so once for objects with damaged fields. `plugin.run` of a generator is an error
 that names `plugin.generate`. In the app, Object › Plug-ins lists the generators with the filters (`plugin.dialog {id}`
 opens the `pluginGenerate` dialog for one with parameters), and Object › Plug-ins › Edit Generated Art…
 (`ui.editGeneratedArt {id?}`) opens that dialog with a selected object's parameters. A failing plug-in returns an error and leaves the document as it was (an export writes

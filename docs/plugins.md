@@ -109,15 +109,16 @@ art was drawn with and the art itself, so the art can be drawn again when the pa
   dashes and effect distances are scaled as Scale Strokes & Effects scaled the old art's, and its pattern tiles are
   moved as Transform Patterns moved them. Object › Expand makes a generated art object an ordinary group of its art. A
   generated art object can't be drawn again while its plug-in isn't installed or is installed as a plug-in of another
-  kind, or while its saved fields are damaged; the error names the plug-in, and its art stays as it
-  is.
+  kind, or while its saved fields are damaged. The error names the plug-in when it is missing or of another kind, and
+  the object's art stays as it is.
 - **Files.** The native file keeps each generated art object's plug-in id, its name (at most 64 characters), the
   parameters, the transform since it was drawn, what its strokes and effects were scaled by and its pattern tiles
   transformed by (`strokeScale`, `effectScale`, `patternTransform`), and a SHA-256 of its art's JSON (`generated`).
   Opening a file never runs a plug-in: each object is drawn from the art the file holds. When its plug-in isn't
   installed or is a plug-in of another kind, when its saved plug-in id is not a plug-in id or its parameters,
   transforms or scales can't be read, or when its art doesn't match the hash, the art stays as the file has it and the
-  open's warnings say so, naming the plug-in. Saving writes the hash of the art as it is then, and an object whose
+  open's warnings say so. The warnings name the plug-in, except for damaged fields, where they say that a generated
+  art object's plug-in id or parameters are damaged. Saving writes the hash of the art as it is then, and an object whose
   saved fields were damaged is saved with `damaged: true`, so it still can't be drawn again after the file is opened
   again. A generated art object inside another one's art is saved as plain art, without its own settings. A file that
   has settings on such an object anyway opens with them left out, and the outer object reads as `changed`.
