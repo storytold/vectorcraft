@@ -9,7 +9,7 @@ use serde_json::json;
 
 use super::tests_appearance::{app_with_rect, run};
 use super::*;
-use crate::tests::panel_harness::Panel;
+use crate::tests::panel_harness::{Panel, ROOM};
 
 type Show = fn(&mut VectorcraftApp, &mut Ui);
 
@@ -17,10 +17,13 @@ type Show = fn(&mut VectorcraftApp, &mut Ui);
 fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "millimeters".into();
-    let surfaces: [Show; 3] = [stroke::show, properties::show, crate::chrome::control_bar];
+    // The Control bar spans the window.
+    let surfaces: [(Show, egui::Vec2); 3] = [(stroke::show, ROOM), (properties::show, ROOM), (crate::chrome::control_bar, egui::vec2(1600.0, 200.0))];
     let panel = Panel::new(app, stroke::show);
-    for show in surfaces {
-        let p = Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
+    for (show, room) in surfaces {
+        let mut p =
+            Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
+        p.room(room).frame();
         assert!(super::tests_units::reads(p.value("Weight"), vectorcraft_doc::Unit::Millimeters, 1.0), "{:?}", p.value("Weight"));
         *panel.app() = std::mem::replace(&mut *p.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
     }
@@ -126,10 +129,10 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
     assert_eq!(stroke::weight_presets(Unit::Meters), stroke::weight_presets(Unit::Points));
 }
 
-/// A click on the weight's step arrow in `show`'s surface: the stroke's weight afterwards.
-fn step(app: VectorcraftApp, show: Show, part: PartKey) -> f64 {
+/// A click on the weight's step arrow in `show`'s surface, drawn in `room`: the stroke's weight afterwards.
+fn step(app: VectorcraftApp, show: Show, room: egui::Vec2, part: PartKey) -> f64 {
     let mut panel = Panel::new(app, show);
-    panel.frame();
+    panel.room(room).frame();
     panel.click_part("Weight", part, Modifiers::NONE);
     let w = panel.app().session.shown_stroke().unwrap().width;
     w
@@ -139,13 +142,15 @@ fn step(app: VectorcraftApp, show: Show, part: PartKey) -> f64 {
 /// weight between the presets to the next preset: 0.52 pt went down to 0 pt.
 #[test]
 fn every_weight_spinner_steps_to_the_next_preset() {
-    let surfaces: [(&str, Show); 3] =
-        [("Stroke panel", stroke::show), ("Control bar", crate::chrome::control_bar), ("Properties panel", properties::show)];
-    for (surface, show) in surfaces {
+    // The Control bar spans the window.
+    let bar = egui::vec2(1600.0, 200.0);
+    let surfaces: [(&str, Show, egui::Vec2); 3] =
+        [("Stroke panel", stroke::show, ROOM), ("Control bar", crate::chrome::control_bar, bar), ("Properties panel", properties::show, ROOM)];
+    for (surface, show, room) in surfaces {
         for (part, after) in [(NumberField::STEP_DOWN, 0.5), (NumberField::STEP_UP, 0.75)] {
             let mut app = app_with_rect();
             run(&mut app, "stroke.set", json!({"weight": 0.52}));
-            assert_eq!(step(app, show, part), after, "{surface}, {}", part.name());
+            assert_eq!(step(app, show, room, part), after, "{surface}, {}", part.name());
         }
     }
 }
@@ -157,7 +162,7 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "picas".into();
     run(&mut app, "stroke.set", json!({"weight": 2.004}));
-    assert_eq!(step(app, stroke::show, NumberField::STEP_DOWN), 1.0);
+    assert_eq!(step(app, stroke::show, ROOM, NumberField::STEP_DOWN), 1.0);
 }
 
 /// With objects of different weights selected the Weight field is blank, and its spinner steps

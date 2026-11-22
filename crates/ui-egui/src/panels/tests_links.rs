@@ -297,7 +297,9 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     assert_eq!(h.app().clipboard_out.take().as_deref(), Some("inside.png"));
     h.click_with("layer.png", egui::Modifiers::COMMAND);
     assert_eq!(selected(&h.app()), [layer]);
-    // Both rows are selected until the canvas selection changes: then the panel's pick goes too.
+    // Both rows are selected until the canvas selection changes: then the panel's pick goes too. The second click
+    // comes after the double-click time, so it is a click of its own.
+    h.advance(1.0);
     h.click_with("layer.png", egui::Modifiers::COMMAND);
     assert!(selected(&h.app()).is_empty());
     assert!(h.shows("30 × 20 px"), "the symbol's image is still picked");

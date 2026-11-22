@@ -263,6 +263,14 @@ fn nested_picks(app: &VectorcraftApp) -> Vec<u64> {
     }
 }
 
+/// Forgets the rows picked in the panel once the canvas selection or the document has changed (the panel looks every
+/// frame), so a later return to the same selection does not bring them back.
+fn drop_stale_picks(app: &mut VectorcraftApp) {
+    if app.ui.links.nested.as_ref().is_some_and(|(at, _)| Some(at) != canvas_selection(app).as_ref()) {
+        app.ui.links.nested = None;
+    }
+}
+
 /// Keep `ids` as the rows picked in the panel, with the canvas selection as it is now.
 fn set_nested_picks(app: &mut VectorcraftApp, ids: Vec<u64>) {
     app.ui.links.nested = canvas_selection(app).map(|at| (at, ids));
@@ -699,6 +707,7 @@ fn act(app: &mut VectorcraftApp, act: Act, target: Option<u64>) {
 
 /// The Links panel: the images as a list with a footer of link actions and the Link Info section.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    drop_stale_picks(app);
     let Some(mut cache) = cached(app, ui.ctx()) else {
         Panel::new(tl!("Links")).show(ui, |ui, _| {
             Text::new(tl!("No document")).shade(Shade::Muted).show(ui);
