@@ -173,6 +173,37 @@ fn a_global_function_that_cannot_be_declared_declares_nothing() {
 }
 
 #[test]
+fn a_global_function_is_judged_by_the_global_objects_own_property() {
+    // ECMA-262 2015 sections 8.1.1.4.16 and 8.1.1.4.18 read the global object's own property, so
+    // a fixed property the global object inherits does not stop the declaration.
+    let mut realm = es();
+    let setup = "Object.defineProperty(Object.prototype, 'fixed', { value: 1 }); \
+                 Object.defineProperty(Object.prototype, 'getter', { get: function () { return 1; } }); 0";
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("function fixed() { return 2; } function getter() { return 3; } fixed() + getter()"), Ok(JsValue::Number(5.0)));
+    let own = "var d = Object.getOwnPropertyDescriptor(this, 'fixed'); d.writable && d.enumerable && !d.configurable && ({}).fixed === 1";
+    assert_eq!(realm.run(own), Ok(JsValue::Bool(true)));
+    // A global object that is not extensible takes no new function, inherited name or not, and
+    // a function declared next to one it cannot take is not declared either.
+    let mut realm = es();
+    assert_eq!(realm.run(&format!("{setup}; var kept = 1; Object.preventExtensions(this); 0")), Ok(JsValue::Number(0.0)));
+    for decl in [
+        "function fixed() {}",
+        "function fresh() {}",
+        "(0, eval)('function fixed() {}')",
+        "(0, eval)('function fresh() {}')",
+        "(0, eval)('function kept() {} function fresh() {}')",
+    ] {
+        let failed = realm.run(decl);
+        assert!(
+            matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")),
+            "{decl}: {failed:?}"
+        );
+    }
+    assert_eq!(realm.run("this.hasOwnProperty('fixed') || this.hasOwnProperty('fresh') || kept !== 1"), Ok(JsValue::Bool(false)));
+}
+
+#[test]
 fn eval_code_keeps_its_let_and_const_to_itself() {
     truth("eval('let e = 1; e') === 1 && typeof e === 'undefined'");
     truth("function f() { eval('var v = 2; let l = 3;'); return v + typeof l; } f() === '2undefined'");
@@ -374,6 +405,40 @@ fn spread_and_templates_stay_within_the_limits() {
     let e = realm.run("var s = 'x'; for (var i = 0; i < 22; i++) s += s; [...s]").unwrap_err();
     assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
     throws("function f() {} var a = []; a.length = 100000; f(...a);", "RangeError");
+}
+
+#[test]
+fn spreading_a_rope_counts_its_flattened_length_first() {
+    // `mk` returns a rope whose left half is a flat string of about half the heap, held by
+    // nothing else. Its flattened copy is the other half, so the two don't fit together. Making
+    // the left half takes about 16,400 fuel, and the elements read before the heap fills would
+    // take more than the rest, so only the check before the copy ends the run with the heap limit.
+    let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
+                 function mk() { var a = f('a'); a[0]; return a + 'b'; }";
+    let limits = Limits { heap_bytes: 4 * 262_146, fuel: 20_000, ..Limits::default() };
+    for spread in ["[...mk()]", "Math.max(...mk())"] {
+        let e = Realm::with_options(es_options(), limits.clone()).run(&format!("{build} {spread}; 0")).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread}: {e:?}");
+    }
+    let made = Realm::with_options(es_options(), limits).run(&format!("{build} mk(); 0"));
+    assert_eq!(made, Ok(JsValue::Number(0.0)), "the rope is made within the fuel");
+}
+
+#[test]
+fn a_rest_parameter_checks_the_heap_before_its_array_is_made() {
+    // The 20,000 arguments fit in the room left over, and the rest array of them does not, so
+    // the call ends with the heap limit before the heap estimate passes it.
+    let setup = "function f(...r) { return r.length; } var big = Array(20000); 0";
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (512 << 10);
+    let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("f.apply(null, Array(10))"), Ok(JsValue::Number(10.0)));
+    let e = realm.run("f.apply(null, big)").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    assert!(realm.interp().heap.bytes <= heap_bytes, "{} > {heap_bytes}", realm.interp().heap.bytes);
 }
 
 #[test]
