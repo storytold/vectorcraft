@@ -9,6 +9,10 @@ impl VectorcraftApp {
     pub fn open_url(&mut self, url: &str) {
         self.pending_url = Some(url.to_string());
         self.ui.status = format!("Opened {url}");
+        // The next frame's tick opens it: one asked for in a frame needs another.
+        if let Some(ctx) = &self.ui_ctx {
+            ctx.request_repaint();
+        }
     }
 
     /// Open `url`, which came from a document (an object's URL attribute), in the browser:

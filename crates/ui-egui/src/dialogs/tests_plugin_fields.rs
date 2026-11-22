@@ -44,6 +44,8 @@ fn harness(id: &str) -> Harness {
                 crate::testing::install(ui.ctx());
                 return;
             }
+            // As the hosts run a frame: the tick (which opens the links asked for since the last), then the window.
+            app.tick(ui.ctx());
             app.ui(ui);
         },
         app,
@@ -125,6 +127,8 @@ fn the_help_button_opens_the_parameter_s_page() {
             assert_eq!(dialog.query_all_by_label("Help").count(), 1, "only Spacing has a page");
             dialog.get_by_label("Help").click();
         }
+        // The click asks for the page in one frame, and the next frame's tick opens it.
+        h.step();
         h.step();
     };
     press(&mut h);

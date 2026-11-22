@@ -191,7 +191,7 @@ pub struct VectorcraftApp {
     pub(crate) clipboard_in: Option<vectorcraft_engine::cmd::clipboard::Flavour>,
     /// The Copy or Cut whose formats go to the system clipboard ([`Self::publish_clipboard`]).
     clipboard_publishing: sysclip::Publishing,
-    /// A URL to open through egui next frame (when the host has no `open_url` service).
+    /// A URL to open through egui in the next frame's tick.
     pending_url: Option<String>,
     /// `VECTORCRAFT_TITLEBAR` chose this window's frame (Linux and the BSDs), so Preferences › User
     /// Interface › System Title Bar and VectorCraft Title Bar on Every Desktop do not apply while
