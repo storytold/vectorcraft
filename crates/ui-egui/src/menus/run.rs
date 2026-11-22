@@ -612,7 +612,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 json!(on)
             })
         }
-        "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
+        "window.toolbarAdvanced" => {
+            let on = flag(&mut app.ui.toolbar_advanced);
+            crate::edit_toolbar::keep_strips(&mut app.ui);
+            on
+        }
         "window.toolsBesideCanvas" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.tools_beside_canvas);
             app.ui.tools_beside_canvas = on;

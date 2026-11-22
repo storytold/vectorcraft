@@ -450,7 +450,9 @@ Floating tool groups: dragging or clicking the tear-off bar down a tool group's 
 that opened it over the bar) floats the group as a strip of tool buttons, moved by the same bar and put back in the
 toolbar by the × at its top; `window.floatTools {tool, floating?}` does the same for the group of the current
 layout holding `tool` (omitted toggles; a tool alone in its slot is an error). While a group floats, the presses
-that open its flyout raise the strip instead. The strips (`ui.floating_flyouts` in `ui.inspect`: the group's tools
+that open its flyout raise the strip instead. A strip shows the tools of the current layout's group that starts
+with the same tool, also after `toolbar.addTool`, `toolbar.removeTool`, `toolbar.reset`, `window.toolbarAdvanced`, loading the
+preferences or switching workspaces; a strip with no such group keeps its tools. The strips (`ui.floating_flyouts` in `ui.inspect`: the group's tools
 and the strip's top-left corner) are saved with the preferences and in user workspaces; the built-in workspaces
 float none.
 

@@ -883,7 +883,12 @@ fn loaded_floating_flyouts_keep_known_tools_one_strip_per_group() {
         ..Default::default()
     };
     let ui = ui.sanitized();
-    assert_eq!(ui.floating_flyouts.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), ["pen,addAnchor"]);
+    // The one strip left shows the current layout's Pen group.
+    let pen = BASIC.iter().flat_map(|(_, slots)| slots.iter()).find(|s| s.first() == Some(&"pen")).map(|s| s.join(","));
+    assert_eq!(ui.floating_flyouts.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), pen.into_iter().collect::<Vec<_>>());
+    // A strip whose group isn't in the layout keeps its known tools.
+    let ui = crate::state::UiState { floating_flyouts: vec![f(&["curvature", "nope", "addAnchor"])], ..Default::default() }.sanitized();
+    assert_eq!(ui.floating_flyouts.iter().map(|f| f.tools.join(",")).collect::<Vec<_>>(), ["curvature,addAnchor"]);
 }
 
 #[test]

@@ -1261,6 +1261,7 @@ impl UiState {
         sanitize_toolbar_pos(&mut self.toolbar_pos);
         sanitize_toolbar_pos(&mut self.control_bar_float_pos);
         crate::edit_toolbar::sanitize(&mut self.toolbar_edits);
+        crate::edit_toolbar::keep_strips(&mut self);
         // `read_preferences` converted the file's older layouts already; this covers a state read
         // any other way. What it reports lost was dropped there.
         let _ = crate::layout_migration::migrate_ui(&mut self);

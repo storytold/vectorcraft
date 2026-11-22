@@ -2886,7 +2886,8 @@ ends), `addons::shared_edge` in `vectorcraft-tools`, `cmd::addons::pathtools::sh
 ## Smart Pen add-on (2026-10-30)
 
 A VectorCraft addition, not a feature of the reference app, so no area score moves. Object › Plug-ins › Smart Pen selects the
-Smart Pen Tool (kept out of the shipped toolbars, listed in the All Tools drawer, no shortcut) and opens its panel. The
+Smart Pen Tool (in the Pen tool's group in both shipped toolbars, after the Quick Pen, and under Draw in the All Tools
+drawer; a toolbar edited before keeps its saved layout until Reset Toolbar; no shortcut) and opens its panel. The
 tool draws with a straight or curved next segment (a curve after a straight segment leaves it tangent), smooth drags
 with Alt, Shift and Space, Tab to switch a segment, a rubber band, closing, joining and continuing open ends; and edits
 without switching tools: point select, move, Alt-click remove keeping shape, Shift+Alt-click plain delete, double-click
@@ -2895,7 +2896,10 @@ insert. The panel sets the next segment and runs Remove Points Keep Shape, Make 
 Close or Join. Kernels: `vectorcraft_pathops::addons::pen` and the shared `addons::segment_reshape`. Tests:
 `addons::pen` and `addons::segment_reshape` in `vectorcraft-pathops`, `addons::smart_pen` in `vectorcraft-tools`,
 `cmd::addons::pen::tests` in `vectorcraft-engine` (each command one undo step, bad params refused, the tool's gestures
-through the session) and `addons::pen::tests` in `vectorcraft-ui-egui` (the submenu, the panel). Commands: `docs/mcp.md`
+through the session), `addons::pen::tests` in `vectorcraft-ui-egui` (the submenu, the panel), and for the toolbars
+`smart_pen_is_in_the_pen_flyout` and `a_saved_toolbar_without_smart_pen_keeps_its_layout` in `edit_toolbar::tests`
+in `vectorcraft-ui-egui`, `smart_pen_is_in_the_pen_group_once` in `addons::tests` in `vectorcraft-tools` and
+`headless_backend_methods` in `vectorcraft-mcp`. Commands: `docs/mcp.md`
 › Smart Pen add-on.
 
 ## Color Effects add-on (2026-10-30)

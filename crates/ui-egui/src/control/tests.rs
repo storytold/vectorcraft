@@ -613,7 +613,9 @@ fn control_lists_and_selects_optional_addon_tools() {
     let listed = input_request(&mut app, "ui.tool.list", json!({}));
     assert_eq!(listed["ok"], true);
     let groups = listed["result"].as_array().unwrap();
-    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+    // The add-on tools that ship in a toolbar group as well.
+    let in_toolbar_groups = [vectorcraft_tools::addons::smart_pen::ID].map(|id| vectorcraft_tools::tool_info(id).expect("catalogued"));
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()).chain(in_toolbar_groups) {
         let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
         assert_eq!(matching.len(), 1, "{}", tool.id);
         assert_eq!(matching[0]["label"], tool.label);

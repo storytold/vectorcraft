@@ -49,7 +49,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["pencil", "smooth", "pathEraser", "join"],
             &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen", "smartPen"],
             &["curvature"],
         ],
     ),
@@ -1100,6 +1100,10 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let released_on_bar = input.bar.as_ref().is_some_and(|b| ctx.input(|i| i.pointer.primary_released()) && at.is_some_and(|p| b.rect.contains(p)));
     let dragged_off = input.bar.as_ref().is_some_and(egui::Response::dragged) && press_travel(ctx).is_some_and(|d| d.length() > TEAR);
     if released_on_bar || dragged_off {
+        // A flyout opened before the layout changed shows the tools it was opened with; the strip
+        // gets the group's tools now.
+        let current = tools.first().filter(|_| toolbar.is_none()).and_then(|key| crate::edit_toolbar::layout_group(&app.ui, key));
+        let tools = current.unwrap_or(tools);
         // The strip is far narrower than the flyout: it floats with its bar under the pointer.
         let at = at.unwrap_or(resp.response.rect.right_center());
         // (Past the frame's 1 pt border.)

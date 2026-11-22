@@ -153,7 +153,40 @@ fn edit(app: &mut VectorcraftApp, f: impl FnOnce(&mut Vec<ToolbarCategory>) -> R
     f(&mut cats)?;
     prune(&mut cats);
     *slot = (cats != shipped(advanced)).then_some(cats);
+    keep_strips(&mut app.ui);
     Ok(slots_json(app))
+}
+
+/// Give each group torn off the Tools panel's toolbar the tools of the current layout's group
+/// with the same first tool, as [`crate::custom_toolbars::keep_strips`] does for a toolbar made
+/// with New Toolbar. A strip with no such group keeps its tools.
+pub(crate) fn keep_strips(ui: &mut crate::state::UiState) {
+    if ui.floating_flyouts.is_empty() {
+        return;
+    }
+    let groups = layout_groups(ui);
+    for f in &mut ui.floating_flyouts {
+        if let Some(group) = f.tools.first().and_then(|k| group_of(&groups, k)) {
+            f.tools = group;
+        }
+    }
+}
+
+/// The tools of the current layout's group of several tools that starts with `key`, if there is
+/// one ([`keep_strips`]).
+pub(crate) fn layout_group(ui: &crate::state::UiState, key: &str) -> Option<Vec<String>> {
+    group_of(&layout_groups(ui), key)
+}
+
+/// The groups of the Tools panel's current layout, as Edit Toolbar left it.
+fn layout_groups(ui: &crate::state::UiState) -> Vec<Vec<&'static str>> {
+    let edited = if ui.toolbar_advanced { &ui.toolbar_edits.advanced } else { &ui.toolbar_edits.basic };
+    let cats = edited.clone().unwrap_or_else(|| shipped(ui.toolbar_advanced));
+    cats.iter().flat_map(|c| c.slots.iter()).map(|s| s.iter().filter_map(|id| tool_info(id).map(|t| t.id)).collect()).collect()
+}
+
+fn group_of(groups: &[Vec<&'static str>], key: &str) -> Option<Vec<String>> {
+    groups.iter().find(|s| s.len() > 1 && s.first() == Some(&key)).map(|s| s.iter().map(|id| id.to_string()).collect())
 }
 
 /// Change the toolbar made with New Toolbar called `name` with `f`, and the groups torn off it with
@@ -311,6 +344,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 });
             }
             *current(&mut app.ui.toolbar_edits, app.ui.toolbar_advanced) = None;
+            keep_strips(&mut app.ui);
             Ok(slots_json(app))
         })(),
         _ => return None,

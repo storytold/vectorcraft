@@ -278,6 +278,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     }
     ui.flyout = None;
     ui.workspace = w.name.clone();
+    crate::edit_toolbar::keep_strips(ui);
 }
 
 /// Keep the layout of the current workspace as it is now, so switching back brings it back.
