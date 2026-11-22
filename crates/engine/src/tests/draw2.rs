@@ -4776,6 +4776,32 @@ fn a_cmd_double_click_goes_to_the_tool_the_clicks_went_to() {
 }
 
 #[test]
+fn a_cmd_double_click_after_a_tool_switch_goes_to_the_new_tool() {
+    // With the Selection tool, a Cmd-click on type goes to Direct Selection, and so does the
+    // Cmd double-click after it, which edits the type. Once another tool is chosen, the
+    // double-click is that tool's: Group Selection's does not edit the type.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 200, "size": 48, "text": "Type"})).unwrap()["id"].as_u64().unwrap());
+    let c = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().center();
+    let clicks = |s: &mut Session, then: Option<&str>| {
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, c.x, c.y).with_mods(cmd), v).unwrap();
+        }
+        if let Some(tool) = then {
+            s.select_tool(tool, v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, c.x, c.y).with_mods(cmd), v).unwrap()
+    };
+    assert_eq!(clicks(&mut s, None), [UiRequest::SwitchTool("type".into())], "Direct Selection's double-click edits the type");
+    assert_eq!(clicks(&mut s, Some("groupSelection")), [], "Group Selection's double-click does not");
+    assert_eq!(s.tool_id(), "groupSelection");
+}
+
+#[test]
 fn a_cmd_press_on_a_selected_object_keeps_select_behind() {
     // Over a selected object, a Cmd-click with the Selection tool selects the object behind it;
     // with Select Behind off, Direct Selection takes the press there too.

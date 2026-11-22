@@ -406,11 +406,17 @@ impl Session {
         if (ev.kind != PointerKind::Down && !follow_up) || !ev.mods.cmd || self.lender.is_some() {
             return Ok((*ev, vec![]));
         }
-        // A follow-up goes where the press before it went, whatever that press selected.
-        let id = if follow_up { self.press_lent } else { self.lent_tool_at(ev.pos, &ev.mods, view) };
+        // A follow-up goes where the press before it went, whatever that press selected, while the
+        // document and the active tool are the ones that press found.
+        let at = (self.active().map(|d| d.uid), self.tool.id());
+        let id = if follow_up {
+            self.press_lent.filter(|(doc, tool, _)| (*doc, *tool) == at).map(|(.., id)| id)
+        } else {
+            self.lent_tool_at(ev.pos, &ev.mods, view)
+        };
         let Some(id) = id else { return Ok((*ev, vec![])) };
         if !follow_up {
-            self.press_lent = Some(id);
+            self.press_lent = Some((at.0, at.1, id));
         }
         // Typing in progress is kept as its own step first: the lent tool's drag previews from the
         // document its interaction started from, which would drop the typing (#1881). When it

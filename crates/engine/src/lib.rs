@@ -110,8 +110,10 @@ pub struct Session {
     /// Selection tool. None until one is chosen.
     pub(crate) last_part_selection_tool: Option<&'static str>,
     /// The selection tool Cmd lent the last press, which also takes the double-click or
-    /// triple-click that follows it. None when the press was not lent.
-    pub(crate) press_lent: Option<&'static str>,
+    /// triple-click that follows it, with the uid of the document and the id of the tool it was
+    /// lent from: a follow-up in another document or after a tool switch is not lent. None when
+    /// the press was not lent.
+    pub(crate) press_lent: Option<(Option<u64>, &'static str, &'static str)>,
     /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
     /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
     /// the document state, active tool and keys it was found for. None when it was last asked
