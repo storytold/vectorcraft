@@ -197,8 +197,8 @@ fn export_selection_to_hpgl_uses_the_selection_and_is_not_remembered() {
     let d = fields(&app);
     assert!(!d.contains(crate::io::EXPORT_SELECTION));
     assert_eq!(hpgl_options::automatic_pens(&app, &d, true).unwrap(), ["#0000ff"], "the selection's pen only");
-    // An artboard choice the whole document would refuse is not this export's.
-    set(&mut app, "artboard", json!(5));
+    // An artboard choice (one the whole document would refuse) is not this export's: the dialog has none to set.
+    assert!(try_set(&mut app, "artboard", json!(5)).is_err());
     frame(&mut app);
     confirm(&mut app);
     assert!(kind(&app).is_none());

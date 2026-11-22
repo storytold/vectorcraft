@@ -65,6 +65,11 @@ impl FileAsks {
     pub(crate) fn automated(&self) -> bool {
         self.automated
     }
+
+    /// A file dialog or a replace question is waiting to answer.
+    pub(crate) fn asking(&self) -> bool {
+        !self.waiting.is_empty() || !self.replacing.is_empty()
+    }
 }
 
 // PLAN: callers use the function form of `BUSY` and `CLOSED`; `tl!` is a runtime lookup, so they are not consts.

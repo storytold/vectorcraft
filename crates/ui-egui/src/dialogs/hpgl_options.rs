@@ -5,8 +5,8 @@
 //! Fields: `document.export` params (`format: hpgl`, `path?`, the artboard choice) and the HP-GL
 //! options (`hpglVersion`, `curveTolerance`, `origin`, `pens`, `sortPaths`, `insideFirst`). OK
 //! remembers the options for next time and writes the file (asking where when there is no path);
-//! an option or artboard choice the export refuses, or a save panel shown in line that is canceled,
-//! keeps the dialog open. A canceled save panel keeps the options remembered before. Opened by Export
+//! an option or artboard choice the export refuses keeps the dialog open, and a save panel that closes
+//! without a file opens it again. A canceled save panel keeps the options remembered before. Opened by Export
 //! Selection, it checks and writes the selection alone. A typed Curve Tolerance is kept within 0.01
 //! to 10 points. OK after another document has become the active one closes the dialog and writes
 //! nothing.
@@ -84,6 +84,8 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
 /// [`open`] for Export Selection when `selection` is set: the options then plot the selection alone.
 pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
     let Some(doc) = app.session.active().map(|st| st.uid) else { return };
+    // Opened afresh, it no longer waits to show again after a save panel.
+    app.export_dialogs.1 = None;
     // Export Selection's flag in `params` says what the options plot: it is no option.
     let mut params = params.clone();
     let asked = params.as_object_mut().and_then(|o| o.remove(io::EXPORT_SELECTION));
@@ -95,7 +97,26 @@ pub fn open_with(app: &mut VectorcraftApp, params: &Value, selection: bool) {
         }
     }
     fields.insert("format".into(), json!("hpgl"));
-    let values = form::fields_of(&rows(), &fields);
+    show(app, doc, selection, form::fields_of(&rows(), &fields));
+}
+
+/// HP-GL Options closed for the save panel its OK asked for: the document and the values it showed.
+pub(super) struct Asked {
+    doc: u64,
+    selection: bool,
+    fields: DialogFields,
+}
+
+/// The save panel `asked` waited on closed without a file: the dialog shows again with its values, unless another
+/// document has become the active one.
+pub(super) fn reopen(app: &mut VectorcraftApp, asked: Asked) {
+    if app.session.active().map(|st| st.uid) == Some(asked.doc) {
+        show(app, asked.doc, asked.selection, asked.fields);
+    }
+}
+
+/// Shows HP-GL Options for document `doc` with `values`.
+fn show(app: &mut VectorcraftApp, doc: u64, selection: bool, values: DialogFields) {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let dialog = HostedParamDialog::new(&ctx, KIND, values, |fields| {
         ParamDialog::new(KIND, tl!("HP-GL Options"), rows()).values(Bind::bound(fields)).ok_label(tl!("Export").into())
@@ -314,15 +335,23 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     let (source, checked) = source(st, fields, open.selection)?;
     fileio::hpgl::check(&source, &checked)?;
     let remembered = Value::Object(map.into_iter().filter(|(k, _)| !PER_EXPORT.contains(&k.as_str())).collect());
-    let before = std::mem::replace(&mut app.ui.hpgl_options, remembered);
+    let exported = super::export_as::exported(open.selection, params);
+    let f = fileio::format("hpgl").ok_or("no HP-GL encoder")?;
     let path = fields.text("path").map(str::to_string);
-    let waiting = app.file_dialog_open();
-    let r = io::export(app, Some("hpgl"), path, &super::export_as::exported(open.selection, params));
-    // A save panel shown off the UI thread confirms the dialog again when it answers, which remembers the options
-    // then; until it does, and when an export stops before writing (a canceled panel), the options remembered
-    // before stay.
-    if (!waiting && app.file_dialog_open()) || r.is_err() {
-        app.ui.hpgl_options = before;
+    // The options are remembered once the file is known (a save panel answers later); a panel that closes without
+    // a file shows the dialog again (`export_host::pump`), and the options remembered before stay.
+    app.export_dialogs.1 = Some(Asked { doc: *doc, selection: open.selection, fields: fields.clone() });
+    let r = io::export_path(app, path, f, move |app, path| {
+        app.export_dialogs.1 = None;
+        let before = std::mem::replace(&mut app.ui.hpgl_options, remembered);
+        let r = io::export(app, Some("hpgl"), Some(path), &exported);
+        if r.is_err() {
+            app.ui.hpgl_options = before;
+        }
+        r
+    });
+    if r.is_err() {
+        app.export_dialogs.1 = None;
     }
     r.map(|_| None)
 }

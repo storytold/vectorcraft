@@ -69,9 +69,10 @@ pub(crate) struct Open {
     pub after: After,
 }
 
-/// The export dialogs that are open (`app.export_dialogs`).
+/// The export dialogs that are open (`app.export_dialogs`), and HP-GL Options closed for the save panel its OK
+/// asked for, shown again when the panel closes without a file.
 #[derive(Default)]
-pub(crate) struct ExportDialogs(Vec<Open>);
+pub(crate) struct ExportDialogs(Vec<Open>, pub(super) Option<hpgl_options::Asked>);
 
 impl ExportDialogs {
     fn find(&self, id: DialogId) -> Option<&Open> {
@@ -178,6 +179,11 @@ fn report<T>(app: &mut VectorcraftApp, result: Result<T, String>) {
 /// Once per frame: answers the rows' requests of each open export dialog, and runs the step after a confirmed
 /// dialog that has closed. Each dialog's requests are taken once, so a second pass in the same frame finds none.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    if !app.file_asks.asking()
+        && let Some(asked) = app.export_dialogs.1.take()
+    {
+        hpgl_options::reopen(app, asked);
+    }
     // PLAN: assumed `VectorcraftApp::dialogs(&self) -> Option<WindowDialogs>` (wg.S1)
     let Some(dialogs) = app.dialogs() else { return };
     let ids: Vec<DialogId> = app.export_dialogs.0.iter().map(|o| o.id).collect();

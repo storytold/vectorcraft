@@ -394,12 +394,31 @@ fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
     None
 }
 
+/// The fields show what the effect stores, also for a value set while the dialog is open: Scribble's 270° angle
+/// reads -90°.
+fn show_stored(cx: &EffectCx, d: &mut HostedParamDialog) {
+    let rows = effect_params(cx, d.fields());
+    let shown = form::json_of(&rows, d.fields());
+    let Value::Object(stored) = vectorcraft_effects::upgrade_params(&cx.id, &Value::Object(shown.clone())) else { return };
+    let same = |a: &Value, b: &Value| a.as_f64().zip(b.as_f64()).map_or(a == b, |(x, y)| x == y);
+    let changed: Map<String, Value> = stored.into_iter().filter(|(k, v)| shown.get(k).is_some_and(|s| !same(s, v))).collect();
+    if changed.is_empty() {
+        return;
+    }
+    for (k, v) in form::fields_of(&rows, &changed).iter() {
+        d.set_field(k, v.clone());
+    }
+}
+
 /// One frame of the open dialog: the preview of its values, and the requests its rows filed.
 fn drive(app: &mut VectorcraftApp, mut open: Open) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some((fields, previewing, path)) =
-        dialogs.with(|h| h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| (d.fields().clone(), d.is_previewing(), d.pick_path())))
-    else {
+    let Some((fields, previewing, path)) = dialogs.with(|h| {
+        h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| {
+            show_stored(&open.cx, d);
+            (d.fields().clone(), d.is_previewing(), d.pick_path())
+        })
+    }) else {
         app.effect_dialogs.effect = Some(open);
         return;
     };

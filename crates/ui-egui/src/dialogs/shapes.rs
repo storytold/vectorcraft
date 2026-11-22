@@ -87,6 +87,11 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: &str, click: Option<Click>) {
     if SIZE_KINDS.contains(&kind) {
         values.insert("constrain".into(), json!(app.object_dialogs.shape_link));
     }
+    // The click is among the fields (no row shows it), where OK reads it.
+    if let Some(click) = click {
+        values.insert("x".into(), json!(click.at.x));
+        values.insert("y".into(), json!(click.at.y));
+    }
     let ink = (kind == "arc" && click.is_none()).then(|| ArcInk::of(&app.session));
     let params = shape_params(kind, &values, lengths, ink);
     let fields = form::fields_of(&params, &values);
@@ -475,6 +480,8 @@ fn confirm(app: &mut VectorcraftApp, kind: &str, click: Option<Click>, fields: &
         };
     };
     let corner_radius = if kind == "roundedRectangle" { Some(rounded_radius(app, fields)?) } else { None };
+    let at = |key, clicked| fields.number(key).unwrap_or(clicked);
+    let click = Click { at: Point::new(at("x", click.at.x), at("y", click.at.y)), ..click };
     let (x, y) = (click.at.x, click.at.y);
     let (width, height) = (length_of(fields, "width", 100.0), length_of(fields, "height", 100.0));
     let (bx, by) = box_origin(click, width, height);

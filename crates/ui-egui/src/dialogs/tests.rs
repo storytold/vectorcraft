@@ -286,6 +286,10 @@ fn raster_filter_dialogs_preview_and_apply() {
             Some(n) => json!([16, 8, 0].map(|shift| f64::from((n >> shift) & 255) / 255.0)),
             None => v.clone(),
         };
+        // Darkness takes input once it is chosen over Color: a greyed-out row refuses it.
+        if key == "darkness" && effect == "stylize.dropShadow" {
+            set(&mut app, "shade", json!("darkness"));
+        }
         set(&mut app, key, sent);
         frame(&mut app, vec![]);
         assert!(app.session.in_interaction(), "{effect}: previews");

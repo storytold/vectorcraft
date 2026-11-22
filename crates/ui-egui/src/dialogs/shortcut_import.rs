@@ -117,6 +117,10 @@ pub(crate) fn foreign_set(read: &Value) -> (ForeignSet, ImportOptions) {
             entry = entry.at_line(line);
         }
         if let Some(target) = e["target"].as_str() {
+            // An entry answered with a tool selects one: the review matches it among the tools.
+            if target.starts_with("tool:") {
+                entry = entry.tool();
+            }
             remembered.insert(entry.remember_key(), (!target.is_empty()).then(|| crate::keymap::command_of(target)));
         }
         entries.push(entry);

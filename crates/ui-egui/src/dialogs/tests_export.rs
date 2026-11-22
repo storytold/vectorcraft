@@ -315,7 +315,10 @@ fn a_format_continues_in_its_options_dialog() {
         app.run("file.exportAs", params).unwrap();
         confirm(&mut app);
         assert_eq!(kind(&app).as_deref(), Some(options), "{case}: its options follow");
-        assert!(fields(&app)["path"].as_str().is_some_and(|p| p.starts_with("/out/Untitled-1.")), "{case}: {}", fields(&app));
+        // Save PDF's fields are its settings: the file it writes is its job's.
+        let job = app.save_pdf.as_ref().and_then(|o| o.job.as_ref()?.path.clone());
+        let path = fields(&app)["path"].as_str().map(str::to_string).or(job);
+        assert!(path.is_some_and(|p| p.starts_with("/out/Untitled-1.")), "{case}: {}", fields(&app));
         assert!(written.borrow().is_empty(), "{case}: nothing is written before OK");
         frame(&mut app);
         confirm(&mut app);
