@@ -21,10 +21,12 @@ use std::collections::HashMap;
 use craft::behavior::{IconId, Selection, SelectionModel};
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
-use craft::ui::contract::{Bind, MemoProps, SelectMode, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, MemoKey, MemoProps, SelectMode, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeAction, NoticeLayout};
-use craft::ui::patterns::presets::{PresetBrowser, PresetEvent, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetView};
+use craft::ui::patterns::presets::{
+    PresetBrowser, PresetEvent, PresetFns, PresetKind, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetView,
+};
 use craft::ui::primitives::{ContentPainterCx, IconSpec};
 use craft::ui::runtime::access::PopupKind;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
@@ -120,7 +122,10 @@ pub(crate) trait LibraryKind {
     const VIEW: View = View::MediumThumb;
     /// A library's contents, cheap to clone.
     type Lib;
-    type Item;
+    type Item: Sync;
+    /// What the thumbnails paint with besides each item (a panel setting, the documents a library's patterns come
+    /// from); `()` for nothing.
+    type Thumbs: MemoProps + Send;
     /// Every library, in menu order.
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef>;
     /// Library `id`: its name and contents.
@@ -140,8 +145,10 @@ pub(crate) trait LibraryKind {
     /// The browser row of `item`, named `label`, with the tooltip that describes it. The panel
     /// sets the row's key.
     fn row(id: &str, item: &Self::Item, label: &str) -> PresetRow<LibraryKey>;
-    /// An item's thumbnail in `rect`.
-    fn thumb(app: &VectorcraftApp, cx: &ContentPainterCx, rect: Rect, item: &Self::Item);
+    /// What the thumbnails of `lib` paint with.
+    fn thumbs(app: &VectorcraftApp, lib: &Self::Lib) -> Self::Thumbs;
+    /// An item's thumbnail in `rect`, painted with `thumbs`.
+    fn thumb(thumbs: &Self::Thumbs, cx: &ContentPainterCx, rect: Rect, item: &Self::Item);
     /// An item described in words, for list tooltips.
     fn describe(item: &Self::Item) -> String;
     /// A plain click on item `name` of library `id`: add it to the document and apply it.
@@ -601,6 +608,27 @@ fn browser_rows<K: LibraryKind>(panel: &str, id: &str, rows: &[Row<K::Item>]) ->
         .collect()
 }
 
+/// What a library's browser shows: its rows, the items their thumbnails paint and what those paint with.
+struct Shown<'a, K: LibraryKind> {
+    rows: &'a [PresetRow<LibraryKey>],
+    items: HashMap<&'a str, &'a K::Item>,
+    thumbs: K::Thumbs,
+}
+
+/// By the rows (each names its library and item, whose look a library keeps) and what the thumbnails paint with.
+impl<K: LibraryKind> MemoProps for Shown<'_, K> {
+    fn key(&self, key: &mut MemoKey) {
+        for row in self.rows {
+            row.key.key(key);
+            row.label.key(key);
+            row.depth.key(key);
+            (row.kind == PresetKind::Item).key(key);
+        }
+        self.rows.len().key(key);
+        self.thumbs.key(key);
+    }
+}
+
 /// The selected items and folders of panel `panel`.
 fn selected(app: &VectorcraftApp, panel: &str) -> Selection<LibraryKey> {
     app.ui.library_selection.get(panel).cloned().unwrap_or_default()
@@ -616,24 +644,23 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let (view, hide_find) = settings(&app.ui, K::KIND, id).map_or((K::VIEW, false), |s| (s.view.unwrap_or(K::VIEW), s.hide_find));
     let flat = K::rows(&lib, id);
     let rows = browser_rows::<K>(&panel, id, &flat);
-    let source = PresetSource::listed(&rows);
-    let items: HashMap<&str, &K::Item> = flat.iter().filter_map(|r| r.item.map(|i| (r.name, i))).collect();
+    let items = flat.iter().filter_map(|r| r.item.map(|i| (r.name, i))).collect();
+    let fns = PresetFns::new(|shown: &Shown<'_, K>, _| shown.rows.to_vec()).thumb(|shown, cx, rect, info| {
+        if let Some(item) = shown.items.get(info.key.name.as_str()) {
+            K::thumb(&shown.thumbs, cx, rect, item);
+        }
+    });
+    let source = PresetSource::new(Shown::<K> { rows: &rows, items, thumbs: K::thumbs(app, &lib) }, fns);
     let selection = selected(app, &panel);
     // The search text and the open groups are the browser's; the view is the panel's setting.
     let state_id = egui::Id::unique(("library-panel-state", &panel));
     let mut state: PresetState<LibraryKey> = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
     (state.view, state.zoom) = view.preset();
-    let shown = &*app;
     let out = PresetBrowser::new(library_name(id, &name).to_string(), Bind::bound(&mut state), &source)
         .toolbar(true)
         .search(!hide_find)
         .select(SelectMode::Multi)
         .selection(Bind::given(selection.clone()))
-        .thumb(|cx, rect, info| {
-            if let Some(item) = items.get(info.key.name.as_str()) {
-                K::thumb(shown, cx, rect, item);
-            }
-        })
         .empty(tl!("This library is empty."))
         .row_menu(PresetRowMenu::Off)
         .drags(K::drags())

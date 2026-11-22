@@ -18,13 +18,12 @@ use std::sync::Arc;
 
 use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{
-    Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
+    Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, MemoProps, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
 };
 use craft::ui::display::Divider;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
     PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetPicker, PresetReorder, PresetRow, PresetSource, PresetState, PresetView,
-    ThumbPainter,
 };
 use craft::ui::primitives::{
     ContentPainterCx, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
@@ -40,8 +39,8 @@ use vectorcraft_doc::{
     Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
     StyleLibrary,
 };
-use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
+use vectorcraft_engine::cmd::{styled_node, stylelib};
 use vectorcraft_geom::{Affine, Point, shapes};
 
 use super::library_panel::{self, LibraryKey, LibraryKind, LibraryRef, Row};
@@ -86,11 +85,25 @@ impl View {
 }
 
 /// What the thumbnails show the styles on (Use Square / Use Text for Previews).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, MemoProps)]
 pub(crate) enum Preview {
     #[default]
     Square,
     Text,
+}
+
+/// How the thumbnails show a style: on the square or on type, and whether type's characters take the style's colours
+/// (the preference Override Character Color).
+#[derive(Clone, Copy, PartialEq, MemoProps)]
+pub(crate) struct ThumbLook {
+    preview: Preview,
+    override_chars: bool,
+}
+
+impl ThumbLook {
+    fn of(app: &VectorcraftApp, preview: Preview) -> Self {
+        ThumbLook { preview, override_chars: app.session.prefs.override_char_color }
+    }
 }
 
 /// The Graphic Styles panel's state for the session (`UiState::graphic_styles_panel`).
@@ -223,7 +236,7 @@ fn look_hashes(panel: &mut GraphicStylesPanel, app: &VectorcraftApp) -> Arc<Vec<
 /// Style `g` applied (as `graphicStyle.apply` applies it) to the preview shape, rendered `px`
 /// pixels square on white, with `paints`. A style with no fill and no stroke ([`paints_nothing`])
 /// is shown on the shape outlined in black and filled with white, under a red slash.
-fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Preview, px: u32) -> Option<egui::ColorImage> {
+fn render(paints: Paints, g: &GraphicStyle, look: ThumbLook, px: u32) -> Option<egui::ColorImage> {
     const SIDE: f64 = 100.0;
     let empty = paints_nothing(g);
     let backed;
@@ -243,7 +256,7 @@ fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Previ
         doc.unknown.insert("brushes".into(), b.clone());
     }
     let id = doc.alloc_id();
-    let shape = match preview {
+    let shape = match look.preview {
         Preview::Square => Node::path(id, shapes::rectangle(vectorcraft_geom::Rect::new(22.0, 22.0, 78.0, 78.0)), Appearance::default()),
         Preview::Text => {
             let style = CharStyle { size: 54.0, ..Default::default() };
@@ -255,7 +268,7 @@ fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Previ
         }
     };
     let layer = doc.layers[0].id;
-    doc.insert(Some(layer), 0, app.session.styled(&shape, g)).ok()?;
+    doc.insert(Some(layer), 0, styled_node(&shape, g, look.override_chars)).ok()?;
     let img = RENDERER.with(|r| r.borrow_mut().render_region(&doc, vectorcraft_geom::Rect::new(0.0, 0.0, SIDE, SIDE), px as f64 / SIDE, true));
     let mut img = crate::canvas::color_image(&img);
     if empty {
@@ -264,18 +277,23 @@ fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Previ
     Some(img)
 }
 
-/// The version of the picture of a style with look `look` on `preview`: Override Character Color
-/// changes only how type takes a style.
-fn thumb_revision(app: &VectorcraftApp, look: u64, preview: Preview) -> Revision {
-    Revision::of(&(look, preview, preview == Preview::Text && app.session.prefs.override_char_color))
+/// The version of the picture of a style with look hash `hash` shown as `look`: Override Character
+/// Color changes only how type takes a style.
+fn thumb_revision(hash: u64, look: ThumbLook) -> Revision {
+    Revision::of(&(hash, look.preview, look.preview == Preview::Text && look.override_chars))
 }
 
-/// The styles of a document as thumbnails: the framework asks for a picture per style and revision.
+/// The styles of a document version as the panel's presets and their thumbnails: the framework asks for a picture
+/// per style and revision.
+#[derive(Clone, Copy, MemoProps)]
 pub(crate) struct StyleThumbs<'a> {
-    app: &'a VectorcraftApp,
+    uid: u64,
+    revision: u64,
+    #[memo_props(covered_by = "revision", reason = "a document version's styles are fixed")]
     d: &'a Document,
+    #[memo_props(covered_by = "revision", reason = "worked out once from the document version")]
     looks: &'a [u64],
-    preview: Preview,
+    look: ThumbLook,
 }
 
 impl ThumbSource<StyleKey> for StyleThumbs<'_> {
@@ -284,30 +302,29 @@ impl ThumbSource<StyleKey> for StyleThumbs<'_> {
             .d
             .graphic_style_index(key)
             .map(|i| self.looks.get(i).copied().unwrap_or_else(|| look_hash(Paints::of(self.d), &self.d.graphic_styles[i])));
-        thumb_revision(self.app, look.unwrap_or_default(), self.preview)
+        thumb_revision(look.unwrap_or_default(), self.look)
     }
 
     fn render(&self, key: &StyleKey, request: &ThumbRequest) -> ThumbRender {
         let Some(g) = self.d.graphic_style(key) else { return ThumbRender::Blank };
-        render(self.app, Paints::of(self.d), g, self.preview, request.side).map_or(ThumbRender::Blank, ThumbRender::Ready)
+        render(Paints::of(self.d), g, self.look, request.side).map_or(ThumbRender::Blank, ThumbRender::Ready)
     }
 }
 
 /// The styles of a library as thumbnails.
 struct LibThumbs<'a> {
-    app: &'a VectorcraftApp,
     style: &'a LibStyle,
-    preview: Preview,
+    look: ThumbLook,
 }
 
 impl ThumbSource<StyleKey> for LibThumbs<'_> {
     fn revision(&self, _: &StyleKey, _: &ThumbRequest) -> Revision {
-        thumb_revision(self.app, self.style.look, self.preview)
+        thumb_revision(self.style.look, self.look)
     }
 
     fn render(&self, _: &StyleKey, request: &ThumbRequest) -> ThumbRender {
         let paints = Paints { patterns: &self.style.lib.patterns, brushes: None };
-        render(self.app, paints, self.style.style(), self.preview, request.side).map_or(ThumbRender::Blank, ThumbRender::Ready)
+        render(paints, self.style.style(), self.look, request.side).map_or(ThumbRender::Blank, ThumbRender::Ready)
     }
 }
 
@@ -336,7 +353,7 @@ fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, l
     }
     let image = match st.selection.objects.first().and_then(|id| st.doc.node(*id)) {
         Some(n) => render_object(app, &st.doc, n, g, px)?,
-        None => render(app, Paints::of(&st.doc), g, preview, px)?,
+        None => render(Paints::of(&st.doc), g, ThumbLook::of(app, preview), px)?,
     };
     let tex = ctx.load_texture("gs-large", image, egui::TextureOptions::LINEAR);
     ctx.data_mut(|d| d.insert_temp(slot, (key, tex.clone())));
@@ -350,9 +367,9 @@ fn render_object(app: &VectorcraftApp, doc: &Document, n: &Node, g: &GraphicStyl
     let styled = if empty {
         // An outline about 1.5 pixels wide on the object scaled to the preview.
         let side = n.geometric_bounds().map_or(1.0, |b| b.width().max(b.height()));
-        app.session.styled(n, &backing(g, (1.5 * side / px.max(1) as f64).max(1e-3)))
+        styled_node(n, &backing(g, (1.5 * side / px.max(1) as f64).max(1e-3)), app.session.prefs.override_char_color)
     } else {
-        app.session.styled(n, g)
+        styled_node(n, g, app.session.prefs.override_char_color)
     };
     let img = RENDERER.with(|r| r.borrow_mut().render_node_thumbnail(doc, &styled, px, Some([255; 4])))?;
     let mut img = crate::canvas::color_image(&img);
@@ -363,11 +380,11 @@ fn render_object(app: &VectorcraftApp, doc: &Document, n: &Node, g: &GraphicStyl
 }
 
 /// The tip over a style: it large, on the selected object when there is one, with its name.
-fn large_tip(thumbs: &StyleThumbs, ui: &mut Ui, key: &StyleKey) {
+fn large_tip(app: &VectorcraftApp, thumbs: &StyleThumbs, ui: &mut Ui, key: &StyleKey) {
     let Some(i) = thumbs.d.graphic_style_index(key) else { return };
     let px = (LARGE * ui.ctx().pixels_per_point()).round() as u32;
     let look = thumbs.looks.get(i).copied().unwrap_or_default();
-    let tex = object_preview(thumbs.app, ui.ctx(), &thumbs.d.graphic_styles[i], look, thumbs.preview, px);
+    let tex = object_preview(app, ui.ctx(), &thumbs.d.graphic_styles[i], look, thumbs.look.preview, px);
     let (r, _) = ui.allocate_exact_size(vec2(LARGE, LARGE), Sense::hover());
     match &tex {
         Some(tex) => ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE),
@@ -378,13 +395,21 @@ fn large_tip(thumbs: &StyleThumbs, ui: &mut Ui, key: &StyleKey) {
 
 // ---------- the panel ----------
 
-/// The panel's presets: one per style, in document order. The Default Graphic Style is neither renamed nor deleted.
-fn style_source(d: &Document) -> PresetSource<'static, StyleKey> {
-    let names: Vec<StyleKey> = d.graphic_styles.iter().map(|g| g.name.clone()).collect();
-    let fns = PresetFns::new(|names: &Vec<StyleKey>, _| names.iter().map(|n| PresetRow::item(n.clone(), n.clone(), 0)).collect())
-        .can_delete(|names, key| key != DEFAULT_GRAPHIC_STYLE && names.contains(key))
-        .can_rename(|_, key| key != DEFAULT_GRAPHIC_STYLE);
-    PresetSource::new(names, fns)
+/// The panel's presets: one per style, in document order, with their thumbnails. The Default Graphic Style is neither
+/// renamed nor deleted.
+fn style_source(thumbs: StyleThumbs<'_>) -> PresetSource<'_, StyleKey> {
+    let fns = PresetFns::new(|t: &StyleThumbs, _| t.d.graphic_styles.iter().map(|g| PresetRow::item(g.name.clone(), g.name.clone(), 0)).collect())
+        .can_delete(|t, key| key != DEFAULT_GRAPHIC_STYLE && t.d.graphic_style_index(key).is_some())
+        .can_rename(|_, key| key != DEFAULT_GRAPHIC_STYLE)
+        .thumb(|t, cx, rect, info| paint_thumb(cx, rect, &thumbnails(cx.painter.ctx(), "vc-style-thumbs"), t, info.key));
+    PresetSource::new(thumbs, fns)
+}
+
+/// The thumbnails of the active document's styles: its document `doc`, their [`look_hash`]es `looks`, shown on
+/// `preview`.
+fn style_thumbs<'a>(app: &VectorcraftApp, doc: &'a Document, looks: &'a [u64], preview: Preview) -> StyleThumbs<'a> {
+    let (uid, revision) = app.session.active().map_or((0, 0), |st| (st.uid, st.revision));
+    StyleThumbs { uid, revision, d: doc, looks, look: ThumbLook::of(app, preview) }
 }
 
 /// The styles selected in the panel (those still in the document), in panel order.
@@ -434,8 +459,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let before = panel.selection.clone();
     let (alt, linked) = (alt_held(ui), app.session.selection_graphic_style().is_some());
-    let source = style_source(&doc);
-    let thumbs = StyleThumbs { app, d: &doc, looks: &looks, preview: panel.preview };
+    let thumbs = style_thumbs(app, &doc, &looks, panel.preview);
+    let source = style_source(thumbs);
     let browser_id = ui.make_persistent_id("graphic-styles-browser");
     let list = PresetBrowser::<StyleKey>::list_id(browser_id);
     // A style dragged from this panel's list.
@@ -455,8 +480,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ];
     let footer: RefCell<Option<FooterOutput>> = RefCell::new(None);
     let mut shown = {
-        let store = thumbnails(ui.ctx(), "vc-style-thumbs");
-        let store = &store;
         let items = |key: &StyleKey| {
             let (is_default, multi) = (key == DEFAULT_GRAPHIC_STYLE, targets(app, key).len() > 1);
             vec![
@@ -477,8 +500,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .reorder(PresetReorder::items())
                     .empty(tl!("Select styled art and click New Graphic Style."))
                     .row_items(items)
-                    .thumb(ThumbPainter::new(|cx, rect, info| paint_thumb(cx, rect, store, &thumbs, info.key)))
-                    .tip(|ui, key| large_tip(&thumbs, ui, key))
+                    .tip(|ui, key| large_tip(app, &thumbs, ui, key))
                     .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Between, |drag, _| dropped_object(drag).is_some()))
                     .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, |drag, _| dropped_object(drag).is_some()))
                     .takes_drop(PresetDrop::new::<ListDrag<StyleKey>>(
@@ -657,17 +679,10 @@ pub(crate) fn style_picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut panel = std::mem::take(&mut app.ui.graphic_styles_panel);
     let looks = look_hashes(&mut panel, app);
     let mut linked: Option<StyleKey> = app.session.selection_graphic_style().filter(|(_, linked)| *linked).map(|(g, _)| g.name.clone());
-    let source = style_source(&doc);
-    let thumbs = StyleThumbs { app, d: &doc, looks: &looks, preview: panel.preview };
-    let out = {
-        let store = thumbnails(ui.ctx(), "vc-style-thumbs");
-        let (state, store) = (&mut panel.picker_state, &store);
-        // PLAN: assumed `PresetPicker::thumb(ThumbPainter)` as the browser's.
-        PresetPicker::new(tl!("Graphic Styles").to_string(), Bind::bound(&mut linked), &source, Bind::bound(state))
-            .field(PickerField::Thumbnail)
-            .thumb(ThumbPainter::new(|cx, rect, info| paint_thumb(cx, rect, store, &thumbs, info.key)))
-            .show(ui)
-    };
+    let source = style_source(style_thumbs(app, &doc, &looks, panel.preview));
+    let out = PresetPicker::new(tl!("Graphic Styles").to_string(), Bind::bound(&mut linked), &source, Bind::bound(&mut panel.picker_state))
+        .field(PickerField::Thumbnail)
+        .show(ui);
     app.ui.graphic_styles_panel = panel;
     if let Some(name) = out.picked {
         run_status(app, "graphicStyle.apply", json!({ "name": name, "add": out.mods.alt }));
@@ -907,6 +922,7 @@ impl LibraryKind for GraphicStyleLibraries {
     const VIEW: super::swatches::View = super::swatches::View::LargeThumb;
     type Lib = LibStyles;
     type Item = LibStyle;
+    type Thumbs = ThumbLook;
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
         let libs = stylelib::libraries(&app.session).into_iter();
@@ -937,9 +953,12 @@ impl LibraryKind for GraphicStyleLibraries {
         row.search_name = Some(name);
         row
     }
+    fn thumbs(app: &VectorcraftApp, _: &LibStyles) -> ThumbLook {
+        ThumbLook::of(app, app.ui.graphic_styles_panel.preview)
+    }
     /// The style on the Graphic Styles panel's preview shape.
-    fn thumb(app: &VectorcraftApp, cx: &ContentPainterCx<'_>, r: Rect, s: &LibStyle) {
-        let source = LibThumbs { app, style: s, preview: app.ui.graphic_styles_panel.preview };
+    fn thumb(look: &ThumbLook, cx: &ContentPainterCx<'_>, r: Rect, s: &LibStyle) {
+        let source = LibThumbs { style: s, look: *look };
         paint_thumb(cx, r, &thumbnails(cx.painter.ctx(), "vc-style-lib-thumbs"), &source, &s.style().name);
     }
     fn describe(s: &LibStyle) -> String {
@@ -1076,7 +1095,7 @@ mod tests {
         let rev = |app: &VectorcraftApp, panel: &mut GraphicStylesPanel, i: usize, preview: Preview| {
             let d = doc(app);
             let looks = look_hashes(panel, app);
-            StyleThumbs { app, d: &d, looks: &looks, preview }.revision(&d.graphic_styles[i].name, &request)
+            style_thumbs(app, &d, &looks, preview).revision(&d.graphic_styles[i].name, &request)
         };
         app.session.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
         app.session.execute("graphicStyle.new", &json!({"name": "Red"})).unwrap();
@@ -1093,7 +1112,7 @@ mod tests {
         assert_ne!(rev(&app, &mut panel, i, Preview::Square), red);
         assert_eq!(rev(&app, &mut panel, 0, Preview::Square), first);
         let d = doc(&app);
-        let img = render(&app, Paints::of(&d), &d.graphic_styles[i], Preview::Square, 40).unwrap();
+        let img = render(Paints::of(&d), &d.graphic_styles[i], ThumbLook::of(&app, Preview::Square), 40).unwrap();
         assert_eq!(img.pixels[20 * img.size[0] + 20], Color32::from_rgb(0, 0, 255));
         assert_eq!(img.pixels[2 * img.size[0] + 2], Color32::WHITE);
     }
@@ -1116,7 +1135,7 @@ mod tests {
     fn a_style_with_no_fill_and_no_stroke_shows_an_outlined_shape_and_a_red_slash() {
         let app = app();
         let d = app.session.active().unwrap().doc.clone();
-        let image = |app: &VectorcraftApp, g: &GraphicStyle, preview: Preview| render(app, Paints::of(&d), g, preview, 40).unwrap();
+        let image = |app: &VectorcraftApp, g: &GraphicStyle, preview: Preview| render(Paints::of(&d), g, ThumbLook::of(app, preview), 40).unwrap();
         let px = |img: &egui::ColorImage, x: usize, y: usize| img.pixels[y * img.size[0] + x];
         let empty = GraphicStyle::new("Empty", Appearance::default());
         let nones = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
@@ -1160,7 +1179,7 @@ mod tests {
         let mut app = app();
         app.session.prefs.override_char_color = false;
         let d = app.session.active().unwrap().doc.clone();
-        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Text, 40).unwrap();
+        let image = |g: &GraphicStyle| render(Paints::of(&d), g, ThumbLook::of(&app, Preview::Text), 40).unwrap();
         let plain = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
         let mut above = plain.clone();
         above.appearance.set_contents_at(1);
@@ -1175,7 +1194,7 @@ mod tests {
     fn a_fill_or_a_stroke_alone_or_a_hidden_fill_shows_no_slash() {
         let app = app();
         let d = app.session.active().unwrap().doc.clone();
-        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Square, 40).unwrap();
+        let image = |g: &GraphicStyle| render(Paints::of(&d), g, ThumbLook::of(&app, Preview::Square), 40).unwrap();
         let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
         let fill = GraphicStyle::new("Fill", Appearance::basic(blue.clone(), Paint::None, 1.0));
         let stroke = GraphicStyle::new("Stroke", Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 0.6, 0.0)), 4.0));

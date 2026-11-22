@@ -1,13 +1,15 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use craft::ui::contract::Entry;
+use craft::ui::contract::{Entry, MemoKey, MemoProps};
 use craft::ui::patterns::presets::PresetRow;
 use craft::ui::primitives::ContentPainterCx;
 use egui::{Rect, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::libraries::{BuiltinLibrary, GRADIENT_LIBRARIES, SWATCH_LIBRARIES};
 use vectorcraft_color::{Swatch, SwatchLibrary};
+use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::patternlib::PATTERN_LIBRARIES;
 use vectorcraft_engine::cmd::swatchlib;
 
@@ -90,6 +92,14 @@ pub(crate) fn limit_key(app: &VectorcraftApp, l: &str) -> Result<String, String>
 /// Swatch libraries in library panels (engine: `swatch.library.*`).
 pub(crate) struct SwatchLibraries;
 
+/// The documents a library's pattern swatches draw from, by swatch name.
+pub(crate) struct PatternSources(HashMap<String, Arc<Document>>);
+
+/// Covered by the browser's rows: they name the library, whose pattern documents stay as it loaded them.
+impl MemoProps for PatternSources {
+    fn key(&self, _: &mut MemoKey) {}
+}
+
 impl LibraryKind for SwatchLibraries {
     const KIND: &'static str = "swatches";
     const OPEN: &'static str = "window.swatchLibrary";
@@ -99,6 +109,7 @@ impl LibraryKind for SwatchLibraries {
     const ADD: &'static str = "Add to Swatches";
     type Lib = Arc<SwatchLibrary>;
     type Item = Swatch;
+    type Thumbs = PatternSources;
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
         library_refs(swatchlib::libraries(&app.session))
@@ -140,10 +151,12 @@ impl LibraryKind for SwatchLibraries {
         row.search_name = Some(w.name.clone());
         row
     }
+    fn thumbs(app: &VectorcraftApp, lib: &Self::Lib) -> PatternSources {
+        PatternSources(lib.iter().filter_map(|w| Some((w.name.clone(), swatchlib::pattern_source(&app.session, w)?))).collect())
+    }
     /// A pattern library's pattern, or a loaded library's, drawn from the library.
-    fn thumb(app: &VectorcraftApp, cx: &ContentPainterCx<'_>, rect: Rect, w: &Swatch) {
-        let src = swatchlib::pattern_source(&app.session, w);
-        paint_swatch(cx, rect, &w.paint, false, (w.global, w.spot), src.as_deref());
+    fn thumb(sources: &PatternSources, cx: &ContentPainterCx<'_>, rect: Rect, w: &Swatch) {
+        paint_swatch(cx, rect, &w.paint, false, (w.global, w.spot), sources.0.get(&w.name).map(|d| &**d));
     }
     fn drags() -> bool {
         true

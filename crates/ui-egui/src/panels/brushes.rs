@@ -841,6 +841,7 @@ impl LibraryKind for BrushLibraries {
     const VIEW: super::swatches::View = super::swatches::View::LargeThumb;
     type Lib = Rc<Vec<LibBrush>>;
     type Item = LibBrush;
+    type Thumbs = ();
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
         let libs = brushlib::libraries(&app.session).into_iter();
@@ -871,8 +872,9 @@ impl LibraryKind for BrushLibraries {
         row.search_name = Some(b.name().to_string());
         row
     }
+    fn thumbs(_: &VectorcraftApp, _: &Self::Lib) {}
     /// The brush's stroke preview, drawn with the library's resources.
-    fn thumb(_: &VectorcraftApp, cx: &ContentPainterCx, rect: Rect, b: &LibBrush) {
+    fn thumb(_: &(), cx: &ContentPainterCx, rect: Rect, b: &LibBrush) {
         paint_brush(cx, rect, &b.lib.doc, &b.shown);
     }
     /// Its type.

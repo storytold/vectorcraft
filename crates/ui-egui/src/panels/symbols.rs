@@ -939,6 +939,7 @@ impl LibraryKind for SymbolLibraries {
     const VIEW: super::swatches::View = super::swatches::View::LargeThumb;
     type Lib = Arc<Vec<LibSymbol>>;
     type Item = LibSymbol;
+    type Thumbs = ();
 
     fn list(app: &VectorcraftApp) -> Vec<LibraryRef> {
         let libs = symbollib::libraries(&app.session).into_iter();
@@ -970,9 +971,9 @@ impl LibraryKind for SymbolLibraries {
         row.search_name = Some(s.name().to_string());
         row
     }
+    fn thumbs(_: &VectorcraftApp, _: &Self::Lib) {}
     /// The symbol's art on white, as the Symbols panel shows it.
-    // PLAN: assumed ap.AS9's `thumb(app, ..)` takes `app: &VectorcraftApp`, as `draw` did.
-    fn thumb(_: &VectorcraftApp, cx: &ContentPainterCx<'_>, rect: Rect, s: &LibSymbol) {
+    fn thumb(_: &(), cx: &ContentPainterCx<'_>, rect: Rect, s: &LibSymbol) {
         paint_symbol(cx, rect, &s.lib.doc, &library_symbols(&s.lib), s.name());
     }
     /// Its natural size.

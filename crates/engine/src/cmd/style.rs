@@ -329,14 +329,15 @@ impl Session {
         let g = st.doc.graphic_style_by_id(n.extras().graphic_style?)?;
         Some((g, in_sync(n, g)))
     }
+}
 
-    /// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it (Override Character
-    /// Color as set): the Graphic Styles panel's previews.
-    pub fn styled(&self, n: &Node, g: &GraphicStyle) -> Node {
-        let mut n = n.clone();
-        style_node(&mut n, g, &mut None, self.prefs.override_char_color);
-        n
-    }
+/// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it, type's characters too
+/// with `override_char_color` (the preference Override Character Color): the Graphic Styles
+/// panel's previews.
+pub fn styled_node(n: &Node, g: &GraphicStyle, override_char_color: bool) -> Node {
+    let mut n = n.clone();
+    style_node(&mut n, g, &mut None, override_char_color);
+    n
 }
 
 // ---------- commands ----------
