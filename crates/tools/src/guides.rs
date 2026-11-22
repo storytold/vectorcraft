@@ -25,10 +25,10 @@ mod snap;
 mod targets;
 
 pub(crate) use bitangent::TangentLine;
-pub(crate) use snap::hold_on_path;
 pub use snap::{
     DEFAULT_CONSTRUCTION_ANGLES, DrawSnap, HandleSnap, Leave, PointSnap, construction_angles, distance_guides, snap_draw, snap_pick, square,
 };
+pub(crate) use snap::{SnapSettings, hold_on_path};
 use targets::Kind;
 pub use targets::Targets;
 #[cfg(test)]
