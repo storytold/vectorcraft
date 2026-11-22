@@ -433,11 +433,12 @@ impl Session {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {
                 // The options are the last preview's params with the values it noted, without the
-                // matrix and the ids.
+                // matrix, the ids and `drawBehind` (Transform Again puts its copies above).
                 let mut options = preview.1.clone();
                 if let Some(o) = options.as_object_mut() {
                     o.remove("matrix");
                     o.remove("ids");
+                    o.remove("drawBehind");
                 }
                 st.last_transform = Some(LastTransform::Matrix(m, options));
                 st.last_perspective = None;

@@ -1793,7 +1793,7 @@ impl FindPart<'_> {
         if !n.visible || !self.whole_instance && (n.locked || n.is_template()) || self.skips_guide(n) || ArtWalk::used_up() {
             return None;
         }
-        let outline = outline || previews_off(n);
+        let outline = outline || !self.opt.ignore_layer_preview && previews_off(n);
         let opt = HitOptions { outline, ..self.opt };
         let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole, opt) };
         if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
