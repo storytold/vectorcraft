@@ -40,7 +40,9 @@ pub(crate) fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, m
     let (_, at) = control(app, ctx, &draw, name);
     let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers };
     draw_frame(app, ctx, &draw, vec![Event::ModifiersChanged(modifiers), Event::PointerMoved(at)]);
-    draw_frame(app, ctx, &draw, vec![button(true), button(false)]);
+    // The release comes a frame after the press, as a hand's does.
+    draw_frame(app, ctx, &draw, vec![button(true)]);
+    draw_frame(app, ctx, &draw, vec![button(false)]);
     draw_frame(app, ctx, &draw, vec![Event::ModifiersChanged(Modifiers::NONE)]);
 }
 
@@ -267,7 +269,7 @@ fn the_save_dialog_writes_swatch_exchange_files() {
         })),
         ..Default::default()
     };
-    let mut web = VectorcraftApp::new(Session::new(), services);
+    let mut web = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     web.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     web.run("ui.saveSwatchLibrary", json!({})).unwrap();
     confirm_save(&mut web, &[("format", json!("ase")), ("name", json!(" Brand: Kit. "))]);
@@ -361,7 +363,8 @@ fn control(app: &mut VectorcraftApp, ctx: &egui::Context, draw: &dyn Fn(&mut Vec
 fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, draw: &dyn Fn(&mut VectorcraftApp, &mut Ui), at: Pos2) {
     let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
     draw_frame(app, ctx, draw, vec![Event::PointerMoved(at)]);
-    draw_frame(app, ctx, draw, vec![button(true), button(false)]);
+    draw_frame(app, ctx, draw, vec![button(true)]);
+    draw_frame(app, ctx, draw, vec![button(false)]);
 }
 
 /// The app restarted with the preferences `app` saves.

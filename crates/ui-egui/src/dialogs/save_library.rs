@@ -69,10 +69,14 @@ pub(super) fn open(app: &mut VectorcraftApp, library: Library, names: Vec<String
     Ok(Value::Null)
 }
 
-/// The save command's parameters from the answer: `name`, `user` and, with Selected Only, the selected `names`.
+/// The save command's parameters from the answer: `name`, `user`, the dialog's `format` when it has one
+/// and, with Selected Only, the selected `names`.
 fn params(result: &ParamResult) -> Value {
     let fields = &result.fields;
     let mut p = json!({"name": fields.text("name").unwrap_or_default(), "user": fields.text("saveTo") == Some("user")});
+    if let Some(format) = fields.text("format") {
+        p["format"] = json!(format);
+    }
     if fields.bool("selectedOnly") == Some(true) {
         let names = fields.list("names").map(|l| l.iter().filter_map(|v| if let FieldValue::Text(s) = v { Some(json!(s)) } else { None }).collect());
         p["names"] = Value::Array(names.unwrap_or_default());

@@ -180,7 +180,8 @@ fn with_preview_off_a_slider_change_waits_for_trace() {
     panel.click("Trace");
     assert_eq!(undo(&panel.app()), steps + 1, "Trace applies it as one undo step");
     assert_eq!(children(&panel.app()), 1, "only the source remains below the ink's luminance");
-    assert_eq!(find_target(&panel.app()).stored.unwrap()["params"], shown(&panel).params);
+    let stored = find_target(&panel.app()).stored.unwrap();
+    assert_eq!(stored["params"], shown(&panel).params);
     assert!(!panel.app().ui.image_trace_preview, "Trace leaves Preview off");
 }
 

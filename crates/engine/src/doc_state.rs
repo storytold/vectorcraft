@@ -706,7 +706,7 @@ impl DocState {
         }
     }
     /// Ask the Layers panel to reveal what changed since `before`, in this order: isolation entered
-    /// or left, the highlighted rows, the current layer, the last selected object. A request made
+    /// or left, the highlighted rows, the last selected object, the current layer. A request made
     /// meanwhile (`layer.locate`) stands, and nothing is asked while an interaction is open, so a
     /// drag's previews reveal nothing and its commit does.
     pub(crate) fn request_reveal(&mut self, before: &LayersView) {
@@ -721,15 +721,17 @@ impl DocState {
         if request.is_none() && now.rows != before.rows {
             request = self.highlighted_rows().first().copied().map(LayersReveal::Row);
         }
-        if request.is_none() && now.active_layer != before.active_layer {
-            request = self.current_layer().map(LayersReveal::Current);
-        }
+        // A new selection asks for its object even when it changed the current layer too: the panel
+        // falls back to the current layer when it does not locate the object.
         if request.is_none() && now.last_selected != before.last_selected {
             request = now.last_selected.map(LayersReveal::Selected);
             // An emptied selection leaves no object to locate.
             if request.is_none() && matches!(self.layers_reveal, Some(LayersReveal::Selected(_))) {
                 self.layers_reveal = None;
             }
+        }
+        if request.is_none() && now.active_layer != before.active_layer {
+            request = self.current_layer().map(LayersReveal::Current);
         }
         if request.is_some() {
             self.layers_reveal = request;

@@ -304,6 +304,15 @@ pub(crate) fn floating_window<'a>(layout: &'a Layout<String>, panel: &str) -> Op
     layout.floating.iter().find(|w| w.contains(panel))
 }
 
+/// The top left a new floating window `height` tall takes beside the window floated last: a cascade
+/// step from it, inside the float space. None while nothing floats.
+pub(crate) fn cascaded_float_origin(app: &VectorcraftApp, height: f32) -> Option<egui::Pos2> {
+    let last = layout_of(&app.ui).floating.last()?.rect;
+    let space = command_space(app);
+    let size = egui::vec2(space.default_size.x, height);
+    Some(craft::behavior::placement::cascade(last, size, space.area, space.inset).min)
+}
+
 /// Is `panel` showing: in front of its group and not in a column collapsed to icons, or in the
 /// open flyout of an iconic column? The Window menu checks these.
 pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {

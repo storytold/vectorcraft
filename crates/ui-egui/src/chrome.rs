@@ -91,7 +91,10 @@ impl Trailing {
             Trailing::Discord => crate::community::discord_button(app, ui),
             Trailing::Learn => {
                 // PLAN: assumed `IconButton::command` is bound by a `&str` command id.
-                IconButton::command(IconId::new("graduation-cap"), "window.learn").selected(crate::panels::learn::visible(app)).show(ui);
+                IconButton::command(IconId::new("graduation-cap"), "window.learn")
+                    .label(tl!("Explore tutorials"))
+                    .selected(crate::panels::learn::visible(app))
+                    .show(ui);
             }
             Trailing::Arrange => arrange_documents(app, ui),
             Trailing::Search => {

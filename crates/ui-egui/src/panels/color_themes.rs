@@ -634,9 +634,10 @@ mod tests {
         fx
     }
 
-    /// The slider rails, top to bottom (the wheel's Brightness rail first).
+    /// The slider rails, top to bottom (the wheel's Brightness rail first). The wheel's colour markers are
+    /// sliders too, but square: a rail is wider than tall.
     fn rails(fx: &Fixture) -> Vec<craft::ui::testing::Target> {
-        let mut rails = fx.by_role(Role::SLIDER);
+        let mut rails: Vec<_> = fx.by_role(Role::SLIDER).into_iter().filter(|t| t.rect.width() > 2.0 * t.rect.height()).collect();
         rails.sort_by(|a, b| a.center().y.total_cmp(&b.center().y));
         rails
     }

@@ -663,6 +663,11 @@ fn with_the_option_the_panels_own_clicks_locate_nothing() {
     assert_eq!(listed_ids(&app).len(), 3, "Layer 1, Sub (closed) and c");
     select_rows(&mut app, &[layer, sub, c]);
     assert_eq!(rows_of(&app), [layer, sub, c]);
+    // Shift-clicks on c's target circle, then Sub's, as the panel's pass runs them: Sub's and c's art is selected.
+    unrevealed(&mut app, |app| app.run("layer.target", json!({"id": c.0})).unwrap());
+    unrevealed(&mut app, |app| app.run("layer.target", json!({"range": [sub.0, c.0]})).unwrap());
+    let st = app.session.active().unwrap();
+    assert!(st.selection.objects.len() >= 3 && st.selection.objects.contains(&c), "c and Sub's art are selected");
     assert_eq!(reveal_of(&app), None, "a selection made in the panel asks for no reveal");
     pass(&mut app, &ctx);
     assert_eq!(listed_ids(&app).len(), 3, "no row opens");
@@ -801,11 +806,10 @@ fn with_the_option_and_show_layers_only_the_active_layer_is_revealed() {
     pass(&mut app, &ctx);
     let bottom_layer = app.session.active().unwrap().doc.layer_of(NodeId(bottom)).unwrap();
     run(&mut app, "select.set", json!({"ids": [bottom]}));
-    // PLAN: the sheet row says `Current(layer)` here while writer note 3 says the session sets `Selected(object)` and
-    // the panel falls back; the sheet row is asserted.
-    assert_eq!(reveal_of(&app), Some(LayersReveal::Current(bottom_layer)));
-    pass(&mut app, &ctx);
-    assert_eq!(reveal_of(&app), None, "the pass took the request");
+    // The session asks for the object (writer note 3); the panel, which lists no row for it, reveals its layer.
+    assert_eq!(reveal_of(&app), Some(LayersReveal::Selected(NodeId(bottom))));
+    assert_eq!(reveal_for(&mut app), Some(bottom_layer), "the panel reveals the active layer");
+    assert_eq!(reveal_of(&app), None, "the panel took the request");
 }
 
 /// With Locate Selected Objects on, art selected outside the panel that Show Layers Only or the filter leaves without a
@@ -859,11 +863,13 @@ fn a_canvas_selection_reveals_its_active_layer() {
     let top_layer = doc.layer_of(NodeId(rects[59])).unwrap();
     run(&mut app, "select.set", json!({"ids": [rects[0]]}));
     assert_eq!(app.session.active().unwrap().current_layer(), Some(bottom_layer));
-    assert_eq!(reveal_of(&app), Some(LayersReveal::Current(bottom_layer)), "no row is highlighted: the active layer");
-    pass(&mut app, &ctx);
+    assert_eq!(reveal_for(&mut app), Some(bottom_layer), "no row is highlighted: the active layer");
     // A row highlighted in the panel keeps the view when the active layer changes.
     run(&mut app, "layer.highlight", json!({"ids": [top_layer.0], "mode": "set"}));
     pass(&mut app, &ctx);
-    run(&mut app, "select.set", json!({"ids": [rects[30]]}));
-    assert_eq!(reveal_of(&app), None, "a highlighted row keeps the view");
+    // The active layer changes, as production's test set it, with the request a change of it makes.
+    let st = app.session.active_mut().unwrap();
+    st.active_layer = Some(bottom_layer);
+    st.layers_reveal = Some(LayersReveal::Current(bottom_layer));
+    assert_eq!(reveal_for(&mut app), None, "a highlighted row keeps the view");
 }

@@ -102,6 +102,8 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     (v.edges, v.templates, v.corner_widgets, v.shape_widgets, v.text_threads, v.hidden_chars, v.gradient_annotator).hash(&mut h);
     (v.live_paint_gaps, v.artboards, v.rulers, v.video_rulers, v.bounding_box, v.guides, v.grid).hash(&mut h);
     (app.outline_view(), s.guides_locked(), s.slices_hidden()).hash(&mut h);
+    // The Align To choice: Object › Align's checks and the Distribute buttons with the Artboard tool.
+    app.ui.align_to.hash(&mut h);
     crate::panels::actions::menu::key(app).hash(&mut h);
     crate::panels::script_console::key(app).hash(&mut h);
     h.finish()

@@ -25,7 +25,7 @@ const HIDE_OPTIONS: &str = "align-hide-options";
 
 /// What Align aligns to. The Align To choice kept with the UI state ([`crate::UiState::align_to`])
 /// is Selection or Artboard: Align to Key Object stores no choice.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AlignTo {
     #[default]

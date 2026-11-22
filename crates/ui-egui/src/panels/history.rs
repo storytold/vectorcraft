@@ -269,12 +269,14 @@ mod tests {
         };
         frame(&mut app, vec![]);
         let nodes = frame(&mut app, vec![]);
-        // PLAN: the button is named by the framework's words; the name is matched by its start.
-        let button = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.starts_with("New Document"))).expect("the button");
+        // PLAN: the button is named by the framework's words ("Create New Document from Current State"); the name is
+        // matched by the words it holds.
+        let button = nodes.iter().map(|(_, n)| n).find(|n| n.label().is_some_and(|l| l.contains("New Document"))).expect("the button");
         let at = button.bounds().expect("its bounds");
         let at = egui::pos2((at.x0 + at.x1) as f32 / 2.0, (at.y0 + at.y1) as f32 / 2.0);
         let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(&mut app, vec![egui::Event::PointerMoved(at), press(true), press(false)]);
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(&mut app, vec![press(false)]);
         assert_eq!(app.session.documents().len(), 2);
         assert_eq!(app.session.active_index(), Some(1), "the new document is the active one");
         let st = app.session.active().unwrap();

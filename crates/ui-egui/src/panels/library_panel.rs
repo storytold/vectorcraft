@@ -413,10 +413,16 @@ pub(crate) fn open_command<K: LibraryKind>(app: &mut VectorcraftApp, p: &Value) 
     Ok(json!({"open": id, "panel": panel, "name": name, "count": count}))
 }
 
-/// Float library panel `panel`, as tall as its body in the kind's view.
+/// Float library panel `panel`, as tall as its body in the kind's view, beside the window floated last.
 pub(crate) fn float(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
     let large = parse(panel).is_some_and(|(k, _)| k.view == View::LargeThumb);
-    app.run("window.panel.float", json!({ "panel": panel, "height": if large { 400 } else { 340 } }))
+    let height = if large { 400.0 } else { 340.0 };
+    let mut p = json!({ "panel": panel, "height": height });
+    if let Some(at) = crate::panel_docking::cascaded_float_origin(app, height) {
+        p["x"] = json!(at.x);
+        p["y"] = json!(at.y);
+    }
+    app.run("window.panel.float", p)
 }
 
 /// `ui.libraryPanel {panel, library?, view?, showFind?, persistent?}`: show another library in an
