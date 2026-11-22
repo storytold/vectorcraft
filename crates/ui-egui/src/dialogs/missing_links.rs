@@ -508,7 +508,7 @@ pub(super) mod drive {
     pub(crate) fn frame(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().expect("the context the app adopted");
         let dialogs = app.dialogs().expect("a window dialog host");
-        let _ = ctx.run_ui(Default::default(), |ui| dialogs.with(|h| h.run(ui)));
+        ctx.run_ui(Default::default(), |ui| dialogs.with(|h| h.run(ui))).textures_delta.clear();
     }
 
     /// One frame's pump.

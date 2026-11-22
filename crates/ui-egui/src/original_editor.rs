@@ -186,7 +186,7 @@ mod tests {
     /// One pass of the File Handling row.
     fn row(app: &mut VectorcraftApp) {
         let ctx = ctx(app);
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui, true));
+        ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui, true)).textures_delta.clear();
     }
 
     /// Choose… answered with `path` (cancelled for none), then the pass that takes the answer.
@@ -314,7 +314,7 @@ mod tests {
         // A pass that carries injected input acts for automation too.
         let ctx = ctx(&app);
         craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, craft::keymap::Key::A, Default::default(), false);
-        let _ = ctx.run_ui(egui::RawInput::default(), |_| assert!(pick(&mut app).is_err()));
+        ctx.run_ui(egui::RawInput::default(), |_| assert!(pick(&mut app).is_err())).textures_delta.clear();
         assert!(app.original_editor.choice.path.is_none());
     }
 

@@ -120,7 +120,7 @@ mod tests {
             assert!(h.confirm_by_id(&ctx, id));
         });
         super::super::host::pump(app, &ctx);
-        let _ = ctx.run_ui(Default::default(), |ui| host.with(|h| h.run(ui)));
+        ctx.run_ui(Default::default(), |ui| host.with(|h| h.run(ui))).textures_delta.clear();
     }
 
     /// OK opens the chosen type's Brush Options for a new brush, named New <Type> Brush; their OK

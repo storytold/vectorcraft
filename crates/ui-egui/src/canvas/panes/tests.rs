@@ -117,21 +117,24 @@ fn has_picture(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, uid: u64) 
 }
 
 /// Run frames with `run` until window `w`'s pane has its picture and the upload of it was seen,
-/// starting from the uploads `seed` holds → the picture and every upload seen.
+/// starting from the uploads `seed` holds → the picture and its pixels and size as uploaded. The uploads are handled
+/// once read.
 fn wait_ready(
     app: &mut VectorcraftApp,
     ctx: &egui::Context,
     w: Win,
     seed: Vec<egui::TexturesDelta>,
     run: &mut dyn FnMut(&mut VectorcraftApp) -> egui::FullOutput,
-) -> (CachedTexture, Vec<egui::TexturesDelta>) {
+) -> (CachedTexture, (Vec<Color32>, [usize; 2])) {
     let uid = app.session.documents()[w.0].uid;
     let mut uploads = seed;
     for _ in 0..400 {
         if let TextureState::Ready(texture) = picture_of(app, ctx, w, uid)
             && uploads.iter().flat_map(|d| d.set.iter()).any(|e| *e.0 == texture.id)
         {
-            return (texture, uploads);
+            let picture = uploaded(&uploads, texture.id);
+            uploads.iter_mut().for_each(egui::TexturesDelta::clear);
+            return (texture, picture);
         }
         let mut out = run(app);
         uploads.push(std::mem::take(&mut out.textures_delta));
@@ -169,8 +172,7 @@ fn pane_middle(
     seed: Vec<egui::TexturesDelta>,
     run: &mut dyn FnMut(&mut VectorcraftApp) -> egui::FullOutput,
 ) -> [u8; 3] {
-    let (texture, uploads) = wait_ready(app, ctx, (i, 1), seed, run);
-    let (pixels, [w, h]) = uploaded(&uploads, texture.id);
+    let (_, (pixels, [w, h])) = wait_ready(app, ctx, (i, 1), seed, run);
     let p = pixels[h / 2 * w + w / 2];
     [p.r(), p.g(), p.b()]
 }
@@ -794,7 +796,10 @@ fn other_panes_draw_their_guides_and_selected_objects() {
     // The pane hands its document's guides and selected objects to the overlays it shows.
     let st = &app.session.documents()[0];
     let mut tokens = None;
-    let _ = crate::testing::ui_context().run_ui(Default::default(), |ui| tokens = Some(craft::theme::Tokens::clone(Env::of(ui).tokens.tokens())));
+    crate::testing::ui_context()
+        .run_ui(Default::default(), |ui| tokens = Some(craft::theme::Tokens::clone(Env::of(ui).tokens.tokens())))
+        .textures_delta
+        .clear();
     let guides = format!("{:?}", crate::canvas::guides::shown(&app, st, &tokens.unwrap()));
     assert!(guides.contains("300"), "the guide at 300 is shown in the pane: {guides}");
     assert!(!crate::canvas::selection::outlines(&app, st).is_empty(), "the selected rectangle is outlined in its pane");
@@ -951,10 +956,10 @@ fn other_panes_draw_through_their_documents_profiles() {
     app.run("window.arrange.tile", json!({})).unwrap();
     // The first document in front: the second one's pane draws through Display P3, its paper too.
     app.run("document.activate", json!({"index": 0})).unwrap();
-    let out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
+    let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
     assert!(fills(&out, paper_p3), "the back document's paper draws through its Display P3: {paper_p3:?}");
     assert!(!fills(&out, [0xcc, 0x66, 0x33]), "the back document's paper does not draw through the working space");
-    let shown = pane_middle(&mut app, &ctx, 1, vec![out.textures_delta.clone()], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
+    let shown = pane_middle(&mut app, &ctx, 1, vec![std::mem::take(&mut out.textures_delta)], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
     assert!(near(shown, p3), "the back document draws through its Display P3: {shown:?}, not {p3:?}");
     // The same in a floating window.
     app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
@@ -972,17 +977,17 @@ fn other_panes_draw_through_their_documents_profiles() {
         floating(&mut app).textures_delta.clear();
     }
     forget(&mut app, &ctx);
-    let out = floating(&mut app);
+    let mut out = floating(&mut app);
     assert!(fills(&out, paper_p3), "the floating document's paper draws through its Display P3: {paper_p3:?}");
-    let shown = pane_middle(&mut app, &ctx, 1, vec![out.textures_delta.clone()], &mut |a| floating(a));
+    let shown = pane_middle(&mut app, &ctx, 1, vec![std::mem::take(&mut out.textures_delta)], &mut |a| floating(a));
     assert!(near(shown, p3), "the floating document draws through its Display P3: {shown:?}, not {p3:?}");
     app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     forget(&mut app, &ctx);
     // The second document in front: the first one's pane draws through the working sRGB.
     app.run("document.activate", json!({"index": 1})).unwrap();
-    let out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
-    let shown = pane_middle(&mut app, &ctx, 0, vec![out.textures_delta.clone()], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
+    let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
+    let shown = pane_middle(&mut app, &ctx, 0, vec![std::mem::take(&mut out.textures_delta)], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
     assert!(near(shown, srgb), "the back document draws through the working space: {shown:?}, not {srgb:?}");
     // A CMYK document behind the front one draws through its own assigned CMYK profile.
     app.run("document.activate", json!({"index": 0})).unwrap();
@@ -1029,8 +1034,7 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     // The second document's pane: the picture it shows, and its width.
     let pane = |app: &mut VectorcraftApp| -> (Vec<Color32>, usize) {
         forget(app, &ctx);
-        let (texture, uploads) = wait_ready(app, &ctx, (1, 1), vec![], &mut |a| run_out(a, &ctx));
-        let (pixels, [width, _]) = uploaded(&uploads, texture.id);
+        let (_, (pixels, [width, _])) = wait_ready(app, &ctx, (1, 1), vec![], &mut |a| run_out(a, &ctx));
         (pixels, width)
     };
     app.session.prefs.monitor_profile_display = false;

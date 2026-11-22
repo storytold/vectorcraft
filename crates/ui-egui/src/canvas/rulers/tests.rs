@@ -24,12 +24,12 @@ fn drag(along: Axis, phase: GesturePhase, at: f64, cmd: bool) -> GuideDrag {
 
 /// One pass of the strip's guide.
 fn send(app: &mut VectorcraftApp, ctx: &egui::Context, drag: GuideDrag) {
-    let _ = ctx.run_ui(Default::default(), |ui| guide(app, ui, &drag));
+    ctx.run_ui(Default::default(), |ui| guide(app, ui, &drag)).textures_delta.clear();
 }
 
 /// One pass of the zero-point gesture.
 fn zero(app: &mut VectorcraftApp, ctx: &egui::Context, step: impl Fn(&mut VectorcraftApp, &egui::Ui)) {
-    let _ = ctx.run_ui(Default::default(), |ui| step(app, ui));
+    ctx.run_ui(Default::default(), |ui| step(app, ui)).textures_delta.clear();
 }
 
 fn guides(app: &VectorcraftApp) -> Vec<(bool, f64)> {

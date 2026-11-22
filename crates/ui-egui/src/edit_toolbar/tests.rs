@@ -37,10 +37,11 @@ fn ctx() -> egui::Context {
 /// One whole app frame at `time`; returns the named nodes it drew.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Nodes {
     let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
-    let out = ctx.run_ui(input, |ui| {
+    let mut out = ctx.run_ui(input, |ui| {
         app.tick(ui.ctx());
         app.ui(ui);
     });
+    out.textures_delta.clear();
     let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
     nodes
         .into_iter()

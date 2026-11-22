@@ -45,7 +45,8 @@ mod tests {
 
     /// The URLs the frame after `app`'s last action asked to open.
     fn opened_in_frame(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
-        let out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+        out.textures_delta.clear();
         out.platform_output
             .commands
             .into_iter()

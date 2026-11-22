@@ -23,7 +23,7 @@ fn locate(app: &mut VectorcraftApp, tool: &str) -> serde_json::Value {
 
 /// One pass at `time`, then `tidy`.
 fn pass(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) {
-    let _ = ctx.run_ui(egui::RawInput { time: Some(time), events, ..Default::default() }, |ui| tidy(app, ui.ctx()));
+    ctx.run_ui(egui::RawInput { time: Some(time), events, ..Default::default() }, |ui| tidy(app, ui.ctx())).textures_delta.clear();
 }
 
 #[test]
@@ -119,4 +119,3 @@ fn a_second_learn_link_replaces_the_mark_and_escape_removes_it() {
     assert!(a.ui.learn_locate.is_none(), "an Escape no component took ends the locate");
     let _ = (keys::with_window_intents, Intent::Cancel);
 }
-

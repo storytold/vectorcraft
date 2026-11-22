@@ -318,7 +318,7 @@ fn a_mixed_selection_has_no_colour_to_edit() {
     app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
     app.run("paint.setFill", json!({"color": "#00ff00", "ids": [b]})).unwrap();
     assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false));
-    let _ = ctx.run_ui(Default::default(), |ui| assert_eq!(target(&app, ui).color(), None));
+    ctx.run_ui(Default::default(), |ui| assert_eq!(target(&app, ui).color(), None)).textures_delta.clear();
     // The Eyedropper armed for a stop of the Live Paint Bucket's gradient shows the bucket's color.
     app.select_tool("eyedropper");
     assert_eq!(crate::panels::mixed_paints(&app, &ctx), (true, false));

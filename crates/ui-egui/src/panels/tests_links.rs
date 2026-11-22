@@ -492,9 +492,11 @@ fn edit_original_with_chosen_editor_still_refuses_automation() {
     let ctx = crate::testing::ui_context();
     app.adopt_context(&ctx);
     craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, craft::keymap::Key::A, Default::default(), false);
-    let _ = ctx.run_ui(egui::RawInput::default(), |_| {
+    ctx.run_ui(egui::RawInput::default(), |_| {
         assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
-    });
+    })
+    .textures_delta
+    .clear();
 }
 
 /// Edit Original hands only regular image and document files to the system's default app.

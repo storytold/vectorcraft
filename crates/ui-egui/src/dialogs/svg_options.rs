@@ -466,7 +466,8 @@ mod tests {
     /// The URLs the app asked egui to open in one frame.
     fn open_urls(app: &mut VectorcraftApp) -> Vec<String> {
         let ctx = app.ui_ctx.clone().expect("a test app has a window");
-        let out = ctx.run_ui(Default::default(), |ui| app.ui(ui));
+        let mut out = ctx.run_ui(Default::default(), |ui| app.ui(ui));
+        out.textures_delta.clear();
         out.platform_output
             .commands
             .iter()

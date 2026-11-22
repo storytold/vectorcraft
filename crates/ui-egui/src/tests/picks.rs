@@ -206,7 +206,8 @@ fn fields_of(app: &VectorcraftApp, id: DialogId) -> Option<Value> {
 fn opened_urls(app: &mut VectorcraftApp) -> Vec<String> {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))), ..Default::default() };
-    let out = ctx.run_ui(raw, |ui| poll(app, ui.ctx()));
+    let mut out = ctx.run_ui(raw, |ui| poll(app, ui.ctx()));
+    out.textures_delta.clear();
     out.platform_output
         .commands
         .iter()

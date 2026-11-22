@@ -17,7 +17,7 @@ fn app() -> VectorcraftApp {
 // PLAN: needs `pub(crate) mod marks` in canvas.rs (canvas-w10); the sheet's `mod marks;` is private to `canvas`.
 fn tile_numbers(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-    let _ = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
+    ctx.run_ui(raw, |ui| crate::canvas::show(app, ui)).textures_delta.clear();
     let Some(view) = app.canvas_view() else { return vec![] };
     crate::canvas::marks::marks_of(app, &view).tiles.into_iter().map(|t| t.label).collect()
 }

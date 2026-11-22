@@ -15,7 +15,7 @@ fn app() -> VectorcraftApp {
 /// The theme's tokens, as a pass of the app's interface resolves them.
 fn tokens() -> Tokens {
     let mut tokens = None;
-    let _ = crate::testing::ui_context().run_ui(Default::default(), |ui| tokens = Some(Tokens::clone(Env::of(ui).tokens.tokens())));
+    crate::testing::ui_context().run_ui(Default::default(), |ui| tokens = Some(Tokens::clone(Env::of(ui).tokens.tokens()))).textures_delta.clear();
     tokens.expect("the pass ran")
 }
 

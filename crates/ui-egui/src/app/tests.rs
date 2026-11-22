@@ -43,14 +43,16 @@ fn close_frame(app: &mut VectorcraftApp, ctx: &egui::Context) -> Option<CloseDec
     let mut raw = egui::RawInput::default();
     raw.viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
     let mut decision = None;
-    let _ = ctx.run_ui(raw, |ui| {
+    ctx.run_ui(raw, |ui| {
         app.ui(ui);
         embed::logic(ui.ctx(), || {
             let answer = app.close_decision();
             decision = Some(answer);
             answer
         });
-    });
+    })
+    .textures_delta
+    .clear();
     decision
 }
 

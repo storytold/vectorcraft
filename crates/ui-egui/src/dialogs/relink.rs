@@ -372,7 +372,7 @@ mod tests {
         let ctx = ctx(app);
         let dialogs = app.dialogs().expect("a window");
         for _ in 0..2 {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui)));
+            ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
             crate::dialogs::host::pump(app, &ctx);
         }
     }

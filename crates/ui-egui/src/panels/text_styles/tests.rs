@@ -21,7 +21,7 @@ fn panel_of(app: &mut VectorcraftApp, kind: Kind) -> &mut StylesPanel {
 
 /// One `show` pass of `kind`'s panel.
 fn draw(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind) {
-    let _ = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui, kind));
+    ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui, kind)).textures_delta.clear();
 }
 
 /// The id `run_action` takes for the style `name`: its row in the list, Normal being 0.
