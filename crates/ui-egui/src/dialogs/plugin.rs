@@ -190,34 +190,37 @@ pub(crate) fn before_command() -> u64 {
 }
 
 /// After command `id` with `params` ran with result `r`, the registry at revision `before` when it
-/// started: a `plugin.run` that succeeded, or the last `plugin.run` step of a batch that succeeded
-/// (`command.batch`, or `action.batch` on at least one file or data set), is noted as the filter
-/// that ran last ([`record`]).
+/// started: a `plugin.run` that succeeded, or each `plugin.run` step of a batch that succeeded
+/// (`command.batch`, or `action.batch` on at least one file or data set) in the order they ran, is
+/// noted ([`record`]), so the last one is the filter that ran last.
 pub(crate) fn after_command(app: &mut VectorcraftApp, id: &str, params: &Value, r: &Result<Value, String>, before: u64) {
     let Ok(reply) = r else { return };
     // Action Batch returns success even when files or data sets fail, and runs every step on each
     // one that doesn't.
     let played = |v: &Value| v.get("count").and_then(Value::as_u64).unwrap_or(0) > v.get("failed").and_then(Value::as_u64).unwrap_or(0);
-    let ran = match id {
-        CMD => Some(params),
+    match id {
+        CMD => record(app, params),
         "command.batch" | "action.batch" if id == "command.batch" || played(reply) => {
             let steps = params.get("commands").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
-            let Some(at) = steps.iter().rposition(|s| step_id(s) == Some(CMD)) else { return };
-            let p = steps[at].get("params").unwrap_or(&Value::Null);
-            // The plug-in installed under the id now is the one that ran when no later step changed
-            // the plug-ins, or when it was installed before the batch (installing gives a new serial).
-            let changed_later = steps[at + 1..].iter().any(|s| step_id(s).is_some_and(|c| REGISTRY_CHANGES.contains(&c)));
-            let installed_before = p.get("id").and_then(Value::as_str).and_then(registry::get).is_some_and(|q| q.serial() <= before);
-            if changed_later && !installed_before {
-                forget(app, p);
-                return;
+            // `command.batch` returns each step's result; Action Batch returns none.
+            let results = reply.get("results").and_then(Value::as_array);
+            // Every filter step is noted in the order the steps ran, so the last one is the filter
+            // that ran last and a filter that ran twice keeps its newest parameters.
+            for (at, s) in steps.iter().enumerate().filter(|(_, s)| step_id(s) == Some(CMD)) {
+                let p = s.get("params").unwrap_or(&Value::Null);
+                let ran = p.get("id").and_then(Value::as_str).unwrap_or_default();
+                // The plug-in installed under the id now is the one that ran when no later step may
+                // have changed it, or when it was installed before the batch (installing gives a new
+                // serial).
+                let changed_later = (at + 1..steps.len()).any(|i| may_change(&steps[i], results.and_then(|r| r.get(i)), ran));
+                let installed_before = registry::get(ran).is_some_and(|q| q.serial() <= before);
+                match changed_later && !installed_before {
+                    true => forget(app, p),
+                    false => record(app, p),
+                }
             }
-            Some(p)
         }
-        _ => None,
-    };
-    if let Some(p) = ran.cloned() {
-        record(app, &p);
+        _ => {}
     }
 }
 
@@ -226,8 +229,17 @@ fn step_id(s: &Value) -> Option<&str> {
     s.get("command").and_then(Value::as_str)
 }
 
-/// The commands that install, remove or reload plug-ins.
-const REGISTRY_CHANGES: [&str; 3] = ["plugin.install", "plugin.remove", "plugin.reload"];
+/// Whether batch step `s`, which returned `result` if the batch reports it, may have installed,
+/// removed or reloaded plug-in `id`: a removal names its id, an install reports the id it installed,
+/// and a reload, or an install whose result is not known, may change any plug-in.
+fn may_change(s: &Value, result: Option<&Value>, id: &str) -> bool {
+    match step_id(s) {
+        Some("plugin.remove") => s.get("params").and_then(|p| p.get("id")).and_then(Value::as_str) == Some(id),
+        Some("plugin.install") => result.and_then(|r| r.get("id")).and_then(Value::as_str).is_none_or(|i| i == id),
+        Some("plugin.reload") => true,
+        _ => false,
+    }
+}
 
 /// Notes the filter `plugin.run` params `p` name as the one that ran last, without parameters or a
 /// module, so that Apply Last Filter and Last Filter… stay off until a filter runs again.

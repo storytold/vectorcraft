@@ -199,6 +199,62 @@ fn only_successful_filter_runs_become_the_last_filter() {
     dialogs::cancel(&mut app);
 }
 
+/// Every filter step of a batch counts, in the order the steps ran: the last one becomes the last
+/// filter, each filter's dialog opens with the parameters it last ran with in the batch, and a
+/// filter that ran twice keeps the newer ones.
+#[test]
+fn every_filter_step_of_a_batch_counts() {
+    let mut app = app();
+    let (a, b) = ("test.ui.last.batch.a", "test.ui.last.batch.b");
+    install(&mut app, &filter(a, "Batch A", N));
+    install(&mut app, &filter(b, "Batch B", N));
+    let steps = json!([
+        {"command": "plugin.run", "params": {"id": a, "params": {"n": 4}}},
+        {"command": "plugin.run", "params": {"id": b, "params": {"n": 2}}},
+        {"command": "plugin.run", "params": {"id": a, "params": {"n": 7}}},
+        {"command": "plugin.run", "params": {"id": b, "params": {"n": 6}}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(app.last_filters.last_id(), Some(b), "the last filter step");
+    for (id, n) in [(a, 7), (b, 6)] {
+        app.run("plugin.dialog", json!({"id": id})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
+        dialogs::cancel(&mut app);
+    }
+
+    // Filters installed in the batch: installing another plug-in after a filter ran keeps that
+    // filter's parameters.
+    let (c, d) = ("test.ui.last.batch.c", "test.ui.last.batch.d");
+    let steps = json!([
+        {"command": "plugin.install", "params": {"dataBase64": vectorcraft_format::base64_encode(&filter(c, "Batch C", N)), "replace": true}},
+        {"command": "plugin.run", "params": {"id": c, "params": {"n": 7}}},
+        {"command": "plugin.install", "params": {"dataBase64": vectorcraft_format::base64_encode(&filter(d, "Batch D", N)), "replace": true}},
+        {"command": "plugin.run", "params": {"id": d, "params": {"n": 2}}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(app.last_filters.last_id(), Some(d), "the last filter step");
+    for (id, n) in [(c, 7), (d, 2)] {
+        app.run("plugin.dialog", json!({"id": id})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
+        dialogs::cancel(&mut app);
+    }
+
+    // The same over an Action Batch, with the filters in the other order.
+    app.run("dataset.new", json!({"name": "a"})).unwrap();
+    let steps = json!([
+        {"command": "plugin.run", "params": {"id": b, "params": {"n": 1}}},
+        {"command": "plugin.run", "params": {"id": a, "params": {"n": 9}}},
+    ]);
+    let r = app.run("action.batch", json!({"source": "datasets", "commands": steps})).unwrap();
+    assert_eq!((r["count"].clone(), r["failed"].clone()), (json!(1), json!(0)), "{r}");
+    assert_eq!(app.last_filters.last_id(), Some(a), "the last Action Batch filter step");
+    for (id, n) in [(a, 9), (b, 1)] {
+        app.run("plugin.dialog", json!({"id": id})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("n"), Some(&json!(n)), "{id}");
+        dialogs::cancel(&mut app);
+    }
+}
+
 /// Installing the plug-in again, even the same module, another module with its id, one whose
 /// manifest no longer takes the parameters, and removing it turn both items off, and the new
 /// module's dialog opens with its own defaults. Installing another plug-in keeps them.

@@ -64,7 +64,7 @@ the filter that last ran again with the same parameters on the selection, withou
 **Last Filter…** (`plugin.lastFilter`), which opens that filter's dialog with those parameters, its OK running it as a
 new run. Once a filter has run they read **Apply** followed by the filter's name and the filter's name with an
 ellipsis. A run counts once it succeeds: from its menu item, its dialog's OK, a shortcut, `plugin.run` or a
-`command.batch` step (the last such step of the batch), an Action Batch (`action.batch`) step once a file or data set
+`command.batch` step (each such step in the order the batch ran them, so the last one runs again), an Action Batch (`action.batch`) step once a file or data set
 ran it, and a background run once its
 result is applied. A preview, Cancel, a failed or canceled run, a plug-in's own commands and live effects don't count,
 and neither does a batch step whose filter the batch installed when a later step of the batch installs, removes or
