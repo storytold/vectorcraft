@@ -270,18 +270,20 @@ fn readonly_background_completion_resumes_the_original_uid_without_repeating_sav
 
 #[test]
 fn readonly_busy_picker_and_save_changes_keep_the_existing_error_flow() {
-    let (mut app, _) = app("svg", ErrorKind::PermissionDenied);
+    let (mut app, files) = app("svg", ErrorKind::PermissionDenied);
     let picker = scripted(&mut app);
     let _ = app.run("file.saveAs", json!({}));
     assert_eq!(picker.requests().len(), 1);
-    assert!(app.run("file.save", json!({})).is_err());
-    normal_error(&app);
+    // The document's save is waiting on its picker (one save flow per document): Save is refused
+    // as in progress, writes nothing and opens no second panel or dialog.
+    let busy = app.run("file.save", json!({})).unwrap_err();
+    assert_eq!(busy, craft::dialogs::save::SAVE_IN_PROGRESS.english);
+    assert!(files.lock().unwrap().attempts.is_empty());
+    assert!(!app.any_dialog_open() && app.told.0.is_empty());
     assert_eq!(picker.requests().len(), 1);
     picker.cancel();
     poll(&mut app);
-    if let Some(open) = open_dialogs(&app).pop() {
-        answer_dialog(&mut app, open.id, &[], true);
-    }
+    assert!(!app.any_dialog_open());
     let ctx = crate::testing::ui_context();
     let _ = crate::unsaved::close(&mut app, 0);
     let save = open_dialogs(&app).pop().expect("the unsaved-changes question").id;

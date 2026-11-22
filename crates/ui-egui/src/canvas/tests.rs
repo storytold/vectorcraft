@@ -2620,6 +2620,11 @@ fn view_actual_size_follows_display_print_size() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
     let ctx = crate::testing::ui_context();
+    // Frames as the hosts run them: the zoom stops come from the preferences through the app's frame input.
+    let frame = |app: &mut VectorcraftApp, ctx: &egui::Context, _: Vec<egui::Event>| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        crate::testing::part_frame(app, ctx, raw, |app, ui| show(app, ui));
+    };
     frame(&mut app, &ctx, vec![]);
     // The view's zoom after Actual Size from 250%, and the percent the app's zoom scheme reads it as.
     let actual = |app: &mut VectorcraftApp| {

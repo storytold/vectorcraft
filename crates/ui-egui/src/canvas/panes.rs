@@ -95,6 +95,14 @@ pub struct Panes {
     fits: HashMap<Slot, (egui::Vec2, f64, Point)>,
     /// Where the dividers between the tiled panes lie.
     at: SplitAt,
+    /// While the tiled panes draw, the art areas of the panes drawn so far, by window: their drop catchers show after
+    /// the current window's body ([`super::drops::show`]).
+    pub(crate) drops: Option<Vec<(Win, egui::Rect)>>,
+    /// Art released over a pane in the frame the pointer reached it, applied after the current window's body.
+    pub(crate) released: Option<(Win, super::drops::Dropped)>,
+    /// The `(uid, revision)` of the document whose carried art was released this pass, before the release gave up its
+    /// move: the drop catchers that run after the release still take that art.
+    pub(crate) released_from: Option<(u64, u64)>,
 }
 
 impl Panes {
@@ -357,12 +365,21 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         let areas: Vec<(Win, egui::Rect)> = cells.iter().map(|(w, cell)| (*w, art_area(app, *w, *cell))).collect();
         let unfitted = refit_resized(app, &areas);
         // The other panes first, so that what the canvas draws past its pane (the Contextual Task Bar)
-        // stays over them.
+        // stays over them; their drop catchers last, after the current window's tool may start a carry.
+        app.canvas.panes.drops = Some(Vec::new());
         for (w, cell) in cells.iter().copied().filter(|(w, _)| Some(*w) != active) {
             pane(app, ui, w, cell);
         }
         if let Some((w, cell)) = cells.iter().copied().find(|(w, _)| Some(*w) == active) {
             show_body(app, ui, w, cell, BodyKind::Live);
+        }
+        for (w, area) in app.canvas.panes.drops.take().unwrap_or_default() {
+            let mut catcher = ui.new_child(egui::UiBuilder::new().id_salt(("pane-drops", w)).max_rect(area));
+            super::drops::show(app, &mut catcher, w, BodyKind::Pane);
+        }
+        app.canvas.panes.released_from = None;
+        if let Some((w, drop)) = app.canvas.panes.released.take() {
+            super::drops::drop_on_pane(app, w, &drop);
         }
         // Note the fits this frame made, for `refit_resized`.
         for ((w, area), was_unfitted) in areas.iter().zip(unfitted) {

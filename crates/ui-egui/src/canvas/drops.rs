@@ -2,11 +2,11 @@
 //! items) and artwork carried out of a document's canvas by a Selection move, in the source's own window or another
 //! tab, pane or window. The drag session resolves a drop in the pass after the release; `show` applies it.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
-use craft::behavior::{CanvasView, DropOperation, Input, Metrics, Sense};
-use craft::ui::canvas::{CanvasSpace, ToolContext, ToolPointer};
+use craft::behavior::{CanvasView, CursorIcon, CursorPriority, DropOperation, Input, Metrics, Sense};
+use craft::ui::canvas::{ToolContext, ToolPointer};
 use craft::ui::contract::{
     Common, Component, Cx, DragPreview, DropMark, DropTarget, ListDrag, MeasureCx, OsFiles, Pointer as _, Props, Role, Show as _,
 };
@@ -72,18 +72,28 @@ pub struct CanvasDropsStyle {
     metrics: Metrics,
 }
 
-/// A drop target for one payload type `P`: `make` turns the payload into the canvas's own, or refuses it.
+/// A drop target for one payload type `P`: `make` turns the payload into the canvas's own, or refuses it. `seen` is
+/// the operation of the last payload it accepted at the pointer.
 struct Target<'a, F> {
     rect: Rect,
     view: &'a CanvasView,
     make: F,
+    seen: Cell<Option<DropOperation>>,
+}
+
+impl<'a, F> Target<'a, F> {
+    fn new(rect: Rect, view: &'a CanvasView, make: F) -> Self {
+        Target { rect, view, make, seen: Cell::new(None) }
+    }
 }
 
 impl<P: ?Sized, F: Fn(&P) -> Option<Payload>> DropTarget<P> for Target<'_, F> {
     type Drop = Dropped;
 
     fn accept(&self, payload: &P, at: Pos2, op: DropOperation) -> Option<Dropped> {
-        Some(Dropped { payload: (self.make)(payload)?, at: self.view.to_doc(at), zoom: self.view.zoom, op })
+        let payload = (self.make)(payload)?;
+        self.seen.set(Some(op));
+        Some(Dropped { payload, at: self.view.to_doc(at), zoom: self.view.zoom, op })
     }
 
     fn mark(&self, _: &Dropped) -> DropMark {
@@ -100,6 +110,8 @@ pub(crate) struct CanvasDrops<'a> {
     common: Common,
     view: CanvasView,
     kind: BodyKind,
+    /// The uid of the document the canvas shows.
+    document: u64,
     /// `(uid, revision)` of every open document: carried art whose source is not listed unchanged is refused.
     sources: Vec<(u64, u64)>,
     out: &'a RefCell<Option<Dropped>>,
@@ -132,15 +144,22 @@ impl Component for CanvasDrops<'_> {
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         let rect = cx.rect;
         let (sources, view) = (&self.sources, &self.view);
-        let art = Target { rect, view, make: |a: &CarriedArt| sources.contains(&(a.document, a.revision)).then(|| Payload::Art(a.clone())) };
+        let art = Target::new(rect, view, |a: &CarriedArt| sources.contains(&(a.document, a.revision)).then(|| Payload::Art(a.clone())));
         let mut dropped = cx.drop_target::<CarriedArt, _>(&art);
+        if self.kind == BodyKind::Pane
+            && let (Some(op), Some((carried, _))) = (art.seen.get(), cx.dragging::<CarriedArt>())
+        {
+            // Into another view of its document the art moves, unless Alt copies it; another document takes a copy.
+            let icon = if carried.document == self.document && op != DropOperation::Copy { CursorIcon::Move } else { CursorIcon::Copy };
+            cx.cursor(icon, CursorPriority::Drag);
+        }
         if self.kind == BodyKind::Live {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
-            let panel = Target { rect, view, make: |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())) };
-            let style = Target { rect, view, make: |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())) };
-            let symbol = Target { rect, view, make: |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())) };
-            let brush = Target { rect, view, make: |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())) };
-            let library = Target { rect, view, make: |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())) };
+            let panel = Target::new(rect, view, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
+            let style = Target::new(rect, view, |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())));
+            let symbol = Target::new(rect, view, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
+            let brush = Target::new(rect, view, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
+            let library = Target::new(rect, view, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
             let panel = cx.drop_target::<PanelDrag, _>(&panel);
             let style = cx.drop_target::<ListDrag<StyleKey>, _>(&style);
             let symbol = cx.drop_target::<ListDrag<SymbolKey>, _>(&symbol);
@@ -158,40 +177,68 @@ impl Component for CanvasDrops<'_> {
     }
 }
 
-/// Shows the drop catcher over the body of window `win` and applies the drop released on it. A pane shows window
-/// `win` first, as the drop makes it the current window.
-pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, _space: &CanvasSpace, win: Win, kind: BodyKind) {
+/// Shows the drop catcher over the body of window `win` and applies the drop released on it. While the tiled panes
+/// draw before the current window's body ([`super::panes`]), a pane's catcher waits for that body, whose tool starts
+/// the carry it catches: the pane's area is noted instead.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKind) {
     let rect = ui.max_rect();
+    if kind == BodyKind::Pane
+        && let Some(later) = &mut app.canvas.panes.drops
+    {
+        later.push((win, rect));
+        return;
+    }
     let view = match kind {
         BodyKind::Live => app.canvas_view(),
-        BodyKind::Pane => crate::doc_windows::view(app, win).map(|v| v.canvas(app.ui_scaling(), rect)),
+        BodyKind::Pane => pane_view(app, win, rect),
     };
-    let Some(view) = view else { return };
-    let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).collect();
+    let (Some(view), Some(document)) = (view, app.session.documents().get(win.0).map(|d| d.uid)) else { return };
+    let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).chain(app.canvas.panes.released_from).collect();
     let (out, files_out) = (RefCell::new(None), RefCell::new(None));
     let files = (CanvasFiles::new(app, rect, &view), &files_out);
-    CanvasDrops { common: Common::new(), view, kind, sources, out: &out, files }.id_salt(("canvas-drops", win)).show_at(ui, rect);
+    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, out: &out, files };
+    drops.id_salt(("canvas-drops", win)).show_at(ui, rect);
     if let Some(files) = files_out.take() {
         crate::place::canvas_drop(app, ui.ctx(), files);
     }
     let Some(drop) = out.take() else { return };
-    let result = match kind {
-        BodyKind::Live => apply_drop(app, &drop),
-        BodyKind::Pane => {
-            let before = crate::doc_windows::current(app);
-            app.ui.home = None;
-            crate::doc_windows::show_window(app, win);
-            let result = apply_drop(app, &drop);
-            if let (Err(_), Some(b)) = (&result, before) {
-                crate::doc_windows::show_window(app, b);
+    match kind {
+        BodyKind::Live => {
+            if let Err(e) = apply_drop(app, &drop) {
+                app.status(e);
             }
-            result
         }
-    };
+        BodyKind::Pane => drop_on_pane(app, win, &drop),
+    }
+    ui.ctx().request_repaint();
+}
+
+/// Window `win`'s view over its pane's art area `rect`.
+fn pane_view(app: &VectorcraftApp, win: Win, rect: Rect) -> Option<CanvasView> {
+    crate::doc_windows::view(app, win).map(|v| v.canvas(app.ui_scaling(), rect))
+}
+
+/// Applies `drop`, released on window `win`'s pane, which becomes the current window first; when the drop fails, the
+/// window that was current comes back and the status bar shows the error.
+pub(crate) fn drop_on_pane(app: &mut VectorcraftApp, win: Win, drop: &Dropped) {
+    let before = crate::doc_windows::current(app);
+    app.ui.home = None;
+    crate::doc_windows::show_window(app, win);
+    let result = apply_drop(app, drop);
+    if let (Err(_), Some(b)) = (&result, before) {
+        crate::doc_windows::show_window(app, b);
+    }
     if let Err(e) = result {
         app.status(e);
     }
-    ui.ctx().request_repaint();
+}
+
+/// Art carried off the canvas and released at `at` (screen) over a pane this pass noted, in the frame the pointer
+/// reached it, before the pane could take it as a drop: the pane's window and the drop there.
+pub(crate) fn released_on_pane(app: &VectorcraftApp, art: CarriedArt, at: Pos2, op: DropOperation) -> Option<(Win, Dropped)> {
+    let (win, rect) = app.canvas.panes.drops.as_ref()?.iter().rev().copied().find(|(_, rect)| rect.contains(at))?;
+    let view = pane_view(app, win, rect)?;
+    Some((win, Dropped { payload: Payload::Art(art), at: view.to_doc(at), zoom: view.zoom, op }))
 }
 
 /// Starts carrying the art of a Selection, Direct Selection or Group Selection move that left the canvas, handing it

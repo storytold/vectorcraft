@@ -91,7 +91,8 @@ fn a_rectangle_drag_held_near_the_bottom_edge_keeps_growing() {
     let start = rect.center() - vec2(150.0, 100.0);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start), button(start, true)]);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start + vec2(10.0, 10.0))]);
-    let edge = pos2(start.x + 10.0, rect.bottom() - 2.0);
+    // Just past the bottom edge: the canvas scrolls for a drag that goes past its edge.
+    let edge = pos2(start.x + 10.0, rect.bottom() + 2.0);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(edge)]);
     let c0 = center(&app);
     // The bottom of the rectangle drawn so far: the preview in the document.

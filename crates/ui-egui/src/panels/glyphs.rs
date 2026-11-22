@@ -775,8 +775,12 @@ impl OnCanvas {
 /// character as it stands in its word ([`alternates_found`], found once for each document
 /// revision), in the font's order and without the glyph the character is drawn with. A character
 /// drawn with an alternate gets its default glyph first. `None` unless the Type tool's selection
-/// is exactly one character of one type object whose font is available and gives it another glyph.
+/// is exactly one character of one type object whose font is available and gives it another glyph,
+/// and while Preferences › Type › Show Character Alternates is on.
 pub(crate) fn on_canvas(app: &mut VectorcraftApp) -> Option<OnCanvas> {
+    if !app.session.prefs.show_character_alternates {
+        return None;
+    }
     let (_, a, b) = super::character::text_editing(app)?;
     if a == b || super::character::text_story(app).is_some() {
         return None;

@@ -94,7 +94,7 @@ impl ItemSource<usize> for Cells {}
 // PLAN: assumed dependencies of vectorcraft-ui-egui: craft-behavior and craft-font-manager (hub-w1's Cargo.toml)
 pub(super) fn alternates_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, task_bar: Option<Rect>) {
     // Not while a press or a drag is choosing the selection: the row would follow the pointer.
-    if !app.session.prefs.show_character_alternates || !app.session.tool_wants_text() || app.session.tool_busy() {
+    if !app.session.tool_wants_text() || app.session.tool_busy() {
         return;
     }
     let Some(found) = glyphs::on_canvas(app) else { return };

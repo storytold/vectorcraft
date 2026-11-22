@@ -90,6 +90,9 @@ pub struct CanvasCache {
     /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
     /// canvas drops its art there relative to the pointer (`canvas::drops`).
     pub grab: Option<Point>,
+    /// The last drag the tool was sent and the screen point it was at: when the view scrolls under the held
+    /// pointer, the drag goes on at that point in the scrolled view.
+    pub last_drag: Option<(egui::Pos2, vectorcraft_tools::PointerEvent)>,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.

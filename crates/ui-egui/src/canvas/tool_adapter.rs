@@ -3,7 +3,7 @@
 
 use std::cell::{Cell, RefCell, RefMut};
 
-use craft::behavior::{CancelReason, CanvasView, Cursor, PointerKind as Device, PressPhase};
+use craft::behavior::{CancelReason, CanvasView, Cursor, DropOperation, PointerKind as Device, PressPhase};
 use craft::keymap::{Chord, Key};
 use craft::ui::canvas::ToolPath;
 use craft::ui::canvas::{
@@ -189,6 +189,7 @@ impl CanvasTool for SessionTool<'_> {
         run_clicks(&mut app, pointer.clicks);
         // Where the art was grabbed, should a move carry it off the canvas.
         app.canvas.grab = Some(ev.pos);
+        app.canvas.last_drag = None;
         dispatch(&mut app, &ev, self.view);
         ToolAction::Claimed
     }
@@ -197,15 +198,25 @@ impl CanvasTool for SessionTool<'_> {
         // Art carried off the canvas waits where it last moved; back on the canvas the move goes on.
         let carried = super::drops::carry_out(&mut self.app(), cx, pointer);
         if !carried {
-            self.send(PointerKind::Drag, pointer, cx);
+            let ev = pointer_event(PointerKind::Drag, pointer, cx);
+            dispatch(&mut self.app(), &ev, self.view);
+            self.app().canvas.last_drag = Some((pointer.pos, ev));
         }
         self.carrying.set(carried);
     }
 
     fn release(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) {
-        if cx.over_drop_target() || super::drops::carried(&self.app(), cx, pointer).is_some() {
+        let carried = super::drops::carried(&self.app(), cx, pointer);
+        self.app().canvas.panes.released_from = carried.as_ref().map(|art| (art.document, art.revision));
+        if cx.over_drop_target() || carried.is_some() {
             // The art goes to the drop target, or nowhere off the canvas: the move is given up where it started.
             let _ = self.app().session.cancel_interaction();
+        }
+        if let Some(art) = carried.filter(|_| !cx.over_drop_target()) {
+            // Released over a pane in the frame the pointer reached it: no target could take it yet.
+            let op = if pointer.mods.alt { DropOperation::Copy } else { DropOperation::Move };
+            let mut app = self.app();
+            app.canvas.panes.released = super::drops::released_on_pane(&app, art, pointer.pos, op);
         }
         self.app().canvas.grab = None;
         self.send(PointerKind::Up, pointer, cx);
@@ -373,16 +384,24 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
     }
     let mut view = response.view.or(pass.view).or_else(|| pass.space.map(|s| s.view));
+    let mut scrolled = false;
     if let (Some(v), Some(step)) = (view.as_mut(), response.scroll) {
         if Autoscroll::scroll(v, step, super::document_size(app.content_bounds())).is_some() {
             ui.ctx().request_repaint();
             // The body takes the reply's view as the one the canvas showed.
             response.view = Some(*v);
+            scrolled = true;
         }
     }
     let scaling = app.ui_scaling();
     if let (Some(v), Some(view)) = (app.view_mut(), view.as_ref()) {
         v.set_canvas(view, scaling);
+    }
+    // The view scrolled under the held pointer: the drag goes on where the pointer now is in the document.
+    if let (true, Some(view), Some((at, mut ev))) = (scrolled && app.session.in_interaction(), view, app.canvas.last_drag) {
+        ev.pos = view.to_doc(at);
+        let info = app.view_info();
+        dispatch(app, &ev, info);
     }
     // The press phase says whether the canvas has the pointer: a dialog, floating panel or menu over it hides the
     // document point, and a drag that began on the canvas keeps its own phase over them.
