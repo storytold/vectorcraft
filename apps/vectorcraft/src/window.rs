@@ -170,6 +170,12 @@ fn fit(size: [f32; 2], room: [f32; 2]) -> [f32; 2] {
     std::array::from_fn(|i| size[i].min(room[i]).max(MIN_SIZE[i].min(room[i])).max(1.0))
 }
 
+/// The smallest size a window of `size` points may take: [`MIN_SIZE`], lowered to `size` in each
+/// dimension where [`fit`] made the window smaller than that to fit a small work area.
+fn min_size(size: [f32; 2]) -> [f32; 2] {
+    std::array::from_fn(|i| MIN_SIZE[i].min(size[i]))
+}
+
 /// Whether to list the monitors again: on the first frame, when the UI zoom changed, and at most
 /// every [`MONITORS_EVERY`] seconds while the app draws. `listed` holds the last list's time and zoom.
 pub fn monitors_due(listed: Option<(f64, f32)>, now: f64, zoom: f32) -> bool {
@@ -301,6 +307,12 @@ pub fn restore(window: &winit::window::Window, saved: Option<WindowGeometry>) ->
     let g = place(saved, &monitors, home);
     if let Some([x, y]) = g.pos {
         window.set_outer_position(PhysicalPosition::new(x, y));
+    }
+    // The native minimum (`MIN_SIZE`, set in `native_options`) would keep the window bigger than a
+    // size fitted to a small work area, so it is lowered to that size first.
+    let min = min_size(g.size);
+    if min != MIN_SIZE {
+        window.set_min_inner_size(Some(LogicalSize::new(min[0], min[1])));
     }
     // Returns the new size when it applies at once; either way the window gets it.
     let _ = window.request_inner_size(LogicalSize::new(g.size[0], g.size[1]));
@@ -442,6 +454,21 @@ mod tests {
         assert_eq!((tall.pos, tall.size), (Some([0, 48]), [1900.0, 993.0]));
         // Without a work area the frame leaves the monitor's rect as it was.
         assert_eq!(monitor(0, 0, 1920, 1080, 1.0).less_frame([16, 39]).work, None);
+    }
+
+    #[test]
+    fn a_window_fitted_below_the_smallest_size_lowers_the_minimum_to_its_size() {
+        // 1366 × 768 at 150% with a 48-pixel taskbar along the bottom: a work area 480 points high.
+        let areas = [WorkArea { monitor: [0, 0, 1366, 768], work: [0, 0, 1366, 720] }];
+        let m = [monitor(0, 0, 1366, 768, 1.5).with_work_area(&areas)];
+        let g = place(saved(Some([0, 0]), [900.0, 500.0], false), &m, Some(0));
+        assert_eq!(g.size, [900.0, 480.0]);
+        // The minimum height drops to the fitted 480 points; the width keeps the normal minimum.
+        assert_eq!(min_size(g.size), [800.0, 480.0]);
+        // A window with room for the smallest size keeps the normal minimum.
+        let big = [monitor(0, 0, 1920, 1080, 1.0)];
+        assert_eq!(min_size(place(saved(Some([0, 0]), [1000.0, 700.0], false), &big, Some(0)).size), MIN_SIZE);
+        assert_eq!(min_size([1.0, 1.0]), [1.0, 1.0]);
     }
 
     #[test]

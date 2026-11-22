@@ -50,6 +50,11 @@ pub const SMOOTH_MIN_TOLERANCE: f64 = SMOOTH_MIN_FIDELITY / 640.0;
 /// pixels) at the lowest zoom (3.13 %).
 pub const SMOOTH_MAX_TOLERANCE: f64 = 100.0 / 0.0313;
 
+/// The range (points) of `path.smoothRegion`'s `radius`, `path.joinScrub`'s `tolerance` and
+/// `path.eraseSegments`' `width`, which the tools send as screen pixels divided by the zoom.
+/// VectorCraft's own range.
+pub const REACH_RANGE: (f64, f64) = (0.001, 1000.0);
+
 /// Whether segment `i` of `sp` is straight, so the Smooth tool leaves it as it is: its handles lie
 /// on the line through its ends, and the segment runs from one end to the other without turning back.
 pub fn segment_is_straight(sp: &SubPath, i: usize) -> bool {
@@ -375,6 +380,7 @@ pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
+    // The loop skips ids that are already listed.
     let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
         if seen.insert(id) {

@@ -742,6 +742,74 @@ fn smooth_level_0_keeps_a_closed_paths_start_corner_within_tolerance() {
     assert!(moved <= limit, "level 0 moved the path by {moved} pt, more than {limit} pt: {:?}", s.subpaths[0].anchors[0]);
 }
 
+/// Twice the area `sp` encloses, from 16 points along each segment: positive when it runs
+/// counterclockwise in y-up terms.
+fn signed_area(sp: &SubPath) -> f64 {
+    let pts: Vec<Point> = (0..sp.segment_count()).flat_map(|i| (0..16).map(move |k| sp.segment(i).eval(f64::from(k) / 16.0))).collect();
+    (0..pts.len()).map(|i| pts[i].to_vec2().cross(pts[(i + 1) % pts.len()].to_vec2())).sum()
+}
+
+/// A D of 41 corner points round (0, 0): the arc of radius 100 from (100, 0) up to (0, 100), the
+/// straight side down to (0, -100), and the arc back. It starts in the middle of its arc, and its
+/// first corner is at the top.
+fn d_shape() -> SubPath {
+    let at = |deg: f64| Point::new(100.0 * deg.to_radians().cos(), 100.0 * deg.to_radians().sin());
+    let pts: Vec<Point> = (0..=20).map(|i| at(4.5 * f64::from(i))).chain((0..20).map(|i| at(-90.0 + 4.5 * f64::from(i)))).collect();
+    SubPath::polyline(&pts, true)
+}
+
+/// Object › Path › Simplify starts a closed path where it started, though the refit runs from the
+/// first corner: on the D, the refit starts within the tolerance of the old start, runs the same way
+/// round, and has fewer anchors.
+#[test]
+fn simplify_keeps_a_closed_paths_start() {
+    let sp = d_shape();
+    let path = PathData::single(sp.clone());
+    let s = simplify_with(&path, &SimplifyOptions { tolerance: 1.0, ..Default::default() });
+    let out = &s.subpaths[0];
+    assert!(out.closed && out.anchors.len() < sp.anchors.len(), "{out:?}");
+    let moved = out.anchors[0].p.distance(sp.anchors[0].p);
+    assert!(moved <= 1.0 + 1e-9, "the start moved {moved} pt, to {:?}", out.anchors[0].p);
+    assert!(signed_area(out) * signed_area(&sp) > 0.0, "the direction stays");
+    assert!(one_way_distance(&path, &s).max(one_way_distance(&s, &path)) <= 1.0 + 1e-6);
+}
+
+/// Object › Path › Smooth starts a closed path near where it started, though the refit runs from the
+/// point where the path turns back: a round loop of radius 50 with a needle out to (250, 0), which
+/// starts on the far side of the loop at (-50, 0).
+#[test]
+fn smooth_keeps_a_closed_paths_start() {
+    let at = |deg: f64| Point::new(50.0 * deg.to_radians().cos(), 50.0 * deg.to_radians().sin());
+    let pts: Vec<Point> = (0..=20)
+        .map(|i| at(180.0 + 8.95 * f64::from(i)))
+        .chain([Point::new(250.0, 0.0)])
+        .chain((0..20).map(|i| at(1.0 + 8.95 * f64::from(i))))
+        .collect();
+    let sp = SubPath::polyline(&pts, true);
+    let path = PathData::single(sp.clone());
+    let s = smooth_level(&path, SMOOTH_AUTO_LEVEL);
+    let out = &s.subpaths[0];
+    assert!(out.closed && out.anchors.len() < sp.anchors.len(), "{out:?}");
+    let moved = out.anchors[0].p.distance(sp.anchors[0].p);
+    assert!(moved <= 5.0, "the start moved {moved} pt, to {:?}", out.anchors[0].p);
+    assert!(signed_area(out) * signed_area(&sp) > 0.0, "the direction stays");
+}
+
+/// A refit with only one anchor fewer than the closed path gets no anchor split in to keep its
+/// start: it starts at its anchor nearest the old start. A rectangle with a straight point at
+/// (30, 0) simplifies to its four corners, starting at (0, 0).
+#[test]
+fn simplify_starts_at_the_nearest_anchor_rather_than_add_one_back() {
+    let pts = [(30.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0), (0.0, 0.0)].map(|(x, y)| Point::new(x, y));
+    let path = PathData::single(SubPath::polyline(&pts, true));
+    let want = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)].map(|(x, y)| Point::new(x, y));
+    for straight_lines in [false, true] {
+        let s = simplify_with(&path, &SimplifyOptions { tolerance: 1.0, straight_lines, ..Default::default() });
+        let got: Vec<Point> = s.subpaths[0].anchors.iter().map(|a| a.p).collect();
+        assert_eq!(got, want, "straight_lines {straight_lines}");
+    }
+}
+
 #[test]
 fn remove_redundant_collinear_and_curve() {
     let p = PathData::single(SubPath::polyline(
