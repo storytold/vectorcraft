@@ -1206,7 +1206,7 @@ fn ends_early(bytes: &[u8], kind: Kind) -> bool {
 pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     let kind = crate::sniff(bytes).ok_or("not an EMF or WMF file")?;
     let pic = craft_metafile::parse(bytes).map_err(|e| match e {
-        craft_metafile::Error::NotMetafile => "not an EMF or WMF file".to_string(),
+        craft_metafile::Error::NotMetafile | craft_metafile::Error::NotPict => "not an EMF or WMF file".to_string(),
         craft_metafile::Error::BadHeader => format!("the {} header is damaged", kind.id().to_uppercase()),
         craft_metafile::Error::NoRecords => format!("the {} file holds no records", kind.id().to_uppercase()),
     })?;
@@ -1223,4 +1223,22 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
         m.item(item);
     }
     Ok(m.finish(kind, lost))
+}
+
+/// Turn a metafile picture into a document.
+pub(crate) fn convert(pic: craft_metafile::Picture) -> crate::Picture {
+    let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), (1.0, 1.0));
+    if pic.truncated {
+        m.warn(AT_LIMIT);
+    }
+    let lost = Lost { skipped: pic.skipped_records, images: pic.dropped_images, clips: pic.ignored_clips, rops: pic.unplayed_raster_ops };
+    for item in pic.items {
+        m.item(item);
+    }
+    let imported = m.finish(Kind::Wmf, lost);
+    let mut p = crate::Picture { document: imported.document, warnings: imported.warnings };
+    if p.document.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())) {
+        p.warnings.push("the picture draws nothing VectorCraft reads".to_string());
+    }
+    p
 }
