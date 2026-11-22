@@ -15,7 +15,7 @@ use crate::tests::picks::{answer_dialog, cancel_dialog, open_dialogs};
 /// places off the UI thread when `background`.
 fn app(background: bool) -> VectorcraftApp {
     let services = Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-    let mut app = VectorcraftApp::new(Session::new(), services);
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.placing.off_the_ui_thread = background;
     crate::tests_background::threaded(&mut app);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
