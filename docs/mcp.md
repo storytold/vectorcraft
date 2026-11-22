@@ -2659,8 +2659,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
-  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
-  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. When a placed image is embedded, an
+  object a script holds for it is stale, and the next read gives a new `RasterItem` object. The
   enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.

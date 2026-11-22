@@ -279,6 +279,24 @@ fn embed_reclassifies_and_stales_wrapper() {
 }
 
 #[test]
+fn embed_gives_raster_item_a_new_object() {
+    let base = folder("embed-new");
+    let a = base.join("main/a.png");
+    std::fs::write(&a, gray_png(10, 10)).unwrap();
+    let mut s = session();
+    place(&mut s, &a, true);
+    let out = log(
+        &mut s,
+        &base,
+        "var d = app.activeDocument, p = d.placedItems[0], q = d.pageItems[0]; vc.log(p === q); p.embed();\
+         var r = d.rasterItems[0]; vc.log(p === r); vc.log(r.typename); vc.log(d.pageItems[0] === r); var m = '';\
+         try { p.name; } catch (e) { m = e.message; } vc.log(m);",
+    );
+    assert_eq!(out, vec![json!(true), json!(false), json!("RasterItem"), json!(true), json!("Stale page item")]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
 fn missing_link_embed_reports_error() {
     let base = folder("missing");
     let a = base.join("main/a.png");
