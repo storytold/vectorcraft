@@ -81,13 +81,15 @@ pub(crate) struct StylesPanel {
 }
 
 /// The styles highlighted in the panel, in the order they were picked, among the styles `listed`; a
-/// highlight made in another document is dropped.
+/// highlight made in another document is dropped. A highlight made before the panel first read one (an
+/// action from the panel menu before the list drew) is the active document's.
 fn highlighted(app: &mut VectorcraftApp, kind: Kind, listed: &[&str]) -> Vec<String> {
     let document = app.session.active().map(|st| st.uid);
     let panel = app.ui.text_styles.of(kind);
-    if panel.document != document {
-        *panel = StylesPanel { document, ..Default::default() };
+    if panel.document.is_some_and(|made| Some(made) != document) {
+        *panel = StylesPanel::default();
     }
+    panel.document = document;
     panel.highlight.retain(|n| listed.contains(&n.as_str()));
     panel.highlight.clone()
 }
