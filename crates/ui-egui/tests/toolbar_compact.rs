@@ -4,6 +4,7 @@
 
 use std::sync::Mutex;
 
+use craft::ui::shell::embed;
 use egui::{Pos2, Rect, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -108,8 +109,8 @@ struct ToolbarFrames {
 }
 impl ToolbarFrames {
     fn new(app: VectorcraftApp, height: f32) -> Self {
-        // PLAN: assumed `vectorcraft_ui_egui::testing::ui_context() -> egui::Context`, the helper shell-w6 requested for `tests/`
-        let ctx = vectorcraft_ui_egui::testing::ui_context();
+        let ctx = egui::Context::default();
+        embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
         ctx.enable_accesskit();
         Self { app, ctx, time: 0.0, height, nodes: vec![] }
     }
@@ -124,8 +125,9 @@ impl ToolbarFrames {
         };
         let ctx = self.ctx.clone();
         let app = &mut self.app;
+        embed::before_input(&ctx, |out| app.frame_input(out));
         let mut output = ctx.run_ui(input, |ui| {
-            app.logic(ui.ctx());
+            app.tick(ui.ctx());
             app.ui(ui);
         });
         if let Some(update) = output.platform_output.accesskit_update.take() {
@@ -261,8 +263,7 @@ fn compact_tools_workspace_roundtrip_restores_density_and_legacy_defaults() {
     app.select_tool("pen");
     let saved = serde_json::to_value(workspaces::record(&app.ui)).unwrap();
     assert_eq!(saved["toolbarCompact"], true, "the record uses the workspace's camelCase wire convention");
-    // PLAN: assumed `save_as(app, name) -> Result<_, String>`
-    workspaces::save_as(&mut app, "Compact drawing").unwrap();
+    workspaces::save_as(&mut app.ui, "Compact drawing").unwrap();
     let mut legacy_state = serde_json::to_value(&app.ui).unwrap();
 
     app.run("window.toolbarCompact", json!({"on": false})).unwrap();

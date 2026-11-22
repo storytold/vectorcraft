@@ -7,6 +7,8 @@
 use std::sync::{Mutex, MutexGuard};
 
 use craft::ui::menu::bar::{is_focused, is_open};
+use craft::ui::runtime::overlay::{self, OpenFilter};
+use craft::ui::shell::embed;
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -57,13 +59,12 @@ impl Scene {
         app.run("select.set", json!({"ids": [id]})).unwrap();
         app.select_tool("selection");
         let ctx = egui::Context::default();
-        vectorcraft_ui_egui::theme::install_fonts(&ctx);
-        vectorcraft_ui_egui::theme::apply(&ctx, Default::default());
+        embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
         let mut s = Self { app, ctx, time: 0.0 };
         for _ in 0..4 {
             s.frame(vec![]);
         }
-        assert!(!s.app.any_dialog_open());
+        assert!(!overlay::any_open(&s.ctx, OpenFilter::Keys), "no dialog is open");
         assert!(!s.ctx.egui_wants_keyboard_input(), "the initial idle canvas owns input");
         s
     }
@@ -77,9 +78,11 @@ impl Scene {
             ..Default::default()
         };
         let app = &mut self.app;
-        // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
-        craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
-        let mut out = self.ctx.run_ui(raw, |ui| app.ui(ui));
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
+        let mut out = self.ctx.run_ui(raw, |ui| {
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
         out.textures_delta.clear();
     }
 

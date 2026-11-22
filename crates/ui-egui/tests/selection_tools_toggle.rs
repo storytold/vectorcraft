@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::shell::embed;
 use egui::{Event, Key, Modifiers};
 use serde_json::json;
 use vectorcraft_doc::NodeId;
@@ -54,11 +55,14 @@ struct Keyboard {
 }
 impl Keyboard {
     fn new() -> Self {
-        Self { ctx: egui::Context::default(), time: 0.0 }
+        let ctx = egui::Context::default();
+        embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
+        Self { ctx, time: 0.0 }
     }
 
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>) {
         self.time += 0.05;
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut out = self.ctx.run_ui(
             egui::RawInput {
                 events,
@@ -68,7 +72,7 @@ impl Keyboard {
                 ..Default::default()
             },
             |ui| {
-                app.logic(ui.ctx());
+                app.tick(ui.ctx());
                 app.ui(ui);
             },
         );

@@ -4,10 +4,11 @@
 
 use std::sync::Mutex;
 
+use craft::automation::actions::{Action, ActionList, ActionStep};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, NodeId};
 use vectorcraft_engine::Session;
-use vectorcraft_ui_egui::panels::actions::{self, ActionSet};
+use vectorcraft_ui_egui::panels::actions;
 use vectorcraft_ui_egui::{UiState, VectorcraftApp};
 
 static CASE: Mutex<()> = Mutex::new(());
@@ -29,6 +30,35 @@ fn close(actual: [f64; 4], expected: [f64; 4]) -> bool {
     actual.into_iter().zip(expected).all(|(a, e)| (a - e).abs() < 1e-8)
 }
 
+/// Makes the action list one set, `name`, holding `members` in order.
+fn one_set(app: &mut VectorcraftApp, name: &str, members: Vec<Action>) {
+    let mut list = ActionList::new();
+    list.new_set(name).unwrap();
+    for action in members {
+        list.push(Action { set: Some(name.to_string()), ..action }).unwrap();
+    }
+    app.ui.actions = list;
+}
+
+/// The list index of action `n` of the first set.
+fn index(app: &VectorcraftApp, n: usize) -> usize {
+    let list = &app.ui.actions;
+    actions::members(list, list.sets()[0])[n]
+}
+
+/// Action `n` of the first set.
+fn action(app: &VectorcraftApp, n: usize) -> &Action {
+    app.ui.actions.action(index(app, n)).unwrap()
+}
+
+/// Gives the first action of the first set `params` for its step `step`.
+fn set_params(app: &mut VectorcraftApp, step: usize, params: Value) {
+    let i = index(app, 0);
+    let command = app.ui.actions.action(i).unwrap().steps[step].command.clone();
+    app.ui.actions.delete_step(i, step).unwrap();
+    app.ui.actions.insert_step(i, step, ActionStep::new(command, params)).unwrap();
+}
+
 /// Record Center exactly once through New Action, the two actual Align commands, and Stop.
 fn record_center(automatic: bool) -> CenterRecording {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -41,17 +71,17 @@ fn record_center(automatic: bool) -> CenterRecording {
     assert!(close(bounds(&app, b), [180.0, 120.0, 260.0, 180.0]));
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
     app.run("select.key", json!({"id": b.0})).unwrap();
-    app.ui.action_sets = vec![ActionSet::new("Automatic Align", vec![])];
+    one_set(&mut app, "Automatic Align", vec![]);
     let new_action = if automatic { json!({"set": 0, "name": "Center", "automaticAlignTo": true}) } else { json!({"set": 0, "name": "Center"}) };
     app.run(actions::NEW_ACTION, new_action).unwrap();
     app.run("object.align", json!({"horizontal": "center", "to": "key"})).unwrap();
     app.run("object.align", json!({"vertical": "center", "to": "key"})).unwrap();
     app.run(actions::STOP_RECORDING, json!({})).unwrap();
-    let action = &app.ui.action_sets[0].actions[0];
-    assert_eq!(action.steps.len(), 2);
-    assert!(action.steps.iter().all(|(id, p)| id == "object.align" && p["to"] == "key"));
-    assert_eq!(action.automatic_align_to, automatic, "New Action sets the option it is given");
-    let raw_steps = serde_json::to_value(&action.steps).unwrap();
+    let recorded = action(&app, 0);
+    assert_eq!(recorded.steps.len(), 2);
+    assert!(recorded.steps.iter().all(|s| s.command == "object.align" && s.params["to"] == "key"));
+    assert_eq!(actions::automatic_align_to(recorded), automatic, "New Action sets the option it is given");
+    let raw_steps = serde_json::to_value(&recorded.steps).unwrap();
     let ui = serde_json::to_value(&app.ui).unwrap();
     CenterRecording { document, a, b, ui, raw_steps }
 }
@@ -99,7 +129,7 @@ fn automatic_center_recording_resolves_all_three_playback_selections() {
         let undo = app.session.active().unwrap().history.undo.len();
         let result = actions::play(&mut app, 0, 0);
         let actual = [bounds(&app, recording.a), bounds(&app, recording.b)];
-        let raw_unchanged = serde_json::to_value(&app.ui.action_sets[0].actions[0].steps).unwrap() == recording.raw_steps;
+        let raw_unchanged = raw_steps(&app) == recording.raw_steps;
         let selection_unchanged = app.session.active().unwrap().selection == selection;
         let undo_steps = app.session.active().unwrap().history.undo.len().saturating_sub(undo);
         let undo_restored = result.is_ok()
@@ -131,15 +161,15 @@ fn legacy_center_without_the_option_keeps_its_frozen_key_target() {
     assert!(error.to_lowercase().contains("key"), "{error}");
     assert!(close(bounds(&app, recording.a), [20.0, 40.0, 60.0, 60.0]));
     assert!(close(bounds(&app, recording.b), [180.0, 120.0, 260.0, 180.0]));
-    assert_eq!(serde_json::to_value(&app.ui.action_sets[0].actions[0].steps).unwrap(), recording.raw_steps);
+    assert_eq!(raw_steps(&app), recording.raw_steps);
 }
 
 fn raw_steps(app: &VectorcraftApp) -> Value {
-    serde_json::to_value(&app.ui.action_sets[0].actions[0].steps).unwrap()
+    serde_json::to_value(&action(app, 0).steps).unwrap()
 }
 
 fn automatic_flag(app: &VectorcraftApp) -> bool {
-    serde_json::to_value(&app.ui.action_sets[0].actions[0]).unwrap()["automaticAlignTo"].as_bool().unwrap_or(false)
+    actions::automatic_align_to(action(app, 0))
 }
 
 #[test]
@@ -155,8 +185,9 @@ fn automatic_align_options_toggle_restores_the_original_recorded_targets() {
     assert!(close(bounds(&app, recording.a), [20.0, 40.0, 60.0, 60.0]));
     app.run(actions::ACTION_OPTIONS, json!({"set": 0, "action": 0, "automaticAlignTo": true})).unwrap();
     assert!(automatic_flag(&app));
-    let copy = app.ui.action_sets[0].actions[0].copy();
-    assert_eq!(serde_json::to_value(copy).unwrap()["automaticAlignTo"], true, "copying retains the per-action choice");
+    let i = index(&app, 0);
+    let copy = app.ui.actions.duplicate_action(i, |_, _, _| {}).unwrap();
+    assert!(actions::automatic_align_to(app.ui.actions.action(copy).unwrap()), "copying retains the per-action choice");
     actions::play(&mut app, 0, 0).unwrap();
     assert!(close(bounds(&app, recording.a), [120.0, 100.0, 160.0, 120.0]));
     assert!(close(bounds(&app, recording.b), [100.0, 80.0, 180.0, 140.0]));
@@ -168,7 +199,8 @@ fn automatic_align_observes_selection_changed_by_an_earlier_accelerated_step() {
     let _case = CASE.lock().unwrap_or_else(|e| e.into_inner());
     let recording = record_center(true);
     let mut app = playback_app(&recording, false, true);
-    app.ui.action_sets[0].actions[0].steps.insert(0, ("select.set".into(), json!({"ids": [recording.a.0]})));
+    let i = index(&app, 0);
+    app.ui.actions.insert_step(i, 0, ActionStep::new("select.set", json!({"ids": [recording.a.0]}))).unwrap();
     let raw = raw_steps(&app);
     let undo = app.session.active().unwrap().history.undo.len();
     actions::play(&mut app, 0, 0).unwrap();
@@ -185,7 +217,8 @@ fn automatic_align_step_speed_and_stop_continue_share_the_compiled_choice() {
     let _case = CASE.lock().unwrap_or_else(|e| e.into_inner());
     let recording = record_center(true);
     let mut app = playback_app(&recording, true, false);
-    app.ui.action_sets[0].actions[0].steps.insert(1, (actions::STOP_STEP.into(), json!({"message": "Choose B as key", "allowContinue": true})));
+    let i = index(&app, 0);
+    app.ui.actions.insert_step(i, 1, ActionStep::new(actions::STOP_STEP, json!({"message": "Choose B as key", "allowContinue": true}))).unwrap();
     let raw = raw_steps(&app);
     app.run(actions::PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
     actions::play(&mut app, 0, 0).unwrap();
@@ -231,7 +264,7 @@ fn save_file(app: &mut VectorcraftApp, files: &ActionFiles, path: &str) -> Value
 }
 
 fn load_only_file(app: &mut VectorcraftApp, path: &str) {
-    app.ui.action_sets.clear();
+    app.ui.actions = ActionList::new();
     let result = app.run(actions::LOAD_SET, json!({"path": path})).unwrap();
     assert_eq!(result["set"], 0);
 }
@@ -253,45 +286,48 @@ fn automatic_align_files_preserve_enabled_and_raw_recorded_excluded_semantics() 
     app.run(actions::NEW_ACTION, json!({"set": 0, "name": "Recorded Automatic Center"})).unwrap();
     actions::play(&mut app, 0, 0).unwrap();
     app.run(actions::STOP_RECORDING, json!({})).unwrap();
-    let destination = app.ui.action_sets[0].actions[1].clone();
-    assert_ne!(serde_json::to_value(&destination).unwrap()["automaticAlignTo"], true);
+    let destination = action(&app, 1).clone();
+    assert!(!actions::automatic_align_to(&destination));
     assert_eq!(destination.steps.len(), 1);
-    assert_eq!(destination.steps[0].0, "command.batch");
-    let nested = destination.steps[0].1["commands"].as_array().unwrap();
+    assert_eq!(destination.steps[0].command, "command.batch");
+    let nested = destination.steps[0].params["commands"].as_array().unwrap();
     assert_eq!(nested.len(), 2);
     assert!(nested.iter().all(|s| s["command"] == "object.align" && s["params"]["to"] == "auto"));
     let raw = serde_json::to_value(&destination.steps).unwrap();
-    app.ui.action_sets = vec![ActionSet::new("Recorded Default-false", vec![destination])];
+    one_set(&mut app, "Recorded Default-false", vec![destination]);
     let recorded = save_file(&mut app, &files, "recorded.vcactions");
     assert_eq!(recorded["version"], 7, "raw automatic batches require version 7 even when no action flag is true");
     assert_ne!(recorded["actions"][0]["automaticAlignTo"], true);
     load_only_file(&mut app, "recorded.vcactions");
     assert!(!automatic_flag(&app));
     assert_eq!(raw_steps(&app), raw);
-    let imported = app.ui.action_sets[0].actions[0].clone();
+    let imported = action(&app, 0).clone();
     let mut fresh = playback_app(&recording, false, false);
-    fresh.ui.action_sets = vec![ActionSet::new("Imported", vec![imported])];
+    one_set(&mut fresh, "Imported", vec![imported]);
     actions::play(&mut fresh, 0, 0).unwrap();
     assert!(close(bounds(&fresh, recording.a), [120.0, 100.0, 160.0, 120.0]));
     assert!(close(bounds(&fresh, recording.b), [100.0, 80.0, 180.0, 140.0]));
 
-    app.ui.action_sets[0].actions[0].excluded_steps.insert(0);
+    let i = index(&app, 0);
+    app.ui.actions.set_step(i, 0, false).unwrap();
     let excluded = save_file(&mut app, &files, "excluded.vcactions");
     assert_eq!(excluded["version"], 7, "excluding a raw automatic batch does not make its stored semantics compatible with older readers");
     load_only_file(&mut app, "excluded.vcactions");
     assert!(!automatic_flag(&app));
     assert_eq!(raw_steps(&app), raw);
-    assert!(app.ui.action_sets[0].actions[0].excluded_steps.contains(&0));
+    assert!(action(&app, 0).disabled.contains(&0));
 
     // Nested raw batches may be stored/excluded even though command.batch cannot execute nested batches.
     // The format requirement follows their retained command semantics, not an executable flattening.
-    let recorded_batch = app.ui.action_sets[0].actions[0].steps[0].1.clone();
-    app.ui.action_sets[0].actions[0].steps[0].1 = json!({"commands": [{"command": "command.batch", "params": recorded_batch}]});
+    let recorded_batch = action(&app, 0).steps[0].params.clone();
+    set_params(&mut app, 0, json!({"commands": [{"command": "command.batch", "params": recorded_batch}]}));
+    let i = index(&app, 0);
+    app.ui.actions.set_step(i, 0, false).unwrap();
     let deeper = raw_steps(&app);
     assert_eq!(save_file(&mut app, &files, "nested-excluded.vcactions")["version"], 7);
     load_only_file(&mut app, "nested-excluded.vcactions");
     assert_eq!(raw_steps(&app), deeper);
-    assert!(app.ui.action_sets[0].actions[0].excluded_steps.contains(&0));
+    assert!(action(&app, 0).disabled.contains(&0));
 }
 
 const LEGACY_V1: &str = r#"{
@@ -367,12 +403,12 @@ fn automatic_align_ignores_an_artboard_the_step_stores() {
     app.run("edit.undo", json!({})).unwrap();
     assert!(!close(current, second), "the two artboards center the rectangle in different places");
 
-    let mut action = actions::Action::new("Center", vec![("object.align".into(), stored.clone())]);
-    action.automatic_align_to = true;
-    app.ui.action_sets = vec![ActionSet::new("Automatic Align", vec![action])];
+    let mut center_action = Action::new("Center", vec![ActionStep::new("object.align", stored.clone())]);
+    actions::set_automatic_align_to(&mut center_action, true);
+    one_set(&mut app, "Automatic Align", vec![center_action]);
     actions::play(&mut app, 0, 0).unwrap();
     assert!(close(bounds(&app, a), current), "automatic playback uses the current artboard, not the stored one");
-    assert_eq!(app.ui.action_sets[0].actions[0].steps[0].1, stored, "the stored step keeps its artboard");
+    assert_eq!(action(&app, 0).steps[0].params, stored, "the stored step keeps its artboard");
 }
 
 #[test]
@@ -382,11 +418,10 @@ fn automatic_align_inside_a_recorded_batch_run_needs_version_7() {
     let files = host_files(&mut app);
     let align = json!({"command": "object.align", "params": {"horizontal": "center", "to": "auto"}});
     let batch = json!({"commands": [align], "label": "Center", "source": "datasets", "destination": "none"});
-    let action = actions::Action::new("Batch Center", vec![("action.batch".into(), batch.clone())]);
-    app.ui.action_sets = vec![ActionSet::new("Recorded Batch", vec![action])];
+    one_set(&mut app, "Recorded Batch", vec![Action::new("Batch Center", vec![ActionStep::new("action.batch", batch.clone())])]);
     let saved = save_file(&mut app, &files, "batch.vcactions");
     assert_eq!(saved["version"], 7, "a Batch run's automatic Align step needs a reader that knows `to: \"auto\"`");
     assert_ne!(saved["actions"][0]["automaticAlignTo"], true);
     load_only_file(&mut app, "batch.vcactions");
-    assert_eq!(app.ui.action_sets[0].actions[0].steps[0].1, batch);
+    assert_eq!(action(&app, 0).steps[0].params, batch);
 }

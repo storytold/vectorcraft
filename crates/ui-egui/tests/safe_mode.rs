@@ -9,14 +9,16 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use craft::automation::{ControlRequest, Reply};
+use craft::ui::shell::embed;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::safe_mode::{self, Item};
 use vectorcraft_plugins::{registry, wat as tpl};
-use vectorcraft_ui_egui::control::{ControlRequest, Outcome, handle};
+use vectorcraft_ui_egui::control::handle;
 use vectorcraft_ui_egui::dialogs::safe_mode as ui;
 use vectorcraft_ui_egui::panels::appearance;
-use vectorcraft_ui_egui::{Services, VectorcraftApp, chrome, theme};
+use vectorcraft_ui_egui::{Services, VectorcraftApp, chrome};
 
 static LOCK: Mutex<()> = Mutex::new(());
 
@@ -93,23 +95,27 @@ fn stopped_while_loading_x(launch: &Path, dir: &Path) {
     std::fs::write(launch.join("launch-1-dead.json"), item.to_string()).unwrap();
 }
 
-/// A window for one test, with the app's fonts.
+/// A window for one test, with the interface runtime and the app's fonts.
 fn window() -> egui::Context {
     let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
+    embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
     ctx
 }
 
 /// One headless frame of the app: its dialogs open and their answers are read.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.ui(ui));
+    embed::before_input(ctx, |out| app.frame_input(out));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        app.tick(ui.ctx());
+        app.ui(ui);
+    });
     out.textures_delta.clear();
 }
 
 /// A control request, then one frame; the reply says whether it was done.
 fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) -> Value {
     let (req, _rx) = ControlRequest::new(method, params);
-    let Outcome::Done(reply) = handle(app, ctx, &req) else { panic!("{method}: not done") };
+    let Reply::Done(reply) = handle(app, ctx, &req) else { panic!("{method}: not done") };
     frame(app, ctx);
     reply
 }
@@ -362,7 +368,9 @@ fn help_safe_mode_lists_a_plug_in_found_under_several_files_once() {
     app.run("help.safeMode", json!({})).unwrap();
     frame(&mut app, &ctx);
     // One row for each plug-in: x, y and z, not an entry for each of x's files.
-    let row = |app: &mut VectorcraftApp, k: usize| control(app, &ctx, "ui.dialog.set", json!({"field": format!("enable-{k}"), "value": false}))["ok"];
+    let row = |app: &mut VectorcraftApp, k: usize| {
+        control(app, &ctx, "ui.dialog.set", json!({"field": format!("enable-{k}"), "value": false}))["ok"].clone()
+    };
     assert_eq!((row(&mut app, 2), row(&mut app, 3)), (json!(true), json!(false)), "three rows");
     let reply = control(&mut app, &ctx, "ui.dialog.set", json!({"field": "enable-0", "value": true}));
     assert_eq!(reply["ok"], true, "{reply}");

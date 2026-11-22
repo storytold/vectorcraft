@@ -4,6 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::shell::embed;
 use serde_json::json;
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, ColorSettings, DISPLAY_P3, PROPHOTO_RGB, SRGB, WIDE_GAMUT_RGB};
@@ -72,6 +73,27 @@ fn rgb_edits_preserve_untouched_working_channels() {
     }
 }
 
+/// A test window of `size` that runs `pass` over `app` in the app's interface: the runtime and the
+/// app's fonts are installed in the first pass, and each later pass gets the frame input the app gives.
+fn harness(
+    size: egui::Vec2,
+    app: VectorcraftApp,
+    mut pass: impl FnMut(&mut egui::Ui, &mut VectorcraftApp) + 'static,
+) -> egui_kittest::Harness<'static, VectorcraftApp> {
+    let mut installed = false;
+    egui_kittest::Harness::builder().with_size(size).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut installed, true) {
+                embed::install(ui.ctx(), craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
+                return;
+            }
+            embed::before_input(ui.ctx(), |out| app.frame_input(out));
+            pass(ui, app);
+        },
+        app,
+    )
+}
+
 /// The picker's R, G and B fields show the stored RGB components in every working profile.
 #[test]
 fn picker_rgb_fields_show_working_values() {
@@ -82,17 +104,10 @@ fn picker_rgb_fields_show_working_values() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
         app.run("ui.colorPicker", json!({"color": [0.6, 0.4, 0.2]})).unwrap();
-        let mut fonts = false;
-        let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 900.0)).with_accessibility_check(false).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    vectorcraft_ui_egui::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                vectorcraft_ui_egui::dialogs::show(app, ui.ctx());
-            },
-            app,
-        );
+        let mut harness = harness(egui::vec2(1280.0, 900.0), app, |ui, app| {
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
         harness.run_steps(3);
         // HSB's Brightness field is also labelled B, so the fields labelled B are read together.
         for (label, expected) in [("R", "153"), ("G", "102"), ("B", "51")] {
@@ -115,17 +130,7 @@ fn color_panel_slider_preserves_native_channels_and_undo() {
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     app.run("paint.setFill", json!({"color": [0.5, 0.3, 0.2]})).unwrap();
-    let mut fonts = false;
-    let mut harness = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 400.0)).with_accessibility_check(false).build_ui_state(
-        move |ui, app: &mut VectorcraftApp| {
-            if !std::mem::replace(&mut fonts, true) {
-                vectorcraft_ui_egui::theme::install_fonts(ui.ctx());
-                return;
-            }
-            show(app, ui);
-        },
-        app,
-    );
+    let mut harness = harness(egui::vec2(320.0, 400.0), app, |ui, app| show(app, ui));
     harness.run_steps(3);
     harness.get_by_role_and_label(egui::accesskit::Role::Slider, "R").click();
     harness.run_steps(3);
