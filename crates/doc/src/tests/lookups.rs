@@ -1,6 +1,6 @@
 //! The batched lookups ([`Document::index_paths`], `node_at`, `node_mut_at`, `ancestry_at`) agree
 //! with the one-id ones on nested trees with missing and duplicated ids, and the edits of many nodes
-//! ([`Document::remove_many`], `wrap`, `insert_beside`) leave the tree that `remove`, `insert` and
+//! ([`Document::remove_many`], `wrap`, `insert_beside`, `insert_below`) leave the tree that `remove`, `insert` and
 //! `move_node` leave one node at a time.
 use crate::*;
 use vectorcraft_geom::shapes;
@@ -291,6 +291,26 @@ fn insert_beside_matches_inserting_one_at_a_time() {
 }
 
 #[test]
+fn insert_below_matches_inserting_one_at_a_time() {
+    for seed in 1..40 {
+        let (mut d, mut ids) = tree(seed);
+        let picked = picks(&d, seed);
+        // None to three new nodes for each anchor.
+        let items: Vec<(NodeId, Vec<Node>)> = picked.iter().enumerate().map(|(k, id)| (*id, (0..k % 4).map(|_| square(&mut d)).collect())).collect();
+        ids.extend(items.iter().flat_map(|(_, new)| new.iter().map(|n| n.id)));
+        let (mut a, mut b) = (d.clone(), d.clone());
+        for (id, new) in items.clone() {
+            let (parent, at, _) = a.position(id).unwrap();
+            for (k, n) in new.into_iter().enumerate() {
+                a.insert(parent, at + k, n).unwrap();
+            }
+        }
+        b.insert_below(items).unwrap();
+        same(&a, &b, &ids, &format!("seed {seed}"));
+    }
+}
+
+#[test]
 fn wrap_matches_inserting_a_group_and_moving_the_nodes_into_it_one_at_a_time() {
     for seed in 1..40 {
         let (mut d, mut ids) = tree(seed);
@@ -331,6 +351,8 @@ fn edits_of_many_refuse_missing_repeated_and_nested_ids() {
             let items = list.iter().map(|id| (*id, vec![])).collect();
             assert_eq!(b.insert_beside(items, replace).err(), Some(DocError::NoNode(bad)), "{what}");
         }
+        let items = list.iter().map(|id| (*id, vec![])).collect();
+        assert_eq!(b.insert_below(items).err(), Some(DocError::NoNode(bad)), "{what}");
         assert_eq!(serde_json::to_string(&b).ok(), saved, "{what}: the document stays as it was");
     }
 }

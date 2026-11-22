@@ -1,7 +1,7 @@
 //! Hosting the active tool: pointer/key events → actions → commands.
 
 use serde_json::{Map, Value};
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::draw2::FEEDBACK;
@@ -186,12 +186,13 @@ impl Session {
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())
             .filter(|o| o.get("editing").is_some_and(|v| !v.is_null()) && o.get("start") != o.get("end"));
-        // The gradient mesh points the Mesh tool, Direct Selection or the Lasso picked stay picked
-        // for the Eyedropper, which samples into them (#8090), and for the tool after it.
-        let mesh_points = (id == "eyedropper" || self.tool.id() == "eyedropper")
+        // The gradient mesh points the Mesh tool, Direct Selection, the Lasso or the Polygonal Lasso
+        // picked stay picked when another of these tools or the Eyedropper, which samples into
+        // them (#8090), is chosen: a fill color then recolors just them. None stay picked when
+        // none were.
+        let mesh_points = (Self::picks_mesh_points(id) && Self::picks_mesh_points(self.tool.id()))
             .then(|| self.tool.options().get("meshPoints").cloned())
-            .flatten()
-            .filter(|v| v.as_array().is_some_and(|a| !a.is_empty()));
+            .flatten();
         self.deactivate_tool(view)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
@@ -206,6 +207,13 @@ impl Session {
             self.select_whole_instance(id);
         }
         Ok(())
+    }
+
+    /// Does tool `id` pick gradient mesh points (its `meshPoints` option): the Mesh tool, Direct
+    /// Selection, the Lasso, the Polygonal Lasso and the Eyedropper? Group Selection, which
+    /// selects whole objects, does not.
+    fn picks_mesh_points(id: &str) -> bool {
+        matches!(id, "mesh" | "directSelection" | "lasso" | "polygonalLasso" | "eyedropper")
     }
 
     /// Deactivate the tool and apply the actions it returns. In a batch, a Cancel is left out: the
@@ -292,9 +300,9 @@ impl Session {
         // double-click or triple-click compares.
         self.tool.press_elsewhere();
         let mut lent = self.make_tool(id);
-        // The gradient mesh points the Eyedropper holds are the lent tool's picks, which a Shift
-        // click adds to (#8090).
-        if self.tool.id() == "eyedropper" {
+        // The gradient mesh points the lending tool picked (the Mesh tool's, the Lasso's, the
+        // Eyedropper's) are the lent tool's picks, which a Shift click adds to (#8090).
+        if Self::picks_mesh_points(self.tool.id()) && Self::picks_mesh_points(id) {
             let points = self.tool.options().get("meshPoints").cloned().unwrap_or_else(|| Value::Array(vec![]));
             lent.set_option("meshPoints", &points);
         }
@@ -311,12 +319,22 @@ impl Session {
     /// Pen goes on drawing its path), less the work the gesture ended as a command would: a
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
+        let lent_by_bucket = self.lent_by_bucket();
         let Some(lender) = self.lender.take() else { return Ok(()) };
-        // The points the lent tool left picked go back to the Eyedropper, none when it unpicked
-        // them all (#8090). Group Selection picks no mesh points, so the Eyedropper keeps its own.
-        let mesh_points =
-            (lender.id() == "eyedropper" && self.tool.id() != "groupSelection").then(|| self.tool.options().get("meshPoints").cloned()).flatten();
+        // The points the lent tool left picked go back to the tool it was lent to when that tool
+        // picks mesh points, none when it unpicked them all (#8090). Group Selection and the
+        // Selection tool pick no mesh points, so the tool keeps its own. Unchanged picks are not
+        // set again, so the Mesh tool keeps the point whose handles it shows.
+        let mesh_points = (Self::picks_mesh_points(lender.id()) && Self::picks_mesh_points(self.tool.id()))
+            .then(|| self.tool.options().get("meshPoints").cloned())
+            .flatten()
+            .filter(|p| lender.options().get("meshPoints") != Some(p));
+        // The lent tool's last actions (a drag it cancels or keeps) still count as the Live Paint
+        // Bucket's when the bucket lent it ([`Session::bucket_paints`]).
+        let outer_bucket = self.back_to_bucket;
+        self.back_to_bucket |= lent_by_bucket;
         let r = self.deactivate_tool(view);
+        self.back_to_bucket = outer_bucket;
         self.keep_tool_settings();
         self.tool = lender;
         if let Some(points) = mesh_points {
@@ -1536,11 +1554,12 @@ impl Session {
     }
 
     /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
-    /// the Type tool and the Eyedropper clear a character range whose text is no longer selected.
+    /// the Type tool and the Eyedropper clear a character range whose text is no longer selected,
+    /// and the Curvature Circle tool lets the pointer reach its circles once none is selected.
     /// After `edit.undo` or `edit.redo` (`cmd`), the tool is told first, so the Type tool puts the
     /// caret where the step changed the text.
     pub(crate) fn after_command(&mut self, cmd: Option<&str>) {
-        if self.in_tool_actions || (!self.tool.wants_text() && self.tool.id() != "eyedropper") {
+        if self.in_tool_actions || (!self.tool.wants_text() && !matches!(self.tool.id(), "eyedropper" | vectorcraft_tools::curvature_circle::ID)) {
             return;
         }
         if let Some(cmd @ ("edit.undo" | "edit.redo")) = cmd {
@@ -1742,7 +1761,7 @@ impl Session {
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
-            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default();
+            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection, cmd, p)).unwrap_or_default();
             let (objects, color) = self
                 .active()
                 .map(|st| (st.selection.objects.clone(), st.selection.objects.first().map(|id| st.doc.layer_color(*id))))
@@ -1783,11 +1802,17 @@ const FEEDBACK_MAX_POINTS: usize = 100_000;
 
 /// The outlines of every selected object, a group's members each with their own, or the selection's
 /// bounds when the outlines' points and the objects evaluated to make them come to more than
-/// [`FEEDBACK_MAX_POINTS`].
-fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    let nodes = selection.objects.iter().filter_map(|&id| doc.node(id));
-    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS).unwrap_or_else(|| {
-        doc.bounds_of(&selection.objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect()
-    });
+/// [`FEEDBACK_MAX_POINTS`]. A `dimension.update` preview (`cmd`, `p`) that names its dimensions,
+/// as the Dimension tool sends for a dimension it drags, outlines those dimensions instead.
+fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection, cmd: &str, p: &Value) -> Vec<Overlay> {
+    let named: Vec<NodeId> = if cmd == "dimension.update" {
+        p.get("ids").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect()
+    } else {
+        vec![]
+    };
+    let objects = if named.is_empty() { &selection.objects } else { &named };
+    let nodes = objects.iter().filter_map(|&id| doc.node(id));
+    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS)
+        .unwrap_or_else(|| doc.bounds_of(objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect());
     outlines.into_iter().map(|path| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false }).collect()
 }

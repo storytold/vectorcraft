@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create)} restyle, turn or move existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create), at?: [x,y] (after offset: puts a linear dimension's line through this point, gives an angular dimension's arc a radius of the point's distance from the vertex, at least 12 pt, or turns a radius or diameter line toward it; what the dimension measures does not change)} restyle, turn or move existing dimensions → {ids}",
             has_doc,
             update
         ),
@@ -159,6 +159,7 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(error("Select dimensions to update"));
     }
     let o = if p.get("options").is_some() { Some(options(s, p)?) } else { None };
+    let at = if p.get("at").is_some() { Some(point(p, "at")?) } else { None };
     // Every dimension is checked before anything changes, and an update that changes none of
     // them records no undo step.
     let mut next = Vec::with_capacity(ids.len());
@@ -178,6 +179,10 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
             }
             dim.offset = distance(p, dim.offset)?;
             dim.resolve(doc).map_err(error)?;
+            if let Some(at) = at {
+                dim.place(at);
+                dim.resolve(doc).map_err(error)?;
+            }
             if dim != old {
                 next.push((*id, dim));
             }
