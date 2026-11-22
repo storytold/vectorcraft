@@ -2831,6 +2831,32 @@ fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
     assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
 }
 
+/// A symbol's art on a layer of the symbol whose Preview is off is hit in outline, unless the
+/// click sets [`HitOptions::ignore_layer_preview`]: then the stroke past the instance's box hits.
+#[test]
+fn ignore_layer_preview_reaches_symbol_art_on_a_preview_off_layer() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // A 20 pt stroke reaches 10 pt past the 0..100 square.
+    let look = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 20.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look);
+    let mut layer = Node::layer(d.alloc_id(), "Art", crate::LayerColor::Preset(2));
+    if let NodeKind::Layer { children, preview, .. } = &mut layer.kind {
+        *children = vec![Arc::new(square)];
+        *preview = false;
+    }
+    let art = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Stroked".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Stroked".into(), xf })).unwrap();
+    let at = |x: f64, opt: HitOptions| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    let painted = HitOptions { ignore_layer_preview: true, ..HitOptions::default() };
+    assert_eq!(at(108.0, HitOptions::default()), None, "Preview off: in outline");
+    assert_eq!(at(108.0, painted), Some(inst), "ignore_layer_preview: on the stroke past the box");
+    assert_eq!(at(116.0, painted), None, "past the stroke");
+}
+
 /// Outside a symbol instance's box, an instance nested in its art counts where its own art is, not
 /// anywhere in its box: a click or a marquee on empty space in the nested box, where a moved
 /// clipping path shows the art past the outer box, selects nothing, and on art drawn there it

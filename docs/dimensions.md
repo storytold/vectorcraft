@@ -78,8 +78,10 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   tolerance of the level of a parallel line of a linear dimension already drawn has its line on
   that level. The other dimension, and every layer and group it is in, must be visible and
   unlocked. The tool reads at most 20,000 visible, unlocked layers, groups and objects, from the
-  frontmost back, so in a larger document a dimension past them is not a level. This is
-  VectorCraft's own rule. With
+  frontmost back, so in a larger document a dimension past them is not a level. A line that
+  moves off its level by more than 0.000001 pt across the span of both lines is not parallel. A
+  level that would put the line more than 1,000,000 pt from its points is passed over, and the
+  line goes where the pointer is. This is VectorCraft's own rule. With Smart Guides and
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
