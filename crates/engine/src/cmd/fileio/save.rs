@@ -1078,6 +1078,8 @@ impl SaveJob {
             && let Some((p, bytes)) = files.iter().find(|(p, _)| super::may_write(p).is_err())
         {
             write(p, bytes)?;
+            // A writer that does not check the file access writes none of the others.
+            return Err(super::may_write(p).err().unwrap_or_else(|| crate::EngineError::Other(format!("file access denied: {p}"))));
         }
         for (i, (p, bytes)) in files.iter().enumerate() {
             if i == 0 {

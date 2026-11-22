@@ -207,6 +207,47 @@ fn a_save_writes_nothing_when_one_of_its_files_is_refused() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// When the writer a save is given does not check the file access itself, a save of several files
+/// still writes none of them after the refused one.
+#[test]
+fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
+    use crate::cmd::fileio::{SaveMode, save_job, save_plan};
+    use crate::file_access::{ScriptGate, ScriptScope, with_script_gate};
+    let base = folder("unchecked");
+    let dir = base.join("outside");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let params = json!({"path": dir.join("a.eps").to_string_lossy(), "format": "eps", "useArtboards": true});
+    let plan = save_plan(&s, SaveMode::SaveAs, &params).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::of_folder(&dir), documents: vec![], held: vec![], also: None };
+    let (mut refused, mut written) = (None, vec![]);
+    let make_read_only = |paths: &[&str]| {
+        let last = paths.last().map(|p| p.to_string()).unwrap();
+        std::fs::write(&last, b"").unwrap();
+        let mut perms = std::fs::metadata(&last).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&last, perms).unwrap();
+        refused = Some(last);
+        None
+    };
+    let r = with_script_gate(gate, || {
+        job.write_unless(make_read_only, |p, _| {
+            written.push(p.to_string());
+            Ok(())
+        })
+    });
+    assert!(r.is_err(), "{r:?}");
+    let refused = refused.unwrap();
+    assert_eq!(written, std::slice::from_ref(&refused), "only the refused file went to the writer");
+    let mut perms = std::fs::metadata(&refused).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    std::fs::set_permissions(&refused, perms).unwrap();
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Every path goes through the script's file grants, as a `File` opened for reading or writing.
 #[test]
 fn save_as_export_file_and_open_refuse_paths_outside_the_grants() {
