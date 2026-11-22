@@ -194,9 +194,10 @@ fn close_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> 
 }
 
 /// Quitting while a script runs asks whether to stop it, also over the script's own dialog, which
-/// Cancel shows again as it was. Any other open dialog stays, and quitting asks nothing yet.
+/// Cancel shows again as it was, with the text typed in a ScriptUI dialog's fields. Any other open
+/// dialog stays, and quitting asks nothing yet.
 pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
-    let notice = app.ui.dialog.take_if(|d| d.kind == NOTICE_KIND || d.kind == PICKER_KIND);
+    let notice = app.ui.dialog.take_if(|d| d.kind == NOTICE_KIND || d.kind == PICKER_KIND || d.kind == super::script_window::KIND);
     if app.ui.dialog.is_some() {
         return;
     }
@@ -218,6 +219,7 @@ pub(crate) fn settle_close(app: &mut VectorcraftApp) {
         app.ui.dialog = None;
     } else if app.session.script_dialog().is_none()
         && app.session.script_picker().is_none()
+        && app.session.script_window().is_none()
         && let Some(d) = app.ui.dialog.as_mut()
     {
         d.fields.remove(super::PARENT);

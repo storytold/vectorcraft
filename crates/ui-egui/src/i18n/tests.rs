@@ -5774,12 +5774,14 @@ fn script_answers_errors_are_translated() {
         "is a confirm's answer, whose `value` must be true or false",
         "is longer than 16 KiB",
         "is a prompt's answer, whose `value` must be a string or null",
-        "must have `kind` alert, confirm or prompt",
+        "must have `kind` alert, confirm, prompt or window",
+        "is a window's answer, whose `value` must be a list of steps",
     ];
     let in_app = "`answers` is only for a run with nobody to ask: in the app, the person answers each dialog";
     let lists = ["`answers` must be a list of answers", "`answers` has more than {MAX_ANSWERS} answers", "`answers` is larger than 1 MiB"];
+    let step = "has a step {i} that is not a valid click, change or close";
     let scanned = message_literals();
-    for template in reasons.into_iter().chain(lists).chain(["`answers[{i}]` {e}", in_app]) {
+    for template in reasons.into_iter().chain(lists).chain(["`answers[{i}]` {e}", in_app, step]) {
         assert!(scanned.contains(template), "{template}");
     }
     let ok = json!({"kind": "alert", "value": "ok"});
@@ -5791,6 +5793,7 @@ fn script_answers_errors_are_translated() {
         json!({"kind": "prompt", "value": "x".repeat(16 * 1024 + 1)}),
         json!({"kind": "prompt", "value": 1}),
         json!({"kind": "beep", "value": 1}),
+        json!({"kind": "window", "value": "click"}),
     ];
     let run = |s: &mut Session, answers: Value| s.execute("script.run", &json!({"source": "1", "answers": answers})).unwrap_err();
     let mut s = Session::new();
@@ -5807,6 +5810,8 @@ fn script_answers_errors_are_translated() {
     errors.push((run(&mut s, json!(vec![ok.clone(); 10_001])), "`answers` has more than 10000 answers".to_string(), None));
     let long = json!({"kind": "prompt", "value": "x".repeat(16 * 1024)});
     errors.push((run(&mut s, json!(vec![long; 70])), lists[2].to_string(), None));
+    let steps = json!([{"kind": "window", "value": [{"event": "close"}, {"event": "tap"}]}]);
+    errors.push((run(&mut s, steps), "`answers[0]` has a step 1 that is not a valid click, change or close".to_string(), None));
     s.script_frames = true;
     errors.push((run(&mut s, json!([ok])), in_app.to_string(), None));
     for (e, want, reason) in &errors {
@@ -5826,8 +5831,8 @@ fn script_answers_errors_are_translated() {
             let numbers: Vec<&str> = want.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
             let names = ["`answers", "`kind`", "`value`", "true", "false", "null"];
             assert!(numbers.iter().chain(&names).all(|n| !want.contains(n) || shown.contains(n)), "{code}: {shown}");
-            if want.ends_with("alert, confirm or prompt") {
-                assert!(["alert", "confirm", "prompt"].iter().all(|k| shown.contains(k)), "{code}: {shown}");
+            if want.ends_with("alert, confirm, prompt or window") {
+                assert!(["alert", "confirm", "prompt", "window"].iter().all(|k| shown.contains(k)), "{code}: {shown}");
             }
         }
     }

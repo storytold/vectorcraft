@@ -67,6 +67,7 @@ mod realm;
 mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
+pub mod scriptui;
 mod string_builtins;
 mod token;
 mod value;
@@ -208,6 +209,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod scriptui_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

@@ -40,10 +40,12 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
-/// Reading a file or a folder, a file dialog and a message to the person do not change anything
-/// outside it.
+/// Reading a file or a folder, a file dialog, a message to the person and a ScriptUI dialog do not
+/// change anything outside it.
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder alert confirm localize prompt toSource"),
+    ("", "$ File Folder Window alert confirm localize prompt toSource"),
+    ("Window.", "length prototype"),
+    ("Window.prototype.", "add center close constructor findElement hide show"),
     ("Object.prototype.", "toSource"),
     ("localize.", "length"),
     ("toSource.", "length"),

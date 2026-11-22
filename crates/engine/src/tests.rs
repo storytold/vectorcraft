@@ -177,6 +177,7 @@ mod script_folder;
 mod script_include;
 mod script_io;
 mod script_run;
+mod script_scriptui;
 mod scripts;
 mod select_effects;
 mod select_ids_first;

@@ -1,12 +1,13 @@
 //! A running script, advanced one slice per frame: `script.run` starts it and [`poll`] takes it to
 //! its end, while the app goes on drawing the documents as they were before the run. The status bar
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
-//! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
+//! `alert`, `confirm`, `prompt`, a ScriptUI dialog's `show()` or a `File` or `Folder` file dialog,
+//! waits for the person's answer.
 
 use serde_json::json;
 
 use crate::VectorcraftApp;
-use crate::dialogs::script_run;
+use crate::dialogs::{script_run, script_window};
 use crate::state::Dialog;
 
 /// Advances the running script by one slice, or asks what its growth needs asked.
@@ -29,7 +30,7 @@ pub fn poll(app: &mut VectorcraftApp) {
     if cursor_settings != (app.session.caps_lock, app.session.prefs.use_precise_cursors) {
         app.canvas.hover_cursor = None;
     }
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::GROWTH_KIND) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::GROWTH_KIND || d.kind == script_window::KIND) {
         app.ui.dialog = None;
     }
     script_run::settle_close(app);
@@ -49,6 +50,14 @@ pub fn poll(app: &mut VectorcraftApp) {
 /// question about its growth. Closes the script's dialog when the run no longer waits at it.
 /// → true while the run waits.
 fn ask(app: &mut VectorcraftApp) -> bool {
+    // A ScriptUI dialog the script closed gives way to the file dialog or dialog function it waits
+    // at now.
+    if app.session.script_window().is_none()
+        && (app.session.script_picker().is_some() || app.session.script_dialog().is_some())
+        && app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND)
+    {
+        app.ui.dialog = None;
+    }
     if let Some(picker) = app.session.script_picker() {
         if app.ui.dialog.is_none() {
             script_run::open_picker(app, &picker);
@@ -66,6 +75,21 @@ fn ask(app: &mut VectorcraftApp) -> bool {
     }
     // A run asked to stop no longer waits at its dialog.
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::NOTICE_KIND) {
+        app.ui.dialog = None;
+    }
+    if let Some(window) = app.session.script_window() {
+        // A dialog the script showed after closing the one that is open replaces it.
+        if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND && !script_window::is_open_for(d, &window)) {
+            app.ui.dialog = None;
+        }
+        if app.ui.dialog.is_none() {
+            script_window::open(app, &window);
+        }
+        return true;
+    }
+    // While a handler runs, the ScriptUI dialog stays open, until the run ends or asks about its
+    // growth.
+    if app.session.script_waiting() && app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND) {
         app.ui.dialog = None;
     }
     if app.session.script_waiting() {

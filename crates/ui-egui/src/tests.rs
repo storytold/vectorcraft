@@ -43,6 +43,7 @@ mod screenshots;
 mod script_check;
 mod script_dialogs;
 mod script_run;
+mod script_window;
 mod scripts_menu;
 mod scrub;
 mod selectall;

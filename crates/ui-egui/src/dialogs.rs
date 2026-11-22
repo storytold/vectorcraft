@@ -131,6 +131,7 @@ pub mod save_swatch_library;
 pub mod save_symbol_library;
 pub mod script_check;
 pub mod script_run;
+pub mod script_window;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
@@ -466,6 +467,7 @@ registry! {
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
     ScriptFiles: [script_run::PICKER_KIND] => script_run::PICKER_SPEC,
+    ScriptWindow: [script_window::KIND] => script_window::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     ObjectMosaic: [object_mosaic::KIND] => object_mosaic::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
@@ -776,7 +778,7 @@ pub fn cancel(app: &mut VectorcraftApp) {
     if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
         return;
     }
-    if let Some(d) = app.ui.dialog.take() {
+    if let Some(mut d) = app.ui.dialog.take() {
         if d.kind == "preferences" {
             crate::original_editor::cancel(app);
         }
@@ -811,6 +813,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::PICKER_KIND {
             script_run::picker_cancel(app, &d);
         }
+        if d.kind == script_window::KIND {
+            script_window::cancel(app, &mut d);
+        }
         missing_links::cancelled(app, &d);
         // Cancel discards Recolor Artwork's own history of color edits with them.
         if d.kind == recolor::KIND {
@@ -830,6 +835,11 @@ pub fn cancel(app: &mut VectorcraftApp) {
             let _ = app.session.cancel_interaction();
         }
         app.ui.dialog = parent(&d);
+        // A script's ScriptUI dialog stays open, with the text typed in its fields, until the
+        // script closes it or the run no longer waits at it.
+        if d.kind == script_window::KIND && app.ui.dialog.is_none() && app.session.script_running() {
+            app.ui.dialog = Some(d);
+        }
     }
     settle(app);
 }

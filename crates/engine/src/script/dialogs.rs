@@ -23,6 +23,7 @@ use std::rc::Rc;
 use serde_json::{Map, Value, json};
 use vectorcraft_js::{Arg, Data, HostError, HostFunction, Realm, RunError};
 
+use super::scriptui::{self, ScriptUiDialog, Showing, UiEvent, UiStep};
 use super::{Host, console};
 
 /// The most bytes (UTF-8) of a dialog's message.
@@ -48,6 +49,8 @@ pub enum DialogKind {
     Alert,
     Confirm,
     Prompt,
+    /// A ScriptUI dialog's `show()` ([`super::scriptui`]).
+    Window,
 }
 
 impl DialogKind {
@@ -57,6 +60,7 @@ impl DialogKind {
             Self::Alert => "alert",
             Self::Confirm => "confirm",
             Self::Prompt => "prompt",
+            Self::Window => "window",
         }
     }
 }
@@ -85,6 +89,8 @@ pub enum DialogAnswer {
     Confirm(bool),
     /// OK with the field's text, or Cancel (`None`), for `prompt`.
     Prompt(Option<String>),
+    /// What happens in a ScriptUI dialog, step by step, for a run with nobody to ask.
+    Window(Vec<UiStep>),
 }
 
 impl DialogAnswer {
@@ -93,13 +99,14 @@ impl DialogAnswer {
             Self::Ok => DialogKind::Alert,
             Self::Confirm(_) => DialogKind::Confirm,
             Self::Prompt(_) => DialogKind::Prompt,
+            Self::Window(_) => DialogKind::Window,
         }
     }
 
     /// What the function returns.
     fn data(&self) -> Data {
         match self {
-            Self::Ok => Data::Undefined,
+            Self::Ok | Self::Window(_) => Data::Undefined,
             Self::Confirm(b) => Data::Bool(*b),
             Self::Prompt(Some(t)) => Data::String(t.clone()),
             Self::Prompt(None) => Data::Null,
@@ -112,6 +119,7 @@ impl DialogAnswer {
             Self::Ok => json!("ok"),
             Self::Confirm(b) => json!(b),
             Self::Prompt(t) => json!(t),
+            Self::Window(steps) => json!(steps.len()),
         }
     }
 }
@@ -148,8 +156,9 @@ pub fn cut_to(text: &str, max: usize) -> &str {
 }
 
 /// `script.run`'s `answers`: a list of `{kind: "alert", value: "ok"}`, `{kind: "confirm", value:
-/// true | false}` and `{kind: "prompt", value: text | null}`. An empty object, which the parameter
-/// took before dialogs existed, is an empty list.
+/// true | false}`, `{kind: "prompt", value: text | null}` and `{kind: "window", value: [step, ...]}`
+/// ([`super::scriptui`]). An empty object, which the parameter took before dialogs existed, is an
+/// empty list.
 pub(crate) fn parse_answers(v: Option<&Value>) -> Result<Vec<DialogAnswer>, String> {
     let list = match v {
         None => return Ok(Vec::new()),
@@ -166,11 +175,18 @@ pub(crate) fn parse_answers(v: Option<&Value>) -> Result<Vec<DialogAnswer>, Stri
     list.iter().enumerate().map(|(i, a)| answer(a).map_err(|e| format!("`answers[{i}]` {e}"))).collect()
 }
 
-fn answer(a: &Value) -> Result<DialogAnswer, &'static str> {
-    let Some(o) = a.as_object() else { return Err("must be an object with `kind` and `value`") };
+fn answer(a: &Value) -> Result<DialogAnswer, String> {
+    let Some(o) = a.as_object() else { return Err("must be an object with `kind` and `value`".into()) };
     if o.len() != 2 || !o.contains_key("value") {
-        return Err("must have exactly `kind` and `value`");
+        return Err("must have exactly `kind` and `value`".into());
     }
+    if o.get("kind").and_then(Value::as_str) == Some("window") {
+        return super::scriptui::parse_steps(&o["value"]).map(DialogAnswer::Window);
+    }
+    known_answer(o).map_err(String::from)
+}
+
+fn known_answer(o: &Map<String, Value>) -> Result<DialogAnswer, &'static str> {
     match (o.get("kind").and_then(Value::as_str), &o["value"]) {
         (Some("alert"), Value::String(s)) if s == "ok" => Ok(DialogAnswer::Ok),
         (Some("alert"), _) => Err("is an alert's answer, whose `value` must be \"ok\""),
@@ -180,7 +196,7 @@ fn answer(a: &Value) -> Result<DialogAnswer, &'static str> {
         (Some("prompt"), Value::String(s)) if s.len() <= MAX_PROMPT_BYTES => Ok(DialogAnswer::Prompt(Some(s.clone()))),
         (Some("prompt"), Value::String(_)) => Err("is longer than 16 KiB"),
         (Some("prompt"), _) => Err("is a prompt's answer, whose `value` must be a string or null"),
-        _ => Err("must have `kind` alert, confirm or prompt"),
+        _ => Err("must have `kind` alert, confirm, prompt or window"),
     }
 }
 
@@ -199,6 +215,12 @@ pub(crate) struct Dialogs {
     record_bytes: Cell<usize>,
     count: Cell<u64>,
     truncated: Cell<bool>,
+    /// The ScriptUI dialog whose `show()` is running.
+    window: RefCell<Option<Showing>>,
+    /// That dialog waits for what the person does.
+    window_waiting: Cell<bool>,
+    /// The `show()` calls the run has made.
+    shows: Cell<u64>,
 }
 
 impl Dialogs {
@@ -213,6 +235,9 @@ impl Dialogs {
             record_bytes: Cell::new(0),
             count: Cell::new(0),
             truncated: Cell::new(false),
+            window: RefCell::default(),
+            window_waiting: Cell::new(false),
+            shows: Cell::new(0),
         }
     }
 
@@ -222,7 +247,118 @@ impl Dialogs {
     }
 
     pub(crate) fn is_waiting(&self) -> bool {
-        self.waiting.borrow().is_some()
+        self.waiting.borrow().is_some() || self.window_waiting.get()
+    }
+
+    /// The ScriptUI dialog that waits for what the person does.
+    pub(crate) fn waiting_window(&self) -> Option<ScriptUiDialog> {
+        if !self.window_waiting.get() {
+            return None;
+        }
+        self.window.borrow().as_ref().map(|s| s.dialog.clone())
+    }
+
+    /// Gives the waiting ScriptUI dialog `event`, once it is checked against the dialog.
+    pub(crate) fn window_answer(&self, realm: &mut Realm, event: UiEvent) -> Result<(), String> {
+        if !self.window_waiting.get() {
+            return Err("no script dialog waits".into());
+        }
+        let event = {
+            let mut window = self.window.borrow_mut();
+            let Some(showing) = window.as_mut() else { return Err("no script dialog waits".into()) };
+            let event = scriptui::check_event(&showing.dialog, event)?;
+            showing.events = showing.events.saturating_add(1);
+            event
+        };
+        self.window_waiting.set(false);
+        if let Err(e) = realm.answer(event.data()) {
+            *self.failed.borrow_mut() = Some(e);
+        }
+        Ok(())
+    }
+
+    fn cannot_wait(&self) -> Result<(), HostError> {
+        if self.framed && !self.can_wait.get() {
+            return Err(HostError::Error(
+                "show: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code"
+                    .into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// `show()` opens `dialog`. A run with nobody to ask takes its next answer, which must be a
+    /// `window` answer.
+    pub(crate) fn window_open(&self, mut dialog: ScriptUiDialog) -> Result<(), HostError> {
+        self.cannot_wait()?;
+        self.shows.set(self.shows.get().saturating_add(1));
+        dialog.shown = self.shows.get();
+        let mut showing = Showing { dialog, steps: None, events: 0 };
+        if !self.framed {
+            let next = self.answers.borrow_mut().pop_front();
+            match next {
+                Some(DialogAnswer::Window(steps)) => showing.steps = Some(steps.into()),
+                Some(a) => {
+                    self.push_record(showing.record(json!("missing")));
+                    return Err(HostError::Abort(format!("show: the next answer in `answers` is for {}, not window", a.kind().id())));
+                }
+                None => {
+                    self.push_record(showing.record(json!("missing")));
+                    return Err(HostError::Abort("show: `answers` has no answer left for this dialog".into()));
+                }
+            }
+        }
+        *self.window.borrow_mut() = Some(showing);
+        Ok(())
+    }
+
+    /// The dialog that is showing waits, as `dialog` now is. A run with nobody to ask takes the
+    /// next step of its answer.
+    pub(crate) fn window_wait(&self, mut dialog: ScriptUiDialog) -> Result<Data, HostError> {
+        self.cannot_wait()?;
+        let mut window = self.window.borrow_mut();
+        let Some(showing) = window.as_mut() else { return Err(HostError::Error("show: no dialog is showing".into())) };
+        dialog.shown = showing.dialog.shown;
+        showing.dialog = dialog;
+        let Some(steps) = showing.steps.as_mut() else {
+            drop(window);
+            self.window_waiting.set(true);
+            return Err(HostError::Wait);
+        };
+        let failure = match steps.pop_front() {
+            None => "show: the dialog's answer in `answers` has no step left".to_string(),
+            Some(step) => match scriptui::step_event(&showing.dialog, &step) {
+                Ok(event) => {
+                    showing.events = showing.events.saturating_add(1);
+                    return Ok(event.data());
+                }
+                Err(e) => format!("show: a step of the dialog's answer in `answers` cannot be taken: {e}"),
+            },
+        };
+        if let Some(showing) = window.take() {
+            self.push_record(showing.record(json!("missing")));
+        }
+        Err(HostError::Abort(failure))
+    }
+
+    /// `show()` ends with `result`, or with an error when not `normal`. A run with nobody to ask
+    /// must have used every step of the dialog's answer.
+    pub(crate) fn window_end(&self, result: f64, normal: bool) -> Result<(), HostError> {
+        self.window_waiting.set(false);
+        let Some(showing) = self.window.borrow_mut().take() else { return Ok(()) };
+        let left = showing.steps.as_ref().map_or(0, std::collections::VecDeque::len);
+        if normal && left > 0 {
+            self.push_record(showing.record(json!("missing")));
+            let steps = if left == 1 { "step" } else { "steps" };
+            return Err(HostError::Abort(format!("show: the dialog's answer in `answers` has {left} {steps} the dialog did not use")));
+        }
+        let answer = match result {
+            _ if !normal => json!("error"),
+            r if r.fract() == 0.0 && r.abs() < 9.0e15 => json!(r as i64),
+            r => json!(r),
+        };
+        self.push_record(showing.record(answer));
+        Ok(())
     }
 
     /// The error that ended the run when its answer could not reach the script.
@@ -257,10 +393,13 @@ impl Dialogs {
         if let Some(d) = self.waiting.borrow_mut().take() {
             self.record(&d, json!("stop"));
         }
+        self.window_waiting.set(false);
+        if let Some(showing) = self.window.borrow_mut().take() {
+            self.push_record(showing.record(json!("stop")));
+        }
     }
 
     fn record(&self, d: &ScriptDialog, answer: Value) {
-        self.count.set(self.count.get().saturating_add(1));
         let mut r = Map::new();
         r.insert("kind".into(), json!(d.kind.id()));
         r.insert("message".into(), json!(d.message));
@@ -269,9 +408,14 @@ impl Dialogs {
             DialogKind::Alert => r.insert("errorIcon".into(), json!(d.error_icon)),
             DialogKind::Confirm => r.insert("noAsDefault".into(), json!(d.no_as_default)),
             DialogKind::Prompt => r.insert("preset".into(), json!(d.preset)),
+            DialogKind::Window => None,
         };
         r.insert("answer".into(), answer);
-        let r = Value::Object(r);
+        self.push_record(Value::Object(r));
+    }
+
+    fn push_record(&self, r: Value) {
+        self.count.set(self.count.get().saturating_add(1));
         let bytes = serde_json::to_vec(&r).map_or(usize::MAX, |b| b.len());
         let mut records = self.records.borrow_mut();
         if self.truncated.get() || records.len() >= MAX_RECORDS || self.record_bytes.get().saturating_add(bytes) > MAX_RECORD_BYTES {
@@ -325,6 +469,7 @@ fn open(host: &Host, kind: DialogKind, args: &[Data]) -> Result<Data, HostError>
             let Some(preset) = text(args, 1) else { return Err(HostError::Type(format!("{name}: give the text the field starts with"))) };
             (text(args, 2), false, false, preset)
         }
+        DialogKind::Window => return Err(HostError::Error("a ScriptUI dialog opens with show()".into())),
     };
     if message.len() > MAX_MESSAGE_BYTES {
         return Err(HostError::Range(format!("{name}: the message is longer than 16 KiB")));

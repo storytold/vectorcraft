@@ -256,6 +256,8 @@ impl Realm {
         interp.host_abort = None;
         interp.waiting = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
@@ -292,6 +294,8 @@ impl Realm {
         interp.join_stack.clear();
         interp.waiting = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.passing = Value::Undefined;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
@@ -483,6 +487,16 @@ impl Realm {
     /// next run would give.
     pub fn define_host_object(&mut self, name: &str, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match self.interp.install_host_object(name, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds ScriptUI's global constructor `Window` ([`crate::scriptui`]), whose dialogs the host
+    /// functions in `items` show: `open` and `wait`, each given the dialog's description, and
+    /// `end`, given the result of `show()` and whether `show()` ended normally.
+    pub fn define_script_ui(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::scriptui::install(&mut self.interp, items) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
