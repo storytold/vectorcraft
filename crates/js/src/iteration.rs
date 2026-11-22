@@ -77,10 +77,11 @@ impl Interp {
     }
 
     /// The record of a [`Walk`] over an array, an `arguments` object or a string, for a realm
-    /// without `Symbol.iterator`; any other value is not iterable there.
+    /// without `Symbol.iterator`; any other value is not iterable there. A concatenated string's
+    /// flattened copy is counted against the heap before it is made.
     fn walk_record(&mut self, v: &Value) -> JsResult<ObjId> {
         let walk = match v {
-            Value::String(s) => Walk::String(Str::from_rc(s.flat()), 0),
+            Value::String(s) => Walk::String(Str::from_rc(crate::string_builtins::flat_charged(self, s)?), 0),
             Value::Object(o) if matches!(self.object(*o)?.class, Class::Array { .. } | Class::Arguments(_)) => Walk::Array(*o, 0.0),
             _ => return Err(self.type_error("the value is not iterable")),
         };

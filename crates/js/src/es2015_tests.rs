@@ -416,9 +416,14 @@ fn spreading_a_rope_counts_its_flattened_length_first() {
     let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
                  function mk() { var a = f('a'); a[0]; return a + 'b'; }";
     let limits = Limits { heap_bytes: 4 * 262_146, fuel: 20_000, ..Limits::default() };
-    for spread in ["[...mk()]", "Math.max(...mk())"] {
+    for spread in ["[...mk()]", "Math.max(...mk())", "var [c] = mk()", "for (var c of mk()) break"] {
         let e = Realm::with_options(es_options(), limits.clone()).run(&format!("{build} {spread}; 0")).unwrap_err();
         assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread}: {e:?}");
+        // A realm without `Symbol.iterator` walks the string, and flattens it the same way.
+        let mut walking = Realm::with_options(Options::default(), limits.clone());
+        walking.set_es2015(true);
+        let e = walking.run(&format!("{build} {spread}; 0")).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "walking {spread}: {e:?}");
     }
     let made = Realm::with_options(es_options(), limits).run(&format!("{build} mk(); 0"));
     assert_eq!(made, Ok(JsValue::Number(0.0)), "the rope is made within the fuel");

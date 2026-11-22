@@ -59,7 +59,8 @@
 //! Spread, `for … of` and array patterns use the iterator protocol of the 11th edition
 //! (<https://262.ecma-international.org/11.0/>, section 7.4), and a loop or pattern left early
 //! closes its iterator. In a realm made without the option and later given it with
-//! [`Realm::set_es2015`], which has no `Symbol.iterator`, they walk arrays, `arguments` objects and strings by index and throw a `TypeError` for other values.
+//! [`Realm::set_es2015`], which has no `Symbol.iterator`, they walk arrays and `arguments` objects
+//! by index and strings by code point, and throw a `TypeError` for other values.
 //! Object rest properties (`{ a, ...rest }`), classes, generators and modules stay syntax errors.
 //!
 //! With [`Options::es2015`], the realm also has `Symbol` (ECMA-262 11th edition, section 19.4,
