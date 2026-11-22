@@ -227,6 +227,7 @@ fn reflection(interp: &mut Interp, name: &str, properties: &[Info], methods: &[I
     let methods = info_array(interp, methods)?;
     interp.reserve_heap(2 * OBJECT_BYTES + 8 * PROP_BYTES)?;
     let find = native(interp, "find", find, 1, NativeKind::Plain, false)?;
+    interp.object_mut(find)?.extensible = false;
     interp.temp_roots.push(Value::Object(find));
     let r = interp.new_object();
     interp.temp_roots.push(Value::Object(r));

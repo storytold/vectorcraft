@@ -229,6 +229,41 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     assert!(e.contains("Cannot select"), "{e}");
 }
 
+/// An index past the end of `pageItems` gives `undefined`, which does not clear the selection;
+/// `null` and `[]` do.
+#[test]
+fn assigning_undefined_to_the_selection_throws_and_keeps_it() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let caught = "var d = app.activeDocument, m = '';\
+                  try { d.selection = d.pageItems[99]; } catch (e) { m = e.name; }\
+                  vc.log(m); vc.log(d.selection.length);";
+    assert_eq!(log(&mut s, caught), vec![json!("TypeError"), json!(1)]);
+    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
+    for clear in ["null", "[]"] {
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        log(&mut s, &format!("app.activeDocument.selection = {clear};"));
+        assert!(s.active().unwrap().selection.objects.is_empty(), "{clear}");
+    }
+}
+
+/// `controlBounds` takes in a direction point that lies past the curve; `visibleBounds` does not.
+#[test]
+fn control_bounds_take_in_direction_points_past_the_curve() {
+    let (mut s, _, _) = doc();
+    s.execute("path.create", &json!({"anchors": [{"x": 200, "y": 0, "out": [200, -100]}, {"x": 300, "y": 0, "in": [300, -100]}]})).unwrap();
+    let out = log(
+        &mut s,
+        "app.coordinateSystem = CoordinateSystem.ARTBOARDCOORDINATESYSTEM; var p = app.activeDocument.pageItems;\
+         vc.log(p[2].controlBounds); vc.log(p[2].visibleBounds); vc.log(p[0].controlBounds); vc.log(p[0].visibleBounds);",
+    );
+    let top = |v: &Value| v[1].as_f64().unwrap();
+    assert!((top(&out[0]) + 100.0).abs() < 1e-9, "{out:?}");
+    assert!(top(&out[1]) > -90.0, "{out:?}");
+    // A rectangle's direction points lie on its edges.
+    assert_eq!(out[2], out[3]);
+}
+
 #[test]
 fn an_inactive_document_changes_without_switching_tabs() {
     let (mut s, a, _) = doc();
@@ -364,6 +399,17 @@ fn a_copy_that_cannot_be_placed_is_deleted() {
     assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
     // The refused copy leaves no undo step and does not change the document's step.
     assert_eq!((undo_steps(&s), s.active().unwrap().history.step()), (steps, step));
+    // Nor does it count toward the run's growth allowance: many refused copies stay within one
+    // that a few kept copies would pass.
+    crate::script::TEST_GROWTH.with(|g| g.set(Some(5)));
+    let r = run(
+        &mut s,
+        "var p = app.activeDocument.pageItems, n = p.length, g = p[0], t = p[n - 1], refused = 0;\
+         for (var k = 0; k < 20; k++) { try { t.duplicate(g, ElementPlacement.INSIDE); } catch (e) { refused++; } }\
+         vc.log(refused);",
+    );
+    crate::script::TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(r.unwrap()["log"], json!([20]));
 }
 
 #[test]
@@ -482,6 +528,14 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
         let by_row = stored.clone().with_params(&json!({"artboardLayout": layout}), "file.new").unwrap();
         assert_eq!((by_row.rows, by_row.to_json()["artboardLayout"].get("rows")), (0, None), "{layout}");
     }
+    // A change of spacing alone leaves the stored columns as they are, so leaving the rows later
+    // gives the same grid with or without it.
+    let to_row = json!({"artboardLayout": {"layout": "gridByRow"}});
+    let plain = stored.clone().with_params(&json!({"artboards": 9}), "file.new").unwrap();
+    let spaced = stored.clone().with_params(&json!({"artboards": 9, "artboardLayout": {"spacing": 20}}), "file.new").unwrap();
+    assert_eq!((plain.grid_columns(), spaced.grid_columns()), (3, 3));
+    let (plain, spaced) = (plain.with_params(&to_row, "file.new").unwrap(), spaced.with_params(&to_row, "file.new").unwrap());
+    assert_eq!(plain.grid_columns(), spaced.grid_columns());
     let e = s.execute("file.new", &json!({"artboardLayout": {"layout": "gridByColumn", "rows": 0}})).unwrap_err().to_string();
     assert!(e.contains("rows must be 1 or more"), "{e}");
     for layout in ["gridByRow", "row", "column"] {
@@ -547,6 +601,26 @@ fn an_edit_keeps_the_order_of_a_mixed_selection() {
     log(&mut s, "app.activeDocument.pageItems[2].duplicate();");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.anchors.clone()), (before.objects, before.anchors));
+}
+
+/// A path with segments selected and no anchors gets the segments back, not every anchor.
+#[test]
+fn an_edit_keeps_a_path_with_only_a_segment_selected() {
+    let (mut s, a, b) = doc();
+    rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.segments", &json!({"id": b.0, "segments": [[0, 1]], "mode": "add"})).unwrap();
+    s.doc_mut().unwrap().selection.anchors.remove(&b);
+    let before = s.active().unwrap().selection.clone();
+    log(&mut s, "app.activeDocument.pageItems[2].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((&sel.objects, &sel.segments, sel.anchors.get(&a)), (&before.objects, &before.segments, before.anchors.get(&a)));
+    // The segment brings back its own two end points, as `select.segments` selects them, and none
+    // of the path's other anchors: the journaled restore selects none of them first.
+    assert_eq!(sel.anchors.get(&b).map(|k| k.len()), Some(2), "{sel:?}");
+    let restore = s.journal.iter().rev().find(|(id, _)| id == "select.anchorsMany").map(|(_, p)| p.clone()).unwrap();
+    let path = restore["items"].as_array().unwrap().iter().find(|i| i["id"] == json!(b.0)).cloned().unwrap();
+    assert_eq!(path["anchors"], json!([]), "{restore}");
 }
 
 #[test]
@@ -731,6 +805,28 @@ fn a_document_preset_is_an_instance_of_its_class() {
     let mut s = Session::new();
     let out = log(&mut s, "var p = new DocumentPreset(); vc.log(p instanceof DocumentPreset); vc.log(p.typename); vc.log(p.width);");
     assert_eq!(out, vec![json!(true), json!("DocumentPreset"), json!(612)]);
+}
+
+/// The values the presets hold count against the run's heap, a value assigned again in place of
+/// the one before it.
+#[test]
+fn document_preset_values_are_bounded_by_the_runs_heap() {
+    use crate::script::TEST_ENGINE_HEAP;
+    TEST_ENGINE_HEAP.with(|h| h.set(Some(8 << 20)));
+    let mut s = Session::new();
+    let big = "var s = 'a'; while (s.length < (1 << 19)) s += s;";
+    let again =
+        format!("#targetengine presets\n{big} var p = new DocumentPreset(); for (var k = 0; k < 40; k++) p.title = s + k; vc.log(p.title.length);");
+    assert_eq!(log(&mut s, &again), vec![json!(524_290)]);
+    let many = format!(
+        "#targetengine presets\n{big} var m = '';\
+         try {{ for (var k = 0; k < 40; k++) {{ var p = new DocumentPreset(); p.title = s; }} }} catch (e) {{ m = e.name + ': ' + e.message; }}\
+         vc.log(k < 40); vc.log(m);"
+    );
+    let out = log(&mut s, &many);
+    TEST_ENGINE_HEAP.with(|h| h.set(None));
+    assert_eq!(out[0], json!(true), "{out:?}");
+    assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{out:?}");
 }
 
 #[test]
@@ -928,20 +1024,52 @@ fn wrappers_go_stale_after_delete_and_undo() {
     assert!(e.contains("Stale page item"), "{e}");
 }
 
+/// File › Revert loads objects with the ids they were saved with: an object or a layer read before
+/// the revert does not name the loaded one.
+#[test]
+fn wrappers_go_stale_after_revert() {
+    let (mut s, a, _) = doc();
+    let dir = std::env::temp_dir().join(format!("vc-dom-revert-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("saved.vectorcraft");
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    for read in ["i.name", "i.name = 'after'", "app.activeDocument.selection = i", "l.name"] {
+        let source = format!("var i = app.activeDocument.pageItems[0], l = i.parent; i.name = 'before'; vc.run('file.revert'); {read};");
+        let e = failure(&mut s, &source);
+        assert!(e.contains("Stale page item"), "{read}: {e}");
+    }
+    // Objects read after the revert are the loaded ones.
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems; p[0].name = 'before'; vc.run('file.revert');\
+         app.activeDocument.pageItems[0].name = 'loaded'; vc.log(app.activeDocument.pageItems.length);",
+    );
+    assert_eq!(out, vec![json!(2)]);
+    assert_eq!(s.active().unwrap().doc.node(a).unwrap().name.as_deref(), Some("loaded"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn remove_all_refuses_locked_art_before_deleting_anything() {
     let (mut s, a, b) = doc();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
-    assert!(e.contains(&b.0.to_string()), "{e}");
-    assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    // The script catches the error and finds both objects still there before the run ends, so the
+    // run's own rollback cannot hide a deletion.
+    let caught = "var p = app.activeDocument.pageItems, m = '';\
+                  try { p.removeAll(); } catch (e) { m = e.message; }\
+                  vc.log(m); vc.log(p.length);";
+    let out = log(&mut s, caught);
+    assert!(out[0].as_str().unwrap().contains(&b.0.to_string()), "{out:?}");
+    assert_eq!(out[1], json!(2));
+    assert!(s.active().unwrap().doc.node(a).is_some() && s.active().unwrap().doc.node(b).is_some());
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     // A locked object inside an unlocked group stops it too.
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
-    assert!(e.contains(&g.to_string()), "{e}");
+    let out = log(&mut s, caught);
+    assert!(out[0].as_str().unwrap().contains(&g.to_string()), "{out:?}");
+    assert_eq!(out[1], json!(3));
     assert!(s.active().unwrap().doc.node(b).is_some());
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p.removeAll(); vc.log(p.length);");
@@ -1002,8 +1130,9 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = path.to_string_lossy().to_string();
+    let (p, other) = (serde_json::to_string(&p).unwrap(), serde_json::to_string(&format!("{p}.other")).unwrap());
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.

@@ -2631,7 +2631,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
   `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
-  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  starts with the defaults that page gives. The values a run's `DocumentPreset` objects hold together may not take
+  more than the run's heap; an assignment past that throws a `RangeError`, and a value assigned again replaces the
+  one before it in that count. A preset's `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
@@ -2648,7 +2650,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds, widened to take in the direction points of every path in the object), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
@@ -2670,16 +2672,16 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
-  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
-  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, that was read before
+  `file.revert` reloaded its document, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
   hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
   `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
   when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
-  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
-  nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  a list of at most 10,000, `null` or `[]`; `undefined`, such as an index past the end of `pageItems`, throws a
+  `TypeError`, and an object that cannot be selected throws `Cannot select`, both with nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,

@@ -349,6 +349,10 @@ fn reflected_members(class: &HostClass) -> Result<Rc<[Reflected]>, String> {
         if out.iter().any(|r| *r.name == **name) {
             return Err(format!("the host class {} names the member {name} twice", class.name));
         }
+        // The prototype's `constructor` is the class's own constructor.
+        if name == "constructor" {
+            return Err(format!("the host class {} names a member constructor, which is the name of its constructor", class.name));
+        }
         let access = match member {
             HostMember::Get(_) => Access::ReadOnly,
             HostMember::Property { .. } => Access::ReadWrite,

@@ -6,9 +6,10 @@
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/> describe them.
 //!
 //! The objects are host classes ([`vectorcraft_js::HostClass`]): each holds the run's number, the
-//! document's [`crate::DocState::uid`] and, for art, the object's id, and every read looks the
-//! document and the object up again. An object that was deleted, a document that was closed and an
-//! object from an earlier run of a named engine throw an error on every member. Every change runs
+//! document's [`crate::DocState::uid`] and, for art and layers, the document's
+//! [`crate::DocState::reverts`] and the object's id, and every read looks the document and the
+//! object up again. An object that was deleted, a document that was closed, an object from before
+//! File › Revert and an object from an earlier run of a named engine throw an error on every member. Every change runs
 //! a command, as `vc.run` does, so it joins the run's transaction and its one undo step for each
 //! changed document; a change that changes nothing runs no command. A change to a document that is
 //! not the active one makes it active for the command and makes the other one active again after.
@@ -24,7 +25,9 @@
 //! - Enumerated values are strings such as `"ZOrderMethod.BRINGTOFRONT"`.
 //! - `app.activeDocument` with no document open throws `No active document`.
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
-//!   must be one of that document's that can be selected, or nothing changes.
+//!   must be one of that document's that can be selected, or nothing changes. `undefined` throws.
+//! - `controlBounds` is the visible bounds, widened to take in the direction points of every path
+//!   in the object.
 //! - Members the help pages list that are not here yet throw an error that says so, and `reflect`
 //!   leaves them out.
 //! - `reflect` on an object or a class gives each member's type from the declaration that installs
@@ -33,6 +36,7 @@
 //!   more than one type.
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -93,16 +97,24 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
 /// page items, kept while that document is unchanged, whether a call's own savepoint
-/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made.
+/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made, with the size
+/// of the values they hold now and the most they may hold: the run's heap.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    preset_bytes: Cell<u64>,
+    preset_limit: u64,
 }
 
 impl State {
+    /// The state of a run whose heap is `heap_bytes`.
+    pub(super) fn new(heap_bytes: usize) -> Self {
+        Self { preset_limit: heap_bytes as u64, ..Self::default() }
+    }
+
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
@@ -111,20 +123,25 @@ impl State {
 
 /// Runs `f`, whose commands are kept together or put back together: when `f` fails, every
 /// document, the selection and the undo histories are as they were before it, with no undo step
-/// and no change to the document's saved state.
+/// and no change to the document's saved state, and the growth its commands were charged is not
+/// counted.
 fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostError>) -> std::result::Result<T, HostError> {
     if h.dom.saving.get() {
         return f(h);
     }
     let save = Savepoint::take(&mut h.session.borrow_mut(), "edit.duplicate");
+    let mark = h.growth_mark();
     h.dom.saving.set(true);
     let r = f(h);
     h.dom.saving.set(false);
     let mut s = h.session.borrow_mut();
     if r.is_ok() {
         save.keep(&mut s);
-    } else if !save.restore(&mut s) {
-        return Err(HostError::Abort(HISTORY_LOST.to_string()));
+    } else {
+        h.put_growth_back(mark);
+        if !save.restore(&mut s) {
+            return Err(HostError::Abort(HISTORY_LOST.to_string()));
+        }
     }
     r
 }
@@ -304,11 +321,17 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
     }
 }
 
+/// Whether the document `doc` was reverted since a handle that saw `reverts` reverts was made: the
+/// objects File › Revert loaded can have the ids of the objects the handle named.
+fn reverted_since(h: &Host, doc: Doc, reverts: f64) -> bool {
+    whole(reverts) != Some(with_doc(h, doc, |_, st| st.reverts))
+}
+
 /// The page item `d` names, which must still be in its document.
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let [run, uid, reverts, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
+    let doc = find_doc(h, *run, *uid).filter(|doc| !reverted_since(h, *doc, *reverts)).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
@@ -346,8 +369,8 @@ fn doc_ref(h: &Host, uid: u64) -> Data {
 fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     match st.doc.node(id) {
         Some(n) => match typename(n) {
-            Some(t) => host_ref(t, &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
-            None => host_ref("Layer", &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
+            Some(t) => host_ref(t, &[float(h.run), float(st.uid), float(st.reverts), id_parts(id)[0], id_parts(id)[1]]),
+            None => host_ref("Layer", &[float(h.run), float(st.uid), float(st.reverts), id_parts(id)[0], id_parts(id)[1]]),
         },
         None => Data::Null,
     }
@@ -509,6 +532,8 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
             .map(|i| {
                 let anchors: Vec<[usize; 2]> = match before.anchors.get(i) {
                     Some(a) => a.iter().map(|(p, k)| [*p, *k]).collect(),
+                    // A path with only segments selected gets them back below, with no anchors.
+                    None if before.segments.contains_key(i) => Vec::new(),
                     None => doc.node(*i).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, k, _)| [s, k]).collect()).unwrap_or_default(),
                 };
                 json!({"id": i.0, "anchors": anchors})
@@ -963,15 +988,28 @@ fn new_preset(h: &Host) -> Answer {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
+    let fields = vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]);
+    ];
+    hold_preset_bytes(h, 0, fields.iter().map(|(_, v)| data_size(v)).sum())?;
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
+}
+
+/// Counts that the run's presets now hold `added` bytes of values in place of `replaced`, and
+/// refuses when they would hold more than the run's heap.
+fn hold_preset_bytes(h: &Host, replaced: u64, added: u64) -> std::result::Result<(), HostError> {
+    let total = h.dom.preset_bytes.get().saturating_sub(replaced).saturating_add(added);
+    if total > h.dom.preset_limit {
+        return Err(HostError::Range(format!("the DocumentPreset settings would hold more than {} bytes", h.dom.preset_limit)));
+    }
+    h.dom.preset_bytes.set(total);
+    Ok(())
 }
 
 /// The most `DocumentPreset` objects one run can make.
@@ -1026,8 +1064,12 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
-        match fields.iter_mut().find(|(k, _)| k == key) {
-            Some((_, v)) => *v = value,
+        // The values the presets hold now count against the run's heap: a value assigned again
+        // replaces the one before it.
+        let at = fields.iter().position(|(k, _)| k == key);
+        hold_preset_bytes(&h, at.map_or(0, |n| data_size(&fields[n].1)), data_size(&value))?;
+        match at {
+            Some(n) => fields[n].1 = value,
             None => fields.push((key.to_string(), value)),
         }
         Ok(Data::Undefined)
@@ -1157,28 +1199,33 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 }
 
 /// The ids an assignment to a document's selection gives: one page item, a list of them, `null` or
-/// `[]`. Every one must be an object of that document that can be selected.
+/// `[]`. Every one must be an object of that document that can be selected. `undefined`, such as
+/// an index past the end of `pageItems`, is refused and clears nothing.
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
-        Data::Null | Data::Undefined => Vec::new(),
+        Data::Null => Vec::new(),
+        Data::Undefined => return Err(HostError::Type("a selection is a page item, a list of them, null or []".into())),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
     };
-    let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
-    for d in list {
-        let item = item_of(h, d)?;
-        let ok = item.doc.uid == doc.uid
-            && with_doc(h, doc, |_, st| crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id));
-        if !ok {
-            let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
-            return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
+    // The locked artboards are found once for the whole list, and repeated objects are kept once.
+    with_doc(h, doc, |_, st| {
+        let locks = st.doc.locked_artboards();
+        let mut seen: HashSet<NodeId> = HashSet::with_capacity(list.len());
+        let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+        for d in list {
+            let item = item_of(h, d)?;
+            if item.doc.uid != doc.uid || !crate::cmd::select::is_selectable(&st.doc, st.isolation, &locks, item.id) {
+                let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
+                return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
+            }
+            if seen.insert(item.id) {
+                ids.push(item.id);
+            }
         }
-        if !ids.contains(&item.id) {
-            ids.push(item.id);
-        }
-    }
-    Ok(ids)
+        Ok(ids)
+    })
 }
 
 fn doc_set_selection(h: &Host, a: &[Data]) -> Answer {
@@ -1440,6 +1487,25 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
 }
 
+/// `controlBounds`: the visible bounds, widened to take in the direction points of every path in
+/// the object.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = item_rect(h, item, true)?;
+    let r = with_doc(h, item.doc, |_, st| {
+        let mut r = r;
+        if let Some(n) = st.doc.node(item.id) {
+            n.walk(&mut |c| {
+                if let Some(handles) = c.path_data().and_then(vectorcraft_geom::PathData::control_bounds) {
+                    r = r.union(handles);
+                }
+            });
+        }
+        r
+    });
+    Ok(f.bounds(h.dom.coords.get(), r))
+}
+
 fn item_position(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let (r, f) = item_rect(h, item, false)?;
@@ -1611,13 +1677,13 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> s
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
     let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
+    let Some(&[run, uid, reverts, high, low]) = handle.as_deref() else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
         }
         return Err(HostError::Type("the relative object must be a page item or a layer".into()));
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let doc = find_doc(h, run, uid).filter(|doc| !reverted_since(h, *doc, reverts)).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
@@ -1771,8 +1837,11 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
 
 fn layer_name(h: &Host, a: &[Data]) -> Answer {
     let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
+    let [run, uid, reverts, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
     let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    if reverted_since(h, doc, *reverts) {
+        return Err(HostError::Error(STALE_ITEM.into()));
+    }
     let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
     with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
 }
@@ -1962,7 +2031,7 @@ fn classes(link: &Link) -> Vec<HostClass> {
         ("height", property(l, item_height, item_set_height), typed("number")),
         ("geometricBounds", get(l, item_geometric), typed("Array")),
         ("visibleBounds", get(l, item_visible), typed("Array")),
-        ("controlBounds", get(l, item_visible), typed("Array")),
+        ("controlBounds", get(l, item_control), typed("Array")),
         ("editable", get(l, item_editable), typed("boolean")),
         ("zOrderPosition", get(l, item_z_order_position), typed("number")),
         ("duplicate", method(l, item_duplicate), returns("PageItem", &placement)),

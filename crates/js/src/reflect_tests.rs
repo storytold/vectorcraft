@@ -112,13 +112,20 @@ fn a_reflection_cannot_be_changed() {
                  [typeof o.reflect, x.name, x.properties[0].dataType, x.properties.length, x.extra, typeof x.methods].join()";
     assert_eq!(text(&mut r, tries), "object,Object,number,1,,object");
     // In strict mode each one throws a TypeError.
-    for write in ["o.reflect = 5", "x.name = 'y'", "x.properties[0].type = 'y'", "x.properties.push(1)", "x.extra = 1", "delete x.find"] {
+    for write in
+        ["o.reflect = 5", "x.name = 'y'", "x.properties[0].type = 'y'", "x.properties.push(1)", "x.extra = 1", "delete x.find", "x.find.extra = 1"]
+    {
         assert!(thrown(&mut r, &format!("(function () {{ 'use strict'; {write}; }})();")).starts_with("TypeError"), "{write}");
     }
     assert_eq!(
-        text(&mut r, "Object.isFrozen(x) + ' ' + Object.isFrozen(x.properties) + ' ' + Object.isFrozen(x.properties[0].arguments)"),
-        "true true true"
+        text(
+            &mut r,
+            "Object.isFrozen(x) + ' ' + Object.isFrozen(x.properties) + ' ' + Object.isFrozen(x.properties[0].arguments) + ' ' + Object.isFrozen(x.find)"
+        ),
+        "true true true true"
     );
+    // The frozen `find` still finds.
+    assert_eq!(text(&mut r, "x.find('a').name"), "a");
 }
 
 #[test]
@@ -239,4 +246,11 @@ fn info_for_a_member_a_class_does_not_have_is_refused() {
     class.members.push(("size".into(), HostMember::Get(constant(1.0))));
     let e = r.define_host_classes(vec![class], Vec::new()).unwrap_err();
     assert!(e.message.contains("names the member size twice"), "{}", e.message);
+    // `constructor` is the class's own constructor, so no member may take its name.
+    let mut r = realm();
+    let mut class = classes().remove(0);
+    class.members.push(("constructor".into(), HostMember::Get(constant(1.0))));
+    let e = r.define_host_classes(vec![class], Vec::new()).unwrap_err();
+    assert!(e.message.contains("names a member constructor"), "{}", e.message);
+    assert_eq!(text(&mut r, "typeof Item"), "undefined");
 }
