@@ -44,7 +44,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given.
+/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given,
+/// and `PlacedItem.file=` and `PlacedItem.relink` read the image file they are given.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -77,7 +78,7 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems RulerUnits ZOrderMethod",
+         PageItems PlacedItem PlacedItems RasterItem RasterItems RulerUnits ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -99,8 +100,8 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= placedItems rasterItems \
+         rulerOrigin rulerOrigin= rulerUnits selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
@@ -116,6 +117,19 @@ const INSIDE: &[(&str, &str)] = &[
          position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("PlacedItems.", "prototype"),
+    ("PlacedItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("PlacedItem.", "prototype"),
+    ("PlacedItem.prototype.", "boundingBox constructor contentVariable contentVariable= embed file file= matrix matrix= relink trace trace="),
+    ("RasterItems.", "prototype"),
+    ("RasterItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("RasterItem.", "prototype"),
+    (
+        "RasterItem.prototype.",
+        "bitsPerChannel boundingBox channels colorants colorants= colorize colorize= colorizedGrayscale constructor \
+         contentVariable contentVariable= embedded embedded= file imageColorSpace matrix matrix= overprint overprint= status \
+         trace trace= transparent",
     ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
@@ -145,12 +159,16 @@ const INSIDE: &[(&str, &str)] = &[
     ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
     ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    // The enumerations of placed and raster items.
+    ("", "ImageColorSpace RasterLinkState"),
+    ("ImageColorSpace.", "CMYK DeviceN Grayscale Indexed LAB RGB Separation"),
+    ("RasterLinkState.", "DATAFROMFILE DATAMODIFIED NODATA"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
 /// and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
+     PlacedDocumentItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
      ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
