@@ -380,6 +380,22 @@ fn text_beside_an_array_is_kept() {
     assert_eq!(xmp::parse(&out, &mut registry), Ok(meta));
 }
 
+/// No property is set in the RDF or XML namespace, which a packet cannot hold.
+#[test]
+fn rdf_and_xml_namespaces_hold_no_properties() {
+    for ns in ["http://www.w3.org/1999/02/22-rdf-syntax-ns#", "http://www.w3.org/XML/1998/namespace"] {
+        assert_eq!(
+            thrown(&format!("new XMPMeta().setProperty({ns:?}, 'foo', 'x')")),
+            "Error: XMPMeta.setProperty: foo is not a valid property name",
+            "{ns}"
+        );
+        assert_eq!(
+            thrown(&format!("new XMPMeta().appendArrayItem({ns:?}, 'foo', 'x', XMPConst.PROP_IS_ARRAY)")),
+            "Error: XMPMeta.appendArrayItem: foo is not a valid property name"
+        );
+    }
+}
+
 #[test]
 fn array_forms_follow_their_options() {
     assert_eq!(Form::from_options(0x200), Form::Bag);

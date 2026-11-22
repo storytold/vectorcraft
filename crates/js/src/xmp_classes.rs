@@ -342,6 +342,10 @@ fn namespace(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
 fn target(i: &mut Interp, args: &[Value], at: usize, what: &str) -> JsResult<(String, String, Step)> {
     let ns = namespace(i, &arg(args, at), what)?;
     let path = text(i, &arg(args, at + 1))?;
+    // A packet holds no property in the RDF or XML namespace.
+    if ns == xmp::RDF || ns == xmp::XML {
+        return Err(xmp_error(i, what, XmpError::BadName, &path));
+    }
     let r = xmp::parse_path(&path, &ns, registry(i)?);
     match r {
         Ok((name, step)) => Ok((ns, name, step)),
