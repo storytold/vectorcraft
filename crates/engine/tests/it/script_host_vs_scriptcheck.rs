@@ -90,7 +90,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames typename \
+         rulerUnits saveAs saveAs= selection selection= stories swatches swatches= symbols symbols= textFrames typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
@@ -135,7 +135,7 @@ const INSIDE: &[(&str, &str)] = &[
          contents contents= convertAreaObjectToPointObject convertPointObjectToAreaObject createOutline endTValue endTValue= \
          insertionPoints insertionPoints= kind lines lines= matrix matrix= nextFrame nextFrame= opticalAlignment \
          opticalAlignment= orientation orientation= paragraphs previousFrame previousFrame= rowCount rowCount= rowGutter \
-         rowGutter= startTValue startTValue= story story= textPath textPath= textRange textRanges textRanges= textSelection \
+         rowGutter= startTValue startTValue= story textPath textPath= textRange textRanges textRanges= textSelection \
          textSelection= words",
     ),
     ("TextRange.", "prototype"),
@@ -147,7 +147,7 @@ const INSIDE: &[(&str, &str)] = &[
          getLocalParaOverridesJSON= getParagraphLength getTextRunLength horizontalScale horizontalScale= insertionPoints \
          insertionPoints= kerning kerning= leading leading= length length= lines lines= move move= paragraphAttributes \
          paragraphStyles paragraphStyles= paragraphs parent remove rotation rotation= select select= size size= start start= \
-         story story= strikeThrough strikeThrough= textFont textFont= textRanges textRanges= textSelection textSelection= \
+         story strikeThrough strikeThrough= textFont textFont= textRanges textRanges= textSelection textSelection= \
          tracking tracking= typename underline underline= verticalScale verticalScale= words",
     ),
     ("Characters.", "prototype"),
@@ -176,6 +176,34 @@ const INSIDE: &[(&str, &str)] = &[
     ("Justification.", "CENTER FULLJUSTIFY FULLJUSTIFYLASTLINECENTER FULLJUSTIFYLASTLINELEFT FULLJUSTIFYLASTLINERIGHT LEFT RIGHT"),
     ("TextOrientation.", "HORIZONTAL VERTICAL"),
     ("TextType.", "AREATEXT PATHTEXT POINTTEXT"),
+    ("", "Stories Story StoryCharacters StoryParagraphs StoryRange StoryWords"),
+    ("Stories.", "prototype"),
+    ("Stories.prototype.", "constructor index length parent typename"),
+    ("Story.", "prototype"),
+    (
+        "Story.prototype.",
+        "characters constructor insertionPoints insertionPoints= length lines lines= paragraphs parent textFrames textRange \
+         textRanges textRanges= textSelection textSelection= typename words",
+    ),
+    ("StoryRange.", "prototype"),
+    (
+        "StoryRange.prototype.",
+        "autoLeading autoLeading= baselineShift baselineShift= changeCaseTo changeCaseTo= characterAttributes \
+         characterAttributes= characterOffset characterOffset= characterStyles characterStyles= characters constructor \
+         contents contents= deSelect deSelect= duplicate duplicate= end end= getLocalCharOverridesJSON \
+         getLocalCharOverridesJSON= getLocalParaOverridesJSON getLocalParaOverridesJSON= getParagraphLength getTextRunLength \
+         getTextRunLength= horizontalScale horizontalScale= insertionPoints insertionPoints= kerning kerning= leading leading= \
+         length length= lines lines= move move= paragraphAttributes paragraphAttributes= paragraphStyles paragraphStyles= \
+         paragraphs parent remove rotation rotation= select select= size size= start start= story strikeThrough \
+         strikeThrough= textFont textFont= textRanges textRanges= textSelection textSelection= tracking tracking= typename \
+         underline underline= verticalScale verticalScale= words",
+    ),
+    ("StoryCharacters.", "prototype"),
+    ("StoryCharacters.prototype.", "constructor length parent typename"),
+    ("StoryWords.", "prototype"),
+    ("StoryWords.prototype.", "constructor length parent typename"),
+    ("StoryParagraphs.", "prototype"),
+    ("StoryParagraphs.prototype.", "constructor length parent typename"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`

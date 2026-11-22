@@ -1767,6 +1767,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("convertCoordinate", method(l, doc_convert)),
         ("pageItems", get(l, doc_page_items)),
         ("textFrames", text::doc_text_frames(l)),
+        ("stories", text::threads::doc_stories(l)),
         ("selection", property(l, doc_selection, doc_set_selection)),
     ]);
     document.extend(

@@ -44,6 +44,8 @@ use super::{
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
+pub(super) mod threads;
+
 /// The error of a text range, or of a collection of one, whose frame's text changed other than
 /// through the object model.
 pub const STALE_RANGE: &str = "Stale text range";
@@ -188,6 +190,7 @@ pub(in crate::script) struct TextState {
     /// The fonts `app.textFonts` lists, as family and style, read once a run; a font a character
     /// names that is not installed is added at the end.
     fonts: RefCell<Option<Vec<(String, String)>>>,
+    stories: threads::StoryState,
 }
 
 fn text_of(st: &DocState, id: NodeId) -> Option<&TextObject> {
@@ -1191,24 +1194,32 @@ fn in_path(h: &Host, a: &[Data], on_path: bool, rest: &[usize]) -> Answer {
         return Err(HostError::Error(super::CROSS_DOCUMENT.into()));
     }
     if rest.iter().any(|i| !matches!(arg(a, *i), Data::Undefined)) {
-        return Err(HostError::Error("TextFrames: threading and path positions are not available yet".into()));
+        return Err(HostError::Error("TextFrames: path positions are not available yet".into()));
     }
-    let orientation = if on_path { 4 } else { 2 };
+    let (orientation, base) = if on_path { (4, 5) } else { (2, 3) };
     let vertical = vertical_of(arg(a, orientation))?;
+    let base = threads::base_frame(h, doc, arg(a, base), arg(a, base + 1))?;
+    if base.is_some() {
+        threads::check_base_path(h, path)?;
+    }
     let mode = if on_path { "onPath" } else { "area" };
     let params = json!({"path": path.id.0, "mode": mode, "text": "", "vertical": vertical});
     let (_, r) = on_doc(h, doc.uid, true, |h| super::command_value(h, "text.createInPath", &params))?;
-    new_ref(h, doc, result_id(&r))
+    let id = result_id(&r);
+    if let (Some((base, postfix)), Some(id)) = (base, id) {
+        threads::thread_new(h, base, id, postfix)?;
+    }
+    new_ref(h, doc, id)
 }
 
 /// `areaText(textPath, orientation?, baseFrame?, postFix?)`.
 fn frames_area_text(h: &Host, a: &[Data]) -> Answer {
-    in_path(h, a, false, &[3, 4])
+    in_path(h, a, false, &[])
 }
 
 /// `pathText(textPath, startTValue?, endTValue?, orientation?, baseFrame?, postFix?)`.
 fn frames_path_text(h: &Host, a: &[Data]) -> Answer {
-    in_path(h, a, true, &[2, 3, 5, 6])
+    in_path(h, a, true, &[2, 3])
 }
 
 /// `removeAll()`: deletes every type object in one command; a hidden or locked one stops it first.
@@ -1462,14 +1473,12 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("convertAreaObjectToPointObject", method(l, frame_to_point)),
         ("convertPointObjectToAreaObject", method(l, frame_to_area)),
     ]);
+    frame.extend(threads::frame_members(l));
     frame.extend(
         [
             "lines",
             "insertionPoints",
             "textRanges",
-            "story",
-            "nextFrame",
-            "previousFrame",
             "textPath",
             "anchor",
             "antialias",
@@ -1504,12 +1513,12 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("remove", method(l, range_remove)),
     ]);
     range.extend(attr_members(l));
+    range.push(threads::range_member(l));
     range.extend(
         [
             "lines",
             "insertionPoints",
             "textRanges",
-            "story",
             "kerning",
             "characterStyles",
             "paragraphStyles",
@@ -1537,7 +1546,8 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
     chars.extend(attr_members(l));
     let mut paras = named(vec![("typename", get(l, para_attrs_typename))]);
     paras.extend(para_members(l));
-    vec![
+    let stories = threads::classes(l);
+    let mut out = vec![
         class("TextFrame", Some("PageItem"), frame, None),
         class("TextRange", None, range, None),
         part("Characters"),
@@ -1586,7 +1596,9 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             ]),
             None,
         ),
-    ]
+    ];
+    out.extend(stories);
+    out
 }
 
 #[cfg(test)]

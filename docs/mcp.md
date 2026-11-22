@@ -2728,9 +2728,36 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   the auto leading. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
   when `text.setRangeStyle` warns that the font is not available, or when Missing Glyph Protection keeps characters the
   font has no glyph for in their font, giving how many. A `TextFont` from an earlier run throws
-  `Stale text font`. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.story` and
+  `Stale text font`. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.textPath` and
   `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`, `end`, `length` and
   `orientation` cannot be set yet.
+- Threaded type (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/Story/, https://ai-scripting.docsforadobe.dev/jsobjref/Stories/): a
+  `TextFrame` has `nextFrame` and `previousFrame`, the frames after and before it in its story (`null` at either end),
+  and `story`; a `TextRange` has `story` too. Assigning `nextFrame` or `previousFrame` runs `text.thread.setNeighbor`:
+  a frame links the last frame of one story to the first frame of another, whose text flows on after the first story's
+  text, and `null` breaks that link, no text moving across it. `areaText(path, orientation?, baseFrame?,
+  postFix?)` and `pathText(path, startTValue?, endTValue?, orientation?, baseFrame?, postFix?)` thread the new frame
+  after `baseFrame`, or before it when `postFix` is false, with `text.thread.add`; `startTValue` and `endTValue` are
+  not available yet. `Document.stories` lists the stories with `length`, `[i]` and `index(key)`. A `Story` has
+  `parent` (its document), `length`, `textFrames` (an array of its frames in thread order), `textRange`, `characters`,
+  `words` and `paragraphs`; `lines`, `insertionPoints`, `textRanges` and `textSelection` are not available yet.
+  VectorCraft's own rules: point type, a frame of another document, the frame itself, a frame inside a story, a link
+  that would make a loop and a story with a hidden or locked frame are refused with nothing changed, and assigning the
+  link that is already there, or `null` where there is none, runs no command. `postFix` is true when it is left out,
+  and a `baseFrame` given with a path inside a compound path is refused before the path is turned into type.
+  `Document.stories` lists one story for each type object in no thread and one for each thread, in the paint order of
+  their first frames, and `index` with a string finds the first story whose first frame has that name. A frame that
+  a stored thread lists twice is in its story once. A `Story` is
+  the story of the frame it was read from, as that frame is threaded now, and throws `Stale story` once that frame is
+  deleted. The text of a story of one frame is that frame's text, with its ranges. The text of a longer story is its
+  frames' text in thread order, counted in UTF-16 units: its `textRange` reads and writes across the frames, and
+  writing it edits the frames from the last one it reaches back to the first, inside the run's one undo step, and the
+  story then flows through its frames again. Such a range has `contents`, `start`, `end`, `characterOffset`,
+  `length`, `parent` and `story` (its story), `characters`, `words`, `paragraphs`, `getParagraphLength()` and
+  `remove()`; its character and paragraph attributes and the other members are not available yet. It keeps its place
+  through edits made through the story's ranges and throws `Stale text range` after any other change to the story's
+  text and after `file.revert`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -11522,6 +11549,18 @@ A double-click on a port where the frame is threaded breaks the thread there (on
 after it (`out`). The whole story flows into the frames before the break; the frames after it are left empty, still
 threaded with each other when two or more remain, and the first of them starts a paragraph. It refuses an `id` that
 doesn't exist, a `port` other than `in` or `out`, and a side where no frame of a thread comes before or after `id`.
+
+`text.thread.setNeighbor {id, side: "next" | "previous", neighbor: id | null}` is what a script's `nextFrame` and
+`previousFrame` assignments run, and needs no selection. With an id it links area type or type on a path `id` to
+`neighbor` after it (`next`) or before it (`previous`): `id` must be the last frame of its story for `next` (the first
+for `previous`) and `neighbor` the first (the last) frame of another story, and the second story's text flows on after
+the first's (one undo step, Thread Text). With `null` it breaks the link on that side, and the frames on each side
+form a story of their own (one undo step, Break Thread): no text moves across the break, and the frames after it flow
+their own text again from their first frame, which now starts a paragraph. It refuses point type and
+other art, a frame linked to itself, a link that would make a loop or go to a frame inside a story, and a story with a
+hidden or locked frame, with nothing changed. A link that is already there, or a break where there is no link, changes
+nothing and records no undo step. The selection is kept. It returns `{changed, threads}`, `threads` listing the
+stories of the frames involved after the change, a story of one frame as `[id]`.
 
 `select.same.linkBlockSeries` (Select › Same › Link Block Series) selects every frame of the threads that the selected
 type objects, and the type inside selected groups, are in, in thread order, and returns `{count}`. Type in no thread

@@ -59,6 +59,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             break_thread
         ),
+        cmd!(
+            "text.thread.setNeighbor",
+            "Thread Text",
+            [],
+            None,
+            "{id, side: \"next\"|\"previous\", neighbor: id|null} link area type or type on a path `id` to the frame that follows it (`next`) or comes before it (`previous`) in its story, or with null break that one link, as a script's `nextFrame` and `previousFrame` assignments do. Linking joins two stories: `id` must be the last frame of its story for `next` (the first for `previous`) and `neighbor` the first (the last) of another one, and the second story's text flows on after the first's. Breaking a link makes each side of it a story of its own: no text moves across the break, and the frames after it flow their own text again from their first frame, which now starts a paragraph. An error, with nothing changed, for point type or other art, a frame linked to itself, a link that would make a loop or go to a frame inside a story, and a frame of either story that is hidden or locked; a link that is already there, or a break where there is no link, changes nothing and records no undo step; the selection is kept → {changed: bool, threads: [[id…]] (the stories of the frames involved, after the change, a one-frame story as [id])}",
+            has_doc,
+            set_neighbor
+        ),
         cmd!(query "text.thread.info", "Threads", [], None, "{} → [[id…]] every thread in order", has_doc, |s, _| {
             Ok(json!(s.doc()?.doc.text_threads.iter().map(|t| t.iter().map(|i| i.0).collect::<Vec<_>>()).collect::<Vec<_>>()))
         }),
@@ -984,6 +993,112 @@ fn break_thread(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// The frames of the story `id` is a frame of, in thread order: its thread's area type and type on
+/// a path, each once, or `id` alone when it is in no thread.
+fn chain_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    let mut frames = story_of(d, id);
+    let mut seen = Ids::default();
+    frames.retain(|f| seen.insert(*f));
+    if frames.len() < 2 { vec![id] } else { frames }
+}
+
+fn chain_ids(chains: &[&[NodeId]]) -> Value {
+    json!(chains.iter().filter(|c| !c.is_empty()).map(|c| c.iter().map(|i| i.0).collect::<Vec<_>>()).collect::<Vec<_>>())
+}
+
+/// `text.thread.setNeighbor`: link a frame to the frame after or before it, or break that link.
+fn set_neighbor(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.thread.setNeighbor";
+    let id = checked_id(s, p.get("id").unwrap_or(&Value::Null), C)?;
+    let next = match p.get("side").and_then(Value::as_str) {
+        Some("next") => true,
+        Some("previous") => false,
+        _ => return Err(bad(C, "`side` must be \"next\" or \"previous\"")),
+    };
+    let neighbor = match p.get("neighbor") {
+        None => return Err(bad(C, "missing `neighbor` (an id, or null to break the link)")),
+        Some(Value::Null) => None,
+        Some(v) => Some(checked_id(s, v, C)?),
+    };
+    let d = &s.doc()?.doc;
+    if text_of(d, id).is_none() {
+        return Err(bad(C, "`id` must be area type or type on a path"));
+    }
+    let locked = |frames: &[NodeId]| {
+        let editable = d.editable();
+        frames.iter().any(|f| !editable(*f))
+    };
+    let chain = chain_of(d, id);
+    let Some(n) = neighbor else {
+        // Break the link on that side: the frames before it and the frames after it.
+        let i = chain.iter().position(|f| *f == id).unwrap_or(0);
+        let at = if next { i + 1 } else { i };
+        if at == 0 || at >= chain.len() {
+            return Ok(json!({"changed": false, "threads": chain_ids(&[&chain])}));
+        }
+        if locked(&chain) {
+            return Err(bad(C, "a frame of the story is hidden or locked"));
+        }
+        let (head, tail) = (chain[..at].to_vec(), chain[at..].to_vec());
+        let cut: Ids = chain.iter().copied().collect();
+        s.edit("Break Thread", |d, _| {
+            d.text_threads.retain(|t| !t.iter().any(|f| cut.contains(f)));
+            for part in [&head, &tail] {
+                if part.len() >= 2 {
+                    d.text_threads.push(part.clone());
+                }
+            }
+            // The first frame after the break starts its story, which flows again on this edit so
+            // that its numbered paragraphs count from 1.
+            if let Some(f) = tail.first() {
+                touch(d, *f);
+            }
+            if let Some(NodeKind::Text(t)) = tail.first().and_then(|f| d.node_mut(*f)).map(|n| &mut n.kind)
+                && t.first_para_continues
+            {
+                t.first_para_continues = false;
+                refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+        return Ok(json!({"changed": true, "threads": chain_ids(&[&head, &tail])}));
+    };
+    if n == id {
+        return Err(bad(C, "a frame cannot be linked to itself"));
+    }
+    if text_of(d, n).is_none() {
+        return Err(bad(C, "`neighbor` must be area type or type on a path"));
+    }
+    // `first` is to flow into `second`.
+    let (first, second) = if next { (id, n) } else { (n, id) };
+    let (a, b) = if next { (chain, chain_of(d, n)) } else { (chain_of(d, n), chain) };
+    if a.contains(&second) {
+        if a.windows(2).any(|w| w == [first, second]) {
+            return Ok(json!({"changed": false, "threads": chain_ids(&[&a])}));
+        }
+        return Err(bad(C, "the two frames are already in one story: the link would make a loop or reorder it"));
+    }
+    if a.last() != Some(&first) {
+        return Err(bad(C, format!("frame {} already has a next frame: break that link first", first.0)));
+    }
+    if b.first() != Some(&second) {
+        return Err(bad(C, format!("frame {} already has a previous frame: break that link first", second.0)));
+    }
+    if locked(&a) || locked(&b) {
+        return Err(bad(C, "a frame of either story is hidden or locked"));
+    }
+    let joined: Vec<NodeId> = a.iter().chain(&b).copied().collect();
+    let affected: Ids = joined.iter().copied().collect();
+    s.edit("Thread Text", |d, _| {
+        d.text_threads.retain(|t| !t.iter().any(|f| affected.contains(f)));
+        d.text_threads.push(joined.clone());
+        // Force a re-flow of the joined story on this edit.
+        touch(d, first);
+        Ok(())
+    })?;
+    Ok(json!({"changed": true, "threads": chain_ids(&[&joined])}))
 }
 
 #[cfg(test)]
