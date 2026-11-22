@@ -466,6 +466,7 @@ struct World {
     draw_mode: DrawMode,
     draw_inside: Option<NodeId>,
     clipboard: Clipboard,
+    clipboard_copied: bool,
     untitled_counter: u32,
     menu: cmd::menucmds::MenuState,
     last_solid: crate::Color,
@@ -590,6 +591,7 @@ impl World {
             draw_mode: s.draw_mode,
             draw_inside: s.draw_inside,
             clipboard: s.clipboard.clone(),
+            clipboard_copied: s.clipboard_copied,
             untitled_counter: s.untitled_counter,
             menu: s.menu.clone(),
             last_solid: s.last_solid,
@@ -613,6 +615,7 @@ impl World {
         swap(&mut self.draw_mode, &mut s.draw_mode);
         swap(&mut self.draw_inside, &mut s.draw_inside);
         swap(&mut self.clipboard, &mut s.clipboard);
+        swap(&mut self.clipboard_copied, &mut s.clipboard_copied);
         swap(&mut self.untitled_counter, &mut s.untitled_counter);
         swap(&mut self.menu, &mut s.menu);
         swap(&mut self.last_solid, &mut s.last_solid);
@@ -650,7 +653,8 @@ pub(crate) struct Savepoint {
     fill_active: bool,
     draw_mode: DrawMode,
     draw_inside: Option<NodeId>,
-    clipboard: Option<Clipboard>,
+    /// The clipboard, [`Session::clipboard_copied`] and [`Session::copies`].
+    clipboard: Option<(Clipboard, bool, u64)>,
     untitled_counter: u32,
     menu: cmd::menucmds::MenuState,
     last_solid: crate::Color,
@@ -684,7 +688,7 @@ impl Savepoint {
             fill_active: s.fill_active,
             draw_mode: s.draw_mode,
             draw_inside: s.draw_inside,
-            clipboard: CAN_FAIL_AFTER_COPYING.contains(&id).then(|| s.clipboard.clone()),
+            clipboard: CAN_FAIL_AFTER_COPYING.contains(&id).then(|| (s.clipboard.clone(), s.clipboard_copied, s.copies)),
             untitled_counter: s.untitled_counter,
             menu: s.menu.clone(),
             last_solid: s.last_solid,
@@ -734,8 +738,10 @@ impl Savepoint {
         s.fill_active = self.fill_active;
         s.draw_mode = self.draw_mode;
         s.draw_inside = self.draw_inside;
-        if let Some(clipboard) = self.clipboard {
+        if let Some((clipboard, copied, copies)) = self.clipboard {
             s.clipboard = clipboard;
+            s.clipboard_copied = copied;
+            s.copies = copies;
         }
         s.untitled_counter = self.untitled_counter;
         s.menu = self.menu;
@@ -771,6 +777,8 @@ struct Host {
     log: RefCell<Vec<Value>>,
     log_bytes: Cell<usize>,
     written: RefCell<Written>,
+    /// A command ran a Copy or Cut ([`Session::copies`]), also inside a batch or an action.
+    copied: Cell<bool>,
     /// The run's number in its session, and the script's name, which its console lines carry.
     run: u64,
     name: Arc<str>,
@@ -1257,6 +1265,7 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
+    let copies = s.copies;
     crate::file_access::start_recording_writes();
     // The command reads and writes only where the script's own files may, and the open documents' files.
     let gate = host.disk.borrow().gate(s.docs.iter().filter_map(|d| d.path.clone()).collect());
@@ -1270,6 +1279,9 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     match r {
         Ok(v) => {
             note_ids(s);
+            if s.copies != copies {
+                host.copied.set(true);
+            }
             let (mut objects, mut bytes) = (0, 0);
             for st in &s.docs {
                 match before.iter().find(|(uid, ..)| *uid == st.uid) {
@@ -2054,6 +2066,7 @@ impl Session {
             log: RefCell::new(Vec::new()),
             log_bytes: Cell::new(0),
             written: RefCell::new(Written::default()),
+            copied: Cell::new(false),
             run: self.script_runs,
             name: console::line_name(&name),
             console: RefCell::default(),
@@ -2315,6 +2328,13 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        // The run ran a Copy or Cut, and the clipboard still holds what one put there.
+        if host.copied.get()
+            && self.clipboard_copied
+            && let Some(o) = report.as_object_mut()
+        {
+            o.insert("copied".into(), json!(true));
+        }
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
         self.script_report = Some(report.clone());

@@ -21,6 +21,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         super::super::edit::settle_interaction(s)?;
     }
     let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter, s.explicit_undo_group.clone());
+    let (clipboard_copied, copies) = (s.clipboard_copied, s.copies);
     // The documents as they are now, whole: what a failed step brings back. Their art, history,
     // file, format and saved state share their data with the open ones until a step changes them.
     let start = s.docs.clone();
@@ -43,6 +44,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
             s.active = active;
             s.sync_front_profiles();
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
+            (s.clipboard_copied, s.copies) = (clipboard_copied, copies);
             s.pending_paint = None;
             return Err(e);
         }

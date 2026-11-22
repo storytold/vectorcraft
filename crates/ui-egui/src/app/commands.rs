@@ -262,7 +262,7 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
-        let copied = r.is_ok() && self.publish_copy(id);
+        let copied = r.as_ref().is_ok_and(|v| self.publish_copy(id, v));
         self.sync_views();
         self.refresh_replace_font_warning(false);
         // File › Revert replaces the document in its tab, keeps the tab's view and starts the tool afresh.
@@ -328,10 +328,11 @@ impl VectorcraftApp {
         r
     }
 
-    /// After a Copy or Cut `id` that ran: offer what it copied to other apps
-    /// ([`Self::publish_clipboard`]) → whether `id` is one.
-    fn publish_copy(&mut self, id: &str) -> bool {
-        let copy = matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut");
+    /// After a Copy or Cut `id` that ran, or a script run to its end (`reply` without `running`)
+    /// that reports `copied`: offer what it copied to other apps ([`Self::publish_clipboard`]) →
+    /// whether it did.
+    fn publish_copy(&mut self, id: &str, reply: &Value) -> bool {
+        let copy = matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut") || (id == "script.run" && reply["copied"] == true);
         if copy {
             self.publish_clipboard(matches!(id, "edit.cut" | "artboard.cut"));
         }

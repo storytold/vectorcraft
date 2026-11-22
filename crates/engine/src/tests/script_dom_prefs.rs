@@ -450,3 +450,25 @@ fn copy_and_paste_run_as_one_undo_step() {
     log(&mut s, "app.cut();");
     assert!(s.active().unwrap().doc.node(NodeId(a)).is_none());
 }
+
+#[test]
+fn only_copies_that_fill_the_clipboard_and_are_kept_are_counted() {
+    let mut s = Session::new();
+    s.clipboard_copied = true;
+    s.note_copy();
+    assert_eq!(s.copies, 0);
+    assert!(!s.clipboard_copied);
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(s.copies, 1);
+    assert!(s.clipboard_copied);
+    // A batch that copies and then fails puts the count back with the clipboard.
+    s.execute("clipboard.importSvg", &json!({"svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>"})).unwrap();
+    assert!(!s.clipboard_copied);
+    let batch = json!({"commands": [{"command": "edit.copy", "params": {}}, {"command": "no.such", "params": {}}]});
+    assert!(s.execute("command.batch", &batch).is_err());
+    assert_eq!(s.copies, 1);
+    assert!(!s.clipboard_copied);
+}

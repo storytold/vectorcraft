@@ -2706,7 +2706,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `app.copy()`, `app.cut()` and `app.paste()` (https://ai-scripting.docsforadobe.dev/jsobjref/Application/) run
   `edit.copy`, `edit.cut` and `edit.paste` on the active document inside the run's transaction. With nothing selected
   `copy` and `cut` do nothing, and with the clipboard empty `paste` does nothing; `paste` with no document open throws
-  `No active document`.
+  `No active document`. VectorCraft's own rules: `paste` takes what VectorCraft's clipboard holds (a Copy or Cut in
+  VectorCraft, or what the last Paste took from another app), not art another app copied since. A run that finishes
+  after a Copy or Cut (these functions, or `edit.copy`, `edit.cut`, `artboard.copy` or `artboard.cut` through
+  `vc.run`, also inside `command.batch` or an action), with the clipboard still holding what the Copy or Cut put
+  there and not what a `clipboard.import…` command put there since, has `copied: true` in its report, and the desktop
+  app then offers the clipboard to other apps as Edit › Copy does.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -2907,7 +2912,8 @@ VectorCraft sets these limits itself:
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
-runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`, with
+`copied: true` after a Copy or Cut whose art the clipboard still holds. In
 the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
 report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
 the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the

@@ -641,6 +641,66 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
 }
 
 #[test]
+fn a_scripts_copy_is_offered_to_other_apps_when_the_run_ends() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    app.clipboard_out = None;
+    let draw = "vc.run('shape.rectangle', {x:0,y:0,width:10,height:10});";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": draw })).unwrap().unwrap();
+    finish(&mut app);
+    assert!(app.clipboard_out.is_none(), "a run without a Copy offers nothing");
+    let copy = "vc.run('select.all', {}); app.copy();";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": copy })).unwrap().unwrap();
+    finish(&mut app);
+    assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{:?}", app.clipboard_out);
+    // A Copy of what the clipboard already holds is offered again.
+    app.clipboard_out = None;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": copy })).unwrap().unwrap();
+    finish(&mut app);
+    assert!(app.clipboard_out.is_some());
+    // A Copy inside a batch of commands counts too, also of what the clipboard already holds.
+    app.clipboard_out = None;
+    let batch = "vc.run('select.all', {}); vc.run('command.batch', {commands: [{command: 'edit.copy', params: {}}]});";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": batch })).unwrap().unwrap();
+    finish(&mut app);
+    assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{:?}", app.clipboard_out);
+    // A clipboard an import replaced after the Copy is not offered.
+    app.clipboard_out = None;
+    let import =
+        "app.copy(); vc.run('clipboard.importSvg', {svg: '<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>'});";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": import })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(app.ui.status, "Ran script");
+    assert!(app.clipboard_out.is_none());
+    // An import in a batch that fails and is rolled back leaves the copied clipboard to be offered.
+    let rolled_back = "app.copy(); try { vc.run('command.batch', {commands: [{command: 'clipboard.importSvg', params: {svg: '<svg \
+                       xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"5\" height=\"5\"/></svg>'}}, {command: 'no.such', params: {}}]}); } \
+                       catch (e) {}";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": rolled_back })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(app.ui.status, "Ran script");
+    assert!(app.clipboard_out.is_some());
+    // A run that copies and then fails leaves the clipboard and what other apps were offered alone.
+    app.clipboard_out = None;
+    let fails = "app.cut(); throw new Error('stop');";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": fails })).unwrap().unwrap();
+    finish(&mut app);
+    assert!(app.clipboard_out.is_none());
+    assert_eq!(objects(&app), 1);
+    // A Copy with nothing selected copies nothing, and other apps keep what they were offered.
+    let empty = "vc.run('select.none', {}); app.copy();";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": empty })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(app.ui.status, "Ran script");
+    assert!(app.clipboard_out.is_none());
+    // A run that automation takes to its end at once offers its Copy too.
+    app.session.script_frames = false;
+    let reply = app.run("script.run", json!({ "source": copy, "name": "t.js" })).unwrap();
+    assert_eq!(reply["copied"], true);
+    assert!(app.clipboard_out.as_deref().is_some_and(|svg| svg.contains("<svg")), "{:?}", app.clipboard_out);
+}
+
+#[test]
 fn a_new_app_shows_the_warning_by_default() {
     assert!(Session::new().prefs.show_external_script_warning);
 }

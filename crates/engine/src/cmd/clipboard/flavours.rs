@@ -385,6 +385,16 @@ impl Session {
         self.prefs.copy_as_svg && !self.clipboard_svg_refused()
     }
 
+    /// After a Copy or Cut has filled the clipboard: counts it in [`Session::copies`] when it put
+    /// something there, and marks the clipboard as holding a copy ([`Session::clipboard_copied`]).
+    pub(crate) fn note_copy(&mut self) {
+        let filled = !self.clipboard.is_empty();
+        if filled {
+            self.copies = self.copies.wrapping_add(1);
+        }
+        self.clipboard_copied = filled;
+    }
+
     /// Replace the clipboard with `clip`, centred on `p`'s `center` (default: the first
     /// artboard's centre) → the number of objects.
     pub(super) fn load_clipboard(&mut self, mut clip: Clipboard, p: &Value) -> Result<usize> {
@@ -400,6 +410,7 @@ impl Session {
         }
         let count = clip.nodes.len();
         self.clipboard = clip;
+        self.clipboard_copied = false;
         Ok(count)
     }
 }
