@@ -193,6 +193,7 @@ impl VectorcraftApp {
             queued_profile_opens: Default::default(),
             script_picked: Vec::new(),
             script_picked_left_out: false,
+            script_print_shown_at: None,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]
@@ -292,6 +293,14 @@ impl VectorcraftApp {
         self.shortcuts_frames.clear();
     }
 
+    /// The app's monotonic clock in seconds ([`now_secs`]), or a test's clock when it set one.
+    pub(crate) fn clock_secs(&self) -> f64 {
+        #[cfg(test)]
+        return self.now_override.unwrap_or_else(now_secs);
+        #[cfg(not(test))]
+        now_secs()
+    }
+
     /// Background work, once per host iteration (full or logic-only): control requests, background
     /// saves/exports/opens, plug-ins, recovery, font and clipboard polls, capture completion. It
     /// reads only viewport state from `ctx.input` — never events or `i.time`: a logic-only pass
@@ -327,10 +336,7 @@ impl VectorcraftApp {
         // Monotonic host time, never egui's `InputState::time`: a logic-only (hidden) iteration
         // replays the last shown pass's time, freezing recovery, clipboard polling and deadlines.
         // Tests inject a clock to drive idle scheduling deterministically.
-        #[cfg(test)]
-        let now = self.now_override.unwrap_or_else(now_secs);
-        #[cfg(not(test))]
-        let now = now_secs();
+        let now = self.clock_secs();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
         self.refresh_replace_font_warning(false);

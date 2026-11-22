@@ -371,6 +371,9 @@ pub struct VectorcraftApp {
     pub(crate) script_picked: Vec<String>,
     /// Choose… left out files past the most a script is given.
     pub(crate) script_picked_left_out: bool,
+    /// When the question before a script's print jobs were sent was first drawn, on
+    /// [`Self::clock_secs`]; `None` while it is not open.
+    pub(crate) script_print_shown_at: Option<f64>,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,

@@ -2756,9 +2756,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   app listed for the run, or `print` throws `PrintOptions.printerName names no installed printer`; with no default
   printer it throws `There is no default printer`. `print` composes the job as a print-ready PDF when it is called
   and sends nothing while the run goes on. When the run ends and its changes are kept, the app asks before it sends
-  the jobs (dialog kind `scriptPrint`, listing each job's document, printer and pages). Only the person at the
-  keyboard can choose Print: `ui.dialog.confirm` and synthetic input are refused, and the dialog stays open. Cancel,
-  Escape and `ui.dialog.cancel` drop the jobs and keep the run's changes. A run that fails or is stopped sends
+  the jobs (dialog kind `scriptPrint`, listing each job's document, printer and pages). The dialog does not open
+  while a text field or text being typed on the canvas has the keyboard; it opens once neither does. The jobs are
+  sent only after the person at the keyboard clicks its Print button, or presses Space once Tab has moved the focus to
+  it: the button takes no click or focus for the first second after the dialog appears (VectorCraft's own value),
+  Enter does not print, and `ui.dialog.confirm` and synthetic input are refused, and the dialog stays open. Cancel, Escape and `ui.dialog.cancel` drop the jobs and keep the
+  run's changes. A run that fails or is stopped sends
   nothing. Before it sends them, the app checks that each printer is still installed under that name, and sends none
   when one is not. A run prepares at most 4 jobs, together at most 100 pages, every copy counted, and 32 MiB, and
   none while an earlier run's jobs wait for an answer. A job for a printer is a PDF, so `postScriptLevel` with no

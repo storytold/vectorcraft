@@ -27,9 +27,12 @@
 //!
 //! The jobs a script prepared for a printer (`Document.print` without a file) wait for the dialog of
 //! kind `scriptPrint`, which opens once the run has ended and its changes are kept, when no other
-//! dialog is open. It lists each job's document, printer and sheets from the jobs themselves, which
-//! no field changes. Only the person at the keyboard prints them, with Print: from
-//! `ui.dialog.confirm` or synthetic input Print is refused and the dialog stays open. Cancel,
+//! dialog is open and no text field or text being typed on the canvas has the keyboard. It lists
+//! each job's document, printer and sheets from the jobs themselves, which no field changes. Only
+//! the person at the keyboard prints them, with a click on its Print button or Space once Tab gave
+//! it the focus: the button takes no click or focus for [`PRINT_ENABLE_DELAY_SECS`] after the
+//! dialog is first drawn, Enter does not print, and
+//! from `ui.dialog.confirm` or synthetic input Print is refused and the dialog stays open. Cancel,
 //! Escape and `ui.dialog.cancel` drop the jobs, from anyone; the script's changes stay either way.
 
 use serde_json::{Value, json};
@@ -58,9 +61,9 @@ pub const PRINT_KIND: &str = "scriptPrint";
 
 pub(super) const PRINT_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Print").into(),
-    body: print_body,
+    body_with_actions: Some(print_body),
     confirm: print_confirm,
-    ok: Some("Print"),
+    ok: None,
     min_width: 420.0,
     max_width: Some(560.0),
     ..DialogSpec::FORM
@@ -566,16 +569,64 @@ fn answers_for(kind: &str) -> &'static str {
     }
 }
 
+/// How long the print question's Print button takes no click after the dialog is first drawn, in
+/// seconds: VectorCraft's own value, so a click or key meant for what was there before does not
+/// send a job.
+pub(crate) const PRINT_ENABLE_DELAY_SECS: f64 = 1.0;
+
 /// Opens the question before the jobs a script prepared for a printer are sent, once the run has
-/// ended and no other dialog is open.
+/// ended, no other dialog is open and nothing is being typed: while a text field or text on the
+/// canvas has the keyboard it waits, and a later poll opens it.
 pub(crate) fn ask_print(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_none() && !app.session.script_running() && app.session.script_prints_waiting() {
-        app.ui.dialog = Some(Dialog::new(PRINT_KIND, json!({})));
+    if app.ui.dialog.is_some() || app.session.script_running() || !app.session.script_prints_waiting() {
+        return;
     }
+    let typing = app.ui_ctx.as_ref().is_some_and(egui::Context::text_edit_focused) || app.session.tool_wants_text();
+    if typing {
+        return;
+    }
+    app.script_print_shown_at = None;
+    app.ui.dialog = Some(Dialog::new(PRINT_KIND, json!({})));
 }
 
-/// The jobs, read from the session, so `ui.dialog.set` cannot change what the person reads.
-fn print_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> bool {
+/// Seconds until Print takes a click, from when the dialog was first drawn: 0 once it does.
+fn print_wait(app: &VectorcraftApp) -> f64 {
+    app.script_print_shown_at.map_or(PRINT_ENABLE_DELAY_SECS, |at| (at + PRINT_ENABLE_DELAY_SECS - app.clock_secs()).max(0.0))
+}
+
+/// The jobs, read from the session, so `ui.dialog.set` cannot change what the person reads, then
+/// Cancel and Print. Enter gives nothing, and Print takes no click until [`PRINT_ENABLE_DELAY_SECS`]
+/// after the dialog was first drawn.
+fn print_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAction {
+    if app.script_print_shown_at.is_none() {
+        app.script_print_shown_at = Some(app.clock_secs());
+    }
+    print_jobs(app, ui);
+    ui.add_space(16.0);
+    let wait = print_wait(app);
+    if wait > 0.0 {
+        ui.ctx().request_repaint_after_secs(wait as f32);
+    }
+    let mut action = DialogAction::None;
+    let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // A click, Space on the button once Tab gave it the focus, or a screen reader's press;
+        // never Enter.
+        let print = widgets::primary_button_enabled(ui, tl!("Print"), wait <= 0.0);
+        if print.clicked() && !ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            d.fields.insert("answer".into(), json!("print"));
+            action = DialogAction::Confirm;
+        }
+        ui.add_space(8.0);
+        if widgets::secondary_button(ui, tl!("Cancel")).clicked() {
+            action = DialogAction::Cancel;
+        }
+    });
+    action
+}
+
+/// The question and the table of jobs: document, printer and pages.
+fn print_jobs(app: &VectorcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     ui.label(tl!("The script asks to print these jobs. Its changes to the documents are kept whether or not you print."));
     ui.add_space(8.0);
@@ -593,14 +644,17 @@ fn print_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, _: &mut Dialog) -> bo
             }
         });
     });
-    false
 }
 
-/// Print: sends the jobs, when the person at the keyboard asked. From automation (a control or MCP
-/// request, or synthetic input) it is refused and the dialog stays open.
-fn print_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {
+/// Print: sends the jobs, when the person at the keyboard clicked Print once it took clicks. From
+/// automation (a control or MCP request, or synthetic input) it is refused, as a confirm without
+/// that click is, and the dialog stays open.
+fn print_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if app.automation_asked() {
         return Err(PRINT_BY_PERSON.into());
+    }
+    if d.fields.get("answer").and_then(Value::as_str) != Some("print") || print_wait(app) > 0.0 {
+        return Err(PRINT_BY_CLICK.into());
     }
     close_print(app);
     let jobs = app.session.take_script_prints();
@@ -623,9 +677,12 @@ fn close_print(app: &mut VectorcraftApp) {
     if app.ui.dialog.as_ref().is_some_and(|open| open.kind == PRINT_KIND) {
         app.ui.dialog = None;
     }
+    app.script_print_shown_at = None;
 }
 
 /// Print's error when automation asked.
 pub(crate) const PRINT_BY_PERSON: &str = "Only the person at the keyboard can print a script's print jobs";
+/// The error of a confirm without a click on Print once it took clicks.
+pub(crate) const PRINT_BY_CLICK: &str = "Click Print to send the script's print jobs";
 /// The status after Cancel.
 pub(crate) const PRINTS_DROPPED: &str = "The script's print jobs were not sent";
