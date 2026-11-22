@@ -119,7 +119,8 @@ art was drawn with and the art itself, so the art can be drawn again when the pa
   transforms or scales can't be read, or when its art doesn't match the hash, the art stays as the file has it and the
   open's warnings say so, naming the plug-in. Saving writes the hash of the art as it is then, and an object whose
   saved fields were damaged is saved with `damaged: true`, so it still can't be drawn again after the file is opened
-  again.
+  again. A generated art object inside another one's art is saved as plain art, without its own settings. A file that
+  has settings on such an object anyway opens with them left out, and the outer object reads as `changed`.
 - **Permissions.** A generator implies `doc.write`, and a list of `permissions` must hold it.
 
 These rules are VectorCraft's own.

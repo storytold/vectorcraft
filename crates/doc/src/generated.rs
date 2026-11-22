@@ -10,6 +10,14 @@
 //! object [`State::Damaged`], and art that doesn't match the hash marks it [`State::Changed`]: the
 //! art stays as it was read either way. A damaged object is saved with `damaged: true`, so it stays
 //! damaged when the file is opened again.
+//!
+//! A generated art object inside another one's art (anywhere in its children or their opacity
+//! masks) is written and read as plain art: its settings are left out of the file, and a file that
+//! has them there anyway loses them when it is read, its outer object marked [`State::Changed`]
+//! without hashing. So each object's art is written and hashed once, whatever the nesting.
+
+use std::cell::Cell;
+use std::sync::Arc;
 
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -139,17 +147,84 @@ pub fn valid_id(id: &str) -> bool {
     (1..=MAX_ID).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
+std::thread_local! {
+    /// Is a generated art object's art being written on this thread ([`Inside`])?
+    static INSIDE: Cell<bool> = const { Cell::new(false) };
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// The bytes [`art_hash`] has hashed on this thread.
+    static HASHED: Cell<usize> = const { Cell::new(0) };
+}
+
+/// While it lives, objects written on this thread are part of a generated art object's art, and
+/// the generated art objects among them are written as plain art ([`written`]).
+pub(crate) struct Inside(bool);
+
+impl Inside {
+    pub(crate) fn enter() -> Self {
+        Self(INSIDE.with(|i| i.replace(true)))
+    }
+}
+
+impl Drop for Inside {
+    fn drop(&mut self) {
+        INSIDE.with(|i| i.set(self.0));
+    }
+}
+
+/// The settings `g` an object writes: none while a generated art object's art is being written.
+pub(crate) fn written(g: Option<&GeneratedArt>) -> Option<&GeneratedArt> {
+    g.filter(|_| !INSIDE.with(Cell::get))
+}
+
 /// The SHA-256 of `children` written as JSON, in lower-case hexadecimal: what a file holds as the
-/// hash of a generated art object's art.
-pub fn art_hash(children: &[std::sync::Arc<Node>]) -> String {
+/// hash of a generated art object's art. Generated art objects among them are written as plain
+/// art.
+pub fn art_hash(children: &[Arc<Node>]) -> String {
     use sha2::{Digest, Sha256};
-    let bytes = serde_json::to_vec(children).unwrap_or_default();
+    let bytes = {
+        let _inside = Inside::enter();
+        serde_json::to_vec(children).unwrap_or_default()
+    };
+    #[cfg(test)]
+    HASHED.with(|h| h.set(h.get() + bytes.len()));
     Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The bytes `children` take written as JSON ([`MAX_ART_BYTES`]).
-pub fn art_bytes(children: &[std::sync::Arc<Node>]) -> usize {
+/// The bytes `children` take written as JSON, generated art objects among them as plain art
+/// ([`MAX_ART_BYTES`]).
+pub fn art_bytes(children: &[Arc<Node>]) -> usize {
+    let _inside = Inside::enter();
     serde_json::to_vec(children).map_or(usize::MAX, |b| b.len())
+}
+
+/// Drops the settings of the generated art objects in `nodes`, among their descendants and in
+/// their opacity masks' art, which become plain art; returns whether there were any. It doesn't
+/// look among the children of such an object, which reading it already made plain art, only at
+/// its opacity mask's art.
+fn plain_art(nodes: &mut [Arc<Node>]) -> bool {
+    let mut found = false;
+    for a in nodes {
+        let generated = a.extras().generated.is_some();
+        if !generated && a.children().is_none_or(Vec::is_empty) && a.extras().mask.is_none() {
+            continue;
+        }
+        let n = Arc::make_mut(a);
+        if generated {
+            n.extras_mut().generated = None;
+            found = true;
+        } else if let Some(ch) = n.children_mut() {
+            found |= plain_art(ch);
+        }
+        if n.extras().mask.is_some()
+            && let Some(m) = n.extras_mut().mask.as_mut()
+        {
+            found |= plain_art(std::slice::from_mut(&mut m.art));
+        }
+    }
+    found
 }
 
 /// How a file holds a generated art object's settings, borrowed from the node.
@@ -216,9 +291,11 @@ fn read_scale(k: Option<Value>) -> Option<f64> {
 /// The settings a file gives (`v`, its `generated` field) for a node of `kind`: `None` for anything
 /// but a group, else what could be read, marked [`State::Damaged`] or [`State::Changed`] when a
 /// field or the art's hash doesn't hold up. A field that can't be read is kept empty: an id is
-/// kept only when it is a plug-in id, a name at most [`MAX_NAME`] characters long.
-pub(crate) fn read(v: Value, kind: &NodeKind) -> Option<Box<GeneratedArt>> {
+/// kept only when it is a plug-in id, a name at most [`MAX_NAME`] characters long. Generated art
+/// objects in the group's art become plain art ([`plain_art`]), and the art is then not hashed.
+pub(crate) fn read(v: Value, kind: &mut NodeKind) -> Option<Box<GeneratedArt>> {
     let NodeKind::Group { children, .. } = kind else { return None };
+    let nested = plain_art(children);
     let Value::Object(mut o) = v else {
         return Some(Box::new(GeneratedArt { state: State::Damaged, ..GeneratedArt::new("", "", Map::new()) }));
     };
@@ -257,7 +334,7 @@ pub(crate) fn read(v: Value, kind: &NodeKind) -> Option<Box<GeneratedArt>> {
     };
     let stroke_scale = scale("strokeScale");
     let effect_scale = scale("effectScale");
-    let intact = matches!(o.get("hash"), Some(Value::String(h)) if *h == art_hash(children));
+    let intact = !nested && matches!(o.get("hash"), Some(Value::String(h)) if *h == art_hash(children));
     let state = if damaged {
         State::Damaged
     } else if intact {
@@ -287,6 +364,119 @@ mod tests {
 
     fn reread(v: &Value) -> Node {
         serde_json::from_value(v.clone()).unwrap()
+    }
+
+    /// `depth` generated art objects, each the only child of the one around it, the innermost
+    /// [`art`].
+    fn nested(depth: usize) -> Node {
+        let mut n = art();
+        for i in 1..depth {
+            let mut g = Node::group(NodeId(10 + i as u64), vec![Arc::new(n)]);
+            g.extras_mut().generated = Some(Box::new(GeneratedArt::new("org.example.gen", "Squares", Map::new())));
+            n = g;
+        }
+        n
+    }
+
+    /// The bytes [`art_hash`] hashes while `f` runs.
+    fn hashed<T>(f: impl FnOnce() -> T) -> (T, usize) {
+        HASHED.with(|h| h.set(0));
+        let out = f();
+        (out, HASHED.with(Cell::get))
+    }
+
+    /// The generated art objects in `n` and below it, outermost first, as (depth, state).
+    fn generated_in(n: &Node) -> Vec<(usize, State)> {
+        let mut out = vec![];
+        let mut at = Some((n, 0));
+        while let Some((n, d)) = at {
+            if let Some(g) = &n.extras().generated {
+                out.push((d, g.state));
+            }
+            at = n.children().and_then(|c| c.first()).map(|c| (&**c, d + 1));
+        }
+        out
+    }
+
+    /// Generated art objects nested in one another are written with the outermost one's settings
+    /// alone, so writing and reading them hash each object's art once, however deep they nest; a
+    /// file that has settings on the inner ones anyway loses them, without hashing.
+    #[test]
+    fn nested_generated_art_is_written_and_read_with_its_art_hashed_once() {
+        crate::depth::with_deep_stack(|| {
+            for depth in [16, 200] {
+                let n = nested(depth);
+                let (bytes, writing) = hashed(|| serde_json::to_vec(&n).unwrap());
+                assert!(writing <= bytes.len(), "{depth} deep: {writing} bytes hashed to write {}", bytes.len());
+                assert_eq!(String::from_utf8_lossy(&bytes).matches("\"generated\"").count(), 1, "{depth} deep");
+                let v = serde_json::to_value(&n).unwrap();
+                let (back, reading) = hashed(|| reread(&v));
+                assert!(reading <= bytes.len(), "{depth} deep: {reading} bytes hashed to read {}", bytes.len());
+                assert_eq!(generated_in(&back), vec![(0, State::Intact)], "{depth} deep");
+                // Settings on every level, each with a hash: none is hashed, the inner ones are
+                // dropped, and the outermost reads as changed.
+                let mut crafted = v.clone();
+                let settings = v["generated"].clone();
+                let mut at = crafted.pointer_mut("/kind/children/0");
+                while let Some(c) = at {
+                    if c.pointer("/kind/children/0").is_some() {
+                        c["generated"] = settings.clone();
+                    }
+                    at = c.pointer_mut("/kind/children/0");
+                }
+                let (crafted_back, reading) = hashed(|| reread(&crafted));
+                assert!(reading <= bytes.len(), "{depth} deep, crafted: {reading} bytes hashed to read {}", bytes.len());
+                assert_eq!(generated_in(&crafted_back), vec![(0, State::Changed)], "{depth} deep, crafted");
+                assert_eq!(crafted_back.children(), back.children(), "{depth} deep, crafted");
+            }
+        });
+    }
+
+    /// A generated art object inside another one's art, whose opacity mask's art is a generated art
+    /// object too, reads as plain art with plain mask art.
+    #[test]
+    fn a_nested_generated_art_objects_mask_art_reads_as_plain_art() {
+        let mut inner = art();
+        inner.extras_mut().mask = Some(Box::new(crate::OpacityMask::new(art(), true)));
+        let mut outer = Node::group(NodeId(20), vec![Arc::new(inner)]);
+        outer.extras_mut().generated = Some(Box::new(GeneratedArt::new("org.example.gen", "Squares", Map::new())));
+        let v = serde_json::to_value(&outer).unwrap();
+        assert!(v.pointer("/kind/children/0/generated").is_none() && v.pointer("/kind/children/0/mask/art/generated").is_none());
+        let mut crafted = v.clone();
+        let settings = v["generated"].clone();
+        crafted["kind"]["children"][0]["generated"] = settings.clone();
+        crafted["kind"]["children"][0]["mask"]["art"]["generated"] = settings;
+        let back = reread(&crafted);
+        assert_eq!(back.extras().generated.as_ref().map(|g| g.state), Some(State::Changed));
+        let inner = &back.children().unwrap()[0];
+        assert!(inner.extras().generated.is_none());
+        assert!(inner.extras().mask.as_ref().is_some_and(|m| m.art.extras().generated.is_none()));
+        assert_eq!(back.children(), reread(&v).children());
+    }
+
+    /// A generated art object inside plain groups is still checked against its hash: intact as
+    /// written, changed when its art is tampered with.
+    #[test]
+    fn a_generated_art_object_deep_in_plain_groups_keeps_its_hash_check() {
+        crate::depth::with_deep_stack(|| {
+            let mut n = art();
+            for i in 1..200 {
+                n = Node::group(NodeId(10 + i as u64), vec![Arc::new(n)]);
+            }
+            let v = serde_json::to_value(&n).unwrap();
+            let state = |v: &Value| generated_in(&reread(v)).into_iter().map(|(_, s)| s).collect::<Vec<_>>();
+            assert_eq!(state(&v), vec![State::Intact]);
+            let mut tampered = v.clone();
+            let mut at = tampered.pointer_mut("/kind/children/0");
+            while let Some(c) = at {
+                if c.get("generated").is_some() {
+                    c["kind"]["children"][0]["name"] = json!("tampered");
+                    break;
+                }
+                at = c.pointer_mut("/kind/children/0");
+            }
+            assert_eq!(state(&tampered), vec![State::Changed]);
+        });
     }
 
     /// A generated art object writes its plug-in, name, parameters and the hash of its art, and
