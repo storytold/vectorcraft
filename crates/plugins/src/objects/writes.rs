@@ -51,7 +51,7 @@ pub(super) fn changes(o: &Map<String, Value>, given: &Value, kind: InputKind, at
             continue;
         }
         match (k.as_str(), was) {
-            ("text", Some(was)) => text_changes(v, was, given.get("truncated") == Some(&Value::Bool(true)), at, text, &mut out)?,
+            ("text", Some(was)) => text_changes(k, v, was, given.get("truncated") == Some(&Value::Bool(true)), at, text, &mut out)?,
             ("name", None) if v.is_null() => {}
             (_, Some(was)) if first_difference(v, was, "").is_none() => {}
             _ => {
@@ -62,16 +62,17 @@ pub(super) fn changes(o: &Map<String, Value>, given: &Value, kind: InputKind, at
     Ok((!out.is_empty()).then_some(out))
 }
 
-/// The `runs` and `paragraphs` of type text `v` that differ from `was` (the text the input gave),
-/// into `out`; its other fields must be as given, and type given as `truncated` keeps its text. A
-/// changed list is held to [`MAX_INPUT_RUNS`] entries, and changed runs to [`MAX_INPUT_TEXT`] bytes
-/// of text, which count toward `total`, held to [`MAX_INPUT_TEXT_TOTAL`].
-fn text_changes(v: &Value, was: &Value, truncated: bool, at: &str, total: &mut usize, out: &mut Map<String, Value>) -> Result<()> {
-    let t = v.as_object().ok_or_else(|| out_err(at, "`text` must be an object"))?;
+/// The `runs` and `paragraphs` of type text `v`, the output's field `key`, that differ from `was`
+/// (the text the input gave), into `out`; its other fields must be as given, and type given as
+/// `truncated` keeps its text. A changed list is held to [`MAX_INPUT_RUNS`] entries, and changed
+/// runs to [`MAX_INPUT_TEXT`] bytes of text, which count toward `total`, held to
+/// [`MAX_INPUT_TEXT_TOTAL`].
+fn text_changes(key: &str, v: &Value, was: &Value, truncated: bool, at: &str, total: &mut usize, out: &mut Map<String, Value>) -> Result<()> {
+    let t = v.as_object().ok_or_else(|| out_err(at, format!("`{key}` must be an object")))?;
     let mut keys: Vec<&String> = t.keys().collect();
     keys.sort();
     for k in keys {
-        let field = format!("text.{k}");
+        let field = format!("{key}.{k}");
         let given = was.get(k);
         let differs = given.is_none_or(|g| first_difference(&t[k], g, "").is_some());
         if !matches!(k.as_str(), "runs" | "paragraphs") {
@@ -134,16 +135,18 @@ fn attr_names<T: DeserializeOwned>() -> &'static [&'static str] {
     fields
 }
 
-/// `v` as a `T` whose attributes are all ones `T` reads: an unknown key, as an ill-typed value, is
-/// an error at `at`.
-fn strict<T: DeserializeOwned>(v: &Value, at: &str, what: &str) -> Result<T> {
-    let o = v.as_object().ok_or_else(|| out_err(at, format!("{what} must be an object")))?;
+/// `v`, the field `key` of the entry at `parent`, as a `T` whose attributes are all ones `T` reads:
+/// a value that isn't an object is an error at `parent`, and an unknown key, as an ill-typed value,
+/// an error at `parent.key`.
+fn strict<T: DeserializeOwned>(v: &Value, parent: &str, key: &str) -> Result<T> {
+    let o = v.as_object().ok_or_else(|| out_err(parent, format!("`{key}` must be an object")))?;
+    let at = format!("{parent}.{key}");
     let names = attr_names::<T>();
     if let Some(k) = o.keys().find(|k| !names.contains(&k.as_str())) {
         let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
-        return Err(out_err(at, format!("unknown attribute '{k}'")));
+        return Err(out_err(&at, format!("unknown key '{k}'")));
     }
-    serde_json::from_value(v.clone()).map_err(|e| out_err(at, e))
+    serde_json::from_value(v.clone()).map_err(|e| out_err(&at, e))
 }
 
 /// A transform from a filter's output: six finite numbers, each within ±[`MAX_COORD`], that don't
@@ -212,7 +215,7 @@ pub(super) fn apply(doc: &Document, n: &mut Node, changes: &Map<String, Value>, 
     }
     if changes.contains_key("runs") || changes.contains_key("paragraphs") {
         let story = doc.story_of(n.id).len();
-        let NodeKind::Text(t) = &mut n.kind else { return Err(out_err(at, "only type has text")) };
+        let NodeKind::Text(t) = &mut n.kind else { return Err(read_only_changed(at, "text")) };
         set_text(doc, t, story > 1, changes.get("runs"), changes.get("paragraphs"), at)?;
     }
     if let Some(v) = changes.get("name") {
@@ -243,9 +246,10 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
                 let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
                 return Err(out_err(&at, format!("unknown key '{k}'")));
             }
-            let text = o.get("text").and_then(Value::as_str).ok_or_else(|| out_err(&at, "`text` must be a string"))?;
+            let key = "text";
+            let text = o.get(key).and_then(Value::as_str).ok_or_else(|| out_err(&at, format!("`{key}` must be a string")))?;
             let style_v = o.get("style").unwrap_or(&Value::Null);
-            let mut style: CharStyle = strict(style_v, &format!("{at}.style"), "`style`")?;
+            let mut style: CharStyle = strict(style_v, &at, "style")?;
             let inline = match o.get("inline") {
                 None | Some(Value::Null) => None,
                 Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| out_err(&format!("{at}.inline"), e))?),
@@ -299,13 +303,13 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
     }
     match paragraphs {
         Some(v) => {
-            let at = format!("{at}.text.paragraphs");
+            let text = format!("{at}.text");
             let list = v.as_array().map(Vec::as_slice).unwrap_or_default();
             let count = t.paragraph_count();
             if list.len() != count {
-                return Err(out_err(&at, format!("expected {count} paragraph styles, one per paragraph")));
+                return Err(out_err(&format!("{text}.paragraphs"), format!("expected {count} paragraph styles, one per paragraph")));
             }
-            let styles = list.iter().enumerate().map(|(i, p)| para_style(doc, p, &format!("{at}[{i}]"))).collect::<Result<_>>()?;
+            let styles = list.iter().enumerate().map(|(i, p)| para_style(doc, p, &text, &format!("paragraphs[{i}]"))).collect::<Result<_>>()?;
             t.set_paragraph_styles(styles);
         }
         None => t.normalize_paras(),
@@ -414,17 +418,18 @@ fn range_err(at: &str, e: &AttrRangeError) -> Error {
     out_err(&format!("{at}.{}", e.key), &e.message)
 }
 
-/// Paragraph style `v` from a filter's output, at `at`: each attribute one a paragraph reads, each
-/// number in the range the paragraph style commands keep it to ([`ParaStyle::check_ranges`], the
-/// Justification options as given), and a custom Kinsoku set one of `doc`'s, by name, whose
-/// characters it takes.
-fn para_style(doc: &Document, v: &Value, at: &str) -> Result<ParaStyle> {
-    let mut st: ParaStyle = strict(v, at, "a paragraph style")?;
+/// Paragraph style `v` from a filter's output, the entry `key` of the text at `parent`: each
+/// attribute one a paragraph reads, each number in the range the paragraph style commands keep it
+/// to ([`ParaStyle::check_ranges`], the Justification options as given), and a custom Kinsoku set
+/// one of `doc`'s, by name, whose characters it takes.
+fn para_style(doc: &Document, v: &Value, parent: &str, key: &str) -> Result<ParaStyle> {
+    let mut st: ParaStyle = strict(v, parent, key)?;
+    let at = format!("{parent}.{key}");
     let justification = match v.get("justification") {
         None | Some(Value::Null) => None,
         Some(j) => Some(serde_json::from_value::<JustificationOptions>(j.clone()).map_err(|e| out_err(&format!("{at}.justification"), e))?),
     };
-    st.check_ranges(justification.as_ref(), &[], |_, _| true).map_err(|e| range_err(at, &e))?;
+    st.check_ranges(justification.as_ref(), &[], |_, _| true).map_err(|e| range_err(&at, &e))?;
     if let Some(set) = &st.kinsoku_set {
         let found = KinsokuSet::named(&doc.kinsoku_sets, &set.name).ok_or_else(|| {
             let shown = crate::permissions::display_text(&set.name, crate::permissions::MAX_SHOWN_FIELD);

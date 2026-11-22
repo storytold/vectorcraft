@@ -1269,7 +1269,7 @@ fn bad_writes_are_refused_naming_the_object_and_the_field() {
             text,
             json!({"text": {"runs": styled(&|s| s["fontSzie"] = json!(9))}}),
             &InputKind::ALL,
-            "text.runs[0].style: unknown attribute 'fontSzie'".into(),
+            "text.runs[0].style: unknown key 'fontSzie'".into(),
         ),
         (
             text,
@@ -1285,6 +1285,11 @@ fn bad_writes_are_refused_naming_the_object_and_the_field() {
             "font_family: must be 1-256 printable characters".into(),
         ),
         (text, json!({"text": {"runs": [{"text": "Hi", "style": style, "color": 1}]}}), &InputKind::ALL, "text.runs[0]: unknown key 'color'".into()),
+        (text, json!({"text": 5}), &InputKind::ALL, format!("objects[{ti}] (id {t}): `text` must be an object")),
+        (text, json!({"text": {"runs": [{"text": 5, "style": style}]}}), &InputKind::ALL, "text.runs[0]: `text` must be a string".into()),
+        (text, json!({"text": {"runs": [{"text": "Hi", "style": 5}]}}), &InputKind::ALL, "text.runs[0]: `style` must be an object".into()),
+        (text, json!({"text": {"paragraphs": [5, {}]}}), &InputKind::ALL, "text: `paragraphs[0]` must be an object".into()),
+        (text, json!({"text": {"paragraphs": [{"spaceBefor": 1}, {}]}}), &InputKind::ALL, "text.paragraphs[0]: unknown key 'spaceBefor'".into()),
         (
             text,
             json!({"text": {"runs": [{"text": "Hi\u{FFFC}", "style": style}]}}),
