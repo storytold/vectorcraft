@@ -19,7 +19,14 @@ pub(crate) use presentation::presentation_step;
 /// Runs one command the key stage fired. A tool key chooses its tool (and starts or ends a hold), `Select All`
 /// with the Artboard tool selects artboards, and every other command runs as its menu item does.
 pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fired) {
-    let command = &fired.command;
+    let renamed;
+    let command = match engine_id(&fired.command.id) {
+        Some(id) => {
+            renamed = CommandRef::with_params(id, fired.command.params.clone());
+            &renamed
+        }
+        None => &fired.command,
+    };
     if command.id.starts_with("tool:") {
         match fired.phase {
             FirePhase::Release => held_tool::release(app, ctx, fired),
@@ -40,6 +47,16 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     match menu_target(command) {
         Some((id, params)) => crate::menus::invoke(app, &id, params),
         None => crate::menus::invoke(app, &command.id, shortcut_params(command)),
+    }
+}
+
+/// The engine's id of a framework edit command that no focused part took: Select All and Delete. Cut, Copy, Paste,
+/// Undo and Redo have the same id in both.
+fn engine_id(id: &str) -> Option<&'static str> {
+    match id {
+        "edit.select_all" => Some("select.all"),
+        "edit.delete" => Some("edit.clear"),
+        _ => None,
     }
 }
 

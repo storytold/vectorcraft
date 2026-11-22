@@ -34,16 +34,38 @@ pub(crate) fn ui_context() -> egui::Context {
     ctx
 }
 
-/// One frame of the whole app on `ctx` as the hosts run it (kb.C26): the app gives the input of the frame
+/// One frame of the whole app on `ctx` as the hosts run it (kb.C26): the app has the window's context, as the hosts
+/// hand it when they create the app, gives the input of the frame
 /// (`embed::before_input`), the window draws with `raw`, and the app takes what the runtime gathered in it, running the
 /// commands it fired, as the host's next frame begins. The frame's texture uploads are handled.
 pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, raw: egui::RawInput) -> egui::FullOutput {
-    embed::before_input(ctx, |out| app.frame_input(out));
-    let mut out = ctx.run_ui(raw, |ui| {
+    part_frame(app, ctx, raw, |app, ui| {
         app.tick(ui.ctx());
         app.ui(ui);
-    });
+    })
+}
+
+/// [`app_frame`] with `draw` showing part of the window in place of the whole app.
+pub(crate) fn part_frame(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
+    raw: egui::RawInput,
+    mut draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
+) -> egui::FullOutput {
+    app.adopt_context(ctx);
+    embed::before_input(ctx, |out| app.frame_input(out));
+    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
     embed::before_input(ctx, |out| app.frame_input(out));
     out.textures_delta.clear();
     out
+}
+
+/// Gives `fixture` the app's input for its next frame as the hosts give it (`embed::before_input`): the commands the
+/// frames since the last call fired run first.
+pub(crate) fn fixture_input(app: &mut crate::VectorcraftApp, fixture: &mut craft::ui::testing::Fixture) {
+    let input = app.frame_input(craft::ui::runtime::frame::take_output(fixture.ctx()));
+    fixture.root(input.root).commands(input.commands);
+    if let Some(host) = input.host {
+        fixture.host(host);
+    }
 }

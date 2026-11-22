@@ -155,7 +155,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     .files(Arc::new(WebFiles::new(wake)))
                     .install(ctx);
                 let services = services(host.inbox.clone(), host.place_inbox.clone(), host.locks.clone());
-                let app = match taken.borrow_mut().take() {
+                let mut app = match taken.borrow_mut().take() {
                     Some(mut app) => {
                         // The old services asked the old context for frames.
                         app.services = services;
@@ -173,6 +173,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                         VectorcraftApp::new(Session::new(), services).with_control(control_rx)
                     }
                 };
+                app.adopt_context(ctx);
                 Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
             }),
         )

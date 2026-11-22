@@ -102,8 +102,10 @@ impl VectorcraftApp {
 
     /// Textures live in one egui context. When the host hands the app a new one (it started again
     /// after losing its graphics), everything uploaded to the old one is made again: the fonts and
-    /// theme, the canvas, the place cursor's thumbnails and every [`TexCache`].
-    pub(crate) fn adopt_context(&mut self, ctx: &egui::Context) {
+    /// theme, the canvas, the place cursor's thumbnails and every [`TexCache`]. The host hands it
+    /// the window's context when it creates the app, so the first frame's input has the app's
+    /// commands.
+    pub fn adopt_context(&mut self, ctx: &egui::Context) {
         let tag = context_tag(ctx);
         self.ui_ctx = Some(ctx.clone());
         if self.context == tag {

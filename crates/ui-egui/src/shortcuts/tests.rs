@@ -1504,6 +1504,8 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
     let f6 = || tap(Key::F6, cmd() | Modifiers::ALT | Modifiers::SHIFT);
     assert_eq!(listed(&mut app, effect), vec![]);
     install("{}");
+    // The window's keymap takes the plug-in's command in the frame after the install.
+    frame(&mut app, vec![]);
     app.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     assert_eq!(listed(&mut app, effect), vec![(key.to_string(), json!(chord))]);
     frame(&mut app, f6());
@@ -1536,6 +1538,7 @@ fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     let f7 = || tap(Key::F7, cmd() | Modifiers::ALT | Modifiers::SHIFT);
     install(one, "Same Name", "{}");
     install(two, "Same Name", r#"{"wiggle":{"type":"bool"}}"#);
+    frame(&mut app, vec![]);
     assert_eq!(listed(&mut app, "test.ui.key_filter-"), vec![(key_one.clone(), Value::Null), (key_two.clone(), Value::Null)]);
     app.run("shortcuts.set", json!({"id": key_two, "shortcut": chord})).unwrap();
     assert_eq!(listed(&mut app, "test.ui.key_filter-"), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
@@ -1572,6 +1575,7 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
     let f6 = || tap(Key::F6, cmd() | Modifiers::ALT | Modifiers::SHIFT);
     let mut app = new_app();
     vectorcraft_plugins::registry::install_bytes(&wasm("Original", "{}")).unwrap();
+    frame(&mut app, vec![]);
     app.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     vectorcraft_plugins::registry::install_bytes(&wasm("Replaced", with_params)).unwrap();
     frame(&mut app, f6());
@@ -1586,6 +1590,7 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
     frame(&mut app, vec![]);
     assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": id })).as_deref(), Some(chord));
     let mut empty = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    ready(&mut empty);
     empty.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     frame(&mut empty, f6());
     assert!(dialog_kind(&empty).is_none(), "no document: no dialog");
@@ -1604,6 +1609,7 @@ fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
         let manifest = format!(r#"{{"id":"{id}","name":"Heavy {id}","version":"1","kind":"filter","budget":"heavy","params":{params}}}"#);
         let wasm = wat::parse_str(tpl::spinning(&manifest, 1 << 40, r#"{"objects":[]}"#)).unwrap();
         app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "allowHeavy": true})).unwrap();
+        frame(&mut app, vec![]);
         app.run("shortcuts.set", json!({"id": format!("plugin:{id}"), "shortcut": chord})).unwrap();
     }
     frame(&mut app, tap(Key::F7, cmd() | Modifiers::ALT | Modifiers::SHIFT));

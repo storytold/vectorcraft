@@ -132,13 +132,18 @@ pub(crate) fn recording_shortcut(app: &VectorcraftApp) -> bool {
     app.shortcuts_dialog.as_ref().is_some_and(|d| d.state.is_recording())
 }
 
-/// The command input of the frame: the catalog, the states and the gate that refuses commands
-/// while a file dialog is open or the shortcuts dialog records a chord, and in Presentation Mode
-/// every command but leaving it.
+/// The command input of the frame: the catalog, the states, the user's shortcuts with the hold
+/// shortcuts while they are on (kb.C14), and the gate that refuses commands while a file dialog is
+/// open or the shortcuts dialog records a chord, and in Presentation Mode every command but
+/// leaving it.
 pub(crate) fn command_input(app: &VectorcraftApp) -> CommandInput {
     let blocked = app.file_dialog_open() || recording_shortcut(app);
     let presenting = app.ui.screen_mode == 3;
-    let mut input = CommandInput::new().states(&app.menus.states);
+    let prefs = &app.session.prefs;
+    let mut input = CommandInput::new()
+        .states(&app.menus.states)
+        .overrides(app.shortcut_overrides.clone())
+        .holds(prefs.hold_shortcuts.then(|| prefs.key_hold_delay()));
     if let Some(catalog) = &app.menus.catalog {
         input = input.catalog(catalog.clone());
     }

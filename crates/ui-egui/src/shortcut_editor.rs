@@ -1192,6 +1192,18 @@ fn parse_chord(text: &str) -> Result<craft::keymap::Chord, String> {
     stored::parse_vc(text).ok_or_else(|| format!("can't parse shortcut `{text}`"))
 }
 
+/// A shortcut in VectorCraft's spelling: a chord `X`, a double press `X X` or a hold `Hold X` (kb.C13b).
+fn parse_trigger(text: &str) -> Result<Trigger, String> {
+    let text = text.trim();
+    if let Some(chord) = text.strip_prefix("Hold ") {
+        return Ok(Trigger::hold(parse_chord(chord)?));
+    }
+    match text.split_once(' ') {
+        Some((first, second)) if first == second.trim() => Ok(Trigger::double(parse_chord(first)?)),
+        _ => Ok(Trigger::single(parse_chord(text)?)),
+    }
+}
+
 /// Entry `key`'s shortcut and hold shortcut in `keymap`, in the crate's spelling.
 fn row_bindings(keymap: &Keymap, key: &str) -> (Option<String>, Option<String>) {
     let bindings = keymap.bindings(&command_of(key));
@@ -1239,7 +1251,7 @@ fn set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         singles = match (p.get("shortcut"), shortcut.as_deref()) {
             (Some(Value::Null), _) => keymap.default_bindings(&command).into_iter().filter(|b| !b.trigger.is_hold()).collect(),
             (_, None | Some("")) => vec![],
-            (_, Some(text)) => vec![Binding::new(parse_chord(text)?)],
+            (_, Some(text)) => vec![Binding::new(parse_trigger(text)?)],
         };
     }
     if has_hold {

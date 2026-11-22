@@ -307,7 +307,6 @@ impl VectorcraftApp {
     pub fn frame_input(&mut self, out: FrameOutput) -> FrameInput {
         // The output collects every pass of the last frame, so each fired command runs once here
         // whatever number of passes fired it.
-        if !out.fired.is_empty() || !out.delivered.is_empty() { eprintln!("TEMPDIAG fired {:?} delivered {:?}", out.fired.iter().map(|f| (&f.command, f.phase)).collect::<Vec<_>>(), out.delivered.iter().map(|f| &f.command).collect::<Vec<_>>()); }
         if let Some(ctx) = self.ui_ctx.clone() {
             for fired in &out.fired {
                 shortcuts::run_fired(self, &ctx, fired);
@@ -554,6 +553,7 @@ impl VectorcraftApp {
             .allow_reveal(!self.ui.presenting())
             .body(|ui, _cx, app: &mut VectorcraftApp| {
                 panel_docking::show(app, ui);
+                crate::place::window_files(app, ui);
             })
             .show(ui, self);
         chrome::set_control_bar_place(&mut self.ui, control_bar_place);

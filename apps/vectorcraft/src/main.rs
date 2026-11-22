@@ -645,6 +645,7 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_proof_setups(&mut session);
                 prefs_dir::attach_script_data(&mut session);
                 let mut app = VectorcraftApp::new(session, services(winit_window.clone()));
+                app.adopt_context(&cc.egui_ctx);
                 app.set_startup_update_check(true);
                 load_prefs(&mut app, &settings);
                 safe_mode::after_start(&mut app, stopped);
