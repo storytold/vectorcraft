@@ -269,10 +269,10 @@ fn capture_settings(items: Option<&[(String, Data)]>) -> std::result::Result<(f6
 
 /// The files a capture must not write over: the open documents' files and the files their linked
 /// images and placed documents show, wherever those are stored (opacity masks, symbols, patterns
-/// and brushes included), with a DCS image's plate files, by their real paths. A link's stored path
-/// and its relative path are each taken from its document's folder, as opening the document reads
-/// them.
-fn sources_on_disk(h: &Host) -> Vec<std::path::PathBuf> {
+/// and brushes included), with a DCS image's plate files, also when a file is missing, in the form
+/// [`placed`] gives. A link's stored path and its relative path are each taken from its
+/// document's folder, as opening the document reads them.
+fn sources_on_disk(h: &Host) -> Vec<Placed> {
     let s = h.session.borrow();
     let mut paths: Vec<String> = Vec::new();
     for st in s.documents() {
@@ -287,7 +287,97 @@ fn sources_on_disk(h: &Host) -> Vec<std::path::PathBuf> {
             }
         }
     }
-    paths.iter().filter_map(|p| std::fs::canonicalize(p).ok()).collect()
+    paths.iter().filter_map(|p| placed(std::path::Path::new(p))).collect()
+}
+
+/// A file as its folder's real path and its name.
+type Placed = (std::path::PathBuf, std::ffi::OsString);
+
+/// `p` as its folder's real path and its file name: from its real path with links followed, or,
+/// for a file that is not there, from its folder's real path. `None` when neither the file nor its
+/// folder is there.
+fn placed(p: &std::path::Path) -> Option<Placed> {
+    let real = std::fs::canonicalize(p).ok().or_else(|| Some(std::fs::canonicalize(p.parent()?).ok()?.join(p.file_name()?)))?;
+    Some((real.parent()?.to_path_buf(), real.file_name()?.to_os_string()))
+}
+
+/// Whether two [`placed`] files are one file: the same folder, and the same name, or names that
+/// differ only in letter case in a folder whose volume ignores case.
+fn same_file(a: &Placed, b: &Placed) -> bool {
+    same_folder(&a.0, &b.0) && (a.1 == b.1 || (a.1.to_string_lossy().to_lowercase() == b.1.to_string_lossy().to_lowercase() && ignores_case(&a.0)))
+}
+
+/// Whether two real paths are one file or folder: the same path, or, on Unix, the same device and
+/// file number, so a path spelled in another letter case on a volume that ignores case still
+/// matches. On Windows a real path carries the letter case stored on disk.
+fn same_folder(a: &std::path::Path, b: &std::path::Path) -> bool {
+    if a == b {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(x), Ok(y)) = (std::fs::metadata(a), std::fs::metadata(b)) {
+            return x.dev() == y.dev() && x.ino() == y.ino();
+        }
+    }
+    false
+}
+
+/// Whether `other`, a spelling of `entry` in other letter case, finds `entry` itself and not a
+/// symbolic link or another file.
+fn finds_same(entry: &std::path::Path, other: &std::path::Path) -> bool {
+    if !std::fs::symlink_metadata(other).is_ok_and(|m| !m.file_type().is_symlink()) {
+        return false;
+    }
+    match (std::fs::canonicalize(entry), std::fs::canonicalize(other)) {
+        (Ok(a), Ok(b)) => same_folder(&a, &b),
+        _ => false,
+    }
+}
+
+/// `name` with the letter case of every ASCII letter swapped, and other characters as they are.
+fn swapped_case(name: &str) -> String {
+    name.chars().map(|c| if c.is_ascii_lowercase() { c.to_ascii_uppercase() } else { c.to_ascii_lowercase() }).collect()
+}
+
+/// Whether file names in the real folder `folder` ignore letter case. Names keep case when two of
+/// the folder's first 256 entries differ only in the case of ASCII letters. Otherwise the first of
+/// them whose name has an ASCII letter and that is not a symbolic link is looked up with the case
+/// of those letters swapped: names ignore case when that finds the same entry. With no such entry
+/// on macOS, where a whole volume either ignores or keeps case, the nearest folder at or above
+/// `folder` whose name has an ASCII letter, with its parent on the same volume, is looked up the
+/// same way in its parent. When neither tells, names are taken to ignore case.
+fn ignores_case(folder: &std::path::Path) -> bool {
+    let entries: Vec<std::fs::DirEntry> = std::fs::read_dir(folder).into_iter().flatten().flatten().take(256).collect();
+    let mut folded = std::collections::HashSet::new();
+    let names: std::collections::HashSet<String> = entries.iter().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    if !names.iter().all(|n| folded.insert(n.to_ascii_lowercase())) {
+        return false;
+    }
+    for entry in &entries {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let swapped = swapped_case(&name);
+        if swapped != name && entry.file_type().is_ok_and(|t| !t.is_symlink()) {
+            return finds_same(&entry.path(), &folder.join(swapped));
+        }
+    }
+    #[cfg(target_os = "macos")]
+    for dir in folder.ancestors() {
+        use std::os::unix::fs::MetadataExt;
+        let (Some(parent), Some(name)) = (dir.parent(), dir.file_name()) else { break };
+        let device = |p: &std::path::Path| std::fs::metadata(p).map(|m| m.dev()).ok();
+        let here = device(folder);
+        if here.is_none() || device(dir) != here || device(parent) != here {
+            break;
+        }
+        let name = name.to_string_lossy();
+        let swapped = swapped_case(&name);
+        if swapped != name {
+            return finds_same(dir, &parent.join(swapped));
+        }
+    }
+    true
 }
 
 /// `document.imageCapture(imageFile, clipBounds?, options?)`: `document.export` of a PNG of the
@@ -308,8 +398,8 @@ fn doc_image_capture(h: &Host, a: &[Data]) -> Answer {
     };
     check_size(region, ppi)?;
     let real = h.disk.borrow().save_target(path).map_err(|m| HostError::Error(format!("{m}: {path}")))?;
-    let canonical = std::fs::canonicalize(&real).ok();
-    if canonical.is_some_and(|c| sources_on_disk(h).contains(&c)) {
+    let target = placed(&real);
+    if target.is_some_and(|t| sources_on_disk(h).iter().any(|s| same_file(&t, s))) {
         return Err(HostError::Error(format!("imageCapture cannot write over an open document or a file it links: {path}")));
     }
     let p = json!({

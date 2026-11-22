@@ -525,6 +525,73 @@ fn capture_denied_or_source_path_writes_nothing() {
 }
 
 #[test]
+fn capture_to_a_missing_links_path_writes_nothing() {
+    let base = folder("missing-link");
+    let (mut s, dir) = capture_doc(&base);
+    s.active_mut().unwrap().path = Some(dir.join("doc.vectorcraft").to_string_lossy().into_owned());
+    // An image linked by a path next to the document whose file is not there.
+    s.edit("Place", |d, _| {
+        let id = d.alloc_id();
+        let link = Some(vectorcraft_doc::LinkInfo { path: "gone.png".into(), relative: Some("gone.png".into()), ..Default::default() });
+        let im = vectorcraft_doc::ImageObject {
+            key: "gone".into(),
+            width: 1,
+            height: 1,
+            xf: vectorcraft_geom::Affine::IDENTITY,
+            link,
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(d.default_layer(), 0, vectorcraft_doc::Node::new(id, NodeKind::Image(Box::new(im))))?;
+        Ok(())
+    })
+    .unwrap();
+    let gone = dir.join("gone.png");
+    assert!(!gone.exists());
+    let e =
+        file_failure(&mut s, &base, &format!("Folder.userData; app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]);", quoted(&gone)));
+    assert!(e.contains("cannot write over an open document"), "{e}");
+    assert!(!gone.exists(), "nothing written");
+    // The same name in other letter case is the linked file only where the volume ignores case.
+    std::fs::write(dir.join("probe.txt"), b"x").unwrap();
+    let volume_ignores_case = dir.join("PROBE.TXT").exists();
+    let upper = dir.join("GONE.png");
+    let text = format!("Folder.userData; app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]);", quoted(&upper));
+    if volume_ignores_case {
+        assert!(file_failure(&mut s, &base, &text).contains("cannot write over an open document"));
+        assert!(!gone.exists(), "nothing written");
+    } else {
+        script(&mut s, &base, &text);
+        assert!(upper.exists() && !gone.exists(), "a different file on a volume that keeps case");
+        // Two names for one file that differ only in case show that the folder keeps case.
+        let sub = dir.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("probe.txt"), b"x").unwrap();
+        std::fs::hard_link(sub.join("probe.txt"), sub.join("PROBE.TXT")).unwrap();
+        s.edit("Place", |d, _| {
+            let id = d.alloc_id();
+            let link = Some(vectorcraft_doc::LinkInfo { path: "sub/gone.png".into(), relative: Some("sub/gone.png".into()), ..Default::default() });
+            let im = vectorcraft_doc::ImageObject {
+                key: "sub-gone".into(),
+                width: 1,
+                height: 1,
+                xf: vectorcraft_geom::Affine::IDENTITY,
+                link,
+                placement: Default::default(),
+                pixels: None,
+            };
+            d.insert(d.default_layer(), 0, vectorcraft_doc::Node::new(id, NodeKind::Image(Box::new(im))))?;
+            Ok(())
+        })
+        .unwrap();
+        let sub_upper = sub.join("GONE.png");
+        script(&mut s, &base, &format!("Folder.userData; app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]);", quoted(&sub_upper)));
+        assert!(sub_upper.exists() && !sub.join("gone.png").exists());
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
 fn capture_written_before_a_failure_is_reported() {
     let base = folder("report");
     let (mut s, dir) = capture_doc(&base);

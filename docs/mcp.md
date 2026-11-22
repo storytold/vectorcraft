@@ -2749,14 +2749,15 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   document, one listed twice, one inside another listed one, a path of a compound path, and one that is locked or in
   a locked layer or group throw an error, and nothing changes. It keeps the selection, less the art it replaces. With
   `clippingMask` the `RasterItem` is the image inside its clip group. `transparency` wins over `backgroundBlack`, and
-  `padding` takes 0 to 1,000 points. `convertSpotColors`, `convertTextToOutlines` and `includeLayers` true throw an error that says
-  they are not available yet. `imageCapture` writes a PNG, and the file's name must end with `.png`. With
+  `padding` takes 0 to 1,000 points. `convertSpotColors`, `convertTextToOutlines` and `includeLayers` true throw an
+  error that says they are not available yet. `imageCapture` writes a PNG, and the file's name must end with `.png`. With
   `transparency` the image keeps its transparency; otherwise it is drawn on `matteColor` with `matte`, and on white
   without. `matteColor` is a record with `red`, `green` and `blue` from 0 to 255. The file is checked as a `File`
   opened for writing is checked, and a path that is an open document's file or a file one of them links throws an
-  error. An image of more than 64 megapixels or 32,768 pixels a side throws an error before anything is drawn or
-  written, and the resolution is never lowered to make it fit. `Document.windowCapture` throws an error that says it
-  is not available yet.
+  error, also when that file is missing. A name that differs from it only in letter case throws the same error in a
+  folder whose names ignore case, and in a folder where that cannot be told. An image of more than 64 megapixels or
+  32,768 pixels a side throws an error before anything is drawn or written, and the resolution is never lowered to
+  make it fit. `Document.windowCapture` throws an error that says it is not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
