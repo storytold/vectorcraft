@@ -256,6 +256,16 @@ fn apply_to_styles_a_range_and_clearing_overrides_resets_it() {
     assert_eq!(runs(&s, id), [("H".into(), None, 30.0, false), ("ello world".into(), Some("Big".into()), 30.0, false)]);
 }
 
+/// A character style applied to an empty frame styles the text set in it later.
+#[test]
+fn a_character_style_applied_to_an_empty_frame_styles_text_set_later() {
+    for target in ["tf", "tf.textRange"] {
+        let (mut s, id) = doc_with("");
+        log(&mut s, &format!("{DOC} var big = cs.add('Big'); big.characterAttributes.size = 30; big.applyTo({target}); tf.contents = 'Hi';"));
+        assert_eq!(runs(&s, id), [("Hi".into(), Some("Big".into()), 30.0, false)], "{target}");
+    }
+}
+
 /// A paragraph style styles every paragraph the text touches, and only those.
 #[test]
 fn a_paragraph_style_styles_the_paragraphs_the_text_touches() {

@@ -2756,8 +2756,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   followed by the panel's order. A name is trimmed and must then have 1 to 256 characters and no control characters.
   An attribute a style does not set reads `undefined`, and setting one changes text in the style where it had the
   style's old value. `applyTo` takes a text range, a text frame or its characters, words or paragraphs, in the
-  style's document; a character style on an empty range changes nothing, and a paragraph style styles every
-  paragraph the text touches. `clearingOverrides` left out is false. A range lists each style once, in the order
+  style's document; a character style on an empty range inside text changes nothing, on empty text it styles the
+  text typed or set later, and a paragraph style styles every paragraph the text touches. `clearingOverrides` left
+  out is false. A range lists each style once, in the order
   its text first uses it, the Normal style standing for text in no other style, and its lists cannot add or remove
   styles. The Normal styles cannot be renamed or removed. A style object keeps naming its style after a rename made
   through `name`; after the style is removed, renamed another way or its document closed or reverted, it throws

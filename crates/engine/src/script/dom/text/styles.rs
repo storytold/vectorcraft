@@ -359,7 +359,8 @@ fn style_apply_to(h: &Host, a: &[Data]) -> Answer {
         let (_, ba, bb) = para_range(&index, s, e);
         (ba, bb)
     } else {
-        if s == e {
+        // An empty range inside text changes nothing; empty text takes the style on its runs.
+        if s == e && index.len() > 0 {
             return Ok(Data::Undefined);
         }
         (index.byte(s, false), index.byte(e, true))
