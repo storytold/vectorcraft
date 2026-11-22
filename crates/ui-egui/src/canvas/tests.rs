@@ -776,6 +776,32 @@ fn a_clip_group_over_a_huge_path_shows_its_clipping_path() {
     assert_eq!((anchors, hovered), (4, true), "the square's four anchors, and the hover highlight");
 }
 
+/// The selection marks count the ends of the lines that cross linked images toward the overlay's
+/// limit; the hover highlight and the key object's outline, which draw no such lines, do not
+/// (#9080).
+#[test]
+fn the_overlay_limit_counts_crossing_lines_only_where_they_are_drawn() {
+    use super::outline::{too_many_anchors, too_many_marks};
+    let image = |link: Option<vectorcraft_doc::LinkInfo>| {
+        let im = vectorcraft_doc::ImageObject {
+            key: "k".into(),
+            width: 10,
+            height: 10,
+            xf: vectorcraft_geom::Affine::IDENTITY,
+            link,
+            placement: Default::default(),
+            pixels: None,
+        };
+        vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(1), NodeKind::Image(Box::new(im)))
+    };
+    // Four corners each fit; with the four ends of the crossing lines they do not.
+    let count = OVERLAY_MAX_ANCHORS / 6;
+    let linked = vec![image(Some(vectorcraft_doc::LinkInfo { path: "/a.png".into(), ..Default::default() })); count];
+    let embedded = vec![image(None); count];
+    assert!(!too_many_anchors(&linked) && too_many_marks(&linked), "linked images");
+    assert!(!too_many_anchors(&embedded) && !too_many_marks(&embedded), "embedded images");
+}
+
 /// #2422: the art inside a clip group still shows its whole outline when it is picked on its
 /// own: by Edit Contents, by a Direct Selection or Group Selection click, and in isolation mode;
 /// so does its Group Selection hover highlight.

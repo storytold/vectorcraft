@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::grid::LineLook;
-use super::outline::{c32, node_outline, to_screen_path, too_many_anchors};
+use super::outline::{c32, linked_crosses, node_outline, to_screen_path, too_many_marks};
 use super::view::fit_zoom;
 use super::{
     Affine, BezPath, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, backdrop,
@@ -639,7 +639,7 @@ fn outline_shapes(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<egui::Shape
         st.selection.objects.iter().filter_map(|id| Some((*id, st.doc.node(*id)?))).collect();
     let color = |id: vectorcraft_doc::NodeId| Stroke::new(1.0, c32(st.doc.layer_color(id)));
     let mut stroke = |bp: &BezPath, s: Stroke| shapes.extend(to_screen_path(bp, xf).into_iter().map(|line| egui::Shape::line(line, s)));
-    if too_many_anchors(nodes.iter().map(|(_, n)| *n)) {
+    if too_many_marks(nodes.iter().map(|(_, n)| *n)) {
         let bounds = nodes.iter().filter_map(|(_, n)| n.geometric_bounds_with(&symbols)).reduce(|a, b| a.union(b));
         if let (Some(b), Some((id, _))) = (bounds, nodes.first()) {
             stroke(&vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color(*id));
@@ -647,7 +647,9 @@ fn outline_shapes(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<egui::Shape
         return shapes;
     }
     for (id, n) in nodes {
-        stroke(&node_outline(n, &symbols), color(id));
+        let color = color(id);
+        stroke(&node_outline(n, &symbols), color);
+        stroke(&linked_crosses(n), color);
     }
     shapes
 }

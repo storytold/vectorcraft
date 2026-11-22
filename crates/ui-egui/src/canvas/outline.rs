@@ -39,8 +39,8 @@ pub(super) fn c32(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])
 }
 
-/// Outline of a node for highlighting (paths, compound children, area type frames, other
-/// text/image bounds, symbol instances' bounds measured by their art from `symbols`; a clip
+/// Outline of a node for highlighting (paths, compound children, area type frames, other text
+/// bounds, images' frames, symbol instances' bounds measured by their art from `symbols`; a clip
 /// group's clipping path only, as [`walk_drawn`] visits it).
 pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
     let mut bp = BezPath::new();
@@ -62,7 +62,13 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
         }
-        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
+        // An image shows its frame, turned or distorted with it.
+        NodeKind::Image(_) => {
+            if let Some(frame) = c.image_frame() {
+                bp.extend(frame);
+            }
+        }
+        NodeKind::SymbolInstance { .. } => {
             if let Some(b) = c.geometric_bounds_with(symbols) {
                 bp.extend(vectorcraft_geom::shapes::rectangle(b).to_bezpath());
             }
@@ -87,6 +93,41 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
     bp
 }
 
+/// Whether `n` is a linked image or a placed document, which the selection marks cross.
+fn is_linked(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Image(im) => im.link.is_some(),
+        NodeKind::PlacedDocument(_) => true,
+        _ => false,
+    }
+}
+
+/// The corners (top left, top right, bottom right, bottom left) of a linked image's frame or of a
+/// placed document's box. `None` for an embedded image and for anything else.
+fn linked_corners(n: &Node) -> Option<[Point; 4]> {
+    match &n.kind {
+        NodeKind::Image(_) if is_linked(n) => n.image_corners(),
+        NodeKind::PlacedDocument(p) => Some(p.corners()),
+        _ => None,
+    }
+}
+
+/// The lines that cross each linked image and placed document of `n` that [`walk_drawn`] visits,
+/// from corner to corner of its frame or box (#9080). The selection marks draw them; the hover
+/// highlight does not.
+pub(super) fn linked_crosses(n: &Node) -> BezPath {
+    let mut bp = BezPath::new();
+    walk_drawn(n, &mut |c| {
+        if let Some([tl, tr, br, bl]) = linked_corners(c) {
+            bp.move_to(tl);
+            bp.line_to(br);
+            bp.move_to(tr);
+            bp.line_to(bl);
+        }
+    });
+    bp
+}
+
 /// The width of the key object's outline (Align to Key Object), thicker than the selection's.
 pub(super) const KEY_OUTLINE: f32 = 2.5;
 
@@ -100,19 +141,32 @@ pub(super) const OVERLAY_MAX_ANCHORS: usize = 100_000;
 /// Whether `nodes` have more than [`OVERLAY_MAX_ANCHORS`] points to outline ([`overlay_points`];
 /// counting stops there).
 pub(super) fn too_many_anchors<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> bool {
-    fn over(n: &Node, left: &mut usize) -> bool {
-        match left.checked_sub(overlay_points(n)) {
+    over_limit(nodes, false)
+}
+
+/// Whether `nodes` have more than [`OVERLAY_MAX_ANCHORS`] points to outline and to cross where they
+/// are linked images or placed documents ([`linked_crosses`]), as the selection marks draw them.
+pub(super) fn too_many_marks<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> bool {
+    over_limit(nodes, true)
+}
+
+/// Whether `nodes` have more than [`OVERLAY_MAX_ANCHORS`] points ([`overlay_points`], with the
+/// ends of the crossing lines when `crosses`); counting stops there.
+fn over_limit<'a>(nodes: impl IntoIterator<Item = &'a Node>, crosses: bool) -> bool {
+    fn over(n: &Node, left: &mut usize, crosses: bool) -> bool {
+        let ends = if crosses && is_linked(n) { 4 } else { 0 };
+        match left.checked_sub(overlay_points(n) + ends) {
             Some(l) => *left = l,
             None => return true,
         }
         // A clip group counts only its clipping path, the one child `walk_drawn` visits.
         if n.clips() {
-            return n.children().and_then(|children| children.first()).is_some_and(|clip| over(clip, left));
+            return n.children().and_then(|children| children.first()).is_some_and(|clip| over(clip, left, crosses));
         }
-        !matches!(n.kind, NodeKind::Envelope { .. }) && n.editing_children().iter().any(|c| over(c, left))
+        !matches!(n.kind, NodeKind::Envelope { .. }) && n.editing_children().iter().any(|c| over(c, left, crosses))
     }
     let mut left = OVERLAY_MAX_ANCHORS;
-    nodes.into_iter().any(|n| over(n, &mut left))
+    nodes.into_iter().any(|n| over(n, &mut left, crosses))
 }
 
 /// The points counted for `n` itself, without its children, toward [`OVERLAY_MAX_ANCHORS`]: a

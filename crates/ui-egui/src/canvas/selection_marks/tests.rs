@@ -63,6 +63,7 @@ fn plain(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_too
         if !matches!(n.kind, NodeKind::Text(ref tx) if matches!(tx.kind, vectorcraft_doc::TextKind::Point)) {
             stroke(&node_outline(n, &symbols), 1.0);
         }
+        stroke(&linked_crosses(n), 1.0);
         walk_drawn(n, &mut |c| {
             let envelope = vectorcraft_doc::live::envelope_overlay(c).and_then(|(_, grid)| grid);
             let grid = match &c.kind {
@@ -582,6 +583,73 @@ fn an_edit_of_a_symbol_outlines_its_instance_again() {
     let after = app.session.active().unwrap().doc.node(instance).unwrap().geometric_bounds_with(&app.session.active().unwrap().doc.symbol_boxes());
     assert_ne!(before, after, "the edit changes what the instance measures");
     assert_matches_plain(&ctx, &mut marks, &app, &view, 1.0, "after the edit");
+}
+
+/// A selected linked image and a selected placed document are crossed from corner to corner, on a
+/// turned image along its frame; a selected embedded image shows its outline alone, and output of
+/// the linked image shows no cross (#9080).
+#[test]
+fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    let dir = vectorcraft_testkit::temp_dir("selection-marks-linked");
+    let png = dir.join("red.png");
+    let pixels = [200u8, 40, 40, 255].repeat(40 * 40);
+    let image = Image::from_raw(40, 40, ChannelLayout::Rgba, SampleType::U8, pixels).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+    let placed = dir.join("art.vectorcraft");
+    std::fs::write(&placed, vectorcraft_format::save_file(&vectorcraft_doc::Document::new(60.0, 40.0))).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let place = |app: &mut VectorcraftApp, path: &std::path::Path, link: bool, at: [f64; 2]| {
+        NodeId(app.run("file.place", json!({"path": path, "link": link, "at": at})).unwrap()["ids"][0].as_u64().unwrap())
+    };
+    let linked = place(&mut app, &png, true, [100.0, 120.0]);
+    let embedded = place(&mut app, &png, false, [300.0, 120.0]);
+    let document = place(&mut app, &placed, true, [200.0, 230.0]);
+    let ctx = egui::Context::default();
+    let view = xf(1.0, VIEW, 0.0);
+    // Whether the marks draw within a pixel of each of the points a quarter and three quarters of
+    // the way along each diagonal of `corners`, clear of the outline.
+    let crossed = |app: &VectorcraftApp, corners: [Point; 4]| -> [bool; 4] {
+        let picture = picture(&ctx, 1.0, |p| paint(&mut SelectionMarks::default(), app, p, &view, false));
+        let drawn = |q: Point| {
+            let s = view.to_screen(q);
+            (-1..=1).any(|dy| {
+                (-1..=1).any(|dx| {
+                    let (x, y) = ((s.x.round() as i64 + dx) as usize, (s.y.round() as i64 + dy) as usize);
+                    picture.pixels[y * picture.size.0 + x][3] > 0.0
+                })
+            })
+        };
+        let [tl, tr, br, bl] = corners;
+        assert!([(tl, tr), (tr, br), (br, bl), (bl, tl)].into_iter().all(|(a, b)| drawn(a.midpoint(b))), "the outline runs along the frame");
+        [tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)].map(drawn)
+    };
+    let corners = |app: &VectorcraftApp, id: NodeId| {
+        let n = app.session.active().unwrap().doc.node(id).unwrap();
+        match &n.kind {
+            NodeKind::PlacedDocument(p) => p.corners(),
+            _ => n.image_corners().unwrap(),
+        }
+    };
+    app.run("select.all", json!({})).unwrap();
+    assert_eq!(crossed(&app, corners(&app, linked)), [true; 4], "a linked image");
+    assert_eq!(crossed(&app, corners(&app, document)), [true; 4], "a placed document");
+    assert_eq!(crossed(&app, corners(&app, embedded)), [false; 4], "an embedded image");
+    assert_matches_plain(&ctx, &mut SelectionMarks::default(), &app, &view, 1.0, "linked and embedded images");
+    app.run("select.set", json!({"ids": [linked.0]})).unwrap();
+    app.run("object.rotate", json!({"angle": 30})).unwrap();
+    assert_eq!(crossed(&app, corners(&app, linked)), [true; 4], "a turned linked image, along its frame");
+    let doc = &app.session.active().unwrap().doc;
+    let [tl, tr, br, bl] = corners(&app, linked);
+    let bounds = doc.node(linked).unwrap().geometric_bounds().unwrap();
+    let out = vectorcraft_testkit::raster::render_region(doc, bounds, 1.0);
+    let pixel = |q: Point| out.pixel((q.x - bounds.x0).round() as u32, (q.y - bounds.y0).round() as u32);
+    // Halfway between the middle of the left side and the centre: clear of both diagonals.
+    let clear = pixel(tl.midpoint(bl).midpoint(tl.midpoint(br)));
+    assert!(clear[0] > 150 && clear[1] < 100 && clear[3] == 255, "the render shows the image: {clear:?}");
+    let on_lines = [tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)];
+    assert!(on_lines.iter().all(|q| pixel(*q) == clear), "output of a selected linked image is not crossed");
 }
 
 /// A frame of the whole canvas keeps entries for the selected objects only.

@@ -892,7 +892,7 @@ fn outlines_made_each_frame(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<S
             shapes.push(Shape::line(line, s));
         }
     };
-    if too_many_anchors(nodes.iter().map(|(_, n)| *n)) {
+    if too_many_marks(nodes.iter().map(|(_, n)| *n)) {
         let bounds = nodes.iter().filter_map(|(_, n)| n.geometric_bounds_with(&symbols)).reduce(|a, b| a.union(b));
         if let (Some(b), Some((id, _))) = (bounds, nodes.first()) {
             stroke_path(&vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color(*id));
@@ -901,6 +901,7 @@ fn outlines_made_each_frame(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<S
     }
     for (id, n) in nodes {
         stroke_path(&node_outline(n, &symbols), color(id));
+        stroke_path(&linked_crosses(n), color(id));
     }
     shapes
 }
@@ -940,6 +941,31 @@ fn kept_outlines_do_not_show_for_a_new_document_that_takes_a_freed_documents_add
         assert!(!kept.shows(&other, &affine), "a different document with the same revision, selection and mapping is not the one shown");
     }
     assert!(!reused, "the weak reference keeps the freed document's address from being taken");
+}
+
+/// Another pane crosses a selected linked image from corner to corner, as the current pane does,
+/// and outlines a selected embedded image alone (#9080).
+#[test]
+fn other_panes_cross_a_selected_linked_image() {
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    let dir = vectorcraft_testkit::temp_dir("panes-linked-image");
+    let png = dir.join("red.png");
+    let image = Image::from_raw(40, 40, ChannelLayout::Rgba, SampleType::U8, [200u8, 40, 40, 255].repeat(40 * 40)).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let linked = in_first(&mut app, "file.place", json!({"path": png, "link": true, "at": [100, 100]}))["ids"][0].clone();
+    let embedded = in_first(&mut app, "file.place", json!({"path": png, "link": false, "at": [250, 100]}))["ids"][0].clone();
+    let lines = |app: &mut VectorcraftApp, id: &serde_json::Value| {
+        in_first(app, "select.set", json!({"ids": [id]}));
+        frame(app, &ctx, vec![]);
+        let drawn = frame(app, &ctx, vec![]);
+        kept_outlines(app, &ctx, &drawn).len()
+    };
+    let (linked, embedded) = (lines(&mut app, &linked), lines(&mut app, &embedded));
+    assert_eq!(linked, embedded + 2, "the outline of a linked image and its two crossing lines; an embedded image's outline alone");
 }
 
 #[test]

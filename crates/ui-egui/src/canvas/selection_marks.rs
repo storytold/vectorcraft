@@ -21,7 +21,7 @@ use egui::epaint::{ClippedShape, Primitive, RectShape, TessellationOptions, Tess
 use egui::{Mesh, Vec2};
 use vectorcraft_doc::{AnchorRef, NodeId, SegmentRef};
 
-use super::outline::{KEY_OUTLINE, c32, node_outline, to_screen_path, walk_drawn};
+use super::outline::{KEY_OUTLINE, c32, linked_crosses, node_outline, to_screen_path, walk_drawn};
 use super::overlays::{HandleLook, anchor_square, selected_anchor};
 use super::{BezPath, Color32, Node, NodeKind, Point, Pos2, Shape, Stroke, StrokeKind, SymbolBoxes, Xf, pos2, vec2};
 
@@ -839,6 +839,8 @@ fn object_marks(
     if !matches!(n.kind, NodeKind::Text(ref tx) if matches!(tx.kind, vectorcraft_doc::TextKind::Point)) {
         marks.outline(&node_outline(n, symbols), xf, Stroke::new(1.0, color));
     }
+    // Linked images and placed documents crossed from corner to corner.
+    marks.outline(&linked_crosses(n), xf, Stroke::new(1.0, color));
     // Anchors (and handles for selected anchors in direct mode); a gradient mesh's or a mesh
     // envelope's points.
     walk_drawn(n, &mut |c| {

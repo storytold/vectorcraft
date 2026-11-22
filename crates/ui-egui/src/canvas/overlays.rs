@@ -6,7 +6,7 @@ use egui::epaint::{TessellationOptions, Tessellator};
 
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
-use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors};
+use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, too_many_marks};
 use super::selection_marks::{MarkOptions, SelectionMarks};
 use super::{BezPath, Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
@@ -161,7 +161,7 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     };
     let st = app.session.active();
     let show_marks = !crate::dialogs::halftone::previewing(app);
-    let big = show_marks && st.is_some_and(|st| too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
+    let big = show_marks && st.is_some_and(|st| too_many_marks(st.selection.objects.iter().filter_map(|id| st.doc.node(*id))));
     let big_bounds = if big { app.selection_bounds() } else { None };
     let app = &*app;
     let Some(st) = app.session.active() else { return };
