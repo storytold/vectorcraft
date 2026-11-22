@@ -707,7 +707,23 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
     (edit, chosen)
 }
 
+/// The field holding the swatch last clicked in the list: `{name, library, color, keep}` (see
+/// [`picked_swatch`]).
+const PICKED_SWATCH: &str = "__pickedSwatch";
+
+/// The swatch the dialog's color was picked from, while the color is still that swatch's: for a
+/// global or spot swatch `{name, library}` for a `recolor.apply` row's `swatch` and its color, and
+/// for a process swatch or a swatch linked to another swatch (a tint swatch) `None` and its color.
+fn picked_swatch(d: &Dialog) -> Option<(Option<Value>, Color)> {
+    let w = d.fields.get(PICKED_SWATCH)?;
+    let c = w.get("color").and_then(color_value)?;
+    let swatch = w["keep"].as_bool().unwrap_or(false).then(|| json!({"name": w["name"], "library": w["library"]}));
+    (picked(d).color == c).then_some((swatch, c))
+}
+
 /// The document's colour swatches or a swatch library as a list; returns the clicked swatch's colour.
+/// A click also records the swatch in [`PICKED_SWATCH`], with `keep` for a global or spot swatch
+/// that is not linked to another one.
 fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Color, side: f32) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     let mut chosen = None;
@@ -740,10 +756,16 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
                         widgets::dim_label(ui, tl!("Open a document to see its swatches."));
                         return;
                     };
-                    let doc = &st.doc;
+                    // Over Recolor Artwork, the swatches as they were before its preview, which
+                    // `recolor.apply` reads: a library swatch the preview added is not listed.
+                    let doc = match &st.interaction {
+                        Some(it) if d.fields.contains_key(RECOLOR_ROW) => &it.doc,
+                        _ => &st.doc,
+                    };
                     for s in doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| g.swatches.iter())) {
                         let Some(color) = s.paint.color() else { continue };
                         let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, color == *current, &s.name));
                         if resp.hovered() {
                             ui.painter().rect_filled(r, 0.0, t.hover);
                         }
@@ -757,13 +779,14 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
                             t.text,
                         );
                         if resp.clicked() {
-                            chosen = Some(color);
+                            chosen = Some((color, s.name.clone(), (s.global || s.spot) && matches!(s.paint, Paint::Solid { swatch: None, .. })));
                         }
                     }
                 } else if let Some((_, lib)) = swatchlib::library(&app.session, &cur) {
                     for s in lib.swatches.iter().chain(lib.groups.iter().flat_map(|g| g.swatches.iter())) {
                         let Some(color) = s.paint.color() else { continue };
                         let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
+                        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, color == *current, &s.name));
                         if resp.hovered() {
                             ui.painter().rect_filled(r, 0.0, t.hover);
                         }
@@ -777,14 +800,17 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
                             t.text,
                         );
                         if resp.clicked() {
-                            chosen = Some(color);
+                            chosen = Some((color, s.name.clone(), (s.global || s.spot) && matches!(s.paint, Paint::Solid { swatch: None, .. })));
                         }
                     }
                 }
             });
         });
     });
-    chosen
+    let (color, name, keep) = chosen?;
+    let library = Some(d.str("library")).filter(|l| !l.is_empty()).unwrap_or_else(|| swatchlib::DOCUMENT_SWATCHES.to_string());
+    d.fields.insert(PICKED_SWATCH.into(), json!({"name": name, "library": library, "color": color_json(&color), "keep": keep}));
+    Some(color)
 }
 
 /// OK: apply the colour to the proxy, keeping the live preview as one undo step. For an artboard,
@@ -818,8 +844,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     if let Some(row) = d.fields.get(RECOLOR_ROW).and_then(Value::as_u64) {
         let parent = super::parent(d).ok_or("Recolor Artwork is no longer open")?;
-        let c = in_document_model(app, picked(d).color);
-        app.ui.dialog = Some(super::recolor::with_new_color(app, parent, usize::try_from(row).unwrap_or(usize::MAX), c));
+        let row = usize::try_from(row).unwrap_or(usize::MAX);
+        // A color picked from a global or spot swatch is that swatch, in its own color model; one
+        // picked from another swatch takes the row's swatch away.
+        app.ui.dialog = Some(match picked_swatch(d) {
+            Some((Some(swatch), c)) => super::recolor::with_new_swatch(app, parent, row, c, Some(swatch)),
+            Some((None, _)) => super::recolor::with_new_swatch(app, parent, row, in_document_model(app, picked(d).color), None),
+            None => super::recolor::with_new_color(app, parent, row, in_document_model(app, picked(d).color)),
+        });
         return Ok(Value::Null);
     }
     if d.bool("keep") && !app.session.in_interaction() && d.fields.get("original").and_then(color_value) == Some(picked(d).color) {

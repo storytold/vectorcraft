@@ -84,7 +84,9 @@
 //! or redo.
 //!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
-//! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
+//! color, added?, swatch?: {name, library} of the global or spot swatch the Color Picker's
+//! swatches gave the new color, which links the row's art to it}]; a row with no current colors,
+//! `from: []`, recolors no art, and with `added: true`
 //! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color;
 //! `base: true`, the base color, else the first color the Edit tab shows; `tie: n` on a marker and
 //! `follows: n` on a color added on its line, which moves with it; the dialog sends `recolor.apply`
@@ -1082,21 +1084,26 @@ fn set_to(row: &mut Value, c: &Color) {
     if let Some(r) = row.as_object_mut() {
         r.remove("tint");
         r.remove("model");
+        r.remove(SWATCH);
     }
 }
+
+/// A row's `swatch`: the swatch its new color was picked from (`recolor.apply`'s row `swatch`).
+const SWATCH: &str = "swatch";
 
 /// Set for the frame in which Randomly change color order shuffled the rows' new colors.
 const SHUFFLED: &str = "__shuffled";
 
 /// Give each row of `rows` whose current colors and new color are those of the same row of
-/// `before` that row's tint and model again, when it has none: a change that snaps back to the
-/// same new color keeps the tint of it and the model a slider edit gave it.
+/// `before` that row's tint, model and swatch again, when it has none: a change that snaps back to
+/// the same new color keeps the tint of it, the model a slider edit gave it and the swatch it was
+/// picked from.
 fn keep_tints(before: &[Value], rows: &mut [Value]) {
     for (r, b) in rows.iter_mut().zip(before) {
         if r["from"] != b["from"] || r["to"] != b["to"] {
             continue;
         }
-        for k in ["tint", "model"] {
+        for k in ["tint", "model", SWATCH] {
             if r.get(k).is_none()
                 && let Some(v) = b.get(k)
             {
@@ -1478,6 +1485,33 @@ pub(super) fn with_new_color(app: &VectorcraftApp, mut d: Dialog, i: usize, c: C
         keep_tints(&rows(&d), &mut rs);
         d.fields.insert("rows".into(), Value::Array(rs));
     }
+    d
+}
+
+/// `d` with row `i`'s new color set to color `c` of a swatch picked from the Color Picker's
+/// swatches: for a global or spot swatch, `swatch` (`{name, library}`), which the row keeps, so
+/// `recolor.apply` links its art to it, unless Limit to Library snaps the color to another one
+/// (colors compare as [`ColorKey`]s, as the row holds them); for another swatch, `None`, which
+/// takes away a swatch picked for the row before, and without Limit to Library the tint it gave.
+pub(super) fn with_new_swatch(app: &VectorcraftApp, d: Dialog, i: usize, c: Color, swatch: Option<Value>) -> Dialog {
+    let mut d = with_new_color(app, d, i, c);
+    let keeps_tint = !d.str("limitTo").is_empty();
+    let mut rs = rows(&d);
+    let Some(r) = rs.get_mut(i) else { return d };
+    match swatch {
+        Some(w) if to_color(r).is_some_and(|t| ColorKey::of(&t) == ColorKey::of(&c)) => r[SWATCH] = w,
+        Some(_) => return d,
+        None => {
+            let Some(o) = r.as_object_mut() else { return d };
+            if o.remove(SWATCH).is_none() {
+                return d;
+            }
+            if !keeps_tint {
+                o.remove("tint");
+            }
+        }
+    }
+    d.fields.insert("rows".into(), Value::Array(rs));
     d
 }
 
@@ -2030,10 +2064,13 @@ fn spot_tinted(app: &VectorcraftApp, c: Color, t: f32) -> Color {
 fn new_shown(app: &VectorcraftApp, d: &Dialog, row: &Value) -> Color {
     let to = to_color(row).unwrap_or_default();
     // Only a Lab spot color can show another color; the library lookup is skipped for the rest.
-    if matches!(to, Color::Lab { .. }) && d.bool("__art") && spot_of(app, d, &to).is_some() {
+    if matches!(to, Color::Lab { .. }) && d.bool("__art") && (spot_of(app, d, &to).is_some() || own_spot(app, d, row, &to).is_some()) {
         spot_tinted(app, to, row_tint(row))
-    } else {
+    } else if row_tint(row) < 1.0 && tint_applies(app, d, row, &to) {
         to.tinted(row_tint(row))
+    } else {
+        // The swatch the tint was for no longer links the art, which takes the full color.
+        to
     }
 }
 
@@ -2051,6 +2088,59 @@ fn spot_of(app: &VectorcraftApp, d: &Dialog, c: &Color) -> Option<String> {
     }
     let near = swatchlib::limit_palette(&app.session, &lib)?.nearest(*c);
     swatchlib::library_swatches(&app.session, &lib)?.into_iter().find(|w| w.paint.color() == Some(near)).filter(|w| w.spot).map(|w| w.name)
+}
+
+/// The name of the spot swatch `row`'s new color `c` was picked from (its `swatch`), while that
+/// swatch has color `c` and no Global Adjust applies without Limit to Library, as `recolor.apply`
+/// reads it.
+fn own_spot(app: &VectorcraftApp, d: &Dialog, row: &Value, c: &Color) -> Option<String> {
+    if d.str("limitTo").is_empty() && !global_adjust(adjust_values(d)).is_identity() {
+        return None;
+    }
+    let (name, _) = swatch_ref(row)?;
+    row_swatch(app, row, c).filter(|spot| *spot).map(|_| name.to_string())
+}
+
+/// The name and library key of `row`'s `swatch` when it is `{name, library?}` with a name, as
+/// `recolor.apply` reads it.
+fn swatch_ref(row: &Value) -> Option<(&str, &str)> {
+    let w = row.get(SWATCH)?;
+    let name = w.get("name")?.as_str().filter(|n| !n.is_empty())?;
+    let library = match w.get("library") {
+        None | Some(Value::Null) => swatchlib::DOCUMENT_SWATCHES,
+        Some(l) => l.as_str().filter(|l| !l.is_empty())?,
+    };
+    Some((name, library))
+}
+
+/// Whether the swatch `row`'s `swatch` names, with color `c` (as a color key), is a spot color,
+/// when it is a global or spot swatch; `None` when it is a process swatch or not there (deleted
+/// since the pick). Of several swatches with that name, the first with that color counts, as
+/// `recolor.apply` finds it. The document's swatches are read as they were before the preview,
+/// which `recolor.apply` runs on.
+fn row_swatch(app: &VectorcraftApp, row: &Value, c: &Color) -> Option<bool> {
+    let (name, lib) = swatch_ref(row)?;
+    let fits = |s: &&vectorcraft_color::swatch::Swatch| {
+        s.name == name
+            && matches!(s.paint, vectorcraft_color::Paint::Solid { swatch: None, .. })
+            && s.paint.color().is_some_and(|w| ColorKey::of(&w) == ColorKey::of(c))
+    };
+    let found = if lib == swatchlib::DOCUMENT_SWATCHES {
+        let st = app.session.active()?;
+        let doc = st.interaction.as_ref().map_or(&st.doc, |it| &it.doc);
+        doc.swatches_iter().find(fits).map(|s| (s.global || s.spot, s.spot))
+    } else {
+        let (_, l) = swatchlib::library(&app.session, lib)?;
+        l.swatches.iter().chain(l.groups.iter().flat_map(|g| g.swatches.iter())).find(fits).map(|s| (s.global || s.spot, s.spot))
+    };
+    found.filter(|(links, _)| *links).map(|(_, spot)| spot)
+}
+
+/// Whether the new color chip shows `row`'s tint: with Limit to Library, when the row has no
+/// `swatch`, or when its `swatch` links the art ([`row_swatch`], with no Global Adjust). A row whose
+/// `swatch` links nothing recolors its art with the full color.
+fn tint_applies(app: &VectorcraftApp, d: &Dialog, row: &Value, c: &Color) -> bool {
+    !d.str("limitTo").is_empty() || swatch_ref(row).is_none() || (global_adjust(adjust_values(d)).is_identity() && row_swatch(app, row, c).is_some())
 }
 
 /// The mode the sliders show new color `c` in, `None` for Tint: the mode picked in the menu, else
@@ -2098,7 +2188,7 @@ impl SliderTarget {
         let row = row.filter(|i| *i < rows.len());
         let color = row.and_then(|i| to_color(&rows[i]));
         // A row tint acts only on art, so without art a spot color shows the process modes.
-        let spot = color.filter(|_| d.bool("__art")).and_then(|c| spot_of(app, d, &c));
+        let spot = color.filter(|_| d.bool("__art")).and_then(|c| spot_of(app, d, &c).or_else(|| own_spot(app, d, &rows[row?], &c)));
         Self { row, color, spot }
     }
 
@@ -2431,6 +2521,7 @@ fn remove_color(rows: &mut Vec<Value>, i: usize, base: Option<usize>, keep: bool
         if let Some(r) = rows[i].as_object_mut() {
             r.remove("tint");
             r.remove("model");
+            r.remove(SWATCH);
         }
         return Some(base.unwrap_or(0));
     }
@@ -3509,6 +3600,80 @@ mod tests {
         assert_eq!(super::rows(&same)[0]["tint"], json!(40.0));
         let other = with_new_color(&app, d, 0, Color::rgb(0.0, 1.0, 0.0));
         assert!(super::rows(&other)[0].get("tint").is_none(), "{:?}", super::rows(&other));
+    }
+
+    /// A spot swatch picked for a row with no Limit to Library gives the row the swatch and the
+    /// sliders its Tint; another new color drops the swatch, and a Global Adjust, under which
+    /// `recolor.apply` does not use the swatch, shows the color modes instead of Tint.
+    #[test]
+    fn a_picked_spot_swatch_gives_its_row_the_tint_slider() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": "cmyk 0 100 0 0", "spot": true})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#808080"})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": 1})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": ["rgb 128 128 128"], "to": "rgb 128 128 128"}]));
+        let ink = Color::cmyk(0.0, 1.0, 0.0, 0.0);
+        let picked = with_new_swatch(&app, d.clone(), 0, ink, Some(json!({"name": "Ink", "library": "document"})));
+        let rs = super::rows(&picked);
+        assert_eq!(rs[0][SWATCH], json!({"name": "Ink", "library": "document"}));
+        assert_eq!(SliderTarget::at(&app, &picked, &rs, Some(0)).spot.as_deref(), Some("Ink"), "the Tint slider");
+        let other = with_new_color(&app, picked.clone(), 0, Color::rgb(0.0, 1.0, 0.0));
+        assert!(super::rows(&other)[0].get(SWATCH).is_none(), "{:?}", super::rows(&other));
+        let mut adjusted = picked;
+        adjusted.fields.insert("globalAdjust".into(), json!({"saturation": 20.0, "brightness": 0.0, "temperature": 0.0, "luminosity": 0.0}));
+        assert_eq!(SliderTarget::at(&app, &adjusted, &rs, Some(0)).spot, None, "no Tint under a Global Adjust");
+    }
+
+    /// A row's chip shows its tint while its picked swatch links the art, also while a preview
+    /// changes that swatch; once the swatch is deleted the chip shows the full color the art takes
+    /// and OK recolors with it. A process swatch picked in its place takes the row's swatch and tint
+    /// away.
+    #[test]
+    fn a_picked_swatch_that_is_gone_links_nothing() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": "cmyk 0 100 0 0", "spot": true})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#808080"})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": 1})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": ["rgb 128 128 128"], "to": "rgb 128 128 128"}]));
+        let ink = Color::cmyk(0.0, 1.0, 0.0, 0.0);
+        let mut picked = with_new_swatch(&app, d, 0, ink, Some(json!({"name": "Ink", "library": "document"})));
+        let mut rs = super::rows(&picked);
+        rs[0]["tint"] = json!(40.0);
+        picked.fields.insert("rows".into(), Value::Array(rs));
+        let rs = super::rows(&picked);
+        let tinted = new_shown(&app, &picked, &rs[0]);
+        assert!(tinted != ink && tinted.to_rgb()[1] > ink.to_rgb()[1], "the chip at 40%: {tinted:?}");
+        // A process swatch of the same color picked for the row.
+        let process = with_new_swatch(&app, picked.clone(), 0, ink, None);
+        let r = &super::rows(&process)[0];
+        assert!(r.get(SWATCH).is_none() && r.get("tint").is_none(), "{r}");
+        // A preview that gives the swatch another color: the row still links to it.
+        let _ = app.session.cancel_interaction();
+        app.session.begin_interaction("Swatch Options").unwrap();
+        app.session.preview("swatch.edit", &json!({"name": "Ink", "color": "cmyk 100 0 0 0"})).unwrap();
+        assert_eq!(SliderTarget::at(&app, &picked, &rs, Some(0)).spot.as_deref(), Some("Ink"), "the swatch as it was before the preview");
+        assert_eq!(new_shown(&app, &picked, &rs[0]), tinted);
+        let _ = app.session.cancel_interaction();
+        app.run("swatch.delete", json!({"names": ["Ink"]})).unwrap();
+        assert_eq!(SliderTarget::at(&app, &picked, &rs, Some(0)).spot, None, "no Tint slider");
+        assert_eq!(new_shown(&app, &picked, &rs[0]), ink, "the full color the art takes");
+        let r = app.session.execute(CMD, &apply_params(&picked)).unwrap();
+        assert_eq!(r["swatchesNotFound"], json!(["Ink"]), "{r}");
+        let doc = &app.session.doc().unwrap().doc;
+        match doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint() {
+            vectorcraft_color::Paint::Solid { color, swatch, .. } => {
+                assert_eq!(swatch, None, "no link");
+                let [r, g, b] = color.to_rgb();
+                assert!(r > 0.9 && g < 0.1 && b > 0.4, "the full ink, not a 40% tint or the gray: {color:?}");
+            }
+            p => panic!("{p:?}"),
+        }
     }
 
     /// With the Spot Colors options on CMYK values, a row whose new color is a Lab spot color of the
