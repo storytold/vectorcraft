@@ -2673,7 +2673,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
   kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
   hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
-  `cannot delete hidden or locked objects` and delete nothing. Setting `width` or `height` scales the object along
+  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
+  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
