@@ -14,8 +14,9 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Node> {
     let roots: Vec<&vectorcraft_doc::Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
     let any = |f: fn(&NodeKind) -> bool| roots.iter().any(|n| f(&n.kind));
     let several = roots.len() >= 2;
-    let mut v = spelling_items(app);
-    v.extend([c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep]);
+    // The spelling rows stay out of `prune`: tidy drops a heading with no item after it, and No Suggestions is alone.
+    let spelling = spelling_items(app);
+    let mut v = vec![c("Undo", "edit.undo"), c("Redo", "edit.redo"), Sep];
     if st.isolation.is_some() {
         v.extend([c("Exit Isolation Mode", "object.exitIsolation"), Sep]);
     }
@@ -128,7 +129,7 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Node> {
             c("Export Selection…", "file.exportSelection"),
         ]);
     }
-    prune(app, v)
+    [spelling, prune(app, v)].concat()
 }
 
 /// A right-click on a word Auto Spell Check underlined ([`crate::state::UiState::context_spelling`]):
