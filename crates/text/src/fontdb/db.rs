@@ -374,8 +374,6 @@ impl FontDb {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn scan_font_dirs(&self) -> usize {
-        // Files may have been installed since: other versions are looked for again.
-        self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
         let mut catalog = Catalog::new();
         let mut aliases: HashMap<String, Vec<Alias>> = HashMap::new();
         let mut postscript = PostScriptNames::new();
@@ -455,6 +453,9 @@ impl FontDb {
         let _change = self.cataloged.get().is_some().then(crate::test_fonts::font_change);
         *self.stamp.lock().unwrap_or_else(|e| e.into_inner()) = Some(ScanStamp { paths, modified: modified_at });
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
+        // Files may have been installed since: other versions are looked for again, in this
+        // catalog. A version lookup made during the scan read the previous one.
+        self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
         *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
         // Faces loaded from a file this scan did not catalog (the font was removed, or its folder

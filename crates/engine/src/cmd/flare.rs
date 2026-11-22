@@ -65,12 +65,14 @@ fn settings_of(p: &Value, cmd: &str) -> Result<Value> {
     };
     let rays = count_or(p, "rays", 15, cmd)?.min(50);
     let rings = count_or(p, "rings", 10, cmd)?.min(50);
+    // The end point is given whole or not at all: a lone `x2` or `y2` is refused.
     let end = match (p.get("x2").and_then(Value::as_f64), p.get("y2").and_then(Value::as_f64)) {
         (Some(x), Some(y)) => Point::new(x, y),
-        _ => {
+        (None, None) => {
             let a = f64_or(p, "direction", 45.0).to_radians();
             finite_end(c + Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0), cmd)?
         }
+        _ => Point::new(f64_req(p, "x2", cmd)?, f64_req(p, "y2", cmd)?),
     };
     let mut v = json!({ "cx": c.x, "cy": c.y, "x2": end.x, "y2": end.y, "rays": rays, "rings": rings, "seed": seed });
     if let Some(r) = ring_seed {

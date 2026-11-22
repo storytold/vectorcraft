@@ -3455,6 +3455,145 @@ fn redefining_a_graphic_style_keeps_an_edited_mark_of_a_linked_series_group() {
     assert!(marks[1..].iter().all(|m| d.node(*m).unwrap().extras().graphic_style == Some(style.id)));
 }
 
+/// A column graph whose series 0 group is linked to style "Blue" (as a file can hold it) and whose first path directly
+/// inside that group is linked to style "Green" and has its look: the session, the graph, the group, series 0's paths,
+/// and the ids of "Blue" and "Green".
+fn linked_group_with_a_green_mark() -> (Session, NodeId, NodeId, Vec<NodeId>, u32, u32) {
+    let (mut s, id, _, marks) = column_marks();
+    let (group, _) = series_0_group(&s, id);
+    let (blue, green) = blue_and_green_styles(&mut s);
+    link_group_and_member(&mut s, group, &blue, marks[0], &green);
+    (s, id, group, marks, blue.id, green.id)
+}
+
+/// Graphic styles "Blue" (a blue fill at 50% opacity) and "Green" (a green fill at full opacity), made from one new
+/// rectangle that is linked to neither.
+fn blue_and_green_styles(s: &mut Session) -> (vectorcraft_doc::GraphicStyle, vectorcraft_doc::GraphicStyle) {
+    let (rect, _) = blue_style(s, "Blue", false);
+    s.execute("appearance.setItem", &json!({"ids": [rect.0], "index": top_row(s, rect, true), "color": "#00ff00", "opacity": 100})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": rect.0, "name": "Green"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    (d.graphic_style("Blue").unwrap().clone(), d.graphic_style("Green").unwrap().clone())
+}
+
+/// Links `group` to `outer` with its look and `member` to `inner` with its look, as a file can hold them.
+fn link_group_and_member(
+    s: &mut Session,
+    group: NodeId,
+    outer: &vectorcraft_doc::GraphicStyle,
+    member: NodeId,
+    inner: &vectorcraft_doc::GraphicStyle,
+) {
+    s.edit("Link", |d, _| {
+        let g = d.node_mut(group).unwrap();
+        g.appearance = outer.appearance.clone().into();
+        g.extras_mut().graphic_style = Some(outer.id);
+        let m = d.node_mut(member).unwrap();
+        m.appearance = inner.appearance.clone().into();
+        m.extras_mut().graphic_style = Some(inner.id);
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Asserts that `d` holds what `was` holds for a redefinition of style "Blue": its definition, the link of `group`, the
+/// look and link of each of `members`, and everything graph `id` stores (series paints and label rows included).
+fn assert_same_redefine_state(
+    d: &vectorcraft_doc::Document,
+    was: &vectorcraft_doc::Document,
+    id: NodeId,
+    group: NodeId,
+    members: &[NodeId],
+    when: &str,
+) {
+    assert_eq!(d.graphic_style("Blue"), was.graphic_style("Blue"), "{when}: the definition of Blue");
+    assert_eq!(d.node(group).unwrap().extras().graphic_style, was.node(group).unwrap().extras().graphic_style, "{when}: the group's link");
+    for m in members {
+        let (a, b) = (d.node(*m).unwrap(), was.node(*m).unwrap());
+        assert_eq!((&a.appearance, a.extras().graphic_style), (&b.appearance, b.extras().graphic_style), "{when}: member {m:?}");
+    }
+    assert_eq!(d.node(id).unwrap().extras().graph, was.node(id).unwrap().extras().graph, "{when}: what the graph stores");
+}
+
+/// Redefine Graphic Style with another style's look (`from`) on a linked series group leaves a path of the group that is
+/// linked to that other style linked to it, and restyles and links the group's other paths; one undo takes the
+/// redefinition back and redo makes it again.
+#[test]
+fn redefining_a_graphic_style_from_another_style_keeps_a_mark_linked_to_it() {
+    let (mut s, id, group, marks, blue, green) = linked_group_with_a_green_mark();
+    let own = s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.clone();
+    let look = s.doc().unwrap().doc.graphic_style("Green").unwrap().appearance.fill_paint();
+    let was = s.doc().unwrap().doc.clone();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "from": "Green"})).unwrap();
+    let after = s.doc().unwrap().doc.clone();
+    let first = after.node(marks[0]).unwrap();
+    assert_eq!((&first.appearance, first.extras().graphic_style), (&own, Some(green)), "the mark keeps its own style");
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().appearance.fill_paint() == look));
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().extras().graphic_style == Some(blue)));
+    assert_eq!(after.node(group).unwrap().extras().graphic_style, None);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(look), "the graph stores the new look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &was, id, group, &marks, "after one undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &after, id, group, &marks, "after redo");
+}
+
+/// Redefine Graphic Style from an object on a linked series group leaves a path of the group that is linked to another
+/// style as it is, restyles and links the group's other paths; one undo takes the redefinition back and redo makes it
+/// again.
+#[test]
+fn redefining_a_graphic_style_from_an_object_keeps_a_mark_linked_to_another_style() {
+    let (mut s, id, group, marks, blue, green) = linked_group_with_a_green_mark();
+    let own = s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.clone();
+    let red = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.setItem", &json!({"ids": [red.0], "index": top_row(&s, red, true), "color": "#ff0000", "opacity": 100})).unwrap();
+    let look = s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint();
+    let was = s.doc().unwrap().doc.clone();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": red.0})).unwrap();
+    let after = s.doc().unwrap().doc.clone();
+    let first = after.node(marks[0]).unwrap();
+    assert_eq!((&first.appearance, first.extras().graphic_style), (&own, Some(green)), "the mark keeps its own style");
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().appearance.fill_paint() == look));
+    assert!(marks[1..].iter().all(|m| after.node(*m).unwrap().extras().graphic_style == Some(blue)));
+    assert_eq!(after.node(group).unwrap().extras().graphic_style, None);
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(look), "the graph stores the new look");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &was, id, group, &marks, "after one undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &after, id, group, &marks, "after redo");
+}
+
+/// Redefine Graphic Style on a graph's Legend group linked to the style leaves a label of the group that is linked to
+/// another style with its look and its link, restyles and links the group's other label, and clears and unlinks the
+/// group; one undo takes the redefinition back and redo makes it again.
+#[test]
+fn redefining_a_graphic_style_keeps_a_legend_label_linked_to_another_style() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let legend = group(s.doc().unwrap().doc.node(id).unwrap(), "Legend").id;
+    let labels = [text_id(&s, id, "Legend", "2024"), text_id(&s, id, "Legend", "2025")];
+    let (blue, green) = blue_and_green_styles(&mut s);
+    link_group_and_member(&mut s, legend, &blue, labels[0], &green);
+    let own = s.doc().unwrap().doc.node(labels[0]).unwrap().appearance.clone();
+    let red = NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("appearance.setItem", &json!({"ids": [red.0], "index": top_row(&s, red, true), "color": "#ff0000", "opacity": 100})).unwrap();
+    let look = s.doc().unwrap().doc.node(red).unwrap().appearance.fill_paint();
+    let was = s.doc().unwrap().doc.clone();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": red.0})).unwrap();
+    let after = s.doc().unwrap().doc.clone();
+    let kept = after.node(labels[0]).unwrap();
+    assert_eq!((&kept.appearance, kept.extras().graphic_style), (&own, Some(green.id)), "the label keeps its own style");
+    let other = after.node(labels[1]).unwrap();
+    assert_eq!((other.appearance.fill_paint(), other.extras().graphic_style), (look, Some(blue.id)), "the other label follows");
+    let g = after.node(legend).unwrap();
+    assert_eq!((g.appearance.items.is_empty(), g.extras().graphic_style), (true, None), "the group is cleared and unlinked");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &was, id, legend, &labels, "after one undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_same_redefine_state(&s.doc().unwrap().doc, &after, id, legend, &labels, "after redo");
+}
+
 /// Series `index`'s group: its object opacity and blend mode, and those of each path directly inside it.
 fn group_transparency(s: &Session, id: NodeId, index: u32) -> ((f32, BlendMode), Vec<(f32, BlendMode)>) {
     let n = s.doc().unwrap().doc.node(id).unwrap().clone();
@@ -9469,6 +9608,29 @@ fn appearance_commands_given_the_axes_or_legend_group_edit_its_lines_and_labels(
         assert!(g.appearance.items.is_empty(), "{name} keeps no rows of its own");
         let members: Vec<Paint> = g.children().unwrap().iter().map(|c| c.appearance.fill_paint()).collect();
         assert!(!members.is_empty() && members.iter().all(|p| *p == blue), "{name}: {members:?}");
+    }
+}
+
+/// Aligned rows copied to `to` given the Legend group, whose labels have the same rows, go to `to` in every label.
+#[test]
+fn aligned_copies_given_the_legend_group_go_to_to_when_its_labels_have_the_same_rows() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let labels = |s: &Session| -> Vec<vectorcraft_doc::Appearance> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Legend").children().unwrap().iter().map(|c| (*c.appearance).clone()).collect()
+    };
+    let legend = group(s.doc().unwrap().doc.node(id).unwrap(), "Legend").id;
+    s.execute("appearance.addFill", &json!({"ids": [legend.0]})).unwrap();
+    s.execute("appearance.addStroke", &json!({"ids": [legend.0]})).unwrap();
+    let was = labels(&s);
+    assert!(was.len() >= 2 && was.iter().all(|a| *a == was[0]) && was[0].items.len() >= 2, "{was:?}");
+    let top = was[0].items.len() - 1;
+    s.execute("appearance.duplicateItem", &json!({"ids": [legend.0], "index": top, "to": 0, "aligned": true})).unwrap();
+    for a in labels(&s) {
+        assert_eq!(a.items.len(), was[0].items.len() + 1);
+        assert_eq!(a.items[0], was[0].items[top], "the copy is at the bottom");
     }
 }
 
