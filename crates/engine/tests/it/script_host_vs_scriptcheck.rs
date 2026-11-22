@@ -39,6 +39,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
     ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
     ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
+    ("Document.prototype.print", "var o = new PrintOptions(); o.jobOptions.file = new File(p); app.activeDocument.print(o);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -75,7 +76,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPresetType \
+        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
          PageItems RulerUnits ZOrderMethod",
     ),
@@ -83,7 +84,16 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         open selection typename userInteractionLevel userInteractionLevel=",
+         open PPDFileList printPresetsList printerList selection typename userInteractionLevel \
+         userInteractionLevel=",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -137,11 +147,93 @@ const INSIDE: &[(&str, &str)] = &[
     ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
     ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    // The print option classes and the enumerations of printing.
+    (
+        "",
+        "FontSubstitutionPolicy PageMarksTypes PostScriptImageCompressionType PrintArtworkDesignation PrintColorIntent \
+         PrintColorManagementOptions PrintColorProfile PrintColorSeparationMode PrintColorSeparationOptions \
+         PrintCoordinateOptions PrintFlattenerOptions PrintFontDownloadMode PrintFontOptions PrintJobOptions PrintOptions \
+         PrintOrientation PrintPageMarksOptions PrintPaperOptions PrintPosition PrintPostScriptOptions PrintTiling \
+         Printer PrinterPostScriptLevelEnum PrintingBounds",
+    ),
+    ("Printer.", "prototype"),
+    ("Printer.prototype.", "constructor name printerInfo printerInfo= typename"),
+    ("PrintOptions.", "prototype"),
+    (
+        "PrintOptions.prototype.",
+        "PPDName PPDName= colorManagementOptions colorManagementOptions= colorSeparationOptions colorSeparationOptions= \
+         constructor coordinateOptions coordinateOptions= flattenerOptions flattenerOptions= flattenerPreset \
+         flattenerPreset= fontOptions fontOptions= jobOptions jobOptions= pageMarksOptions pageMarksOptions= paperOptions \
+         paperOptions= postScriptOptions postScriptOptions= printPreset printPreset= printerName printerName= typename",
+    ),
+    ("PrintJobOptions.", "prototype"),
+    (
+        "PrintJobOptions.prototype.",
+        "artboardRange artboardRange= bitmapResolution bitmapResolution= collate collate= constructor copies copies= \
+         designation designation= file file= name name= printAllArtboards printAllArtboards= printArea printArea= \
+         printAsBitmap printAsBitmap= reversePages reversePages= typename",
+    ),
+    ("PrintColorManagementOptions.", "prototype"),
+    ("PrintColorManagementOptions.prototype.", "colorProfileMode colorProfileMode= constructor intent intent= name name= typename"),
+    ("PrintColorSeparationOptions.", "prototype"),
+    (
+        "PrintColorSeparationOptions.prototype.",
+        "colorSeparationMode colorSeparationMode= constructor convertSpotColors convertSpotColors= inkList inkList= \
+         overPrintBlack overPrintBlack= typename",
+    ),
+    ("PrintCoordinateOptions.", "prototype"),
+    (
+        "PrintCoordinateOptions.prototype.",
+        "constructor emulsion emulsion= fitToPage fitToPage= horizontalScale horizontalScale= orientation orientation= \
+         position position= tiling tiling= typename verticalScale verticalScale=",
+    ),
+    ("PrintFlattenerOptions.", "prototype"),
+    (
+        "PrintFlattenerOptions.prototype.",
+        "clipComplexRegions clipComplexRegions= constructor convertStrokesToOutlines convertStrokesToOutlines= \
+         convertTextToOutlines convertTextToOutlines= flatteningBalance flatteningBalance= gradientResolution \
+         gradientResolution= overprint overprint= rasterizationResolution rasterizationResolution= typename",
+    ),
+    ("PrintFontOptions.", "prototype"),
+    ("PrintFontOptions.prototype.", "constructor downloadFonts downloadFonts= fontSubstitution fontSubstitution= typename"),
+    ("PrintPageMarksOptions.", "prototype"),
+    (
+        "PrintPageMarksOptions.prototype.",
+        "bleedOffsetRect bleedOffsetRect= colorBars colorBars= constructor marksOffsetRect marksOffsetRect= pageInfoMarks \
+         pageInfoMarks= pageMarksType pageMarksType= registrationMarks registrationMarks= trimMarks trimMarks= \
+         trimMarksWeight trimMarksWeight= typename",
+    ),
+    ("PrintPaperOptions.", "prototype"),
+    ("PrintPaperOptions.prototype.", "constructor height height= name name= offset offset= transverse transverse= typename width width="),
+    ("PrintPostScriptOptions.", "prototype"),
+    (
+        "PrintPostScriptOptions.prototype.",
+        "binaryPrinting binaryPrinting= compatibleShading compatibleShading= constructor forceContinuousTone \
+         forceContinuousTone= imageCompression imageCompression= negativePrinting negativePrinting= postScriptLevel \
+         postScriptLevel= shadingResolution shadingResolution= typename",
+    ),
+    ("FontSubstitutionPolicy.", "SUBSTITUTEDEVICE SUBSTITUTEOBLIQUE SUBSTITUTETINT"),
+    ("PageMarksTypes.", "Japanese Roman"),
+    ("PostScriptImageCompressionType.", "IMAGECOMPRESSIONNONE JPEG RLE"),
+    ("PrintArtworkDesignation.", "ALLLAYERS VISIBLELAYERS VISIBLEPRINTABLELAYERS"),
+    ("PrintColorIntent.", "ABSOLUTECOLORIMETRIC PERCEPTUALINTENT RELATIVECOLORIMETRIC SATURATIONINTENT"),
+    ("PrintColorProfile.", "CUSTOMPROFILE OLDSTYLEPROFILE PRINTERPROFILE SOURCEPROFILE"),
+    ("PrintColorSeparationMode.", "COMPOSITE HOSTBASEDSEPARATION INRIPSEPARATION"),
+    ("PrintFontDownloadMode.", "DOWNLOADCOMPLETE DOWNLOADNONE DOWNLOADSUBSET"),
+    ("PrintOrientation.", "AUTOROTATE LANDSCAPE PORTRAIT REVERSELANDSCAPE REVERSEPORTRAIT"),
+    (
+        "PrintPosition.",
+        "TRANSLATEBOTTOM TRANSLATEBOTTOMLEFT TRANSLATEBOTTOMRIGHT TRANSLATECENTER TRANSLATELEFT TRANSLATERIGHT TRANSLATETOP \
+         TRANSLATETOPLEFT TRANSLATETOPRIGHT",
+    ),
+    ("PrintTiling.", "TILEFULLPAGES TILEIMAGEABLEAREAS TILESINGLEFULLPAGE"),
+    ("PrinterPostScriptLevelEnum.", "PSLEVEL1 PSLEVEL2 PSLEVEL3"),
+    ("PrintingBounds.", "ARTBOARDBOUNDS ARTWORKBOUNDS"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`,
-/// the page item types and the save and export option classes.
-const BARE_CLASSES: &str = "BlendItem CompoundPathItem DocumentPreset EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// and the save and export option classes.
+const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
      PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
      ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 

@@ -234,28 +234,35 @@ fn unit(d: &Dialog) -> Unit {
 }
 
 /// The artboard layout fields. A grid by column with rows shows the columns those rows give the
-/// current number of artboards, as `file.new` lays them out.
+/// current number of artboards, as `file.new` lays them out. Rows and columns are read as
+/// `file.new` reads them: a number of 1 or more, rounded and kept to [`MAX_ARTBOARDS`].
 fn layout(d: &Dialog) -> (ArtboardLayout, u64, f64, bool) {
     let l = d.fields.get("artboardLayout");
     let get = |k: &str| l.and_then(|l| l.get(k));
+    let count = |k: &str| get(k).and_then(Value::as_f64).filter(|c| c.is_finite() && *c >= 1.0).map(|c| c.round().min(MAX_ARTBOARDS as f64) as u64);
     let lay = get("layout").and_then(Value::as_str).and_then(ArtboardLayout::parse).unwrap_or_default();
-    let rows = get("rows").and_then(Value::as_u64).filter(|r| *r > 0 && lay == ArtboardLayout::GridByColumn);
+    let rows = count("rows").filter(|_| lay == ArtboardLayout::GridByColumn);
     let columns = match rows {
         Some(rows) => {
             let n = d.f64("artboards", 1.0).round().clamp(1.0, MAX_ARTBOARDS as f64) as u64;
             n.div_ceil(rows.min(n))
         }
-        None => get("columns").and_then(Value::as_u64).unwrap_or(1),
+        None => count("columns").unwrap_or(1),
     };
     (lay, columns, get("spacing").and_then(Value::as_f64).unwrap_or(20.0), get("rightToLeft").and_then(Value::as_bool).unwrap_or(false))
 }
 
 /// Sets one artboard layout field. A new layout or column count replaces the rows of a preset
-/// made with `file.new`'s `rows`.
+/// made with `file.new`'s `rows`; a new layout keeps the column count those rows showed.
 fn set_layout(d: &mut Dialog, key: &str, v: Value) {
+    let (lay, shown, ..) = layout(d);
     let mut l = d.fields.get("artboardLayout").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
-    if let ("layout" | "columns", Some(o)) = (key, l.as_object_mut()) {
-        o.remove("rows");
+    if let ("layout" | "columns", Some(o)) = (key, l.as_object_mut())
+        && o.remove("rows").and_then(|r| r.as_f64()).is_some_and(|r| r.is_finite() && r >= 1.0)
+        && key == "layout"
+        && lay == ArtboardLayout::GridByColumn
+    {
+        o.insert("columns".into(), json!(shown));
     }
     l[key] = v;
     d.fields.insert("artboardLayout".into(), l);
@@ -912,7 +919,35 @@ mod tests {
         assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByColumn", "columns": 3, "spacing": 5.0}));
         set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 4}));
         super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByRow"));
-        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByRow"}));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByRow", "columns": 1}));
+    }
+
+    /// A new layout keeps the columns a preset's rows showed, so Create lays out what the dialog
+    /// showed. Under a grid by row the dialog shows the stored columns, and they stay.
+    #[test]
+    fn a_new_layout_keeps_the_columns_a_presets_rows_showed() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        let columns = |app: &VectorcraftApp| super::layout(app.ui.dialog.as_ref().unwrap()).1;
+        set(&mut app, "artboards", json!(9));
+        for to in ["gridByRow", "gridByColumn", "row", "column"] {
+            for rows in [json!(4), json!(4.0), json!(3.6)] {
+                set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": rows}));
+                assert_eq!(columns(&app), 3, "9 artboards in rows {rows}");
+                super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!(to));
+                assert_eq!(field(&app, "artboardLayout"), json!({"layout": to, "columns": 3}), "{to}, rows {rows}");
+            }
+        }
+        set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 2, "rows": 4}));
+        assert_eq!(columns(&app), 2);
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByColumn"));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByColumn", "columns": 2}));
+        assert_eq!(columns(&app), 2);
+        // Rows file.new would reject leave the stored columns the dialog showed.
+        set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": 0}));
+        assert_eq!(columns(&app), 2);
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByRow"));
+        assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByRow", "columns": 2}));
     }
 
     /// Columns shows what a preset's rows give the current number of artboards.
@@ -929,6 +964,26 @@ mod tests {
         // Without rows, Columns shows the stored count.
         set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 2, "rows": 4}));
         assert_eq!(columns(&app), 2);
+    }
+
+    /// Rows and columns stored as floats, as `ui.dialog.set` stores them, show what `file.new`
+    /// makes of them: rounded, at least 1 and at most the artboard limit.
+    #[test]
+    fn columns_read_float_rows_and_columns_as_file_new_does() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        let columns = |app: &VectorcraftApp| super::layout(app.ui.dialog.as_ref().unwrap()).1;
+        set(&mut app, "artboards", json!(5));
+        for (rows, shown) in [(json!(4.0), 2), (json!(3.5), 2), (json!(2.4), 3)] {
+            set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 1, "rows": rows}));
+            assert_eq!(columns(&app), shown, "rows {rows}");
+        }
+        set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 3.0}));
+        assert_eq!(columns(&app), 3);
+        set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 1e9}));
+        assert_eq!(columns(&app), super::MAX_ARTBOARDS as u64);
+        set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 0.4}));
+        assert_eq!(columns(&app), 1);
     }
 
     /// Recent shows each entry as it was made: a portrait and a landscape A3 are two cards of

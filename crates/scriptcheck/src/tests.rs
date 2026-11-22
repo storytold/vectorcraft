@@ -577,6 +577,33 @@ fn app_open_reads_a_file() {
     assert!(feature(&r, "file.read").is_none());
 }
 
+/// A document's `print` writes the file its options' `jobOptions.file` names, called with a dot or
+/// with its name in brackets, on a document (also one `add`, `addDocument` or `addDocumentNoUI`
+/// returns) or a variable that holds one; reading the method without
+/// calling it, and a `print` method of another object, do not.
+#[test]
+fn print_writes_a_file() {
+    let r = report(concat!(
+        "var o = new PrintOptions(); o.jobOptions.file = new File(p);\n",
+        "app.activeDocument.print(o);\n",
+        "app.activeDocument['print'](o);\n",
+        "var n = app.activeDocument['print'];\n",
+        "var d = app.documents[0]; d.print(o);\n",
+        "logger.print('hello'); logger['print']('hello');\n",
+        "app.activeDocument.name.concat(logger.print('x'));\n",
+        "app.print(o); app.activeDocument.layers[0]['print'](o); app.documents['print'](o); app.preferences.activeDocument.print(o);\n",
+        "var e = app.open(new File(p)); e.print(o);\n",
+        "activeDocument.print(o);\n",
+        "documents.addDocument('Print').print(o);\n",
+        "app.documents.addDocument('Print', s, false).print(o);\n",
+        "documents.addDocumentNoUI('Print').print(o);\n",
+        "app.documents.addDocumentNoUI('Print').print(o);\n",
+    ));
+    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14][..];
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

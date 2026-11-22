@@ -79,6 +79,30 @@ pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportFile", "saveAs"];
 // Application methods that read the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Application/
 pub(crate) const DOM_FILE_READS: &[&str] = &["open"];
 
+// The document method that writes the file its options' `jobOptions.file` names, on the same page.
+// It counts only when a member chain that ends with one of `DOM_DOCUMENTS` calls it.
+pub(crate) const DOM_PRINT: &str = "print";
+
+// The member chains that give a document, whole and as the chains are written (`[]` for an index,
+// `()` for a call): https://ai-scripting.docsforadobe.dev/jsobjref/Application/ (`activeDocument`,
+// `documents`, `open`) and https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ (`add`, `addDocument`,
+// `addDocumentNoUI`, `getByName`).
+pub(crate) const DOM_DOCUMENTS: &[&str] = &[
+    "activeDocument",
+    "app.activeDocument",
+    "documents[]",
+    "app.documents[]",
+    "documents.add()",
+    "app.documents.add()",
+    "documents.addDocument()",
+    "app.documents.addDocument()",
+    "documents.addDocumentNoUI()",
+    "app.documents.addDocumentNoUI()",
+    "documents.getByName()",
+    "app.documents.getByName()",
+    "app.open()",
+];
+
 // Application methods that page doesn't list, named in public forum posts:
 // https://community.adobe.com/t5/illustrator-discussions/changes-in-cs6/td-p/4173362 (executeMenuCommand,
 // doScript, loadAction, unloadAction) and

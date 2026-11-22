@@ -82,7 +82,8 @@ fn print_writes_the_file_with_the_assigned_options_over_the_saved_settings() {
              o.paperOptions.name = 'a4'; o.coordinateOptions.fitToPage = true; o.coordinateOptions.orientation = PrintOrientation.PORTRAIT;\n\
              o.printerName = ''; o.fontOptions.downloadFonts = PrintFontDownloadMode.DOWNLOADSUBSET;\n\
              doc.print(o);\n\
-             o.postScriptOptions.postScriptLevel = PrinterPostScriptLevelEnum.PSLEVEL2; j.file = new File(dir + '/c.ps');\n\
+             j.file = new File(dir + '/c.ps'); doc.print(o);\n\
+             o.postScriptOptions.postScriptLevel = PrinterPostScriptLevelEnum.PSLEVEL2; j.file = new File(dir + '/level2.prn');\n\
              doc.print(o);\n\
              vc.log([app.printPresetsList[0], app.PPDFileList.length]);"
         ),
@@ -96,7 +97,9 @@ fn print_writes_the_file_with_the_assigned_options_over_the_saved_settings() {
     assert_eq!(pages(&dir.join("a.pdf")).len(), 6, "two artboards, three copies");
     assert_eq!(pages(&dir.join("b.pdf")), vec![(595.0, 842.0)], "artboard 2 only, on upright A4");
     let ps = std::fs::read_to_string(dir.join("c.ps")).unwrap();
-    assert!(ps.starts_with("%!PS") && ps.contains("%%LanguageLevel: 2"), "{}", &ps[..ps.len().min(200)]);
+    assert!(ps.starts_with("%!PS") && !ps.contains("%%LanguageLevel: 2"), "a .ps name alone: {}", &ps[..ps.len().min(200)]);
+    let ps = std::fs::read_to_string(dir.join("level2.prn")).unwrap();
+    assert!(ps.starts_with("%!PS") && ps.contains("%%LanguageLevel: 2"), "a level alone: {}", &ps[..ps.len().min(200)]);
     assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"], saved, "printing leaves the saved settings as they are");
     assert_eq!(s.active().unwrap().history.undo.len(), undo, "and adds no undo step");
     // The commands stay closed to vc.run, before and after a print.
@@ -447,6 +450,61 @@ fn one_assigned_scale_factor_keeps_the_saved_other() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// An assigned `artboardRange` replaces a saved range, an assigned `printArea` prints by artboard over
+/// saved settings that ignore the artboards, and two scale factors that differ by any amount print
+/// unlinked.
+#[test]
+fn assigned_job_and_scale_options_apply_over_the_saved_settings() {
+    let base = folder("over-saved");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let print = |s: &mut Session, name: &str, body: &str| {
+        let file = quoted(&dir.join(name));
+        logged(
+            s,
+            &base,
+            &format!("Folder.userData; var o = new PrintOptions(); o.jobOptions.file = new File({file}); {body} app.activeDocument.print(o);"),
+        );
+        pages(&dir.join(name)).len()
+    };
+    s.execute("print.setup", &json!({"settings": {"artboards": "range", "range": "1"}})).unwrap();
+    assert_eq!(print(&mut s, "saved.pdf", ""), 1, "the saved range");
+    assert_eq!(print(&mut s, "range.pdf", "o.jobOptions.artboardRange = '1-2';"), 2, "the assigned range replaces the saved one");
+    s.execute("print.setup", &json!({"settings": {"artboards": "ignore"}})).unwrap();
+    assert_eq!(print(&mut s, "ignore.pdf", ""), 1, "all the art as one page");
+    assert_eq!(print(&mut s, "area.pdf", "o.jobOptions.printArea = PrintingBounds.ARTBOARDBOUNDS;"), 2, "each artboard prints");
+    assert_eq!(print(&mut s, "range-ignored.pdf", "o.jobOptions.artboardRange = '2';"), 1, "a range alone keeps ignoring the artboards");
+    let area_range = "o.jobOptions.printArea = PrintingBounds.ARTBOARDBOUNDS; o.jobOptions.artboardRange = '2';";
+    assert_eq!(print(&mut s, "area-range.pdf", area_range), 1, "printArea with a range prints the range");
+    let scaled = "o.coordinateOptions.horizontalScale = 100; o.coordinateOptions.verticalScale = 100.0000000005;";
+    assert!(print(&mut s, "scale.pdf", scaled) >= 1, "factors that differ by a tiny amount print unlinked");
+    assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"]["artboards"], json!("ignore"), "the saved settings stay");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The format follows the name `jobOptions.file` gives, not the extension of the file a link in the
+/// granted folder leads to.
+#[cfg(unix)]
+#[test]
+fn the_format_follows_the_name_the_script_gives() {
+    let base = folder("format-name");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    std::fs::write(dir.join("proof.pdf"), "old").unwrap();
+    std::os::unix::fs::symlink(dir.join("proof.pdf"), dir.join("proof.ps")).unwrap();
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var o = new PrintOptions(); o.jobOptions.file = new File({}); app.activeDocument.print(o);",
+            quoted(&dir.join("proof.ps"))
+        ),
+    );
+    let written = std::fs::read(dir.join("proof.pdf")).unwrap();
+    assert!(written.starts_with(b"%!PS"), "PostScript for a .ps name: {:?}", String::from_utf8_lossy(&written[..written.len().min(40)]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Artboard ranges the document does not hold and preset names that are not presets, such as
 /// paths, throw before anything is written.
 #[test]
@@ -498,6 +556,8 @@ fn print_refuses_profile_paper_and_blank_preset_names() {
         ("c.name = '   ';", "PrintColorManagementOptions.name must name a color profile"),
         ("p.name = '../letter';", paper),
         ("p.name = 'let\\u0007ter';", paper),
+        ("p.name = '\\tA4\\n';", paper),
+        ("o.printPreset = '[Default]\\n';", "PrintOptions.printPreset names no print preset"),
         ("p.name = 'Office Tray 2';", paper),
         ("p.name = '';", "PrintPaperOptions.name must name a paper"),
         ("p.name = 'a4'; p.width = 300;", "PrintPaperOptions.width and height apply only to custom paper, not a4"),
