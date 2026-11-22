@@ -199,6 +199,7 @@ pub(crate) fn is_open(app: &VectorcraftApp) -> bool {
 }
 
 /// The English name of the category the window shows.
+#[cfg(test)]
 pub(crate) fn page(app: &VectorcraftApp) -> Option<&str> {
     app.prefs.as_ref().map(|w| w.state.selected.as_str())
 }
@@ -237,8 +238,9 @@ pub(crate) fn set_field(app: &mut VectorcraftApp, key: &str, value: Value) -> Re
     }
 }
 
-/// Asks whether to reset the preferences. OK puts every default in the draft; nothing is applied until OK in
-/// Preferences.
+/// Asks whether to reset the preferences, as the Reset Preferences button does. OK puts every default in the
+/// draft; nothing is applied until OK in Preferences.
+#[cfg(test)]
 pub(crate) fn ask_reset(app: &mut VectorcraftApp) {
     if let Some(w) = app.prefs.as_mut() {
         ask(w);
@@ -257,11 +259,12 @@ fn ask(w: &mut PrefsWindow) {
     w.reset_asked = Some(w.nested.open(question));
 }
 
-/// Answers the Reset question as the button `choice` would.
-pub(crate) fn answer_reset(app: &mut VectorcraftApp, choice: PromptChoice) {
-    let Some(ctx) = app.ui_ctx.clone() else { return };
-    let Some(mut w) = app.prefs.take() else { return };
-    if let Some(id) = w.reset_asked {
+/// Answers the Reset question as the button `choice` would; false when the question is not asked.
+pub(crate) fn answer_reset(app: &mut VectorcraftApp, choice: PromptChoice) -> bool {
+    let Some(ctx) = app.ui_ctx.clone() else { return false };
+    let Some(mut w) = app.prefs.take() else { return false };
+    let asked = w.reset_asked;
+    if let Some(id) = asked {
         if choice == PromptChoice::Cancel {
             w.nested.cancel_by_id(&ctx, id);
         } else {
@@ -273,6 +276,7 @@ pub(crate) fn answer_reset(app: &mut VectorcraftApp, choice: PromptChoice) {
     }
     (Live { app: &mut *app, w: &mut w }).take_answers();
     app.prefs = Some(w);
+    asked.is_some()
 }
 
 /// The file name Export Preferences… suggests.

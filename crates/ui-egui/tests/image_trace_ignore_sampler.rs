@@ -711,7 +711,7 @@ fn review_gesture_group_fixture() -> (VectorcraftApp, egui::Context, Point, Node
     (app, ctx, point, group)
 }
 
-fn review_gesture_screen(app: &VectorcraftApp, ctx: &egui::Context, point: Point) -> Pos2 {
+fn review_gesture_screen(app: &VectorcraftApp, point: Point) -> Pos2 {
     let view = app.canvas_view().unwrap();
     let at = view.to_screen(point);
     assert!(view.rect.contains(at), "the real canvas contains the gesture point");
@@ -773,13 +773,13 @@ fn review_gesture_ordinary_pair(app: &mut VectorcraftApp, ctx: &egui::Context, f
 #[test]
 fn review_followup_sampler_cancelled_mid_hold_keeps_release_owned() {
     let (mut control, control_ctx, control_point, control_group) = review_gesture_group_fixture();
-    let control_at = review_gesture_screen(&control, &control_ctx, control_point);
+    let control_at = review_gesture_screen(&control, control_point);
     review_gesture_ordinary_pair(&mut control, &control_ctx, control_at, control_at, control_group);
 
     let (mut app, ctx, point, _) = review_gesture_group_fixture();
     let source = selected(&app).id;
     click_control(&mut app, &ctx, SAMPLE_TIP);
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     review_gesture_release(&mut app, &ctx, at, start + step);
@@ -805,13 +805,13 @@ fn review_followup_sampler_cancelled_mid_hold_keeps_release_owned() {
 #[test]
 fn review_followup_consumed_prefix_keeps_two_fresh_clicks_single_then_double() {
     let (mut control, control_ctx, control_point, control_group) = review_gesture_group_fixture();
-    let control_at = review_gesture_screen(&control, &control_ctx, control_point);
+    let control_at = review_gesture_screen(&control, control_point);
     review_gesture_ordinary_pair(&mut control, &control_ctx, control_at, control_at, control_group);
 
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
     click_control(&mut app, &ctx, SAMPLE_TIP);
     app.run("select.none", json!({})).unwrap();
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     let expected = review_gesture_state(&app);
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
@@ -858,8 +858,8 @@ fn review_gesture_original_pixels(app: &VectorcraftApp) {
 }
 
 fn review_gesture_close_pair(app: &VectorcraftApp, ctx: &egui::Context, miss: Point, hit: Point) -> (Pos2, Pos2) {
-    let miss = review_gesture_screen(app, ctx, miss);
-    let hit = review_gesture_screen(app, ctx, hit);
+    let miss = review_gesture_screen(app, miss);
+    let hit = review_gesture_screen(app, hit);
     let distance = ctx.options(|o| o.input_options.max_click_dist);
     assert!(distance.is_finite() && distance > 0.0);
     assert!(miss.distance_sq(hit) < distance * distance, "the actual transformed miss/hit pair satisfies egui's click distance");
@@ -1038,7 +1038,7 @@ fn review_followup_release_position_survives_a_later_hover_move() {
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
     click_control(&mut app, &ctx, SAMPLE_TIP);
     app.run("select.none", json!({})).unwrap();
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     let hover = at + vec2(80.0, 0.0);
     assert!(app.canvas_view().unwrap().rect.contains(hover));
     assert!(at.distance(hover) > ctx.options(|o| o.input_options.max_click_dist));
@@ -1075,7 +1075,7 @@ fn review_596866_owned_release_then_press(coalesced: bool) {
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
     click_control(&mut app, &ctx, SAMPLE_TIP);
     app.run("select.none", json!({})).unwrap();
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     assert_eq!(app.session.tool_id(), "selection");
@@ -1119,14 +1119,14 @@ fn review_596866_owned_up_then_new_down_in_one_frame_keeps_the_next_click_single
 #[test]
 fn review_596866_second_corrected_release_uses_its_release_position() {
     let (mut control, control_ctx, control_point, control_group) = review_gesture_group_fixture();
-    let control_at = review_gesture_screen(&control, &control_ctx, control_point);
+    let control_at = review_gesture_screen(&control, control_point);
     review_gesture_ordinary_pair(&mut control, &control_ctx, control_at, control_at, control_group);
 
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
     click_control(&mut app, &ctx, SAMPLE_TIP);
     app.run("select.none", json!({})).unwrap();
-    let at = review_gesture_screen(&app, &ctx, point);
-    let hover = review_gesture_screen(&app, &ctx, Point::new(340.0, 250.0));
+    let at = review_gesture_screen(&app, point);
+    let hover = review_gesture_screen(&app, Point::new(340.0, 250.0));
     assert!(at.distance(hover) > ctx.options(|o| o.input_options.max_click_dist));
     let expected = review_gesture_state(&app);
     let (start, step) = review_gesture_times(&ctx);
@@ -1169,7 +1169,7 @@ fn review_596866_pick_binding(app: &mut VectorcraftApp, ctx: &egui::Context) -> 
     let target = app.ui.trace_ignore_sampler.as_ref().unwrap().target;
     let source = review_596866_source_image(app, target);
     let point = review_596866_bound_point(app, target);
-    let at = review_gesture_screen(app, ctx, point);
+    let at = review_gesture_screen(app, point);
     let (start, step) = review_gesture_times(ctx);
     review_gesture_press(app, ctx, at, start);
     review_gesture_release(app, ctx, at, start + step);
@@ -1229,7 +1229,7 @@ fn review_596866_preview_retraces_the_retained_sampler_binding() {
     let bound_source = review_596866_source_image(&app, bound);
     assert_ne!(review_596866_ignore_color(&app, bound_source), "#255395", "CONTROL: the sample must change the bound trace's stored color");
     let point = review_596866_bound_point(&app, bound);
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     review_gesture_release(&mut app, &ctx, at, start + step);
@@ -1282,7 +1282,7 @@ fn review_596866_coalesced_fresh_suffix(dragged: bool) {
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
     click_control(&mut app, &ctx, SAMPLE_TIP);
     app.run("select.none", json!({})).unwrap();
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     let distance = ctx.options(|o| o.input_options.max_click_dist);
     let away = at + vec2(distance + 8.0, 0.0);
     assert!(away.distance(at) > distance && app.canvas_view().unwrap().rect.contains(away));
@@ -1348,8 +1348,8 @@ fn review_597048_escape_returns_to_a_hidden_grid_without_fresh_activation() {
 fn review_597048_down_pixel(later_move: bool) {
     let (mut app, ctx) = fixture(true, [37, 83, 149], false);
     let source = review_596866_source_image(&app, selected(&app).id);
-    let pressed = review_gesture_screen(&app, &ctx, source_point(&app, 0.25));
-    let hover = review_gesture_screen(&app, &ctx, source_point(&app, 0.75));
+    let pressed = review_gesture_screen(&app, source_point(&app, 0.25));
+    let hover = review_gesture_screen(&app, source_point(&app, 0.75));
     assert_ne!(pressed, hover);
     let expected = review_gesture_state(&app);
     click_control(&mut app, &ctx, SAMPLE_TIP);
@@ -1375,7 +1375,7 @@ fn review_597048_sampler_uses_down_pixel_before_a_later_move() {
 
 fn review_597048_coalesced_pair(sampler_prefix: bool) {
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
-    let at = review_gesture_screen(&app, &ctx, point);
+    let at = review_gesture_screen(&app, point);
     if sampler_prefix {
         click_control(&mut app, &ctx, SAMPLE_TIP);
     }
@@ -1418,12 +1418,12 @@ fn review_597048_two_ordinary_clicks_in_one_frame_survive_sampler_correction() {
 #[test]
 fn review_597048_a_later_drag_release_does_not_replace_a_qualified_double_click() {
     let (mut control, control_ctx, point, group) = review_gesture_group_fixture();
-    let at = review_gesture_screen(&control, &control_ctx, point);
+    let at = review_gesture_screen(&control, point);
     review_gesture_ordinary_pair(&mut control, &control_ctx, at, at, group);
     let (mut app, ctx, point, group) = review_gesture_group_fixture();
     app.run("select.none", json!({})).unwrap();
-    let at = review_gesture_screen(&app, &ctx, point);
-    let blank = review_gesture_screen(&app, &ctx, Point::new(340.0, 250.0));
+    let at = review_gesture_screen(&app, point);
+    let blank = review_gesture_screen(&app, Point::new(340.0, 250.0));
     let distance = ctx.options(|o| o.input_options.max_click_dist);
     let away = blank + vec2(distance + 8.0, 0.0);
     assert!(app.canvas_view().unwrap().rect.contains(away) && away.distance(blank) > distance);

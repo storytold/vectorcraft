@@ -45,13 +45,6 @@ pub(crate) fn threaded(app: &mut VectorcraftApp) {
     with_jobs(app, Arc::new(craft::host::ThreadJobs));
 }
 
-/// Background work that waits until the test runs it (`run_next`, `run_all`).
-pub(crate) fn manual_jobs(app: &mut VectorcraftApp) -> Arc<craft::host::ManualJobs> {
-    let jobs = Arc::new(craft::host::ManualJobs::default());
-    with_jobs(app, jobs.clone());
-    jobs
-}
-
 /// An app whose thread-safe writer records files once `gate` opens.
 fn app(gate: Gate) -> (VectorcraftApp, Files) {
     let files = Files::default();

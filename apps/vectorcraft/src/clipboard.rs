@@ -23,7 +23,6 @@
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
 
-// PLAN: apps/vectorcraft/Cargo.toml needs craft-platform with its `clipboard` feature (hub-w3).
 use craft::platform::clipboard::{ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
 use vectorcraft_engine::cmd::clipboard::{BITMAP, EMF, EPS, FILE_HEAD, Flavour, PDF, PNG, SVG, TEXT, file_flavour};
 
@@ -887,8 +886,8 @@ mod portable {
     use std::time::{Duration, Instant};
 
     use super::{
-        BITMAP, ClipboardBackend, ClipboardError, ClipboardImage, ClipboardRead, Flavor, Flavour, LaterFlavor, PNG, SVG, TEXT, copied_file,
-        decode_png, engine_mime, engine_mimes, png_flavour, read_flavor, read_image_flavor, read_later_flavor, takes_files,
+        BITMAP, ClipboardBackend, ClipboardError, ClipboardImage, ClipboardRead, Flavor, Flavour, LaterFlavor, PNG, TEXT, copied_file, decode_png,
+        engine_mimes, png_flavour, read_flavor, read_image_flavor, read_later_flavor, takes_files,
     };
 
     /// What our last write put on the clipboard, for a read answered late ([`Unanswered::paste`]): a
@@ -1561,6 +1560,7 @@ mod portable {
             let cb = self.cb(Asker::User).map_err(ClipboardError::Other)?;
             #[cfg(target_os = "linux")]
             if let Backend::Wayland(wl) = cb {
+                use super::{SVG, engine_mime};
                 let offered: Vec<Flavour> =
                     flavors.iter().filter_map(|f| Some(Flavour { mime: engine_mime(&f.mime)?, data: f.data.clone() })).collect();
                 wl.copy(&offered).map_err(ClipboardError::Other)?;

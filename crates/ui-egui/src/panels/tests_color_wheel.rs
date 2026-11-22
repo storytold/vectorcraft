@@ -7,12 +7,9 @@ use std::rc::Rc;
 use craft::ui::testing::focus::AccessActionKind;
 use craft::ui::testing::{Fixture, Target};
 use egui::{Key, Modifiers, vec2};
-use serde_json::{Value, json};
-use vectorcraft_color::Color;
-use vectorcraft_color::cms::{self};
-use vectorcraft_engine::Session;
+use serde_json::Value;
 
-use super::color_wheel::{display_hsb, show};
+use super::color_wheel::show;
 use crate::VectorcraftApp;
 
 /// The app shown through the panel's `show`, driven by the parts' names and keys.
@@ -61,10 +58,6 @@ impl Panel {
         self.fx.tree().value_of(self.node(label).node).map(str::to_owned)
     }
 
-    pub(super) fn disabled(&self, label: &str) -> bool {
-        self.fx.tree().is_disabled_key(self.node(label).node)
-    }
-
     /// Sets the row named `label` as a screen reader does.
     pub(super) fn set(&mut self, label: &str, v: f64) {
         let t = self.node(label);
@@ -82,29 +75,4 @@ impl Panel {
         let t = self.node(label);
         self.fx.access(AccessActionKind::Click, &t).idle(2);
     }
-}
-
-/// An app with a selected rectangle filled with `fill`.
-fn app(fill: serde_json::Value) -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-    app.run("paint.setFill", json!({"color": fill})).unwrap();
-    app
-}
-
-fn fill(app: &VectorcraftApp) -> Color {
-    crate::panels::current_paints(app).0.color().expect("a solid fill")
-}
-
-fn hsb(c: &Color) -> [f32; 3] {
-    display_hsb(&cms::active(), c)
-}
-
-fn near(a: [f32; 3], b: [f32; 3], tol: [f32; 3]) -> bool {
-    (0..3).all(|i| (a[i] - b[i]).abs() <= tol[i])
-}
-
-fn undo_len(app: &VectorcraftApp) -> usize {
-    app.session.doc().unwrap().history.undo.len()
 }

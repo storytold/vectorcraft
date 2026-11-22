@@ -218,6 +218,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         crate::panels::three_d::handles::show(app, ui, space);
     }
     if live {
+        if !presenting {
+            crate::dialogs::revolve_gizmo::show(app, ui, space);
+        }
         selection_widgets::show(app, ui, space, win, kind);
         out.edited = compass(app, ui, space).or_else(|| scroll_bars(app, ui, space));
         if app.ui.screen_mode < 3 {

@@ -60,13 +60,6 @@ fn drag_strip(app: &mut VectorcraftApp, to_end: bool) {
     drag(app, rail.center(), vec2(by, 0.0));
 }
 
-fn app_with_selection() -> VectorcraftApp {
-    let mut app = window(VectorcraftApp::new(Session::new(), Default::default()));
-    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
-    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 80, "height": 60})).unwrap();
-    app
-}
-
 fn app_with_dense_path() -> VectorcraftApp {
     let mut app = window(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();

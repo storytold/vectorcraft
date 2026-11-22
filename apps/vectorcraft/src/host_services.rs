@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use craft::dialogs::ShowHook;
 use craft::dialogs::service::{ExtensionPolicy, FilePanels, FileService};
 use craft::host::Wake;
+use craft::platform::clipboard::ClipboardBackend;
 use craft::ui::runtime::pen::PenSource;
 use vectorcraft_ui_egui::hang_beacon::{Activity, BEACON, Beacon};
 
@@ -13,7 +14,7 @@ use super::mac_tablet;
 use super::tablet;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 use super::windows_stylus;
-use super::{Services, fileio, printing};
+use super::{Services, clipboard, fileio, printing};
 
 /// The main window, which the pen reader looks at to tell an X11 window from a Wayland one.
 pub(crate) type Parent = Option<std::sync::Arc<winit::window::Window>>;
@@ -154,8 +155,18 @@ fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
 
 /// The host's services. File dialogs, the clipboard, URLs, the pen and the screen color picker are
 /// the framework's.
-pub(crate) fn services() -> Services {
+pub(crate) fn services(window: Parent) -> Services {
+    let probe_window = window.clone();
     Services {
+        // Every format Copy offers and Paste reads. Its calls are marked for the hang report (`hang_watch`).
+        clipboard: Some(Box::new(vectorcraft_ui_egui::hang_beacon::Marked(clipboard::system_clipboard(window)))),
+        // Linux checks whether Paste has something to take on a background thread: an X11 clipboard
+        // owner that never answers holds a text read for up to 4 s for each format it tries, and
+        // quitting waits up to `craft::platform::clipboard::PROBE_STOP_WAIT` for that thread. Windows
+        // only asks which formats the clipboard holds and macOS asks the pasteboard server, so they
+        // check in line. The probe's handle is made on its own thread, from the window (`Send`).
+        clipboard_probe: cfg!(target_os = "linux")
+            .then(|| Box::new(move || clipboard::system_clipboard(probe_window)) as Box<dyn FnOnce() -> Box<dyn ClipboardBackend> + Send>),
         read: Some(Box::new(read_file)),
         // Load Actions… refuses a file over its size limit without reading all of it.
         read_head: Some(Box::new(read_file_head)),

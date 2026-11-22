@@ -81,13 +81,6 @@ fn check_tool_switch_cancels(app: &mut VectorcraftApp, widget: Widget, at: Pos2,
     assert!(plan(app, &mut held, widget, Gesture::Release(v.to_doc(q)), Mods::default()).is_empty(), "the release commits nothing");
 }
 
-fn first_at(l: &Layout, w: Widget) -> Pos2 {
-    match &l.items.iter().find(|i| i.widget == w).unwrap().hit {
-        HitShape::Circle { center, .. } => *center,
-        other => other.bounds().center(),
-    }
-}
-
 fn mirror_app() -> (VectorcraftApp, u64) {
     let mut app = app();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 80})).unwrap();

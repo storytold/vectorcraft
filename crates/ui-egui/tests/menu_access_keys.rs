@@ -12,7 +12,6 @@ use craft::ui::shell::embed;
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_ui_egui::i18n::LangExt;
 use vectorcraft_ui_egui::{VectorcraftApp, i18n};
 
 // These cases share the library's process-global locale. A failing case must not poison the

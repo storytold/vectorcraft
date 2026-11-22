@@ -76,29 +76,6 @@ fn cells(app: &VectorcraftApp, ctx: &egui::Context, nodes: &[Node]) -> Vec<egui:
     found
 }
 
-/// The rects of the last frame's widgets of `size`, top to bottom.
-pub(crate) fn widget_rects(ctx: &egui::Context, size: egui::Vec2) -> Vec<egui::Rect> {
-    let mut r: Vec<egui::Rect> =
-        ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).filter(|w| w.rect.size() == size).map(|w| w.rect).collect());
-    r.sort_by(|a, b| a.top().total_cmp(&b.top()));
-    r
-}
-
-/// A mouse wheel turn over `at`, scrolling the content up by `dy` points.
-pub(crate) fn wheel(at: Pos2, dy: f32) -> Vec<Event> {
-    let unit = egui::MouseWheelUnit::Point;
-    vec![
-        Event::PointerMoved(at),
-        Event::MouseWheel {
-            unit,
-            delta: egui::vec2(0.0, -dy),
-            phase: egui::TouchPhase::Move,
-            modifiers: Default::default(),
-            source: egui::MouseWheelSource::Unknown,
-        },
-    ]
-}
-
 /// `app` with a window to host its dialogs in.
 fn windowed(mut app: VectorcraftApp) -> VectorcraftApp {
     app.ui_ctx = Some(crate::testing::ui_context());

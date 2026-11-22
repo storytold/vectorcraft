@@ -1587,6 +1587,15 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
 fn preferences_method(app: &mut VectorcraftApp, method: &str, p: &Value) -> Result<Value, String> {
     let keys: &[&str] = if method == "ui.dialog.set" { &["dialog", "field", "value", "fields", "action"] } else { &["dialog"] };
     let p = Params(p).only(None, keys)?;
+    // The Reset question over the window takes the answer first, as it does the user's.
+    let answer = match method {
+        "ui.dialog.confirm" => Some(craft::ui::dialog::PromptChoice::Proceed),
+        "ui.dialog.cancel" => Some(craft::ui::dialog::PromptChoice::Cancel),
+        _ => None,
+    };
+    if answer.is_some_and(|choice| crate::prefs_dialog::answer_reset(app, choice)) {
+        return Ok(Value::Null);
+    }
     let action = match method {
         "ui.dialog.set" => match p.get("action").map(Value::as_str) {
             None => None,

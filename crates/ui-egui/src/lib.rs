@@ -144,9 +144,6 @@ pub struct VectorcraftApp {
     clipboard_probe: Option<craft::platform::clipboard::ClipboardProbe>,
     /// The system clipboard: the host's backend, or one that keeps copies inside the app.
     pub clipboard: craft::platform::clipboard::Clipboard,
-    /// The host reads the system clipboard's rich formats itself (`Services::clipboard` was given):
-    /// Copy publishes SVG, PDF and the rest beside the text.
-    pub(crate) rich_clipboard: bool,
     pub services: Services,
     /// The app's services as the framework reads them (language, catalogs, jobs, files), handed
     /// to every frame in [`Self::frame_input`].

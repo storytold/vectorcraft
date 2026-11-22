@@ -80,7 +80,7 @@ fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest
         if let Ok(r) = reply.try_recv() {
             return r;
         }
-        ctx.run_ui(egui::RawInput::default(), |_| {});
+        ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
     }
     reply.try_recv().unwrap()
 }
@@ -592,7 +592,9 @@ fn a_pass_with_injected_input_runs_inside_the_roots() {
         ctx.run_ui(raw, |ui| {
             app.tick(ui.ctx());
             app.ui(ui);
-        });
+        })
+        .textures_delta
+        .clear();
         app.session.documents().len()
     };
     assert_eq!(pass(&mut app, true), 0, "the pass carrying the key is confined");

@@ -791,7 +791,6 @@ pub(crate) fn text_copy(app: &mut VectorcraftApp, cut: bool) -> bool {
         // The desktop clipboard must own the same styled art as the internal clipboard. An egui
         // plain-text copy would replace its formats, so let the publisher provide both text and
         // rich art. Paste on the canvas can then keep the runs after Type editing ends.
-        // PLAN: assumed app.clipboard.readable_any_time() (sh.N2, shell-w14 decision shell-1).
         if app.clipboard.readable_any_time() {
             app.publish_clipboard(cut);
             return true;

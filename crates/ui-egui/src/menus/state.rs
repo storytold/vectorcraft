@@ -310,6 +310,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some()
         }
         "ui.importSvgFilter" => app.session.active().is_some(),
+        crate::dialogs::save_pdf::SAVE_SUMMARY => crate::dialogs::save_pdf::summary_open(app),
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" | "ui.colorGroupOptions" => app.session.active().is_some(),

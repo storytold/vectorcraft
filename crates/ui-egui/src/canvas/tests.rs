@@ -258,11 +258,6 @@ fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
     assert_eq!(count(&app), before - 1, "Essentials: undone");
 }
 
-/// Finger `n` touching at `pos`.
-fn finger(n: u64, phase: egui::TouchPhase, pos: Pos2) -> egui::Event {
-    egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None }
-}
-
 /// Switch Selection and Drawing Modes from the command: Pencil when no drawing tool was chosen yet,
 /// a view tool is left for Selection without becoming the drawing tool, and every selection tool
 /// switches to drawing mode.
@@ -379,10 +374,6 @@ fn tool_commands_return_a_failed_choice() {
 fn artboard_labels_name_the_artboard() {
     assert!(names_an_artboard("01 - Layers") && names_an_artboard("12 - Artboard 12 - copy"));
     assert!(!names_an_artboard("anchor") && !names_an_artboard("1 - x") && !names_an_artboard("Off the mesh - move closer"));
-}
-
-fn middle(pos: Pos2, pressed: bool) -> egui::Event {
-    egui::Event::PointerButton { pos, button: egui::PointerButton::Middle, pressed, modifiers: Default::default() }
 }
 
 /// The box-drawing shape tools show the bounding box of the shape just drawn (#5477). A drag of

@@ -64,7 +64,6 @@ impl VectorcraftApp {
         let views = session.documents().iter().map(View::of).collect();
         let view_uids = session.documents().iter().map(|d| d.uid).collect();
         let known = session.documents().iter().map(|d| d.uid).collect();
-        let rich_clipboard = services.clipboard.is_some();
         // Without a host clipboard (tests, the web before its host sets one) copies stay inside the app.
         let clipboard = match services.clipboard.take() {
             Some(backend) => Clipboard::new(backend),
@@ -79,7 +78,6 @@ impl VectorcraftApp {
             view_uids,
             clipboard_probe: None,
             clipboard,
-            rich_clipboard,
             services,
             host,
             canvas: CanvasCache {

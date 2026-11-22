@@ -135,9 +135,9 @@ pub fn tell(app: &mut VectorcraftApp, message: &str, detail: &str) {
     let Some(dialogs) = app.dialogs() else {
         return;
     };
-    // A message already waiting is not queued twice, and at most 16 wait.
+    // A message already waiting is not queued twice, and at most `MAX_WAITING` wait.
     let told = &mut app.told.0;
-    if told.len() >= 16 || told.iter().any(|(m, d)| m == message && d == detail) {
+    if told.len() >= super::host::MAX_WAITING || told.iter().any(|(m, d)| m == message && d == detail) {
         return;
     }
     told.push((message.to_string(), detail.to_string()));

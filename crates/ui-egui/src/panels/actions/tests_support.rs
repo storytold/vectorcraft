@@ -44,15 +44,6 @@ pub(crate) fn push_set(app: &mut VectorcraftApp, name: &str, actions: Vec<Action
     push_into(&mut app.ui.actions, name, actions);
 }
 
-/// Adds a set as the saved preferences hold it (`{name, actions: [{name, steps: [[command,
-/// params]], excluded_steps?, key?, color?, automaticAlignTo?}]}`), read as the preferences are.
-pub(crate) fn push_set_json(app: &mut VectorcraftApp, set: Value) {
-    let read = model::prefs::deserialize(json!([set])).expect("a set in the saved shape");
-    for name in read.sets() {
-        push_set(app, name, members_of(&read, name));
-    }
-}
-
 /// Copies of the actions of the set `name` of `list`, in order.
 fn members_of(list: &ActionList, name: &str) -> Vec<Action> {
     model::members(list, name).into_iter().filter_map(|i| list.action(i).cloned()).collect()

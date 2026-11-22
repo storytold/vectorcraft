@@ -76,7 +76,7 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandStates;
 use craft::ui::runtime::env::Label;
 use craft::ui::text::{NumberField, link_toggle};
-use egui::{Ui, vec2};
+use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{LiveCorners, Node, NodeId, NodeKind, StrokeLayer};
@@ -737,8 +737,6 @@ fn paint_popover(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// Where a live control's gesture stands this pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Live {
-    /// No gesture this pass.
-    Idle,
     /// The value is being dragged.
     Dragging,
     /// The drag ended this pass.
@@ -748,23 +746,18 @@ pub(crate) enum Live {
 /// Run `cmd` live: while dragging, preview on top of an interaction snapshot; on release, commit
 /// it as one undo step. Falls back to a plain run when no document is open.
 pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params: Value, phase: Live) {
-    match phase {
-        Live::Idle => {}
-        Live::Dragging | Live::Released => {
-            if app.begin_interaction(label).is_ok() {
-                if let Err(e) = app.session.preview(cmd, &params) {
-                    app.ui.status = e.to_string();
-                }
-                if phase == Live::Released
-                    && let Err(e) = app.session.commit_interaction()
-                {
-                    app.ui.status = e.to_string();
-                }
-                app.sync_views();
-            } else if phase == Live::Released {
-                app.run(cmd, params).ok();
-            }
+    if app.begin_interaction(label).is_ok() {
+        if let Err(e) = app.session.preview(cmd, &params) {
+            app.ui.status = e.to_string();
         }
+        if phase == Live::Released
+            && let Err(e) = app.session.commit_interaction()
+        {
+            app.ui.status = e.to_string();
+        }
+        app.sync_views();
+    } else if phase == Live::Released {
+        app.run(cmd, params).ok();
     }
 }
 
@@ -811,47 +804,6 @@ pub(crate) fn set_view(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Str
         _ => return Err("`panel` is swatches, graphicStyles or symbols".to_string()),
     };
     Ok(json!({ "panel": panel, "view": view }))
-}
-
-/// How near a scrolled list's top or bottom edge a drag scrolls it ([`scroll_at_edges`]).
-const DRAG_SCROLL_EDGE: f32 = 28.0;
-
-/// The speed of that scrolling in points per second: at the band's inner side, and added to it at
-/// the list's edge.
-const DRAG_SCROLL_SPEED: (f32, f32) = (60.0, 280.0);
-
-/// The scrolling [`scroll_at_edges`] asks for, in points per second (positive shows earlier rows),
-/// with the pointer `depth` points below the top of a list view `view_height` points tall. Each
-/// band is [`DRAG_SCROLL_EDGE`] deep, or half the view in a view shorter than two bands, so the
-/// pointer is in one band at most and the middle of a short view scrolls neither way. A view with
-/// no height, or a value that isn't a number, gives 0.
-fn drag_scroll_speed(view_height: f32, depth: f32) -> f32 {
-    if !(view_height.is_finite() && view_height > 0.0) {
-        return 0.0;
-    }
-    let band = DRAG_SCROLL_EDGE.min(view_height / 2.0);
-    let (slow, more) = DRAG_SCROLL_SPEED;
-    let speed = |depth: f32| if (0.0..band).contains(&depth) { slow + more * (1.0 - depth / band) } else { 0.0 };
-    speed(depth) - speed(view_height - depth)
-}
-
-/// While something is dragged near the top or bottom edge of a scrolled list (`ui`: its contents),
-/// scroll that way, faster nearer the edge, and draw the next frame so a pointer held still keeps
-/// it scrolling. The pointer must be over the list's width. Each frame scrolls by the time it
-/// took (a stalled frame counts a tenth of a second at most), so the speed is the same at every
-/// frame rate.
-pub(crate) fn scroll_at_edges(ui: &mut Ui) {
-    let Some(pos) = ui.ctx().pointer_hover_pos() else { return };
-    let view = ui.clip_rect();
-    if !view.x_range().contains(pos.x) {
-        return;
-    }
-    let per_second = drag_scroll_speed(view.height(), pos.y - view.top());
-    if per_second != 0.0 {
-        let dt = ui.input(|i| i.stable_dt).min(0.1);
-        ui.scroll_with_delta_animation(vec2(0.0, per_second * dt), egui::style::ScrollAnimation::none());
-        ui.ctx().request_repaint();
-    }
 }
 
 /// [`crate::i18n::label_or_name`] in the UI language.
@@ -970,26 +922,6 @@ mod tests {
         assert_eq!(p["gradient"]["stops"][0]["midpoint"], json!(0.5));
         let tint = Paint::Solid { color: Color::gray(0.5), swatch: Some("Ink".into()), tint: 0.5 };
         assert_eq!(paint_params(&tint), json!({"swatch": "Ink", "tint": 50.0}), "a tint keeps its percentage");
-    }
-
-    #[test]
-    fn drag_scrolling_in_a_short_list_goes_toward_the_nearer_edge() {
-        for h in [40.0, 56.0, 100.0] {
-            let speed = |depth: f32| drag_scroll_speed(h, depth);
-            assert!(speed(1.0) > 0.0 && speed(h - 1.0) < 0.0, "{h} pt view: the top edge shows earlier rows, the bottom later ones");
-            assert!(speed(1.0) > speed(h / 4.0).max(0.0), "{h} pt view: faster nearer the edge");
-            for depth in [1.0, h / 8.0, h / 4.0] {
-                assert!((speed(depth) + speed(h - depth)).abs() < 1e-3, "{h} pt view: symmetric about the middle at {depth} pt");
-            }
-            assert_eq!(speed(h / 2.0), 0.0, "{h} pt view: the middle scrolls neither way");
-            assert_eq!(speed(-1.0), 0.0, "{h} pt view: above the view");
-            assert_eq!(speed(h + 1.0), 0.0, "{h} pt view: below the view");
-        }
-        assert_eq!(drag_scroll_speed(100.0, 50.0), 0.0, "a tall view has a still middle band");
-        for h in [0.0, -10.0, f32::NAN, f32::INFINITY] {
-            assert_eq!(drag_scroll_speed(h, 5.0), 0.0, "view height {h}");
-        }
-        assert_eq!(drag_scroll_speed(40.0, f32::NAN), 0.0);
     }
 }
 #[cfg(test)]

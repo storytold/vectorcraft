@@ -103,7 +103,9 @@ fn open_asked_under_roots(app: &mut VectorcraftApp, tagged: &[u8]) {
     assert_eq!(r, json!({ "dialog": OPEN_KIND }));
     assert!(file_access::current().is_none(), "OK is pressed outside the roots");
     let id = open_id::<ProfileMismatchDialog>(app);
-    confirm_opens_one_under(app, roots.as_ref(), |app| drop(answer_ok(app, id)));
+    confirm_opens_one_under(app, roots.as_ref(), |app| {
+        answer_ok(app, id);
+    });
 }
 
 /// An open asked outside automation roots and confirmed by a caller under them finishes under that
@@ -115,7 +117,9 @@ fn open_confirmed_under_roots(app: &mut VectorcraftApp, tagged: &[u8]) {
     let r = crate::io::open_bytes(app, "tagged.vectorcraft", tagged, None).unwrap();
     assert_eq!(r, json!({ "dialog": OPEN_KIND }));
     let id = open_id::<ProfileMismatchDialog>(app);
-    confirm_opens_one_under(app, roots.as_ref(), |app| drop(file_access::confine(roots.as_ref(), || answer_ok(app, id))));
+    confirm_opens_one_under(app, roots.as_ref(), |app| {
+        file_access::confine(roots.as_ref(), || answer_ok(app, id));
+    });
 }
 
 /// A PNG of one color, 8 × 8.

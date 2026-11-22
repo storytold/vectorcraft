@@ -381,14 +381,6 @@ fn edited_type(app: &mut VectorcraftApp, tool: &str) -> u64 {
     t
 }
 
-/// The font family and style of type `t`'s first character.
-fn font_of(app: &VectorcraftApp, t: u64) -> (String, String) {
-    match kind(app, t) {
-        NodeKind::Text(t) => (t.first_style().font_family, t.first_style().font_style),
-        k => panic!("{k:?}"),
-    }
-}
-
 /// The size of each run of type `t`, with its text.
 fn sizes(app: &VectorcraftApp, t: u64) -> Vec<(String, f64)> {
     match kind(app, t) {

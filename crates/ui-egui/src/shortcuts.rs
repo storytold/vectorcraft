@@ -2,7 +2,7 @@
 //! nudges and the window's panel and artboard shortcuts.
 
 use craft::keymap::{CommandRef, Mods};
-use craft::ui::runtime::commands::{CommandGate, FirePhase, Fired};
+use craft::ui::runtime::commands::{FirePhase, Fired};
 use craft::ui::runtime::keys::{self, Intent};
 use serde_json::json;
 use vectorcraft_tools::ToolKey;
@@ -15,12 +15,6 @@ mod presentation;
 pub(crate) use held_tool::{HeldTool, note_tool_use};
 use presentation::escape_resets_rotation;
 pub(crate) use presentation::presentation_step;
-
-/// The gate over commands for the frame's `CommandInput`: in Presentation Mode only leaving it runs.
-// PLAN: the sheet's `presentation_gate() -> CommandGate` has no way to read `screen_mode`; the caller (shortcuts-w6) passes it.
-pub(crate) fn presentation_gate(presenting: bool) -> CommandGate {
-    CommandGate::new(presenting, |presenting: &bool, command: &CommandRef| !*presenting || command.id == "view.presentation")
-}
 
 /// Runs one command the key stage fired. A tool key chooses its tool (and starts or ends a hold), `Select All`
 /// with the Artboard tool selects artboards, and every other command runs as its menu item does.

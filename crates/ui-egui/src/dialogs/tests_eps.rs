@@ -192,59 +192,6 @@ fn bad_custom_flattener_options_keep_the_dialog_open() {
     assert_eq!((custom["preserveOverprints"].as_bool(), custom["preserveAlpha"].as_bool()), (Some(true), Some(false)));
 }
 
-/// Headless frames of the dialog layer with screen-reader output, input events and a clock.
-pub(super) struct Frames {
-    ctx: egui::Context,
-    time: f64,
-}
-
-impl Frames {
-    pub(super) fn new() -> Self {
-        let ctx = crate::testing::ui_context();
-        ctx.enable_accesskit();
-        Self { ctx, time: 0.0 }
-    }
-
-    fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
-        self.time += 0.1;
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
-        let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
-        let mut out = self.ctx.run_ui(input, |ui| app.ui(ui));
-        out.textures_delta.clear();
-        crate::dialogs::host::pump(app, &self.ctx);
-        out
-    }
-
-    /// The screen-reader node of the control of `role` named `label`, with its center.
-    pub(super) fn control(&mut self, app: &mut VectorcraftApp, label: &str, role: egui::accesskit::Role) -> (egui::accesskit::NodeId, egui::Pos2) {
-        self.run(app, vec![]);
-        let out = self.run(app, vec![]);
-        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-        let (id, n) =
-            nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role).unwrap_or_else(|| panic!("no {role:?} named {label:?}"));
-        let b = n.bounds().expect("bounds");
-        (*id, egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5))
-    }
-
-    pub(super) fn click(&mut self, app: &mut VectorcraftApp, at: egui::Pos2) {
-        for pressed in [true, false] {
-            let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-            self.run(app, vec![egui::Event::PointerMoved(at), button]);
-        }
-    }
-
-    /// Click the text field named `label`, type `text` over its text and press Tab.
-    pub(super) fn type_into(&mut self, app: &mut VectorcraftApp, label: &str, text: &str) {
-        let (_, at) = self.control(app, label, egui::accesskit::Role::TextInput);
-        self.click(app, at);
-        self.run(app, vec![egui::Event::Text(text.into())]);
-        let tab = |pressed| egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
-        self.run(app, vec![tab(true)]);
-        self.run(app, vec![tab(false)]);
-        self.run(app, vec![]);
-    }
-}
-
 /// Opening an EPS file whose PostScript reads only partly says why, in the status bar and in
 /// `file.open`'s result (what `app.open` and MCP's `open_file` return): the error, the operator
 /// and the procedure it ran in.
