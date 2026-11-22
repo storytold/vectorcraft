@@ -347,12 +347,13 @@ pub struct VectorcraftApp {
 }
 
 impl VectorcraftApp {
-    /// Whether a layer that takes the keys (a modal dialog, a popup) showed in the last pass: a
-    /// command or a canvas gesture waits while one does. A modeless dialog blocks nothing, and the
-    /// job progress window does not count (its layer has the progress role). False before the app
-    /// has a context.
+    /// Whether a layer that takes the keys (a modal dialog, a popup) showed in the last pass, or a
+    /// modal dialog opened since: a command or a canvas gesture waits while one does. A modeless
+    /// dialog blocks nothing, and the job progress window does not count (its layer has the
+    /// progress role). False before the app has a context.
     pub(crate) fn any_dialog_open(&self) -> bool {
         self.ui_ctx.as_ref().is_some_and(|ctx| overlay::any_open(ctx, OpenFilter::Keys))
+            || self.dialogs().is_some_and(|d| d.with(|h| h.shows_modal()))
     }
 
     /// The background job service: the one the window's host installed, or jobs that run in line
