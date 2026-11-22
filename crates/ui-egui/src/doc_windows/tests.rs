@@ -1355,6 +1355,30 @@ fn a_fit_made_while_a_floating_window_is_unread_counts_from_its_last_reading() {
     assert_eq!(app.print_ppi_of(Some(win)), Some(110.0));
 }
 
+/// A zoom set as a percentage on a floating OS window that has not been read yet is not a fit,
+/// even when the window recorded that zoom and center as its fit: the first reading of its display
+/// keeps the percentage.
+#[test]
+fn a_zoom_set_before_a_floating_window_is_first_read_keeps_its_percentage() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    let (zoom, center) = (app.views[1].zoom, app.views[1].center);
+    let body = egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0));
+    let mut shown =
+        Shown { ppi: Some(crate::ScreenPpi::Read(Some(91.0))), body: Some(body), fit: Some((body.size(), zoom, center)), ..Default::default() };
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut shown);
+    let pct = crate::state::zoom_display_percent(app.views[1].zoom, app.print_ppi_of(Some(win)));
+    assert!((pct - 100.0).abs() < 1e-9, "the first reading keeps 100%: {pct}");
+    assert!((app.views[1].zoom * 72.0 - 91.0).abs() < 1e-9, "an inch of the document fills an inch of its display");
+}
+
 /// A floating OS window whose view still fits it, moved between two displays read before, keeps
 /// fitting it at the zoom the new density gives: the fit this frame keeps is the settled one.
 #[test]
