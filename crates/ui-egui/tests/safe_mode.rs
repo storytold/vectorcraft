@@ -95,7 +95,8 @@ fn stopped_while_loading_x(launch: &Path, dir: &Path) {
     std::fs::write(launch.join("launch-1-dead.json"), item.to_string()).unwrap();
 }
 
-/// A window for one test, with the interface runtime and the app's fonts.
+/// A window for one launch, with the interface runtime and the app's fonts: dialogs are the window's, so a launch
+/// after another opens its own.
 fn window() -> egui::Context {
     let ctx = egui::Context::default();
     embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
@@ -155,6 +156,7 @@ fn disable_and_continue_loads_every_plug_in_but_the_one_that_was_loading() {
 
     // The next launch, which quit normally before: nothing is asked, and x stays off.
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
     frame(&mut app, &ctx);
     assert!(!ui::choosing(&app) && !safe_mode::active());
     assert!(registry::get("test.ui.x").is_none() && registry::get("test.ui.y").is_some());
@@ -181,6 +183,7 @@ fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
 
     stopped_while_loading_x(&launch_dir, &dir);
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
     frame(&mut app, &ctx);
     assert!(ui::choosing(&app) && !ui::staying_on(&app), "Safe Mode until the user chooses");
     let reply = control(&mut app, &ctx, "ui.dialog.cancel", json!({}));
@@ -192,6 +195,7 @@ fn start_normally_loads_everything_and_start_in_safe_mode_loads_nothing() {
     ui::end_launch();
     safe_mode::set_active(None);
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
     frame(&mut app, &ctx);
     assert!(ui::choosing(&app), "Start in Safe Mode leaves the choice to the next launch");
     done(&launch_dir);
@@ -294,6 +298,7 @@ fn a_safe_mode_flag_launch_leaves_the_stopped_plug_in_to_the_next_launch() {
 
     // The next launch, without the flag, asks about it before anything loads.
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
     frame(&mut app, &ctx);
     assert!(ui::choosing(&app));
     assert!(registry::list().is_empty());
@@ -303,6 +308,7 @@ fn a_safe_mode_flag_launch_leaves_the_stopped_plug_in_to_the_next_launch() {
 
     // A launch after the choice asks nothing.
     let mut app = launch(&dir, &launch_dir, false);
+    let ctx = window();
     frame(&mut app, &ctx);
     assert!(!ui::choosing(&app) && !safe_mode::active());
     done(&launch_dir);
