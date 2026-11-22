@@ -1019,9 +1019,8 @@ as it is. When no object has one, `appearance.setItem` and `appearance.removeIte
 do for a row no object has, and the other commands are an error. The paint, stroke and gradient commands are also an
 error when the art's row is not the kind of row they edit, and `paint.editGradient`, `paint.setGradientGeom` and the
 `paint.freeform.*` commands without `stroke` edit the kind of the art's row. `appearance.moveItem`, `effect.move` and
-`appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects', and
-`appearance.duplicateItem` with `to` is also an error when two or more other objects are given, as it is without the
-art. To change the art, edit the design with `graph.design`.
+`appearance.duplicateItem` with `to` are an error when the art's stack differs from the other objects'. To change the
+art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
