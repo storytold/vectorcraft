@@ -1405,3 +1405,33 @@ fn a_fitted_floating_window_moved_to_another_density_keeps_fitting() {
     assert_ne!(v.zoom, zoom, "the move to a denser display keeps the zoom percentage");
     assert_eq!(moved.fit, Some((body.size(), v.zoom, v.center)), "and the fit kept is the settled zoom");
 }
+
+/// A floating OS window whose view fits it, moved to a display of another density while a modal is
+/// open, keeps the settled zoom and center as its fit, so the next resize fits it again.
+#[test]
+fn a_fitted_floating_window_moved_while_a_modal_is_open_keeps_the_settled_fit() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    take_window_fit(&mut app, &ctx, ((uid, 1), true), win, &mut Shown { ppi: Some(crate::ScreenPpi::Read(Some(91.0))), ..Default::default() });
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let (zoom, center) = (app.views[1].zoom, app.views[1].center);
+    let body = egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0));
+    let fit = Some((body.size(), zoom, center));
+    if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == 1) {
+        x.fit = fit;
+    }
+    app.ui.about = true;
+    assert!(crate::panel_docking::modal_open(&app, &ctx), "a modal is open");
+    let mut moved = Shown { ppi: Some(crate::ScreenPpi::Read(Some(150.0))), body: Some(body), fit, ..Default::default() };
+    take_window_fit(&mut app, &ctx, ((uid, 1), true), win, &mut moved);
+    let v = app.views[1];
+    assert_ne!(v.zoom, zoom, "the move to a denser display keeps the zoom percentage");
+    let kept = app.ui.floating.iter().find(|x| x.uid == uid && x.view == 1).and_then(|x| x.fit);
+    assert_eq!(kept, Some((body.size(), v.zoom, v.center)), "the window keeps the settled zoom and center as its fit");
+}

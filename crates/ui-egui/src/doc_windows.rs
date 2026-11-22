@@ -525,7 +525,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let Some(win) = find(app, (w.uid, w.view)) else { continue };
         let raised = raise == Some((w.uid, w.view));
         let mut shown = if native { os_window(app, ctx, &w, (win, blocked), raised) } else { app_window(app, ctx, &w, (win, blocked), raised) };
-        take_window_ppi(app, ctx, ((w.uid, w.view), native), win, &mut shown);
+        take_window_fit(app, ctx, ((w.uid, w.view), native), win, &mut shown);
         if blocked {
             continue;
         }
@@ -537,7 +537,6 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             x.focused = shown.focused;
             x.body = shown.body;
-            x.fit = shown.fit;
         }
         over_strip |= shown.over_strip;
         if shown.close {
@@ -611,6 +610,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (win, blocked): (Win, bool)
         _ => fit,
     };
     (pressed, rect, fit)
+}
+
+/// Takes the density of the display that `shown`, floating window `key`'s window `win`, was found on
+/// ([`take_window_ppi`]), and keeps the fit `shown` holds after it as the window's fit, also while a
+/// modal blocks the window.
+fn take_window_fit(app: &mut VectorcraftApp, ctx: &egui::Context, ((uid, number), os): ((u64, u32), bool), win: Win, shown: &mut Shown) {
+    take_window_ppi(app, ctx, ((uid, number), os), win, shown);
+    if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == number) {
+        x.fit = shown.fit;
+    }
 }
 
 /// Takes the density of the display that `shown`, floating window `key`'s ([`views::key`]) window
