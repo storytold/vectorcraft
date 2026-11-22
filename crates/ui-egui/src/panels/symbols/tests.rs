@@ -251,9 +251,10 @@ fn art_still_selected(app: &VectorcraftApp) -> bool {
     matches!(st.selection.objects.as_slice(), [id] if st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. })))
 }
 
-/// Width over height of symbol `name`'s art.
+/// Width over height of symbol `name`'s art at its natural size (the art is kept in a square, its size beside it).
 fn art_ratio(app: &VectorcraftApp, name: &str) -> f64 {
-    symbol_art(app, name).geometric_bounds().map_or(0.0, |b| b.width() / b.height())
+    let natural = app.session.active().unwrap().doc.symbol_natural_xf(name);
+    symbol_art(app, name).geometric_bounds().map(|b| natural.transform_rect_bbox(b)).map_or(0.0, |b| b.width() / b.height())
 }
 
 /// A document with one selected 30 × 20 rectangle.

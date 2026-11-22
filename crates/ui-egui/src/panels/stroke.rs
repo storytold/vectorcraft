@@ -10,7 +10,7 @@ use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSec
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
+use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
 use craft::ui::form::Field;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
@@ -348,9 +348,10 @@ fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &'static str, side: Side
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")
-/// opens the Stroke panel in a popover under it, and whose drag scrubs the weight.
+/// opens the Stroke panel in a popover under it, and whose drag scrubs the weight. The field keeps its name, Weight:
+/// the label beside the Stroke chip says which paint it is the weight of.
 pub(crate) fn link_field(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, weight: Option<f64>) {
-    let side = SideLabel::new().scrub(true).link().tooltip(TooltipSpec::new(tl!("Stroke options")));
+    let side = SideLabel::new().scrub(true).link().role(FieldLabelRole::Describes).tooltip(TooltipSpec::new(tl!("Stroke options")));
     let mut open = app.ui.stroke_panel.link_open;
     if let Some(out) = weight_row(app, ui, label, side, weight) {
         apply_weight(app, &out, WeightTarget::Shown);

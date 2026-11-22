@@ -27,10 +27,11 @@ use craft::ui::buttons::{Button, ButtonOutput, Link};
 use craft::ui::choice::{Swatch, SwatchOutput};
 use craft::ui::contract::overlay::{Anchor, Place};
 use craft::ui::contract::{
-    Bind, CollectionEvent, CollectionResponse, ColumnSpec, ItemCx, ListDrag, MemoProps, PopupKind, Props as _, ReorderMove, ReorderRule, Show as _,
-    ShowCollection as _, ShowContainer as _, ToggleColumn, Trigger, clicked,
+    Bind, CollectionEvent, CollectionResponse, ColumnSpec, FieldLabelRole, ItemCx, ListDrag, MemoProps, PopupKind, Props as _, ReorderMove,
+    ReorderRule, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, ToggleColumn, Trigger, clicked,
 };
 use craft::ui::display::{Picture, Shade, Text};
+use craft::ui::form::Field;
 use craft::ui::layout_components::Stack;
 use craft::ui::list::{List, ListRow, RowDragSpot, RowEvent, RowInk, ThumbAspect, ThumbSize, ThumbTarget, ToggleCell};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
@@ -415,9 +416,6 @@ const CLEAR: usize = 5;
 const DUPLICATE_ITEM: &str = "ui.appearance.duplicateItem";
 const REMOVE_ITEM: &str = "ui.appearance.removeItem";
 const THUMBNAIL: &str = "ui.appearance.thumbnail";
-
-/// The key Free Distort's inline Edit… row sets: its corners are dragged in its dialog.
-const EDIT_CORNERS: &str = "editCorners";
 
 /// The Appearance panel: the object row, the stack of the selected object (or of new art with
 /// nothing selected) and the footer; Delete in the list removes the picked rows.
@@ -880,6 +878,8 @@ fn opacity_row<'r>(cx: &'r RowCx<'_>, key: RowKey) -> ListRow<'r> {
     ListRow::new(tl!("Opacity"))
         .toggle(ToggleCell::eye(EYE, true))
         .cell_field(NAME, Link::new(tl!("Opacity:")).tooltip(tl!("Click to edit")), link_output(cx.pass, key))
+        // A screen reader reads the shown opacity as the row's description.
+        .description(shown.clone())
         .trailing(shown)
 }
 
@@ -934,15 +934,8 @@ fn effect_row<'r>(cx: &'r RowCx<'_>, key: RowKey, item: &mut ItemCx<'_, 'r, RowK
 /// dragged.
 fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option<usize>, k: usize, e: &Effect) -> impl FnOnce(&mut Ui) + 'r {
     let values = editor_params(e);
-    let params: Vec<Param> = if e.id == crate::dialogs::free_distort::FREE_DISTORT {
-        vec![Param::custom(EDIT_CORNERS, effect_label(&e.id), |ui, fields, _| {
-            let out = Button::new(tl!("Edit…")).show(ui);
-            if clicked(&out) {
-                fields.set(EDIT_CORNERS, true);
-            }
-            out.response
-        })]
-    } else if values.is_empty() {
+    let free_distort = e.id == crate::dialogs::free_distort::FREE_DISTORT;
+    let params: Vec<Param> = if free_distort || values.is_empty() {
         vec![]
     } else {
         // The rows a plug-in shows depend on its values: the first list reads them, the second
@@ -954,6 +947,17 @@ fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option
     let fields = fields_of(&params, &values);
     let (name, id) = (effect_label(&e.id), e.id.clone());
     move |ui| {
+        if free_distort {
+            // The button keeps its own name: the label says what it edits.
+            let edit = Field::new(tl!("Corners"))
+                .side(SideLabel::new().role(FieldLabelRole::Describes))
+                .show(ui, |ui, _| clicked(&Button::new(tl!("Edit…")).show(ui)))
+                .inner;
+            if edit == Some(true) {
+                pass.borrow_mut().acts.push(Act::Dialog(item, k, id));
+            }
+            return;
+        }
         if params.is_empty() {
             Text::new(tl!("No options")).shade(Shade::Muted).show(ui);
             return;
@@ -962,10 +966,6 @@ fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option
         let before = json_of(&params, &fields);
         for event in out.events.iter() {
             let (EditEvent::Set { after, .. } | EditEvent::Commit { after, .. }) = event else { continue };
-            if after.bool(EDIT_CORNERS) == Some(true) {
-                pass.borrow_mut().acts.push(Act::Dialog(item, k, id.clone()));
-                continue;
-            }
             let changed: serde_json::Map<String, Value> = json_of(&params, after).into_iter().filter(|(key, v)| before.get(key) != Some(v)).collect();
             if !changed.is_empty() {
                 pass.borrow_mut().acts.push(Act::Params(item, k, changed));
@@ -1786,10 +1786,11 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
+    // A menu row reads `&` as its mnemonic marker: `&&` is the character ("Distort & Transform").
     for (g, items) in groups {
-        Menu::submenu_row(ui, tl!(&g).to_string(), |ui, _| {
+        Menu::submenu_row(ui, tl!(&g).replace('&', "&&"), |ui, _| {
             for (id, label) in &items {
-                if MenuItem::new(format!("{label}…")).show(ui).ran {
+                if MenuItem::new(format!("{}…", label.replace('&', "&&"))).show(ui).ran {
                     app.run("effect.dialog", json!({ "effect": id })).ok();
                 }
             }
