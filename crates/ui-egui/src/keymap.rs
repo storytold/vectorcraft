@@ -413,7 +413,8 @@ mod tests {
         if let Some(set) = set {
             raw["shortcut_set"] = json!(set);
         }
-        serde_json::from_value(raw).unwrap()
+        // A loaded file's old keys become the sets as the settings are sanitized.
+        serde_json::from_value::<UiState>(raw).unwrap().sanitized()
     }
 
     fn active(ui: &UiState) -> &Overrides {
@@ -464,7 +465,7 @@ mod tests {
             o.remove("shortcut_sets");
         }
         raw["shortcut_overrides"] = json!({"x": 5, "tool:pen": "Shift+9"});
-        let ui: UiState = serde_json::from_value(raw).unwrap();
+        let ui = serde_json::from_value::<UiState>(raw).unwrap().sanitized();
         assert!(ui.control_bar);
         assert!(active(&ui).get("x").is_none());
         assert_eq!(texts(active(&ui), "tool:pen"), Some(vec!["Shift+9"]));

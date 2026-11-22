@@ -1227,12 +1227,16 @@ pub(crate) fn modal_open(app: &VectorcraftApp) -> bool {
     app.any_dialog_open() || app.ui.palette_open || app.file_dialog_open()
 }
 
-/// Is a modal window open in this pass: a modal dialog or a file dialog? A popup (a menu, a
-/// dropdown, a slider strip) is no window, so it does not close itself.
+/// Is a modal window open in this pass: a modal dialog, Preferences, Keyboard Shortcuts or a file
+/// dialog? A popup (a menu, a dropdown, a slider strip) is no window, so it does not close itself;
+/// nor is the open palette's own box, so a modal layer of the last pass counts only while the
+/// palette is closed.
 pub(crate) fn modal_window_up(app: &VectorcraftApp) -> bool {
     use craft::ui::runtime::overlay::{OpenFilter, any_open};
-    app.ui_ctx.as_ref().is_some_and(|ctx| any_open(ctx, OpenFilter::Modal))
+    (!app.ui.palette_open && app.ui_ctx.as_ref().is_some_and(|ctx| any_open(ctx, OpenFilter::Modal)))
         || app.dialogs().is_some_and(|d| d.with(|h| h.shows_modal()))
+        || crate::prefs_dialog::is_open(app)
+        || app.shortcuts_dialog.is_some()
         || app.file_dialog_open()
 }
 

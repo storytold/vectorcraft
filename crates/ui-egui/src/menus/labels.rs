@@ -151,6 +151,7 @@ pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
                 | crate::dialogs::proof_setup::LOAD
         )
         || vectorcraft_engine::cmd::plugin::is_command_id(id)
+        || (id == "window.workspace" && !crate::workspaces::builtins().iter().any(|w| w.name.eq_ignore_ascii_case(label.trim())))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 

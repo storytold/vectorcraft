@@ -1172,6 +1172,14 @@ fn current_keymap(app: &VectorcraftApp) -> Result<Keymap, String> {
     Ok(keymap)
 }
 
+/// [`current_keymap`] with its hold shortcuts counted whether Hold Shortcuts is on or not: the
+/// editor lists and sets them either way, and the preference decides only whether they act.
+fn editing_keymap(app: &VectorcraftApp) -> Result<Keymap, String> {
+    let mut keymap = current_keymap(app)?;
+    keymap.set_holds(true);
+    Ok(keymap)
+}
+
 /// Saves `keymap`'s overrides to the set in use (an edit of a built-in set becomes a set of the
 /// user's, named after [`CUSTOM`]) and hands them to the key stage.
 fn keep(app: &mut VectorcraftApp, keymap: &Keymap) -> Result<(), String> {
@@ -1242,7 +1250,7 @@ fn set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let force = menus::opt_bool(p, "force")?.unwrap_or(false);
     let hold = text_param(p, "hold")?;
     dialog_closed(app)?;
-    let mut keymap = current_keymap(app)?;
+    let mut keymap = editing_keymap(app)?;
     let command = command_of(&key);
     let def = keymap.bindable(&command).cloned().ok_or_else(|| format!("unknown tool or command `{key}`"))?;
     let (mut singles, mut holds): (Vec<Binding>, Vec<Binding>) = keymap.bindings(&command).into_iter().partition(|b| !b.trigger.is_hold());
@@ -1315,7 +1323,7 @@ fn give_back_function_keys(keymap: &mut Keymap) {
 /// `shortcuts.list {query?}`: the entries the editor lists, with their shortcuts.
 fn list(app: &VectorcraftApp, p: &Value) -> Result<Value, String> {
     let q = text_param(p, "query")?.unwrap_or_default().to_lowercase();
-    let keymap = current_keymap(app)?;
+    let keymap = editing_keymap(app)?;
     let snapshot = snapshot();
     let rows = snapshot
         .entries
@@ -1333,9 +1341,11 @@ fn list(app: &VectorcraftApp, p: &Value) -> Result<Value, String> {
 
 /// `shortcuts.conflicts`: each shortcut more than one entry has, hold shortcuts as `Hold X`.
 fn conflicts(app: &VectorcraftApp) -> Result<Value, String> {
-    let keymap = current_keymap(app)?;
+    let keymap = editing_keymap(app)?;
     let mut by: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for c in keymap.conflicts().into_iter().filter(|c| c.kind == ConflictKind::Clash) {
+    // The framework's Select All and Delete run the app's own (`shortcuts::engine_id`): one command, no clash.
+    let same = |a: &str, b: &str| crate::shortcuts::engine_id(a) == Some(b) || crate::shortcuts::engine_id(b) == Some(a);
+    for c in keymap.conflicts().into_iter().filter(|c| c.kind == ConflictKind::Clash && !same(&c.a.0.id, &c.b.0.id)) {
         let ids = by.entry(c.chord.to_string()).or_default();
         for k in [entry_key(&c.a.0), entry_key(&c.b.0)] {
             if !ids.contains(&k) {

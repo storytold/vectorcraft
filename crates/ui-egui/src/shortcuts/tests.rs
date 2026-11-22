@@ -112,6 +112,18 @@ fn dialog_kind(app: &VectorcraftApp) -> Option<String> {
     crate::tests::picks::open_dialogs(app).pop().and_then(|d| d.key)
 }
 
+/// The effect of the open Effect dialog, when the window's top dialog is it (its key is `effect`;
+/// the effect is the app's, not a field).
+fn open_effect(app: &VectorcraftApp) -> Option<String> {
+    (dialog_kind(app).as_deref() == Some("effect")).then(|| app.effect_dialogs.effect.as_ref().map(|o| o.cx.id.clone()))?
+}
+
+/// The plug-in of the open plug-in dialog, when the window's top dialog is it (its key is
+/// `plugin`, its instance the plug-in).
+fn open_plugin(app: &VectorcraftApp) -> Option<String> {
+    (dialog_kind(app).as_deref() == Some(crate::dialogs::plugin::KIND)).then(|| app.plugin_dialog.as_ref().map(|d| d.plugin().to_string()))?
+}
+
 /// A field of the window's top dialog.
 fn dialog_field(app: &VectorcraftApp, key: &str) -> Option<Value> {
     crate::tests::picks::open_dialogs(app).pop().and_then(|d| d.fields?.get(key).cloned())
@@ -502,7 +514,7 @@ fn cmd_enter_bound_to_an_effect_runs_the_effect_not_the_tool() {
     app.select_tool("selection");
     bind(&mut app, "effect:distort.transform", "Cmd+Enter");
     frame(&mut app, tap(Key::Enter, cmd()));
-    assert_eq!(dialog_field(&app, "__effect"), Some(json!("distort.transform")), "the effect's, not Move: {:?}", dialog_kind(&app));
+    assert_eq!(open_effect(&app).as_deref(), Some("distort.transform"), "the effect's, not Move: {:?}", dialog_kind(&app));
 }
 
 /// Cmd+, opens Preferences on a Mac only, and a user binding on the chord wins.
@@ -573,7 +585,7 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
         bind(&mut app, id, "Cmd+Alt+Shift+F9");
         app.ui.status.clear();
         frame(&mut app, chord.clone());
-        assert_eq!(dialog_field(&app, "__command"), Some(json!(id)), "{id}: {}", app.ui.status);
+        assert_eq!(dialog_kind(&app).as_deref(), Some(id), "{id}: {}", app.ui.status);
     }
 }
 
@@ -1483,7 +1495,7 @@ fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
     assert!(!listed(&mut app, "effect:distort.transform").is_empty(), "Transform is listed");
     bind(&mut app, "effect:distort.transform", "Cmd+Alt+Shift+F11");
     frame(&mut app, tap(Key::F11, cmd() | Modifiers::ALT | Modifiers::SHIFT));
-    assert_eq!(dialog_field(&app, "__effect"), Some(json!("distort.transform")), "{:?}", dialog_kind(&app));
+    assert_eq!(open_effect(&app).as_deref(), Some("distort.transform"), "{:?}", dialog_kind(&app));
     assert_eq!(item_shortcut(&app, "effect.dialog", json!({"effect": "distort.transform"})).as_deref(), Some("Cmd+Alt+Shift+F11"));
 }
 
@@ -1517,7 +1529,7 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
     install(r#"{"wiggle":{"type":"bool"}}"#);
     assert_eq!(listed(&mut app, effect), vec![(key.to_string(), json!(chord))]);
     frame(&mut app, f6());
-    assert_eq!(dialog_field(&app, "__effect"), Some(json!(effect)), "{:?}", dialog_kind(&app));
+    assert_eq!(open_effect(&app).as_deref(), Some(effect), "{:?}", dialog_kind(&app));
     assert_eq!(item_shortcut(&app, "effect.dialog", json!({ "effect": effect })).as_deref(), Some(chord));
     vectorcraft_plugins::registry::remove(plugin);
 }
@@ -1543,7 +1555,7 @@ fn each_filter_plugin_takes_a_shortcut_of_its_own() {
     app.run("shortcuts.set", json!({"id": key_two, "shortcut": chord})).unwrap();
     assert_eq!(listed(&mut app, "test.ui.key_filter-"), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
     frame(&mut app, f7());
-    assert_eq!(dialog_field(&app, "__plugin"), Some(json!(two)), "the filter's dialog opens");
+    assert_eq!(open_plugin(&app).as_deref(), Some(two), "the filter's dialog opens");
     assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": two })).as_deref(), Some(chord));
     assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": one })), None);
     close_top_dialog(&mut app, false);
@@ -1579,7 +1591,7 @@ fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
     app.run("shortcuts.set", json!({"id": key, "shortcut": chord})).unwrap();
     vectorcraft_plugins::registry::install_bytes(&wasm("Replaced", with_params)).unwrap();
     frame(&mut app, f6());
-    assert_eq!(dialog_field(&app, "__plugin"), Some(json!(id)), "the replaced filter has parameters");
+    assert_eq!(open_plugin(&app).as_deref(), Some(id), "the replaced filter has parameters");
     assert_eq!(item_shortcut(&app, "plugin.dialog", json!({ "id": id })).as_deref(), Some(chord));
     close_top_dialog(&mut app, false);
     let folder = std::env::temp_dir().join(format!("vectorcraft-ui-filter-shortcut-{}", std::process::id()));
@@ -1616,7 +1628,7 @@ fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
     assert_eq!(app.plugin_runs.running.len(), 1, "started in the background");
     assert_eq!(app.ui.status, format!("Running “Heavy {at_once}”…"));
     frame(&mut app, tap(Key::F8, cmd() | Modifiers::ALT | Modifiers::SHIFT));
-    assert_eq!(dialog_field(&app, "__plugin"), Some(json!(asks)), "the heavy filter with parameters opens its dialog");
+    assert_eq!(open_plugin(&app).as_deref(), Some(asks), "the heavy filter with parameters opens its dialog");
     assert!(dialog_field(&app, "preview").is_none(), "no Preview");
     close_top_dialog(&mut app, false);
     assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);

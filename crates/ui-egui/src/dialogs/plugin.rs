@@ -153,6 +153,13 @@ pub(crate) enum Opened {
     Import { plugin: String, open: Value, params: Arc<[Param]> },
 }
 
+impl PluginDialog {
+    /// The plug-in the dialog is for.
+    pub(crate) fn plugin(&self) -> &str {
+        self.kind.plugin()
+    }
+}
+
 impl Opened {
     fn plugin(&self) -> &str {
         match self {

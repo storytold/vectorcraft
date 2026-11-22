@@ -20,6 +20,14 @@ pub(crate) struct CommandDialog {
     open: Option<Open>,
 }
 
+impl CommandDialog {
+    /// The open dialog's heading, in English, as the menu item gave it.
+    #[cfg(test)]
+    pub(crate) fn label(&self) -> Option<&str> {
+        self.open.as_ref().map(|o| o.label.as_str())
+    }
+}
+
 /// One open parameter dialog.
 struct Open {
     id: DialogId,

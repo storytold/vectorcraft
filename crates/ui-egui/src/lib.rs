@@ -352,7 +352,9 @@ impl VectorcraftApp {
     /// dialog blocks nothing, and the job progress window does not count (its layer has the
     /// progress role). False before the app has a context.
     pub(crate) fn any_dialog_open(&self) -> bool {
-        self.ui_ctx.as_ref().is_some_and(|ctx| overlay::any_open(ctx, OpenFilter::Keys))
+        // A modeless layer with a focus scope (the canvas's task bar) takes keys too, and blocks nothing.
+        let popup = |ctx: &egui::Context| overlay::top(ctx).and_then(|id| overlay::entry(ctx, id)).is_some_and(|e| e.rank == overlay::Rank::Popup);
+        self.ui_ctx.as_ref().is_some_and(|ctx| overlay::any_open(ctx, OpenFilter::Modal) || popup(ctx))
             || self.dialogs().is_some_and(|d| d.with(|h| h.shows_modal()))
     }
 

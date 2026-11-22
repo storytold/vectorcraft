@@ -728,6 +728,29 @@ pub(crate) fn record_pick(app: &mut VectorcraftApp, command: &CommandRef) {
     app.ui.command_uses.count(&command.key_text());
 }
 
+/// Why a palette pick of `command` runs nothing now, as the status line says it, or `None` while it
+/// can run: a panel can't be shown in Presentation Mode, and any other result's menu item is dimmed
+/// (an effect's or a filter's while nothing is selected), with the engine's reason when it gives one.
+/// A tool can always be chosen; a choice that fails says so itself.
+pub(crate) fn refusal(app: &VectorcraftApp, command: &CommandRef) -> Option<String> {
+    let id = command.id.as_str();
+    if id.starts_with("tool:") {
+        return None;
+    }
+    if id == "window.panel" {
+        return (app.ui.screen_mode >= 3).then(|| "panels can't be shown in Presentation Mode".to_string());
+    }
+    let why = match crate::menus::why_off(app, id)? {
+        Some(why) => Some(why),
+        // Dimmed before the engine was asked (no Appearance subject, an input method composing).
+        None => vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()),
+    };
+    Some(match why {
+        Some(why) => vectorcraft_engine::EngineError::Disabled(id.to_string(), why).to_string(),
+        None => format!("command `{id}` is not available right now"),
+    })
+}
+
 /// Shows the palette while it is open. The framework palette ranks, caps the results, keeps the
 /// recent picks and closes on a press outside it; a pick reaches the app as a command fired from
 /// the palette, which the runner runs and records ([`record_pick`]). Nothing is built while the
@@ -881,7 +904,7 @@ mod tests {
         let items = items();
         let ids: Vec<&str> = items.iter().filter(|(label, ..)| label == "Cancel Key Object").map(|(_, id)| id.as_str()).collect();
         assert_eq!(ids, ["select.key"]);
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let mut app = app_on(vectorcraft_engine::Session::new());
         let commands = crate::control::all_commands(&app);
         let key = commands.as_array().unwrap().iter().find(|c| c["id"] == "select.key").unwrap();
         assert_eq!(key["label"], "Cancel Key Object");
@@ -1559,7 +1582,7 @@ mod tests {
         };
         let acts = |id: &str| {
             [Session::new(), Fixture::Single.session(), Fixture::Multi.session()].into_iter().any(|session| {
-                let mut app = VectorcraftApp::new(session, crate::Services::default());
+                let mut app = app_on(session);
                 let before = look(&app);
                 pick(&mut app, id);
                 look(&app) != before

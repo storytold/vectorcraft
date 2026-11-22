@@ -44,6 +44,14 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, at: Pos2, hei
     frame(app, ctx, time + 0.1, vec![], height)
 }
 
+/// One frame of the canvas alone over the view's rect: a fit or zoom a command asked for waits for the canvas (a view
+/// request, canvas-w10 note 3).
+fn canvas_pass(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.clone().expect("a window");
+    let screen_rect = app.view().map(|v| v.rect);
+    crate::testing::part_frame(app, &ctx, egui::RawInput { screen_rect, ..Default::default() }, crate::canvas::show);
+}
+
 /// Where a screen-reader node is drawn.
 fn bounds(node: &Node) -> Option<egui::Rect> {
     let b = node.bounds()?;
@@ -127,9 +135,11 @@ fn tools_open_their_options() {
     app.view_mut().unwrap().rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(660.0, 460.0));
     app.run("view.setZoom", json!({"zoom": 333, "center": [10, 10]})).unwrap();
     open_options(&mut app, "hand").unwrap();
+    canvas_pass(&mut app);
     let v = *app.view().unwrap();
     assert_eq!((v.center.x, v.center.y, v.zoom), (150.0, 100.0, 2.0));
     open_options(&mut app, "zoom").unwrap();
+    canvas_pass(&mut app);
     assert_eq!(app.view().unwrap().zoom, 1.0);
     // With an object selected, the transform tools open their dialogs and the selection tools open Move.
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();

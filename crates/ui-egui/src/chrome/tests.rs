@@ -50,6 +50,21 @@ impl Shown {
         self
     }
 
+    /// One frame of the canvas, as the window draws it beside the chrome: a fit or zoom a command asked for waits for
+    /// the canvas (a view request, canvas-w10 note 3). Then the status bar again, and the view keeps the rect the test
+    /// gave it.
+    fn canvas_pass(&mut self) -> &mut Self {
+        let rect = self.app().view().map(|v| v.rect);
+        self.draw(crate::canvas::show).frame(vec![]);
+        if let Some(rect) = rect {
+            let mut app = self.app();
+            if let Some(view) = app.view_mut() {
+                view.rect = rect;
+            }
+        }
+        self.draw(super::status_bar)
+    }
+
     /// The room every following frame shows the chrome in.
     fn room(&mut self, room: egui::Vec2) -> &mut Self {
         self.fixture.room(room);
@@ -690,25 +705,28 @@ fn the_artboard_navigator_goes_to_artboards_and_fitting_shows_the_current_one() 
     app.run("artboard.new", json!({})).unwrap();
     app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(460.0, 260.0));
     let mut bar = status_shown(app);
-    let at = |bar: &Shown| {
+    // Where the view is once the canvas has drawn.
+    let at = |bar: &mut Shown| {
+        bar.canvas_pass();
         let app = bar.app();
         let view = app.view().unwrap();
         (view.artboard, view.center)
     };
     bar.click("Next Artboard");
-    assert_eq!(at(&bar), (1, Point::new(320.0, 50.0)), "next");
+    assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)), "next");
     bar.click("Last Artboard");
-    assert_eq!(at(&bar), (2, Point::new(540.0, 50.0)), "last");
+    assert_eq!(at(&mut bar), (2, Point::new(540.0, 50.0)), "last");
     bar.click("Previous Artboard");
-    assert_eq!(at(&bar), (1, Point::new(320.0, 50.0)), "previous");
+    assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)), "previous");
     // Fit Artboard in Window and Actual Size show the navigator's artboard.
     bar.app().run("view.setZoom", json!({"zoom": 300, "center": [0, 0]})).unwrap();
     bar.app().run("view.fitArtboard", json!({})).unwrap();
-    assert_eq!(at(&bar), (1, Point::new(320.0, 50.0)));
+    assert_eq!(at(&mut bar), (1, Point::new(320.0, 50.0)));
     bar.app().run("view.actualSize", json!({})).unwrap();
-    assert_eq!((at(&bar).1, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
+    let center = at(&mut bar).1;
+    assert_eq!((center, bar.app().view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
     bar.click("First Artboard");
-    assert_eq!(at(&bar), (0, Point::new(100.0, 50.0)), "first");
+    assert_eq!(at(&mut bar), (0, Point::new(100.0, 50.0)), "first");
     // The command also takes an index, clamped to the last artboard.
     let mut app = bar.app();
     assert_eq!(app.run("view.goToArtboard", json!({"index": 9})), Ok(json!({"index": 2})));
@@ -860,6 +878,7 @@ fn the_artboard_navigator_lists_the_artboards_by_number_and_name() {
     let rows: Vec<Target> = entries.iter().map(|e| bar.find(e).unwrap_or_else(|| panic!("the list shows {e:?}: {:?}", bar.names()))).collect();
     assert!(rows.windows(2).all(|w| w[0].rect.bottom() <= w[1].rect.top()), "the rows in the artboards' order: {rows:?}");
     bar.click_on(&rows[0]);
+    bar.canvas_pass();
     {
         let app = bar.app();
         let view = app.view().unwrap();
@@ -900,6 +919,7 @@ fn artboard_navigation_next(bar: &mut Shown) {
     let next = bar.named("Next Artboard");
     assert!(!bar.app().view().unwrap().rect.contains(next.center()));
     bar.click_on(&next);
+    bar.canvas_pass();
 }
 
 /// Properties' Delete Artboard button, once Properties shows the board named `shown`.

@@ -54,6 +54,8 @@ pub(crate) struct Closing {
     /// still open.
     front: Option<u64>,
     then: Then,
+    /// The document whose save waits on a later frame (its Save As or a replace question).
+    saving: Option<u64>,
 }
 
 /// Nothing closes while a file dialog's sheet is on the window (macOS): what asked for it runs
@@ -122,7 +124,7 @@ fn ask(app: &mut VectorcraftApp, i: usize, then: Then) -> Result<Value, String> 
     let front = app.session.active().map(|d| d.uid).filter(|f| then == Then::Close && *f != uid);
     let guard = CloseGuard::new(then.scope(), uids);
     show_question(app, &guard, uid)?;
-    app.closing = Some(Closing { guard, front, then });
+    app.closing = Some(Closing { guard, front, then, saving: None });
     Ok(json!({ "pending": KIND }))
 }
 
@@ -183,6 +185,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if app.closing.is_none() {
         return;
     }
+    if let Some(uid) = app.closing.as_ref().and_then(|c| c.saving) {
+        finish_save(app, uid);
+        ctx.request_repaint();
+        return;
+    }
     let Some(result) = app.dialogs().and_then(|d| d.with(|h| h.take::<UnsavedChangesDialog>())) else { return };
     let Some(mut closing) = app.closing.take() else { return };
     // Closed from outside: the same as Cancel.
@@ -190,6 +197,36 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let step = if all { closing.guard.answer_all(answer) } else { closing.guard.answer(answer) };
     advance(app, closing, step);
     ctx.request_repaint();
+}
+
+/// The save of document `uid` that a Save answer started and that waited on a later frame: once the
+/// document is saved it closes and the operation goes on; while its dialog or write is still running
+/// it waits; given up (its Save As cancelled) the document stays open and the operation stops.
+fn finish_save(app: &mut VectorcraftApp, uid: u64) {
+    let doc = app.session.documents().iter().find(|d| d.uid == uid);
+    let saved = doc.is_none_or(|d| !d.is_dirty());
+    let asking = app.dialogs().is_some_and(|d| d.with(|h| !h.open_dialogs().is_empty()));
+    if !saved && (app.file_dialog_open() || asking || app.background.busy_with(uid)) {
+        return;
+    }
+    let title = doc.map(|d| d.title()).unwrap_or_default();
+    let Some(mut closing) = app.closing.take() else { return };
+    closing.saving = None;
+    let step = match position(app, uid) {
+        Some(i) if saved => match close_now(app, i, closing.front) {
+            Ok(_) => closing.guard.saved(),
+            Err(e) => {
+                app.status(e);
+                return;
+            }
+        },
+        None => closing.guard.saved(),
+        Some(_) => {
+            app.status(format!("{title}: not saved, so not closed"));
+            closing.guard.save_failed()
+        }
+    };
+    advance(app, closing, step);
 }
 
 /// Acts on `step` until the guard asks a question again, waits, or stops.
@@ -230,8 +267,9 @@ fn advance(app: &mut VectorcraftApp, mut closing: Closing, mut step: GuardStep<u
                 None => closing.guard.saved(),
                 Some(i) => match save_then_close(app, i, closing.front) {
                     Ok(true) => closing.guard.saved(),
-                    // The replace-file question is open: the guard stays in `saving`.
+                    // Save As or the replace-file question is open: the guard stays in `saving`.
                     Ok(false) => {
+                        closing.saving = Some(uid);
                         app.closing = Some(closing);
                         return;
                     }
@@ -476,7 +514,7 @@ mod tests {
         // #830: it answered null at once, before the question.
         let mut app = app();
         new_doc(&mut app, true);
-        let ctx = ready_for_test(&mut app);
+        let (ctx, _picker) = ready_with_picks(&mut app);
         let quit = |app: &mut VectorcraftApp| {
             let (req, _rx) = craft::automation::ControlRequest::new("app.quit", json!({}));
             let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };

@@ -8,12 +8,7 @@ use vectorcraft_engine::cmd::prefscmds::PREF_SPECS;
 use crate::theme::Brightness;
 
 fn app() -> VectorcraftApp {
-    VectorcraftApp::new(Session::new(), Services::default())
-}
-
-/// A context with the fonts installed, for the passes the nested reset question needs.
-fn ctx() -> egui::Context {
-    crate::testing::ui_context()
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()))
 }
 
 /// One headless pass of the open window.
@@ -24,7 +19,8 @@ fn frame(a: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Reset Preferences asked and answered with `choice`, with the passes the question's host needs.
 fn reset_preferences(a: &mut VectorcraftApp, choice: PromptChoice) {
-    let ctx = ctx();
+    // The question's host answers on the window's context.
+    let ctx = a.ui_ctx.clone().expect("a window context");
     frame(a, &ctx);
     ask_reset(a);
     frame(a, &ctx);
@@ -165,7 +161,7 @@ fn a_render_threads_change_restarts_the_renderer_at_the_next_push() {
 fn dialog_ok_applies_prefs_and_ui_fields() {
     let mut a = app();
     open(&mut a, Some("general"));
-    assert_eq!(page(&a), Some("general"));
+    assert_eq!(page(&a), Some("General"));
     set_field(&mut a, "keyboardIncrement", json!(4)).unwrap();
     set_field(&mut a, "uiBrightness", json!("light")).unwrap();
     set_field(&mut a, "__smartGuides", json!(false)).unwrap();
@@ -378,7 +374,7 @@ fn reset_preferences_asks_first_and_cancel_returns_to_preferences() {
     reset_preferences(&mut a, PromptChoice::Cancel);
     assert!(is_open(&a), "Preferences is open again");
     assert!(same(&field(&a, "keyboardIncrement"), &json!(7)), "the edit is kept");
-    assert_eq!(page(&a), Some("units"));
+    assert_eq!(page(&a), Some("Units"));
     assert_eq!(a.session.prefs.keyboard_increment, 5.0, "nothing applied");
 }
 

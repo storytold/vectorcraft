@@ -235,19 +235,15 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn offer_and_wait(updater: &mut Updater, release: craft::update::Release) {
         let ctx = crate::testing::ui_context();
-        let (answered, wait) = std::sync::mpsc::channel();
-        ctx.set_repaint_observer(move |info| {
-            if info.delay.is_zero() {
-                let _ = answered.send(());
-            }
-        });
-        // Keeps `ctx` for the offer's thread.
         updater.tick(&ctx);
         updater.offer(release);
         // `offer` reads the launcher's choice; a managed copy starts no inspection.
         assert!(updater.managed().is_none(), "the launcher manages this copy, so it ignored the offer");
+        // The offer's thread only answers; `tick` polls for it, as each frame does.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while !updater.prompt_open() {
-            wait.recv().unwrap();
+            assert!(std::time::Instant::now() < deadline, "the offer's prompt never opened");
+            std::thread::sleep(std::time::Duration::from_millis(5));
             updater.tick(&ctx);
         }
     }

@@ -2,7 +2,7 @@
 //! nudges and the window's panel and artboard shortcuts.
 
 use craft::keymap::{CommandRef, Mods};
-use craft::ui::runtime::commands::{FirePhase, Fired};
+use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
 use craft::ui::runtime::keys::{self, Intent};
 use serde_json::json;
 use vectorcraft_tools::ToolKey;
@@ -27,15 +27,36 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
         }
         None => &fired.command,
     };
-    if command.id.starts_with("tool:") {
+    // A palette pick of a dimmed result runs nothing and says why; one that ran, opened its dialog
+    // or chose its tool is counted.
+    let picked = fired.source == FireSource::Palette;
+    if picked && let Some(why) = crate::palette::refusal(app, command) {
+        app.status(why);
+        return;
+    }
+    if let Some(tool) = command.id.strip_prefix("tool:") {
         match fired.phase {
             FirePhase::Release => held_tool::release(app, ctx, fired),
             FirePhase::Press | FirePhase::Repeat => held_tool::choose(app, ctx, fired),
+        }
+        if picked && app.session.tool_id() == tool {
+            crate::palette::record_pick(app, command);
         }
         return;
     }
     // The end of a momentary key is the board's; no command of the app acts on it.
     if fired.phase == FirePhase::Release {
+        return;
+    }
+    // A panel's pick shows the panel, where `window.panel` would put a showing one away.
+    if picked
+        && command.id == "window.panel"
+        && let Some(panel) = command.params.get("panel").and_then(serde_json::Value::as_str)
+    {
+        match crate::panel_docking::reveal_panel(app, panel) {
+            Ok(_) => crate::palette::record_pick(app, command),
+            Err(e) => app.status(e),
+        }
         return;
     }
     if command.id == "select.all" && crate::panels::artboards::selects_all(app) {
@@ -48,11 +69,14 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
         Some((id, params)) => crate::menus::invoke(app, &id, params),
         None => crate::menus::invoke(app, &command.id, shortcut_params(command)),
     }
+    if picked {
+        crate::palette::record_pick(app, command);
+    }
 }
 
 /// The engine's id of a framework edit command that no focused part took: Select All and Delete. Cut, Copy, Paste,
 /// Undo and Redo have the same id in both.
-fn engine_id(id: &str) -> Option<&'static str> {
+pub(crate) fn engine_id(id: &str) -> Option<&'static str> {
     match id {
         "edit.select_all" => Some("select.all"),
         "edit.delete" => Some("edit.clear"),

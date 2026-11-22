@@ -40,9 +40,10 @@ fn separators(nodes: &[Node]) -> Vec<usize> {
 /// The label the built bar shows for `id`, with the step-naming wording (Undo Move) applied.
 fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
     let ctx = crate::testing::ui_context();
-    // PLAN: assumed `app.menus.bar` is the `craft::menu::MenuBar` that `refresh` builds, with dynamic labels written into its items
     crate::menus::model::refresh(app, &ctx);
-    app.menus.bar.items().into_iter().find(|it| it.command.id == id).map(|it| it.label.clone())
+    // The bar keeps an item's own label; the row shows its state's title, which the model makes so.
+    let app = &*app;
+    app.menus.bar.items().into_iter().find(|it| it.command.id == id).map(|it| crate::menus::shown_label(app, id, &it.command.params, &it.label))
 }
 
 /// One frame of the whole app on `ctx`, with `events` as the host's input.
@@ -237,7 +238,8 @@ fn discover_rejects_invalid_search_and_selection_parameters() {
 #[test]
 fn discover_command_results_follow_their_menu_label() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // Help searches in the window's interface language.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     let found = app.run("help.discover.search", json!({"query": "view.grid"})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "view.grid" && hit["path"][0] == "View").unwrap();
@@ -288,7 +290,8 @@ fn discover_leaves_out_menus_the_window_does_not_show() {
 /// an effect by its own id (Effect › Pathfinder › Add reads Réunion in French).
 #[test]
 fn discover_finds_commands_by_their_shown_menu_label() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // Help searches in the window's interface language.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     let fr = crate::i18n::Lang::from_code("fr").unwrap();
     let shown = crate::i18n::tr_id(fr, "pathfinder.add", "Add");
     assert_ne!(shown, crate::i18n::tr(fr, "Add"));
@@ -309,7 +312,8 @@ fn discover_finds_commands_by_their_shown_menu_label() {
 
 #[test]
 fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // Help searches in the window's interface language.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     let found = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
     assert_eq!(found["results"][index]["shortcut"], "Cmd+N");
@@ -838,7 +842,7 @@ fn classic_rotate_is_in_the_3d_classic_submenu() {
 /// one brings back its zoom, centre and rotation after the view changed.
 #[test]
 fn every_saved_view_is_listed_at_the_bottom_of_the_view_menu() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     for i in 1..=25 {
         {
@@ -873,7 +877,7 @@ fn every_saved_view_is_listed_at_the_bottom_of_the_view_menu() {
 /// way Edit Selection… does.
 #[test]
 fn edit_views_opens_its_dialog_on_the_saved_views() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     assert!(!enabled(&app, "view.saved.edit"));
     invoke(&mut app, "view.saved.edit", json!({}));
@@ -923,10 +927,10 @@ fn undo_and_redo_name_a_style_step_around_the_style_name() {
 fn save_selection_asks_for_a_name() {
     let mut app = app_with_a_rectangle();
     invoke(&mut app, "select.save", json!({}));
-    let (_, fields) = open_dialog(&app);
+    let (dialog, fields) = open_dialog(&app);
     assert_eq!(
-        (text_of(&fields, "__command"), text_of(&fields, "__label"), text_of(&fields, "name")),
-        ("select.save".to_string(), "Save Selection".to_string(), "Selection 1".to_string())
+        (dialog.key.as_deref(), app.command_dialog.label(), text_of(&fields, "name").as_str()),
+        (Some("select.save"), Some("Save Selection"), "Selection 1")
     );
     // OK saves under the name typed.
     answer_open(&mut app, json!({"name": "Logo"}), true);
@@ -1210,7 +1214,12 @@ fn every_bound_menu_command_exists() {
             match n {
                 Node::Item(it) => {
                     let id = it.command.id.as_str();
-                    if vectorcraft_engine::find_command(id).is_none() && !UI_COMMANDS.iter().any(|c| c.0 == id) && !id.starts_with("object.path.") {
+                    // A Coming Soon row (`TODO`) is bound to no command.
+                    if id != TODO
+                        && vectorcraft_engine::find_command(id).is_none()
+                        && !UI_COMMANDS.iter().any(|c| c.0 == id)
+                        && !id.starts_with("object.path.")
+                    {
                         bad.push(id.to_string());
                     }
                 }
