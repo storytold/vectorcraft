@@ -743,3 +743,24 @@ fn opening_a_javascript_manifest_installs_it_with_its_script() {
     assert_eq!(vectorcraft_plugins::registry::get(id).and_then(|p| p.script().map(str::to_string)).as_deref(), Some("open.js"));
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
+
+/// Opening a JavaScript plug-in's `.vcplugin` by its path installs it through `plugin.install
+/// {path}` without the app's file reader reading the manifest first.
+#[test]
+fn opening_a_javascript_manifest_by_path_does_not_read_it_first() {
+    let mut app = app();
+    app.services.read = Some(Box::new(|_: &str| Err("the whole file was read".to_string())));
+    let id = "test.ui.js.open.path";
+    let dir = std::env::temp_dir().join(format!("vc-ui-js-open-path-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = json!({"id": id, "name": "Open JS by path", "kind": "filter", "runtime": "js", "script": "open.js"}).to_string();
+    let path = dir.join("open.vcplugin");
+    std::fs::write(&path, &manifest).unwrap();
+    std::fs::write(dir.join("open.js"), "function run(input) { return input; }").unwrap();
+    let r = io::open_path(&mut app, &path.display().to_string());
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(r, Ok(Value::Null));
+    assert_eq!(vectorcraft_plugins::registry::get(id).and_then(|p| p.script().map(str::to_string)).as_deref(), Some("open.js"));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}

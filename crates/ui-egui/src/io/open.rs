@@ -575,6 +575,12 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A JavaScript plug-in's manifest is read by `plugin.install {path}`, with the script it names.
+    if opens_as(path) == Some(OpensAs::Plugin) && vectorcraft_plugins::registry::is_js_package(std::path::Path::new(path)) {
+        install_module(app, json!({ "path": path }))?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
