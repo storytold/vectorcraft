@@ -146,6 +146,29 @@ fn functions_declared_in_blocks_are_scoped_to_the_block() {
 }
 
 #[test]
+fn a_block_function_inside_another_of_its_name_leaves_the_variable_alone() {
+    truth("var f; { function f() { return 'outer'; } { function f() { return 'inner'; } } } f() === 'outer'");
+    truth("function g() { { function f() { return 1; } { function f() { return 2; } } } return f(); } g() === 1");
+}
+
+#[test]
+fn a_labelled_function_in_a_block_is_made_when_the_block_is_entered() {
+    truth("let f = 0; { var value = f(); label: function f() { return 7; } } value === 7 && f === 0");
+    truth("{ var early = g(); a: b: function g() { return 8; } } early === 8 && g() === 8");
+    truth("label: function top() { return 1; } top() === 1");
+    syntax("let f; label: function f() {}");
+    syntax("label: function f() {} let f;");
+    syntax("{ let f; label: function f() {} }");
+}
+
+#[test]
+fn a_function_standing_alone_as_an_if_branch_has_a_block_of_its_own() {
+    truth("var f; if (true) function f() { return f; } var saved = f; f = 0; saved() === saved");
+    truth("var g; if (false) ; else function g() { return g; } var kept = g; g = 0; kept() === kept");
+    truth("if (true) function h() { return 3; } h() === 3");
+}
+
+#[test]
 fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
     let mut realm = es();
     assert_eq!(realm.run("let kept = 5; const fixed = 1; kept"), Ok(JsValue::Number(5.0)));
@@ -191,6 +214,32 @@ fn functions_from_earlier_runs_see_later_global_lexical_bindings() {
     assert_eq!(realm.run("let x = 7; read() + call(() => x) + viaEval() + made()"), Ok(JsValue::Number(28.0)));
     realm.set_es2015(false);
     assert_eq!(realm.run("function later() { return x; } later() + read()"), Ok(JsValue::Number(14.0)));
+}
+
+#[test]
+fn a_function_eval_declares_on_the_global_object_sees_global_lexical_bindings() {
+    // Without the option, eval code's functions close over its variable environment; on the
+    // global object that is the global scope, which holds the scripts' `let` and `const` names.
+    let mut realm = es();
+    assert_eq!(realm.run("let x = 7; 0"), Ok(JsValue::Number(0.0)));
+    realm.set_es2015(false);
+    assert_eq!(realm.run("with ({}) { eval('function read() { return x; }'); } read()"), Ok(JsValue::Number(7.0)));
+    assert_eq!(realm.run("function g() { eval('function inner() { return x; }'); return inner(); } g()"), Ok(JsValue::Number(7.0)));
+}
+
+#[test]
+fn a_global_var_makes_its_own_property_over_an_inherited_one() {
+    // ECMA-262 2015 section 8.1.1.4.17 reads the global object's own property, so `var` makes a
+    // new one even when the global object inherits the name.
+    let mut realm = es();
+    assert_eq!(realm.run("Object.prototype.inherited = 1; Object.prototype.viaEval = 2; 0"), Ok(JsValue::Number(0.0)));
+    let own = "var inherited; (0, eval)('var viaEval'); this.hasOwnProperty('inherited') && inherited === undefined \
+               && this.hasOwnProperty('viaEval') && viaEval === undefined";
+    assert_eq!(realm.run(own), Ok(JsValue::Bool(true)));
+    // Without the option, the inherited property counts as declared (ECMA-262 5.1 section 10.5).
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.prototype.inherited = 1; 0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var inherited; !this.hasOwnProperty('inherited') && inherited === 1"), Ok(JsValue::Bool(true)));
 }
 
 #[test]
@@ -248,6 +297,43 @@ fn a_global_function_is_judged_by_the_global_objects_own_property() {
         );
     }
     assert_eq!(realm.run("this.hasOwnProperty('fixed') || this.hasOwnProperty('fresh') || kept !== 1"), Ok(JsValue::Bool(false)));
+}
+
+fn is_thrown(result: &Result<JsValue, RunError>, name: &str) -> bool {
+    matches!(result, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with(name))
+}
+
+#[test]
+fn a_global_var_stops_a_later_let_even_on_a_configurable_property() {
+    // ECMA-262 2015 section 15.1.8 checks the names global `var` declarations made, not only the
+    // property attributes.
+    let mut realm = es();
+    assert_eq!(realm.run("this.x = 1; this.y = 1; 0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var x; 0"), Ok(JsValue::Number(0.0)));
+    let again = realm.run("let x = 2;");
+    assert!(is_thrown(&again, "SyntaxError"), "{again:?}");
+    // A property no `var` declared still takes a `let`.
+    assert_eq!(realm.run("let y = 2; y"), Ok(JsValue::Number(2.0)));
+    // A variable eval code declared can be deleted, and then its name takes a `let`.
+    assert_eq!(realm.run("(0, eval)('var z = 1'); 0"), Ok(JsValue::Number(0.0)));
+    assert!(is_thrown(&realm.run("let z;"), "SyntaxError"));
+    assert_eq!(realm.run("delete z"), Ok(JsValue::Bool(true)));
+    assert_eq!(realm.run("let z = 3; z"), Ok(JsValue::Number(3.0)));
+    assert_eq!(realm.run("(0, eval)('var w = 1'); delete this.w"), Ok(JsValue::Bool(true)));
+    assert_eq!(realm.run("let w = 4; w"), Ok(JsValue::Number(4.0)));
+}
+
+#[test]
+fn a_global_var_that_cannot_be_declared_declares_nothing() {
+    let mut realm = es();
+    assert_eq!(realm.run("var kept = 1; Object.preventExtensions(this); 0"), Ok(JsValue::Number(0.0)));
+    for decl in ["let x = 1; var y;", "(0, eval)('var y;');", "(0, eval)('let w; var y;');"] {
+        let failed = realm.run(decl);
+        assert!(is_thrown(&failed, "TypeError"), "{decl}: {failed:?}");
+    }
+    assert_eq!(realm.run("this.hasOwnProperty('y')"), Ok(JsValue::Bool(false)));
+    // `x` was not declared, and a `var` the global object already has stays allowed.
+    assert_eq!(realm.run("let x = 2; var kept; x + kept"), Ok(JsValue::Number(3.0)));
 }
 
 #[test]
@@ -356,6 +442,29 @@ fn tagged_templates_get_one_frozen_strings_object_for_each_site() {
 }
 
 #[test]
+fn template_objects_go_once_their_code_cannot_run() {
+    // Each eval makes code with two template sites; once it has run, nothing can run that code.
+    let mut realm = es();
+    let src = "function tag(s) { return s; } for (var i = 0; i < 50; i++) eval('tag`a`; tag`b`;'); 0";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    realm.collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 0);
+    // While the code can run, both of its sites keep their objects.
+    assert_eq!(realm.run("var sites = function () { return [tag`a`, tag`b`]; }; var first = sites(); 0"), Ok(JsValue::Number(0.0)));
+    realm.collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 2);
+    assert_eq!(realm.run("var again = sites(); again[0] === first[0] && again[1] === first[1]"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn a_preprocessor_line_does_not_start_after_a_template_that_spans_lines() {
+    let options = Options { es2015: true, preprocessor_lines: true, ..Options::default() };
+    assert!(crate::parse("var t = `${1}\n` #strict on", &options).is_err());
+    let p = crate::parse("var t = `${1}\n`\n#strict on", &options);
+    assert!(p.as_ref().is_ok_and(|p| p.directives.len() == 1), "{p:?}");
+}
+
+#[test]
 fn bad_template_literals_are_syntax_errors() {
     syntax("`abc");
     syntax("`${1`");
@@ -432,6 +541,70 @@ fn spread_expands_arrays_strings_and_array_like_objects() {
 }
 
 #[test]
+fn spread_reads_a_string_object_by_code_point() {
+    truth("var b = [...new String('a\\uD83D\\uDE00')]; b.length === 2 && b[0] === 'a' && b[1] === '\\uD83D\\uDE00'");
+    truth("function f() { return arguments.length; } f(...new String('\\uD83D\\uDE00\\uD83D\\uDE00')) === 2");
+}
+
+#[test]
+fn spread_reads_an_array_s_length_again_before_each_element() {
+    let shrink = "var a = [1, 2]; Object.defineProperty(a, 0, { get: function () { a.length = 1; return 'v'; } }); \
+                  var b = [...a]; b.length === 1 && b[0] === 'v'";
+    truth(shrink);
+    let grow = "var a = [1]; Object.defineProperty(a, 0, { get: function () { a.push(2); return 'v'; } }); \
+                var b = [...a]; b.join() === 'v,2'";
+    truth(grow);
+    // An object that is not an array keeps the length it had when spread began.
+    truth("var o = { length: 2, get 0() { o.length = 1; return 'v'; }, 1: 'w' }; [...o].join() === 'v,w'");
+}
+
+#[test]
+fn an_array_s_spread_is_checked_against_the_elements_it_reads() {
+    // The array starts at the longest length, and its first element's getter shrinks it, so
+    // only one element is read and the result fits.
+    let shrink = "var a = []; a.length = 4294967295; Object.defineProperty(a, 0, { get: function () { a.length = 1; return 7; } }); \
+                  var b = [...a]; b.length === 1 && b[0] === 7";
+    truth(shrink);
+    let then_more = "var a = []; a.length = 4294967295; Object.defineProperty(a, 0, { get: function () { a.length = 1; return 7; } }); \
+                     var b = [...a, ...[1, 2]]; b.join() === '7,1,2'";
+    truth(then_more);
+    // An array no getter reads is checked when spread begins, without reading its elements.
+    let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
+    let long = realm.run("var a = []; a.length = 4294967295; [...a]");
+    assert!(is_thrown(&long, "RangeError"), "{long:?}");
+    // An object that is not an array is still checked against the length it has when spread
+    // begins.
+    throws("[0, ...{ length: 4294967295 }];", "RangeError");
+}
+
+#[test]
+fn spread_counts_each_index_name_against_the_heap() {
+    // The elements' properties, with their index names and a string's characters, fit in the
+    // heap or the run ends with the heap limit, at every limit in the range.
+    for spread in ["[...a]", "[...s]"] {
+        let setup = "var a = Array(4000); var s = new Array(4001).join('x'); 0";
+        let mut measure = Realm::with_options(es_options(), Limits::default());
+        assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+        measure.interp().collect_garbage();
+        let base = measure.interp().heap.bytes;
+        for extra in (0..640usize).map(|k| k * 1024) {
+            let heap_bytes = base + extra;
+            let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+            if realm.run(setup).is_err() {
+                continue;
+            }
+            match realm.run(&format!("var b = {spread}; b.length")) {
+                Ok(v) => assert_eq!(v, JsValue::Number(4000.0), "{spread} at {heap_bytes}"),
+                Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread} at {heap_bytes}: {e:?}"),
+            }
+            // A collection counts what is live, without the bytes the spread held while it ran.
+            realm.interp().collect_garbage();
+            assert!(realm.interp().heap.bytes <= heap_bytes, "{spread}: {} > {heap_bytes}", realm.interp().heap.bytes);
+        }
+    }
+}
+
+#[test]
 fn spreading_other_values_is_a_type_error() {
     throws("[...1];", "TypeError");
     throws("[...null];", "TypeError");
@@ -488,6 +661,35 @@ fn a_rest_parameter_checks_the_heap_before_its_array_is_made() {
 }
 
 #[test]
+fn a_body_after_default_parameters_checks_the_heap_before_its_scope_is_made() {
+    // The default value fills the heap a little more each run, so at some count the room left
+    // after it is smaller than the body's long variable names need. The call then ends with the
+    // heap limit before the heap estimate passes it.
+    let vars = (0..200).map(|i| format!("v{i:0>60}")).collect::<Vec<_>>().join(", ");
+    let setup = format!(
+        "var keep = []; function fill(k) {{ for (var i = 0; i < k; i++) keep.push(i); }} function f(a = fill(count)) {{ var {vars}; return 1; }} 0"
+    );
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (256 << 10);
+    let mut stopped = 0;
+    for count in (0..4000).step_by(20) {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+        assert_eq!(realm.run(&setup), Ok(JsValue::Number(0.0)));
+        match realm.run(&format!("var count = {count}; f()")) {
+            Ok(v) => assert_eq!(v, JsValue::Number(1.0), "{count}"),
+            Err(e) => {
+                assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{count}: {e:?}");
+                stopped += 1;
+            }
+        }
+        assert!(realm.interp().heap.bytes <= heap_bytes, "{count}: {} > {heap_bytes}", realm.interp().heap.bytes);
+    }
+    assert!(stopped > 0, "no count reached the heap limit");
+}
+
+#[test]
 fn new_scopes_survive_collections_while_they_are_made() {
     // Heaps just big enough make the collector run while function bodies and blocks set up their
     // scopes; each run gives the right total or stops at the heap limit.
@@ -507,6 +709,40 @@ fn new_scopes_survive_collections_while_they_are_made() {
         }
     }
     assert!(completed > 0);
+}
+
+/// Runs `src` with a collection at every heap reservation, and checks that it gives `true`.
+fn truth_collecting(src: &str) {
+    let mut realm = es();
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(true));
+    let r = realm.run(src);
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(false));
+    assert_eq!(r, Ok(JsValue::Bool(true)), "{src}");
+    assert!(realm.interp().heap.collections > 0, "{src}");
+}
+
+#[test]
+fn values_a_call_enters_with_stay_reachable_while_its_scopes_are_made() {
+    truth_collecting("function C() { let x = 1; this.x = x; } var o = new C(); o.x === 1 && o instanceof C");
+    truth_collecting("function f(a) { let x = 1; return arguments[1].v; } f(0, { v: 3 }) === 3");
+    truth_collecting("function g() { 'use strict'; let x = 1; return this.v + x; } g.call({ v: 4 }) === 5");
+}
+
+#[test]
+fn strict_eval_environments_stay_reachable_while_their_scopes_are_made() {
+    truth_collecting("(function () { 'use strict'; var v = 5; return eval('let x = 1; var y = 2; x + y + v'); })() === 8");
+    truth_collecting("(0, eval)(\"'use strict'; let x = 1; var y = 2; x + y\") === 3");
+}
+
+#[test]
+fn new_scopes_survive_a_collection_at_each_reservation() {
+    // The sweep below makes collections fall where the heap size puts them; this one runs one at
+    // every reservation, so every scope is made across a collection.
+    truth_collecting(
+        "var total = 0; \
+         function f(a = 1, ...r) { let x = a + r.length; const y = 1; function g() { return x + y; } function h() { return g(); } return h(); } \
+         for (var i = 0; i < 20; i++) { { let b = i; function k() { return b; } total += f(1, 2) + k() - i; } } total === 60",
+    );
 }
 
 #[test]
@@ -895,6 +1131,29 @@ fn code_made_at_run_time_reads_the_realm_s_language() {
     truth("Function('...r', 'return r.length')(1, 2) === 2");
     let legacy = Realm::new().run("eval('let a = 1;')");
     assert!(matches!(&legacy, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("SyntaxError")), "{legacy:?}");
+}
+
+/// Starts `src` with the option `start`, turns it to `!start` once the run has paused, and gives
+/// the run's value.
+fn run_switching_language(src: &str, start: bool) -> Result<JsValue, RunError> {
+    let mut realm = Realm::with_options(Options { es2015: start, ..Options::default() }, Limits::default());
+    realm.start(src)?;
+    assert_eq!(realm.advance(20)?, crate::Progress::Paused);
+    realm.set_es2015(!start);
+    loop {
+        if let crate::Progress::Done(v) = realm.advance(1000)? {
+            assert_eq!(realm.interp().options.es2015, !start, "the new language applies once the run ends");
+            return Ok(v);
+        }
+    }
+}
+
+#[test]
+fn a_run_keeps_its_language_for_the_code_it_evaluates() {
+    let src = "for (var i = 0; i < 200; i++) {} ";
+    assert_eq!(run_switching_language(&format!("{src} eval('let a = 1; a')"), true), Ok(JsValue::Number(1.0)));
+    let legacy = run_switching_language(&format!("{src} var r; try {{ eval('let a = 1; a'); }} catch (e) {{ r = e.name; }} r"), false);
+    assert_eq!(legacy, Ok(JsValue::String("SyntaxError".into())));
 }
 
 // ---- robustness ----

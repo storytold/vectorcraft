@@ -55,8 +55,9 @@
 //! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
 //! `new` (sections 12.2.5 and 12.3.6.1), classes with `extends`, `super` and `new.target`
 //! (sections 14.5, 12.3.5 and 12.3.8), and methods in object literals (section 14.3). Spread reads
-//! arrays, strings (by code point) and objects with a `length`, by index; other values are a
-//! `TypeError`. Destructuring, `for … of`, generators and modules stay syntax errors.
+//! arrays by index, reading the length again before each element, strings and `String` objects by
+//! code point, and objects with a `length` by index; other values are a `TypeError`.
+//! Destructuring, `for … of`, generators and modules stay syntax errors.
 #![forbid(unsafe_code)]
 
 pub mod ast;

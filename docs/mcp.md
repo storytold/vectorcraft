@@ -2622,8 +2622,9 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
 parameters, spread in array literals, calls and `new`, classes with `extends`, `static` members, accessors and
 computed method names, `super` calls and properties, `new.target`, and methods in object literals. Spread reads
-arrays, strings (by code point) and objects with a `length` property, by index, and throws a `TypeError` for any
-other value; that rule is VectorCraft's own until iterators are added. A class can extend a class, a function, `null`
+arrays by index, reading the length again before each element, strings and `String` objects by code point, and
+objects with a `length` property by index, and throws a `TypeError` for any other value; that rule is VectorCraft's
+own until iterators are added. A class can extend a class, a function, `null`
 or the built-in constructors `Object`, `Function`, `Array`, `String`, `Number`, `Boolean`, `RegExp`, `Date` and the
 error types. A class can name another built-in constructor in `extends`, but `new` on that class throws a
 `TypeError` when it reaches the built-in constructor, a rule that is VectorCraft's own. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and

@@ -237,7 +237,7 @@ pub(crate) struct Interp {
     pub(crate) temp_roots: Vec<Value>,
     /// Environments native code is still building.
     temp_envs: Vec<EnvId>,
-    /// Global and eval code whose declarations are being made, before its frame holds it.
+    /// Global and eval code whose frame is not pushed yet, counted against the heap.
     temp_codes: Vec<Rc<Code>>,
     pub(crate) global: ObjId,
     pub(crate) global_env: EnvId,
@@ -245,6 +245,12 @@ pub(crate) struct Interp {
     /// the scripts the realm runs with [`Options::es2015`]. Global code runs in it in either
     /// language, so a function made by one run sees the names a later run declares.
     pub(crate) global_lex: EnvId,
+    /// The names global code has declared with `var` or as functions on the global object, which
+    /// a later script's `let` or `const` cannot take (ECMA-262 2015 section 8.1.1.4, its
+    /// [[VarNames]]). Deleting the global object's property removes its name.
+    global_vars: std::collections::HashSet<Key>,
+    /// The [`Options::es2015`] a host set while a run was going, for the runs after it.
+    pub(crate) next_es2015: Option<bool>,
     /// The template objects tagged templates have made, by code and template index, each with
     /// its code (ECMA-262 2015 section 12.2.9.3 keeps one object for each site).
     pub(crate) template_objects: std::collections::HashMap<(usize, u32), (Rc<Code>, ObjId)>,
@@ -402,6 +408,8 @@ const NAMED_KEY_UNITS: usize = 256;
 thread_local! {
     /// Tests: the [`Interp::finally_sites`] entries that leaving a block or a frame has looked at.
     pub(crate) static SITE_CHECKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Tests: [`Interp::reserve_heap`] collects garbage each time it is called.
+    pub(crate) static COLLECT_ON_RESERVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
@@ -438,6 +446,14 @@ pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
 /// The estimated bytes of a binding or property named by `len` code units.
 pub(crate) fn binding_bytes(len: usize) -> usize {
     PROP_BYTES + string_bytes(len)
+}
+
+/// The estimated bytes of the element property that spread adds at index `start + i`, its index
+/// name included.
+fn element_bytes(start: u32, i: usize) -> usize {
+    let index = u64::from(start).saturating_add(i as u64);
+    let digits = index.checked_ilog10().map_or(1, |d| d as usize + 1);
+    binding_bytes(digits)
 }
 
 /// At least the bytes that a function object made from `code` adds to the heap: the function,
@@ -531,6 +547,8 @@ impl Interp {
             global,
             global_env,
             global_lex,
+            global_vars: std::collections::HashSet::new(),
+            next_es2015: None,
             template_objects: std::collections::HashMap::new(),
             intrinsics: Intrinsics::placeholder(),
             fuel: u64::MAX,
@@ -713,6 +731,10 @@ impl Interp {
     /// collection. Everything the caller still needs must be reachable from the roots.
     pub(crate) fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
         self.settle_held();
+        #[cfg(test)]
+        if COLLECT_ON_RESERVE.with(std::cell::Cell::get) {
+            self.collect_garbage();
+        }
         if self.heap.bytes.saturating_add(bytes) <= self.limits.heap_bytes {
             return Ok(());
         }
@@ -797,6 +819,7 @@ impl Interp {
         roots.values.push(&self.passing);
         roots.objects.extend(self.finally_marks.iter().map(|&(id, _, _)| id));
         roots.codes.extend(self.finally_sites.iter().map(|((code, _), _)| &**code));
+        roots.codes.extend(self.temp_codes.iter().map(|code| &**code));
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
@@ -812,14 +835,13 @@ impl Interp {
         roots.envs.push(self.global_env);
         roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
-        roots.codes.extend(self.temp_codes.iter().map(|c| &**c));
-        // A template object stays while its code can still run: while something other than the
-        // entries for its code's sites holds the code.
-        let mut sites: std::collections::HashMap<*const Code, usize> = std::collections::HashMap::new();
-        for (code, _) in self.template_objects.values() {
-            *sites.entry(Rc::as_ptr(code)).or_default() += 1;
+        // A template object stays while its code can still run: while the code has an owner other
+        // than the entries of its own sites.
+        let mut sites: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        for &(code, _) in self.template_objects.keys() {
+            *sites.entry(code).or_default() += 1;
         }
-        self.template_objects.retain(|_, (code, _)| Rc::strong_count(code) > sites.get(&Rc::as_ptr(code)).copied().unwrap_or(0));
+        self.template_objects.retain(|(site, _), (code, _)| Rc::strong_count(code) > sites.get(site).copied().unwrap_or(0));
         roots.objects.extend(self.template_objects.values().map(|&(_, id)| id));
         self.heap.collect(&roots);
         // The collection counts the live total again, so bytes already released are not in it.
@@ -1881,6 +1903,12 @@ impl Interp {
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
+                // A deleted global variable no longer stops a `let` or `const` of its name
+                // (ECMA-262 2015 section 8.1.1.4.7), and the names kept are never more than the
+                // global object's properties.
+                if id == self.global {
+                    self.global_vars.remove(k);
+                }
                 let o = self.object_mut(id)?;
                 o.props.remove(k);
                 if let Class::Arguments(map) = &mut o.class
@@ -2317,6 +2345,9 @@ impl Interp {
     fn op_body_env(&mut self) -> JsResult<()> {
         let frame = self.frame()?;
         let (code, params) = (frame.code.clone(), frame.env);
+        // The parameters' values may have filled the room the call reserved, so the body's
+        // environment and declarations are checked against the heap again.
+        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         // Each new environment is in the frame, where the collector finds it, before the next
         // allocation.
         let var_env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(params) });
@@ -2362,25 +2393,45 @@ impl Interp {
     // ---- ECMAScript 2015 spread and templates ----
 
     /// Appends the elements of the value on top to the array under it: an array's elements by
-    /// index (holes read as `undefined`), a string's characters by code point, and an object with
-    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel,
-    /// and a concatenated string's flattened copy is counted against the heap before it is made.
+    /// index (holes read as `undefined`), with its length read again before each one as its
+    /// iterator reads it, a string's or a `String` object's characters by code point, and an
+    /// object with a `length` by index. Any other value is a `TypeError`. Each element takes a
+    /// unit of fuel and is counted against the heap as it is read, with its index name and a
+    /// string's character, and a concatenated string's flattened copy is counted before it is made.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
+        // A `String` object iterates as the string it holds does (ECMA-262 2015 section 21.1.3.27).
+        let boxed = match &v {
+            Value::Object(o) => match &self.object(*o)?.class {
+                Class::String(s) => Some(Value::String(s.clone())),
+                _ => None,
+            },
+            _ => None,
+        };
+        let current = match &self.object(a)?.class {
+            Class::Array { length, .. } => *length,
+            _ => return internal("spread into something that is not an array"),
+        };
+        // The most elements the array has room for.
+        let room = u32::MAX.saturating_sub(current);
         // The list of elements is counted against the heap limit as it grows, and stays counted
         // until its elements have become the array's properties.
         let mut held = HeldBytes::new(self);
-        let items: Vec<Value> = match &v {
+        // A string's characters are counted until the elements are reachable from the roots, where
+        // a collection counts them.
+        let mut chars = HeldBytes::new(self);
+        let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
                 let mut out = Vec::new();
                 let mut i = 0;
                 while let Some(&u) = units.get(i) {
                     self.use_fuel()?;
-                    held.add(self, PROP_BYTES)?;
                     let pair = (0xD800..0xDC00).contains(&u) && units.get(i + 1).is_some_and(|n| (0xDC00..0xE000).contains(n));
                     let len = if pair { 2 } else { 1 };
+                    held.add(self, element_bytes(current, out.len()))?;
+                    chars.add(self, string_bytes(len))?;
                     out.push(Value::String(Str::from_units(units.get(i..i + len).unwrap_or_default().to_vec())));
                     i += len;
                 }
@@ -2391,23 +2442,36 @@ impl Interp {
                 let len = self.get_from(o, &key("length"), &v)?;
                 // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
                 let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
-                let current = match &self.object(a)?.class {
-                    Class::Array { length, .. } => *length,
-                    _ => return internal("spread into something that is not an array"),
-                };
-                let Some(n) = u32::MAX.checked_sub(current).filter(|room| n < f64::from(*room)).map(|_| n as u32) else {
+                // An array's iterator reads its length again before each element (ECMA-262 2015
+                // section 22.1.5.2.1), so a getter that shrinks or grows the array changes the count,
+                // and the room is checked as each element is read. Any other object, and an array
+                // whose elements no getter reads, is checked against the length it has now.
+                let array = matches!(self.object(o)?.class, Class::Array { .. });
+                if n >= f64::from(room) && !(array && self.has_index_getter(o)?) {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
-                };
+                }
+                let n = n as u32;
                 // The elements read so far stay reachable while a getter runs.
                 let mark = self.temp_roots.len();
                 let mut read = || -> JsResult<()> {
-                    for i in 0..n {
+                    let mut i = 0;
+                    loop {
+                        let end = match &self.object(o)?.class {
+                            Class::Array { length, .. } if array => *length,
+                            _ => n,
+                        };
+                        if i >= end {
+                            return Ok(());
+                        }
+                        if i.saturating_add(1) >= room {
+                            return Err(self.throw(ErrorType::Range, "array literal too long"));
+                        }
                         self.use_fuel()?;
-                        held.add(self, PROP_BYTES)?;
+                        held.add(self, element_bytes(current, i as usize))?;
                         let item = self.get_from(o, &index_key(i), &v)?;
                         self.temp_roots.push(item);
+                        i += 1;
                     }
-                    Ok(())
                 };
                 let r = read();
                 let out = self.temp_roots.split_off(mark.min(self.temp_roots.len()));
@@ -2424,6 +2488,7 @@ impl Interp {
         let mark = self.temp_roots.len();
         let count = items.len();
         self.temp_roots.extend(items);
+        drop(chars);
         let reserved = self.reserve_heap(count.saturating_mul(PROP_BYTES.saturating_add(string_bytes(10))));
         let items = self.temp_roots.split_off(mark.min(self.temp_roots.len()));
         reserved?;
@@ -2439,6 +2504,21 @@ impl Interp {
         }
         drop(held);
         self.pop().map(drop)
+    }
+
+    /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
+    /// from has an accessor property with an index name. Each object takes a unit of fuel.
+    fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
+        let mut cur = Some(o);
+        while let Some(id) = cur {
+            self.use_fuel()?;
+            let object = self.object(id)?;
+            if object.props.iter().any(|(k, p)| matches!(p, Prop::Accessor { .. }) && array_index(k).is_some()) {
+                return Ok(true);
+            }
+            cur = object.proto;
+        }
+        Ok(false)
     }
 
     /// Takes the array of a call's or `new`'s arguments off the stack and pushes its elements.
@@ -2793,8 +2873,8 @@ impl Interp {
             .saturating_add(arguments)
             .saturating_add(rest)
             .saturating_add(crate::class_ops::hidden_bytes(&code));
-        // The operands are off the stack and in no frame yet, so they stay reachable while the
-        // function's environments are made.
+        // The callee, the receiver and the arguments stay reachable until the frame holds them:
+        // the reservation and the scopes, functions and objects the call makes can collect.
         let mark = self.temp_roots.len();
         self.temp_roots.push(Value::Object(callee));
         self.temp_roots.push(this.clone());
@@ -3192,12 +3272,11 @@ impl Interp {
 
     /// Declares a script's top-level `let` and `const` names in the global scope, uninitialized
     /// (ECMA-262 2015 section 15.1.8): a name another script declared with `let` or `const`, a
-    /// non-configurable property of the global object (a `var` or a function another script
-    /// declared, or a built-in such as `undefined`) or a `var` or function of this script that
+    /// name global code declared with `var` or as a function, a non-configurable property of the
+    /// global object (such as the built-in `undefined`) or a `var` or function of this script that
     /// another script declared with `let` or `const` is a `SyntaxError`, and nothing is declared.
     /// With [`Options::es2015`], a function of this script that cannot replace a property of the
-    /// global object, or a `var` that cannot be added to it, is a `TypeError`, also before
-    /// anything is declared.
+    /// global object, or a `var` it cannot add, is a `TypeError`, also before anything is declared.
     fn declare_global_lexical(&mut self, code: &Code, lex: EnvId) -> JsResult<()> {
         let lets: &[(Key, bool)] = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[], |s| &s.lets);
         let in_lex = |interp: &Self, name: &[u16]| matches!(interp.heap.env(lex), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
@@ -3205,7 +3284,7 @@ impl Interp {
         for (name, _) in lets {
             self.use_fuel()?;
             let restricted = self.get_own_property(global, name)?.is_some_and(|p| !p.configurable());
-            if in_lex(self, name) || restricted {
+            if in_lex(self, name) || restricted || self.global_vars.contains(name) {
                 let ident = String::from_utf16_lossy(name);
                 return Err(self.throw(ErrorType::Syntax, &format!("redeclaration of '{ident}'")));
             }
@@ -3217,7 +3296,8 @@ impl Interp {
             }
         }
         if self.options.es2015 {
-            self.check_global_declarations(code)?;
+            self.check_global_functions(code)?;
+            self.check_global_vars(code)?;
         }
         for (name, constant) in lets {
             let b = Binding::lexical(*constant);
@@ -3229,19 +3309,9 @@ impl Interp {
     /// The test `declare` makes for a function in an object environment, on the global object's
     /// own property, for every function `code` declares before any is (ECMA-262 2015 sections
     /// 15.1.8, step 8, and 18.2.1.2, step 8, CanDeclareGlobalFunction): a function that cannot
-    /// replace its property is a `TypeError`. So is a variable without an own property of a global
-    /// object that is not extensible (the same sections, step 10, CanDeclareGlobalVar).
-    fn check_global_declarations(&mut self, code: &Code) -> JsResult<()> {
+    /// replace its property is a `TypeError`.
+    fn check_global_functions(&mut self, code: &Code) -> JsResult<()> {
         let global = self.global;
-        if !self.object(global)?.extensible {
-            for name in &code.vars {
-                self.use_fuel()?;
-                if self.get_own_property(global, name)?.is_none() {
-                    let ident = String::from_utf16_lossy(name);
-                    return Err(self.type_error(&format!("cannot declare variable {ident}")));
-                }
-            }
-        }
         for (name, _) in &code.fun_decls {
             let replaceable = match self.get_own_property(global, name)? {
                 None => self.object(global)?.extensible,
@@ -3252,6 +3322,25 @@ impl Interp {
             if !replaceable {
                 let ident = String::from_utf16_lossy(name);
                 return Err(self.type_error(&format!("cannot declare function {ident}")));
+            }
+        }
+        Ok(())
+    }
+
+    /// The test for every `var` name `code` declares on the global object, made before any is
+    /// declared (ECMA-262 2015 sections 15.1.8, step 10, and 18.2.1.2, step 8,
+    /// CanDeclareGlobalVar): a name the global object does not have as its own property needs an
+    /// extensible global object, or it is a `TypeError`.
+    fn check_global_vars(&mut self, code: &Code) -> JsResult<()> {
+        let global = self.global;
+        if self.object(global)?.extensible {
+            return Ok(());
+        }
+        for name in &code.vars {
+            self.use_fuel()?;
+            if self.get_own_property(global, name)?.is_none() {
+                let ident = String::from_utf16_lossy(name);
+                return Err(self.type_error(&format!("cannot declare variable {ident}")));
             }
         }
         Ok(())
@@ -3306,7 +3395,8 @@ impl Interp {
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
             if var_env == self.global_env {
-                self.check_global_declarations(code)?;
+                self.check_global_functions(code)?;
+                self.check_global_vars(code)?;
             }
         }
         let global_lets = !is_eval && env == self.global_lex;
@@ -3337,19 +3427,32 @@ impl Interp {
     /// [`Self::instantiate_global_in`], each taking a unit of fuel.
     fn declare_global_functions_and_vars(&mut self, code: &Rc<Code>, lex: EnvId, var_env: EnvId, configurable: u8) -> JsResult<()> {
         // Functions close over the code's own environment with ES2015's scoping, and over its
-        // variable environment otherwise (ECMA-262 5.1 section 13). Global code's functions close
-        // over the global scope in either language, which sees the global object's names too.
-        let global = var_env == self.global_env && lex == self.global_lex;
-        let scope = if self.options.es2015 || global { lex } else { var_env };
+        // variable environment otherwise (ECMA-262 5.1 section 13). When that is the global
+        // object's, they close over the global scope inside it, which also holds the scripts'
+        // `let` and `const` names, as global code's functions do in either language.
+        let on_global = var_env == self.global_env;
+        let scope = if self.options.es2015 {
+            lex
+        } else if on_global {
+            self.global_lex
+        } else {
+            var_env
+        };
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, scope)?;
             self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
+            if on_global {
+                self.global_vars.insert(name.clone());
+            }
         }
         for v in &code.vars {
             self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
+            if on_global {
+                self.global_vars.insert(v.clone());
+            }
         }
         Ok(())
     }
@@ -3396,7 +3499,10 @@ impl Interp {
             }
             Some(Env::Obj { object, .. }) => {
                 let object = *object;
-                let declared = self.has_property(object, name)?;
+                // ECMA-262 2015 section 8.1.1.4.17 reads the object's own property, so a name it
+                // only inherits gets a new own property; section 10.5 of the 5.1 edition reads the
+                // inherited one as well.
+                let declared = if self.options.es2015 { self.get_own_property(object, name)?.is_some() } else { self.has_property(object, name)? };
                 let flags = WRITABLE | ENUMERABLE | configurable;
                 match value {
                     None if declared => Ok(()),

@@ -244,14 +244,15 @@ impl<'a> FnCompiler<'a> {
     /// in source order, and compiles the functions.
     /// With [`crate::Options::es2015`], only the function declarations at the top of the body are
     /// hoisted; one in a block is instantiated when the block is entered, and outside strict mode
-    /// code its name is also a variable (Annex B.3.3) unless that clashes with a parameter, with
+    /// code its name is also a variable (Annex B.3.3) unless that clashes with a parameter or with
     /// a `let` or a `const` of the body or of a block or loop around the declaration, or with a
-    /// function declared in a block around the one that holds the declaration.
+    /// function of a block around the one that holds it.
     fn hoist(&mut self, body: &[StmtId], params: &[Key]) -> CResult<Hoisted> {
         let mut out = Hoisted::default();
         let mut seen = HashSet::new();
-        // The `let` and `const` names and the block's function names of each statement list and
-        // loop the walk enters, with the index of the one around it; the body's are first.
+        // The `let` and `const` names and the block functions of each statement list and loop the
+        // walk enters, with the index of the one around it; the body's are first, and its
+        // functions are var-scoped.
         let mut scopes: Vec<(Option<usize>, HashSet<Key>, HashSet<Key>)> = vec![(None, self.lexical_names(body), HashSet::new())];
         let mut work: Vec<(StmtId, bool, usize)> = body.iter().rev().map(|&s| (s, false, 0)).collect();
         let mut add_var = |out: &mut Hoisted, k: Key| {
@@ -292,9 +293,9 @@ impl<'a> FnCompiler<'a> {
                 Stmt::If { consequent, alternate, .. } => {
                     // A function declaration standing alone as a branch is in a block of its own
                     // (Annex B.3.4).
-                    for &branch in alternate.iter().chain([consequent]) {
-                        let s =
-                            if matches!(self.ast.stmt(branch), Some(Stmt::FunctionDecl(_))) { enter(HashSet::new(), HashSet::new()) } else { scope };
+                    for &branch in alternate.iter().chain(std::iter::once(consequent)) {
+                        let alone = matches!(self.ast.stmt(branch), Some(Stmt::FunctionDecl(_)));
+                        let s = if alone { enter(HashSet::new(), HashSet::new()) } else { scope };
                         work.push((branch, nested || inner, s));
                     }
                 }
@@ -355,7 +356,8 @@ impl<'a> FnCompiler<'a> {
         for (k, scope, id) in annex {
             let mut cur = Some(scope);
             let mut clash = params.contains(&k) || *k == *key_of("arguments");
-            // The functions of the declaration's own block do not count: it is the one replaced.
+            // The functions of the declaration's own block are judged with it (Annex B.3.3.4);
+            // those of the blocks around it clash.
             let mut own = true;
             while let Some((outer, names, funcs)) = cur.and_then(|i| scopes.get(i)).filter(|_| !clash) {
                 clash = names.contains(&k) || (!own && funcs.contains(&k));
@@ -382,26 +384,25 @@ impl<'a> FnCompiler<'a> {
             .collect()
     }
 
-    /// The names of the function declarations a block's statement list declares, labeled ones
-    /// included.
-    fn block_function_names(&self, list: &[StmtId]) -> HashSet<Key> {
-        list.iter()
-            .filter_map(|&s| self.labeled_function(s))
-            .filter_map(|(_, fid)| self.ast.function(fid).and_then(|f| f.name.as_ref()))
-            .map(|n| key_of(&n.name))
-            .collect()
-    }
-
-    /// The function declaration the statement `s` is, alone or inside labels, and its statement.
-    fn labeled_function(&self, s: StmtId) -> Option<(StmtId, FunctionId)> {
-        let mut cur = s;
+    /// The function declaration a statement is, or the one at the end of its chain of labels,
+    /// with the statement that holds it.
+    fn declared_function(&self, mut s: StmtId) -> Option<(StmtId, FunctionId)> {
         loop {
-            match self.ast.stmt(cur)? {
-                Stmt::FunctionDecl(fid) => return Some((cur, *fid)),
-                Stmt::Labeled { body, .. } => cur = *body,
+            match self.ast.stmt(s)? {
+                Stmt::FunctionDecl(fid) => return Some((s, *fid)),
+                Stmt::Labeled { body, .. } => s = *body,
                 _ => return None,
             }
         }
+    }
+
+    /// The names of the function declarations a statement list holds, labelled ones included.
+    fn block_function_names(&self, list: &[StmtId]) -> HashSet<Key> {
+        list.iter()
+            .filter_map(|&s| self.declared_function(s))
+            .filter_map(|(_, fid)| self.ast.function(fid).and_then(|f| f.name.as_ref()))
+            .map(|name| key_of(&name.name))
+            .collect()
     }
 
     /// The scope a statement list declares with [`crate::Options::es2015`]: its `let`, `const`
@@ -414,20 +415,24 @@ impl<'a> FnCompiler<'a> {
         let mut scope = BlockScope::default();
         for &s in list {
             match self.ast.stmt(s) {
-                Some(Stmt::Lexical(kind, decls)) => scope.lets.extend(decls.iter().map(|d| (key_of(&d.name.name), *kind == LexKind::Const))),
-                Some(Stmt::Class(class)) => scope.lets.extend(class.name.iter().map(|n| (key_of(&n.name), false))),
-                _ if functions => {
-                    let Some((s, fid)) = self.labeled_function(s).filter(|(s, _)| !self.top_funcs.contains(s)) else { continue };
-                    let Some(name) = self.ast.function(fid).and_then(|f| f.name.as_ref()) else {
-                        return internal("function declaration without a name");
-                    };
-                    let k = key_of(&name.name);
-                    let i = self.function(fid)?;
-                    scope.funcs.push((k, i));
-                    self.block_funcs.insert(s);
+                Some(Stmt::Lexical(kind, decls)) => {
+                    scope.lets.extend(decls.iter().map(|d| (key_of(&d.name.name), *kind == LexKind::Const)));
+                    continue;
+                }
+                Some(Stmt::Class(class)) => {
+                    scope.lets.extend(class.name.iter().map(|n| (key_of(&n.name), false)));
+                    continue;
                 }
                 _ => {}
             }
+            let Some((decl, fid)) = self.declared_function(s).filter(|(decl, _)| functions && !self.top_funcs.contains(decl)) else { continue };
+            let Some(name) = self.ast.function(fid).and_then(|f| f.name.as_ref()) else {
+                return internal("function declaration without a name");
+            };
+            let k = key_of(&name.name);
+            let i = self.function(fid)?;
+            scope.funcs.push((k, i));
+            self.block_funcs.insert(decl);
         }
         if scope.lets.is_empty() && scope.funcs.is_empty() {
             return Ok(None);
@@ -601,7 +606,7 @@ impl<'a> FnCompiler<'a> {
             self.expr(*test)?;
             let otherwise = self.new_label();
             self.jump(Op::JumpIfFalse, otherwise);
-            self.stmt(*consequent)?;
+            self.branch(*consequent)?;
             let Some(alt) = *alternate else {
                 self.bind(otherwise);
                 break;
@@ -612,12 +617,21 @@ impl<'a> FnCompiler<'a> {
             if matches!(self.ast.stmt(alt), Some(Stmt::If { .. })) {
                 cur = alt;
             } else {
-                self.stmt(alt)?;
+                self.branch(alt)?;
                 break;
             }
         }
         self.bind(end);
         Ok(())
+    }
+
+    /// An `if` branch. With [`crate::Options::es2015`], a function declaration standing alone as
+    /// the branch is in a block of its own (Annex B.3.4).
+    fn branch(&mut self, id: StmtId) -> CResult<()> {
+        if self.es2015 && matches!(self.ast.stmt(id), Some(Stmt::FunctionDecl(_))) {
+            return self.block(&[id]);
+        }
+        self.stmt(id)
     }
 
     fn labeled(&mut self, id: StmtId) -> CResult<()> {

@@ -978,10 +978,9 @@ impl<'s> Parser<'s> {
             self.ctx.labels.remove(&label.name);
         }
         let mut body = body?;
-        // A labeled function declares its name in the statement list it stands in.
-        if let Some(Stmt::FunctionDecl(fid)) = self.ast.stmt(body) {
-            let fid = *fid;
-            self.declare_function(fid)?;
+        // A labelled function in a statement list is declared there as one without labels is.
+        if let Some(Stmt::FunctionDecl(fid)) = self.ast.stmt(body).filter(|_| in_list) {
+            self.declare_function(*fid)?;
         }
         for (label, label_start) in labels.into_iter().rev() {
             let span = Span::new(label_start.start, self.ast.stmt_span(body).end);
