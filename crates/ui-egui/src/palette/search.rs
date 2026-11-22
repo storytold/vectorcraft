@@ -1004,7 +1004,7 @@ mod tests {
     /// `entries` with their index, the params text of each in `params`.
     fn described(entries: Vec<Entry>, params: &[&str]) -> Catalog {
         let index = Index::build(&entries, &[], params, |_| None);
-        Catalog { list: entries, index, ranked: std::sync::Mutex::new(None) }
+        Catalog { list: entries, index, ranked: std::sync::Mutex::new(None), by_id: Default::default() }
     }
 
     /// Where `id` is among the results of `query`.
@@ -1464,7 +1464,7 @@ mod tests {
     #[test]
     fn without_an_index_only_the_substring_rule_matches() {
         let entries = vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")];
-        let c = Catalog { list: entries, index: Index::default(), ranked: std::sync::Mutex::new(None) };
+        let c = Catalog { list: entries, index: Index::default(), ranked: std::sync::Mutex::new(None), by_id: Default::default() };
         assert!(ranked(&c, "mov.nd").is_empty(), "{:?}", ranked(&c, "mov.nd"));
         assert_eq!(ranked(&c, "background mov"), ["a.one"]);
     }
@@ -1519,7 +1519,12 @@ mod tests {
     fn a_catalog_row_adds_words_to_a_group() {
         let entries = || vec![entry("Zz Delete", "a.one")];
         let row = |key: &str| (key == "remove, delete, erase, clear").then(|| "Entfernen, ganz weg, text".to_string());
-        let with = Catalog { list: entries(), index: Index::build(&entries(), &[], &[], row), ranked: std::sync::Mutex::new(None) };
+        let with = Catalog {
+            list: entries(),
+            index: Index::build(&entries(), &[], &[], row),
+            ranked: std::sync::Mutex::new(None),
+            by_id: Default::default(),
+        };
         assert_eq!(ranked(&with, "entfernen"), ["a.one"]);
         assert!(ranked(&with, "ganz weg").is_empty(), "two words are left out");
         assert!(ranked(&with, "text").is_empty(), "text stays in its own group");

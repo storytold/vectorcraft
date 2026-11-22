@@ -991,6 +991,16 @@ fn a_menu_bar_item_runs(id: &str, params: &str) -> bool {
         || menu_target(id).is_some_and(|(target, _)| target != id || !names_a_required_field(params))
 }
 
+/// Is `id` a UI command that fails when it runs with no params: its params doc names a field a call
+/// must give, no item of the menu bar runs it ([`a_menu_bar_item_runs`]), and a key press does not
+/// run it on its own ([`ui_listed_on_its_own`])? `toolbar.addTool` needs a `tool`.
+pub(crate) fn ui_command_needs_params(id: &str) -> bool {
+    crate::menus::UI_COMMANDS
+        .iter()
+        .find(|c| c.0 == id)
+        .is_some_and(|c| names_a_required_field(c.3) && !a_menu_bar_item_runs(c.0, c.3) && !ui_listed_on_its_own(c.0, c.2, c.3))
+}
+
 /// Is engine command `c` listed in Edit › Keyboard Shortcuts whether or not an item of the menu bar
 /// runs it? A command with a menu path of its own is. One without (a panel menu item) is when a key
 /// alone can run it: it has a default key, or it is an undoable command, not an alias, whose params

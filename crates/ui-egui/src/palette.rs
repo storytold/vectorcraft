@@ -327,6 +327,8 @@ pub(crate) struct Catalog {
     list: Vec<Entry>,
     index: search::Index,
     ranked: std::sync::Mutex<Option<Ranked>>,
+    /// Where each id is in `list`.
+    by_id: std::collections::HashMap<String, usize>,
 }
 
 impl std::ops::Deref for Catalog {
@@ -375,7 +377,69 @@ fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
     // A group's row in the `search` context gives its words in `lang`; a plain row is not read.
     let search_row = |key: &str| crate::i18n::tr_ctx_row(lang, words::CONTEXT, key).map(str::to_string);
     let index = search::Index::build(&list, &shown_homes, &params_texts(&list), search_row);
-    Catalog { list, index, ranked: std::sync::Mutex::new(None) }
+    let by_id = list.iter().enumerate().map(|(i, e)| (e.id.clone(), i)).collect();
+    Catalog { list, index, ranked: std::sync::Mutex::new(None), by_id }
+}
+
+/// What a command button on a toolbar made with New Toolbar shows for the result `id`
+/// ([`button_text`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ButtonText {
+    /// The result's label in the interface language, without the menu path in front of it and
+    /// without a closing ellipsis.
+    pub label: String,
+    /// The result's full name in the interface language, as the palette lists it.
+    pub name: String,
+    /// The shortcut as the menus show it, or empty.
+    pub shortcut: String,
+}
+
+/// The label and shortcut of the palette result `id` in the interface language, from the entries
+/// built once per language, plug-in set and shortcut set (`native`: with the native menu bar); none
+/// when the palette lists no result with that id now (an uninstalled plug-in's command).
+pub(crate) fn button_text(ctx: &egui::Context, native: bool, id: &str) -> Option<ButtonText> {
+    let entries = entries_in(ctx, crate::i18n::current(), native);
+    let e = entries.by_id.get(id).and_then(|&i| entries.list.get(i))?;
+    let label = label_of(e).trim_end();
+    let label = label.strip_suffix('…').or_else(|| label.strip_suffix("...")).unwrap_or(label).trim_end();
+    Some(ButtonText { label: label.to_string(), name: e.shown.clone(), shortcut: menus::shown_shortcut(&e.shortcut) })
+}
+
+/// The results a toolbar made with New Toolbar can hold as command buttons that the query `q`
+/// matches, best first, at most `most`: the results [`is_command`] allows. Each is its id and its
+/// name in the interface language (`native`: as [`button_text`]).
+pub(crate) fn command_matches(ctx: &egui::Context, native: bool, q: &str, most: usize) -> Vec<(String, String)> {
+    let entries = entries_in(ctx, crate::i18n::current(), native);
+    matching(&entries, q, &[], &CommandUses::default())
+        .into_iter()
+        .filter(|e| is_command(&e.id))
+        .take(most)
+        .map(|e| (e.id.clone(), e.shown.clone()))
+        .collect()
+}
+
+/// Can a toolbar made with New Toolbar hold the result `id` as a command button now: is it a
+/// palette result other than a tool, and not a UI command that fails without params a click does
+/// not give ([`crate::shortcut_editor::ui_command_needs_params`]: `toolbar.addTool` needs a
+/// `tool`)? The ids are listed again when the plug-ins or the shortcuts change, not on every call.
+pub(crate) fn is_command(id: &str) -> bool {
+    type Ids = ((u64, u64), Arc<std::collections::HashSet<String>>);
+    static IDS: std::sync::Mutex<Option<Ids>> = std::sync::Mutex::new(None);
+    if id.starts_with("tool:") {
+        return false;
+    }
+    let key = (menus::plugin_revision(), crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed));
+    let kept = IDS.lock().ok().and_then(|ids| ids.as_ref().filter(|(k, _)| *k == key).map(|(_, v)| v.clone()));
+    let ids = kept.unwrap_or_else(|| {
+        let filters: Vec<String> = crate::shortcut_editor::filter_items().iter().map(|f| format!("plugin:{}", f.id)).collect();
+        let ids = drafts().into_iter().map(|d| d.id).filter(|id| !id.starts_with("tool:") && !crate::shortcut_editor::ui_command_needs_params(id));
+        let ids: Arc<std::collections::HashSet<String>> = Arc::new(ids.chain(filters).collect());
+        if let Ok(mut kept) = IDS.lock() {
+            *kept = Some((key, ids.clone()));
+        }
+        ids
+    });
+    ids.contains(id)
 }
 
 /// The params text of each entry's command, which the index reads a description from
@@ -531,7 +595,7 @@ pub(crate) enum Picked {
 /// ([`crate::shortcut_editor::dimmed`]), with the engine's reason when it gives one and `name` in
 /// place of the command's id. A panel can't be shown in Presentation Mode, a tool can always be
 /// chosen, and every other result asks about the command its pick runs.
-fn unavailable(app: &VectorcraftApp, id: &str, name: &str) -> Option<String> {
+pub(crate) fn unavailable(app: &VectorcraftApp, id: &str, name: &str) -> Option<String> {
     if id.starts_with("tool:") {
         return None;
     }
@@ -585,7 +649,7 @@ impl Availability {
 /// mode, an open dialog, and the background saves and exports, file reads, plug-in runs and traces
 /// that run or show their progress. A click asks again for what it leaves out (a panel shown, a
 /// tool chosen) without changing it ([`show`]); typing in the search field does not.
-fn availability_key(app: &VectorcraftApp) -> u64 {
+pub(crate) fn availability_key(app: &VectorcraftApp) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     crate::native_menu::state_hash(app, None).hash(&mut h);
@@ -4016,6 +4080,7 @@ mod tests {
             slot_tool: Default::default(),
             double: false,
             floating: vec![],
+            commands: vec![],
         };
         // Window › Tools hides the Tools panel while a toolbar made with New Toolbar holds the Pen
         // Tool: the row names that toolbar.
@@ -5301,6 +5366,7 @@ mod tests {
             slot_tool: Default::default(),
             double: false,
             floating: vec![],
+            commands: vec![],
         }
     }
 

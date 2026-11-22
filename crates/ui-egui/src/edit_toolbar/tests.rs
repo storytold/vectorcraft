@@ -668,7 +668,7 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     let list = app.run("window.toolbar.list", json!({})).unwrap();
     assert_eq!(
         list,
-        json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]], "floating": true, "side": "left", "order": null}])
+        json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]], "commands": [], "floating": true, "side": "left", "order": null}])
     );
     // A second tool goes after the first.
     let shown = open(&mut app, 19.0);
@@ -890,4 +890,242 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }
+}
+
+/// The command buttons of the toolbar made with New Toolbar called Mine.
+fn mine_commands(app: &VectorcraftApp) -> Vec<String> {
+    crate::custom_toolbars::find(&app.ui, "Mine").unwrap().commands.clone()
+}
+
+/// `toolbar.addCommand` puts command buttons on a toolbar made with New Toolbar and moves them,
+/// `toolbar.removeCommand` takes them off, and a bad call changes nothing. Manage Toolbars' copy
+/// keeps them, and `toolbar.reset` takes them off with the tools.
+#[test]
+fn command_buttons_are_added_moved_and_removed_by_their_commands() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    let added = app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    assert_eq!(added, json!(["object.group"]));
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "at": 0})).unwrap();
+    assert_eq!(mine_commands(&app), ["object.path.cleanUp", "object.group"], "moved, not added twice");
+    for (p, why) in [
+        (json!({"command": "no.such", "toolbar": "Mine"}), "an unknown command"),
+        (json!({"command": "tool:pen", "toolbar": "Mine"}), "a tool"),
+        (json!({"command": "object.group", "toolbar": "Mine", "at": 2}), "a place past the end"),
+        (json!({"command": "object.group", "toolbar": "Mine", "at": -1}), "a negative place"),
+        (json!({"command": "toolbar.addTool", "toolbar": "Mine"}), "a command that needs params"),
+        (json!({"command": "object.group"}), "no toolbar"),
+        (json!({"toolbar": "Mine"}), "no command"),
+    ] {
+        assert!(app.run("toolbar.addCommand", p.clone()).is_err(), "{why}: {p}");
+        assert_eq!(mine_commands(&app), ["object.path.cleanUp", "object.group"], "{why} changes nothing");
+    }
+    assert!(app.run("toolbar.removeCommand", json!({"command": "object.group"})).is_err(), "no toolbar");
+    let list = app.run("window.toolbar.list", json!({})).unwrap();
+    assert_eq!(list[0]["commands"], json!(["object.path.cleanUp", "object.group"]));
+    let copy = app.run("window.toolbar.duplicate", json!({"name": "Mine"})).unwrap();
+    let copy = copy["toolbar"].as_str().unwrap().to_string();
+    assert_eq!(crate::custom_toolbars::find(&app.ui, &copy).unwrap().commands, mine_commands(&app), "the copy has them");
+    let left = app.run("toolbar.removeCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    assert_eq!(left, json!(["object.path.cleanUp"]));
+    app.run("toolbar.addTool", json!({"tool": "pen", "toolbar": "Mine"})).unwrap();
+    app.run("toolbar.reset", json!({"toolbar": "Mine"})).unwrap();
+    assert!(mine_commands(&app).is_empty(), "Reset makes the toolbar blank");
+    assert_eq!(crate::custom_toolbars::find(&app.ui, &copy).unwrap().commands.len(), 2, "the copy keeps its own");
+}
+
+/// The text painted inside the toolbar called Mine that starts with `text`: a point inside it and
+/// its color.
+fn on_mine(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, text: &str) -> Option<(Pos2, Color32)> {
+    let shown = frame(app, ctx, time, vec![]);
+    let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine")))?;
+    shown.into_iter().find(|(s, p, _)| s.starts_with(text) && bar.contains(*p)).map(|(_, p, c)| (p, c))
+}
+
+/// A command button shows its command's label, without the ellipsis, and a click runs what the
+/// command's menu item runs. While that item would be dimmed, the button is dimmed too and a click
+/// runs nothing. A command whose item ends in … opens its dialog.
+#[test]
+fn a_command_button_runs_its_command_and_is_dimmed_while_it_cannot() {
+    let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), Default::default());
+    let ctx = ctx();
+    let t = Tokens::get(&ctx);
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    for c in ["object.group", "object.path.cleanUp"] {
+        app.run("toolbar.addCommand", json!({"command": c, "toolbar": "Mine"})).unwrap();
+    }
+    let undo = |app: &VectorcraftApp| app.session.active().map_or(0, |d| d.history.undo.len());
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let (at, color) = on_mine(&mut app, &ctx, 0.1, "Group").expect("the button shows Group");
+    assert_eq!(color, t.text_disabled, "dimmed with nothing selected");
+    let before = undo(&app);
+    app.ui.status.clear();
+    click(&mut app, &ctx, 1.0, at);
+    assert_eq!(undo(&app), before, "a dimmed button runs nothing");
+    assert!(!app.ui.status.is_empty(), "the status line says why");
+    app.run("select.all", json!({})).unwrap();
+    let (at, color) = on_mine(&mut app, &ctx, 2.0, "Group").expect("the button shows Group");
+    assert_eq!(color, t.text, "not dimmed with objects selected");
+    click(&mut app, &ctx, 3.0, at);
+    assert!(undo(&app) > before, "Group ran");
+    let (at, _) = on_mine(&mut app, &ctx, 4.0, "Clean Up").expect("the button shows Clean Up");
+    assert!(on_mine(&mut app, &ctx, 4.1, "Clean Up…").is_none(), "without the ellipsis");
+    assert!(app.ui.dialog.is_none());
+    click(&mut app, &ctx, 5.0, at);
+    assert!(app.ui.dialog.is_some(), "Clean Up… opens its dialog");
+}
+
+/// Command buttons are kept with the preferences, and a toolbar saved before toolbars held commands
+/// loads with none. A command that is gone, such as an uninstalled plug-in's, stays: its button is
+/// dimmed and shows its id, a click runs nothing and says so, and Remove Command takes it off.
+#[test]
+fn a_missing_command_stays_dimmed_until_it_is_removed() {
+    let mut app = app();
+    let ctx = ctx();
+    let t = Tokens::get(&ctx);
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    crate::custom_toolbars::find_mut(&mut app.ui, "Mine").unwrap().commands.push("plugin:x".into());
+    let kept = app.ui.custom_toolbars.clone();
+    let prefs: crate::state::UiState = serde_json::from_slice(&serde_json::to_vec(&app.ui).unwrap()).unwrap();
+    assert_eq!(prefs.sanitized().custom_toolbars, kept, "kept with the preferences, the missing command too");
+    let mut old = serde_json::to_value(&kept[0]).unwrap();
+    old.as_object_mut().unwrap().remove("commands");
+    let old: crate::state::CustomToolbar = serde_json::from_value(old).unwrap();
+    assert!(old.commands.is_empty(), "an older toolbar loads without commands");
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let (at, color) = on_mine(&mut app, &ctx, 0.1, "plug").expect("the button shows the command's id");
+    assert_eq!(color, t.text_disabled);
+    app.ui.status.clear();
+    click(&mut app, &ctx, 1.0, at);
+    assert!(app.ui.status.contains("plugin:x"), "the status line names it: {}", app.ui.status);
+    let left = app.run("toolbar.removeCommand", json!({"command": "plugin:x", "toolbar": "Mine"})).unwrap();
+    assert_eq!(left, json!(["object.group"]));
+}
+
+/// Add Tool…'s menu lists a toolbar's command buttons under Remove Command, where a click takes one
+/// off, and its Add Command submenu searches the menu commands: a click on a match adds its button
+/// at the end of the toolbar.
+#[test]
+fn the_add_tool_menu_adds_and_removes_commands() {
+    let mut app = app();
+    let ctx = ctx();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
+    // The + button, which moves down as command buttons are added above it.
+    let plus = || {
+        let bar = ctx.memory(|m| m.area_rect(crate::custom_toolbars::area_id("Mine"))).expect("the toolbar is shown");
+        crate::toolbar::tests::widget_rects(&ctx, vec2(26.0, 26.0)).into_iter().find(|r| bar.contains(r.center())).expect("the + button")
+    };
+    // The menu's text named `name`, opened with a click on the + button unless it is open.
+    let menu_text = |app: &mut VectorcraftApp, time: f64, name: &str| {
+        let mut shown = frame(app, &ctx, time, vec![]);
+        if !shown.iter().any(|(s, ..)| s == "Select:") {
+            click(app, &ctx, time + 0.2, plus().center());
+            frame(app, &ctx, time + 0.5, vec![]);
+            shown = frame(app, &ctx, time + 0.6, vec![]);
+        }
+        let menu = ctx.memory(|m| m.area_rect(crate::custom_toolbars::add_menu_id("Mine")))?;
+        shown.into_iter().find(|(s, p, _)| s.trim() == name && menu.contains(*p)).map(|(_, p, _)| p)
+    };
+    assert!(menu_text(&mut app, 1.0, "Remove Command:").is_some(), "a heading over the toolbar's commands");
+    // The Add Command submenu opens under the pointer and searches as text is typed.
+    let row = menu_text(&mut app, 2.0, "Add Command").expect("the Add Command row");
+    frame(&mut app, &ctx, 3.0, vec![Event::PointerMoved(row)]);
+    frame(&mut app, &ctx, 3.5, vec![Event::PointerMoved(row)]);
+    let field = crate::custom_toolbars::command_query_id("Mine").with("edit");
+    ctx.memory_mut(|m| m.request_focus(field));
+    frame(&mut app, &ctx, 4.0, vec![]);
+    frame(&mut app, &ctx, 4.1, vec![Event::Text("clean up".into())]);
+    frame(&mut app, &ctx, 4.2, vec![]);
+    let shown = frame(&mut app, &ctx, 4.3, vec![]);
+    let at = shown.iter().find(|(s, ..)| s.trim().ends_with("Clean Up…")).map(|(_, p, _)| *p).expect("Clean Up… is found");
+    click(&mut app, &ctx, 5.0, at);
+    assert_eq!(mine_commands(&app), ["object.group", "object.path.cleanUp"], "added at the end");
+    let pen = crate::palette::command_matches(&ctx, false, "pen", 30);
+    assert!(!pen.is_empty() && pen.iter().all(|(id, _)| !id.starts_with("tool:")), "tools are not listed among the commands: {pen:?}");
+    let toolbar = crate::palette::command_matches(&ctx, false, "toolbar add", 30);
+    assert!(toolbar.iter().all(|(id, _)| id != "toolbar.addTool" && id != "toolbar.addCommand"), "commands that need params: {toolbar:?}");
+    // Under Remove Command, Group is listed by its full name, and a click takes it off.
+    let name = crate::palette::button_text(&ctx, false, "object.group").expect("Group's result").name;
+    let group = menu_text(&mut app, 10.0, &name).unwrap_or_else(|| panic!("{name} under Remove Command"));
+    click(&mut app, &ctx, 11.0, group);
+    assert_eq!(mine_commands(&app), ["object.path.cleanUp"]);
+}
+
+/// A button for a panel shows the panel, as the panel's Command Palette result does.
+#[test]
+fn a_panel_button_shows_its_panel() {
+    let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), Default::default());
+    let ctx = ctx();
+    let panel = crate::state::all_panels()
+        .map(|(id, _)| id)
+        .find(|id| !crate::panel_docking::visible(&app.ui, id) && crate::palette::is_command(&format!("panel:{id}")))
+        .expect("a hidden panel");
+    let id = format!("panel:{panel}");
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": id, "toolbar": "Mine"})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let label = crate::palette::button_text(&ctx, false, &id).expect("the panel's result").label;
+    let start: String = label.chars().take(3).collect();
+    let (at, _) = on_mine(&mut app, &ctx, 0.1, &start).unwrap_or_else(|| panic!("the button shows {label}"));
+    click(&mut app, &ctx, 1.0, at);
+    frame(&mut app, &ctx, 1.5, vec![]);
+    assert!(crate::panel_docking::visible(&app.ui, panel), "{panel} is shown");
+}
+
+/// A button for a plug-in's command that is not installed is dimmed and shows the command's id;
+/// once the plug-in is installed it shows the plug-in's name and can run, and when the plug-in is
+/// removed again it is dimmed again.
+#[test]
+fn a_plugin_command_button_works_again_when_the_plugin_returns() {
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), Default::default());
+    let ctx = ctx();
+    let t = Tokens::get(&ctx);
+    // A name no other test gives a plug-in.
+    let filter = "test.UI.toolbar_command-probe";
+    let id = format!("plugin:{filter}");
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    crate::custom_toolbars::find_mut(&mut app.ui, "Mine").unwrap().commands.push(id.clone());
+    app.run("select.all", json!({})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let gone = on_mine(&mut app, &ctx, 0.1, "plugin:").map(|(_, c)| c);
+    let manifest = format!(r#"{{"id":"{filter}","name":"Toolbar Probe","version":"1","kind":"filter","params":{{}}}}"#);
+    vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+    frame(&mut app, &ctx, 1.0, vec![]);
+    let back = on_mine(&mut app, &ctx, 1.1, "Toolbar").map(|(_, c)| c);
+    let added = app.run("toolbar.addCommand", json!({"command": id, "toolbar": "Mine", "at": 0}));
+    vectorcraft_plugins::registry::remove(filter);
+    frame(&mut app, &ctx, 2.0, vec![]);
+    let gone_again = on_mine(&mut app, &ctx, 2.1, "plugin:").map(|(_, c)| c);
+    assert_eq!(gone, Some(t.text_disabled), "dimmed, with its id, while it is not installed");
+    assert_eq!(back, Some(t.text), "its name, and it can run, once it is installed");
+    assert!(added.is_ok(), "an installed plug-in's command can be added: {added:?}");
+    assert_eq!(gone_again, Some(t.text_disabled), "dimmed again once it is removed");
+}
+
+/// The toolbars ask only a few command buttons in a frame whether they can run, and the others in
+/// the next frames.
+#[test]
+fn command_buttons_ask_whether_they_can_run_a_few_at_a_time() {
+    let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), Default::default());
+    let ctx = ctx();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    let ids: Vec<String> = crate::palette::command_matches(&ctx, false, "object", 40).into_iter().map(|(id, _)| id).take(20).collect();
+    assert_eq!(ids.len(), 20);
+    for id in &ids {
+        app.run("toolbar.addCommand", json!({"command": id, "toolbar": "Mine"})).unwrap();
+    }
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let (first, waiting) = crate::custom_toolbars::asked(&ctx);
+    assert!(first < ids.len() && waiting, "{first} asked in the first frame");
+    for k in 1..5 {
+        frame(&mut app, &ctx, f64::from(k), vec![]);
+    }
+    assert_eq!(crate::custom_toolbars::asked(&ctx), (ids.len(), false), "every button was asked in the next frames");
 }
