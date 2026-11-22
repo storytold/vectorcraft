@@ -105,6 +105,7 @@ fn catch_finally_and_the_combinators_settle_as_the_specification_says() {
                Promise.allSettled([Promise.reject('r'), 4]).then(function (v) { log.push(v[0].status + ':' + v[0].reason + ' ' + v[1].status + ':' + v[1].value); });\n\
                Promise.race([new Promise(function () {}), Promise.resolve('fast')]).then(function (v) { log.push('race ' + v); });\n\
                Promise.all('ab').then(function (v) { log.push('chars ' + v.length); });\n\
+               Promise.all(new String('a\\uD83D\\uDE00')).then(function (v) { log.push('boxed ' + v.length + ' ' + v[1].length); });\n\
                Promise.all(5).then(null, function (e) { log.push('not a list ' + (e instanceof TypeError)); });\n\
                Promise.race(new Error('e')).then(null, function (e) { log.push('no length ' + (e instanceof TypeError)); });\n\
                Promise.all({ length: 1.5 }).then(null, function (e) { log.push('bad length ' + (e instanceof TypeError)); });";
@@ -117,6 +118,7 @@ fn catch_finally_and_the_combinators_settle_as_the_specification_says() {
         "rejected:r fulfilled:4",
         "race fast",
         "chars 2",
+        "boxed 2 2",
         "not a list true",
         "no length true",
         "bad length true",

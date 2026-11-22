@@ -1141,7 +1141,7 @@ fn combine(interp: &mut Interp, this: Value, input: Value, how: Combine) -> JsRe
 
 /// Where the inputs of `Promise.all`, `allSettled` and `race` come from. An array is read up to
 /// its length at each step, as an array iterator reads it, and another object up to the `length`
-/// it had at the start.
+/// it had at the start. A string, and a `String` object, gives its characters.
 enum Inputs {
     Indexed { object: ObjId, length: f64 },
     CodePoints(Rc<[u16]>),
@@ -1149,6 +1149,13 @@ enum Inputs {
 
 impl Inputs {
     fn new(interp: &mut Interp, input: &Value, how: Combine) -> JsResult<Self> {
+        // A `String` object iterates as the string it holds does (ECMA-262 2015 section 21.1.3.27).
+        if let Value::Object(o) = input
+            && let Some(Class::String(s)) = interp.heap.object(*o).map(|obj| &obj.class)
+        {
+            let s = s.clone();
+            return Ok(Inputs::CodePoints(flat_charged(interp, &s)?));
+        }
         match input {
             Value::Object(o) => match interp.get_from(*o, &key("length"), input)? {
                 Value::Number(length) if length >= 0.0 && length.fract() == 0.0 && length <= 9_007_199_254_740_991.0 => {
