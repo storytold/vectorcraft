@@ -247,6 +247,74 @@ fn blank_values_and_failed_packets_keep_their_state() {
     assert_eq!(string(&src), "undefined", "a packet that fails to read registers no namespace");
 }
 
+/// A namespace URI or prefix over its limit is refused, and so is a namespace that would take the
+/// realm's namespaces over their byte budget; a refused namespace leaves the registry as it was.
+#[test]
+fn namespace_lengths_and_the_registry_budget_are_bounded() {
+    let mut registry = Registry::default();
+    let uri = |n: usize, fill: usize| format!("http://n/{n}/{}", "u".repeat(fill));
+    let at_limit = uri(0, xmp::MAX_URI_BYTES - uri(0, 0).len());
+    assert_eq!(at_limit.len(), xmp::MAX_URI_BYTES);
+    assert_eq!(registry.register(&at_limit, "a"), Ok("a".to_string()));
+    let over = format!("{at_limit}u");
+    assert_eq!(registry.register(&over, "b"), Err(XmpError::TooLarge));
+    assert_eq!(registry.register("http://p/", &"p".repeat(xmp::MAX_PREFIX_BYTES)), Ok("p".repeat(xmp::MAX_PREFIX_BYTES)));
+    assert_eq!(registry.register("http://q/", &"q".repeat(xmp::MAX_PREFIX_BYTES + 1)), Err(XmpError::TooLarge));
+    assert_eq!(registry.register("http://p2/", &"p".repeat(xmp::MAX_PREFIX_BYTES)), Err(XmpError::TooLarge), "the `_1_` suffix counts");
+    assert_eq!(registry.prefix_of(&over), None);
+    let mut n = 1;
+    let refused = loop {
+        let before = registry.bytes();
+        match registry.register(&uri(n, 900), &format!("p{n}")) {
+            Ok(_) => n += 1,
+            Err(e) => break (e, before),
+        }
+        assert!(n < 4096, "the byte budget ends registration before the namespace count does");
+    };
+    assert_eq!(refused.0, XmpError::Namespaces);
+    assert_eq!(registry.bytes(), refused.1, "a refused namespace adds no bytes");
+    assert!(registry.bytes() <= xmp::MAX_REGISTRY_BYTES);
+    assert_eq!(registry.prefix_of(&uri(n, 900)), None);
+    assert_eq!(registry.register(&at_limit, "z"), Ok("a".to_string()), "a namespace registered before keeps its prefix");
+}
+
+#[test]
+fn long_namespaces_from_scripts_and_packets_are_refused() {
+    assert_eq!(
+        thrown("XMPMeta.registerNamespace('http://n/' + new Array(2000).join('u'), 'a')"),
+        "RangeError: XMPMeta.registerNamespace: the XMP data is too large"
+    );
+    assert_eq!(
+        thrown("XMPMeta.registerNamespace('http://n/', new Array(200).join('a'))"),
+        "RangeError: XMPMeta.registerNamespace: the XMP data is too large"
+    );
+    let long = format!("http://n/{}", "u".repeat(xmp::MAX_URI_BYTES));
+    let packet = format!(
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description><a:p xmlns:a='{long}'>v</a:p></rdf:Description></rdf:RDF>"
+    );
+    let mut registry = Registry::default();
+    assert_eq!(xmp::parse(&packet, &mut registry), Err(XmpError::TooLarge));
+    assert_eq!(registry.prefix_of(&long), None);
+    assert_eq!(thrown(&format!("new XMPMeta({packet:?})")), "RangeError: XMPMeta: the XMP data is too large");
+}
+
+/// An error message holds at most the first 200 characters of a name, path, value or namespace
+/// the script gave.
+#[test]
+fn error_messages_hold_a_bounded_part_of_the_script_text() {
+    let cases = [
+        ("new XMPMeta().getProperty('http://none/' + s, 'a')", "Error: XMPMeta.getProperty: the namespace http://none/"),
+        ("new XMPMeta().setProperty(XMPConst.NS_DC, '1' + s, 'x')", "Error: XMPMeta.setProperty: 1"),
+        ("new XMPMeta().getProperty(XMPConst.NS_DC, 'a/' + s)", "RangeError: XMPMeta.getProperty: the value a/"),
+        ("new XMPMeta().getProperty(XMPConst.NS_DC, 'a', s)", "RangeError: XMPMeta.getProperty: the value "),
+    ];
+    for (src, start) in cases {
+        let message = thrown(&format!("var s = new Array(100000).join('x'); {src}"));
+        assert!(message.starts_with(start), "{message}");
+        assert!(message.len() < start.len() + 260, "{src}: {} characters", message.len());
+    }
+}
+
 #[test]
 fn array_forms_follow_their_options() {
     assert_eq!(Form::from_options(0x200), Form::Bag);

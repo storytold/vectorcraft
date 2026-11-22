@@ -17,7 +17,9 @@
 //! VectorCraft's own rules: a packet or a written packet holds at most [`MAX_BYTES`] bytes,
 //! elements nest at most 64 deep, a child of `rdf:RDF` other than `rdf:Description` makes the
 //! packet malformed, a property given twice keeps its first value, and [`find_packet`] finds only a
-//! UTF-8 packet.
+//! UTF-8 packet. A realm registers at most [`MAX_NAMESPACES`] namespaces holding at most
+//! [`MAX_REGISTRY_BYTES`] bytes, each URI at most [`MAX_URI_BYTES`] bytes and each prefix at most
+//! [`MAX_PREFIX_BYTES`] bytes.
 
 use std::collections::{HashMap, HashSet};
 
@@ -49,6 +51,14 @@ const MAX_NODES: usize = 1 << 20;
 const MAX_ATTRS: usize = 1024;
 /// The most namespaces a realm registers.
 const MAX_NAMESPACES: usize = 4096;
+/// The most bytes of a namespace URI a realm registers.
+pub(crate) const MAX_URI_BYTES: usize = 1024;
+/// The most bytes of a namespace prefix a realm registers, a `_n_` suffix included.
+pub(crate) const MAX_PREFIX_BYTES: usize = 128;
+/// The most bytes a realm's namespaces hold, counted by [`Registry::bytes`].
+pub(crate) const MAX_REGISTRY_BYTES: usize = 1 << 20;
+/// The bytes counted for each namespace besides its URI and prefix.
+const ENTRY_BYTES: usize = 96;
 /// The `id` of a packet wrapper (XMP Specification Part 1, 7.3.2).
 const WRAPPER_ID: &str = "W5M0MpCehiHzreSzNTczkc9d";
 
@@ -74,9 +84,11 @@ pub(crate) const ARRAY_IS_ALTTEXT: u32 = 0x1000;
 pub(crate) enum XmpError {
     /// The packet is not well-formed XML, or not XMP.
     Malformed,
-    /// The packet, or the packet written, is longer than [`MAX_BYTES`].
+    /// The packet, or the packet written, is longer than [`MAX_BYTES`], or a namespace URI is longer
+    /// than [`MAX_URI_BYTES`] or its prefix longer than [`MAX_PREFIX_BYTES`].
     TooLarge,
-    /// The realm already has [`MAX_NAMESPACES`] namespaces.
+    /// The realm already has [`MAX_NAMESPACES`] namespaces, or one more would take its namespaces
+    /// over [`MAX_REGISTRY_BYTES`].
     Namespaces,
     /// A name that is not an XML name without a colon, or a prefix that names another namespace.
     BadName,
@@ -228,6 +240,13 @@ pub(crate) struct Registry {
     /// names one namespace.
     prefixes: HashMap<String, String>,
     uris: HashMap<String, String>,
+    /// The bytes the namespaces hold, as [`entry_bytes`] counts them.
+    bytes: usize,
+}
+
+/// The bytes counted for the namespace `uri` with the prefix `prefix`: both strings are kept twice.
+fn entry_bytes(uri: &str, prefix: &str) -> usize {
+    ENTRY_BYTES + 2 * (uri.len() + prefix.len())
 }
 
 impl Default for Registry {
@@ -237,11 +256,17 @@ impl Default for Registry {
         Self {
             prefixes: standard.iter().map(|(p, u)| ((*u).to_string(), (*p).to_string())).collect(),
             uris: standard.iter().map(|(p, u)| ((*p).to_string(), (*u).to_string())).collect(),
+            bytes: standard.iter().map(|(p, u)| entry_bytes(u, p)).sum(),
         }
     }
 }
 
 impl Registry {
+    /// The bytes the namespaces hold, at most [`MAX_REGISTRY_BYTES`].
+    pub(crate) fn bytes(&self) -> usize {
+        self.bytes
+    }
+
     /// The prefix of the namespace `uri`.
     pub(crate) fn prefix_of(&self, uri: &str) -> Option<&str> {
         self.prefixes.get(uri).map(String::as_str)
@@ -254,12 +279,17 @@ impl Registry {
 
     /// Registers the namespace `uri` with the prefix `suggested` (a trailing colon is left out), or
     /// with `suggested_1_`, `suggested_2_` … when that one names another namespace. → the prefix
-    /// the namespace has, which is its earlier one when it was registered before.
+    /// the namespace has, which is its earlier one when it was registered before. A URI over
+    /// [`MAX_URI_BYTES`] or a prefix over [`MAX_PREFIX_BYTES`] is [`XmpError::TooLarge`], and a
+    /// namespace past [`MAX_NAMESPACES`] or [`MAX_REGISTRY_BYTES`] is [`XmpError::Namespaces`].
     pub(crate) fn register(&mut self, uri: &str, suggested: &str) -> Result<String, XmpError> {
         if let Some(p) = self.prefix_of(uri) {
             return Ok(p.to_string());
         }
         let suggested = suggested.strip_suffix(':').unwrap_or(suggested);
+        if uri.len() > MAX_URI_BYTES || suggested.len() > MAX_PREFIX_BYTES {
+            return Err(XmpError::TooLarge);
+        }
         // XML does not allow the prefix `xmlns` to be declared or a prefix to name its namespace.
         if uri.is_empty() || !is_text(uri) || !is_ncname(suggested) || suggested == "xmlns" || uri == XMLNS {
             return Err(XmpError::BadName);
@@ -273,6 +303,14 @@ impl Registry {
             prefix = format!("{suggested}_{n}_");
             n += 1;
         }
+        if prefix.len() > MAX_PREFIX_BYTES {
+            return Err(XmpError::TooLarge);
+        }
+        let bytes = self.bytes.saturating_add(entry_bytes(uri, &prefix));
+        if bytes > MAX_REGISTRY_BYTES {
+            return Err(XmpError::Namespaces);
+        }
+        self.bytes = bytes;
         self.prefixes.insert(uri.to_string(), prefix.clone());
         self.uris.insert(prefix.clone(), uri.to_string());
         Ok(prefix)

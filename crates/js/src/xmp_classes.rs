@@ -103,6 +103,7 @@ fn not_yet(i: &mut Interp, what: &str) -> Abrupt {
 }
 
 fn not_handled(i: &mut Interp, what: &str, value: &str) -> Abrupt {
+    let value = shown(value);
     i.throw(ErrorType::Range, &format!("{what}: the value {value} is not available yet"))
 }
 
@@ -110,26 +111,35 @@ fn wrong_object(i: &mut Interp, what: &str, class: &str) -> Abrupt {
     i.type_error(&format!("{what}: the object is not an {class} object"))
 }
 
+/// The first 200 characters of `s`, the most of a script's text an error message holds.
+fn shown(s: &str) -> String {
+    s.chars().take(200).collect()
+}
+
 /// The exception for `e`, which `what` met with the name or path `name`.
 fn xmp_error(i: &mut Interp, what: &str, e: XmpError, name: &str) -> Abrupt {
+    let name = shown(name);
     match e {
         XmpError::Malformed => i.throw(ErrorType::Error, &format!("{what}: the XMP packet is not well-formed XMP")),
         XmpError::TooLarge | XmpError::Namespaces => i.throw(ErrorType::Range, &format!("{what}: the XMP data is too large")),
         XmpError::BadName => i.throw(ErrorType::Error, &format!("{what}: {name} is not a valid property name")),
         XmpError::BadText => i.throw(ErrorType::Error, &format!("{what}: the text holds a character XML does not allow")),
-        XmpError::NotYet => not_handled(i, what, name),
+        XmpError::NotYet => not_handled(i, what, &name),
     }
 }
 
 fn not_array(i: &mut Interp, what: &str, name: &str) -> Abrupt {
+    let name = shown(name);
     i.throw(ErrorType::Error, &format!("{what}: {name} is not an array"))
 }
 
 fn not_simple(i: &mut Interp, what: &str, name: &str) -> Abrupt {
+    let name = shown(name);
     i.throw(ErrorType::Error, &format!("{what}: {name} is not a simple property"))
 }
 
 fn not_alt_text(i: &mut Interp, what: &str, name: &str) -> Abrupt {
+    let name = shown(name);
     i.throw(ErrorType::Error, &format!("{what}: {name} is not a language alternative array"))
 }
 
@@ -138,6 +148,7 @@ fn out_of_range(i: &mut Interp, what: &str, index: i64) -> Abrupt {
 }
 
 fn unregistered(i: &mut Interp, what: &str, uri: &str) -> Abrupt {
+    let uri = shown(uri);
     i.throw(ErrorType::Error, &format!("{what}: the namespace {uri} is not registered"))
 }
 
@@ -224,7 +235,7 @@ fn record(i: &mut Interp, proto: Option<ObjId>, fields: Vec<(&'static str, Value
 fn external_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let name = text(i, &arg(args, 0))?;
     if name != LIBRARY {
-        let name: String = name.chars().take(200).collect();
+        let name = shown(&name);
         let what = "ExternalObject";
         return Err(i.throw(ErrorType::Error, &format!("{what}: the library {name} is not available")));
     }
@@ -297,7 +308,9 @@ fn new_meta(i: &mut Interp, meta: Meta) -> JsResult<Value> {
 
 /// The metadata of the packet `text`, read for `what`.
 fn parse_packet(i: &mut Interp, what: &str, text: &str) -> JsResult<Meta> {
-    spend(i, text.len())?;
+    // Reading copies the realm's namespaces.
+    let copied = registry(i)?.bytes();
+    spend(i, text.len().saturating_add(copied))?;
     let r = xmp::parse(text, registry(i)?);
     r.map_err(|e| xmp_error(i, what, e, ""))
 }
@@ -1036,7 +1049,7 @@ fn packet_arg(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
     // A packet is checked by reading it into a copy of the realm's namespaces, so checking it
     // registers nothing.
     let mut scratch = registry(i)?.clone();
-    spend(i, s.len())?;
+    spend(i, s.len().saturating_add(2 * scratch.bytes()))?;
     xmp::parse(&s, &mut scratch).map_err(|e| xmp_error(i, what, e, ""))?;
     Ok(s)
 }
