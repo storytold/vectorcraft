@@ -3,7 +3,7 @@
 # common.tsv by @newsbaba24x7, partly reviewed by a native speaker).
 # The remaining rows are AI-assisted translations from the plain meaning of the English.
 # No other product's localisation or string table was consulted. Native speakers reviewed the catalog in the
-# running app (2026-11-15); the rows added on 2026-11-22 await their review.
+# running app (2026-11-15), and the rows added on 2026-11-22 the same day.
 # Product names, file extensions, keyboard keys, units, placeholders, command ids and parameter names stay unchanged.
 # Tamil integer plurals: 1 uses one, everything else other (plural_one_other in i18n.rs).
 # @plural and @msgplural translations have two forms separated by |.

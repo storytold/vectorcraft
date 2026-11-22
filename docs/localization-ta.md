@@ -17,7 +17,7 @@ French, Spanish and Italian catalogs all have.
   coverage tests alone do not establish translation quality.
 - 1,275 rows were added on 2026-11-22 for the strings main gained: 28 reuse the Tamil this
   catalog or craft-i18n already has for the same English, and 1,247 are AI-assisted translations
-  written the same clean-room way. Native review of these rows is pending.
+  written the same clean-room way. Native review of these rows was completed on 2026-11-22.
 
 ## Style
 
