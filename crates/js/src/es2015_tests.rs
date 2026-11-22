@@ -323,6 +323,10 @@ fn spread_expands_arrays_strings_and_array_like_objects() {
     truth("var a = [1, 2]; var b = [0, ...a, 3]; b.join() === '0,1,2,3' && b.length === 4");
     truth("var b = [...'a\\uD83D\\uDE00b']; b.length === 3 && b[1] === '\\uD83D\\uDE00'");
     truth("var b = [...{ length: 2, 0: 'x', 1: 'y' }]; b.join() === 'x,y'");
+    // A negative, NaN or fractional length is read as ToLength reads it.
+    truth("[...{ length: -1, 0: 'x' }].length === 0 && [...{ length: NaN }].length === 0");
+    truth("var b = [...{ length: 1.9, 0: 'x', 1: 'y' }]; b.join() === 'x'");
+    truth("function f() { return arguments.length; } f(...{ length: -4294967295, 0: 1 }) === 0");
     truth("var b = [...[1, , 3]]; b.length === 3 && 1 in b && b[1] === undefined");
     truth("var b = [, ...[1]]; b.length === 2 && !(0 in b)");
     truth("function f() { return arguments.length; } f(...[1, 2], 3, ...[]) === 3");
@@ -363,7 +367,8 @@ fn new_scopes_survive_collections_while_they_are_made() {
     // scopes; each run gives the right total or stops at the heap limit.
     let src = "var total = 0; \
         function f(a = 1, ...r) { let x = a + r.length; const y = 1; function g() { return x + y; } function h() { return g(); } var junk = [a, a, a]; return h(); } \
-        for (var i = 0; i < 300; i++) { { let b = i; function k() { return b; } function m() { return k(); } total += f(1, 2) + m() - i; } } total";
+        function p(c) { let x = c; function q() { return x + arguments.length; } return q(); } \
+        for (var i = 0; i < 300; i++) { { let b = i; function k() { return b; } function m() { return k(); } total += f(1, 2) + m() - i + p(1) - 1; } } total";
     let mut completed = 0;
     for kib in (16..400).step_by(2) {
         let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });

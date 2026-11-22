@@ -2315,14 +2315,15 @@ impl Interp {
             Value::Object(o) if self.has_property(*o, &key("length"))? => {
                 let o = *o;
                 let len = self.get_from(o, &key("length"), &v)?;
-                let n = to_uint32(self.to_number(&len)?);
+                // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
+                let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
                 let current = match &self.object(a)?.class {
                     Class::Array { length, .. } => *length,
                     _ => return internal("spread into something that is not an array"),
                 };
-                if u64::from(current) + u64::from(n) >= u64::from(u32::MAX) {
+                let Some(n) = u32::MAX.checked_sub(current).filter(|room| n < f64::from(*room)).map(|_| n as u32) else {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
-                }
+                };
                 // The elements read so far stay reachable while a getter runs.
                 // The list is counted against the heap limit as it grows.
                 let mark = self.temp_roots.len();
@@ -2795,16 +2796,31 @@ impl Interp {
         let needs_arguments = code.uses_arguments && !code.arrow;
         if code.param_init {
             if needs_arguments && !has(self, &key("arguments")) {
-                let a = self.create_arguments(code, env, args, callee)?;
-                self.env_insert(env, key("arguments"), Binding::new(Value::Object(a), !code.strict, false))?;
+                // The environment stays reachable while the object, which can collect, is made.
+                self.temp_envs.push(env);
+                let a = self.create_arguments(code, env, args, callee);
+                self.temp_envs.pop();
+                self.env_insert(env, key("arguments"), Binding::new(Value::Object(a?), !code.strict, false))?;
             }
             return Ok((env, env));
         }
-        // The environment stays reachable while the body's scope, which can collect, is made.
+        // The environments stay reachable while the body's scope, its functions and its
+        // `arguments` object, each of which can collect, are made.
+        let mark = self.temp_envs.len();
         self.temp_envs.push(env);
-        let lex = self.top_env(code, env);
-        self.temp_envs.pop();
-        let lex = lex?;
+        let r = self.instantiate_function_body(code, env, args, callee, needs_arguments);
+        self.temp_envs.truncate(mark);
+        r.map(|lex| (lex, env))
+    }
+
+    /// Declares the body of function code in its variable environment `env`, which the caller
+    /// keeps reachable: the `let` and `const` names at its top, its functions, its `arguments`
+    /// object and its variables. Gives the environment of the top `let` and `const` names, which
+    /// it adds to the temporary roots for the caller to remove.
+    fn instantiate_function_body(&mut self, code: &Rc<Code>, env: EnvId, args: &[Value], callee: ObjId, needs_arguments: bool) -> JsResult<EnvId> {
+        let has = |interp: &Self, name: &[u16]| matches!(interp.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
+        let lex = self.top_env(code, env)?;
+        self.temp_envs.push(lex);
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -2821,7 +2837,7 @@ impl Interp {
                 self.env_insert(env, v.clone(), Binding::new(Value::Undefined, true, false))?;
             }
         }
-        Ok((lex, env))
+        Ok(lex)
     }
 
     /// The environment of the `let` and `const` names at the top of `code`, inside `outer`, or
