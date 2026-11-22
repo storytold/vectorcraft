@@ -5,13 +5,16 @@
 //!
 //! - macOS: `CGDisplayScreenSize`.
 //! - Windows: `GetDpiForMonitor`'s raw density (`windows_display_size`).
-//! - X11, XWayland included: the RandR output's width and height in millimeters.
-//! - Wayland: the physical width and height of the compositor's `wl_output` for the display.
+//! - X11 on Linux, XWayland included: the RandR output's width and height in millimeters.
+//! - Wayland on Linux: the physical width and height of the compositor's `wl_output` for the display.
+//! - Other systems: no size, so an inch takes 96 points.
 //!
 //! A display that reports no size, or a size no display has, gives `None`, and an inch then takes
 //! 96 points. While the preference is on, the displays are listed once a second while the app
 //! draws. When the list changes, a background thread reads every display's size, and a later
-//! frame takes the result. A reading that fails is tried again after [`RETRY_AFTER`] seconds.
+//! frame takes the result. A reading that fails is tried again after [`RETRY_AFTER`] seconds, and
+//! the displays are read again [`READ_AGAIN_AFTER`] seconds after the last reading; the app draws a
+//! frame for each of these when nothing else makes it draw.
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -140,6 +143,11 @@ impl Tracker {
         {
             let due = (at + RETRY_AFTER).max(self.looked.map_or(0.0, |l| l + LOOK_EVERY));
             ctx.request_repaint_after(std::time::Duration::from_secs_f64((due - now).clamp(0.0, RETRY_AFTER)));
+        } else if enabled && self.running.is_none() && self.read.is_some() {
+            // An app that is not drawing still lists and reads the displays READ_AGAIN_AFTER seconds
+            // after the last reading.
+            let due = (self.read_at + READ_AGAIN_AFTER).max(self.looked.map_or(0.0, |l| l + LOOK_EVERY));
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64((due - now).clamp(0.0, READ_AGAIN_AFTER)));
         }
         densities
     }

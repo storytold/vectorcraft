@@ -1294,3 +1294,40 @@ fn a_floating_window_counts_100_percent_from_its_own_display() {
     app.settle_screen_ppi_if_changed();
     assert_eq!(app.views[1].zoom, fitted, "the fit is made for the main window's display");
 }
+
+/// What the host found for a floating OS window's display reaches its view: its first display and
+/// a move to another keep 100%, a window off every display is unread and keeps its zoom, a fit made
+/// in the frame its window reached a new display stays the fit, and the window drawn in the main
+/// window again counts from the main window's display.
+#[test]
+fn a_floating_os_window_takes_the_density_of_the_display_it_is_found_on() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("view.actualSize", json!({})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    let found = |ppi: Option<crate::ScreenPpi>| Shown { ppi, ..Default::default() };
+    let inch = |app: &VectorcraftApp| app.views[1].zoom * 72.0;
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut found(Some(crate::ScreenPpi::Read(Some(91.0)))));
+    assert!((inch(&app) - 91.0).abs() < 1e-9, "its first display keeps 100%: {}", inch(&app));
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut found(Some(crate::ScreenPpi::Read(Some(150.0)))));
+    assert!((inch(&app) - 150.0).abs() < 1e-9, "and so does a move to a denser one: {}", inch(&app));
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut found(None));
+    assert_eq!(screen_ppi(&app, win), Some(crate::ScreenPpi::Unread), "off every display it is unread");
+    assert!((inch(&app) - 150.0).abs() < 1e-9, "and keeps its zoom");
+    // A fit made in the frame the window reaches a display of another density stays the fit.
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let (zoom, center) = (app.views[1].zoom, app.views[1].center);
+    let body = egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0));
+    let mut fitted =
+        Shown { ppi: Some(crate::ScreenPpi::Read(Some(110.0))), body: Some(body), fit: Some((body.size(), zoom, center)), ..Default::default() };
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut fitted);
+    assert_eq!(app.views[1].zoom, zoom, "the fit was made for that display");
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    take_window_ppi(&mut app, &ctx, ((uid, 1), false), win, &mut found(Some(crate::ScreenPpi::Read(Some(110.0)))));
+    assert!((inch(&app) - 127.0).abs() < 1e-9, "drawn in the main window, 100% counts from the main window's display: {}", inch(&app));
+}

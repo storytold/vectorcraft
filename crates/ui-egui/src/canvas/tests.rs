@@ -8641,12 +8641,37 @@ fn actual_size_and_fits_made_before_a_reading_keep_their_meaning() {
     assert!(app.set_screen_reading(crate::ScreenPpi::Unread), "the window moved to a display being read");
     app.run("view.fitArtboard", json!({})).unwrap();
     let fitted = app.view().unwrap().zoom;
+    assert_eq!(app.print_ppi(), Some(127.0), "meanwhile the fit counts from the last reading, as the window's other views do");
+    app.settle_screen_ppi();
     assert!(app.set_screen_ppi(Some(190.0)));
     assert_eq!(app.view().unwrap().zoom, fitted, "the fit was made for this display");
     assert!(app.set_screen_reading(crate::ScreenPpi::Unread), "and to another display being read");
     app.run("view.actualSize", json!({})).unwrap();
     assert!(app.set_screen_ppi(Some(110.0)));
     assert!((app.view().unwrap().zoom * 72.0 - 110.0).abs() < 1e-9, "Actual Size there is 100%: {}", app.view().unwrap().zoom * 72.0);
+}
+
+/// Actual Size chosen before the first reading is still 100% when the reading arrives, also when a
+/// fit made before it gave the view the same zoom. A zoom chosen after a fit made while the display
+/// is being read keeps its percentage when the reading arrives.
+#[test]
+fn actual_size_after_a_fit_of_the_same_zoom_stays_at_100_percent() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 300, "height": 100})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0)));
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.run("view.fitArtboard", json!({})).unwrap();
+    assert!((app.view().unwrap().zoom * 72.0 - 96.0).abs() < 1e-9, "the fit has Actual Size's zoom before any reading");
+    app.run("view.actualSize", json!({})).unwrap();
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-9, "Actual Size keeps 100%: {}", app.view().unwrap().zoom * 72.0);
+    assert!(app.set_screen_reading(crate::ScreenPpi::Unread), "the window moved to a display being read");
+    app.run("view.fitArtboard", json!({})).unwrap();
+    app.run("view.zoomIn", json!({})).unwrap();
+    let shown = crate::state::zoom_display_percent(app.view().unwrap().zoom, app.print_ppi());
+    assert!(app.set_screen_ppi(Some(150.0)));
+    let now = crate::state::zoom_display_percent(app.view().unwrap().zoom, app.print_ppi());
+    assert!((now - shown).abs() < 1e-9, "a zoom chosen after the fit keeps its percentage: {shown} → {now}");
 }
 
 /// Fit Artboard in Window fits the artboard as a rotated view shows it: at 45° every corner is

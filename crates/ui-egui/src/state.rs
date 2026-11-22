@@ -54,6 +54,11 @@ pub struct View {
     /// percentage keeps its percentage then ([`crate::VectorcraftApp::settle_screen_ppi`]).
     #[serde(skip)]
     pub(crate) fit_zoom: Option<f64>,
+    /// The fit that gave [`Self::fit_zoom`] was made while the view's display was being read: the
+    /// view counts from the last reading meanwhile, and the reading, when it comes, leaves the zoom
+    /// alone while the view still has it.
+    #[serde(skip)]
+    pub(crate) fit_unread: bool,
 }
 
 impl Default for View {
@@ -67,6 +72,7 @@ impl Default for View {
             outline: false,
             shown_ppi: None,
             fit_zoom: None,
+            fit_unread: false,
         }
     }
 }
@@ -94,6 +100,7 @@ impl View {
             artboard: 0,
             outline: false,
             shown_ppi: None,
+            fit_unread: false,
         })
     }
 

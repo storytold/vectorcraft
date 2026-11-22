@@ -174,8 +174,9 @@ impl VectorcraftApp {
     }
 
     /// [`Self::settle_screen_ppi`] for window `w` alone. With `keep` false (a fit made for the
-    /// window), the view counts from the display's reading, or from its first reading still to
-    /// come, without a change of zoom.
+    /// window), the view counts from the display's reading, without a change of zoom; while the
+    /// display is being read, it counts from the last reading, and the reading still to come
+    /// leaves its zoom alone.
     pub(crate) fn settle_window_ppi(&mut self, w: crate::doc_windows::Win, keep: bool) {
         let on = self.session.prefs.display_print_size;
         let now = self.window_ppi(w);
@@ -185,10 +186,18 @@ impl VectorcraftApp {
         // keeps the zoom chosen meanwhile.
         if !on {
             v.shown_ppi = Some(crate::ScreenPpi::Unread);
+            v.fit_unread = false;
             return;
         }
         if !keep {
-            v.shown_ppi = Some(reading);
+            // While the display is being read, the fit counts from the last reading, as the other
+            // views there do, and the reading keeps its zoom.
+            v.shown_ppi = Some(now);
+            v.fit_unread = reading == crate::ScreenPpi::Unread;
+            return;
+        }
+        // A fit made while its display is being read waits for that reading.
+        if v.fit_unread && reading == crate::ScreenPpi::Unread {
             return;
         }
         // A display that has not answered yet leaves the view counting from the last one read, so
@@ -197,11 +206,14 @@ impl VectorcraftApp {
             v.shown_ppi.get_or_insert(now);
             return;
         };
+        let fitted = v.fit_zoom == Some(v.zoom);
         let before = match v.shown_ppi {
+            _ if fitted && v.fit_unread => None,
             Some(crate::ScreenPpi::Read(before)) => Some(before),
-            _ if v.fit_zoom == Some(v.zoom) => None,
+            _ if fitted => None,
             _ => Some(None),
         };
+        v.fit_unread = false;
         if let Some(before) = before
             && before != after
             && let (Some(b), Some(a)) = (crate::state::print_ppi(on, before), crate::state::print_ppi(on, after))

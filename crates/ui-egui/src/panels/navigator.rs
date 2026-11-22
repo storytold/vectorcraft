@@ -437,6 +437,42 @@ mod tests {
         assert!(min.is_some_and(|m| (m - lo).abs() < 1e-6) && max.is_some_and(|m| (m - hi).abs() < 1e-6), "{min:?} to {max:?}");
     }
 
+    /// A click on the thumbnail moves the view there and keeps the zoom percentage, here with
+    /// Display Print Size at 100% Zoom on a display of 127 points to an inch.
+    #[test]
+    fn a_click_on_the_thumbnail_keeps_the_zoom() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        app.set_screen_ppi(Some(127.0));
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.canvas_rect = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0)));
+        app.run("view.setZoom", json!({"zoom": 250, "center": [200, 150]})).unwrap();
+        let percent = |app: &VectorcraftApp| crate::state::zoom_display_percent(app.view().unwrap().zoom, app.print_ppi());
+        let before = (app.view().unwrap().center, percent(&app));
+        let ctx = egui::Context::default();
+        let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out
+        };
+        let pasteboard = Tokens::get(&ctx).pasteboard;
+        let thumb = run(&mut app, vec![])
+            .shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.fill == pasteboard => Some(r.rect),
+                _ => None,
+            })
+            .expect("the thumbnail");
+        let at = thumb.left_top() + thumb.size() * 0.25;
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        run(&mut app, vec![egui::Event::PointerMoved(at)]);
+        run(&mut app, vec![button(true)]);
+        run(&mut app, vec![button(false)]);
+        assert_ne!(app.view().unwrap().center, before.0, "the click moved the view");
+        assert!((percent(&app) - before.1).abs() < 1e-9, "and kept {}%: {}%", before.1, percent(&app));
+    }
+
     #[test]
     fn thumb_mapping_roundtrip() {
         let region = DRect::new(0.0, 0.0, 200.0, 100.0);
