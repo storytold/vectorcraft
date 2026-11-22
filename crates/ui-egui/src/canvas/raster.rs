@@ -35,8 +35,10 @@ pub(crate) fn color_image_owned(img: vectorcraft_render::Rendered) -> egui::Colo
 /// objects showing those bitmaps' files cover (`Some(None)`: none), grown to whole eighths of the
 /// frame, as long as they are at most half of it. None: render the whole frame. Frames the worker
 /// renders stay whole: its renderer keeps the rasters of the art's effects, this thread's doesn't.
+/// What changed is measured by this thread's renderer, which drew the frame shown: it keeps what
+/// it measures (a 3D effect's art) to draw the part again.
 pub(super) fn changed_pixels(
-    app: &VectorcraftApp,
+    app: &mut VectorcraftApp,
     key: &CacheKey,
     doc: &vectorcraft_doc::Document,
     opts: &vectorcraft_render::RenderOptions,
@@ -55,12 +57,9 @@ pub(super) fn changed_pixels(
         return None;
     }
     // The placed documents' files whose bitmaps were made since the frame shown.
-    let placed = if shown_key.placed == key.placed {
-        vectorcraft_render::Changed::Nothing
-    } else {
-        vectorcraft_render::placed_area(doc, &vectorcraft_render::placed_document::made_between(shown_key.placed, key.placed)?)
-    };
-    match vectorcraft_render::changed(shown, doc).and(placed) {
+    let entry = app.session.documents().iter().find(|d| d.uid as usize == key.doc).and_then(|d| app.canvas.placed_keys.get(&d.uid));
+    let placed = super::placed_changes(entry, shown_key.placed, key.placed, doc, vectorcraft_render::placed_document::made_between)?;
+    match app.canvas.renderer.changed(shown, doc, opts).and(placed) {
         vectorcraft_render::Changed::Nothing => Some(None),
         vectorcraft_render::Changed::Area(area) => match vectorcraft_render::view_pixels(area, view, w, h) {
             None => Some(None),
@@ -217,7 +216,7 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
         composed_frame(r, moved_pixels(k.pixels.as_ref()?, job.w, job.h, pan), parts, job)
     });
     let reused = copied.is_some();
-    let (img, moved) = copied.unwrap_or_else(|| {
+    let (mut img, moved) = copied.unwrap_or_else(|| {
         let img = r.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let moved = r.stats.moved;
         (img, moved)
@@ -226,6 +225,9 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
         job.may_keep && moved == 0 && r.stats.view_sized == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
     *kept =
         keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: holds_pixels.then(|| img.pixels.clone()) });
+    // The kept frame stays sRGB, so the next frame's copied pixels are converted only once.
+    let width = img.width;
+    crate::display_profile::convert_over(job.display.as_deref(), &mut img.pixels, width, job.view, job.key.over());
     WorkerFrame { img, moved, reused }
 }
 
@@ -240,9 +242,20 @@ pub(super) fn upload(app: &mut VectorcraftApp, ctx: &egui::Context, img: vectorc
     }
 }
 
+/// The device pixels a point that the art's frame of a canvas `size` points across renders at:
+/// the display's `ppp`, lowered when a side of the frame would be more than `max_side` pixels, the
+/// largest texture side the display supports (egui's `max_texture_side`). The frame is then drawn
+/// scaled up over the canvas, at a lower resolution.
+pub(super) fn frame_ppp(size: egui::Vec2, ppp: f32, max_side: usize) -> f32 {
+    let longest = size.x.max(size.y) * ppp;
+    let max = max_side.clamp(1, usize::from(u16::MAX)) as f32;
+    if longest.round() <= max { ppp } else { ppp * (max / longest) }
+}
+
 /// Pixel Preview: the whole document pixels (x0, y0, x1, y1) under the canvas, rotated view
-/// included. None when the view is degenerate.
-pub(super) fn pixel_region(xf: &Xf) -> Option<[i64; 4]> {
+/// included. None when the view is degenerate, or when a side of the region is more than
+/// `max_side` pixels, the largest texture side the display supports.
+pub(super) fn pixel_region(xf: &Xf, max_side: usize) -> Option<[i64; 4]> {
     let r = xf.rect;
     let corners = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()].map(|p| xf.to_doc(p));
     let (mut x0, mut y0, mut x1, mut y1) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
@@ -251,6 +264,7 @@ pub(super) fn pixel_region(xf: &Xf) -> Option<[i64; 4]> {
     }
     let (x0, y0, x1, y1) = (x0.floor(), y0.floor(), x1.ceil(), y1.ceil());
     // A document pixel is bigger than a screen pixel here, so the region is about canvas-sized.
-    let ok = [x0, y0, x1, y1].iter().all(|c| c.is_finite() && c.abs() < 1e9) && x1 > x0 && y1 > y0 && x1 - x0 <= 16384.0 && y1 - y0 <= 16384.0;
+    let max = max_side.min(16384) as f64;
+    let ok = [x0, y0, x1, y1].iter().all(|c| c.is_finite() && c.abs() < 1e9) && x1 > x0 && y1 > y0 && x1 - x0 <= max && y1 - y0 <= max;
     ok.then_some([x0 as i64, y0 as i64, x1 as i64, y1 as i64])
 }

@@ -11,10 +11,10 @@ use vectorcraft_doc::NodeKind;
 
 use super::tests::{all, bounds, fill, read};
 
-const FONT: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
+pub(super) const FONT: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
 
 /// The glyph index of `c` in [`FONT`] and its advance width in ems.
-fn glyph(c: char) -> (u32, f64) {
+pub(super) fn glyph(c: char) -> (u32, f64) {
     let font = FontRef::new(FONT).unwrap();
     let gid = font.charmap().map(c).unwrap();
     let upem = f64::from(font.metrics(Size::unscaled(), LocationRef::default()).units_per_em);
@@ -24,7 +24,7 @@ fn glyph(c: char) -> (u32, f64) {
 
 /// `sfnts` strings of [`FONT`]: the first of odd length, ending in a padding byte that isn't part
 /// of the font, the rest split at even lengths.
-fn sfnts() -> String {
+pub(super) fn sfnts() -> String {
     let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
     let mut out = format!("<{}00>\n", hex(&FONT[..20000]));
     for chunk in FONT[20000..].chunks(40000) {
@@ -117,6 +117,74 @@ fn widthshow_matches_a_composite_character_by_font_number_and_code() {
     check(format!("{} {} sub abs 0.01 lt", end(1), 10.0 + 100.0 * wh + 20.0));
     // 2 is neither.
     check(format!("{} {} sub abs 0.01 lt", end(2), 10.0 + 100.0 * wh));
+}
+
+/// `cshow` runs its procedure once for each character of a composite font, not for each byte,
+/// with the last byte of its code and its width, and with the descendant that draws it as the
+/// current font while `rootfont` gives the composite font (PLRM 3rd ed., `cshow` and `rootfont`).
+#[test]
+fn cshow_runs_once_for_each_composite_character_in_its_descendant() {
+    let (_, wh) = glyph('H');
+    let (_, wi) = glyph('I');
+    let check = |cond: String| super::tests::check(&format!("{} /Comp findfont 50 scalefont setfont {cond}", fonts()));
+    check("[ {pop pop} (\\000\\001\\000\\002) cshow ] dup length 2 eq exch aload pop 2 eq exch 1 eq and and".into());
+    check(format!("0 {{pop exch pop add}} (\\000\\001\\000\\002) cshow {} sub abs 0.01 lt", 50.0 * (wh + wi)));
+    check("{pop pop pop currentfont /FontName get /seen exch def rootfont /FontName get /root exch def} (\\000\\001) cshow seen /T42 eq root /Comp eq and".into());
+    check("{pop pop pop} (\\000\\001) cshow currentfont /FontName get /Comp eq".into());
+    // A character the procedure shows in the descendant is as wide as the composite font sets it.
+    check(format!(
+        "gsave nulldevice 10 20 moveto {{pop pop ( ) dup 0 4 -1 roll put show}} (\\000\\001\\000\\002) cshow currentpoint grestore pop {} sub abs 0.01 lt",
+        10.0 + 50.0 * (wh + wi)
+    ));
+    // A character in font number 1 still gives only the last byte of its code, not 258.
+    let two = fonts().replace("/Encoding [0] def", "/Encoding [0 0] def");
+    super::tests::check(&format!("{two} /Comp findfont 50 scalefont setfont [ {{pop pop}} (\\001\\002) cshow ] dup length 1 eq exch 0 get 2 eq and"));
+}
+
+/// A `cshow` procedure over a Type 42 descendant without a `FontMatrix` sees it current at the
+/// scale its characters are drawn at: another character it measures there is as wide as the
+/// composite font sets it, as with the identity.
+#[test]
+fn cshow_over_a_type42_descendant_without_a_matrix_sees_it_at_its_drawn_scale() {
+    let (_, wi) = glyph('I');
+    let with = fonts();
+    let without = with.replacen("/FontType 42 def /FontMatrix [1 0 0 1 0 0] def", "/FontType 42 def", 1);
+    assert_ne!(with, without);
+    for fonts in [with, without] {
+        super::tests::check(&format!(
+            "{fonts} /Comp findfont 50 scalefont setfont {{pop pop pop (\\002) stringwidth pop /w exch def}} (\\000\\001) cshow w {} sub abs 0.01 lt",
+            50.0 * wi
+        ));
+    }
+}
+
+/// `kshow` runs its procedure between each two characters of a composite font, with the values of
+/// their codes (font number times 256 plus code), and the next character follows where it moves
+/// the current point (PLRM 3rd ed., `kshow`).
+#[test]
+fn kshow_runs_between_each_two_composite_characters() {
+    let (_, wh) = glyph('H');
+    let (_, wi) = glyph('I');
+    let fonts = fonts().replace("/Encoding [0] def", "/Encoding [0 0] def");
+    let check = |cond: String| super::tests::check(&format!("{fonts} /Comp findfont 50 scalefont setfont {cond}"));
+    check("gsave nulldevice 10 20 moveto [ {} (\\000\\001\\001\\002\\000\\001) kshow ] grestore aload length 4 eq exch 1 eq and exch 258 eq and exch 258 eq and exch 1 eq and".into());
+    check(format!(
+        "gsave nulldevice 10 20 moveto {{pop pop 100 0 rmoveto}} (\\000\\001\\000\\002) kshow currentpoint grestore pop {} sub abs 0.01 lt",
+        10.0 + 50.0 * (wh + wi) + 100.0
+    ));
+    // Drawn, the I starts where the procedure moved the point.
+    let r = read(&format!("{fonts}/Comp findfont 50 scalefont setfont 10 20 moveto {{pop pop 100 0 rmoveto}} (\\000\\001\\000\\002) kshow"));
+    let paths: Vec<_> = all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).map(|n| bounds(n)).collect();
+    assert_eq!(paths.len(), 2, "{paths:?}");
+    assert!(paths[1].x0 > 10.0 + 50.0 * wh + 100.0 - 1.0, "{paths:?}");
+    // A procedure that draws: its square goes after the glyphs' group, outside it.
+    let r = read(&format!(
+        "{fonts}/Comp findfont 50 scalefont setfont 10 20 moveto {{pop pop currentpoint 2 2 rectfill}} (\\000\\001\\000\\002\\000\\001) kshow"
+    ));
+    let top = super::tests::objects(&r.document);
+    assert_eq!(top.len(), 3, "{top:?}");
+    assert_eq!(top[0].children().map(Vec::len), Some(3));
+    assert!(top[1..].iter().all(|n| matches!(n.kind, NodeKind::Path { .. }) && (bounds(n).width() - 2.0).abs() < 0.01), "{top:?}");
 }
 
 /// Measuring a composite font's Type 42 glyphs (`stringwidth` on a long string in a `loop`)
@@ -250,4 +318,17 @@ fn unreadable_type42_data_read_again_runs_out_of_the_budget() {
          /Encoding [{picks}] def /FDepVector [{deps}] def FontName currentdict end definefont pop\n\
          /Comp findfont 50 scalefont setfont {{ ({s}) stringwidth pop pop }} loop"
     ));
+}
+
+/// Characters that map to no glyph (an empty `FDepVector`) cost nothing to draw, but finding that
+/// out reads the whole string: a `loop` showing, measuring or outlining a long string of them runs
+/// out of the operation budget instead of stalling the import.
+#[test]
+fn unmapped_composite_characters_in_a_loop_run_out_of_the_budget() {
+    let font = "16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
+                /Encoding [0] def /FDepVector [] def FontName currentdict end definefont pop\n\
+                /Comp findfont 50 scalefont setfont /s 100000 string def";
+    for body in ["{ 0 0 moveto s show } loop", "{ s stringwidth pop pop } loop", "{ newpath 0 0 moveto s false charpath } loop"] {
+        super::tests::runs_out_of_budget(&format!("{font} {body}"));
+    }
 }

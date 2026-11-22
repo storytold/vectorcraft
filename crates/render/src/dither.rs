@@ -1,6 +1,7 @@
-//! Dithered gradient fills in the renderer.
+//! Dithered gradient fills, and diamond gradients, in the renderer.
 //!
-//! A dithered linear or radial gradient is drawn as pixels: the gradient sampled on a grid over
+//! A dithered linear or radial gradient, and a diamond gradient (which has no vector gradient to
+//! draw it), is drawn as pixels: the gradient sampled on a grid over
 //! the painted box with a cell per device pixel or finer (in quarter-octave steps, so a pan reuses
 //! the grid and a zoom rarely misses), each colour channel given fine noise of up to a level
 //! ([`vectorcraft_color::gradient::dither_noise`]) before it is rounded, and drawn as an image
@@ -50,18 +51,19 @@ fn cells(px: f64) -> u16 {
     2f64.powf(steps / 4.0).ceil().clamp(1.0, MAX_CELLS) as u16
 }
 
-/// Cache key of gradient `g` placed on box `b` as a `cols` × `rows` grid, cells `win` of it,
-/// painted with `ink` (and the active colour settings, which turn colours into display RGB or
-/// inks).
-fn key(g: &GradientPaint, b: Rect, cols: u16, rows: u16, win: &[Range<u16>; 2], ink: Ink) -> u64 {
+/// Cache key of gradient `g` placed on box `place`, sampled as a `cols` × `rows` grid over box
+/// `b`, cells `win` of it, painting a fill (`fill`) with `ink` (and the active color settings,
+/// which turn colors into display RGB or inks).
+#[allow(clippy::too_many_arguments)]
+fn key(g: &GradientPaint, place: Rect, b: Rect, cols: u16, rows: u16, win: &[Range<u16>; 2], ink: Ink, fill: bool) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     let gr = &g.gradient;
-    (gr.kind as u8, gr.dither, gr.method as u8).hash(&mut h);
+    (gr.kind as u8, gr.dither && fill, gr.method as u8, gr.painted_spread()).hash(&mut h);
     for s in &gr.stops {
         (s.offset.to_bits(), s.opacity.to_bits(), s.midpoint.to_bits()).hash(&mut h);
         s.color.key().hash(&mut h);
     }
-    let geom = g.resolve(b);
+    let geom = g.resolve(place);
     (geom.start.x.to_bits(), geom.start.y.to_bits(), geom.end.x.to_bits(), geom.end.y.to_bits(), geom.aspect.to_bits()).hash(&mut h);
     geom.focal.map(|f| (f.x.to_bits(), f.y.to_bits())).hash(&mut h);
     (b.x0.to_bits(), b.y0.to_bits(), b.x1.to_bits(), b.y1.to_bits(), cols, rows).hash(&mut h);
@@ -89,15 +91,17 @@ fn window(xf: Affine, w: u16, h: u16, b: Rect, cols: u16, rows: u16) -> Option<[
     Some([span(seen.x0, seen.x1, b.x0, b.width(), cols)?, span(seen.y0, seen.y1, b.y0, b.height(), rows)?])
 }
 
-/// Cells `win` (columns, rows) of `g` placed on `b` as a `cols` × `rows` grid, as a
-/// premultiplied pixmap, colours as `ink` paints them.
-pub(crate) fn rasterize(g: &GradientPaint, b: Rect, cols: u16, rows: u16, win: [Range<u16>; 2], ink: Ink) -> Pixmap {
+/// Cells `win` (columns, rows) of `g` placed on `place`, sampled as a `cols` × `rows` grid over
+/// `b`, as a premultiplied pixmap, colors as `ink` paints them, with dither's noise when it
+/// paints a fill (`fill`).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rasterize(g: &GradientPaint, place: Rect, b: Rect, cols: u16, rows: u16, win: [Range<u16>; 2], ink: Ink, fill: bool) -> Pixmap {
     let (w, h) = (win[0].len() as u16, win[1].len() as u16);
     let adjusted = ink.gradient(&g.gradient).map(|gradient| GradientPaint { gradient, ..g.clone() });
     let ink = if adjusted.is_some() { ink.base() } else { ink };
     let g = adjusted.as_ref().unwrap_or(g);
     let data = g
-        .pixels_within(b, b, cols, rows, win, true, &|c| ink.rgb(c))
+        .pixels_within(place, b, cols, rows, win, fill, &|c| ink.rgb(c))
         .map(|[r, gr, bl, a]| {
             let pm = |v: u8| ((u16::from(v) * u16::from(a) + 127) / 255) as u8;
             vello_cpu::color::PremulRgba8 { r: pm(r), g: pm(gr), b: pm(bl), a }
@@ -106,11 +110,14 @@ pub(crate) fn rasterize(g: &GradientPaint, b: Rect, cols: u16, rows: u16, win: [
     Pixmap::from_parts(data, w, h)
 }
 
-/// Set dithered gradient `g` on box `bounds` (in the paint's space, which the context's current
-/// transform maps to pixels) as the context paint. Returns false for an empty box or one off the
-/// render target.
-pub(crate) fn set_dithered_paint(ctx: &mut RenderContext, g: &GradientPaint, bounds: Rect, ink: Ink) -> bool {
-    let Some(b) = painted_box(bounds) else { return false };
+/// Set gradient `g` placed on box `bounds` (in the paint's space, which the context's current
+/// transform maps to pixels) as the context paint, drawn as pixels over that box and box `area`
+/// (a stroke's outline, whose miters, caps and arrowheads can reach past `bounds`), with dither's
+/// noise when it paints a fill (`fill`). Returns false for an empty box or one off the render
+/// target. Past both boxes, the pixels at their edge continue.
+pub(crate) fn set_dithered_paint(ctx: &mut RenderContext, g: &GradientPaint, bounds: Rect, area: Rect, ink: Ink, fill: bool) -> bool {
+    let Some(place) = painted_box(bounds) else { return false };
+    let b = Some(place.union(area.abs())).filter(|r| r.is_finite()).unwrap_or(place);
     // Device pixels per unit along the box's sides.
     let [m0, m1, m2, m3, _, _] = ctx.transform().as_coeffs();
     let (sx, sy) = (m0.hypot(m1), m2.hypot(m3));
@@ -121,7 +128,7 @@ pub(crate) fn set_dithered_paint(ctx: &mut RenderContext, g: &GradientPaint, bou
     let (cols, rows) = (cells(wpx), cells(hpx));
     let Some(win) = window(*ctx.transform(), ctx.width(), ctx.height(), b, cols, rows) else { return false };
     let (first_col, first_row) = (win[0].start, win[1].start);
-    let k = key(g, b, cols, rows, &win, ink);
+    let k = key(g, place, b, cols, rows, &win, ink, fill);
     let pm = GRIDS
         .with(|c| {
             let mut c = c.borrow_mut();
@@ -129,7 +136,7 @@ pub(crate) fn set_dithered_paint(ctx: &mut RenderContext, g: &GradientPaint, bou
             c.get(&k, t).cloned()
         })
         .unwrap_or_else(|| {
-            let pm = Arc::new(rasterize(g, b, cols, rows, win, ink));
+            let pm = Arc::new(rasterize(g, place, b, cols, rows, win, ink, fill));
             GRIDS.with(|c| {
                 let mut c = c.borrow_mut();
                 let t = c.tick();

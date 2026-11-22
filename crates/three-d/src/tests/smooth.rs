@@ -118,6 +118,6 @@ fn unshaded_legacy_degenerate_and_high_complexity_surfaces_stay_bounded() {
     }
     assert!(revolve(&p, b, Revolve { smooth_shading: true, angle: 0.0, ..o }).unwrap().is_empty());
     let mut p = path("M40 0");
-    p.subpaths[0].anchors.extend((1..400).map(|i| vectorcraft_geom::Anchor::corner(Point::new(40.0 + (i % 2) as f64, i as f64))));
+    p.subpaths[0].anchors.extend((1..1100).map(|i| vectorcraft_geom::Anchor::corner(Point::new(40.0 + (i % 2) as f64, i as f64))));
     assert!(revolve(&p, p.bounds().unwrap(), Revolve { smooth_shading: true, segments: 128, offset: 30.0, ..o }).is_err());
 }

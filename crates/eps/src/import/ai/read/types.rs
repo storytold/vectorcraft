@@ -11,12 +11,12 @@ pub(super) const MAX_SUBREADERS: usize = 32;
 /// Most operands on the stack.
 pub(super) const MAX_STACK: usize = 1 << 20;
 
-/// Most objects read.
-pub(super) const MAX_NODES: usize = 4_000_000;
+/// Most objects read. The `.ai` editing data writer writes no more ([`crate::import::MAX_EDITING_OBJECTS`]).
+pub(crate) const MAX_NODES: usize = 4_000_000;
 
 /// The most objects all the blends of one import may lay out to be checked (each twice) and made
 /// live; past it, blends keep their drawn steps.
-pub(super) const BLEND_BUDGET: usize = 50_000;
+pub(crate) const BLEND_BUDGET: usize = 50_000;
 
 /// Most points in one path.
 pub(super) const MAX_POINTS: usize = 4_000_000;
@@ -224,6 +224,9 @@ pub(super) struct PendingEnvelope {
     /// had: its drawn art is the one child after them.
     pub(super) depth: usize,
     pub(super) siblings: usize,
+    /// Its contents hold type: it is settled once the type is laid out
+    /// ([`super::super::envelope::TypedEnvelope`]).
+    pub(super) typed: bool,
 }
 
 /// What a reader of a pattern's definition has of its head, `(name) llx lly urx ury`: the operands
@@ -241,6 +244,7 @@ pub(super) struct PatternHead {
 pub(super) struct SymbolHead {
     /// `AI13PatternRegistrationType` in the dictionary after the art.
     pub(super) registration: Option<f64>,
+    pub(super) dynamic: bool,
     /// Art the reader left out (type, a placed file, non-native art, an image it can't read or
     /// place, a gradient it can't read): the symbol isn't kept, and its instances come in as the
     /// page draws them, within the box of the rest.
@@ -279,6 +283,9 @@ impl BrushArtColors {
 #[derive(Debug, Default)]
 pub(super) struct Raster {
     pub(super) space: Option<String>,
+    /// The ink of an image in a Separation space (`XC`): its paint at 100 % and the named colour
+    /// for its swatch (`paint::separation_ink`).
+    pub(super) ink: Option<(Paint, Option<Named>)>,
     /// `XI`'s operands when its samples follow as hex in comment lines (`%FF00…`) up to
     /// `%AI5_EndRaster`, the form the version 7 specification documents (§8).
     pub(super) operands: Option<Vec<V>>,
@@ -370,8 +377,6 @@ pub(super) const IGNORED: &[&str] = &[
     "As",
     "Xd",
     "Xr",
-    // `/DeviceGray XC` after a linked image's file name (`XG`): its colour space.
-    "XC",
     "Xh",
     "XH",
     "Bc",
@@ -382,9 +387,8 @@ pub(super) const IGNORED: &[&str] = &[
     // Path resolution (`Ar`, §12): how finely curves print.
     "Ar",
     "Xs",
+    // The samples of the pen that `XD` notes on the object before them (`Reader::pen_samples`).
     "Xt",
-    // Five indexed curves of samples along a brushed path (`(…) Xt n XD`), on its hidden source path.
-    "XD",
     "Xi",
     "XI",
     "LB2",
@@ -432,8 +436,8 @@ pub const NON_NATIVE_ART_UNREAD: &str = "non-native art (a placed PDF's content)
 /// The name of the group a `/ForeignObject`'s art comes in as.
 pub const NON_NATIVE_ART: &str = "Non-native art";
 
-/// The note for a file with a graph (`%_Gs` … `%_GS`): its drawn art comes in, its data and
-/// settings don't.
+/// The note for a file with a graph (`%_Gs` … `%_GS`) whose data and settings can't be kept: its
+/// drawn art comes in as plain art.
 pub const GRAPH_PLAIN: &str = "graphs come in as plain art, without their data or settings";
 
 /// The note for a graph that starts inside another or doesn't end before its layer does: the art
@@ -441,18 +445,8 @@ pub const GRAPH_PLAIN: &str = "graphs come in as plain art, without their data o
 pub const GRAPH_UNENDED: &str = "a graph's records don't end where they should: its art was read as it is";
 
 /// A graph's records (the version 7 specification's chapter 17 and appendix A): two-letter
-/// operators starting with `G`, read and left out with their operands.
+/// operators starting with `G`, read with their operands.
 pub(super) const GRAPH_OPS: &[&str] = &[
     "G1", "G+", "Ga", "GA", "Gb", "Gc", "GC", "Gd", "GD", "Ge", "Gf", "Gg", "Gi", "Gj", "Gl", "Gm", "Go", "Gp", "Gr", "Gs", "GS", "Gt", "GT", "Gv",
     "Gw", "GX", "Gx", "Gy", "Gz",
 ];
-
-/// A graph being read (`%_Gs` … `%_GS`).
-#[derive(Debug)]
-pub(super) struct Graph {
-    /// Between `Gt` and `GT`, where the graph's settings may use paint and type operators on `%_`
-    /// lines too.
-    pub(super) settings: bool,
-    /// How many frames were open at its `Gs`: a layer that ends with fewer ends the graph.
-    pub(super) frames: usize,
-}

@@ -58,9 +58,9 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 fn in_safe_mode_nothing_loads_or_runs() {
     let _f = fresh();
     // Installed before Safe Mode was turned on.
-    let before = registry::install(Plugin::load(&filter("test.safe.before"), Limits::default()).unwrap());
+    let before = registry::install(Plugin::load(&filter("test.safe.before"), Limits::default()).unwrap()).unwrap();
     let fx = build(&tpl::returning(&tpl::manifest("test.safe.effect", "effect", "{}"), r#"{"objects":[]}"#));
-    registry::install(Plugin::load(&fx, Limits::default()).unwrap());
+    registry::install(Plugin::load(&fx, Limits::default()).unwrap()).unwrap();
     let dir = temp_dir("gate");
     std::fs::write(dir.join("a.wasm"), filter("test.safe.folder")).unwrap();
 
@@ -71,7 +71,8 @@ fn in_safe_mode_nothing_loads_or_runs() {
     assert_eq!(registry::load_folder(&dir), Err(Error::SafeMode));
     assert!(registry::get("test.safe.folder").is_none());
     let path = PathData::default();
-    let drawn = effect::apply("test.safe.effect", &json!({}), &path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, effect::Paints::default());
+    let drawn =
+        effect::apply("test.safe.effect", &json!({}), &path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, effect::Paints::default(), None);
     assert_eq!(drawn, None, "the geometry is drawn unchanged");
     assert_eq!(effect::last_error("test.safe.effect"), None, "not a failure of the plug-in");
     assert_eq!(Error::SafeMode.to_string(), "Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally");

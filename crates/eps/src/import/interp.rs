@@ -79,6 +79,28 @@ pub(crate) struct Interp<'a> {
     /// The `sfnts` arrays whose TrueType data has been counted against [`MAX_MEMORY`]: a font
     /// read again after it left `type42` doesn't count again.
     pub type42_counted: HashSet<Shared<Obj>>,
+    /// The mappings of the CMaps shown with so far, by their range arrays (see `cid`), the most
+    /// recent last.
+    pub cmaps: super::cid::CMaps,
+    /// The Type 1 fonts read from the encrypted part of their programs, by the `CharStrings`
+    /// dictionary given to their font dictionaries (see `type1`).
+    pub type1: Vec<(DictRef, Rc<super::type1::Font>)>,
+    /// The CIDFonts a FontSet's Compact Font Format data defined, by their dictionaries: the
+    /// data and the font's index in it (see `cid`).
+    pub cff: Vec<(DictRef, Rc<super::cid::Cff>)>,
+    /// The decrypted subroutines of Type 0 CIDFonts (see `cid`).
+    pub cid_subrs: super::cid::CidSubrs,
+    /// The font number `usefont` gave the CMap mappings that follow.
+    pub cmap_font: i64,
+    /// The predefined CMaps type was set in so far, by name, with how their strings decode
+    /// (`None` when one can't be read; see `text`).
+    pub predefined_cmaps: Vec<(Rc<str>, Option<Rc<super::predefined_cmap::CMapCodes>>)>,
+    /// The font a `kshow` procedure sees as current while type in a CIDFont only named is set in
+    /// a font of its own (see `text`).
+    pub kshow_font: Option<DictRef>,
+    /// The `cshow` procedure running over a composite font's type, with the font it sees as
+    /// current (see `text`).
+    pub cshow: Option<super::text::CShowFont>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -101,7 +123,7 @@ pub(crate) struct Fault {
 }
 
 /// The TrueType data of Type 42 fonts by their `sfnts` array (see [`Interp::type42`]).
-pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<Vec<u8>>>)>;
+pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<super::type42::Font>>)>;
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;
@@ -137,7 +159,7 @@ impl<'a> Interp<'a> {
         let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
-            for (op, name) in Op::ALL {
+            for (op, name) in Op::ALL.iter().filter(|(op, _)| !Op::PROCSET.contains(op)) {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
@@ -155,6 +177,21 @@ impl<'a> Interp<'a> {
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
         resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
+        // The procedure sets that build CMaps and CIDFonts (CIDInit) and font sets (FontSetInit),
+        // and the predefined Identity CMaps.
+        let cid_init: Dict = Op::PROCSET.iter().map(|op| (Key::name(op.name()), Obj::Op(*op))).collect();
+        let font_set_init = Dict::from([(Key::name("StartData"), Obj::Op(Op::StartData))]);
+        resources.borrow_mut().insert(
+            Key::name("ProcSet"),
+            Obj::dict(Dict::from([(Key::name("CIDInit"), Obj::dict(cid_init)), (Key::name("FontSetInit"), Obj::dict(font_set_init))])),
+        );
+        resources.borrow_mut().insert(
+            Key::name("CMap"),
+            Obj::dict(Dict::from([
+                (Key::name("Identity-H"), super::cid::identity("Identity-H", false)),
+                (Key::name("Identity-V"), super::cid::identity("Identity-V", true)),
+            ])),
+        );
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
@@ -199,6 +236,14 @@ impl<'a> Interp<'a> {
             fault: None,
             glyph_width: None,
             type42: vec![],
+            cmaps: vec![],
+            type1: vec![],
+            cff: vec![],
+            cid_subrs: vec![],
+            cmap_font: 0,
+            predefined_cmaps: vec![],
+            kshow_font: None,
+            cshow: None,
             type42_counted: HashSet::new(),
             g,
             saved: vec![],
@@ -367,6 +412,12 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
+    /// Stop counting `bytes` the program no longer holds: buffers an operator made for itself and
+    /// freed before it returned. Never for what the program's own procedures allocated.
+    pub(crate) fn unalloc(&mut self, bytes: usize) {
+        self.allocated = self.allocated.saturating_sub(bytes);
+    }
+
     fn tick(&mut self) -> Res {
         self.spend(1)
     }
@@ -375,6 +426,11 @@ impl<'a> Interp<'a> {
     /// charges per 64 bytes, so a loop of big copies runs out of the budget.
     pub fn spend_bytes(&mut self, n: usize) -> Res {
         self.spend((n / 256) as u64)
+    }
+
+    /// The operations left in the budget (`max_ops`).
+    pub fn ops_left(&self) -> u64 {
+        self.max_ops.saturating_sub(self.ops)
     }
 
     /// Count `ops` operations' worth of work against the budget (`max_ops`): what an operator that costs
@@ -506,8 +562,28 @@ impl<'a> Interp<'a> {
 
     /// An object as the scanner gives it: with `immediate`, its `//name`s replaced by their
     /// values (down through procedures), as they are when read.
-    pub fn scanned(&self, o: Obj, immediate: bool) -> Res<Obj> {
+    pub fn scanned(&mut self, o: Obj, immediate: bool) -> Res<Obj> {
+        // Every scan builds a fresh string or procedure, so a loop that rescans one text is charged
+        // for each copy it keeps, not only for the text.
+        self.charge_scanned(&o, 0)?;
         if immediate { self.resolve(o, 0) } else { Ok(o) }
+    }
+
+    /// Count the storage of the string or procedure the scanner just made against [`MAX_MEMORY`],
+    /// and the time to build it.
+    fn charge_scanned(&mut self, o: &Obj, depth: usize) -> Res {
+        match o {
+            Obj::Str(s) => {
+                self.alloc(s.len())?;
+                self.spend_bytes(s.len())
+            }
+            Obj::Array { items, .. } if depth < MAX_DEPTH as usize => {
+                self.alloc(items.len().saturating_mul(std::mem::size_of::<Obj>()))?;
+                self.spend_bytes(items.len())?;
+                items.borrow().iter().try_for_each(|i| self.charge_scanned(i, depth + 1))
+            }
+            _ => Ok(()),
+        }
     }
 
     fn resolve(&self, o: Obj, depth: usize) -> Res<Obj> {
@@ -677,21 +753,25 @@ impl<'a> Interp<'a> {
     }
 
     fn search_string(&mut self, op: Op) -> Res {
-        let seek = self.pop_str()?.to_vec();
+        let seek = self.pop_str()?;
         let s = self.pop_str()?;
-        let text = s.to_vec();
-        self.spend((text.len() / 64) as u64)?;
-        let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+        // Both strings are read in place, and the borrows end before the results are pushed.
+        let (len, n, at) = {
+            let (text, seek) = (s.borrow(), seek.borrow());
+            self.spend((text.len() / 64) as u64)?;
+            let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+            (text.len(), seek.len(), at)
+        };
         match at {
             Some(i) => {
                 let o = Obj::Str(s);
                 if op == Op::Search {
-                    self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
-                    self.push_interval(o.clone(), i, seek.len())?;
+                    self.push_interval(o.clone(), i + n, len - i - n)?;
+                    self.push_interval(o.clone(), i, n)?;
                     self.push_interval(o, 0, i)?;
                 } else {
-                    self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
-                    self.push_interval(o, 0, seek.len())?;
+                    self.push_interval(o.clone(), n, len - n)?;
+                    self.push_interval(o, 0, n)?;
                 }
                 self.push(Obj::Bool(true))?;
             }
@@ -1395,7 +1475,7 @@ impl<'a> Interp<'a> {
 
     /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
     /// is open the old value is kept for `restore`.
-    fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
+    pub fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
         let old = {
             let mut dm = d.borrow_mut();
             if v.is_some() && dm.len() >= MAX_ALLOC && !dm.contains_key(&k) {
@@ -1423,6 +1503,21 @@ impl<'a> Interp<'a> {
             Obj::Dict(d) => Ok(d),
             _ => ps_err("typecheck", ""),
         })
+    }
+
+    /// Is `o` the standard encoding (`Some(false)`) or the ISO Latin-1 encoding (`Some(true)`)
+    /// of systemdict, whose names here are all `.notdef`?
+    pub fn standard_encoding(&self, o: &Obj) -> Option<bool> {
+        let items = o.items()?;
+        let s = self.system.borrow();
+        let is = |k: &str| s.get(&Key::name(k)).and_then(Obj::items).is_some_and(|e| e.same(items));
+        if is("StandardEncoding") {
+            Some(false)
+        } else if is("ISOLatin1Encoding") {
+            Some(true)
+        } else {
+            None
+        }
     }
 
     /// The instances of `category`: `FontDirectory` for fonts.

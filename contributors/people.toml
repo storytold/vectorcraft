@@ -220,3 +220,8 @@ real_name = "Sven Lafebre"
 [people.kylekanouse]
 real_name = "Kyle Kanouse"
 sync_github_name = true
+
+[people.Hassan1305]
+real_name = "Hassan Nawaz Khan"
+display_name = "Hassan Nawaz Khan"
+sync_github_name = false

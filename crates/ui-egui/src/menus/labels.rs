@@ -22,6 +22,7 @@ fn view_toggle_label(app: &VectorcraftApp, id: &str) -> Option<String> {
         "view.edges" => if v.edges { "Hide Edges" } else { "Show Edges" }.into(),
         "view.template" => if v.templates { "Hide Template" } else { "Show Template" }.into(),
         "view.cornerWidget" => if v.corner_widgets { "Hide Corner Widget" } else { "Show Corner Widget" }.into(),
+        "view.shapeWidgets" => if v.shape_widgets { "Hide Shape Widgets" } else { "Show Shape Widgets" }.into(),
         "view.textThreads" => if v.text_threads { "Hide Text Threads" } else { "Show Text Threads" }.into(),
         "type.hiddenCharacters" => if v.hidden_chars { "Hide Hidden Characters" } else { "Show Hidden Characters" }.into(),
         "view.gradientAnnotator" => if v.gradient_annotator { "Hide Gradient Annotator" } else { "Show Gradient Annotator" }.into(),
@@ -123,9 +124,9 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
 
 /// Does the menu item `id` show a name that is user, file or system data rather than an interface
 /// label: a recent file, a saved view, a font, a user library or preset, a custom workspace, a
-/// plug-in, an SVG filter? Such names are shown as they are, never translated (a workspace the user calls
-/// "Layers" stays "Layers").
-pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
+/// plug-in, an SVG filter, a script of the Scripts folder? Such names are shown as they are, never
+/// translated (a workspace the user calls "Layers" stays "Layers").
+pub(crate) fn shows_a_name(id: &str, label: &str) -> bool {
     const SLOTS: [&str; 8] = [
         "file.openRecent",
         "view.goto",
@@ -138,16 +139,28 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "svgFilter.apply")
+        || matches!(
+            id,
+            "text.setStyle"
+                | "plugin.dialog"
+                | "file.openWith"
+                | "window.toolbar.custom"
+                | "svgFilter.apply"
+                | crate::scripts_menu::COMMAND
+                | crate::dialogs::proof_setup::LOAD
+        )
+        || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
-/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter or
-/// an Effect › Plug-ins effect), by the plug-in's own name? Told by the item itself, so it holds
-/// while another thread installs or removes plug-ins.
+/// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter, an
+/// Effect › Plug-ins effect or a File › Open With importer) or one of its commands, by the plug-in's
+/// own text? Told by the item itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    id == "plugin.dialog" || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
+    matches!(id, "plugin.dialog" | "file.openWith")
+        || vectorcraft_engine::cmd::plugin::is_command_id(id)
+        || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }
 
 /// The label of a menu item as drawn: [`dynamic_label`] in the UI language. Labels assembled
@@ -211,6 +224,12 @@ pub(super) fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang:
     Some(crate::panels::layers::shown_name(app, n, lang))
 }
 
+/// A context menu suggestion's label: the word it puts in (`text.editRange {insert}`), as it is,
+/// untranslated ([`super::context`]'s `spelling_items`).
+pub(super) fn spelling_item_label(id: &str, p: &Value) -> Option<String> {
+    (id == "text.editRange").then(|| p.get("insert")?.as_str().map(str::to_string)).flatten()
+}
+
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
 /// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
 /// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
@@ -232,7 +251,11 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
 /// Labels only the canvas context menu ([`context_items`]) shows, so the catalog tests can insist
 /// every one of them is translated (a test checks the list against the menu).
 pub const CONTEXT_LABELS: &[&str] = &[
+    "Ignore All",
+    "Add to Dictionary",
+    "No Suggestions",
     "Isolate Selected Group",
+    "Isolate Selected Path",
     "Exit Isolation Mode",
     "Lock Artboards",
     "Lock Selected",
@@ -267,6 +290,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Show Edges",
     "Hide Corner Widget",
     "Show Corner Widget",
+    "Hide Shape Widgets",
+    "Show Shape Widgets",
     "Hide Text Threads",
     "Show Text Threads",
     "Hide Hidden Characters",
@@ -309,14 +334,22 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Lock Grid",
 ];
 
+/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares?
+pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
+    children.iter().any(|c| matches!(c, Item::Cmd(_, id, _) if vectorcraft_engine::cmd::plugin::is_command_id(id)))
+}
+
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
 /// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
-/// data (fonts, recent files, saved views, libraries, installed plug-ins), the point sizes and the
-/// view angles are left out.
+/// data (fonts, recent files, saved views, libraries, installed plug-ins, the scripts and subfolders
+/// of the Scripts folder, saved proof setups), the point sizes and the view angles are left out.
 pub fn menu_strings() -> std::collections::BTreeSet<String> {
     use std::collections::BTreeSet;
     fn user_data(id: &str, params: &Value) -> bool {
-        hidden_when_disabled(id) || id.starts_with("type.recentFont") || lists_plugin(id, params)
+        hidden_when_disabled(id)
+            || id.starts_with("type.recentFont")
+            || lists_plugin(id, params)
+            || matches!(id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD)
     }
     fn walk(items: &[Item], under: &str, out: &mut BTreeSet<String>) {
         for it in items {
@@ -337,6 +370,8 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
                 Item::Todo(l, _) | Item::Header(l) => {
                     out.insert(l.to_string());
                 }
+                // A plug-in's submenu is named after the plug-in, and a subfolder's after the folder.
+                Item::Sub(_, children) if holds_plugin_commands(children) || crate::scripts_menu::is_folder(children) => walk(children, under, out),
                 Item::Sub(l, children) => {
                     out.insert(l.to_string());
                     // Type › Font lists the installed families: names, not UI text.
@@ -356,6 +391,7 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
     out.extend(crate::native_menu::MAC_LABELS.iter().map(|s| s.to_string()));
     out.extend(DYNAMIC_LABELS.iter().map(|s| s.to_string()));
     out.extend(CONTEXT_LABELS.iter().map(|s| s.to_string()));
+    out.extend(crate::scripts_menu::LABELS.iter().map(|s| s.to_string()));
     out.extend(UI_COMMANDS.iter().map(|c| c.1.to_string()));
     for c in vectorcraft_engine::cmd::command_specs() {
         out.insert(c.label.to_string());

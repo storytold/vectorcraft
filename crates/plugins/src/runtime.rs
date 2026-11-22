@@ -1,11 +1,12 @@
 //! The wasmi host: loading, instantiating and calling a plug-in under resource limits.
 
 use wasmi::{
-    Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, WasmParams,
-    WasmResults,
+    Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, Val,
+    WasmParams, WasmResults,
 };
+use wasmparser::{Validator, WasmFeatures};
 
-use crate::host::{self, Deadline, Host, Report, Run};
+use crate::host::{self, Bridge, Deadline, Host, Report, Run};
 use crate::manifest::{MAX_MANIFEST_BYTES, Manifest};
 use crate::permissions::Permission;
 use crate::{Error, Kind, Result};
@@ -14,7 +15,7 @@ use crate::{Error, Kind, Result};
 pub const ABI_VERSION: i32 = 1;
 
 /// Fuel handed out per slice; between slices the host checks the deadline.
-const FUEL_SLICE: u64 = 20_000_000;
+pub const FUEL_SLICE: u64 = 20_000_000;
 
 /// wasmi's fuel costs, but compiling costs nothing. wasmi compiles a function when it is first
 /// called, and charges the run that calls it by the function's size. When the slice a run was in
@@ -24,13 +25,62 @@ const FUEL_SLICE: u64 = 20_000_000;
 /// the next. Copying keeps wasmi's default cost, a unit for every 64 bytes.
 const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64, fuel_per_bytes_translated: 0, fuel_per_bytes_validated: 0 };
 
+/// Bytes a bulk memory instruction copies or fills for each unit of fuel.
+pub const BYTES_COPIED_PER_FUEL: u32 = FUEL_COSTS.bytes_copied_per_fuel;
+
+/// The WebAssembly proposals a plug-in may use, as `docs/plugins.md` lists them. `GC_TYPES` lets
+/// reference types use `funcref` and `externref`; the garbage collection proposal stays off. Every
+/// proposal not listed here is off, whatever wasmi's defaults and crate features turn on.
+const WASM_FEATURES: WasmFeatures = WasmFeatures::MUTABLE_GLOBAL
+    .union(WasmFeatures::SIGN_EXTENSION)
+    .union(WasmFeatures::SATURATING_FLOAT_TO_INT)
+    .union(WasmFeatures::MULTI_VALUE)
+    .union(WasmFeatures::BULK_MEMORY)
+    .union(WasmFeatures::REFERENCE_TYPES)
+    .union(WasmFeatures::GC_TYPES)
+    .union(WasmFeatures::TAIL_CALL)
+    .union(WasmFeatures::EXTENDED_CONST)
+    .union(WasmFeatures::FLOATS);
+
+/// Validates `bytes` with only [`WASM_FEATURES`] on, before wasmi reads the module. A module that
+/// uses any other proposal is refused with the validator's error, which names the proposal.
+fn check_features(bytes: &[u8]) -> Result<()> {
+    Validator::new_with_features(WASM_FEATURES).validate_all(bytes).map(|_| ()).map_err(|e| Error::Module(e.to_string()))
+}
+
+/// Sets each WebAssembly proposal that wasmi's `Config` has a setter for in this build on or off,
+/// to match [`WASM_FEATURES`].
+fn set_features(config: &mut Config) -> &mut Config {
+    config
+        .wasm_mutable_global(true)
+        .wasm_sign_extension(true)
+        .wasm_saturating_float_to_int(true)
+        .wasm_multi_value(true)
+        .wasm_bulk_memory(true)
+        .wasm_reference_types(true)
+        .wasm_tail_call(true)
+        .wasm_extended_const(true)
+        .floats(true)
+        .wasm_multi_memory(false)
+        .wasm_custom_page_sizes(false)
+        .wasm_wide_arithmetic(false)
+}
+
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
 /// the host learns that only once the run has ended.
 pub const HEAVY_FUEL: u64 = 1_000_000_000;
 
-/// Wall-clock budget of a heavy filter's run, in milliseconds (native builds).
+/// Wall-clock budget of a heavy filter's run, in milliseconds.
 pub const HEAVY_WALL_TIME_MS: u64 = 300_000;
+
+/// Instructions a filter's run may use besides [`Limits::fuel_per_byte`] for each byte of input
+/// when Preferences › Plug-ins & Scratch Disks › Plug-in Instruction Budget is Large
+/// ([`Plugin::large_limits`]): 5 times the default.
+pub const LARGE_FUEL: u64 = 250_000_000;
+
+/// The limit a run reports when its input and parameters together are past half its memory.
+pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
 
 /// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
 /// run gets).
@@ -53,14 +103,18 @@ pub struct Limits {
     pub fuel_per_byte: u64,
     /// Deepest call nesting.
     pub max_recursion_depth: usize,
-    /// Wall-clock budget for one run, in milliseconds. Native builds only: the web build has no
-    /// monotonic clock in `std`, so the fuel budget alone bounds it there.
+    /// Wall-clock budget for one run, in milliseconds. The web build measures it with the page's
+    /// `performance.now()`.
     pub wall_time_ms: u64,
     /// The most a heavy filter ([`crate::Budget::Heavy`]) is given instead of `fuel_base` and
     /// `wall_time_ms`: what the host allows, which the module's manifest can ask for but never
     /// raise. Set them to `fuel_base` and `wall_time_ms` to give heavy filters nothing more.
     pub heavy_fuel: u64,
     pub heavy_wall_time_ms: u64,
+    /// What one export or import is given instead of `fuel_base` and `wall_time_ms`
+    /// ([`crate::export::limits`]).
+    pub export_fuel: u64,
+    pub export_wall_time_ms: u64,
 }
 
 impl Default for Limits {
@@ -75,6 +129,8 @@ impl Default for Limits {
             wall_time_ms: 60_000,
             heavy_fuel: HEAVY_FUEL,
             heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
+            export_fuel: crate::export::FUEL,
+            export_wall_time_ms: crate::export::WALL_TIME_MS,
         }
     }
 }
@@ -123,6 +179,39 @@ impl Live {
     }
 }
 
+/// Takes `cost` instructions from a run: from the budget still to hand out (`left`), then from what
+/// the store holds. A run that can't pay ends with its instruction budget.
+fn charge(live: &mut Live, left: &mut u64, cost: u64) -> Result<()> {
+    let held = live.store.get_fuel().map_err(wasm_err)?;
+    if held.saturating_add(*left) < cost {
+        return Err(Error::Limit("instruction budget".into()));
+    }
+    let from_left = cost.min(*left);
+    *left -= from_left;
+    live.store.set_fuel(held - (cost - from_left)).map_err(wasm_err)
+}
+
+/// Resumes a run's call with `step`: the store's storage calls may also pay from `left`
+/// ([`host::Run::fuel_left`]), and what they took from it comes off `left` when the call pauses →
+/// the pause, or the error the call ended with ([`run_err`]).
+fn slice<T>(live: &mut Live, left: &mut u64, step: impl FnOnce(&mut Store<Host>) -> std::result::Result<T, wasmi::Error>) -> Result<T> {
+    live.store.data_mut().run.fuel_left = *left;
+    let paused = step(&mut live.store);
+    *left = std::mem::take(&mut live.store.data_mut().run.fuel_left);
+    paused.map_err(|e| run_err(&mut live.store, e))
+}
+
+/// Why a storage call ended a run of `store` ([`host::Run::storage_stop`]).
+fn stop_reason(store: &mut Store<Host>) -> Error {
+    store.data_mut().run.storage_stop.take().unwrap_or_else(|| Error::Limit("instruction budget".into()))
+}
+
+/// The error `e` that a run of `store` ended with: a storage call's reason ([`host::StorageStop`])
+/// or [`wasm_err`]'s.
+fn run_err(store: &mut Store<Host>, e: wasmi::Error) -> Error {
+    if e.downcast_ref::<host::StorageStop>().is_some() { stop_reason(store) } else { wasm_err(e) }
+}
+
 fn wasm_err(e: wasmi::Error) -> Error {
     if e.as_trap_code() == Some(wasmi::TrapCode::OutOfFuel) { Error::Limit("instruction budget".into()) } else { Error::Trap(e.to_string()) }
 }
@@ -142,8 +231,9 @@ impl Plugin {
         if !bytes.starts_with(b"\0asm") {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
         }
+        check_features(bytes)?;
         let mut config = Config::default();
-        config
+        set_features(&mut config)
             .consume_fuel(true)
             .fuel_cost(FUEL_COSTS)
             .enforced_limits(EnforcedLimits::strict())
@@ -191,6 +281,12 @@ impl Plugin {
     pub fn limits(&self) -> &Limits {
         &self.limits
     }
+    /// Its limits with the Large instruction budget: at least [`LARGE_FUEL`] instructions besides
+    /// those for each byte of input, and every other limit, the time budget included, as it is. A
+    /// heavy filter keeps its larger budget.
+    pub fn large_limits(&self) -> Limits {
+        Limits { fuel_base: self.limits.fuel_base.max(LARGE_FUEL), ..self.limits.clone() }
+    }
     /// Module size in bytes.
     pub fn size(&self) -> usize {
         self.size
@@ -231,7 +327,7 @@ impl Plugin {
             Ok(instance) => instance,
             Err(e) => {
                 *report = std::mem::take(&mut store.data_mut().run.report);
-                return Err(wasm_err(e));
+                return Err(run_err(&mut store, e));
             }
         };
         let memory =
@@ -246,17 +342,53 @@ impl Plugin {
     /// for it. It charges a `memory.fill` or `memory.copy` for its whole length before writing, so
     /// up to that cost can be left in the store at a pause. Each slice tops the store up to the
     /// slice size, keeping that fuel, and a run ends with the instruction budget only when the
-    /// store's fuel and the rest of the budget together can't pay for the next instruction.
+    /// store's fuel and the rest of the budget together can't pay for the next instruction. A
+    /// storage call pays for its bytes ([`host::STORAGE_BYTES_PER_FUEL`]) from the store's fuel and
+    /// the rest of the budget as it is made, and one they can't pay for ends the run.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
+        self.call_with(live, f, params, fuel, deadline, None)
+    }
+
+    /// [`Plugin::call`], making each command call a `vc_call` pauses it for with `bridge`
+    /// ([`host::Run::pending`]) and resuming it with the code. Each call costs [`host::CALL_FUEL`]
+    /// instructions and one for every 64 bytes of its arguments and result; the deadline and the
+    /// caller's cancellation are checked before and after it.
+    fn call_with<P: WasmParams, R: WasmResults>(
+        &self,
+        live: &mut Live,
+        f: &TypedFunc<P, R>,
+        params: P,
+        fuel: u64,
+        deadline: &Deadline,
+        mut bridge: Option<&mut Bridge<'_>>,
+    ) -> Result<R> {
         let mut left = fuel;
         let give = left.min(FUEL_SLICE);
         left -= give;
         live.store.set_fuel(give).map_err(wasm_err)?;
-        let mut call = f.call_resumable(&mut live.store, params).map_err(wasm_err)?;
+        let mut call = slice(live, &mut left, |store| f.call_resumable(store, params))?;
         loop {
             match call {
                 TypedResumableCall::Finished(r) => return Ok(r),
-                TypedResumableCall::HostTrap(_) => return Err(Error::Trap("unexpected host trap".into())),
+                TypedResumableCall::HostTrap(inv) => {
+                    if inv.host_error().downcast_ref::<host::StorageStop>().is_some() {
+                        return Err(stop_reason(&mut live.store));
+                    }
+                    let pending = live.store.data_mut().run.pending.take();
+                    let (Some((id, args, size)), Some(bridge)) = (pending, bridge.as_deref_mut()) else {
+                        return Err(Error::Trap("unexpected host trap".into()));
+                    };
+                    charge(live, &mut left, host::CALL_FUEL.saturating_add(size as u64 / 64))?;
+                    deadline.check()?;
+                    vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
+                    let answer = bridge(&id, &args);
+                    let code = live.store.data_mut().run.call_answered(&id, answer);
+                    let returned = live.store.data().run.call_result.as_ref().map_or(0, Vec::len);
+                    charge(live, &mut left, returned as u64 / 64)?;
+                    deadline.check()?;
+                    vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
+                    call = slice(live, &mut left, |store| inv.resume(store, &[Val::I32(code)]))?;
+                }
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
                     let held = live.store.get_fuel().map_err(wasm_err)?;
@@ -269,7 +401,7 @@ impl Plugin {
                     let fill = total.min(FUEL_SLICE.max(need)).max(held);
                     left -= fill - held;
                     live.store.set_fuel(fill).map_err(wasm_err)?;
-                    call = inv.resume(&mut live.store).map_err(wasm_err)?;
+                    call = slice(live, &mut left, |store| inv.resume(store))?;
                 }
             }
         }
@@ -293,30 +425,61 @@ impl Plugin {
     /// [`vectorcraft_doc::cancel::scope`] its progress goes to the scope's sink (a live effect's
     /// doesn't) and `vc_cancelled` sees the scope's Cancel.
     pub fn run_reporting(&self, input: &[u8], params: &[u8], limits: &Limits) -> (Result<Vec<u8>>, Report) {
+        self.run_guarded(input, params, limits, None)
+    }
+
+    /// [`Plugin::run_reporting`] for a filter whose manifest's `commandAllowlist` names commands:
+    /// each `vc_call` of one of them is made with `bridge`, on the caller's thread, while the run
+    /// waits. A failed call fails the run, also when the plug-in goes on and returns an output; the
+    /// error names the command.
+    pub fn run_calling(&self, input: &[u8], params: &[u8], limits: &Limits, bridge: &mut Bridge<'_>) -> (Result<Vec<u8>>, Report) {
+        self.run_guarded(input, params, limits, Some(bridge))
+    }
+
+    fn run_guarded(&self, input: &[u8], params: &[u8], limits: &Limits, bridge: Option<&mut Bridge<'_>>) -> (Result<Vec<u8>>, Report) {
         let mut report = Report::default();
         if let Err(e) = crate::safe_mode::check() {
             return (Err(e), report);
         }
         // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
         // still not take the document down (native builds; wasm aborts on panic anyway).
-        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report)));
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report, bridge)));
         (run.map_err(|_| Error::Trap("the runtime panicked".into())).and_then(|r| r), report)
     }
 
-    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report) -> Result<Vec<u8>> {
+    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report, bridge: Option<&mut Bridge<'_>>) -> Result<Vec<u8>> {
         let total = input.len().checked_add(params.len()).filter(|b| *b <= i32::MAX as usize && *b <= self.limits.max_memory_bytes / 2);
-        total.ok_or_else(|| Error::Limit("memory budget (the selection is too large to hand over)".into()))?;
+        total.ok_or_else(|| Error::Limit(SELECTION_TOO_LARGE.into()))?;
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
         let mut live = self.instantiate(run, &m.permissions(), report)?;
-        let out = self.run_live(&mut live, input, params, limits, &deadline);
-        *report = std::mem::take(&mut live.store.data_mut().run.report);
-        out
+        // Calls can be made from `vc_run` on, not from the start function.
+        if bridge.is_some() {
+            live.store.data_mut().run.allow_calls(m.command_allowlist.clone());
+        }
+        let out = self.run_live(&mut live, input, params, limits, &deadline, bridge);
+        let state = &mut live.store.data_mut().run;
+        *report = std::mem::take(&mut state.report);
+        // A failed call fails the run, whatever the plug-in did after it, unless the run was
+        // canceled.
+        match (state.call_failure.take(), out) {
+            (_, Err(Error::Cancelled)) => Err(Error::Cancelled),
+            (Some(e), _) => Err(e),
+            (None, out) => out,
+        }
     }
 
     /// Hands `input` and `params` to the instance `live` and runs `vc_run` → the output JSON bytes.
-    fn run_live(&self, live: &mut Live, input: &[u8], params: &[u8], limits: &Limits, deadline: &Deadline) -> Result<Vec<u8>> {
+    fn run_live(
+        &self,
+        live: &mut Live,
+        input: &[u8],
+        params: &[u8],
+        limits: &Limits,
+        deadline: &Deadline,
+        bridge: Option<&mut Bridge<'_>>,
+    ) -> Result<Vec<u8>> {
         let alloc: TypedFunc<i32, i32> = live.func("vc_alloc")?;
         let run: TypedFunc<RunArgs, i64> = live.func("vc_run")?;
         let place = |live: &mut Live, bytes: &[u8]| -> Result<usize> {
@@ -332,7 +495,7 @@ impl Plugin {
         let iptr = place(live, input)?;
         let pptr = place(live, params)?;
         let fuel = limits.fuel_base.saturating_add((input.len() as u64).saturating_mul(limits.fuel_per_byte));
-        let packed = self.call(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline)?;
+        let packed = self.call_with(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline, bridge)?;
         // A cancelled run, or one past its time budget, changes nothing, also when the plug-in saw
         // `vc_cancelled` and returned.
         vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
