@@ -591,8 +591,8 @@ fn the_scripts_own_save_as_writes_no_file() {
 fn a_changed_or_shared_own_save_as_writes_a_file() {
     let r = report(concat!(
         "var f = new File(p);\n",
-        "var a = {saveAs: function () {}}, b = {saveAs: function () {}}, c = {saveAs: function () {}};\n",
-        "var d = {saveAs: function () {}}, e = {saveAs: function () {}}, g = {saveAs: function () {}};\n",
+        "var a = {saveAs: function () {}}; var b = {saveAs: function () {}}; var c = {saveAs: function () {}};\n",
+        "var d = {saveAs: function () {}}; var e = {saveAs: function () {}}; var g = {saveAs: function () {}};\n",
         "a.saveAs(f); b['saveAs'](f); a.n = 1; a.n;\n",
         "a.saveAs = app.activeDocument.saveAs;\n",
         "b['saveAs'] = w;\n",
@@ -606,11 +606,40 @@ fn a_changed_or_shared_own_save_as_writes_a_file() {
         "d.saveAs(f);\n",
         "e.saveAs(f);\n",
         "g['saveAs'](f);\n",
-        "var m = {saveAs: d.saveAs}, n = {saveAs: function () {}, saveAs: d.saveAs};\n",
+        "var m = {saveAs: d.saveAs}; var n = {saveAs: function () {}, saveAs: d.saveAs};\n",
         "m.saveAs(f);\n",
         "n.saveAs(f);\n",
     ));
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19][..]));
+}
+
+/// Only a `var` statement directly in a function body or the global code that gives its first name
+/// the literal as its whole value makes the literal's `saveAs` the script's own, from the end of the
+/// statement. A literal given in a branch, one the value goes on from, one given by an assignment
+/// or to a later name of the statement, a call inside the literal, and a variable a function gave
+/// another value keep reporting the write.
+#[test]
+fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = {saveAs: function () {}};\n",
+        "function choose() { d = null; d = app.activeDocument; }\n",
+        "d.saveAs(f);\n",
+        "var e = app.activeDocument;\n",
+        "if (flag) var e = {saveAs: function () {}};\n",
+        "e.saveAs(f);\n",
+        "if (flag) { var e2 = {saveAs: function () {}}; }\n",
+        "e2.saveAs(f);\n",
+        "var g = {saveAs: function () {}} && app.activeDocument;\n",
+        "g.saveAs(f);\n",
+        "var h = app.activeDocument;\n",
+        "h = {saveAs: function () {}, value: h.saveAs(f)};\n",
+        "var k = {saveAs: function () {}, value: k.saveAs(f)};\n",
+        "k.saveAs(f);\n",
+        "var x = 1, y = {saveAs: function () {}};\n",
+        "y.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 9, 11, 13, 14, 17][..]));
 }
 
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing

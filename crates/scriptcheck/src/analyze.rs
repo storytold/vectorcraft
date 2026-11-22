@@ -266,6 +266,20 @@ struct Assign {
     after_new: bool,
 }
 
+/// `name = {`: an object literal assigned to a variable.
+struct ObjectValue {
+    name: String,
+    /// The bracket depth inside its `{`.
+    depth: usize,
+    /// The document methods writing a file that it defines with a function expression, a bit each
+    /// ([`Analyzer::writers`]).
+    bits: u8,
+    /// It is the value of the first name a `var` statement declares, and the statement is directly
+    /// in a function body or the global code, not in a block and not after `if (…)`, `else`, `do` or
+    /// a loop's parentheses: only then does the variable hold `bits` after it.
+    whole: bool,
+}
+
 /// What a value the check follows holds: a member chain, or a File or Folder object (`folder` when it
 /// is a Folder object whatever the path names: [`Operand::file_step`]).
 enum Held {
@@ -572,9 +586,12 @@ struct Analyzer<'s, 'a, 'l> {
     /// document method that writes a file (`{saveAs: …}`), each with a bit per method it defines (bit
     /// `i` for `catalog::DOM_FILE_WRITES[i]`): a call of that method on them writes nothing.
     writers: HashMap<String, u8>,
-    /// The object literals being assigned to a variable, the innermost last, each with the bracket
-    /// depth inside its `{`, up to [`crate::Limits::nesting`] of them.
-    objects: Vec<(String, usize)>,
+    /// The object literals being assigned to a variable, the innermost last, up to
+    /// [`crate::Limits::nesting`] of them.
+    objects: Vec<ObjectValue>,
+    /// An object literal whose `}` the last token was, with the methods it defines: the variable
+    /// holds them when the next token ends the `var` statement's value.
+    closed: Option<(String, u8)>,
     /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
     /// that is not such a variable.
     index_receiver: u8,
@@ -651,6 +668,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             maybe_files_full: false,
             writers: HashMap::new(),
             objects: vec![],
+            closed: None,
             index_receiver: 0,
             own_names: HashSet::new(),
             scopes: vec![],
@@ -1026,8 +1044,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         } else {
             self.own_names.remove(&name);
         }
-        if saved.writer != 0 {
-            self.writers.insert(name.clone(), saved.writer);
+        // An outer variable the body assigned keeps only the methods it still has: the body may have
+        // given it another value.
+        let writer = if saved.local { saved.writer } else { saved.writer & self.writers.get(&name).copied().unwrap_or(0) };
+        if writer != 0 {
+            self.writers.insert(name.clone(), writer);
         } else {
             self.writers.remove(&name);
         }
@@ -1301,8 +1322,15 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             } else if !a.after_new && t.is("{") {
                 // An object literal: its keys are read at the depth inside its `{` ([`Self::object_key`]).
                 self.unbind(&a.name);
+                let [_, _, declaration, before] = self.h;
+                let depth = self.depth();
+                let body = self.scopes.last().map_or(0, |s| s.depth);
+                let starts = before.is_none()
+                    || [";", "{", "}"].iter().any(|p| is(before, p))
+                    || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !word(before, "else") && !word(before, "do"));
+                let whole = word(declaration, "var") && starts && depth.checked_sub(1) == Some(body);
                 if self.objects.len() < self.acc.limits.nesting {
-                    self.objects.push((a.name, self.depth()));
+                    self.objects.push(ObjectValue { name: a.name, depth, bits: 0, whole });
                 }
             } else {
                 self.unbind(&a.name);
@@ -1344,32 +1372,40 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     /// `t` in an object literal assigned to a variable: a function expression directly inside its
     /// braces as the value of a key that names a document method writing a file
-    /// (`{saveAs: function …}`, `{'exportFile': function …}`) makes the variable one of
-    /// [`Analyzer::writers`], and any other value of that key (`{saveAs: d.saveAs}`) takes the method
-    /// out again. A closing brace ends the literals it closes.
+    /// (`{saveAs: function …}`, `{'exportFile': function …}`) counts the method for the literal, and
+    /// any other value of that key (`{saveAs: d.saveAs}`) takes it out again. A closing brace ends
+    /// the literals it closes. The variable of a [`ObjectValue::whole`] literal joins
+    /// [`Analyzer::writers`] only when the token after its `}` ends the value (`;`, `,` or a line
+    /// break), so a call inside the literal, and a value that goes on (`{…} && d`), see the variable
+    /// as it was.
     fn object_key(&mut self, t: &Sig<'s>) {
+        if let Some((name, bits)) = self.closed.take()
+            && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
+            && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
+        {
+            self.writers.insert(name, bits);
+        }
         let depth = self.depth();
-        while self.objects.pop_if(|(_, d)| *d > depth).is_some() {}
+        while let Some(o) = self.objects.pop_if(|o| o.depth > depth) {
+            if o.whole && o.bits != 0 && o.depth == depth.saturating_add(1) {
+                self.closed = Some((o.name, o.bits));
+            }
+        }
         let [h0, h1, h2, _] = self.h;
         if !is(h0, ":") || !(is(h2, "{") || is(h2, ",")) {
             return;
         }
-        let Some(name) = self.objects.last().filter(|(_, d)| *d == depth).map(|(n, _)| n.clone()) else { return };
         let key = match h1 {
             Some(k) if k.kind == T::Ident => Cow::Borrowed(k.text),
             Some(k) if k.kind == T::Str => Cow::Owned(unquote(k.text, 32)),
             _ => return,
         };
         let Some(i) = catalog::DOM_FILE_WRITES.iter().position(|m| *m == key.as_ref()) else { return };
-        if !t.word("function") {
-            let left = self.writers.get(&name).map_or(0, |bits| bits & !(1 << i));
-            if left == 0 {
-                self.writers.remove(&name);
-            } else {
-                self.writers.insert(name, left);
-            }
-        } else if self.writers.contains_key(&name) || self.acc.room(self.writers.len()) {
-            *self.writers.entry(name).or_insert(0) |= 1 << i;
+        let Some(o) = self.objects.last_mut().filter(|o| o.depth == depth) else { return };
+        if t.word("function") {
+            o.bits |= 1 << i;
+        } else {
+            o.bits &= !(1 << i);
         }
     }
 
