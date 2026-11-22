@@ -948,19 +948,28 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
 /// left out. The settings stay with the run, which hands the script an object of the
 /// `DocumentPreset` class.
 fn new_preset(h: &Host) -> Answer {
+    let item = |k: &str, v: Data| (k.to_string(), v);
+    add_preset(
+        h,
+        vec![
+            item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
+            item("artboardRowsOrCols", num(1.0)),
+            item("artboardSpacing", num(20.0)),
+            item("height", num(792.0)),
+            item("numArtboards", num(1.0)),
+            item("width", num(612.0)),
+        ],
+    )
+}
+
+/// A new `DocumentPreset` of the run with the settings `fields`, which `new DocumentPreset()` and
+/// `app.getPresetSettings` both make.
+fn add_preset(h: &Host, fields: Vec<(String, Data)>) -> Answer {
     let mut presets = h.dom.presets.borrow_mut();
     if presets.len() >= MAX_PRESETS {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
-    let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
-        item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
-        item("artboardRowsOrCols", num(1.0)),
-        item("artboardSpacing", num(20.0)),
-        item("height", num(792.0)),
-        item("numArtboards", num(1.0)),
-        item("width", num(612.0)),
-    ]);
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
 

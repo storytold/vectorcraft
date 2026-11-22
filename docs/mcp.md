@@ -2765,6 +2765,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `INVALIDGRIDPLANETYPE` makes no plane active. A preset name that is not
   listed, a preset whose grid is not of `gridType`, `InvalidPerspectiveGridType` and a name of more than 4,096 bytes
   throw an error with nothing changed. Changing the `DocumentPreset` `getPresetSettings` gives changes nothing else.
+  A run makes at most 10,000 `DocumentPreset` objects, those of `new DocumentPreset()` and `getPresetSettings`
+  together; one more throws a `RangeError`.
   `app.saveWorkspace`, `switchWorkspace`, `deleteWorkspace`, `resetWorkspace`, `loadColorSettings` and
   `showPresets`, and `Document.exportPerspectiveGridPreset` and `importPerspectiveGridPreset`, throw an error that
   says they are not available yet.

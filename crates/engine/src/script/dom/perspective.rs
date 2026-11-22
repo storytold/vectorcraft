@@ -24,7 +24,8 @@
 //!   `addDocument` takes back unchanged. Settings it cannot take are left out: units other than
 //!   the six `RulerUnits` values, a PPI other than 72, 150 or 300, the artboard count and layout
 //!   of more than 100 artboards, and the layout of a grid by column that no row count lays out the
-//!   same. Changing the result changes nothing else.
+//!   same. Changing the result changes nothing else. Each result counts toward the run's limit
+//!   of `DocumentPreset` objects, as `new DocumentPreset()` does.
 //! - The workspace methods, `loadColorSettings`, `showPresets` and the perspective grid preset
 //!   files are not available yet.
 
@@ -207,7 +208,6 @@ fn preset_settings(h: &Host, a: &[Data]) -> Answer {
     };
     let item = |k: &str, v: Data| (k.to_string(), v);
     let mut out = vec![
-        item("typename", text("DocumentPreset")),
         item("artboardLayout", text(format!("DocumentArtboardLayout.{layout}"))),
         item("artboardSpacing", num(d.spacing)),
         item("colorMode", text(if cmyk { "DocumentColorSpace.CMYK" } else { "DocumentColorSpace.RGB" })),
@@ -231,7 +231,7 @@ fn preset_settings(h: &Host, a: &[Data]) -> Answer {
     if let Some((_, r)) = resolutions.iter().find(|(ppi, _)| (d.raster_effects_ppi - ppi).abs() < 1e-9) {
         out.push(item("rasterResolution", text(format!("DocumentRasterResolution.{r}"))));
     }
-    Ok(Data::Object(out))
+    super::add_preset(h, out)
 }
 
 /// The members this module adds to `Document`'s.
