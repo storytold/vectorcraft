@@ -944,6 +944,7 @@ fn file_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
         return Err(not_handled(i, what, &format!("0x{format:08X}")));
     }
     let open_flags = flags(i, &arg(args, 2), what)?;
+    // `OPEN_ONLY_XMP` asks for the XMP alone, which is all an `XMPFile` reads.
     only(i, open_flags, OPEN_FOR_READ | OPEN_FOR_UPDATE | OPEN_ONLY_XMP | OPEN_USE_PACKET_SCANNING, what)?;
     let update = open_flags & OPEN_FOR_UPDATE != 0;
     let scan = open_flags & OPEN_USE_PACKET_SCANNING != 0;

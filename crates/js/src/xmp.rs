@@ -543,11 +543,12 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry) -> Result<P
 }
 
 /// Registers the namespaces of the name and the attributes of `el`, with `scope` holding the
-/// bindings in scope there, other than RDF, XML and no namespace.
+/// bindings in scope there, other than RDF, XML and no namespace. A prefix nothing declares makes
+/// the packet malformed.
 fn register_names(el: &El, scope: &Scope, registry: &mut Registry) -> Result<(), XmpError> {
     let names = std::iter::once((el.name.as_str(), true)).chain(attrs(el).into_iter().map(|(k, _)| (k, false)));
     for (name, element) in names {
-        let Some((ns, _)) = resolve(name, scope, element) else { continue };
+        let (ns, _) = resolve(name, scope, element).ok_or(XmpError::Malformed)?;
         if !ns.is_empty() && ns != RDF && ns != XML {
             registry.register(&ns, name.split_once(':').map_or("ns", |(p, _)| p))?;
         }

@@ -360,6 +360,12 @@ fn namespaces_inside_kept_values_are_registered() {
     let src =
         format!("var m = new XMPMeta({packet:?}); [XMPMeta.getNamespacePrefix('http://inner/'), XMPMeta.getNamespacePrefix('http://q/')].join('|')");
     assert_eq!(string(&src), "in:|q:");
+    for value in ["<a:p><bad:c>1</bad:c></a:p>", "<a:p bad:k='v'>x</a:p>"] {
+        let packet = format!(
+            "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:a='http://a/'>{value}</rdf:Description></rdf:RDF>"
+        );
+        assert_eq!(xmp::parse(&packet, &mut Registry::default()), Err(XmpError::Malformed), "an undeclared prefix in {value}");
+    }
 }
 
 #[test]
