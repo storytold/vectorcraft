@@ -121,31 +121,13 @@ pub(super) fn space_seen(ui: &Ui) -> Option<bool> {
     })
 }
 
-/// Whether Backtick was held when `button` went up in this frame, with `before` its state at the end
-/// of the frame before ([`backquote_seen`]). Its state as the frame began is the opposite of its
-/// first press or release in the frame; when the window lost the focus first (which lets go of every
-/// key without a release), it is `before`; with neither, it is its state now. The frame's presses,
-/// releases and focus losses before the button-up then apply in the order they came. Without a
-/// button-up in this frame, its state now.
-pub(super) fn backquote_at_release(ui: &Ui, button: egui::PointerButton, before: Option<bool>) -> bool {
-    key_at_release(ui, egui::Key::Backtick, button, before)
-}
-
-/// Whether `key` was held when `button` went up in this frame, by the rules of
-/// [`backquote_at_release`], with `before` its state at the end of the frame before.
-pub(super) fn key_at_release(ui: &Ui, key: egui::Key, button: egui::PointerButton, before: Option<bool>) -> bool {
-    key_at_button(ui, key, button, false, before)
-}
-
-/// Whether `key` was held when `button` went down in this frame, by the rules of
-/// [`backquote_at_release`] with the button-down in place of the button-up.
-pub(super) fn key_at_press(ui: &Ui, key: egui::Key, button: egui::PointerButton, before: Option<bool>) -> bool {
-    key_at_button(ui, key, button, true, before)
-}
-
-/// Whether `key` was held when `button` first went down (`pressed`) or up in this frame
-/// ([`key_at_release`], [`key_at_press`]).
-fn key_at_button(ui: &Ui, key: egui::Key, button: egui::PointerButton, pressed: bool, before: Option<bool>) -> bool {
+/// Whether `key` (Backtick, Space) was held at the frame's event at index `at`, a button going down
+/// or up, with `before` its state at the end of the frame before ([`backquote_seen`], [`space_seen`]).
+/// Its state as the frame began is the opposite of its first press or release in the frame; when
+/// the window lost the focus first (which lets go of every key without a release), it is `before`;
+/// with neither, it is its state now. The frame's presses, releases and focus losses before `at`
+/// then apply in the order they came. Without `at`, its state now.
+pub(super) fn key_at_event(ui: &Ui, key: egui::Key, at: Option<usize>, before: Option<bool>) -> bool {
     ui.input(|i| {
         let now = i.key_down(key);
         // A press or release of `key` (`Some(pressed)`), or a focus loss (`None`).
@@ -154,9 +136,7 @@ fn key_at_button(ui: &Ui, key: egui::Key, button: egui::PointerButton, pressed: 
             egui::Event::WindowFocused(false) => Some(None),
             _ => None,
         };
-        let Some(up) =
-            i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: p, .. } if *b == button && *p == pressed))
-        else {
+        let Some(up) = at.map(|k| k.min(i.events.len())) else {
             return now;
         };
         let start = match i.events.iter().find_map(step) {
@@ -166,6 +146,13 @@ fn key_at_button(ui: &Ui, key: egui::Key, button: egui::PointerButton, pressed: 
         };
         i.events[..up].iter().filter_map(step).fold(start, |_, s| s.unwrap_or(false))
     })
+}
+
+/// Whether `key` was held when `button` first went down in this frame, by the rules of
+/// [`key_at_event`].
+pub(super) fn key_at_press(ui: &Ui, key: egui::Key, button: egui::PointerButton, before: Option<bool>) -> bool {
+    let at = ui.input(|i| i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: b, pressed: true, .. } if *b == button)));
+    key_at_event(ui, key, at, before)
 }
 
 /// The pen pressure (0..1) of the press in progress: the force of this frame's pen or touch
@@ -238,7 +225,8 @@ pub(super) fn frame_moves(ui: &Ui, stylus: Option<&StylusFeed>, release: Option<
 }
 
 /// [`frame_moves`], and with `since_press` only the moves after the primary button first went down
-/// in this frame: a press that began in this frame did not pass the positions before it.
+/// in this frame: a press that began in this frame did not pass the positions before it. The moves
+/// then stop at the first button-up after that press, not at a release that came before it.
 pub(super) fn frame_moves_since(
     ui: &Ui,
     stylus: Option<&StylusFeed>,
@@ -248,17 +236,15 @@ pub(super) fn frame_moves_since(
     let samples = stylus.map(StylusFeed::take_moves).unwrap_or_default();
     ui.input(|i| {
         // How many of the frame's moves came before the press, when only those after it count.
-        let before_press = if since_press {
-            i.events
-                .iter()
-                .position(|e| matches!(e, egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: true, .. }))
-                .map_or(0, |k| i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count())
+        let press = if since_press {
+            i.events.iter().position(|e| matches!(e, egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: true, .. }))
         } else {
-            0
+            None
         };
+        let before_press = press.map_or(0, |k| i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count());
         // How many of the frame's moves came before the button-up, and where it came, if it came.
         let before_up = release.and_then(|b| {
-            i.events.iter().enumerate().find_map(|(k, e)| match e {
+            i.events.iter().enumerate().skip(press.map_or(0, |k| k + 1)).find_map(|(k, e)| match e {
                 egui::Event::PointerButton { pos, button, pressed: false, .. } if *button == b => {
                     Some((i.events.iter().take(k).filter(|e| matches!(e, egui::Event::PointerMoved(_))).count(), *pos))
                 }

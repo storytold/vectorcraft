@@ -1547,6 +1547,88 @@ fn a_zoom_click_within_one_frame_starts_where_it_was_pressed() {
     }
 }
 
+/// With Animated Zoom on, a Zoom tool press dragged sideways and released in one frame zooms with
+/// the pointer about the press, as it does over several frames, instead of stepping as a click. A
+/// press released where it went down, with a move after the release in that frame, still steps.
+#[test]
+fn an_animated_zoom_drag_within_one_frame_scrubs() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("zoom");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() - vec2(100.0, 50.0);
+    let to = at + vec2(100.0, 0.0);
+    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let doc_at = |app: &VectorcraftApp, p: Pos2| Xf::new(rect, app.view().unwrap()).to_doc(p);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+    let (z0, pinned) = (app.view().unwrap().zoom, doc_at(&app, at));
+    frame(&mut app, &ctx, vec![button(at, true), Event::PointerMoved(to), button(to, false)]);
+    frame(&mut app, &ctx, vec![]);
+    let z1 = app.view().unwrap().zoom;
+    assert!((z1 / z0 - 2.0).abs() < 1e-6, "100 points right doubles the zoom: {z0} → {z1}");
+    assert!(doc_at(&app, at).distance(pinned) < 1e-6, "about the press");
+    app.view_mut().unwrap().zoom = z0;
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at)]);
+    frame(&mut app, &ctx, vec![button(at, true), button(at, false), Event::PointerMoved(to)]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true), "a click steps the zoom");
+}
+
+/// A press and release in one frame that follow the release of an earlier press in that frame end
+/// at their own release, with its modifiers: with Animated Zoom off, a Zoom tool click steps the
+/// zoom in though Alt was held at the earlier release, and a drag zooms to the area it dragged
+/// across, not to the earlier release.
+#[test]
+fn a_press_within_one_frame_after_an_earlier_release_ends_at_its_own_release() {
+    use egui::Event;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
+    app.select_tool("zoom");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() - vec2(100.0, 50.0);
+    let to = at + vec2(100.0, 50.0);
+    let (near, far) = (rect.center() + vec2(110.0, 90.0), rect.center() + vec2(150.0, 120.0));
+    let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    let none = egui::Modifiers::NONE;
+    let z0 = app.view().unwrap().zoom;
+    // A press dragged in earlier frames, then in one frame its release, a new press and that
+    // press's release.
+    let run = |app: &mut VectorcraftApp, events: Vec<Event>| {
+        app.view_mut().unwrap().zoom = z0;
+        frame(app, &ctx, vec![Event::PointerMoved(near)]);
+        frame(app, &ctx, vec![button(near, true, none)]);
+        frame(app, &ctx, vec![Event::PointerMoved(far)]);
+        frame(app, &ctx, events);
+        frame(app, &ctx, vec![Event::ModifiersChanged(none)]);
+        app.view().unwrap().zoom
+    };
+    let alt = egui::Modifiers::ALT;
+    let z = run(
+        &mut app,
+        vec![
+            Event::ModifiersChanged(alt),
+            button(far, false, alt),
+            Event::ModifiersChanged(none),
+            Event::PointerMoved(at),
+            button(at, true, none),
+            button(at, false, none),
+        ],
+    );
+    assert_eq!(z, crate::state::next_zoom(z0, true), "the click zooms in with the modifiers of its own release");
+    let z = run(
+        &mut app,
+        vec![button(far, false, none), Event::PointerMoved(at), button(at, true, none), Event::PointerMoved(to), button(to, false, none)],
+    );
+    let area = z0 * f64::from((rect.width() / 100.0).min(rect.height() / 50.0));
+    assert!((z - area).abs() < 1e-6, "the drag zooms to its own area: {z0} → {z}, not {area}");
+}
+
 /// Space pressed after a tool drag's release, in the same frame, does not count for the drag: the
 /// Rectangle tool's last move still resizes the rectangle instead of moving it.
 #[test]

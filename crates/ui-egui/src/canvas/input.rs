@@ -1,8 +1,8 @@
 use super::artboards::{artboard_name_at, begin_artboard_name_edit, name_press_id, select_named_artboard};
 use super::drag::{
-    FrameMove, HoverContext, apply_requests, backquote_at_release, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id,
-    drop_press, key_at_press, key_at_release, mods, move_pose, on_canvas, pen_pose, pen_pressure, space_lends_view_tools, space_seen,
-    tool_drag_doc_id, tool_drag_mods_changed, tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
+    FrameMove, HoverContext, apply_requests, backquote_seen, dispatch, drag_art_out, drag_id, drag_layer_id, drag_pos_id, drop_press, key_at_event,
+    key_at_press, mods, move_pose, on_canvas, pen_pose, pen_pressure, space_lends_view_tools, space_seen, tool_drag_doc_id, tool_drag_mods_changed,
+    tool_drag_moved, tool_frame_moves, tool_holds, tool_press_doc_id,
 };
 use super::view::{
     HOLD_DELAY, HOLD_ZOOM, SCRUB_SLOP, SCRUB_ZOOM, WheelTurn, animated_zoom, edge_scroll, edge_scroll_pixels, pan_pixels, pan_ppp, rotate_about,
@@ -136,13 +136,33 @@ pub(super) fn handle_input(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respo
                 (Pointing { ..f }, backquote_now)
             };
             begin_drag(app, ui, &press, start, backquote);
-            if released && let Some(d) = ui.data(|dd| dd.get_temp::<Drag>(drag_id())) {
-                // A pan or a turn of the view follows the pointer to where the button went up, with
-                // the modifiers held then (Shift snaps the turn).
-                if matches!(d, Drag::Pan { .. } | Drag::RotateView { .. })
-                    && let Some(up) = release_pos(ui, primary, false)
-                {
-                    drag_held(app, ui, &Pointing { m: release_mods(ui, primary).unwrap_or(m), ..press }, d, up);
+            if released && let Some(mut d) = ui.data(|dd| dd.get_temp::<Drag>(drag_id())) {
+                let span = press_span(ui, primary);
+                if let Some((_, up, up_mods)) = ending_release(ui, primary, span.as_ref()) {
+                    match d {
+                        // A pan or a turn of the view follows the pointer to where the button went
+                        // up, with the modifiers held then (Shift snaps the turn).
+                        Drag::Pan { .. } | Drag::RotateView { .. } => drag_held(app, ui, &Pointing { m: up_mods, ..press }, d, up),
+                        // An Animated Zoom press that moved more than the scrub's slop before it went
+                        // up zooms with the pointer as a held one does, about where it was pressed;
+                        // one that stayed within it is a click. Only the moves before the button-up count.
+                        Drag::ZoomScrub { start: from, held, .. } => {
+                            let moved = ui.input(|i| {
+                                let span = i.events.get(span.clone().unwrap_or_default()).unwrap_or_default();
+                                std::iter::once(up)
+                                    .chain(span.iter().filter_map(|e| if let egui::Event::PointerMoved(q) = e { Some(*q) } else { None }))
+                                    .any(|q| (q - from).length() > SCRUB_SLOP)
+                            });
+                            if moved {
+                                let ui_zoom = app.canvas_ui_zoom;
+                                if let Some(vm) = app.view_mut() {
+                                    zoom_about(vm, rect, from, vm.zoom * (f64::from(up.x - from.x) * SCRUB_ZOOM).exp(), ui_zoom);
+                                }
+                                d = Drag::ZoomScrub { start: from, held, moved: true };
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 end_drag(app, ui, &f, d, egui::PointerButton::Primary, start, true);
             }
@@ -618,13 +638,15 @@ fn dispatch_frame_moves(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, backquo
 /// A gesture whose `button` went up ends where it went up, with the modifiers and Space held then:
 /// the moves and key changes after the release in this frame do not count. Without a release in
 /// this frame, it ends at `p` with the modifiers and Space held now. `pressed_here` says that the
-/// gesture was pressed in this frame too ([`drag_released`]).
+/// gesture was pressed in this frame too ([`drag_released`]), and then the release that ends it is
+/// the one after that press ([`ending_release`]).
 fn end_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, button: egui::PointerButton, p: Pos2, pressed_here: bool) {
-    let m = release_mods(ui, button).unwrap_or(f.m);
-    let space = space_lends_view_tools(app, m, key_at_release(ui, egui::Key::Space, button, f.space_before));
-    let up = Pointing { m, space, ..*f };
     let cut = if pressed_here { press_span(ui, button) } else { None };
-    drag_released(app, ui, &up, d, release_pos(ui, button, false).unwrap_or(p), cut);
+    let release = ending_release(ui, button, cut.as_ref());
+    let m = release.map_or(f.m, |(_, _, m)| m);
+    let space = space_lends_view_tools(app, m, key_at_event(ui, egui::Key::Space, release.map(|(k, ..)| k), f.space_before));
+    let up = Pointing { m, space, ..*f };
+    drag_released(app, ui, &up, d, release.map_or(p, |(_, q, _)| q), cut);
 }
 
 /// A gesture released at `p`: the view settles, or the tool gets its up. With `cut`, the gesture
@@ -638,7 +660,8 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     // Where the pointer was in the frame before: a zoom marquee moved with Space follows it.
     let before: Option<Pos2> = ui.data(|dd| dd.get_temp(drag_pos_id()));
     // Backtick as it was at the button-up: a key pressed or released later in the frame does not count.
-    let backquote = backquote_at_release(ui, egui::PointerButton::Primary, f.backquote_before);
+    let release = ending_release(ui, egui::PointerButton::Primary, cut.as_ref()).map(|(k, ..)| k);
+    let backquote = key_at_event(ui, egui::Key::Backtick, release, f.backquote_before);
     // Whether Shift, Alt, Cmd/Ctrl, Space or Backtick changed since the drag's last frame, read
     // before the drag's state is cleared below.
     let mods_changed = matches!(d, Drag::Tool) && tool_drag_mods_changed(ui, mods(m, space), backquote);
@@ -805,14 +828,16 @@ fn triple_click(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
     dispatch(app, &ev, view);
 }
 
-/// Where `button` went up: the first release ends a drag, the last classifies this frame's click.
-fn release_pos(ui: &Ui, button: egui::PointerButton, last: bool) -> Option<Pos2> {
+/// The release of `button` that ends a gesture, with its index among the frame's events, where it
+/// came and the modifiers held then. With `cut`, the gesture was pressed in this frame, and its
+/// release is the one that ends `cut` ([`press_span`]), not one that came before the press; else
+/// it is the first release in this frame. `None` without one.
+fn ending_release(ui: &Ui, button: egui::PointerButton, cut: Option<&std::ops::Range<usize>>) -> Option<(usize, Pos2, egui::Modifiers)> {
     ui.input(|i| {
-        let mut releases = i.events.iter().filter_map(|e| match e {
-            egui::Event::PointerButton { pos, button: b, pressed: false, .. } if *b == button => Some(*pos),
+        i.events.iter().enumerate().skip(cut.map_or(0, |r| r.end)).find_map(|(k, e)| match e {
+            egui::Event::PointerButton { pos, button: b, pressed: false, modifiers } if *b == button => Some((k, *pos, *modifiers)),
             _ => None,
-        });
-        if last { releases.next_back() } else { releases.next() }
+        })
     })
 }
 
@@ -844,16 +869,6 @@ fn press_span(ui: &Ui, button: egui::PointerButton) -> Option<std::ops::Range<us
         let press = i.events.iter().position(|e| is(e, true))?;
         let up = i.events.iter().skip(press).position(|e| is(e, false))?;
         Some(press + 1..press + up)
-    })
-}
-
-/// The modifiers held when `button` first went up in this frame, the release that ends a drag.
-fn release_mods(ui: &Ui, button: egui::PointerButton) -> Option<egui::Modifiers> {
-    ui.input(|i| {
-        i.events.iter().find_map(|e| match e {
-            egui::Event::PointerButton { button: b, pressed: false, modifiers, .. } if *b == button => Some(*modifiers),
-            _ => None,
-        })
     })
 }
 
