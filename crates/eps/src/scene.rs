@@ -507,9 +507,10 @@ impl<'a> Scene<'a> {
         }
     }
 
-    /// Turn overprinting on for one paint (when overprints are preserved); `false` when it stays off.
-    fn overprint_on(&mut self, overprint: bool) -> bool {
-        let on = overprint && self.o.overprint == Overprint::Preserve;
+    /// Turn overprinting on for one paint (when overprints are preserved, and `paint` is not paper
+    /// white with Discard White Overprint; a white spot ink still prints); `false` when it stays off.
+    fn overprint_on(&mut self, overprint: bool, paint: &Paint) -> bool {
+        let on = overprint && !self.doc.discards_white(paint) && self.o.overprint == Overprint::Preserve;
         if on {
             self.line("true op");
         }
@@ -569,7 +570,9 @@ impl<'a> Scene<'a> {
                 let blob = self.doc.image_blob(im);
                 match n.extras().colorize.as_deref() {
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
+                        let on = self.overprint_on(n.colorize_overprints(), p);
                         self.colorized_image(&im.key, blob, im.width, im.height, im.xf, p);
+                        self.overprint_off(on);
                     }
                     _ => self.image(&im.key, blob, im.width, im.height, im.xf),
                 }
@@ -688,7 +691,7 @@ impl<'a> Scene<'a> {
         if p.is_none() {
             return;
         }
-        let on = self.overprint_on(overprint);
+        let on = self.overprint_on(overprint, p);
         match p {
             Paint::None => {}
             Paint::Solid { color, swatch, tint } => {
@@ -791,7 +794,7 @@ impl<'a> Scene<'a> {
         };
         match &w.shape {
             WrittenShape::Stroke { width } => {
-                let on = self.overprint_on(st.overprint);
+                let on = self.overprint_on(st.overprint, &st.paint);
                 self.line_style(st, *width);
                 match &st.paint {
                     Paint::Solid { color, swatch, tint } => {

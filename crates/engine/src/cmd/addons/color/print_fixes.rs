@@ -98,6 +98,11 @@ impl Fixes {
                 off(self.stroke, is_white(&r.style.stroke), &mut r.style.overprint_stroke);
             }
         }
+        // A colorized image's color is its fill.
+        if n.colorize_overprints() {
+            let white = n.extras().colorize.as_deref().is_some_and(is_white);
+            off(self.fill, white, &mut n.extras_mut().colorize_overprint);
+        }
         changed
     }
 

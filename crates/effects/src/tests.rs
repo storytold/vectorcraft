@@ -701,21 +701,22 @@ fn a_nested_groups_gradient_follows_its_warped_image() {
 }
 
 /// An image under a geometry effect other than a Warp draws as the image does: colorized by
-/// a grayscale image's fill color, and smoothed or not.
+/// a grayscale image's fill color, overprinting as it does, and smoothed or not.
 #[test]
 fn an_image_under_a_geometry_effect_keeps_its_color_and_smoothing() {
     let mut n = (*warp_test_image(1)).clone();
     n.appearance.effects = vec![fx("distort.roughen", json!({"size": 5, "detail": 10}))];
     n.extras_mut().colorize = Some(Box::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))));
+    n.extras_mut().colorize_overprint = true;
     n.extras_mut().pixelated = true;
     let art = crate::reshape::reshape(None, &n, None).unwrap();
     let mut seen = vec![];
     art.walk(&mut |c| {
         if matches!(c.kind, NodeKind::Image(_)) {
-            seen.push((c.extras().colorize.clone(), c.extras().pixelated));
+            seen.push((c.extras().colorize.clone(), c.colorize_overprints(), c.extras().pixelated));
         }
     });
-    assert_eq!(seen, vec![(n.extras().colorize.clone(), true)]);
+    assert_eq!(seen, vec![(n.extras().colorize.clone(), true, true)]);
 }
 
 /// What `effects` make of `path` within `budget`.

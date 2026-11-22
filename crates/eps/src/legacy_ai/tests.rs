@@ -1039,7 +1039,8 @@ fn colorized_images_keep_their_color() {
     // Each row is a byte: the black pixels are 0 bits.
     assert_eq!(data, &["%6996"], "{text}");
     let at = text.find("%AI5_File:\n").unwrap();
-    assert!(text[..at].ends_with("0 0.5 1 0 k\n"), "{text}");
+    // Its color, and its fill overprint off.
+    assert!(text[..at].ends_with("0 0.5 1 0 k\n0 O\n"), "{text}");
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     let read = crate::import(&out.bytes).unwrap().document;
     let mut found = vec![];

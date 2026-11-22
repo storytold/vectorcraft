@@ -1154,11 +1154,15 @@ fn drop_own_overprints(n: &mut Node) {
                 (r.style.overprint_fill, r.style.overprint_stroke) = (false, false);
             }
         }
+        if n.colorize_overprints() {
+            n.extras_mut().colorize_overprint = false;
+        }
     }
 }
 
 fn overprints(n: &Node) -> bool {
     n.appearance.items.iter().any(AppearanceItem::overprint)
+        || n.colorize_overprints()
         || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
 }
 

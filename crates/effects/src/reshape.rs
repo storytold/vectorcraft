@@ -1277,6 +1277,7 @@ fn as_art_opts(
             {
                 let mut e = image.extras_mut();
                 e.colorize = n.extras().colorize.clone();
+                e.colorize_overprint = n.extras().colorize_overprint;
                 e.pixelated = n.extras().pixelated;
                 e.color_mask = n.extras().color_mask.clone();
                 e.image_quad = n.extras().image_quad.clone();

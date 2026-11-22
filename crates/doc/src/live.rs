@@ -1340,6 +1340,33 @@ mod tests {
         assert!(piece.knockout_outline().is_none());
     }
 
+    /// Each piece of a mesh-warped colorized image keeps its color and whether it overprints.
+    #[test]
+    fn mesh_warp_image_pieces_keep_an_overprinting_color() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::BLACK)));
+        n.extras_mut().colorize_overprint = true;
+        for masked in [false, true] {
+            let g = mesh_warp_image(&n, &im, &|p| p, 2, false, masked);
+            let mut pieces = vec![];
+            g.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::Image(_)) {
+                    pieces.push(c.colorize_overprints());
+                }
+            });
+            assert_eq!(pieces, [true; 8], "masked {masked}");
+        }
+    }
+
     /// More cells than the objects live art may make cut no pieces (the count overflowed).
     #[test]
     fn mesh_warp_image_past_the_budget_makes_an_empty_group() {

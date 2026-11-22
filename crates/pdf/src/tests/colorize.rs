@@ -121,6 +121,43 @@ fn a_process_color_writes_the_image_in_that_color_with_a_soft_mask() {
     assert_eq!(images(&pdf(&doc(ColorMode::Cmyk, None))), [("DeviceGray".into(), vec![], false)]);
 }
 
+/// A colorized image whose color overprints is drawn with an overprinting graphics state
+/// (ISO 32000-1 §8.6.7), its DeviceN image unchanged; one that knocks out sets none.
+#[test]
+fn an_overprinting_colorized_image_sets_overprint() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let text = |d: &Document| String::from_utf8_lossy(&pdf(d)).into_owned();
+    assert!(!text(&d).contains("/OP true"), "a knocking-out image sets no overprint");
+    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    let out = pdf(&d);
+    assert!(text(&d).contains("/OP true/op true"), "the image overprints");
+    assert!(images(&out).contains(&("DeviceN".into(), vec!["Ink".into()], true)), "still the ink's DeviceN image");
+
+    // A process color is written in only the process inks it puts down, so its zero plates keep
+    // the inks below: an image's samples take no part in the nonzero overprint mode.
+    let mut d = doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0))));
+    assert_eq!(images(&pdf(&d)), [("DeviceGray".into(), vec![], false), ("DeviceCMYK".into(), vec![], true)], "knocking out: CMYK");
+    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
+
+    // Paper white knocks out with Discard White Overprint (the default); without it, overprinting
+    // white puts no ink down and paints nothing.
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0))));
+    assert_eq!(images(&pdf(&d)).len(), 2, "the white image and its soft mask");
+    d.setup.discard_white_overprint = false;
+    assert!(images(&pdf(&d)).is_empty(), "{:?}", images(&pdf(&d)));
+
+    // A white spot ink is an ink: it overprints with Discard White Overprint too.
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    d.swatches.push(Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 }));
+    d.setup.discard_white_overprint = true;
+    assert!(text(&d).contains("/OP true/op true"), "the white spot ink overprints");
+}
+
 /// Registration prints on every plate: the process inks and the document's spot inks.
 #[test]
 fn registration_writes_the_image_in_every_ink() {
@@ -299,6 +336,30 @@ fn separations_print_the_image_on_its_ink_plate() {
         // The gray image itself has no spot ink.
         if name == "Ink" {
             assert_eq!(plain, &[0, 0], "{name}: the uncolorized image");
+        }
+    }
+}
+
+/// On printed separations an overprinting colorized image is hidden on the plates its color puts
+/// no ink on, so a writer without blending modes (PostScript) keeps the ink below it there; a
+/// knocking-out one is drawn on every plate.
+#[test]
+fn separations_hide_an_overprinting_image_on_plates_without_its_ink() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let shown = |overprint: bool, postscript: bool| {
+        let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+        let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+        let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(&d, &PrintOptions { settings, postscript, ..Default::default() }).unwrap();
+        names.into_iter().zip(&job.plates).map(|(name, p)| (name, p.layers[0].children().unwrap()[0].visible)).collect::<Vec<_>>()
+    };
+    for postscript in [true, false] {
+        let knocking = shown(false, postscript);
+        assert!(knocking.len() > 1 && knocking.iter().all(|(_, v)| *v), "{knocking:?}");
+        for (name, visible) in shown(true, postscript) {
+            assert_eq!(visible, name == "Ink", "{name}");
         }
     }
 }
