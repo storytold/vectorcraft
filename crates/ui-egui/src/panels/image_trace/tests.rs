@@ -502,6 +502,9 @@ fn advanced_is_a_section_that_stays_as_it_was_left() {
     // The section's region and heading share its name: the header's disclosure is the button.
     panel.click_role("Advanced", craft::ui::contract::Role::BUTTON);
     assert!(!panel.app().ui.image_trace_advanced, "the header closes it");
+    // Once the section has drawn itself closed (it animates), as production read it on a later frame.
+    panel.advance(1.0);
+    panel.frame();
     assert!(!panel.shows("Corners"));
     // Remembered with the UI preferences, across launches.
     let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&panel.app().ui).unwrap()).unwrap();
@@ -509,6 +512,7 @@ fn advanced_is_a_section_that_stays_as_it_was_left() {
     let old: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
     assert!(old.image_trace_advanced, "open for preferences saved before the section existed");
     panel.click_role("Advanced", craft::ui::contract::Role::BUTTON);
+    panel.frame();
     assert!(panel.app().ui.image_trace_advanced && panel.shows("Corners"));
 }
 
@@ -814,12 +818,18 @@ fn selecting_an_object_traced_with_a_renamed_preset_shows_the_new_name() {
     panel.frame();
     assert_eq!(shown_preset(&panel), "Dark Ink");
     // Dark Ink is deleted, and another preset with the same settings is made under that name: the object shows
-    // Custom, also after that preset is renamed.
+    // Custom, also after that preset is renamed. Each is read from the panel opened anew, whose run-only state starts
+    // over, as production read it from a new context.
+    let reopened = |panel: &mut Panel| {
+        panel.app().ui.image_trace_panel = Default::default();
+        panel.frame();
+        shown_preset(panel)
+    };
     panel.app().session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
-    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Dark Ink", "preset": "Sketched Art"}));
-    assert_eq!(shown_preset(&panel), "Custom");
-    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Dark Ink", "newName": "Other Ink"}));
-    assert_eq!(shown_preset(&panel), "Custom");
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "preset": "Sketched Art"})).unwrap();
+    assert_eq!(reopened(&mut panel), "Custom");
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "newName": "Other Ink"})).unwrap();
+    assert_eq!(reopened(&mut panel), "Custom");
 }
 
 /// The Control bar's and Properties' Preset dropdowns show an object traced with a saved preset under the name the
