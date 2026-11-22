@@ -431,9 +431,12 @@ impl eframe::App for WebShell {
                         match f.bytes_async().await {
                             Ok(bytes) => {
                                 match target {
-                                    DropTarget::Place(d) => {
-                                        place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some(d) })
-                                    }
+                                    DropTarget::Place(d) => place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival {
+                                        name,
+                                        bytes,
+                                        drop: Some(d),
+                                        with: serde_json::Value::Null,
+                                    }),
                                     DropTarget::Open => inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes)),
                                 }
                                 repaint.request_repaint();
@@ -477,8 +480,9 @@ fn services(
             });
         })),
         script_inbox: Some(script_inbox),
-        // File → Place…: the picked files go to the Place dialog.
-        place_async: Some(Box::new(move || {
+        // File → Place…: the picked files go to the Place dialog, with the importer plug-in and
+        // parameters `with` names.
+        place_async: Some(Box::new(move |with: serde_json::Value| {
             let inbox = picked.clone();
             let ctx = place_ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
@@ -493,7 +497,7 @@ fn services(
                 };
                 let mut arrived = vec![];
                 for f in files {
-                    arrived.push(PlaceArrival { name: f.file_name(), bytes: f.read().await, drop: None });
+                    arrived.push(PlaceArrival { name: f.file_name(), bytes: f.read().await, drop: None, with: with.clone() });
                 }
                 inbox.lock().unwrap_or_else(|e| e.into_inner()).extend(arrived);
                 ctx.request_repaint();

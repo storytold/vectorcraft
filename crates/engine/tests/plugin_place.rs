@@ -280,3 +280,44 @@ fn failures_place_nothing() {
     assert_eq!(state(&mut s), before, "too large");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file past the limit, placed with `importer` named, is refused from its size before any of it
+/// is read: here the file can't be read at all, and the error is still the size.
+#[test]
+fn a_named_importer_refuses_a_large_file_before_reading_it() {
+    let mut s = with_document();
+    install(&mut s, &tpl::returning(&placing("test.place.unread", r#"["tpu"]"#), ART));
+    let dir = std::env::temp_dir().join(format!("vc-plugin-place-unread-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let big = dir.join("big.tpu");
+    std::fs::File::create(&big).unwrap().set_len(vectorcraft_plugins::import::MAX_INPUT_BYTES as u64 + 1).unwrap();
+    // Unix: no read permission. Windows: another handle that shares nothing.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&big, std::fs::Permissions::from_mode(0o000)).unwrap();
+    }
+    #[cfg(windows)]
+    let _held = {
+        use std::os::windows::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new().read(true).share_mode(0).open(&big).unwrap()
+    };
+    // A user that reads the file anyway (root) can't show the order of the checks.
+    if std::fs::File::open(&big).is_ok() {
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
+    let before = state(&mut s);
+    let e = s.execute("file.place", &json!({"path": big.to_string_lossy(), "importer": "plugin.test.place.unread"})).unwrap_err().to_string();
+    assert!(e.contains("can't place `big.tpu`") && e.contains("larger than"), "{e}");
+    assert_eq!(state(&mut s), before);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&big, std::fs::Permissions::from_mode(0o644));
+    }
+    #[cfg(windows)]
+    drop(_held);
+    let _ = std::fs::remove_dir_all(&dir);
+}

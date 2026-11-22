@@ -13300,7 +13300,8 @@ their bounds, Save then asks for a name, and `warnings` holds the importer's war
 `place` (`place: true` in `document.formats` and `plugin.list`) also places its files: `file.place`, `file.place.info`
 and `file.place.queue` take `importer?: "plugin.<id>"` (one that sets `place` and lists the file's extension) and
 `params?`, and without `importer` a file no built-in format reads goes to the first such importer by id that lists its
-extension. The importer is given at most 128 MiB of the file (a larger file is refused from its size, before it is read)
+extension. The importer is given at most 128 MiB of the file (a larger file is refused from its size, with `importer`
+before any of it is read or decoded, and without it after its first 64 KiB are read or decoded)
 and `_context.mode` `"place"`; its objects, guides left out, are placed as one group named after the file, in the order
 it returned them, as one undo step, embedded whatever `link` says (`linked: false`). `plugin.run` of an importer is
 an error that names `document.open`. In the app, File › Open With lists the installed importers, and

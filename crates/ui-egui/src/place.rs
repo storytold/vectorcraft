@@ -23,6 +23,9 @@ pub struct PlaceArrival {
     pub name: String,
     pub bytes: Vec<u8>,
     pub drop: Option<DropAt>,
+    /// A picked file's importer plug-in and parameters, from the `file.place` that started the pick
+    /// (`importer`, `params`; `null` or `{}` without them).
+    pub with: Value,
 }
 
 pub type PlaceInbox = Arc<Mutex<Vec<PlaceArrival>>>;
@@ -223,8 +226,8 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
         let files: Vec<Value> = match p.get("paths").and_then(Value::as_array) {
-            Some(a) => a.iter().filter_map(Value::as_str).map(|path| json!({ "path": path })).collect(),
-            None => return pick(app).map(|_| Value::Null),
+            Some(a) => a.iter().filter_map(Value::as_str).map(|path| with_importer(json!({ "path": path }), &p)).collect(),
+            None => return pick(app, &p).map(|_| Value::Null),
         };
         if files.is_empty() {
             return Err("paths: give at least one file".into());
@@ -280,10 +283,11 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
 }
 
-/// Pick files to place: the Place dialog opens with them (on the web once they arrive).
-fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
+/// Pick files to place: the Place dialog opens with them (on the web once they arrive), placed with
+/// the importer plug-in and parameters `p` names ([`with_importer`]).
+fn pick(app: &mut VectorcraftApp, p: &Value) -> Result<(), String> {
     if let Some(f) = app.services.place_async.as_mut() {
-        f();
+        f(with_importer(json!({}), p));
         return Ok(());
     }
     let paths = if app.services.pick_open_multi.is_some() {
@@ -296,8 +300,23 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
     if paths.is_empty() {
         return Err("cancelled".into());
     }
-    open_dialog(app, paths.into_iter().map(|path| json!({ "path": path })).collect());
+    open_dialog(app, paths.into_iter().map(|path| with_importer(json!({ "path": path }), p)).collect());
     Ok(())
+}
+
+/// The params of `file.place` that name an importer plug-in and its parameters: a Place dialog file
+/// entry carries them, and its file is read and placed with them.
+const IMPORTER_KEYS: [&str; 2] = ["importer", "params"];
+
+/// Place dialog file entry `file` with the importer plug-in and parameters `p` names
+/// ([`IMPORTER_KEYS`]).
+fn with_importer(mut file: Value, p: &Value) -> Value {
+    for k in IMPORTER_KEYS {
+        if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+            file[k] = v.clone();
+        }
+    }
+    file
 }
 
 /// The Place dialog for `files` (`{path}`, or `{name}` with the bytes in [`PlaceState`]).
@@ -326,9 +345,13 @@ fn open_dialog(app: &mut VectorcraftApp, files: Vec<Value>) {
 /// object), or a PDF, `.ai`, EPS or PostScript file on disk? A DCS file (an EPS file naming its
 /// plates) is placed as a linked image instead. Where the platform reads part of a file, only the
 /// file's start is read; a file longer than that is taken to be at least as long as its binary EPS
-/// header says, and one whose header can't be told from it counts as a document.
+/// header says, and one whose header can't be told from it counts as a document. A file that names
+/// an importer plug-in is none of these, and none of it is read here.
 fn is_vectorcraft_file(app: &VectorcraftApp, file: &Value) -> bool {
     use vectorcraft_engine::cmd::place::{DCS_HEAD_BYTES, head_is_dcs};
+    if file.get("importer").is_some() {
+        return false;
+    }
     let Some(path) = file.get("path").and_then(Value::as_str) else { return false };
     let native = ["vectorcraft", vectorcraft_format::LEGACY_EXTENSION, "vctemplate"];
     // The file's start, and the file's length when that is all of it.
@@ -357,14 +380,15 @@ fn is_vectorcraft_file(app: &VectorcraftApp, file: &Value) -> bool {
     }
 }
 
-/// The engine params naming `file` (a dialog file entry).
+/// The engine params naming `file` (a dialog file entry), with the importer plug-in and parameters
+/// it carries ([`IMPORTER_KEYS`]).
 fn source(app: &VectorcraftApp, file: &Value) -> Option<Value> {
     if let Some(path) = file.get("path").and_then(Value::as_str) {
-        return Some(json!({ "path": path }));
+        return Some(with_importer(json!({ "path": path }), file));
     }
     let name = file.get("name").and_then(Value::as_str)?;
     let bytes = app.place.picked.iter().find(|(n, _)| n == name).map(|(_, b)| b)?;
-    Some(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }))
+    Some(with_importer(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }), file))
 }
 
 /// The Place dialog's line about each of `files`, read at once, or where the files the user places
@@ -481,7 +505,9 @@ pub fn confirm(app: &mut VectorcraftApp, d: &crate::state::Dialog) -> Result<Val
         many => {
             let paths: Vec<&Value> = many.iter().filter_map(|s| s.get("path")).collect();
             let files: Vec<&Value> = many.iter().filter(|s| s.get("path").is_none()).collect();
-            let mut q = json!({ "paths": paths, "files": files, "link": link, "template": template });
+            // The files of one dialog come from one `file.place`, with one importer plug-in and its
+            // parameters, if any.
+            let mut q = with_importer(json!({ "paths": paths, "files": files, "link": link, "template": template }), &many[0]);
             if !ask {
                 // Each text file, DXF drawing and embedded PSD file in the cursor takes the options
                 // confirmed last.
@@ -770,20 +796,28 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
 }
 
 /// Files that arrived to be placed (web): drops go where they were dropped, picked files to the
-/// Place dialog.
+/// Place dialog. One dialog holds the files of picks with one importer plug-in and its parameters
+/// ([`PlaceArrival::with`]); picked files with others, and picked files that arrive while a Place
+/// dialog is open, wait in the inbox until it closes.
 pub fn drain(app: &mut VectorcraftApp) {
     let arrived: Vec<PlaceArrival> =
         app.services.place_inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();
-    let mut picked = vec![];
+    let open = app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::place::KIND);
+    let (mut picked, mut with, mut waiting) = (vec![], None::<Value>, vec![]);
     for a in arrived {
         match a.drop {
             Some(d) => drop_files(app, vec![(DropTarget::Place(d), (a.name, None, a.bytes))]),
+            None if open || with.as_ref().is_some_and(|w| *w != a.with) => waiting.push(a),
             None => {
-                picked.push(json!({ "name": a.name }));
+                picked.push(with_importer(json!({ "name": a.name }), &a.with));
                 app.place.picked.retain(|(n, _)| *n != a.name);
+                with = Some(a.with);
                 app.place.picked.push((a.name, a.bytes));
             }
         }
+    }
+    if let (false, Some(q)) = (waiting.is_empty(), app.services.place_inbox.as_ref()) {
+        q.lock().unwrap_or_else(|e| e.into_inner()).splice(0..0, waiting);
     }
     if !picked.is_empty() {
         open_dialog(app, picked);

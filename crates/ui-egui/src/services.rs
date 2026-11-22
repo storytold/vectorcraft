@@ -131,8 +131,9 @@ pub struct Services {
     /// Show an open dialog for several files of the pick's types (a script's `File.openDialog` with
     /// `multiSelect`); returns their paths (none: cancelled). Without it, an open dialog for one.
     pub pick_open_files: Option<PickOpenFiles>,
-    /// Web: start an async pick of files to place (they arrive via `place_inbox`).
-    pub place_async: Option<Box<dyn FnMut()>>,
+    /// Web: start an async pick of files to place (they arrive via `place_inbox`), each with the
+    /// importer plug-in and parameters given ([`place::PlaceArrival::with`]).
+    pub place_async: Option<Box<dyn FnMut(serde_json::Value)>>,
     /// Files that arrived asynchronously to be placed (web: picked for Place, or dropped on the
     /// canvas).
     pub place_inbox: Option<place::PlaceInbox>,

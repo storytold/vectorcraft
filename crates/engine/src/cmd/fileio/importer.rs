@@ -148,7 +148,8 @@ fn check_data_for(p: &Value, mode: Mode, cmd: &str) -> Result<()> {
 /// `importer` names, or an extension no built-in format reads that an importer lists) is read up
 /// to [`import::MAX_INPUT_BYTES`]: past that, it is an error, unless the start of the file shows a
 /// built-in format and no importer was named, which is read whole as any other file is. A file past
-/// the limit that isn't read whole is reported from its size, without reading it.
+/// the limit that isn't read whole is reported from its size: with `importer` named, before any of
+/// it is read, and otherwise after the start of it is read to look for a built-in format.
 pub(super) fn read_path(path: &str, p: &Value) -> Result<Vec<u8>> {
     read_path_for(path, p, Mode::Import, C)
 }
@@ -157,21 +158,32 @@ pub(super) fn read_path(path: &str, p: &Value) -> Result<Vec<u8>> {
 #[cfg(not(target_arch = "wasm32"))]
 fn read_path_for(path: &str, p: &Value, mode: Mode, cmd: &str) -> Result<Vec<u8>> {
     let explicit = named(p, cmd)?.is_some();
-    if !explicit && !importer_reads(&extension(path), mode) {
+    if explicit {
+        return read_for_importer(path, mode);
+    }
+    if !importer_reads(&extension(path), mode) {
         return super::read_file(path);
     }
     let head = super::read_file_head(path, SNIFF_BYTES)?;
     if head.len() < SNIFF_BYTES {
         return Ok(head);
     }
-    if !explicit && detect(path, &head).is_some() {
+    if detect(path, &head).is_some() {
         return super::read_file(path);
     }
-    let size = std::fs::metadata(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?.len();
-    if size > import::MAX_INPUT_BYTES as u64 {
+    read_for_importer(path, mode)
+}
+
+/// The file at `path` for an importer: refused from its size, before any of it is read, when it is
+/// past [`import::MAX_INPUT_BYTES`].
+#[cfg(not(target_arch = "wasm32"))]
+fn read_for_importer(path: &str, mode: Mode) -> Result<Vec<u8>> {
+    super::may_read(path)?;
+    let meta = std::fs::metadata(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    if meta.is_file() && meta.len() > import::MAX_INPUT_BYTES as u64 {
         return Err(too_large(path, mode));
     }
-    // The file can grow after the size is read.
+    // The file can grow after the size is read; anything but a regular file is refused here.
     let file = super::read_file_head(path, import::MAX_INPUT_BYTES + 1)?;
     if file.len() > import::MAX_INPUT_BYTES {
         return Err(too_large(path, mode));

@@ -417,8 +417,9 @@ fn a_file_read_after_another_document_became_active_lands_where_it_was_dropped()
         DropTarget::Place(d) => d,
         t => panic!("{t:?}"),
     };
-    let arrive =
-        |name: &str, drop| inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop: Some(drop) });
+    let arrive = |name: &str, drop| {
+        inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop: Some(drop), with: json!(null) })
+    };
     // Dropped on A; another document opens while the file is read.
     let on_a = drop_on_active(&app);
     let want = Xf::new(rect, app.view().unwrap()).to_doc(pos);

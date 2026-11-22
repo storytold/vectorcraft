@@ -59,18 +59,24 @@ An importer whose manifest has `"place": true` also places its files. `document.
 importers that set `place`: when no built-in format reads the file, the first such importer by id that lists its
 extension reads it, and `"importer": "plugin.<id>"` names one, which must set `place` and list the file's extension,
 also one a built-in format reads. `"params"?: {…}` holds its parameters, which take their defaults when left out. The
-importer is given at most 128 MiB of the file (a larger file is refused from its size, before it is read) and
-`_context.mode` `"place"`, and returns its objects as it does for File › Open. They are placed in the open document as
+importer is given at most 128 MiB of the file and `_context.mode` `"place"`, and returns its objects as it does for
+File › Open. They are placed in the open document as
 one group named after the file, in the order the importer returned them, at the place, size or object `at`, `rect`,
 `replace` and `template` give, as one undo step; guides are left out, and the group's box is the bounds of what the
 other objects draw. The file is embedded whatever `link`
 says, as a format that can't be linked is, and the reply's `linked` is `false`. A decline, invalid output, a trap or
 Cancel places nothing and leaves the document and its undo steps as they were. An importer without `place` is not used
-by File › Place, and naming it is an error. In the app, File › Place lists a placing importer's extensions under "All
-placeable files" and a filter of its own, named after the importer, and on the web its files dropped on the canvas are
-placed there (the desktop opens a dropped document, as it does an SVG); the importer then runs with its parameters'
-defaults. A file placed with `importer` goes to that importer without the import options File › Place shows for a
-text file, a DXF drawing, a PDF or a PSD file. These rules are VectorCraft's own.
+by File › Place, and naming it is an error. A larger file is refused from its size. With `importer`, a `path` is refused
+before any of it is read and `dataBase64` before any of it is decoded. Without `importer`, the first 64 KiB of the file
+are read or decoded first to look for a built-in format. The web's File › Place reads the picked file in the browser
+before the 128 MiB limit applies. In the app, File › Place lists a placing importer's extensions under "All placeable
+files" and a filter of its own, named after the importer. Extensions that a built-in format reads are left out of both,
+and an importer that lists only such extensions gets no filter. On the web, a dropped file that no built-in format
+reads, by its extension or its content, is placed on the canvas by the first placing importer by id that lists its
+extension (the desktop opens a dropped document, as it does an SVG); a dropped file that a built-in format reads goes
+to that format. The importer then runs with its parameters' defaults. A file placed with `importer` goes to that
+importer without the import options File › Place shows for a text file, a DXF drawing, a PDF or a PSD file. These rules
+are VectorCraft's own.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
