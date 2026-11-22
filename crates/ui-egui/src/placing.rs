@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
-use craft::ui::dialog::DialogId;
+use craft::ui::dialog::{DialogId, dialog_id};
 use serde_json::{Value, json};
 use vectorcraft_engine::cancel::{self, CancelToken};
 use vectorcraft_engine::cmd::clipboard::{Clipboard, Flavour, ImageRead, read_image};
@@ -637,8 +637,11 @@ fn defer_question(app: &mut VectorcraftApp, chain: u64, insertion: &Insertion, s
 /// Runs a deferred paste whose question was answered, and releases it when the question closed
 /// without an answer.
 pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
-    let Some(asked) = app.placing.swatch_paste.as_ref().map(|waiting| waiting.asked) else { return };
-    let (question, taken) = take_question(app, asked);
+    let (question, taken) = match app.placing.swatch_paste.as_ref().map(|waiting| waiting.asked) {
+        Some(asked) => take_question(app, asked),
+        // A paste that ran at once (automation's) waits on nothing deferred: its Swatch Conflict answer runs it.
+        None => (Question::SwatchConflict, crate::dialogs::swatch_conflict::take(app, dialog_id(crate::dialogs::swatch_conflict::KIND))),
+    };
     let answer = match taken {
         Taken::Open => return,
         Taken::Cancelled => return cancel_swatch_paste(app),

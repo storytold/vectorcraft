@@ -489,8 +489,9 @@ fn a_paste_event_waiting_on_a_refused_copy_pastes_that_copy() {
     crate::panels::character::intercept_text_command(&mut app, "edit.copy");
     assert!(app.clipboard_publishing.is_pending());
 
-    // The paste comes while the formats wait, and the write then fails with the clipboard open.
-    super::sysclip::lock(&board, true);
+    // The paste comes while the formats wait, and the write is then refused. The clipboard stays readable: with no
+    // change count, a refused copy is tracked by the clipboard's text (shell-w14), and one locked clipboard drops it.
+    super::sysclip::refuse_writes(&board, true);
     drop(hold);
     app.session.select_tool("selection", v).unwrap();
     app.session.select_tool("type", v).unwrap();
