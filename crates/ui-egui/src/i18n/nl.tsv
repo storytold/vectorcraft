@@ -375,6 +375,8 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` geldt voor lineaire, radiale, conische en ruitvormige verlopen
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} is voltooid, maar het document of de plug-in is intussen gewijzigd: voer het opnieuw uit
 @msg	Running “{name}”…	„{name}” wordt uitgevoerd…
+@msg	Plug-in “{name}”: {notice}	Plug-in „{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` moet een tekenreeks met zichtbare tekst zijn
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	een live-effect wordt uitgevoerd terwijl het document wordt getekend, dus kan het niet `heavy` zijn
 @msg	an exporter always gets an export's budget: leave `budget` out	een exportplug-in krijgt altijd het budget van een export: laat `budget` weg
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}” vraagt om een groot rekenbudget (elke uitvoering tot {minutes} minuten en {times} keer het gebruikelijke aantal instructies): een persoon moet dit goedkeuren in de desktop-app, of geef `allowHeavy: true` door in een sessie die is gestart met --allow-plugin-grants

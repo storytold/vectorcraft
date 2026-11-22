@@ -1172,3 +1172,33 @@ fn document_data_is_kept_forgotten_or_refused() {
     // A decline is still a decline.
     assert!(matches!(decode_output(br#"{"error": "No pens.", "documentData": 1}"#), Err(Error::Failed(_))));
 }
+
+/// A filter's `notice`: absent or `null` is none; a string is trimmed, its control, bidirectional
+/// and separator characters escaped, and cut at [`MAX_NOTICE_CHARS`] with an ellipsis; anything
+/// else, and text with nothing visible, refuses the whole output.
+#[test]
+fn notice_is_escaped_capped_and_checked() {
+    let out = |notice: Option<Value>| {
+        let mut v = json!({"objects": []});
+        if let Some(n) = notice {
+            v["notice"] = n;
+        }
+        decode_output(v.to_string().as_bytes()).map(|o| o.notice)
+    };
+    assert_eq!(out(None).unwrap(), None);
+    assert_eq!(out(Some(Value::Null)).unwrap(), None);
+    assert_eq!(out(Some(json!("  Selected 12 objects \n"))).unwrap().as_deref(), Some("Selected 12 objects"));
+    let shown = out(Some(json!("Saved\u{202E}txt.exe\nError: disk full\u{7}"))).unwrap().unwrap_or_default();
+    assert_eq!(shown, "Saved\\u{202E}txt.exe\\u{000A}Error: disk full\\u{0007}");
+    let long = out(Some(json!("y".repeat(10_000)))).unwrap().unwrap_or_default();
+    assert_eq!(long.chars().count(), MAX_NOTICE_CHARS);
+    assert!(long.ends_with('…'));
+    // Escapes count toward the limit, so a notice of right-to-left overrides stays within it too.
+    let escaped = out(Some(json!("\u{202E}".repeat(10_000)))).unwrap().unwrap_or_default();
+    assert!(escaped.chars().count() <= MAX_NOTICE_CHARS && !escaped.contains('\u{202E}'), "{escaped}");
+    for bad in [json!(""), json!(" \t\n "), json!("\u{200B}\u{FEFF}"), json!(12), json!(["a"]), json!({"text": "a"}), json!(true)] {
+        assert!(matches!(out(Some(bad.clone())), Err(Error::Output(ref e)) if e.contains("`notice`")), "{bad}");
+    }
+    // A decline is still a decline.
+    assert!(matches!(decode_output(br#"{"error": "No pens.", "notice": "Done"}"#), Err(Error::Failed(_))));
+}

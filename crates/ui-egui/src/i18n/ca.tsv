@@ -7141,6 +7141,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
 @msg	result would exceed the canvas (coordinates out of range)	el resultat excediria el llenç (coordenades fora de rang)
 @msg	Running “{name}”…	S’està executant «{name}»…
+@msg	Plug-in “{name}”: {notice}	Complement «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` ha de ser una cadena amb text visible
 @msg	Save for Web: the image is empty	Desa per a la web: la imatge és buida
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Desa escriu {_1}, no {_2}: fes servir document.export per a altres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Desa escriu {_1}, no {_2}: fes servir file.saveAsTemplate per escriure’l

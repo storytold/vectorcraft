@@ -996,6 +996,41 @@ fn german_script_status_preserves_authored_error_and_translates_native_error() {
     assert_eq!(app.session.script_authored_failure(), None);
 }
 
+/// A plug-in run's notice shows in the status bar after the plug-in's name once its output is
+/// applied: the words around it are translated and the notice itself never is, even when it reads
+/// like one of the app's own messages. A run whose output is refused shows no notice, and the next
+/// status message replaces the notice.
+#[test]
+fn plugin_notice_shows_after_the_plug_in_s_name_and_is_never_translated() {
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let install = |app: &mut crate::VectorcraftApp, id: &str, output: &str| {
+        let module = wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), output)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module), "replace": true})).unwrap();
+    };
+    let id = "test.ui.notice";
+    install(&mut app, id, r#"{"objects":[],"notice":"invalid array length"}"#);
+    let r = app.run("plugin.run", json!({"id": id})).unwrap();
+    assert_eq!(r["notice"], json!("invalid array length"));
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    assert_eq!(super::status_bar::status_message(&app), format!("Plug-in „Test {id}“: invalid array length"));
+    // The same words as an ordinary message are translated.
+    app.status("invalid array length");
+    assert_eq!(super::status_bar::status_message(&app), "ungültige Array-Länge");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    // An output refused for its notice shows no notice.
+    let bad = "test.ui.notice.bad";
+    install(&mut app, bad, r#"{"objects":[],"notice":"\u0007"}"#);
+    app.status("");
+    assert!(app.run("plugin.run", json!({"id": bad})).is_err());
+    assert!(!app.ui.status.starts_with("Plug-in “"), "{}", app.ui.status);
+    for id in [id, bad] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
 /// The message of an open that starts with a line about its linked files lists the open's notes on
 /// hover and for screen readers, in a wide and in a narrow window. A later message leaves the list
 /// out.

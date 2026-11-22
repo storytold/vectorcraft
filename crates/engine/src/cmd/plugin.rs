@@ -342,6 +342,7 @@ impl FilterRun {
         // A command's undo step is named after the command.
         let label = self.label();
         let (inputs, parent) = (self.inputs, self.parent);
+        let notice = out.notice;
         let ids = s.edit(&label, |d, sel| {
             let before = (!may_write).then(|| d.layers.clone());
             let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
@@ -358,6 +359,10 @@ impl FilterRun {
         if let Some(cmd) = &self.command {
             out["command"] = json!(cmd.id);
         }
+        // Only an output that was applied reports its notice.
+        if let Some(notice) = notice {
+            out["notice"] = json!(notice);
+        }
         Ok(out)
     }
 }
@@ -372,8 +377,8 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
 /// parameters and `_context` (what it keeps with the document included), and applies its output as
 /// one undo step ([`objects::apply_output`]; effect records as [`admit_effects`] admits them), with
 /// what it keeps with the document from now on: the output handed in for this very run when there
-/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids}`: what it made or
-/// changed, which is then selected.
+/// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids, notice?}`: what it
+/// made or changed, which is then selected, and the output's `notice` once it was applied.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
     let handed = s.plugin_output.take();
@@ -483,7 +488,7 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
         fields.push_str(own);
     }
     let params = format!(
-        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step → {{plugin, command, ids}}",
+        "{{{fields}}} run “{label}”, a command of plug-in {}, on the selected paths and compound paths as plugin.run runs a filter, with _context.command {:?}: one undo step → {{plugin, command, ids, notice?}}",
         m.id, c.id
     );
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
@@ -516,9 +521,9 @@ fn unrouted(_: &mut Session, _: &Value) -> Result<Value> {
 /// Runs plug-in command `id` (`plugin.<plug-in id>.<command id>`): a filter run of the plug-in on
 /// `ids` (else the selection) with the command's own parameters, checked before it runs, and
 /// `_context.command`, under the plug-in's permissions and budget, applied as one undo step named
-/// after the command → `{plugin, command, ids}`. A run that fails (a trap, an exhausted budget, an
-/// output it may not make) leaves the document as it was, and the error names the plug-in and the
-/// command.
+/// after the command → `{plugin, command, ids, notice?}`. A run that fails (a trap, an exhausted
+/// budget, an output it may not make) leaves the document as it was, and the error names the
+/// plug-in and the command.
 pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     // An output handed in is for `plugin.run` alone.
     s.plugin_output = None;

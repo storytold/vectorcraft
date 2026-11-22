@@ -24,6 +24,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::fileio::progress::{self, Progress};
 use vectorcraft_engine::cmd::plugin::FilterRun;
+use vectorcraft_plugins::{permissions, registry};
 
 use crate::VectorcraftApp;
 use crate::export_progress::{self, Pressed};
@@ -152,6 +153,23 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     if let Err(e) = app.run("plugin.run", r.params) {
         app.status(format!("{} failed: {e}", r.who));
     }
+}
+
+/// Shows in the status bar the notice of the plug-in run that command `cmd` (`plugin.run` or a
+/// plug-in command) applied, with result `r`: `Plug-in “name”: notice`, the plug-in's name escaped
+/// and capped as prompts show it. The notice is shown as the run returned it (escaped and capped by
+/// the host) and never translated. A result without a notice leaves the status bar as it is.
+pub fn show_notice(app: &mut VectorcraftApp, cmd: &str, r: &Value) {
+    if cmd != "plugin.run" && !vectorcraft_engine::cmd::plugin::is_command_id(cmd) {
+        return;
+    }
+    let (Some(notice), Some(id)) = (r.get("notice").and_then(Value::as_str), r.get("plugin").and_then(Value::as_str)) else { return };
+    let name = registry::get(id).map_or_else(|| id.to_string(), |p| p.manifest().name.trim().trim_end_matches('…').to_string());
+    let name = permissions::display_text(&name, permissions::MAX_SHOWN_NAME);
+    let status = format!("Plug-in “{name}”: {notice}");
+    let before = status.strip_suffix(notice).unwrap_or_default().to_string();
+    app.status(status);
+    app.ui.status_kept = Some((before, notice.to_string(), String::new()));
 }
 
 /// The progress window's Cancel (also Esc): every filter running in the background stops (at once when it checks

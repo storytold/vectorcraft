@@ -7363,6 +7363,8 @@ axis	Y Axis	Y-akseli
 	Cancel Plug-in Run	Peruuta laajennuksen ajo
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} valmistui, mutta asiakirja tai laajennus muuttui sillä välin: suorita se uudelleen
 @msg	Running “{name}”…	Suoritetaan ”{name}”…
+@msg	Plug-in “{name}”: {notice}	Laajennus ”{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` on oltava merkkijono, jossa on näkyvää tekstiä
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	vientilaajennus saa aina viennin budjetin: jätä `budget` pois
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): ihmisen on hyväksyttävä se työpöytäsovelluksessa, tai anna `allowHeavy: true` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants

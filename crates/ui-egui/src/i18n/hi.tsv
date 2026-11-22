@@ -8888,6 +8888,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	rows and columns must be 1..500	rows और columns को 1..500 होना चाहिए
 @msg	rows of objects whose appearances differ can't be reordered together	उन ऑब्जेक्ट्स की पंक्तियाँ जिनकी उपस्थिति भिन्न होती हैं, उन्हें एक साथ फिर से व्यवस्थित नहीं किया जा सकता है
 @msg	Running “{name}”…	"{name}"...
+@msg	Plug-in “{name}”: {notice}	प्लग-इन "{name}": {notice}
+@msg	`notice` must be a string with visible text	`notice` दिखने वाले टेक्स्ट वाली स्ट्रिंग होनी चाहिए
 @msg	Save for Web: the image is empty	वेब के लिए सेव करें: इमेज खाली है
 @msg	save the document first: copy puts the file in its folder	पहले डॉक्यूमेंट को सेव करना: प्रतिलिपि फ़ाइल को अपने फ़ोल्डर में डालती है
 @msg	save the document first: Package collects a saved document	पहले डॉक्यूमेंट को सेव करना: पैकेज एक सेव किए गए डॉक्यूमेंट एकत्र करता है

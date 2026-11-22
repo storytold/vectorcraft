@@ -792,6 +792,18 @@ under the plug-in's id, and hosts from before `documentData` keep it when they s
 document, so it can read what every plug-in keeps there, not only its own. A live effect isn't given it: its geometry
 is worked out from the object alone.
 
+To report what a run did, a filter or a plug-in command adds `notice`: one string, such as
+`{"objects": [...], "notice": "Selected 12 objects"}`. It needs no permission and no host import. Once the output is
+applied, the desktop app and the web build show it in the status bar as `Plug-in “name”: notice`, the plug-in's name
+first, and `plugin.run` and the plug-in command return it as `notice` in their result. The host trims the white space around it, writes control, bidirectional and line
+separator characters as `\u{202E}` escapes and cuts it at 200 characters, escapes included, ending it with `…`. Each run
+reports at most one notice, and a later status message replaces it. A `notice` that is not a string or has no visible
+character refuses the whole output, and nothing changes. A run that declines, fails, is refused, is canceled or
+finishes after the document changed shows none; an output that changes nothing still shows its notice. The status
+bar translates the words around the notice, never the notice itself. A live effect's
+`notice` is ignored, since it runs whenever its object is drawn. These limits are VectorCraft's own values. Hosts
+from before `notice` ignore it.
+
 For a **live effect**, the geometry of every returned object's `path` (their subpaths, in order) replaces the
 object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry. A live effect
 that declares `paintOutput` returns painted pieces instead ([below](#painted-live-effects)).

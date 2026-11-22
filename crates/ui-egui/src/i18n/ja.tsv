@@ -6994,6 +6994,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	プラグインの実行をキャンセル
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} は完了しましたが、その間にドキュメントまたはプラグインが変更されました。もう一度実行してください
 @msg	Running “{name}”…	「{name}」を実行中…
+@msg	Plug-in “{name}”: {notice}	プラグイン「{name}」: {notice}
+@msg	`notice` must be a string with visible text	`notice` は表示される文字を含む文字列にしてください
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
