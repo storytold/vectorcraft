@@ -184,6 +184,8 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     let view_now = edited.or(reply.and_then(|r| r.view)).or(output.view).unwrap_or(cv);
     if let Some(view) = doc_windows::view_mut(app, win) {
         view.set_canvas(&view_now, scaling);
+        // Fitted once, the view stays where it is moved.
+        view.fitted |= refit;
         // An edit of the compass or a scroll bar reaches the next pass, which stops a running ease.
         view.moved = jumped.then_some(ViewMove::Jump);
     }
