@@ -684,6 +684,24 @@ fn an_edit_during_an_edit_press_stops_the_move() {
     }
 }
 
+/// When another command edits the path while a click is down, the click neither selects the
+/// anchor nor goes on drawing from the open end it found.
+#[test]
+fn an_edit_during_an_edit_click_does_nothing() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let v = view();
+    for (x, moved_y) in [(200.0, 90.0), (300.0, 80.0)] {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 100.0), v).unwrap();
+        s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 100, "y": moved_y})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, 100.0), v).unwrap();
+        assert!(s.doc().unwrap().selection.partial(id).is_none(), "no anchor selected after a click at x = {x}");
+    }
+    // The open end was not taken up, so the next click starts a new path.
+    click(&mut s, 400.0, 200.0);
+    assert_eq!(paths(&s).len(), 2);
+}
+
 /// A click on an anchor selects it alone, Shift-click adds another, and Delete (`edit.clear`, the
 /// context menu's Delete) then removes both.
 #[test]

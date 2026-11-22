@@ -500,7 +500,8 @@ impl QuickPenTool {
     /// go past the drag distance after shorter drag events, moves what it holds to `p` and ends
     /// its undo step. A click on an end of an open path goes on drawing from it, a click on another
     /// anchor selects it alone (with Shift, adds it to the selected anchors or takes it out), and a
-    /// click on a segment starts a new path there.
+    /// click on a segment starts a new path there. A click whose path another command edited while
+    /// the press was down does nothing.
     fn release_edit(&mut self, cx: &ToolContext, mut e: Edit, p: Point) -> Vec<Action> {
         if e.began || p.distance(e.start) >= cx.tol(DRAG_PX) {
             let mut out = e.drag(cx, p);
@@ -509,6 +510,9 @@ impl QuickPenTool {
                 out.push(Action::Commit);
             }
             return out;
+        }
+        if !e.unchanged(cx) {
+            return vec![];
         }
         match e.grab {
             Grab::Anchor { id, si, ai, .. } if e.shift => {

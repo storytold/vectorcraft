@@ -93,6 +93,14 @@ impl Edit {
         Self { grab, start, shift, began: false, pressed, snap: None, guides: vec![] }
     }
 
+    /// Whether the grabbed path is as the document had it when the press went down.
+    pub(super) fn unchanged(&self, cx: &ToolContext) -> bool {
+        match (cx.doc.node(self.grab.id()), self.pressed.as_ref()) {
+            (Some(now), Some(then)) => same_node(now, then),
+            _ => false,
+        }
+    }
+
     /// Moves what the press holds by the drag to `p`. The first move selects the anchor, or the
     /// segment, unless it is already selected, and begins the undo step; a drag that starts on
     /// one of several selected anchors moves them all. When the grabbed path changed after the
@@ -101,11 +109,7 @@ impl Edit {
         let mut out = vec![];
         if !self.began {
             let id = self.grab.id();
-            let unchanged = match (cx.doc.node(id), self.pressed.as_ref()) {
-                (Some(now), Some(then)) => same_node(now, then),
-                _ => false,
-            };
-            if !unchanged {
+            if !self.unchanged(cx) {
                 return out;
             }
             let Some(picked) = self.grab.anchors(cx) else { return out };
