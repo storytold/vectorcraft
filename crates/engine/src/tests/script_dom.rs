@@ -998,6 +998,23 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
 }
 
 #[test]
+fn text_frames_remove_all_refuses_type_on_a_locked_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let t = NodeId(s.execute("text.create", &json!({"x": 10, "y": 250, "text": "hi"})).unwrap()["id"].as_u64().unwrap());
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.textFrames.removeAll();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", t.0)), "{e}");
+    assert!(s.active().unwrap().doc.node(t).is_some());
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));

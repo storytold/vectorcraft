@@ -1215,18 +1215,25 @@ fn frames_path_text(h: &Host, a: &[Data]) -> Answer {
     in_path(h, a, true, &[2, 3, 5, 6])
 }
 
-/// `removeAll()`: deletes every type object in one command; a hidden or locked one stops it first.
+/// `removeAll()`: deletes every type object in one command; a hidden or locked one, or one on a
+/// locked artboard, stops it first.
 fn frames_remove_all(h: &Host, a: &[Data]) -> Answer {
     let doc = frames_doc(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = frame_ids(h, st);
         let ok = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !ok(i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        (ids, refused, on_locked)
     });
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked type: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{}: {list}", super::ON_LOCKED_ARTBOARD)));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
