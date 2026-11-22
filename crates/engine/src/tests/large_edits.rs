@@ -121,6 +121,44 @@ fn delete_of_100000_objects_takes_few_tree_walks() {
 }
 
 #[test]
+fn deleting_2000_objects_by_id_one_at_a_time_takes_few_tree_walks() {
+    // From the top down, from the bottom up, and from the middle out.
+    let orders: [fn(Vec<NodeId>) -> Vec<NodeId>; 3] = [
+        |ids| ids.into_iter().rev().collect(),
+        |ids| ids,
+        |ids| {
+            let middle = ids.len() / 2;
+            let mut placed: Vec<(usize, NodeId)> = ids.into_iter().enumerate().collect();
+            placed.sort_by_key(|(k, _)| k.abs_diff(middle));
+            placed.into_iter().map(|(_, id)| id).collect()
+        },
+    ];
+    for order in orders {
+        let mut s = session(2_000, square);
+        s.execute("guide.add", &json!({"pos": 5.0})).unwrap();
+        let doc = &s.doc().unwrap().doc;
+        let all: Vec<NodeId> = layer(&s, 0).into_iter().filter(|id| !doc.node(*id).unwrap().is_ruler_guide()).collect();
+        assert_eq!(all.len(), 2_000);
+        let (kept, art) = (all[0], all[1..].to_vec());
+        s.execute("select.set", &json!({"ids": [kept]})).unwrap();
+        let ids = order(art);
+        let (mut s, steps) = soon(s, "edit.clear", move |s| {
+            let mut steps = vec![s.doc().unwrap().doc.clone()];
+            for id in &ids {
+                s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+                steps.push(s.doc().unwrap().doc.clone());
+            }
+            steps
+        });
+        assert_eq!(layer(&s, 0).len(), 2, "the kept object and the guide");
+        assert!(selected(&s, &[kept]));
+        for before in steps.iter().rev().skip(1).take(3) {
+            undo_gives_back(&mut s, before);
+        }
+    }
+}
+
+#[test]
 fn delete_selection_of_100000_rows_takes_few_tree_walks() {
     let s = session(100_000, square);
     let (before, ids) = (s.doc().unwrap().doc.clone(), layer(&s, 0));
