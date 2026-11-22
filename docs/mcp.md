@@ -9863,8 +9863,8 @@ or refused the write), every Paste takes the internal clipboard until another ap
 into a text field or type takes the copy's text, or nothing when the formats have no text. Windows and macOS notice
 that copy by the clipboard's change count. Linux and the BSDs notice it only when it changes the clipboard's text,
 so there Paste reads the system clipboard when it held only a picture, or nothing that could be read, at the failed
-write. While a text field or the Type tool has the keyboard, the app waits for
-them. Windows carries every format both ways and pastes a bitmap from PNG, else
+write. Once a paste there has read the changed text, the older text coming back does not restore the copy. While a
+text field or the Type tool has the keyboard, the app waits for them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
 throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). A Paste from the menus or the keys decodes

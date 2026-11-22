@@ -720,6 +720,64 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
     background::wait_all(&mut app);
 }
 
+/// The Edit menu's Paste into a text field after a Copy whose formats have no text (On Copy:
+/// Include SVG Code off) and could not be written: the field takes nothing, not the text another
+/// app left on the clipboard, and the copied art is not pasted onto the canvas.
+#[test]
+fn the_menus_paste_into_a_field_after_a_refused_textless_copy_takes_nothing() {
+    for uncounted in [false, true] {
+        let (mut app, board) = app();
+        if uncounted {
+            without_change_count(&board);
+        }
+        run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": false}));
+        let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
+        run(&mut app, "select.set", json!({"ids": [rect]}));
+        copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+        refuse_writes(&board, true);
+        run(&mut app, "edit.copy", json!({}));
+        background::wait_all(&mut app);
+        refuse_writes(&board, false);
+        let objects = count(&app);
+        let (ctx, id, mut field) = (egui::Context::default(), egui::Id::unique("field"), String::new());
+        for paste in [false, true] {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                if paste {
+                    menus::invoke_from_system_menu(&mut app, ui.ctx(), "edit.paste", json!({}));
+                }
+                ui.add(egui::TextEdit::singleline(&mut field).id(id)).request_focus();
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(field, "", "uncounted {uncounted}: the field takes nothing");
+        assert_eq!(count(&app), objects, "uncounted {uncounted}: nothing is pasted onto the canvas");
+    }
+}
+
+/// Without a change count, a Copy whose formats could not be written stops being what Paste takes
+/// once different text is seen on the clipboard: when another app later puts the older text back,
+/// Paste takes that text, not the copied art.
+#[test]
+fn a_refused_copy_stays_replaced_when_the_older_text_comes_back() {
+    let (mut app, board) = app();
+    without_change_count(&board);
+    let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
+    run(&mut app, "select.set", json!({"ids": [rect]}));
+    copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    refuse_writes(&board, true);
+    run(&mut app, "edit.copy", json!({}));
+    background::wait_all(&mut app);
+    refuse_writes(&board, false);
+
+    copy_elsewhere(&board, vec![(TEXT, b"New".to_vec())]);
+    assert_eq!(app.written_clipboard_text().as_deref(), Some("New"));
+    copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    assert_eq!(app.written_clipboard_text().as_deref(), Some("Old"), "a paste into text");
+    run(&mut app, "edit.paste", json!({}));
+    let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("the copied art, not the clipboard's text") };
+    assert_eq!(t.plain_text(), "Old");
+}
+
 /// A paste chord into type being edited, before the formats are written: the formats are written
 /// first, and the paste pastes their text whether the host read another app's text for it or found
 /// no text, also when the chord's key comes up a frame after they were written; with no text in

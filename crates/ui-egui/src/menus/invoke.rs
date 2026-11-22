@@ -112,7 +112,7 @@ pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Ev
         "select.all" => egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND },
         "edit.copy" => egui::Event::Copy,
         "edit.cut" => egui::Event::Cut,
-        "edit.paste" | "edit.pasteWithoutFormatting" => egui::Event::Paste(app.written_clipboard_text()?),
+        "edit.paste" | "edit.pasteWithoutFormatting" => egui::Event::Paste(app.field_paste_text()?),
         _ => return None,
     })
 }

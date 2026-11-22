@@ -138,9 +138,20 @@ impl Publishing {
     }
 
     /// Is the latest Copy or Cut one whose formats could not be written to `cb`, with nothing
-    /// copied since ([`VectorcraftApp::holds_unwritten_copy`])?
-    fn holds_unwritten(&self, cb: &mut (dyn SystemClipboard + 'static)) -> bool {
-        self.unwritten.as_ref().is_some_and(|(held, _)| Held::now(cb) == *held)
+    /// copied since ([`VectorcraftApp::holds_unwritten_copy`])? A different change count, or
+    /// different text read from `cb`, shows a later copy: the record of the failed write is then
+    /// dropped, so the clipboard holding the older text again later does not bring it back. Text
+    /// that could not be read keeps the record.
+    fn holds_unwritten(&mut self, cb: &mut (dyn SystemClipboard + 'static)) -> bool {
+        let Some((held, _)) = &self.unwritten else { return false };
+        let now = Held::now(cb);
+        if now == *held {
+            return true;
+        }
+        if now != Held::Text(None) {
+            self.unwritten = None;
+        }
+        false
     }
 }
 
@@ -482,7 +493,7 @@ impl VectorcraftApp {
             (_, Some(cb)) => {
                 // After a Copy or Cut whose formats could not be written, with nothing copied
                 // since, what the clipboard still holds is older than the internal clipboard.
-                let publishing = &self.clipboard_publishing;
+                let publishing = &mut self.clipboard_publishing;
                 if publishing.pending || publishing.holds_unwritten(cb.as_mut()) || cb.holds_ours() {
                     return Ok(None);
                 }
@@ -557,6 +568,18 @@ impl VectorcraftApp {
         // Only other copies' formats are ahead of them on the worker ([`Self::publish_clipboard`]).
         background::wait_until(self, |app| !app.clipboard_publishing.pending);
         self.unwritten_copy().unwrap_or_else(|| self.system_clipboard_text())
+    }
+
+    /// The text a paste from the Edit menu gives a focused text field ([`Self::written_clipboard_text`]):
+    /// empty when the formats of a Copy or Cut could not be written and have no text, so the field
+    /// takes nothing and the art is not pasted onto the canvas. `None` when the system clipboard
+    /// holds no text.
+    pub(crate) fn field_paste_text(&mut self) -> Option<String> {
+        background::wait_until(self, |app| !app.clipboard_publishing.pending);
+        match self.unwritten_copy() {
+            Some(text) => Some(text.unwrap_or_default()),
+            None => self.system_clipboard_text(),
+        }
     }
 
     /// The text on the system clipboard, if any.
