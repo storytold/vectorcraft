@@ -323,7 +323,7 @@ fn results_that_are_not_finite_and_division_by_zero_throw() {
         assert_eq!(error_name(&mut r, statement), "RangeError", "{statement}");
     }
     assert_eq!(number(&mut r, "UnitValue(1e300, 'pt').as('mi') * 0"), 0.0);
-    close(number(&mut r, "UnitValue(1e307, 'km').as('mi')"), 1e307 * 1000.0 / 1609.344, "a large value that fits after the division");
+    close(number(&mut r, "UnitValue(1e307, 'km').as('mi')"), 1e307 * (1000.0 / 1609.344), "a large value that fits after the division");
 }
 
 #[test]
