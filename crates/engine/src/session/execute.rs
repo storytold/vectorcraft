@@ -64,6 +64,11 @@ impl Session {
         if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
             return Err(EngineError::Busy);
         }
+        // While a plug-in run that calls commands holds the documents, only queries run, and the
+        // command that applies its output.
+        if self.depth == 0 && self.plugin_calls_open() && !self.plugin_calls_end_with(id) && spec.journal && !JOURNALED_READS.contains(&id) {
+            return Err(EngineError::PluginBusy);
+        }
         // A step of a batch a script runs is held to the same rule as the script's own commands.
         if self.script_in_run && crate::script::refused_to_scripts(id) {
             return Err(EngineError::Other(crate::script::refused_text(id)));

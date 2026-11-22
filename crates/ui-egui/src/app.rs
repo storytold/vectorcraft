@@ -385,7 +385,7 @@ impl VectorcraftApp {
         crate::addons::select::link_status::refresh(self, now);
         if !self.background.jobs.is_empty()
             || !self.opening.pending.is_empty()
-            || !self.plugin_runs.running.is_empty()
+            || plugin_runs::any_pending(self)
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
         {

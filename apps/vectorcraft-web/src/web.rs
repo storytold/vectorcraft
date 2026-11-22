@@ -461,7 +461,10 @@ fn services(
     let place_ctx = ctx.clone();
     let screen_color = eye_dropper(ctx.clone());
     let (script_picked, script_ctx) = (script_inbox.clone(), ctx.clone());
+    let workers_ctx = ctx.clone();
     Services {
+        // Plug-ins are checked and filters run in workers of their own, off the page.
+        plugin_workers: vectorcraft_ui_egui::plugin_runs::workers(Box::new(crate::plugin_workers::PageWorkers { ctx: workers_ctx })),
         // File › Scripts › Other Script…: the picked file goes to the warning before it runs.
         script_async: Some(Box::new(move || {
             let inbox = script_picked.clone();

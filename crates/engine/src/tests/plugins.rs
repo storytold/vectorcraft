@@ -5333,3 +5333,131 @@ fn a_plugin_command_that_calls_commands_is_given_a_deferred_move() {
     assert_moved_once(&s, r, "Same");
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
+
+/// Installs a filter `id` that calls `select.all` and then returns no objects, so it removes the
+/// objects it was given.
+fn install_select_all_then_remove(s: &mut Session, id: &str) {
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"]}}"#);
+    let imports = r#"(import "env" "vc_call" (func $vc_call (param i32 i32 i32 i32) (result i32)))
+  (data (i32.const 0x2000) "select.all")
+  (data (i32.const 0x2100) "{}")"#;
+    let first = "(drop (call $vc_call (i32.const 0x2000) (i32.const 10) (i32.const 0x2100) (i32.const 2)))";
+    let wasm = wat::parse_str(tpl::with_imports(&manifest, imports, first, r#"{"objects":[]}"#)).unwrap();
+    run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}));
+}
+
+/// Runs the job of a run that [`FilterRun::begin_calls`] started as the web build's plug-in worker
+/// does, making each command call in `s` → its output.
+fn run_job_away(s: &mut Session, job: &cmd::plugin::FilterJob) -> Vec<u8> {
+    let (mut held, mut step) = job.plugin.begin_run(&job.input, &job.params, &job.limits, true);
+    loop {
+        match step {
+            vectorcraft_plugins::Step::Done(out, _) => return out.unwrap(),
+            vectorcraft_plugins::Step::Call { command, args } => {
+                let answer = s.plugin_call(&command, &args);
+                step = job.plugin.resume_run(&mut held, answer);
+            }
+        }
+    }
+}
+
+/// A run of a filter that calls commands, made away from the session, holds the documents while
+/// it waits: edits are refused, its calls run on the document, and `plugin.run` with its output
+/// applies the calls and the output as one undo step, as a run on the page does.
+#[test]
+fn a_calling_run_made_away_from_the_session_is_one_undo_step() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.callsaway";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let (a, b) = (rect(&mut s, 10.0, "#ff0000"), rect(&mut s, 40.0, "#00ff00"));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = s.doc().unwrap().history.undo.len();
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})).unwrap();
+    assert!(s.plugin_calls_open());
+    assert!(matches!(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})), Err(EngineError::PluginBusy)));
+    assert!(matches!(s.edit("x", |_, _| Ok(())), Err(EngineError::PluginBusy)));
+    assert!(matches!(FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})), Err(EngineError::PluginBusy)));
+    assert!(s.execute("document.inspect", &json!({})).is_ok(), "queries still run");
+    let output = run_job_away(&mut s, &job);
+    assert!(s.doc().unwrap().selection.objects.contains(&b), "the call selected everything");
+    s.hand_in_plugin_calls(output);
+    run(&mut s, "plugin.run", json!({"id": id}));
+    assert!(!s.plugin_calls_open());
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_some(), "only the given object went");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert!(s.doc().unwrap().doc.node(a).is_some());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a], "undo brings back the selection the run started from");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A run made away from the session that ends without an output changes nothing: what its calls
+/// did is undone and the documents are free again. `plugin.run` without its output is refused
+/// while it holds them.
+#[test]
+fn a_calling_run_made_away_from_the_session_that_ends_changes_nothing() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.callsawayend";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let (a, _) = (rect(&mut s, 10.0, "#ff0000"), rect(&mut s, 40.0, "#00ff00"));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})).unwrap();
+    run_job_away(&mut s, &job);
+    assert!(matches!(s.execute("plugin.run", &json!({"id": id})), Err(EngineError::PluginBusy)), "no output was handed in");
+    s.end_plugin_calls();
+    assert!(!s.plugin_calls_open());
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a]);
+    assert!(s.plugin_call("select.all", &json!({})).is_err(), "no run waits for a call");
+    run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A plug-in command's run made away from the session applies through the command itself: an
+/// output handed in for it, and the calls of one that holds the documents, are one undo step named
+/// after the command.
+#[test]
+fn a_plugin_command_run_made_away_from_the_session_applies_through_the_command() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.awaycommand";
+    let mut s = session();
+    install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
+    let cmd = format!("plugin.{id}.same");
+    let a = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    let job = FilterRun::begin_calls(&mut s, &cmd, &json!({})).unwrap();
+    assert!(matches!(s.execute("plugin.run", &json!({"id": id})), Err(EngineError::PluginBusy)), "only the command applies it");
+    let output = run_job_away(&mut s, &job);
+    s.hand_in_plugin_calls(output);
+    run(&mut s, &cmd, json!({}));
+    assert!(!s.plugin_calls_open());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Same");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A module that a load in another place checked installs from its bytes and the manifest that
+/// load read, without running any of its code: a start function that would spend its whole budget
+/// doesn't run.
+#[test]
+fn a_checked_module_installs_without_running_its_code() {
+    let id = "test.engine.checked";
+    let mut s = session();
+    let manifest = tpl::manifest(id, "filter", "{}");
+    let spins = "(start $spin) (func $spin (loop $l (br $l)))";
+    let wasm = wat::parse_str(tpl::module(&manifest, tpl::ECHO, spins, 1)).unwrap();
+    let data = vectorcraft_format::base64_encode(&wasm);
+    assert!(s.execute("plugin.inspect", &json!({"dataBase64": data})).is_err(), "loading here runs the start function");
+    s.hand_in_checked_plugin(&vectorcraft_plugins::permissions::sha256_hex(&wasm), manifest.clone().into_bytes());
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": data}))["id"], json!(id));
+    assert_eq!(run(&mut s, "plugin.install", json!({"dataBase64": data, "replace": true}))["id"], json!(id));
+    // Other bytes are loaded here, as before.
+    let other = wat::parse_str(tpl::module(&manifest, tpl::ECHO, "(start $spin) (func $spin (loop $l (br $l))) (func $x)", 1)).unwrap();
+    assert!(s.execute("plugin.inspect", &json!({"dataBase64": vectorcraft_format::base64_encode(&other)})).is_err());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}

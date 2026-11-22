@@ -138,6 +138,16 @@ fn a_failed_command_fails_the_run_with_its_reason() {
     assert_eq!(out, Err(Error::Failed("vc_call `select.all`: nothing is selected".into())));
 }
 
+/// A call that panics in the host fails the run with an error, as a panic in the runtime does, and
+/// the caller's thread goes on.
+#[test]
+fn a_call_that_panics_fails_the_run() {
+    let p = calling("test.call.panics", &format!("(drop {})", select_all()));
+    let (out, seen) = run_with(&p, |_| panic!("the command broke"));
+    assert_eq!(out, Err(Error::Trap("the runtime panicked".into())));
+    assert_eq!(seen.len(), 1);
+}
+
 /// After the run's first failed call, a plug-in that goes on calling gets [`CALL_NO_CONTEXT`] for
 /// each call and the host makes none of them; the run fails with the first call's reason.
 #[test]

@@ -9,7 +9,8 @@
 //! it runs in the background ([`crate::plugin_runs`]). A light filter that reports its progress
 //! (plug-in API level 2 with the `progress` permission) and calls no commands runs in the
 //! background too, with its progress and Cancel, when it runs at once or when OK runs it without a
-//! kept preview ([`in_background`]). A filter or live effect with commands of
+//! kept preview ([`in_background`]). On the web every filter and plug-in command run here goes to a
+//! worker, and their dialogs have no Preview ([`crate::plugin_runs`]). A filter or live effect with commands of
 //! its own is a submenu named after it, holding its item and then its commands; a command with
 //! parameters opens the same dialog for them ([`open_command`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
@@ -213,9 +214,9 @@ fn in_background(m: &Manifest) -> bool {
 }
 
 /// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background
-/// ([`in_background`]).
+/// ([`in_background`]). Where filters run in workers (the web build), every run does.
 fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, String> {
-    match in_background(plugin.manifest()) {
+    match in_background(plugin.manifest()) || crate::plugin_runs::in_workers(app) {
         false => app.run(CMD, p),
         true => crate::plugin_runs::start(app, p),
     }
@@ -223,7 +224,8 @@ fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, Str
 
 /// The plug-in's description and fields (a command's: its own parameters), then the live
 /// Preview; a heavy filter has a note instead that it runs in the background, since a run may take
-/// minutes. A command dialog closes once the plug-in no longer has the command.
+/// minutes. On the web the dialog has no Preview: OK runs the filter or its command in a worker. A
+/// command dialog closes once the plug-in no longer has the command.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let Some(plugin) = described(ui, d) else { return true };
     let run_with = command_of(d);
@@ -232,6 +234,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     form::schema_fields(app, ui, d, run_with.as_ref().unwrap_or(plugin.manifest()));
     match plugin.manifest().budget {
+        // Where filters run in workers (the web build), the dialog has no Preview: a preview would
+        // run the plug-in on the page.
+        Budget::Light if crate::plugin_runs::in_workers(app) => {}
         Budget::Light => {
             let (label, p) = (d.str("__label"), params(d));
             form::preview(app, ui, d, &label, &command(d), p);
@@ -248,14 +253,26 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 
 /// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, and a
 /// light one that runs in the background ([`in_background`]) with Preview off or a failed preview,
-/// start in the background ([`run`]) and the dialog closes. A preview still shown when Preview was
-/// just turned off, or a preview that failed, is rolled back first.
+/// start in the background ([`run`]) and the dialog closes. On the web the filter or its command
+/// always starts in a worker. A preview still shown when Preview was just turned off, or a preview
+/// that failed, is rolled back first.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let own_run = d.str("__command").is_empty();
     let kept = |plugin: &Plugin| {
         plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction() && !d.fields.contains_key(form::REFUSED)
     };
     match registry::get(&d.str("__plugin")) {
+        // On the web, with no Preview, the filter or its command always runs in a worker.
+        Some(plugin) if crate::plugin_runs::in_workers(app) => {
+            let r = match own_run {
+                true => run(app, &plugin, params(d)),
+                false => crate::plugin_runs::start_command(app, &command(d), params(d)),
+            };
+            if r.is_ok() {
+                app.ui.dialog = None;
+            }
+            r
+        }
         Some(plugin) if own_run && in_background(plugin.manifest()) && !kept(&plugin) => {
             if d.fields.contains_key(form::PREVIEWED) && app.session.in_interaction() {
                 let _ = app.session.cancel_interaction();

@@ -187,10 +187,35 @@ how much there is only once the run has ended.
   thread of its own while editing goes on, shown in the status bar and, after a moment, in a progress window with
   Cancel (also Esc) and Continue in Background (`plugin.cancelRuns`, `plugin.hideRuns`). When it is done its result is
   applied as `plugin.run` with the same parameters and objects, as one undo step, unless the document or the plug-in
-  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web, which has no threads,
-  it runs at once, under the same instruction budget and 300 s limit.
+  changed meanwhile: then nothing changes, and the status bar says to run it again. On the web it runs in a worker of
+  its own, under the same instruction budget and 300 s limit ([The web build](#the-web-build)).
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
+
+### The web build
+
+The web build checks plug-ins and runs filters in Web Workers, so a plug-in's code never runs on the page. Trunk
+builds the worker, `vectorcraft-plugin-worker` (`apps/vectorcraft-plugin-worker`), beside the app, and the page starts
+one worker for each check and each run (`vectorcraft_plugins::worker` describes the messages).
+
+- **Installing.** Install Plug-in… and File › Open send the module to a worker, which loads it as the desktop app
+  does: its start function, `vc_abi_version` and `vc_manifest` run there. The page then makes the checks that run
+  none of the module's code and installs it with the manifest the worker read. A module that fails in the worker is
+  not installed, and the status bar says why.
+- **Running a filter.** A filter's item in Object › Plug-ins, a plug-in command, or OK in their dialog, runs the
+  filter in a worker, shown in the status bar and the progress window as a heavy filter is. The dialogs have no
+  Preview. A command's run is one undo step named after the command, as on the desktop. The page terminates the
+  worker at once on Cancel, when the document or the plug-in changes before the run ends (the status bar says to run
+  it again), and 5 s past the run's time budget when the worker has not answered (`Limit("time budget")`).
+- **Command calls.** A filter that calls commands sends each call to the page, which makes it and sends back the
+  answer before the filter goes on. The calls and the output are one undo step. While it runs, every other command
+  and edit is refused with "a plug-in is running: cancel it or wait for it to finish", and the progress window shows
+  at once, with Cancel only. Cancel undoes the calls it made.
+- At most 4 workers run at once; a fifth check or run is refused with the same message. A worker that sends more than
+  8 messages between two frames (progress reports aside), a message the page can't read, or a message of another
+  version is terminated, and the run fails.
+- Other plug-in runs still run on the page: live effects, exporters, importers, and `plugin.run`, `plugin.inspect`,
+  `plugin.install` and plug-in commands that automation runs as commands, which return their result when they end.
 
 ### Permissions
 
@@ -520,7 +545,8 @@ the module's start function, in a run that isn't a filter's run on a document, o
   of arguments and results a run. Each call costs 10,000 instructions of the run's budget, plus one for every 64 bytes
   of its arguments and its result, and the run checks Cancel and its time budget before and after each call.
 - A filter that calls commands runs on the app's main thread, so it can't ask for a heavy budget: a manifest with
-  `commandAllowlist` and `budget: "heavy"` is refused.
+  `commandAllowlist` and `budget: "heavy"` is refused. On the web it runs in a worker, and the page makes each call
+  ([The web build](#the-web-build)).
 
 ### Manifest
 
