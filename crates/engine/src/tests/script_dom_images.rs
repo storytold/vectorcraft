@@ -431,3 +431,24 @@ fn stale_and_foreign_placed_items_are_refused() {
     assert!(s.active().unwrap().doc.node(id).is_none());
     let _ = std::fs::remove_dir_all(base);
 }
+
+#[test]
+fn members_not_available_yet_check_the_image_first() {
+    let base = folder("later");
+    let a = base.join("main/a.png");
+    std::fs::write(&a, gray_png(4, 4)).unwrap();
+    let mut s = session();
+    place(&mut s, &a, true);
+    let out = log(
+        &mut s,
+        &base,
+        "var d = app.activeDocument, p = d.placedItems[0], n = d.placedItems.add(), m = [];\
+         try { n.trace; } catch (e) { m.push(e.message); }\
+         p.embed(); try { p.trace; } catch (e) { m.push(e.message); }\
+         var r = d.rasterItems[0]; try { r.colorize; } catch (e) { m.push(e.message); }\
+         r.remove(); try { r.overprint; } catch (e) { m.push(e.message); }\
+         vc.log(m);",
+    );
+    assert_eq!(out, vec![json!(["PlacedItem.file is required", "Stale page item", "RasterItem.colorize is not available yet", "Stale page item"])]);
+    let _ = std::fs::remove_dir_all(base);
+}

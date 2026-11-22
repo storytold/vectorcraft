@@ -170,7 +170,7 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "PageItem" | "PlacedItem" | "RasterItem" => {
                 item_of(&h, arg(&a, 0))?;
             }
             _ => {}
