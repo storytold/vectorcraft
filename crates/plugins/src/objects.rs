@@ -913,20 +913,28 @@ fn output_id(o: &Value) -> Option<NodeId> {
 /// numbers compared by value. Otherwise the error names the first field that differs
 /// (`text.runs[0].text`): a field the entry gives before one it leaves out, shown as
 /// [`crate::permissions::display_text`] shows a manifest string, since the entry's keys are the
-/// plug-in's.
+/// plug-in's. An image's `opacity`, which filters are given from plug-in API level 3, may be left
+/// out, so an entry that a filter built for level 2 writes as it was given there still matches.
 fn check_unchanged(o: &Value, given: &Value, at: &str) -> Result<()> {
     let changed = match (o, given) {
         (Value::Object(x), Value::Object(y)) => {
             let mut keys: Vec<&String> = x.keys().collect();
             keys.sort();
-            keys.into_iter().find_map(|k| match y.get(k) {
-                Some(q) => first_difference(&x[k], q, k),
-                None => Some(k.clone()),
-            })
+            keys.into_iter()
+                .find_map(|k| match y.get(k) {
+                    Some(q) => first_difference(&x[k], q, k),
+                    None => Some(k.clone()),
+                })
+                .or_else(|| {
+                    let image = y.get("type").and_then(Value::as_str) == Some(InputKind::Image.name());
+                    let mut missing: Vec<&String> = y.keys().filter(|k| !x.contains_key(*k) && !(image && *k == "opacity")).collect();
+                    missing.sort();
+                    missing.first().map(|k| (*k).clone())
+                })
         }
-        _ => None,
+        _ => first_difference(o, given, ""),
     };
-    match changed.or_else(|| first_difference(o, given, "")) {
+    match changed {
         None => Ok(()),
         Some(field) => Err(read_only_changed(at, &field)),
     }

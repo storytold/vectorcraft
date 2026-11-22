@@ -552,7 +552,7 @@ the module's start function, in a run that isn't a filter's run on a document, o
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
-- `inputs` (filters at `api` 2 only): the kinds of object besides paths and compound paths the filter reads, any of
+- `inputs` (filters at `api` 2 or later): the kinds of object besides paths and compound paths the filter reads, any of
   `"type"`, `"image"` and `"symbolInstance"`, each at most once (`"inputs": ["type", "image"]`). Left out or `[]`, the
   filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
   another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
@@ -717,10 +717,13 @@ every attribute:
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.
 
-These objects are read only. The output must list each of them exactly once, as `{"id": 17}` alone or exactly as it
-was given (numbers compare by value, so `1` and `1.0` are the same). A changed or added field, one left out, an object
-listed twice or left out, and a new object with one of these types are refused, and the document and undo history
-stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
+Objects of a kind that the manifest's `writes` doesn't list are read only. The output must list each of them exactly
+once, as `{"id": 17}` alone or exactly as it was given (numbers compare by value, so `1` and `1.0` are the same). An
+image may leave out `opacity`, which hosts before `api` 3 don't give. An object of a kind that `writes` lists is also
+listed exactly once, and its entry may give only the fields it changes ([writing type, images and
+symbols](#writing-type-images-and-symbols)). An output deletes the paths and compound paths it leaves out
+([output](#output)), but none of these objects. A changed or added field, one left out, an object listed twice or left
+out, and a new object with one of these types are refused, and the document and undo history stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
 object was left out`. The field is named with control and bidirectional characters escaped (`\u{202E}`), cut to 64
 characters. New objects listed after one of them go just above it.
 
@@ -758,8 +761,9 @@ exactly as given, or with the fields it changes; a field it leaves out keeps its
 - `transform` is six finite numbers, each within ±4,000,000, that don't flatten the object to a line. The object moves
   by the change from its given transform, so an image's distorted corners move with it.
 - `text.runs` replaces the type's runs: each is `{text, style, inline?}` with the character attributes as the native
-  file stores them, and an attribute the host doesn't know is refused. There is at least one run, at most 4,096, and at
-  most 256 KiB of UTF-8 text; the runs written in one output take at most 16 MiB. Every number in every run's style is
+  file stores them, and an attribute the host doesn't know is refused, as is a key of a fill or stroke that its `type`
+  doesn't read. There is at least one run, at most 4,096, at most 4,096 paragraphs, and at most 256 KiB of UTF-8 text;
+  the runs written in one output take at most 16 MiB. Every number in every run's style is
   checked against the range `charStyle.new` keeps it to, including a style one of the type's runs already has: size
   0.1 to 1296 pt, leading 0.1 to 5000 pt, tracking and kerning -1000 to 10000, horizontal and vertical scale 1 to
   10000 %, baseline shift -1296 to 1296 pt, rotation -360 to 360°, and the ranges `docs/mcp.md` gives for
@@ -771,7 +775,8 @@ exactly as given, or with the fields it changes; a field it leaves out keeps its
 - `text.paragraphs` holds one paragraph style per paragraph of the new text, each checked as `paraStyle.new` checks
   its attributes: indents and space before and after within ±1296 pt, the Hyphenation and Justification options in
   their ranges, at most 256 tab stops at 0 to 100,000 pt, and a custom Kinsoku set only by the name of one of the
-  document's sets, whose characters the paragraph takes. With `text.runs` alone, each paragraph keeps its style when
+  document's sets, whose characters the paragraph takes. A `text.paragraphs` list returned as it was given next to
+  changed `text.runs` must also hold one style per paragraph of the new text. With `text.runs` alone, each paragraph keeps its style when
   the number of paragraphs stays the same. When runs add or join paragraphs, the host matches the old and new
   paragraphs by their text: a paragraph whose text is unchanged keeps its style, changed paragraphs take the styles of
   the paragraphs they replace in order, and a paragraph added between others takes the style of the one before it (of
@@ -828,7 +833,9 @@ For an **object filter**, the output is the new state of the input objects:
 - An object without an `id` is new and needs a `path`. It goes just above the object listed before it, or, listed
   before any input object, just below the first one listed after it. New objects take a path's defaults: no fills or
   strokes, full opacity.
-- Input objects missing from the output are deleted. The order of the input objects themselves doesn't change.
+- Input paths and compound paths missing from the output are deleted; type, images and symbol instances can't be left
+  out ([reading type, images and symbols](#reading-type-images-and-symbols)). The order of the input objects themselves
+  doesn't change.
 - `type` turns a path into a compound path (one member per subpath) or back; `name: ""` clears the name.
 - `guide: true` makes the object a guide, as View › Guides › Make Guides does (a compound path's members become
   guide paths), and `guide: false` a plain path again; `locked: true` locks it and `locked: false` unlocks it. Objects

@@ -563,14 +563,15 @@ fn installing_a_plugin_over_another_module_asks_first() {
 }
 
 /// A plug-in with two commands: Grow, which adds a triangle (`_context.command` is `grow`), and
-/// Size, with a parameter, whose `menu` names another menu.
+/// Size, with a parameter, whose `menu` names another menu, which adds a square.
 fn commands_plugin(id: &str) -> Vec<u8> {
     let manifest = format!(
         r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"filter","commands":[{{"id":"grow","label":"Grow"}},
         {{"id":"size","label":"Size","menu":"File","params":{{"by":{{"type":"number","min":0,"max":10,"default":2}}}}}}]}}"#
     );
     let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
-    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""command":"grow""#, triangle)).unwrap()
+    let square = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]},{"p":[0,5]}]}]}}]}"#;
+    wat::parse_str(tpl::when_given_else(&manifest, tpl::Given::Params, r#""command":"grow""#, triangle, square)).unwrap()
 }
 
 fn objects(app: &VectorcraftApp) -> usize {

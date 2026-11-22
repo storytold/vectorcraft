@@ -554,6 +554,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	moet een lijst van ten hoogste {MAX_INPUT_RUNS} items zijn
 @msg	type needs at least one run	tekst heeft ten minste één tekstreeks nodig
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes tekst (limiet {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} alinea's (limiet {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	meer dan {MAX_INPUT_TEXT_TOTAL} bytes tekst in de hele uitvoer
 @msg	unknown key '{k}'	onbekende sleutel '{k}'
 @msg	must be a list of 6 numbers	moet een lijst van 6 getallen zijn

@@ -7563,6 +7563,7 @@ axis	Y Axis	Y-akseli
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	on oltava luettelo, jossa on enintään {MAX_INPUT_RUNS} kohdetta
 @msg	type needs at least one run	tekstissä on oltava vähintään yksi tekstijakso
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} tavua tekstiä (raja {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} kappaletta (raja {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	yli {MAX_INPUT_TEXT_TOTAL} tavua tekstiä koko tulosteessa
 @msg	unknown key '{k}'	tuntematon avain '{k}'
 @msg	must be a list of 6 numbers	on oltava 6 luvun luettelo

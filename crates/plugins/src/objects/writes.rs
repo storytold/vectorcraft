@@ -3,6 +3,8 @@
 //! attributes, and its paragraph styles; an image's opacity; and the symbol an instance shows.
 //! Every other field stays read-only, and every value is checked before anything changes.
 
+use std::collections::HashSet;
+
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use vectorcraft_doc::text::{AttrRangeError, INLINE_CHAR};
@@ -66,7 +68,8 @@ pub(super) fn changes(o: &Map<String, Value>, given: &Value, kind: InputKind, at
 /// (the text the input gave), into `out`; its other fields must be as given, and type given as
 /// `truncated` keeps its text. A changed list is held to [`MAX_INPUT_RUNS`] entries, and changed
 /// runs to [`MAX_INPUT_TEXT`] bytes of text, which count toward `total`, held to
-/// [`MAX_INPUT_TEXT_TOTAL`].
+/// [`MAX_INPUT_TEXT_TOTAL`], and to [`MAX_INPUT_RUNS`] paragraphs. With changed runs, `paragraphs`
+/// given as they were go into `out` too, to be checked against the new paragraphs.
 fn text_changes(key: &str, v: &Value, was: &Value, truncated: bool, at: &str, total: &mut usize, out: &mut Map<String, Value>) -> Result<()> {
     let t = v.as_object().ok_or_else(|| out_err(at, format!("`{key}` must be an object")))?;
     let mut keys: Vec<&String> = t.keys().collect();
@@ -98,12 +101,25 @@ fn text_changes(key: &str, v: &Value, was: &Value, truncated: bool, at: &str, to
             if bytes > MAX_INPUT_TEXT {
                 return Err(out_err(&format!("{at}.{field}"), format!("{bytes} bytes of text (limit {MAX_INPUT_TEXT})")));
             }
+            // Each paragraph gets a paragraph style; the text holds at most as many paragraphs as runs.
+            let breaks = |r: &Value| r.get("text").and_then(Value::as_str).map_or(0, |s| s.bytes().filter(|&b| b == b'\n').count());
+            let paragraphs = list.iter().fold(1usize, |n, r| n.saturating_add(breaks(r)));
+            if paragraphs > MAX_INPUT_RUNS {
+                return Err(out_err(&format!("{at}.{field}"), format!("{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})")));
+            }
             *total = total.saturating_add(bytes);
             if *total > MAX_INPUT_TEXT_TOTAL {
                 return Err(out_err(&format!("{at}.{field}"), format!("more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output")));
             }
         }
         out.insert(k.clone(), t[k].clone());
+    }
+    // Paragraph styles given as they were still need one per paragraph of the new runs.
+    if out.contains_key("runs")
+        && !out.contains_key("paragraphs")
+        && let Some(p) = t.get("paragraphs")
+    {
+        out.insert("paragraphs".into(), p.clone());
     }
     Ok(())
 }
@@ -237,7 +253,8 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
     if let Some(runs) = runs {
         let at = format!("{at}.text.runs");
         let list = runs.as_array().map(Vec::as_slice).unwrap_or_default();
-        let own: Vec<Value> = t.runs.iter().map(|r| serde_json::to_value(&r.style).unwrap_or(Value::Null)).collect();
+        // The type's own styles, as JSON text, to look each run's style up once.
+        let own: HashSet<String> = t.runs.iter().filter_map(|r| serde_json::to_string(&r.style).ok()).collect();
         let mut new = Vec::with_capacity(list.len());
         for (i, v) in list.iter().enumerate() {
             let at = format!("{at}[{i}]");
@@ -260,7 +277,12 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
                 }
                 // Every number goes to the layout, so it is checked even in a style the type has.
                 style.check_ranges(|_| true).map_err(|e| range_err(&format!("{at}.style"), &e))?;
-                if !own.contains(style_v) {
+                for key in ["fill", "stroke"] {
+                    if let Some(p) = style_v.get(key) {
+                        check_paint_keys(p, &format!("{at}.style.{key}"))?;
+                    }
+                }
+                if !serde_json::to_string(&style).is_ok_and(|s| own.contains(&s)) {
                     check_style(doc, &mut style, t.runs.get(i).map(|r| &r.style), &format!("{at}.style"))?;
                 }
             }
@@ -441,11 +463,12 @@ fn para_style(doc: &Document, v: &Value, parent: &str, key: &str) -> Result<Para
 }
 
 /// Checks character style `s`, a filter's own (`was`: the style of the run in its place before):
-/// its font family is 1 to [`MAX_FAMILY`] printable characters, and its fill and stroke are
-/// admitted as an object's paints are. Its numbers are checked for every run ([`set_text`]).
+/// its font family is 1 to [`MAX_FAMILY`] printable characters, counted as given, and its fill and
+/// stroke are admitted as an object's paints are. Its numbers and its paints' keys are checked for
+/// every run ([`set_text`]).
 fn check_style(doc: &Document, s: &mut CharStyle, was: Option<&CharStyle>, at: &str) -> Result<()> {
     let family = s.font_family.trim();
-    if family.is_empty() || family.chars().count() > MAX_FAMILY || s.font_family.chars().any(char::is_control) {
+    if family.is_empty() || s.font_family.chars().count() > MAX_FAMILY || s.font_family.chars().any(char::is_control) {
         return Err(out_err(&format!("{at}.font_family"), format!("must be 1-{MAX_FAMILY} printable characters")));
     }
     let paint = |p: &vectorcraft_color::Paint, was: Option<&vectorcraft_color::Paint>, key: &str| {
@@ -455,5 +478,22 @@ fn check_style(doc: &Document, s: &mut CharStyle, was: Option<&CharStyle>, at: &
     };
     s.fill = paint(&s.fill, was.map(|w| &w.fill), "fill")?;
     s.stroke = paint(&s.stroke, was.map(|w| &w.stroke), "stroke")?;
+    Ok(())
+}
+
+/// Checks that paint `v` of a style, at `at`, has no key besides `type` and those its `type`
+/// reads; a key of another paint, or an unknown one, is an error naming it.
+fn check_paint_keys(v: &Value, at: &str) -> Result<()> {
+    let Some(o) = v.as_object() else { return Ok(()) };
+    let known: &[&str] = match o.get("type").and_then(Value::as_str) {
+        Some("solid") => &["color", "swatch", "tint"],
+        Some("gradient") => attr_names::<vectorcraft_color::GradientPaint>(),
+        Some("pattern") => &["pattern", "xf"],
+        _ => &[],
+    };
+    if let Some(k) = o.keys().find(|k| *k != "type" && !known.contains(&k.as_str())) {
+        let k = crate::permissions::display_text(k, crate::permissions::MAX_SHOWN_FIELD);
+        return Err(out_err(at, format!("unknown key '{k}'")));
+    }
     Ok(())
 }

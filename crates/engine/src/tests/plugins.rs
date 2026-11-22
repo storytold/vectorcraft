@@ -3945,12 +3945,14 @@ fn a_filter_that_writes_type_images_and_instances_is_one_undo_step() {
     let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
     run(&mut s, "plugin.run", p(echo));
     assert_eq!((&s.doc().unwrap().doc, s.doc().unwrap().history.undo.len()), (&doc, undo), "an echo records no undo step");
-    // Refused writes leave the document and the history as they were.
+    // Refused writes leave the document and the history as they were, also when a valid change
+    // comes before the refused one.
     let bad = "test.engine.writes.bad";
+    let retyped = json!({"id": t.0, "text": {"runs": [{"text": "Hello again", "style": style}]}});
     for (writes, output, says) in [
         (
             all,
-            json!({"objects": [{"id": r.0}, {"id": t.0}, {"id": image.0}, {"id": inst.0, "symbolId": "Nowhere"}]}),
+            json!({"objects": [{"id": r.0}, retyped, {"id": image.0}, {"id": inst.0, "symbolId": "Nowhere"}]}),
             format!("objects[3] (id {}).symbolId: 'Nowhere' is not a symbol in this document", inst.0),
         ),
         (

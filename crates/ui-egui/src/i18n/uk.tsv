@@ -7100,6 +7100,7 @@ axis	Y Axis	Вісь Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	має бути списком щонайбільше з {MAX_INPUT_RUNS} елементів
 @msg	type needs at least one run	текст повинен мати щонайменше один фрагмент
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} байтів тексту (межа {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} абзаців (межа {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	понад {MAX_INPUT_TEXT_TOTAL} байтів тексту в усьому виводі
 @msg	unknown key '{k}'	невідомий ключ '{k}'
 @msg	must be a list of 6 numbers	має бути списком із 6 чисел

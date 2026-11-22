@@ -7486,6 +7486,7 @@ axis	Y Axis	Άξονας Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	πρέπει να είναι λίστα με έως {MAX_INPUT_RUNS} στοιχεία
 @msg	type needs at least one run	το κείμενο χρειάζεται τουλάχιστον ένα τμήμα
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte κειμένου (όριο {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} παράγραφοι (όριο {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	περισσότερα από {MAX_INPUT_TEXT_TOTAL} byte κειμένου σε όλη την έξοδο
 @msg	unknown key '{k}'	άγνωστο κλειδί '{k}'
 @msg	must be a list of 6 numbers	πρέπει να είναι λίστα 6 αριθμών

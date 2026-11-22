@@ -7568,6 +7568,7 @@ axis	Y Axis	Y ekseni
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	en fazla {MAX_INPUT_RUNS} girişli bir liste olmalıdır
 @msg	type needs at least one run	metnin en az bir parçası olmalıdır
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bayt metin (sınır {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragraf (sınır {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	çıktının tamamında {MAX_INPUT_TEXT_TOTAL} bayttan fazla metin
 @msg	unknown key '{k}'	bilinmeyen anahtar '{k}'
 @msg	must be a list of 6 numbers	6 sayılık bir liste olmalıdır

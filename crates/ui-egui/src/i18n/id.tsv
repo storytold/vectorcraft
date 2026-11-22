@@ -590,6 +590,7 @@
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	harus berupa daftar berisi paling banyak {MAX_INPUT_RUNS} entri
 @msg	type needs at least one run	teks memerlukan setidaknya satu potongan
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte teks (batas {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paragraf (batas {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	lebih dari {MAX_INPUT_TEXT_TOTAL} byte teks di seluruh keluaran
 @msg	unknown key '{k}'	kunci tidak dikenal '{k}'
 @msg	must be a list of 6 numbers	harus berupa daftar 6 angka

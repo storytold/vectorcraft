@@ -7147,6 +7147,7 @@ axis	Y Axis	Trục Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	phải là danh sách có tối đa {MAX_INPUT_RUNS} mục
 @msg	type needs at least one run	văn bản cần ít nhất một đoạn chạy
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte văn bản (giới hạn {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} đoạn văn (giới hạn {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	hơn {MAX_INPUT_TEXT_TOTAL} byte văn bản trên toàn bộ đầu ra
 @msg	unknown key '{k}'	khóa không xác định '{k}'
 @msg	must be a list of 6 numbers	phải là danh sách gồm 6 số

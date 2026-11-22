@@ -9599,6 +9599,7 @@ axis	Y Axis	Y ღერძი
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	უნდა იყოს სია მაქსიმუმ {MAX_INPUT_RUNS} ჩანაწერით
 @msg	type needs at least one run	ტექსტს სჭირდება მინიმუმ ერთი მონაკვეთი
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	ტექსტის {bytes} ბაიტი (ლიმიტი {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} აბზაცი (ლიმიტი {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	მთელ გამონატანში {MAX_INPUT_TEXT_TOTAL} ბაიტზე მეტი ტექსტია
 @msg	unknown key '{k}'	უცნობი გასაღები '{k}'
 @msg	must be a list of 6 numbers	უნდა იყოს 6 რიცხვის სია

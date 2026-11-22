@@ -7118,6 +7118,7 @@ axis	Y Axis	Ось Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	должно быть списком не более чем из {MAX_INPUT_RUNS} элементов
 @msg	type needs at least one run	у текста должен быть хотя бы один фрагмент
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} байт текста (предел {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} абзацев (предел {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	более {MAX_INPUT_TEXT_TOTAL} байт текста во всём выводе
 @msg	unknown key '{k}'	неизвестный ключ '{k}'
 @msg	must be a list of 6 numbers	должно быть списком из 6 чисел

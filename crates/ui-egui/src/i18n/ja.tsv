@@ -7193,6 +7193,7 @@ axis	Y Axis	Y 軸
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	{MAX_INPUT_RUNS} 項目以下のリストにしてください
 @msg	type needs at least one run	テキストには 1 つ以上のランが必要です
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	テキストが {bytes} バイトあります (上限 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落が {paragraphs} 個あります (上限 {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	出力全体のテキストが {MAX_INPUT_TEXT_TOTAL} バイトを超えています
 @msg	unknown key '{k}'	不明なキー '{k}'
 @msg	must be a list of 6 numbers	6 つの数値のリストにしてください

@@ -7395,6 +7395,7 @@ axis	Y Axis	Eixo Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	deve ser uma lista de no máximo {MAX_INPUT_RUNS} entradas
 @msg	type needs at least one run	o texto precisa de pelo menos um trecho
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de texto (limite {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} parágrafos (limite {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mais de {MAX_INPUT_TEXT_TOTAL} bytes de texto em toda a saída
 @msg	unknown key '{k}'	chave desconhecida '{k}'
 @msg	must be a list of 6 numbers	deve ser uma lista de 6 números

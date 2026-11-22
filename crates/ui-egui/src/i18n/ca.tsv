@@ -7886,6 +7886,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	ha de ser una llista d’un màxim de {MAX_INPUT_RUNS} entrades
 @msg	type needs at least one run	el text necessita almenys un tram
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de text (límit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paràgrafs (límit {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	més de {MAX_INPUT_TEXT_TOTAL} bytes de text en tota la sortida
 @msg	unknown key '{k}'	clau desconeguda '{k}'
 @msg	must be a list of 6 numbers	ha de ser una llista de 6 nombres

@@ -7496,6 +7496,7 @@ axis	Y Axis	osa Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	musí být seznam nejvýše {MAX_INPUT_RUNS} položek
 @msg	type needs at least one run	text potřebuje alespoň jeden úsek
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bajtů textu (limit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} odstavců (limit {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	více než {MAX_INPUT_TEXT_TOTAL} bajtů textu v celém výstupu
 @msg	unknown key '{k}'	neznámý klíč '{k}'
 @msg	must be a list of 6 numbers	musí být seznam 6 čísel

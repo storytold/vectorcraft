@@ -1096,12 +1096,16 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 /// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
 /// `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
-    const RANGED: [&str; 24] = [
+    const RANGED: [&str; 32] = [
         "size",
         "h_scale",
         "v_scale",
         "leading",
+        "tracking",
+        "kerning",
+        "kerningBefore",
         "baseline_shift",
+        "rotation",
         "akiLeft",
         "akiRight",
         "tsume",
@@ -1113,6 +1117,10 @@ fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
         "warichuGap",
         "warichuScale",
         "stroke_width",
+        "stroke_miter_limit",
+        "stroke_dash",
+        "small_caps",
+        "fontAxes",
         "left_indent",
         "right_indent",
         "first_line_indent",

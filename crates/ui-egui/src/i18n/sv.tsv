@@ -7508,6 +7508,7 @@ axis	Y Axis	Y-axel
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	måste vara en lista med högst {MAX_INPUT_RUNS} poster
 @msg	type needs at least one run	text behöver minst ett textavsnitt
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte text (gräns {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} stycken (gräns {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mer än {MAX_INPUT_TEXT_TOTAL} byte text i hela utdatan
 @msg	unknown key '{k}'	okänd nyckel '{k}'
 @msg	must be a list of 6 numbers	måste vara en lista med 6 tal

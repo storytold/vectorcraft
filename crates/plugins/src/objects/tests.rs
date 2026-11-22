@@ -1066,7 +1066,8 @@ fn a_changed_field_is_named_escaped_and_short() {
 }
 
 /// A filter given read-only objects returns each one as `{"id": …}` or exactly as given (numbers by
-/// value), and they stay as they are, new objects listed after one going just above it. Any change,
+/// value; an image may leave out its `opacity`), and they stay as they are, new objects listed
+/// after one going just above it. Any change,
 /// an object left out or listed twice, and a new object of such a kind are refused before anything
 /// changes.
 #[test]
@@ -1087,6 +1088,14 @@ fn read_only_kind_field_and_omission_refuse() {
     let mut echo = input.clone();
     echo["objects"][3]["transform"] = json!([1, 0, 0, 1, 5, 50]);
     assert!(decode_output_with(echo.to_string().as_bytes(), &bytes, &read_only).is_ok());
+    // An image without `opacity`, as plug-in API level 2 gave it, is the image as given.
+    let mut echo = input.clone();
+    for i in [4, 5] {
+        assert_eq!(echo["objects"][i]["type"], json!("image"));
+        echo["objects"][i].as_object_mut().unwrap().remove("opacity");
+    }
+    let out = decode_output_with(echo.to_string().as_bytes(), &bytes, &read_only).unwrap();
+    assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 5);
     // So is an id written as a float; a fractional one names no object.
     let id = input["objects"][3]["id"].as_u64().unwrap();
     let mut echo = input.clone();
@@ -1284,6 +1293,30 @@ fn bad_writes_are_refused_naming_the_object_and_the_field() {
             &InputKind::ALL,
             "font_family: must be 1-256 printable characters".into(),
         ),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["font_family"] = json!(format!(" {}", "a".repeat(256))))}}),
+            &InputKind::ALL,
+            "font_family: must be 1-256 printable characters".into(),
+        ),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["fill"] = json!({"type": "solid", "color": s["fill"]["color"], "tintt": 0.5}))}}),
+            &InputKind::ALL,
+            "text.runs[0].style.fill: unknown key 'tintt'".into(),
+        ),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["stroke"] = json!({"type": "none", "pattern": "Dots"}))}}),
+            &InputKind::ALL,
+            "text.runs[0].style.stroke: unknown key 'pattern'".into(),
+        ),
+        (
+            text,
+            json!({"text": {"runs": [{"text": "A\nB\nC", "style": style}], "paragraphs": input["objects"][at(text)]["text"]["paragraphs"]}}),
+            &InputKind::ALL,
+            "text.paragraphs: expected 3 paragraph styles, one per paragraph".into(),
+        ),
         (text, json!({"text": {"runs": [{"text": "Hi", "style": style, "color": 1}]}}), &InputKind::ALL, "text.runs[0]: unknown key 'color'".into()),
         (text, json!({"text": 5}), &InputKind::ALL, format!("objects[{ti}] (id {t}): `text` must be an object")),
         (text, json!({"text": {"runs": [{"text": 5, "style": style}]}}), &InputKind::ALL, "text.runs[0]: `text` must be a string".into()),
@@ -1358,6 +1391,7 @@ fn written_text_is_held_to_the_input_limits_and_truncated_type_keeps_its_text() 
     for (id, text_v, says) in [
         (text, json!({"runs": [run("x".repeat(MAX_INPUT_TEXT + 1))]}), format!("bytes of text (limit {MAX_INPUT_TEXT})")),
         (text, json!({"runs": vec![run("x".into()); MAX_INPUT_RUNS + 1]}), format!("must be a list of at most {MAX_INPUT_RUNS} entries")),
+        (text, json!({"runs": [run("\n".repeat(MAX_INPUT_RUNS))]}), format!("{} paragraphs (limit {MAX_INPUT_RUNS})", MAX_INPUT_RUNS + 1)),
         (text, json!({"paragraphs": vec![json!({}); MAX_INPUT_RUNS + 1]}), format!("must be a list of at most {MAX_INPUT_RUNS} entries")),
         (long, json!({"runs": [run("short".into())]}), "the text of type given as `truncated` can't be changed".to_string()),
     ] {

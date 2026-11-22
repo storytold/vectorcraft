@@ -7351,6 +7351,7 @@ axis	Y Axis	Oś Y
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	musi być listą co najwyżej {MAX_INPUT_RUNS} pozycji
 @msg	type needs at least one run	tekst potrzebuje co najmniej jednego fragmentu
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bajtów tekstu (limit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} akapitów (limit {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	ponad {MAX_INPUT_TEXT_TOTAL} bajtów tekstu w całym wyniku
 @msg	unknown key '{k}'	nieznany klucz '{k}'
 @msg	must be a list of 6 numbers	musi być listą 6 liczb

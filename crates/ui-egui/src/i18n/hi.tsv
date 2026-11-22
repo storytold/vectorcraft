@@ -6680,6 +6680,7 @@ arrowhead	Feather	पंख
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	अधिकतम {MAX_INPUT_RUNS} प्रविष्टियों की सूची होनी चाहिए
 @msg	type needs at least one run	टेक्स्ट में कम से कम एक रन होना चाहिए
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	टेक्स्ट के {bytes} बाइट (सीमा {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} अनुच्छेद (सीमा {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	पूरे आउटपुट में {MAX_INPUT_TEXT_TOTAL} बाइट से अधिक टेक्स्ट
 @msg	unknown key '{k}'	अज्ञात कुंजी '{k}'
 @msg	must be a list of 6 numbers	6 संख्याओं की सूची होनी चाहिए

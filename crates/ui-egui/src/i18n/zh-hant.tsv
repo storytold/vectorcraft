@@ -7149,6 +7149,7 @@ axis	Y Axis	Y 軸
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	必須是最多 {MAX_INPUT_RUNS} 個項目的清單
 @msg	type needs at least one run	文字至少需要一個文字段
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	文字 {bytes} 位元組（上限 {MAX_INPUT_TEXT}）
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落 {paragraphs} 個（上限 {MAX_INPUT_RUNS}）
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	整個輸出中的文字超過 {MAX_INPUT_TEXT_TOTAL} 位元組
 @msg	unknown key '{k}'	未知的鍵 '{k}'
 @msg	must be a list of 6 numbers	必須是 6 個數字的清單

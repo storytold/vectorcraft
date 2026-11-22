@@ -13257,10 +13257,12 @@ transforms and names included: pixels and runs that don't fit come the same way,
 fit makes `plugin.run` return a memory-budget error naming the object and its size, with nothing changed. A path or compound path that doesn't fit makes it return the
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
-each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A filter at plug-in API level 3 whose manifest also lists some of
+each of them as `{"id": …}` or exactly as given (an image may leave out `opacity`), otherwise `plugin.run` returns an
+error naming the object and the field, and the document and undo history are unchanged. A filter at plug-in API level 3 whose manifest also lists some of
 those kinds in `writes` (with `doc.write`; `writes` in its `plugin.list` entry) may return an object of such a kind with
-only the fields it changes: its name and `transform`, type's `text.runs` and `text.paragraphs`, an image's `opacity` and
+only the fields it changes: its name and `transform`, type's `text.runs` (at most 4,096 runs and 4,096 paragraphs, and
+fills and strokes with only the keys their `type` reads) and `text.paragraphs` (one style per paragraph of the new text,
+also when returned as given next to changed runs), an image's `opacity` and
 an instance's `symbolId`, which must name a symbol in the document. Any other changed field, or a value out of range,
 makes `plugin.run` return an error naming the object and the field, with nothing changed (docs/plugins.md, "Writing
 type, images and symbols"). An output that changes nothing records no undo step. A filter at plug-in API level 2 whose manifest lists the

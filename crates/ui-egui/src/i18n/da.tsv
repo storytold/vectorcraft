@@ -708,6 +708,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	skal være en liste med højst {MAX_INPUT_RUNS} elementer
 @msg	type needs at least one run	tekst skal have mindst ét tekststykke
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte tekst (grænse {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} afsnit (grænse {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mere end {MAX_INPUT_TEXT_TOTAL} byte tekst i hele outputtet
 @msg	unknown key '{k}'	ukendt nøgle '{k}'
 @msg	must be a list of 6 numbers	skal være en liste med 6 tal

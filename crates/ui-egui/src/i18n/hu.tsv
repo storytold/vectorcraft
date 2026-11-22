@@ -7481,6 +7481,7 @@ axis	Y Axis	Y tengely
 @msg	must be a list of at most {MAX_INPUT_RUNS} entries	legfeljebb {MAX_INPUT_RUNS} elemű lista legyen
 @msg	type needs at least one run	a szövegnek legalább egy szakaszra van szüksége
 @msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bájt szöveg (korlát: {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} bekezdés (korlát: {MAX_INPUT_RUNS})
 @msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	több mint {MAX_INPUT_TEXT_TOTAL} bájt szöveg a teljes kimenetben
 @msg	unknown key '{k}'	ismeretlen kulcs: '{k}'
 @msg	must be a list of 6 numbers	6 számból álló lista legyen
