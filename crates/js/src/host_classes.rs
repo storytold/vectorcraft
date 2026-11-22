@@ -17,6 +17,11 @@
 //! setter gets `this` and the value assigned. A class with an indexer answers `object[i]` for each
 //! array index `i` with it, called with `this` and the index, and `i in object` is true when it
 //! gives a value other than `undefined`; other names are looked up as usual.
+//!
+//! A script's `reflect` ([`crate::reflect`]) describes an object of a host class, and the class's
+//! constructor, from the members installed here and their [`HostClass::info`], so what a script is
+//! told always matches what the class has. A class that names a member twice, or describes a member
+//! it does not have, is refused.
 
 use std::rc::Rc;
 
@@ -40,6 +45,39 @@ pub enum HostMember {
     Method(HostFunction),
 }
 
+/// What a script's `reflect` tells of a member of a host class ([`HostClass::info`]). The member's
+/// name and whether it is read-only, read-write or a method come from the [`HostMember`] itself.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MemberInfo {
+    /// The type of the member's value, or of a method's result: `boolean`, `number`, `string`, a
+    /// class name, `*` for any type, `null` or `undefined`. Empty reads as `unknown`.
+    pub data_type: String,
+    pub description: Option<String>,
+    pub help: Option<String>,
+    /// The value an omitted value means.
+    pub default: Option<Data>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    /// The value, or a method's result, is a collection.
+    pub collection: bool,
+    /// A method's arguments, in order.
+    pub arguments: Vec<ArgInfo>,
+    /// The member is installed but throws when used: `reflect` leaves it out.
+    pub unavailable: bool,
+}
+
+/// What a script's `reflect` tells of an argument of a host class's method ([`MemberInfo::arguments`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ArgInfo {
+    pub name: String,
+    /// As [`MemberInfo::data_type`].
+    pub data_type: String,
+    pub description: Option<String>,
+    pub default: Option<Data>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
+
 /// A class [`crate::Realm::define_host_classes`] adds.
 #[derive(Clone)]
 pub struct HostClass {
@@ -48,6 +86,9 @@ pub struct HostClass {
     /// class's prototype inherits from.
     pub parent: Option<String>,
     pub members: Vec<(String, HostMember)>,
+    /// What `reflect` tells of the members, each under the name of one of `members`. A member
+    /// without an entry has the type `unknown` and nothing else.
+    pub info: Vec<(String, MemberInfo)>,
     /// What `object[i]` gives for an array index `i`.
     pub index: Option<HostFunction>,
     /// What `new Name(...)` and `Name(...)` give; without it both throw a `TypeError`.
@@ -72,6 +113,26 @@ pub(crate) struct Entry {
     /// The class without a parent this class descends from (itself for such a class), as an index
     /// into the realm's classes.
     family: u32,
+    /// The parent class, as an index into the realm's classes.
+    parent: Option<u32>,
+    /// The class's own members as `reflect` lists them.
+    members: Rc<[Reflected]>,
+}
+
+/// How a script may use a member of a host class.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Access {
+    ReadOnly,
+    ReadWrite,
+    Method,
+}
+
+/// A member of a host class as `reflect` lists it.
+#[derive(Clone, Debug)]
+pub(crate) struct Reflected {
+    pub(crate) name: Rc<str>,
+    pub(crate) access: Access,
+    pub(crate) info: MemberInfo,
 }
 
 impl Entry {
@@ -168,6 +229,41 @@ impl Interp {
         self.host_classes.iter().any(|e| e.ctor == id)
     }
 
+    /// The name of the host class of `id`, when it is an object of a host class.
+    pub(crate) fn host_class_name(&self, id: ObjId) -> JsResult<Option<Rc<str>>> {
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
+        Ok(self.host_classes.get(h.class as usize).map(|e| e.name.clone()))
+    }
+
+    /// The name and members of the host class of `id`, an object of the class or its constructor:
+    /// the members of its parents first, then its own, a member a class declares again in the place
+    /// of its parent's. Members marked [`MemberInfo::unavailable`] are left out. `None` when `id` is
+    /// neither.
+    pub(crate) fn host_class_members(&self, id: ObjId) -> JsResult<Option<(Rc<str>, Vec<Reflected>)>> {
+        let class = match &self.object(id)?.class {
+            Class::Host(h) => Some(h.class as usize),
+            _ => self.host_classes.iter().position(|e| e.ctor == id),
+        };
+        let Some(class) = class else { return Ok(None) };
+        let Some(entry) = self.host_classes.get(class) else { return Err(Abrupt::Internal("host class out of range".into())) };
+        let mut chain = vec![entry];
+        while let Some(p) = chain.last().and_then(|e| e.parent) {
+            let Some(parent) = self.host_classes.get(p as usize) else { return Err(Abrupt::Internal("host class out of range".into())) };
+            chain.push(parent);
+        }
+        let mut out: Vec<Reflected> = Vec::new();
+        for e in chain.iter().rev() {
+            for m in e.members.iter() {
+                match out.iter_mut().find(|r| r.name == m.name) {
+                    Some(slot) => *slot = m.clone(),
+                    None => out.push(m.clone()),
+                }
+            }
+        }
+        out.retain(|m| !m.info.unavailable);
+        Ok(Some((entry.name.clone(), out)))
+    }
+
     /// The indexer of the host class of `id`, when it is an object of a host class that has one.
     pub(crate) fn host_indexer(&self, id: ObjId) -> JsResult<Option<HostFunction>> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
@@ -223,12 +319,16 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
         return Err(i.throw(ErrorType::Type, &format!("the host class {} is defined twice", class.name)));
     }
     let own = u32::try_from(i.host_classes.len()).unwrap_or(u32::MAX);
-    let (parent, family) = match &class.parent {
-        None => (i.intrinsics.object_proto, own),
-        Some(p) => match i.host_classes.iter().find(|e| *e.name == **p) {
-            Some(e) => (e.proto, e.family),
+    let (parent, family, parent_index) = match &class.parent {
+        None => (i.intrinsics.object_proto, own, None),
+        Some(p) => match i.host_classes.iter().enumerate().find(|(_, e)| *e.name == **p) {
+            Some((n, e)) => (e.proto, e.family, Some(u32::try_from(n).unwrap_or(u32::MAX))),
             None => return Err(i.throw(ErrorType::Type, &format!("the host class {p} is not defined"))),
         },
+    };
+    let members = match reflected_members(&class) {
+        Ok(m) => m,
+        Err(message) => return Err(i.throw(ErrorType::Type, &message)),
     };
     let proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(parent)));
     let mark = i.temp_roots.len();
@@ -236,9 +336,38 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let r = fill_class(i, proto, &class);
     i.temp_roots.truncate(mark);
     let ctor = r?;
-    i.host_classes.push(Entry { name: class.name.as_str().into(), proto, ctor, index: class.index, family });
+    i.host_classes.push(Entry { name: class.name.as_str().into(), proto, ctor, index: class.index, family, parent: parent_index, members });
     let global = i.global;
     i.define(global, key(&class.name), Prop::Data { value: Value::Object(ctor), flags: crate::heap::HIDDEN })
+}
+
+/// The members of `class` as `reflect` lists them, each with its [`HostClass::info`] entry. → the
+/// error's message when a member is named twice, or an entry names no member or is given twice.
+fn reflected_members(class: &HostClass) -> Result<Rc<[Reflected]>, String> {
+    let mut out: Vec<Reflected> = Vec::with_capacity(class.members.len());
+    for (name, member) in &class.members {
+        if out.iter().any(|r| *r.name == **name) {
+            return Err(format!("the host class {} names the member {name} twice", class.name));
+        }
+        let access = match member {
+            HostMember::Get(_) => Access::ReadOnly,
+            HostMember::Property { .. } => Access::ReadWrite,
+            HostMember::Method(_) => Access::Method,
+        };
+        out.push(Reflected { name: name.as_str().into(), access, info: MemberInfo::default() });
+    }
+    let mut seen: Vec<&str> = Vec::with_capacity(class.info.len());
+    for (name, info) in &class.info {
+        if seen.contains(&name.as_str()) {
+            return Err(format!("the host class {} describes the member {name} twice", class.name));
+        }
+        seen.push(name);
+        let Some(slot) = out.iter_mut().find(|r| *r.name == **name) else {
+            return Err(format!("the host class {} describes {name}, which is not one of its members", class.name));
+        };
+        slot.info = info.clone();
+    }
+    Ok(out.into())
 }
 
 /// Puts the members of `class` on `proto` and makes its constructor. → the constructor.

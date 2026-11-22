@@ -2540,9 +2540,9 @@ top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL b
 control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
-  and directives, such as `$`, `alert`, `UnitValue`, `#target` and `#targetengine`), `dom` (the reference app's
+  and directives, such as `$`, `alert`, `UnitValue`, `reflect`, `#target` and `#targetengine`), `dom` (the reference app's
   document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has:
-  palettes, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading, reflection, actions
+  palettes, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading, actions
   and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
@@ -2793,6 +2793,22 @@ itself throws a `TypeError`. So does a property that is not writable or not conf
 `Object.preventExtensions`, `Object.seal` or `Object.freeze`, and an array whose `length` is read-only, since the text
 would make each of them writable, configurable and extensible again (VectorCraft's own rule). A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
 characters throws a `RangeError`.
+
+`value.reflect` describes an object, as the reflection interface page lays out
+(https://extendscript.docsforadobe.dev/extendscript-tools-features/extendscript-reflection-interface/). Each read
+gives a new frozen object with `name` (the class), `description` and `help` (`undefined`), `properties` and
+`methods` (arrays of entries), and `find(name)`, which gives the entry of the property, or else the method, with that
+name, or `null`; a name that is not a string or a number throws a `TypeError`. Each entry has `name` (a number for an
+array index), `description`, `help`, `type` (`readonly`, `readwrite`, `method`, or `parameter` for an argument),
+`dataType`, `defaultValue`, `min`, `max`, `isCollection` and `arguments`; an entry is also under its name in its array
+when that name is not an array index or `length`. `app`, its documents, page items and layers, `DocumentPreset` and
+each class's constructor list the members of their class and its parents, with the types, bounds, defaults and method
+arguments the object model declares for them (VectorCraft's own values); members that are not available yet are left
+out. Any other object lists its own properties: a function value is a method, with a JavaScript function's parameter
+names as its arguments, a data property gives the type of its value, and an accessor gives `unknown`. A string, number
+or boolean lists its prototype's own properties. No getter runs. `reflect` has no setter, and nothing in a reflection
+can be changed: a write is ignored, or throws a `TypeError` in strict mode. An object with more than 10,000 members
+and arguments throws a `RangeError`.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records

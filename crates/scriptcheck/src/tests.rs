@@ -213,6 +213,13 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
 }
 
 #[test]
+fn reflection_needs_only_the_language() {
+    let r = report("var p = obj.reflect.properties;\nvar m = $.reflect.find('write');\n");
+    assert_eq!(feature(&r, "reflection").map(|f| f.lines.clone()), Some(vec![1, 2]));
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs reflect");
+}
+
+#[test]
 fn a_byte_order_mark_and_every_line_break_are_read() {
     // U+2028 ends line 2.
     let r = check("t.jsx", b"\xEF\xBB\xBF#target acme\nvar a = 1;\xE2\x80\xA8#target b\r\n", None, &Limits::default());

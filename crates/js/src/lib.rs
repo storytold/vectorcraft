@@ -65,6 +65,7 @@ mod number;
 mod number_builtins;
 mod parser;
 mod realm;
+mod reflect;
 mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
@@ -82,10 +83,11 @@ pub use ast::{
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
-pub use host_classes::{HOST_REF_KEY, HostClass, HostMember, host_ref, host_ref_parts};
+pub use host_classes::{ArgInfo, HOST_REF_KEY, HostClass, HostMember, MemberInfo, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
 pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
+pub use reflect::MAX_REFLECTED_MEMBERS;
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -210,6 +212,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod reflect_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

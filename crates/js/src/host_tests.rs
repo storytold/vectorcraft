@@ -644,7 +644,7 @@ fn with_thing(r: &mut Realm, make: Option<HostFunction>) {
     let fetch: HostFunction = Rc::new(move |_| if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) });
     let id: HostFunction = Rc::new(|a| Ok(a.first().and_then(host_ref_parts).and_then(|(_, h)| h.first().copied()).map_or(Data::Null, Data::Number)));
     let members = vec![("fetch".to_string(), HostMember::Method(fetch)), ("id".to_string(), HostMember::Get(id))];
-    let class = HostClass { name: "Thing".into(), parent: None, members, index: None, construct: make };
+    let class = HostClass { name: "Thing".into(), parent: None, members, info: Vec::new(), index: None, construct: make };
     r.define_host_classes(vec![class], vec![("thing".into(), host_ref("Thing", &[1.0]))]).unwrap();
 }
 

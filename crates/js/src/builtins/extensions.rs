@@ -1,6 +1,6 @@
 //! The script extensions a host adds with [`crate::Realm::add_script_extensions`]: the global
-//! `localize`, the global `toSource` and `Object.prototype.toSource`, and the getters behind
-//! [`crate::ScriptItem`]. `localize` and `Object.prototype.toString` read the locale of
+//! `localize`, the global `toSource` and `Object.prototype.toSource`, `Object.prototype.reflect`
+//! ([`crate::reflect`]), and the getters behind [`crate::ScriptItem`]. `localize` and `Object.prototype.toString` read the locale of
 //! [`Localization`].
 //!
 //! `toSource` writes primitives, arrays and plain objects as the text of a JavaScript expression
@@ -96,7 +96,8 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     method(interp, global, "localize", localize, 1)?;
     method(interp, global, "toSource", to_source, 1)?;
     let object_proto = interp.intrinsics.object_proto;
-    method(interp, object_proto, "toSource", to_source_method, 0)
+    method(interp, object_proto, "toSource", to_source_method, 0)?;
+    crate::reflect::install(interp)
 }
 
 /// The text of the localization object `id` for the current locale: the string value of the first
