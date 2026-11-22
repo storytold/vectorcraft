@@ -477,3 +477,43 @@ fn hebrew_comes_back_in_logical_order() {
         assert_eq!(shown(&t[0]), shown(&original), "{text}");
     }
 }
+
+/// The text objects a PDF of `text` set in `face` imports as.
+fn imported_texts(face: &vectorcraft_text::FontFace, text: &str) -> Vec<String> {
+    let mut pdf = krilla::Document::new();
+    let mut page = pdf.start_page_with(PageSettings::from_wh(300.0, 200.0).unwrap());
+    let mut s = page.surface();
+    let font = Font::new(face.file_data().to_vec().into(), face.face_index()).unwrap();
+    s.draw_text(KPoint::from_xy(20.0, 50.0), font, 24.0, text, false, TextDirection::Auto);
+    s.finish();
+    page.finish();
+    let r = import_with_report(&pdf.finish().unwrap(), &ImportOptions::default()).unwrap();
+    texts(&r.document).iter().map(|t| t.plain_text()).collect()
+}
+
+#[test]
+fn arabic_ligatures_keep_their_letters_in_order() {
+    // A lam-alef ligature is one glyph whose text is lam then alef: it must not be turned round
+    // with the line it sits in (#6072).
+    let db = vectorcraft_text::FontDb::global();
+    let preferred = ["DejaVu Sans", "Arial", "Times New Roman", "Noto Sans Arabic", "Noto Naskh Arabic"].map(String::from);
+    // Whether `face` draws lam-alef as one glyph, the ligature the fix is about.
+    let ligates = |face: &vectorcraft_text::FontFace| {
+        let style = vectorcraft_doc::CharStyle { font_family: face.family.clone(), font_style: face.style.clone(), ..Default::default() };
+        let t = TextObject::point(kurbo::Point::ORIGIN, "لا", style);
+        vectorcraft_text::layout(db, &t).glyphs.len() == 1
+    };
+    // An installed Arabic font with a lam-alef ligature whose glyphs come back as live type.
+    let Some(face) = preferred
+        .iter()
+        .chain(&db.families())
+        .filter_map(|f| db.face(f, "Regular"))
+        .filter(|f| f.covers('\u{0644}') && f.covers('\u{0627}') && ligates(f))
+        .find(|f| !imported_texts(f, "بب").is_empty())
+    else {
+        return; // No such font on this host.
+    };
+    for text in ["لا", "بلال", "السلام عليكم", "لا إله إلا الله"] {
+        assert_eq!(imported_texts(&face, text), [text], "in {}", face.family);
+    }
+}

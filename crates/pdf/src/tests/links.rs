@@ -6,8 +6,8 @@ use std::sync::Arc;
 use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::object::{Array, Dict, Name};
 use vectorcraft_color::Color;
-use vectorcraft_doc::{Document, Node, NodeId};
-use vectorcraft_geom::{Rect, shapes};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::{add, doc, rect_node};
 use crate::*;
@@ -87,6 +87,27 @@ fn hidden_and_unprinted_objects_have_no_links_and_clipping_trims_them() {
         *printable = false;
     }
     assert_eq!(links(&export(&d, &PdfOptions::default()).unwrap()), vec![Vec::<(String, [f32; 4])>::new()]);
+}
+
+/// A linked symbol instance whose art has a live effect links over the art where the effect draws it.
+#[test]
+fn a_linked_instance_keeps_its_link_when_its_art_has_effects() {
+    let mut art = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), Color::rgb(0.0, 0.0, 1.0));
+    art.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    let mut d = doc(200.0, 100.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+    let mut instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY });
+    instance.edit_attrs(|a| a.url = "https://example.com/symbol".into());
+    add(&mut d, instance);
+    let pages = links(&export(&d, &PdfOptions::default()).unwrap());
+    let [(uri, rect)] = pages[0].as_slice() else { panic!("one link: {pages:?}") };
+    assert_eq!(uri, "https://example.com/symbol");
+    // x 110…120 after the 100 pt move; y up: 100 − 50 to 100 − 40.
+    assert!(near(*rect, [110.0, 50.0, 120.0, 60.0]), "{rect:?}");
 }
 
 #[test]

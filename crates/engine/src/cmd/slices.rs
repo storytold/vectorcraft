@@ -13,7 +13,7 @@ use vectorcraft_doc::{Appearance, CellAlign, CellVAlign, Document, Node, NodeKin
 use vectorcraft_geom::{Rect, shapes};
 
 use super::{
-    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
+    CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, f64_req, has_doc, has_selection, ids_param, index, number_or, object_param,
     switch_or, targets,
 };
 
@@ -204,7 +204,7 @@ impl Session {
 /// The slices a command acts on: `slices` (ids that must all be slices), else the selected ones.
 fn slice_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
-    match ids_param(p, "slices") {
+    match ids_param(p, "slices", cmd)? {
         Some(ids) => match ids.iter().find(|id| !st.doc.is_slice(**id)) {
             Some(id) => Err(bad(cmd, format!("{id} is not a slice"))),
             None => Ok(dedup(ids)),
@@ -290,7 +290,7 @@ pub(crate) fn options_json(o: &SliceOptions) -> Value {
 // ---------- Object → Slice ----------
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", "object.slice.make")? {
         Some(ids) => super::edit::outermost(&s.doc()?.doc, ids),
         None => super::edit::selected_roots(s)?,
     };
@@ -340,8 +340,9 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
 fn from_guides(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     let region = d.slice_clip().ok_or_else(|| EngineError::Other("Create from Guides: the document has no artboard".into()))?;
+    let guides = d.ruler_guides();
     let cuts = |vertical: bool, lo: f64, hi: f64| -> Vec<f64> {
-        let mut v: Vec<f64> = d.guides.iter().filter(|g| g.vertical == vertical && g.pos > lo && g.pos < hi).map(|g| g.pos).collect();
+        let mut v: Vec<f64> = guides.iter().filter(|g| g.vertical == vertical && g.pos > lo && g.pos < hi).map(|g| g.pos).collect();
         v.extend([lo, hi]);
         v.sort_by(f64::total_cmp);
         v.dedup();
@@ -379,7 +380,8 @@ fn from_selection(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = selected(s)?;
-    let (dx, dy) = (f64_or(p, "dx", 10.0), f64_or(p, "dy", 10.0));
+    let dx = number_or(p, "dx", 10.0, "object.slice.duplicate")?;
+    let dy = number_or(p, "dy", 10.0, "object.slice.duplicate")?;
     let ids = s.edit("Duplicate Slice", |d, sel| {
         let mut out = vec![];
         for id in &targets {
@@ -678,7 +680,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_rect(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.slice.setRect";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing `id`"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
     let r = rect_param(p, C)?;
     let d = &s.doc()?.doc;
     if d.slice(id).is_none() {
@@ -708,7 +710,9 @@ fn move_slices(s: &mut Session, p: &Value) -> Result<Value> {
                 None => {
                     if let Some(n) = d.node_mut(*id) {
                         n.transform(vectorcraft_geom::Affine::translate(v), vectorcraft_doc::Scaling::default());
+                        super::object::keep_pixel_aligned(n, vectorcraft_doc::Scaling::default());
                     }
+                    super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
                 }
             }
         }
@@ -732,8 +736,9 @@ fn delete(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn select(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = slice_targets(s, &json!({ "slices": p.get("slices").cloned().unwrap_or(json!([])) }), "object.slice.select")?;
-    let toggle = bool_or(p, "toggle", false);
+    let slices = p.get("slices").filter(|v| !v.is_null()).cloned().unwrap_or(json!([]));
+    let ids = slice_targets(s, &json!({ "slices": slices }), "object.slice.select")?;
+    let toggle = switch_or(p, "toggle", false, "object.slice.select")?;
     s.select(|_, sel| {
         let mut now = if toggle { sel.slices.clone() } else { vec![] };
         for id in ids {

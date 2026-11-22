@@ -300,7 +300,7 @@ fn arrowheads_add_ink_at_the_ends() {
     // Every arrowhead kind renders.
     for a in Arrowhead::ALL {
         let mut b = DocBuilder::new(100.0, 100.0);
-        b.path(line(), stroke_only(2.0, |s| s.end_arrow = Some(a)), |_| {});
+        b.path(line(), stroke_only(2.0, |s| s.end_arrow = Some(a.clone())), |_| {});
         assert!(render(&b.build()).ink() > plain.ink(), "{a:?}");
     }
 }
@@ -473,7 +473,7 @@ fn invisible_and_hidden_nodes_are_not_drawn() {
     let mut b = DocBuilder::new(100.0, 100.0);
     let id = b.rect(Rect::new(0.0, 0.0, 100.0, 100.0), Color::BLACK, |_| {});
     let d = b.build();
-    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), hidden: vec![id], ..Default::default() };
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), hidden: [id].into(), ..Default::default() };
     let r = vectorcraft_render::Renderer::new().render(&d, 100, 100, vectorcraft_geom::Affine::IDENTITY, &opts);
     assert_eq!(Image::from_rendered(&r).ink(), 0);
 }

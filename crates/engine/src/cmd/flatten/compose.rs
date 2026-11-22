@@ -53,6 +53,11 @@ enum Body {
 pub(super) struct Builder {
     pub(super) shapes: Vec<po::Shape>,
     pub(super) kinds: Vec<Kind>,
+    /// Per shape, the clipping path of the innermost clip group it is in (a clipping path's own
+    /// entry is the clip group around its group).
+    pub(super) clip_of: Vec<Option<usize>>,
+    /// The clipping path of the clip group being built.
+    pub(super) clip: Option<usize>,
     /// Building a CMYK document's art.
     pub(super) cmyk: bool,
 }
@@ -72,7 +77,22 @@ impl Builder {
         path.bounds()?;
         self.shapes.push(po::Shape::new(path, rule, self.shapes.len() as u64));
         self.kinds.push(kind);
+        self.clip_of.push(self.clip);
         Some(self.shapes.len() - 1)
+    }
+
+    /// Whether a clip group hides shape `shape` in the region `sources` cover (ascending): the
+    /// region lies outside one of the clipping paths around the shape.
+    pub(super) fn hidden(&self, shape: usize, sources: &[usize]) -> bool {
+        let around = |shape: usize| self.clip_of.get(shape).copied().flatten();
+        let mut clip = around(shape);
+        while let Some(c) = clip {
+            if sources.binary_search(&c).is_err() {
+                return true;
+            }
+            clip = around(c);
+        }
+        false
     }
 
     pub(super) fn elem(&mut self, n: &Node) -> Option<Elem> {
@@ -93,7 +113,11 @@ impl Builder {
                     } else {
                         (None, &children[..])
                     };
-                    Body::Group { clip, children: rest.iter().filter_map(|c| self.elem(c)).collect() }
+                    let outer = self.clip;
+                    self.clip = clip.or(outer);
+                    let children = rest.iter().filter_map(|c| self.elem(c)).collect();
+                    self.clip = outer;
+                    Body::Group { clip, children }
                 }
                 NodeKind::Path { guide: true, .. } => return None,
                 NodeKind::Path { .. } | NodeKind::Compound { .. } => {
@@ -117,7 +141,11 @@ impl Builder {
                     if fills.is_empty() { Body::Complex } else { Body::Fills { shape: self.shape(path, rule, Kind::Vector)?, fills } }
                 }
                 NodeKind::Image(im) => {
-                    let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                    // A distorted image's frame joins its corners.
+                    let frame = match n.image_frame().filter(|_| n.is_distorted_image()) {
+                        Some(bp) => PathData::from_bezpath(&bp),
+                        None => shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf),
+                    };
                     self.shape(frame, FillRule::NonZero, Kind::Other)?;
                     Body::Complex
                 }
