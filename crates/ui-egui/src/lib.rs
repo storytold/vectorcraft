@@ -358,12 +358,14 @@ impl VectorcraftApp {
             || self.dialogs().is_some_and(|d| d.with(|h| h.shows_modal()))
     }
 
-    /// The background job service: the one the window's host installed, or jobs that run in line
-    /// before the app has a window (unit tests, the CLI).
+    /// The background job service: the one the window's host installed, the app's own host (the one
+    /// it gives the window) until the window has installed it, or jobs that run in line before the
+    /// app has a window (unit tests, the CLI).
     pub(crate) fn jobs(&self) -> Arc<dyn craft::host::Jobs> {
-        match self.ui_ctx.as_ref().and_then(Host::try_of_ctx) {
-            Some(host) => host.jobs_shared().clone(),
-            None => Arc::new(craft::host::InlineJobs),
+        match (&self.ui_ctx, self.ui_ctx.as_ref().and_then(Host::try_of_ctx)) {
+            (_, Some(host)) => host.jobs_shared().clone(),
+            (Some(_), None) => self.host.jobs_shared().clone(),
+            (None, None) => Arc::new(craft::host::InlineJobs),
         }
     }
 }
