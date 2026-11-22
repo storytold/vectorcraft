@@ -121,10 +121,20 @@ fn rail(r: &mut Recolor, name: &str, at: f32) {
     click(r, pos2(rail.left() + at * rail.width(), rail.center().y));
 }
 
-/// The wheel's centre and radius.
+/// The wheel's centre and radius. The disc sits inside its control's rect by the theme's padding, so the radius is
+/// read from where the wheel draws a marker: its distance from the centre over the share of the radius its colour
+/// stands for (saturation, or brightness on the hue and brightness wheel).
 fn wheel(r: &Recolor) -> (Pos2, f32) {
     let wheel = r.by_label("Color wheel").or_else(|| r.by_label("Segmented color wheel")).expect("the wheel").rect;
-    (wheel.center(), wheel.width().min(wheel.height()) / 2.0)
+    let c = wheel.center();
+    let bright = field(r, "wheelAxes") == json!("hueBrightness");
+    let radius = field(r, "rows").as_array().into_iter().flatten().find_map(|row| {
+        let hsb = vectorcraft_engine::cmd::color_value(&row["to"])?.to_hsb();
+        let share = if bright { hsb[2] } else { hsb[1] };
+        let at = r.by_label(&hex_of(&row["to"]))?.rect.center();
+        (share > 0.2).then(|| at.distance(c) / share)
+    });
+    (c, radius.unwrap_or(wheel.width().min(wheel.height()) / 2.0))
 }
 
 /// Where the wheel draws hue `hue` at saturation `s` (or brightness, on the hue and brightness wheel).
@@ -385,8 +395,8 @@ fn the_tint_slider_sets_a_spot_rows_tint() {
     art(&mut app, &["cmyk 0 100 0 0"]);
     let mut r = assign(app, json!({"library": lib}));
     put(&mut r, "__sel", json!([0]));
-    assert!(has(&r, "T"), "a spot row shows Tint");
-    rail(&mut r, "T", 0.4);
+    assert!(has(&r, "Tint"), "a spot row shows Tint");
+    rail(&mut r, "Tint", 0.4);
     assert_eq!(field(&r, "rows")[0]["tint"], json!(40.0));
     tap(&mut r, "OK");
     match first_fill(&r.app()) {
@@ -483,7 +493,7 @@ fn a_process_swatch_before_a_spot_one_of_its_color_shows_no_tint() {
     art(&mut app, &["cmyk 0 100 0 0"]);
     let mut r = assign(app, json!({"library": lib}));
     put(&mut r, "__sel", json!([0]));
-    assert!(!has(&r, "T"), "no Tint for a process swatch");
+    assert!(!has(&r, "Tint"), "no Tint for a process swatch");
     assert!(has(&r, "C"), "the CMYK sliders");
 }
 
@@ -497,7 +507,7 @@ fn a_spot_row_of_a_group_without_art_shows_no_tint() {
     let mut r = assign(app, json!({"group": "Mix", "library": lib}));
     assert_ne!(field(&r, "__art"), json!(true), "no art");
     put(&mut r, "__sel", json!([0]));
-    assert!(!has(&r, "T"), "no Tint without art");
+    assert!(!has(&r, "Tint"), "no Tint without art");
     assert!(has(&r, "C"), "the CMYK sliders");
 }
 
@@ -510,7 +520,7 @@ fn a_spot_color_finer_than_the_rows_key_shows_tint() {
     art(&mut app, &["cmyk 0 12 0 0"]);
     let mut r = assign(app, json!({"library": lib}));
     put(&mut r, "__sel", json!([0]));
-    assert!(has(&r, "T"), "the spot row shows Tint");
+    assert!(has(&r, "Tint"), "the spot row shows Tint");
 }
 
 /// Reset with the preview on reads the art's own colors again and discards a slider edit: OK then

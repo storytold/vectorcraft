@@ -202,8 +202,8 @@ const COMPS: &str = "__comps";
 /// request.
 const SETTABLE: [&str; 3] = ["__sel", "__seed", SAVE_GROUP];
 /// The fields `ui.dialog.set` can set while they are unset: Preview, the Color Groups buttons, the Edit tab's slider
-/// mode, display, wheel tool and wheel axes.
-const UNSET_FIELDS: [&str; 6] = ["preview", GROUP_ACTION, "sliderMode", "display", WHEEL_TOOL, WHEEL_AXES];
+/// mode, display, wheel tool and wheel axes, and the Global Adjust, which opens unset (0%).
+const UNSET_FIELDS: [&str; 7] = ["preview", GROUP_ACTION, "sliderMode", "display", WHEEL_TOOL, WHEEL_AXES, "globalAdjust"];
 
 /// The columns of the Assign tab's rows: the current colors, the arrow that excludes the row, the
 /// new color and its hex.
@@ -311,7 +311,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         "preserveWhite": kept("preserveWhite", true), "preserveBlack": kept("preserveBlack", true),
         "preserveGrays": kept("preserveGrays", false), "limitTo": limit,
         "group": group, "groupName": if new_group { Some(NEW_GROUP) } else { group }, "tab": "assign", "rule": Harmony::Complementary.id(), "linked": true,
-        "preview": true, "globalAdjust": zero_adjust(), THEME_PICKER: false, THEME_PICKS: [], WEIGHTS: null, FIND: false, "__art": art,
+        "preview": true, THEME_PICKER: false, THEME_PICKS: [], WEIGHTS: null, FIND: false, "__art": art,
         "__assign": assign, "__newGroup": new_group, GROUP_STORAGE: true, GROUP_LOADED: group,
     });
     let mut d = Fields::new(fields);

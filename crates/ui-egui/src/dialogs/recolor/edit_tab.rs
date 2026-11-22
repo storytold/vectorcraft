@@ -30,9 +30,10 @@ use vectorcraft_color::harmony::Harmony;
 
 use super::prominent::{ProminentBar, ProminentPart, weights};
 use super::{
-    COMPS, DRAG, Feed, Fields, MAX_PICKS, MenuChoice, RecolorDialog, SAVE_GROUP, SHADE_COLS, SHADE_ROWS, SliderTarget, THEME_PICKER, THEME_PICKS,
-    WEIGHTS, WHEEL_AXES, WHEEL_TOOL, active_rows, add_color, added_color, apply_rule, base_row, can_set_base, choose, edit_slider_row, from_colors,
-    in_group, keeps_rows, mode_menu, move_bar, move_color, prominent_parts, remove_color, removed, set_base, shade_at, sliders, to_color, wheel_axes,
+    COMPS, DRAG, Feed, Fields, GLOBAL, MAX_PICKS, MenuChoice, RecolorDialog, SAVE_GROUP, SHADE_COLS, SHADE_ROWS, SliderTarget, THEME_PICKER,
+    THEME_PICKS, WEIGHTS, WHEEL_AXES, WHEEL_TOOL, active_rows, add_color, added_color, apply_rule, base_row, can_set_base, choose, edit_slider_row,
+    from_colors, global_sliders, in_group, keeps_rows, mode_menu, move_bar, move_color, prominent_parts, remove_color, removed, set_base, shade_at,
+    sliders, to_color, wheel_axes,
 };
 use crate::VectorcraftApp;
 use crate::panels::{c32, srgba};
@@ -137,7 +138,9 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
                         }
                     }
                     _ => {
-                        if let Some(&i) = out.pressed.and_then(|k| active.get(k)) {
+                        // A press with a tool on selects nothing either; the press of a click can be reported after
+                        // the click, when the rows it counted from have changed.
+                        if let Some(&i) = out.pressed.filter(|_| !matches!(tool.as_str(), ADD | REMOVE)).and_then(|k| active.get(k)) {
                             d.fields.insert("__sel".into(), json!([i]));
                         }
                         changed |= apply_edits(d, rows, &active, out.edits, linked);
@@ -154,7 +157,13 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
     let active = active_rows(rows);
     let base = base_row(rows, &active);
     let sel = edit_slider_row(d, rows, &active, base);
-    changed |= sliders(ui, feed, d, rows, sel);
+    if d.str("sliderMode") == GLOBAL {
+        // Global Adjust changes every new colour at once; its rails show the selected colour.
+        let sample = sel.and_then(|s| rows.get(s)).and_then(to_color).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
+        global_sliders(ui, d, sample);
+    } else {
+        changed |= sliders(ui, feed, d, rows, sel);
+    }
     changed |= chips(ui, d, rows, &active, base, sel);
     (changed, pick)
 }
@@ -245,7 +254,8 @@ fn tool_row(ui: &mut Ui, d: &mut Fields, display: &'static str, axes: DiscRadius
                 .copied();
         }
         let tip = if bright { tl!("Show saturation and hue on wheel") } else { tl!("Show brightness and hue on wheel") };
-        flipped = ToggleButton::new(tl!("Show brightness and hue on wheel"), Bind::given(on_wheel && bright))
+        // The button is named for what a click shows next, as its tooltip says.
+        flipped = ToggleButton::new(tip.clone(), Bind::given(on_wheel && bright))
             .icon(IconId::new("sun"))
             .icon_only()
             .tooltip(tip)
