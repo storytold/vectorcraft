@@ -286,7 +286,8 @@ fn transparency_dither_keeps_about_as_many_pixels_as_their_opacity() {
             // A fixed palette and the nearest entries make the same pixels transparent.
             let fixed = quantize_to(&px, w, h, &alpha_dither(d, 100), &[[255, 0, 0], [0, 0, 255]]);
             assert_eq!(opaque_share(&fixed), share, "{d:?} at {alpha}, fixed palette");
-            let near = nearest_entries(&px, w, &alpha_dither(d, 100), &[[255, 0, 0]]);
+            let mut near = vec![];
+            nearest_entries(&px, w, &alpha_dither(d, 100), &[[255, 0, 0]], |n| near.push(n));
             let mask = clear_mask(&px, w, &alpha_dither(d, 100));
             assert_eq!(near.iter().map(Option::is_none).collect::<Vec<_>>(), mask, "{d:?} at {alpha}");
         }
