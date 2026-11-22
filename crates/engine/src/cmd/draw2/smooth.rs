@@ -686,7 +686,7 @@ const ROUGHNESS_SEGMENT_PIECES: usize = 1024;
 const ROUGHNESS_PIECES: usize = 1 << 18;
 
 /// How rough the subpath `sp` is, measured along the lines between points on each curved segment
-/// no more than `step` apart along its control polygon (at least 4 and at most
+/// about `step` apart along its control polygon (at least 4 and at most
 /// [`ROUGHNESS_SEGMENT_PIECES`] pieces a segment, fewer on a subpath of very many segments): how
 /// much it turns along its length in radians, from the direction each segment leaves its first anchor
 /// along to the one it arrives at its last anchor along, with each turn at an anchor counted twice;
