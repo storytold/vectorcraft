@@ -108,7 +108,7 @@ fn arrow_align_state(st: Option<&StrokeLayer>) -> (ArrowAlign, bool) {
 fn dash_state(dash: Option<&Dash>, last: Option<(Vec<f64>, bool)>) -> (Vec<f64>, bool) {
     match dash {
         Some(d) => (d.pattern.clone(), d.align_corners),
-        None => last.unwrap_or((vec![12.0], true)),
+        None => last.unwrap_or((vec![12.0, 12.0], true)),
     }
 }
 
@@ -294,6 +294,9 @@ static LADDERS: LazyLock<Vec<(Unit, Ladder)>> = LazyLock::new(|| {
         .collect()
 });
 
+/// The stops a blank weight steps through, in points: it steps from the first.
+static BLANK_WEIGHT_STOPS: [f64; 2] = [0.25, 0.5];
+
 /// The weight field (Stroke panel, Control bar, Properties panel): Units > Stroke, the presets list, step arrows and
 /// scrubbing by its label, blank when mixed. A plain step stops at each preset (0.52 pt goes down to 0.5 pt, not to
 /// 0 pt); Shift or Page steps the grid by ten.
@@ -304,8 +307,16 @@ pub(crate) fn weight_number(app: &VectorcraftApp, weight: Option<f64>) -> Number
     let ladder = LADDERS.iter().find(|(u, _)| *u == unit).or_else(|| LADDERS.iter().find(|(u, _)| *u == Unit::Points)).map(|(_, l)| l);
     let field =
         NumberField::length(tl!("Weight"), Bind::given(weight), lengths).range(0.0..=1000.0).step_arrows(StepArrows::Leading).scrub_by_label();
+    // The stepper steps the number the field shows; the ladders are in points.
+    let in_points = move |stops: &'static [f64], blank: bool| {
+        let step = crate::fields::stops_stepper(1.0, stops, move |pt| unit.format(pt));
+        move |from: f64, direction: i32, scale: f64| unit.from_pt(step(if blank { stops[0] } else { unit.to_pt(from) }, direction, scale))
+    };
     match ladder {
-        Some(l) => field.presets(&l.rows).stepper(crate::fields::stops_stepper(1.0, &l.stops, move |pt| unit.format(pt))),
+        // A blank weight (the selected objects differ) steps in points from 0.25 pt, whatever the unit's ladder: up
+        // gives 0.5 pt, down 0 pt (#5349).
+        Some(l) if weight.is_none() => field.presets(&l.rows).stepper(in_points(&BLANK_WEIGHT_STOPS, true)),
+        Some(l) => field.presets(&l.rows).stepper(in_points(&l.stops, false)),
         None => field,
     }
 }

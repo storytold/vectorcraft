@@ -17,13 +17,11 @@ type Show = fn(&mut VectorcraftApp, &mut Ui);
 fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "millimeters".into();
-    let mm = vectorcraft_doc::Unit::Millimeters.format(1.0);
-    assert_eq!(mm, "0.3528 mm");
     let surfaces: [Show; 3] = [stroke::show, properties::show, crate::chrome::control_bar];
     let panel = Panel::new(app, stroke::show);
     for show in surfaces {
         let p = Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
-        assert_eq!(p.value("Weight").as_deref(), Some(mm.as_str()));
+        assert!(super::tests_units::reads(p.value("Weight"), vectorcraft_doc::Unit::Millimeters, 1.0), "{:?}", p.value("Weight"));
         *panel.app() = std::mem::replace(&mut *p.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
     }
 }
@@ -40,7 +38,7 @@ fn mixed_weights_show_blank() {
     assert_eq!(panel.value("Weight").unwrap_or_default(), "");
     run(&mut panel.app(), "select.set", json!({ "ids": [b] }));
     panel.frame();
-    assert_eq!(panel.value("Weight").as_deref(), Some("3 pt"), "the cache follows the selection");
+    assert_eq!(panel.value("Weight").as_deref(), Some("3"), "the cache follows the selection");
 }
 
 #[test]

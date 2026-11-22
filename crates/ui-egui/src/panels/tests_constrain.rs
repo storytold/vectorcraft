@@ -52,11 +52,11 @@ fn enter_modifiers_set_copy_and_proportional() {
     // (case, field, typed, modifiers, anchors selected, a copy is made, selection size, angle of the last path)
     let rows = [
         ("Alt+Enter on W", "Width", "200", Modifiers::ALT, false, true, Some((200.0, 50.0)), 0.0),
-        ("Alt+Enter on X", "X", "150", Modifiers::ALT, false, true, Some((100.0, 50.0)), 0.0),
-        ("Alt+Enter on Rotate", "Rotate", "45", Modifiers::ALT, false, true, None, 45.0),
-        ("Alt+Enter on X, anchors", "X", "150", Modifiers::ALT, true, false, Some((140.0, 50.0)), 0.0),
+        ("Alt+Enter on X", "X position", "150", Modifiers::ALT, false, true, Some((100.0, 50.0)), 0.0),
+        ("Alt+Enter on Rotate", "Angle", "45", Modifiers::ALT, false, true, None, 45.0),
+        ("Alt+Enter on X, anchors", "X position", "150", Modifiers::ALT, true, false, Some((140.0, 50.0)), 0.0),
         ("Cmd+Enter on W", "Width", "200", Modifiers::COMMAND, false, false, Some((200.0, 100.0)), 0.0),
-        ("Cmd+Enter on X", "X", "200", Modifiers::COMMAND, false, false, Some((100.0, 50.0)), 0.0),
+        ("Cmd+Enter on X", "X position", "200", Modifiers::COMMAND, false, false, Some((100.0, 50.0)), 0.0),
     ];
     for (case, field, text, mods, anchors, copy, want_size, angle) in rows {
         let mut app = rect_app();
