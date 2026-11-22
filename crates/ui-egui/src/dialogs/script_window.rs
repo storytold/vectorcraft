@@ -81,6 +81,7 @@ fn shown(app: &VectorcraftApp, ctx: &egui::Context) -> Option<(Arc<ScriptUiDialo
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAction {
     let Some((w, waiting)) = shown(app, ui.ctx()) else { return DialogAction::None };
+    move_drafts(&w, d);
     let mut events = Vec::new();
     let (width, height) = w.size();
     let size = egui::vec2(width.max(1.0), height.max(1.0));
@@ -123,11 +124,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
         events.retain(|e| !matches!(e, UiEvent::Click(_)));
         app.status(e);
     }
+    note_draft_places(&w, d);
     let mut queue: Vec<Value> = match d.fields.remove(QUEUE_KEY) {
         Some(Value::Array(queue)) => queue,
         _ => Vec::new(),
     };
-    queue.extend(events.iter().map(event_fields));
+    queue.extend(events.iter().map(|e| event_fields(&w, e)));
     if !waiting || queue.is_empty() {
         if !queue.is_empty() {
             d.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
@@ -138,10 +140,46 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
     if !queue.is_empty() {
         d.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
     }
-    if let Value::Object(fields) = next {
+    if let Value::Object(mut fields) = next {
+        // The control the event was given to, found again in the dialog as the handlers that ran
+        // since left it.
+        let at = fields.remove(PLACE_KEY).and_then(|p| serde_json::from_value::<Vec<usize>>(p).ok()).and_then(|p| control_at(&w, &p));
+        if let Some(i) = at {
+            fields.insert("control".into(), json!(i));
+        }
         d.fields.extend(fields);
     }
     DialogAction::Confirm
+}
+
+/// The field of a queued event that holds where its control sits in the dialog ([`place_of`]).
+const PLACE_KEY: &str = "place";
+
+/// Where control `i` sits in the dialog `w`: its position among its container's controls, after
+/// its container's own position, and so on up to the dialog. `add` puts a new control after the
+/// others in its container, so a handler that adds controls leaves the place of every other one
+/// as it was, while its index in the dialog's list of elements can move.
+fn place_of(w: &ScriptUiDialog, mut i: usize) -> Vec<usize> {
+    let mut place = Vec::new();
+    while i > 0 {
+        let Some(n) = w.nodes.get(i) else { return Vec::new() };
+        place.push(w.nodes.iter().take(i).skip(1).filter(|m| m.parent == n.parent).count());
+        if n.parent >= i {
+            return Vec::new();
+        }
+        i = n.parent;
+    }
+    place.reverse();
+    place
+}
+
+/// The index of the control at `place` ([`place_of`]) in the dialog `w`, if it has one.
+fn control_at(w: &ScriptUiDialog, place: &[usize]) -> Option<usize> {
+    let mut at = 0;
+    for &k in place {
+        at = w.nodes.iter().enumerate().skip(1).filter(|(_, n)| n.parent == at).nth(k)?.0;
+    }
+    (at > 0).then_some(at)
 }
 
 /// The field that holds the events the person gave in one frame that the script has not had yet;
@@ -205,6 +243,37 @@ pub(crate) fn keep_refused_texts(w: &ScriptUiDialog, d: &mut Dialog, events: &mu
 /// The field that holds an edit field's text while it is typed.
 fn draft_key(i: usize) -> String {
     format!("text{i}")
+}
+
+/// The field that holds, for each text typed in an edit field, where the field sat ([`place_of`])
+/// in the dialog the text was typed in.
+const DRAFT_PLACES_KEY: &str = "draftPlaces";
+
+/// Records where the field of each typed text sits in the dialog `w`, for [`move_drafts`].
+fn note_draft_places(w: &ScriptUiDialog, d: &mut Dialog) {
+    let places: serde_json::Map<String, Value> =
+        (1..w.nodes.len()).map(|i| (i, draft_key(i))).filter(|(_, k)| d.fields.contains_key(k)).map(|(i, k)| (k, json!(place_of(w, i)))).collect();
+    if places.is_empty() {
+        d.fields.remove(DRAFT_PLACES_KEY);
+    } else {
+        d.fields.insert(DRAFT_PLACES_KEY.into(), Value::Object(places));
+    }
+}
+
+/// Puts each typed text that [`note_draft_places`] recorded under the index its field has in the
+/// dialog `w`, which moves when a handler adds controls before the field. A text whose field the
+/// dialog no longer has is dropped.
+fn move_drafts(w: &ScriptUiDialog, d: &mut Dialog) {
+    let Some(Value::Object(places)) = d.fields.remove(DRAFT_PLACES_KEY) else { return };
+    let mut moved = Vec::new();
+    for (key, place) in places {
+        let Some(text) = d.fields.remove(&key) else { continue };
+        let at = serde_json::from_value::<Vec<usize>>(place).ok().and_then(|p| control_at(w, &p));
+        if let Some(i) = at.filter(|i| w.nodes.get(*i).is_some_and(|n| n.kind == UiKind::EditText)) {
+            moved.push((draft_key(i), text));
+        }
+    }
+    d.fields.extend(moved);
 }
 
 /// The text of the visible static text just before control `i` in its container: the visible prompt
@@ -385,16 +454,21 @@ fn edit(ui: &mut egui::Ui, d: &mut Dialog, rect: egui::Rect, (i, n, prompt): (us
     None
 }
 
-/// `event` as the dialog's `event`, `control` and `value` fields.
-fn event_fields(event: &UiEvent) -> Value {
+/// `event` in the dialog `w` as the dialog's `event`, `control` and `value` fields, and for a
+/// click or a change, the control's place ([`PLACE_KEY`]).
+fn event_fields(w: &ScriptUiDialog, event: &UiEvent) -> Value {
     let (name, control, value) = match event {
-        UiEvent::Click(i) => ("click", json!(i), Value::Null),
-        UiEvent::Change(i, UiValue::Text(t)) => ("change", json!(i), json!(t)),
-        UiEvent::Change(i, UiValue::Number(v)) => ("change", json!(i), json!(v)),
-        UiEvent::Change(i, UiValue::Index(k)) => ("change", json!(i), json!(k)),
-        UiEvent::Close => ("close", Value::Null, Value::Null),
+        UiEvent::Click(i) => ("click", Some(*i), Value::Null),
+        UiEvent::Change(i, UiValue::Text(t)) => ("change", Some(*i), json!(t)),
+        UiEvent::Change(i, UiValue::Number(v)) => ("change", Some(*i), json!(v)),
+        UiEvent::Change(i, UiValue::Index(k)) => ("change", Some(*i), json!(k)),
+        UiEvent::Close => ("close", None, Value::Null),
     };
-    json!({"event": name, "control": control, "value": value})
+    let mut fields = json!({"event": name, "control": control, "value": value});
+    if let Some(i) = control {
+        fields[PLACE_KEY] = json!(place_of(w, i));
+    }
+    fields
 }
 
 /// The event in the dialog's fields, for the dialog `w`.
@@ -432,10 +506,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     vectorcraft_engine::script::scriptui::check_event(&w, event.clone())?;
     let mut events = vec![event];
     let open = app.ui.dialog.as_mut().filter(|open| open.kind == KIND);
-    if let Some(open) = open
-        && matches!(events[0], UiEvent::Click(_) | UiEvent::Close)
-    {
-        commit_drafts(&w, open, &mut events)?;
+    if let Some(open) = open {
+        move_drafts(&w, open);
+        let committed = if matches!(events[0], UiEvent::Click(_) | UiEvent::Close) { commit_drafts(&w, open, &mut events) } else { Ok(()) };
+        note_draft_places(&w, open);
+        committed?;
     }
     let mut events = events.into_iter();
     if let Some(first) = events.next() {
@@ -445,7 +520,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         for k in ["event", "control", "value"] {
             open.fields.remove(k);
         }
-        let later: Vec<Value> = events.map(|e| event_fields(&e)).collect();
+        let later: Vec<Value> = events.map(|e| event_fields(&w, &e)).collect();
         if !later.is_empty() {
             let mut queue = match open.fields.remove(QUEUE_KEY) {
                 Some(Value::Array(queue)) => queue,
@@ -466,7 +541,10 @@ pub(crate) fn cancel(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), Str
     let Some(w) = app.session.script_window() else { return Ok(()) };
     let click = w.cancel_element.map(UiEvent::Click).filter(|e| vectorcraft_engine::script::scriptui::check_event(&w, e.clone()).is_ok());
     let mut events = vec![click.unwrap_or(UiEvent::Close)];
-    commit_drafts(&w, d, &mut events)?;
+    move_drafts(&w, d);
+    let committed = commit_drafts(&w, d, &mut events);
+    note_draft_places(&w, d);
+    committed?;
     let mut queue: Vec<Value> = match d.fields.remove(QUEUE_KEY) {
         Some(Value::Array(queue)) => queue,
         _ => Vec::new(),
@@ -477,7 +555,7 @@ pub(crate) fn cancel(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), Str
     {
         let _ = app.session.script_window_answer(first);
     }
-    queue.extend(events.map(|e| event_fields(&e)));
+    queue.extend(events.map(|e| event_fields(&w, &e)));
     if !queue.is_empty() {
         d.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
     }

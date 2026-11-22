@@ -2946,7 +2946,10 @@ which ends the run as `script.stop` does. It stays open while one of its handler
 returns. Enter outside a field clicks the default button, also with the keyboard focus on a slider or another
 control that Enter does not click. Escape clicks the
 cancel button, or closes the dialog when it has none. Quitting while it waits, or while one of its handlers runs,
-asks whether to stop the script, and Cancel shows it again with the events it has not given the script yet.
+asks whether to stop the script, and Cancel shows it again with the events it has not given the script yet. When a
+handler takes the run past the growth limit, the question to continue opens over the dialog, and Continue shows the
+dialog again with those events and the text typed in its fields. An event that waits for the script goes to the control
+it was given to, and a typed text stays in its field, also after a handler adds controls before that one.
 `ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name or
 its text) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
 script the text still typed in the dialog's fields. When one of those texts is longer than 16 KiB, the script gets
