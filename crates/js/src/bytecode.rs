@@ -211,6 +211,9 @@ pub(crate) enum Op {
     IterStep(u32),
     /// `record x₁…xₙ` → `record x₁…xₙ value`: the next value, `undefined` once it is done.
     IterValue(u32),
+    /// `record` → `record`: steps the iterator without reading the result's `value`, for a hole
+    /// in an array pattern.
+    IterSkip,
     /// `record x₁…xₙ` → `record x₁…xₙ array`: the values left, in an array.
     IterRest(u32),
     /// `record` → nothing: closes the iterator unless it is done (IteratorClose).
@@ -404,7 +407,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
-        Op::ToStr | Op::GetIterator | Op::RequireObjectCoercible => e(1, 1),
+        Op::ToStr | Op::GetIterator | Op::IterSkip | Op::RequireObjectCoercible => e(1, 1),
         Op::IterStep(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
         Op::IterValue(n) | Op::IterRest(n) => e(n.checked_add(1).ok_or("operand too large")?, n.checked_add(2).ok_or("operand too large")?),
         Op::PatternGet(n) => e(n.checked_add(2).ok_or("operand too large")?, n.checked_add(3).ok_or("operand too large")?),

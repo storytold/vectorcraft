@@ -120,6 +120,12 @@ impl Interp {
     /// IteratorStep and IteratorValue (sections 7.4.5 and 7.4.4): the next value, or `None` when
     /// the iterator is done. The record stays done when the step throws.
     pub(crate) fn iter_next(&mut self, rec: ObjId) -> JsResult<Option<Value>> {
+        self.iter_step(rec, true)
+    }
+
+    /// IteratorStep (section 7.4.5), and IteratorValue when `read_value` is set: the next value
+    /// (`undefined` when it is not read), or `None` when the iterator is done.
+    fn iter_step(&mut self, rec: ObjId, read_value: bool) -> JsResult<Option<Value>> {
         let r = self.record(rec)?;
         if r.done {
             return Ok(None);
@@ -137,6 +143,9 @@ impl Interp {
         let value = self.rooted(std::slice::from_ref(&result), |i| {
             if i.get_value(&result, &key("done"))?.truthy() {
                 return Ok(None);
+            }
+            if !read_value {
+                return Ok(Some(Value::Undefined));
             }
             i.get_value(&result, &key("value")).map(Some)
         })?;
@@ -195,6 +204,13 @@ impl Interp {
         let rec = self.record_at(under as usize)?;
         let v = self.iter_next(rec)?.unwrap_or(Value::Undefined);
         self.push(v)
+    }
+
+    /// `record` → `record`: one step of the iterator, for a hole in an array pattern
+    /// (section 13.3.3.6, Elision), which does not read the result's `value`.
+    pub(crate) fn op_iter_skip(&mut self) -> JsResult<()> {
+        let rec = self.record_at(0)?;
+        self.iter_step(rec, false).map(drop)
     }
 
     /// `record x₁…xₙ` → `record x₁…xₙ array`: an array of the values left.

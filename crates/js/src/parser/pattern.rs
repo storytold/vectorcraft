@@ -271,6 +271,7 @@ impl Parser<'_> {
     /// initializer in it are no longer errors.
     pub(super) fn check_assignment_pattern(&mut self, pattern: ExprId) -> Result<()> {
         let mut work = vec![pattern];
+        let mut gaps = Vec::new();
         while let Some(id) = work.pop() {
             for target in self.pattern_targets(id)? {
                 if self.is_pattern(target) {
@@ -279,8 +280,9 @@ impl Parser<'_> {
                     self.check_simple_target(target, "invalid destructuring target")?;
                 }
             }
-            self.take_covers(id);
+            self.cover_gaps(id, &mut gaps);
         }
+        self.take_covers(pattern, gaps);
         Ok(())
     }
 
@@ -288,6 +290,7 @@ impl Parser<'_> {
     /// is a binding pattern: each target is a name written bare or a nested pattern.
     fn check_binding_pattern(&mut self, pattern: ExprId) -> Result<()> {
         let mut work = vec![pattern];
+        let mut gaps = Vec::new();
         while let Some(id) = work.pop() {
             for target in self.pattern_targets(id)? {
                 match self.ast.expr(target) {
@@ -296,17 +299,16 @@ impl Parser<'_> {
                     _ => return Err(self.error_at_offset(self.ast.expr_span(target).start, "invalid arrow function parameters")),
                 }
             }
-            self.take_covers(id);
+            self.cover_gaps(id, &mut gaps);
         }
+        self.take_covers(pattern, gaps);
         Ok(())
     }
 
-    /// Forgets the shorthand properties with an initializer that the object pattern `id` holds
-    /// itself: each one's `=` lies between its target and its default value. One inside a default
-    /// value or a computed name stays an error.
-    fn take_covers(&mut self, id: ExprId) {
+    /// Adds to `gaps` where the `=` of each shorthand property with an initializer that the
+    /// object pattern `id` holds itself lies: between the property's target and its default value.
+    fn cover_gaps(&self, id: ExprId, gaps: &mut Vec<(u32, u32)>) {
         let Some(Expr::Object(properties)) = self.ast.expr(id) else { return };
-        let mut gaps = Vec::new();
         for p in properties {
             if let PropertyValue::Init(v) = p.value
                 && let Some(Expr::Assign { op: None, target, value }) = self.ast.expr(v)
@@ -314,7 +316,33 @@ impl Parser<'_> {
                 gaps.push((self.ast.expr_span(*target).end, self.ast.expr_span(*value).start));
             }
         }
-        self.cover_inits.retain(|&at| !gaps.iter().any(|&(from, to)| from <= at && at < to));
+    }
+
+    /// Forgets the shorthand properties with an initializer whose `=` lies in one of `gaps`, the
+    /// gaps of the object patterns in `pattern`. One inside a default value or a computed name
+    /// stays an error. The positions in `cover_inits` rise, so only those inside `pattern` are
+    /// read, in one pass with the gaps sorted.
+    fn take_covers(&mut self, pattern: ExprId, mut gaps: Vec<(u32, u32)>) {
+        if gaps.is_empty() {
+            return;
+        }
+        gaps.sort_unstable();
+        let span = self.ast.expr_span(pattern);
+        let lo = self.cover_inits.partition_point(|&at| at < span.start);
+        let hi = self.cover_inits.partition_point(|&at| at < span.end).max(lo);
+        let mut gaps = gaps.into_iter().peekable();
+        let kept: Vec<u32> = self
+            .cover_inits
+            .get(lo..hi)
+            .unwrap_or_default()
+            .iter()
+            .copied()
+            .filter(|&at| {
+                while gaps.next_if(|&(_, to)| to <= at).is_some() {}
+                !gaps.peek().is_some_and(|&(from, to)| from <= at && at < to)
+            })
+            .collect();
+        drop(self.cover_inits.splice(lo..hi, kept));
     }
 
     /// An arrow function's parameter from its parenthesized head: `None` when `item` is neither a

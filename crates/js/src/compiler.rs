@@ -65,8 +65,9 @@ enum Ctx {
     /// The protected part (and catch clause) of a `try` with a `finally` block.
     Finally { try_depth: u32, env_depth: u32, entry: Label, exits: Vec<Exit> },
     /// The body of a `for-of` loop, whose Iterator Record is the top value at `depth`: a jump
-    /// out of the loop closes the iterator.
-    Iterator { depth: u32, env_depth: u32 },
+    /// out of the loop goes to the label `exits` holds for it, after the loop's protected range,
+    /// where the iterator is closed and the jump goes on.
+    Iterator { depth: u32, env_depth: u32, exits: Vec<(Exit, Label)> },
 }
 
 struct FnCompiler<'a> {
@@ -335,7 +336,14 @@ impl<'a> FnCompiler<'a> {
                         work.extend(f.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                     if let Some(h) = handler {
-                        let s = enter(self.lexical_names(&h.body));
+                        // A `var` cannot redeclare a destructured catch parameter's names
+                        // (ECMA-262 11th edition section B.3.5), so a block function of that name
+                        // in the body is not also made a `var` (section B.3.3).
+                        let mut names = self.lexical_names(&h.body);
+                        if matches!(h.param, Binding::Pattern(_)) {
+                            names.extend(self.bound_keys(&h.param));
+                        }
+                        let s = enter(names);
                         work.extend(h.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                     let s = enter(self.lexical_names(block));
@@ -976,8 +984,9 @@ impl<'a> FnCompiler<'a> {
                     self.route_through_finally(i, exit, try_depth, env_depth, entry)?;
                     break;
                 }
-                Some(&Ctx::Iterator { depth, env_depth }) => {
-                    // The loop is left: its iterator is closed, a `return` keeping its value.
+                Some(&Ctx::Iterator { depth, env_depth, .. }) => {
+                    // The loop is left: the jump goes past the loop's exception handler, where its
+                    // iterator is closed, a `return` keeping its value (see `for_of`).
                     if exit == Exit::Return {
                         let Some(under) = self.depth.checked_sub(1 + depth) else { return internal("stack below a for-of loop") };
                         if under > 0 {
@@ -988,8 +997,9 @@ impl<'a> FnCompiler<'a> {
                     } else {
                         self.unwind_to(depth, env_depth)?;
                     }
-                    self.emit(Op::IterClose);
-                    self.env_depth = env_depth;
+                    let label = self.iterator_exit(i, exit)?;
+                    self.jump(Op::Jump, label);
+                    break;
                 }
                 None => return internal("context out of range"),
             }
@@ -997,6 +1007,19 @@ impl<'a> FnCompiler<'a> {
         self.depth = saved;
         self.env_depth = saved_env;
         Ok(())
+    }
+
+    /// The label where the `for-of` loop of the iterator context `ctx` closes its iterator for
+    /// `exit` and goes on with it.
+    fn iterator_exit(&mut self, ctx: usize, exit: Exit) -> CResult<Label> {
+        let Some(Ctx::Iterator { exits, .. }) = self.contexts.get(ctx) else { return internal("not an iterator context") };
+        if let Some(&(_, label)) = exits.iter().find(|(e, _)| *e == exit) {
+            return Ok(label);
+        }
+        let label = self.new_label();
+        let Some(Ctx::Iterator { exits, .. }) = self.contexts.get_mut(ctx) else { return internal("not an iterator context") };
+        exits.push((exit, label));
+        Ok(label)
     }
 
     fn route_through_finally(&mut self, ctx: usize, exit: Exit, try_depth: u32, env_depth: u32, entry: Label) -> CResult<()> {

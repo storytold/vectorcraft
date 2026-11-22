@@ -2623,8 +2623,9 @@ declarations scoped to their block, arrow functions, template literals and tagge
 parameters, spread in array literals, calls and `new`, `for`-`of` loops, array and object destructuring in `var`,
 `let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
 and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
-`for`-`of` and array patterns use the iterator protocol, and a loop or pattern left early calls the iterator's
-`return` method. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
+`for`-`of` and array patterns use the iterator protocol. A loop or pattern left early, by `break`, `return`, a
+`continue` to an outer loop or an exception, calls the iterator's `return` method when it has one; an iterator whose
+`next()` throws or says it is done is not closed. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
 (`{ a, ...rest }`, ECMAScript 2018) are syntax errors. In an engine that `#targetengine` keeps and a `.jsx` script
 started, which has no `Symbol`, spread, `for`-`of` and array patterns read arrays, `arguments` objects and strings
 (by code point), by index, and throw a `TypeError` for any other value; that rule is VectorCraft's own. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
@@ -2657,11 +2658,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
-A `.jsx` script and a `source` string do not have `Symbol` or the iterators of arrays, strings and `arguments`
-objects: `typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries` are not defined. A `.js`
-script that starts a new engine has them, through the JavaScript engine's ECMAScript 2015 mode (`Options::es2015` in
-`vectorcraft-js`), as `docs/target-app-parity.md` describes; an engine that `#targetengine` keeps has them only when a
-`.js` script started it.
+The first run in an engine decides which built-ins the engine has, and each run's script decides which syntax that
+run reads. A `.jsx` script or a `source` string that starts a new engine has no `Symbol` and no iterators of arrays,
+strings and `arguments` objects: `typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries`
+are not defined. A `.js` script that starts a new engine has them, through the JavaScript engine's ECMAScript 2015 mode
+(`Options::es2015` in `vectorcraft-js`), as `docs/target-app-parity.md` describes. An engine that `#targetengine` keeps
+has them only when a `.js` script started it, and then a later `.jsx` run in it has them too while it reads ES5.1 only.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and

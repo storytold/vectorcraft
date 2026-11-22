@@ -326,8 +326,9 @@ fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
     assert_eq!(modern["log"], json!([2]), "{modern}");
     let legacy = s.execute("script.run", &path(&write("third.jsx", "#targetengine kept\nvc.log(k2);\nconst c = 1;")));
     assert!(legacy.unwrap_err().to_string().contains("SyntaxError"));
-    let legacy = s.execute("script.run", &path(&write("fourth.jsx", "#targetengine kept\nvc.log(k2 + kept);"))).unwrap();
-    assert_eq!(legacy["log"], json!([3]), "{legacy}");
+    let fourth = "#targetengine kept\nvc.log(k2 + kept);\ntry { eval('let x = 1'); } catch (e) { vc.log(e.name); }";
+    let legacy = s.execute("script.run", &path(&write("fourth.jsx", fourth))).unwrap();
+    assert_eq!(legacy["log"], json!([3, "SyntaxError"]), "{legacy}");
     // `for`-`of` and destructuring, in a new engine and in one a `.jsx` script made.
     let loops = "var s = 0;\nfor (const [a, { b = 1 }] of [[1, {}], [2, { b: 3 }]]) s += a + b;\nvar { p, q: [r] } = { p: 4, q: [5] };\nvc.log(s);\nvc.log(p + r);\nvc.log(typeof Symbol);";
     let r = s.execute("script.run", &path(&write("loops.js", loops))).unwrap();

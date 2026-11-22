@@ -757,7 +757,8 @@ impl<'s> Parser<'s> {
                 if starts_with_let {
                     return Err(self.error_at_offset(self.ast.expr_span(expr).start, "a for-of loop's left-hand side cannot start with 'let'"));
                 }
-                // `for (async of …` is left to async arrow functions (ECMA-262 2017 section 13.7).
+                // `for (async of …` is a SyntaxError, as ECMAScript 2021 has it (ECMA-262 12th
+                // edition section 14.7.5, the lookahead restriction on `async of`).
                 if async_of {
                     return Err(self.error_at_offset(self.ast.expr_span(expr).start, "a for-of loop's left-hand side cannot be 'async'"));
                 }

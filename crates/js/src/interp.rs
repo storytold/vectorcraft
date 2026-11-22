@@ -1105,6 +1105,7 @@ impl Interp {
             Op::GetIterator => self.op_get_iterator(),
             Op::IterStep(t) => self.op_iter_step(t),
             Op::IterValue(n) => self.op_iter_value(n),
+            Op::IterSkip => self.op_iter_skip(),
             Op::IterRest(n) => self.op_iter_rest(n),
             Op::IterClose => self.op_iter_close(),
             Op::IterCloseThrow => self.op_iter_close_throw(),
@@ -1168,13 +1169,13 @@ impl Interp {
         self.passing = v.clone();
         self.throw_site = None;
         self.thrown_mark = None;
+        let slot = self.stack.len();
         if let Value::Object(o) = v
-            && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
+            && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, s)| id == o && s == slot)
         {
             self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
             self.finally_marks.truncate(i);
         }
-        let slot = self.stack.len();
         if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
             self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
             self.finally_sites.truncate(i);

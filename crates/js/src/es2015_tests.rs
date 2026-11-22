@@ -553,6 +553,21 @@ fn closing_an_iterator_reports_a_bad_return_unless_an_exception_is_on_its_way() 
                     return: function () { throw new SyntaxError('r'); } }; ";
     throws(&format!("{throwing} for (var x of t) break;"), "SyntaxError");
     truth(&format!("{throwing} var r; try {{ for (var x of t) throw 5; }} catch (e) {{ r = e; }} r === 5"));
+    // A close that throws when `return` or a jump to an outer statement leaves the loop reaches
+    // the enclosing catch clause. Inner iterators are closed first, and a throwing inner close
+    // still closes the outer iterators.
+    let caught = |src: &str| format!("{COUNTED}{throwing} var r; try {{ {src} }} catch (e) {{ r = e; }} r instanceof SyntaxError");
+    for src in [
+        "(function () { for (var x of t) return 1; })();",
+        "(function () { for (var x of [1]) for (var y of t) return 1; })();",
+        "outer: for (var i = 0; i < 2; i++) for (var x of t) continue outer;",
+        "outer: for (var x of t) for (var y of [1, 2]) break outer;",
+        "outer: for (var x of t) for (var y of it(5)) for (var z of it(5)) break outer;",
+    ] {
+        truth(&format!("{} && closed === {}", caught(src), src.matches("it(5)").count()));
+    }
+    truth(&format!("{} && closed === 1", caught("outer: for (var x of it(5)) for (var y of t) break outer;")));
+    truth(&format!("{} && closed === 1", caught("(function () { for (var x of it(5)) for (var y of t) return 1; })();")));
 }
 
 #[test]
@@ -566,6 +581,10 @@ fn array_patterns_step_the_iterator_and_close_it() {
     counted("var [a, ...r] = it(2); closed === 0 && r.join() === '2'");
     counted("var [] = it(5); closed === 1");
     counted("var [a, b] = it(1); closed === 0 && b === undefined");
+    // A hole steps the iterator without reading the result's `value`.
+    let bad_value = "var t = it(5); t.next = function () { return { done: false, get value() { throw 4; } }; };";
+    counted(&format!("{bad_value} var [,] = t; closed === 1"));
+    counted(&format!("{bad_value} [,] = t; for (let [,] of [t]); closed === 2"));
     counted("try { var [a = (function () { throw 1; })()] = it(0); } catch (e) {} closed === 0");
     counted("try { var [a, b = (function () { throw 1; })()] = [1]; } catch (e) {} closed === 0");
     counted("var o = { set p(v) { throw 2; } }; try { [o.p] = it(5); } catch (e) {} closed === 1");
@@ -584,6 +603,14 @@ fn object_patterns_read_properties_by_name() {
         "var order = []; var o = { get a() { order.push('a'); return 1; }, get b() { order.push('b'); return 2; } }; \
            var { b, a } = o; order.join() === 'b,a'",
     );
+    // A `var` pattern's names are resolved before their values are read (sections 13.3.3.6
+    // and 13.3.3.7).
+    truth(
+        "var o = { x: 0 }; var t = { [Symbol.iterator]: function () { return this; }, \
+         next: function () { delete o.x; return { value: 1, done: false }; }, return: function () { return {}; } }; \
+         with (o) { var [x] = t; } o.x === 1 && x === undefined",
+    );
+    truth("var o = { y: 0 }; with (o) { var { a: y } = { get a() { delete o.y; return 2; } }; } o.y === 2 && y === undefined");
 }
 
 #[test]
@@ -607,6 +634,11 @@ fn destructured_parameters_and_catch_clauses() {
     truth("function f({ a }) { var a; return a; } f({ a: 6 }) === 6");
     truth("var r; try { throw { m: 'x', d: [1] }; } catch ({ m, d: [n] }) { r = m + n; } r === 'x1'");
     truth("var r; try { throw [1, 2]; } catch ([a, b]) { r = function () { return a + b; }; } r() === 3");
+    // A function in a block is not also made a `var` when that `var` would clash with a
+    // destructured catch parameter (ECMA-262 11th edition sections B.3.3 and B.3.5).
+    truth("function g() { try { throw [1]; } catch ([f]) { { function f() {} } } return typeof f; } g() === 'undefined'");
+    truth("try { throw {}; } catch ({ h }) { { function h() {} } } typeof h === 'undefined'");
+    truth("function g() { try { throw 1; } catch (f) { { function f() {} } } return typeof f; } g() === 'function'");
     throws("function f({ a }) {} f();", "TypeError");
     throws("try { throw null; } catch ({ a }) {}", "TypeError");
     throws("function f([a], b = a) {} f([]); f(undefined);", "TypeError");
@@ -688,6 +720,19 @@ fn bad_patterns_are_syntax_errors() {
     truth("var f = ({ a = 1 }, [{ b = 2 }] = [{}]) => a + b; f({}) === 3");
     // `of` stays a name.
     truth("var of = [1]; var n = 0; for (var x of of) n += x; n === 1");
+}
+
+#[test]
+fn large_patterns_take_their_shorthand_defaults() {
+    let defaults = (0..20_000).map(|i| format!("a{i} = {i}")).collect::<Vec<_>>().join(", ");
+    truth(&format!("({{ {defaults} }} = {{}}); a0 === 0 && a19999 === 19999"));
+    truth(&format!("var f = ({{ {defaults} }}) => a19999; f({{}}) === 19999"));
+    // A shorthand default inside a default value or a computed name is still an error.
+    syntax(&format!("({{ {defaults}, b = {{ c = 1 }} }} = {{}});"));
+    syntax(&format!("({{ [{{ c = 1 }}]: b, {defaults} }} = {{}});"));
+    let small = "[{ b = 1 }] = [{}]; ".repeat(20_000);
+    truth(&format!("var b; {small} b === 1"));
+    syntax(&format!("var b; {small} ({{ c = 1 }});"));
 }
 
 #[test]

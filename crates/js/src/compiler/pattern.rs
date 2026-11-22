@@ -7,7 +7,7 @@
 //! reads each property by name. A target that is not a pattern is written as an assignment
 //! (`[a.b] = …`), a `var` or a `let`, `const`, parameter or catch binding, as [`Mode`] says.
 
-use super::{CResult, Ctx, FnCompiler, internal, key_of, len_u32};
+use super::{CResult, Ctx, Exit, FnCompiler, internal, key_of, len_u32};
 use crate::ast::{Binding, Expr, ExprId, ForInTarget, LexKind, Property, PropertyKey, PropertyValue, StmtId};
 use crate::bytecode::{BlockScope, CodeKind, Op};
 use crate::heap::Key;
@@ -75,8 +75,17 @@ impl FnCompiler<'_> {
     }
 
     /// Pushes what writing to `target` needs before its value, and gives how many values that is:
-    /// an assignment's object and key; nothing for a binding or a pattern.
+    /// an assignment's object and key; a `var` name's reference, resolved before the value is
+    /// read (sections 13.3.3.6 and 13.3.3.7); nothing for another binding or a pattern.
     fn target_refs(&mut self, target: ExprId, mode: Mode) -> CResult<u32> {
+        if mode == Mode::Var
+            && let Some(Expr::Ident(name)) = self.ast.expr(target)
+        {
+            self.at(self.ast.expr_span(target).start);
+            let n = self.var_name(name);
+            self.emit(Op::RefVar(n));
+            return Ok(1);
+        }
         if mode != Mode::Assign || self.is_pattern(target) {
             return Ok(0);
         }
@@ -102,7 +111,7 @@ impl FnCompiler<'_> {
                 if mode == Mode::Lexical {
                     self.emit(Op::InitVar(n));
                 } else {
-                    self.emit(Op::SetVar(n));
+                    self.emit(Op::PutRef(n));
                     self.emit(Op::Pop);
                 }
             }
@@ -132,8 +141,7 @@ impl FnCompiler<'_> {
         let start = self.pc();
         for element in elements {
             let Some(element) = *element else {
-                self.emit(Op::IterValue(0));
-                self.emit(Op::Pop);
+                self.emit(Op::IterSkip);
                 continue;
             };
             if let Some(Expr::Spread(target)) = self.ast.expr(element) {
@@ -226,7 +234,7 @@ impl FnCompiler<'_> {
         let done = self.new_label();
         let close_throw = self.new_label();
         let after = self.new_label();
-        self.contexts.push(Ctx::Iterator { depth: record, env_depth: outer_env });
+        self.contexts.push(Ctx::Iterator { depth: record, env_depth: outer_env, exits: Vec::new() });
         self.bind(head);
         self.jump(Op::IterStep, done);
         let start = self.pc();
@@ -244,7 +252,10 @@ impl FnCompiler<'_> {
             self.contexts.pop();
             r
         });
-        self.contexts.pop();
+        let exits = match self.contexts.pop() {
+            Some(Ctx::Iterator { exits, .. }) => exits,
+            _ => return internal("for-of context missing"),
+        };
         r?;
         if scope.is_some() {
             self.emit(Op::PopEnv);
@@ -260,6 +271,18 @@ impl FnCompiler<'_> {
         self.depth = record;
         self.emit(Op::IterClose);
         self.jump(Op::Jump, after);
+        // `return` and jumps to outer statements close the iterator here, outside the range the
+        // loop's handler covers, so an exception from `return` goes to the handlers around the
+        // loop; the jump then goes on through them.
+        for (exit, label) in exits {
+            self.bind(label);
+            self.depth = if exit == Exit::Return { record + 1 } else { record };
+            self.env_depth = outer_env;
+            self.emit(Op::IterClose);
+            self.emit_exit(exit)?;
+        }
+        self.depth = record;
+        self.env_depth = outer_env;
         self.bind(done);
         self.depth = record;
         self.emit(Op::Pop);
