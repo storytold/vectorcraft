@@ -2054,6 +2054,27 @@ fn recolor_with_preset_asks_for_a_library_first() {
     dialogs::cancel(&mut app);
 }
 
+/// Recolor Artwork opened on a colour group over its own preview of that group starts on the
+/// group's colours as the rolled-back preview leaves them.
+#[test]
+fn reopening_a_group_over_its_preview_starts_on_the_groups_colours() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let before = group_keys(&app, "Brights");
+    app.run("ui.recolorDialog", json!({"group": "Brights"})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    let mut rows = field(&app, "rows");
+    rows[1]["to"] = json!("rgb 1 2 3");
+    set(&mut app, "rows", rows);
+    dialog_frame(&mut app, &ctx);
+    assert_ne!(group_keys(&app, "Brights"), before, "the preview changes the group");
+    app.run("ui.recolorDialog", json!({"group": "Brights"})).unwrap();
+    assert_eq!(group_keys(&app, "Brights"), before, "the preview is rolled back");
+    assert_eq!(field(&app, "__assign"), json!(before), "the new dialog starts on the group's colours");
+    dialogs::cancel(&mut app);
+}
+
 /// Every paint under `v`, in order: its color, the swatch it is linked to and its tint.
 fn paints_in(v: &Value, out: &mut Vec<(Color, Option<String>, f64)>) {
     match v {

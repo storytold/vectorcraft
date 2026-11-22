@@ -200,6 +200,23 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
     let group = p.get("group").and_then(Value::as_str);
+    if let Some(g) = group
+        && !st.doc.swatch_groups.iter().any(|x| x.name == g)
+    {
+        return Err(format!("no colour group `{g}`"));
+    }
+    // Colours alone (no art, no group) become a new colour group.
+    let new_group = !art && group.is_none();
+    if new_group && !matches!(p.get("colors"), Some(Value::Array(cs)) if cs.iter().any(|c| color_value(c).is_some())) {
+        return Err("select artwork (or a colour group) to recolor".into());
+    }
+    let limit = library_param(app, p)?;
+    // A dialog this one replaces ends as Cancel ends it, its preview rolled back, before the
+    // group's colours are read.
+    if app.ui.dialog.is_some() {
+        super::cancel(app);
+    }
+    let st = app.session.active().ok_or("no document open")?;
     let group_colors: Option<Vec<Color>> = match group {
         Some(g) => {
             let g = st.doc.swatch_groups.iter().find(|x| x.name == g).ok_or_else(|| format!("no colour group `{g}`"))?;
@@ -212,17 +229,11 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (None, Some(Value::Array(cs))) => cs.iter().filter_map(color_value).map(|c| key(&c)).collect(),
         _ => vec![],
     };
-    // Colours alone (no art, no group) become a new colour group.
-    let new_group = !art && group.is_none();
-    if new_group && assign.is_empty() {
-        return Err("select artwork (or a colour group) to recolor".into());
-    }
     let count = match p.get("colors").and_then(Value::as_u64) {
         Some(n) => json!(n.max(1)),
         None if !assign.is_empty() => json!(assign.len()),
         None => Value::Null,
     };
-    let limit = library_param(app, p)?;
     // Without art the rows are the group's colours, as they are.
     let mut start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
     number_slots(&mut start);
@@ -242,10 +253,6 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     snap(app, &d, &mut rs);
     d.fields.insert("rows".into(), Value::Array(rs));
     // Undo Changes has nothing to undo on a new opening.
-    // A dialog this one replaces ends as Cancel ends it, its preview rolled back.
-    if app.ui.dialog.is_some() {
-        super::cancel(app);
-    }
     app.ui.recolor_history = History { opened: Some(snapshot(&d)), ..History::default() };
     app.ui.dialog = Some(d);
     Ok(Value::Null)
