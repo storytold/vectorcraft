@@ -24,7 +24,8 @@
 //! `putXMP` keeps the packet and `closeFile` writes it.
 //!
 //! VectorCraft's own rules: only a `.xmp` file opened with `OPEN_FOR_UPDATE` takes `putXMP`;
-//! `closeFile` always replaces the file through a temporary one when the folder may hold one; an
+//! `closeFile` always replaces the file through a temporary one when the folder may hold one, and
+//! with `CLOSE_UPDATE_SAFELY` it writes no other way, throwing and keeping the packet instead; an
 //! `XMPFile` is open only in the run that opened it, and a packet it kept and did not write is
 //! dropped when the run ends. A member the reference lists that is not built yet, and a flag,
 //! format or option not handled yet, throws an error that says so.
@@ -125,6 +126,7 @@ fn xmp_error(i: &mut Interp, what: &str, e: XmpError, name: &str) -> Abrupt {
         XmpError::BadName => i.throw(ErrorType::Error, &format!("{what}: {name} is not a valid property name")),
         XmpError::BadText => i.throw(ErrorType::Error, &format!("{what}: the text holds a character XML does not allow")),
         XmpError::NotYet => not_handled(i, what, &name),
+        XmpError::Heap => Abrupt::Limit(crate::LimitKind::Heap),
     }
 }
 
@@ -313,7 +315,8 @@ fn parse_packet(i: &mut Interp, what: &str, text: &str) -> JsResult<Meta> {
     // Reading copies the realm's namespaces.
     let copied = registry(i)?.bytes();
     spend(i, text.len().saturating_add(copied))?;
-    let r = xmp::parse(text, registry(i)?);
+    let budget = i.limits.heap_bytes;
+    let r = xmp::parse_within(text, registry(i)?, budget);
     r.map_err(|e| xmp_error(i, what, e, ""))
 }
 
@@ -340,8 +343,18 @@ fn namespace(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
     Ok(uri)
 }
 
-/// The namespace and path arguments at `at`: the namespace, the property name and its step.
-fn target(i: &mut Interp, args: &[Value], at: usize, what: &str) -> JsResult<(String, String, Step)> {
+/// The namespace and path arguments at `at`, each converted once.
+struct Target {
+    ns: String,
+    /// The property name and its step.
+    name: String,
+    step: Step,
+    /// The path as given.
+    path: String,
+}
+
+/// The namespace and path arguments at `at`.
+fn target(i: &mut Interp, args: &[Value], at: usize, what: &str) -> JsResult<Target> {
     let ns = namespace(i, &arg(args, at), what)?;
     let path = text(i, &arg(args, at + 1))?;
     // A packet holds no property in the RDF or XML namespace.
@@ -350,7 +363,7 @@ fn target(i: &mut Interp, args: &[Value], at: usize, what: &str) -> JsResult<(St
     }
     let r = xmp::parse_path(&path, &ns, registry(i)?);
     match r {
-        Ok((name, step)) => Ok((ns, name, step)),
+        Ok((name, step)) => Ok(Target { ns, name, step, path }),
         Err(e) => Err(xmp_error(i, what, e, &path)),
     }
 }
@@ -395,12 +408,11 @@ fn property_to_string(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsRe
 fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.getProperty";
     let o = this_meta(i, &this, what)?;
-    let (ns, name, step) = target(i, args, 0, what)?;
+    let Target { ns, name, step, path } = target(i, args, 0, what)?;
     if !matches!(arg(args, 2), Value::Undefined) {
         let v = text(i, &arg(args, 2))?;
         return Err(not_handled(i, what, &v));
     }
-    let path = text(i, &arg(args, 1))?;
     let found = {
         let m = meta_of(i, o)?;
         m.find(&ns, &name).map(|at| m.props[at].value.clone())
@@ -421,7 +433,7 @@ fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
 fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.setProperty";
     let o = this_meta(i, &this, what)?;
-    let (ns, name, step) = target(i, args, 0, what)?;
+    let Target { ns, name, step, .. } = target(i, args, 0, what)?;
     let options = flags(i, &arg(args, 3), what)?;
     only(i, options, xmp::PROP_IS_ARRAY | xmp::ARRAY_IS_ORDERED | xmp::ARRAY_IS_ALTERNATIVE, what)?;
     if !matches!(arg(args, 4), Value::Undefined) {
@@ -449,7 +461,7 @@ fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
             Some(true) => Ok(Value::Undefined),
             Some(false) => Err(not_array(i, what, &name)),
             None => {
-                let prop = xmp::Prop { ns, name, value: xmp::Value::Array { form: Form::from_options(options), items: Vec::new() } };
+                let prop = xmp::Prop { ns: ns.into(), name, value: xmp::Value::Array { form: Form::from_options(options), items: Vec::new() } };
                 change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop)).map(|()| Value::Undefined)
             }
         };
@@ -471,7 +483,7 @@ fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
             })
         }
         None => {
-            let prop = xmp::Prop { ns, name, value: new };
+            let prop = xmp::Prop { ns: ns.into(), name, value: new };
             change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop))
         }
     }
@@ -481,7 +493,7 @@ fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
 fn delete_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.deleteProperty";
     let o = this_meta(i, &this, what)?;
-    let (ns, name, step) = target(i, args, 0, what)?;
+    let Target { ns, name, step, .. } = target(i, args, 0, what)?;
     match step {
         Step::Whole => {
             let at = meta_of(i, o)?.find(&ns, &name);
@@ -497,7 +509,7 @@ fn delete_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRe
 fn does_property_exist(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.doesPropertyExist";
     let o = this_meta(i, &this, what)?;
-    let (ns, name, step) = target(i, args, 0, what)?;
+    let Target { ns, name, step, .. } = target(i, args, 0, what)?;
     let m = meta_of(i, o)?;
     let exists = match (m.find(&ns, &name).map(|at| &m.props[at].value), step) {
         (None, _) => false,
@@ -525,20 +537,19 @@ fn array_items(i: &mut Interp, o: ObjId, ns: &str, name: &str, what: &str) -> Js
     }
 }
 
-/// The array name argument at `at` after the namespace: a whole property.
-fn array_target(i: &mut Interp, args: &[Value], what: &str) -> JsResult<(String, String)> {
-    let (ns, name, step) = target(i, args, 0, what)?;
-    if step != Step::Whole {
-        let path = text(i, &arg(args, 1))?;
-        return Err(not_handled(i, what, &path));
+/// The namespace and array name arguments: a whole property.
+fn array_target(i: &mut Interp, args: &[Value], what: &str) -> JsResult<Target> {
+    let t = target(i, args, 0, what)?;
+    if t.step != Step::Whole {
+        return Err(not_handled(i, what, &t.path));
     }
-    Ok((ns, name))
+    Ok(t)
 }
 
 fn count_array_items(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.countArrayItems";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let n = array_items(i, o, &ns, &name, what)?.map_or(0, |(_, _, len)| len);
     Ok(Value::Number(n as f64))
 }
@@ -546,7 +557,7 @@ fn count_array_items(i: &mut Interp, this: Value, args: &[Value], _: bool) -> Js
 fn get_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.getArrayItem";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, path, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
     let Some((at, _, len)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
     let Some(p) = position(index, len) else { return Ok(Value::Undefined) };
@@ -555,14 +566,14 @@ fn get_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
         _ => None,
     };
     let Some(item) = item else { return Ok(Value::Undefined) };
-    let path = format!("{}[{}]", text(i, &arg(args, 1))?, p + 1);
+    let path = format!("{path}[{}]", p + 1);
     property(i, &ns, &path, Some(&item.text), 0, item.lang.as_deref().unwrap_or(""))
 }
 
 fn does_array_item_exist(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.doesArrayItemExist";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
     let len = array_items(i, o, &ns, &name, what)?.map_or(0, |(_, _, len)| len);
     Ok(Value::Bool(position(index, len).is_some()))
@@ -597,11 +608,8 @@ fn insert_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: Option<i64
         })?,
         None => {
             let Some(form) = form else { return Err(not_array(i, what, name)) };
-            let prop = xmp::Prop {
-                ns: ns.to_string(),
-                name: name.to_string(),
-                value: xmp::Value::Array { form, items: vec![Item { text: value, lang: None }] },
-            };
+            let prop =
+                xmp::Prop { ns: ns.into(), name: name.to_string(), value: xmp::Value::Array { form, items: vec![Item { text: value, lang: None }] } };
             change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop))?;
         }
     }
@@ -655,7 +663,7 @@ fn delete_item(i: &mut Interp, o: ObjId, ns: &str, name: &str, index: i64, what:
 fn append_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.appendArrayItem";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     // `itemOptions` may be left out: a string or `null` third argument is the item's value.
     let (value, array_options) = match arg(args, 2) {
         Value::Number(_) => {
@@ -674,7 +682,7 @@ fn append_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> Js
 fn insert_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.insertArrayItem";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
     let value = xml_text(i, &arg(args, 3), what)?;
     item_options(i, &arg(args, 4), what)?;
@@ -684,7 +692,7 @@ fn insert_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> Js
 fn set_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.setArrayItem";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
     let value = xml_text(i, &arg(args, 3), what)?;
     item_options(i, &arg(args, 4), what)?;
@@ -694,7 +702,7 @@ fn set_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
 fn delete_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.deleteArrayItem";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let index = item_index(i, &arg(args, 2), what)?;
     delete_item(i, o, &ns, &name, index, what, false)
 }
@@ -733,10 +741,10 @@ fn lang(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
 }
 
 /// Is the property at `at` of `o` a language alternative: an `rdf:Alt` whose items, if it has any,
-/// all have a language?
+/// all have a language? An item with `xml:lang=""` has none.
 fn is_alt_text(i: &Interp, o: ObjId, at: usize) -> JsResult<bool> {
     Ok(match meta_of(i, o)?.props.get(at).map(|p| &p.value) {
-        Some(xmp::Value::Array { form: Form::Alt, items }) => items.iter().all(|item| item.lang.is_some()),
+        Some(xmp::Value::Array { form: Form::Alt, items }) => items.iter().all(Item::has_lang),
         _ => false,
     })
 }
@@ -744,7 +752,7 @@ fn is_alt_text(i: &Interp, o: ObjId, at: usize) -> JsResult<bool> {
 fn get_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.getLocalizedText";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let generic = lang(i, &arg(args, 2), what)?;
     let specific = lang(i, &arg(args, 3), what)?;
     let Some((at, _, _)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
@@ -764,7 +772,7 @@ fn get_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
 fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.setLocalizedText";
     let o = this_meta(i, &this, what)?;
-    let (ns, name) = array_target(i, args, what)?;
+    let Target { ns, name, .. } = array_target(i, args, what)?;
     let generic = lang(i, &arg(args, 2), what)?;
     let specific = lang(i, &arg(args, 3), what)?;
     if specific.is_empty() || specific.contains(char::is_whitespace) {
@@ -776,7 +784,7 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let (at, new) = match found {
         Some((at, _, _)) if !is_alt_text(i, o, at)? => return Err(not_alt_text(i, what, &name)),
         Some((at, _, _)) => (Some(at), None),
-        None => (None, Some(xmp::Prop { ns, name, value: xmp::Value::Array { form: Form::Alt, items: Vec::new() } })),
+        None => (None, Some(xmp::Prop { ns: ns.into(), name, value: xmp::Value::Array { form: Form::Alt, items: Vec::new() } })),
     };
     // An item and the `x-default` item change, or every item with the text of the `x-default` one.
     let changed = match at.and_then(|at| meta_of(i, o).ok()?.props.get(at)).map(|p| &p.value) {
@@ -806,6 +814,13 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
 /// is added with the value when there is none, and follows a change to an item that had the same
 /// text; a change to the `x-default` item also changes the items that had its text.
 fn set_lang(items: &mut Vec<Item>, generic: &str, specific: &str, value: String) {
+    // An `x-default` item a packet gave later moves to the front; the others keep their order.
+    if let Some(d) = items.iter().position(|i| same_lang(i.lang.as_deref(), "x-default"))
+        && d > 0
+    {
+        let item = items.remove(d);
+        items.insert(0, item);
+    }
     let default = items.iter().position(|i| same_lang(i.lang.as_deref(), "x-default"));
     if specific.eq_ignore_ascii_case("x-default") {
         match default.and_then(|d| items.get(d)).map(|i| i.text.clone()) {
@@ -1094,7 +1109,7 @@ fn packet_arg(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
     // registers nothing.
     let mut scratch = registry(i)?.clone();
     spend(i, s.len().saturating_add(2 * scratch.bytes()))?;
-    xmp::parse(&s, &mut scratch).map_err(|e| xmp_error(i, what, e, ""))?;
+    xmp::parse_within(&s, &mut scratch, i.limits.heap_bytes).map_err(|e| xmp_error(i, what, e, ""))?;
     Ok(s)
 }
 
@@ -1106,7 +1121,11 @@ fn can_put_xmp(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
     }
     let packet = packet_arg(i, &arg(args, 0), what);
     match packet {
-        Ok(_) => Ok(Value::Bool(true)),
+        // Converting the argument runs script code, which may have closed the file.
+        Ok(_) => {
+            let o = open_file(i, &this, what)?;
+            Ok(Value::Bool(can_update(i, o)?))
+        }
         Err(Abrupt::Throw(_)) => Ok(Value::Bool(false)),
         Err(e) => Err(e),
     }
@@ -1119,6 +1138,11 @@ fn put_xmp(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Val
         return Err(i.throw(ErrorType::Error, &format!("{what}: the file cannot be updated")));
     }
     let packet = packet_arg(i, &arg(args, 0), what)?;
+    // Converting the argument runs script code, which may have closed the file.
+    let o = open_file(i, &this, what)?;
+    if !can_update(i, o)? {
+        return Err(i.throw(ErrorType::Error, &format!("{what}: the file cannot be updated")));
+    }
     let v = string(i, &packet)?;
     i.rooted(std::slice::from_ref(&v), |i| set_slot(i, o, PENDING, v.clone()))?;
     Ok(Value::Undefined)
@@ -1133,7 +1157,9 @@ fn close_file(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
     let pending = slot(i, o, PENDING)?;
     if this_run && slot(i, o, OPEN)?.truthy() && matches!(pending, Value::String(_)) {
         let path = slot(i, o, PATH)?;
-        let r = i.rooted(&[path.clone(), pending.clone()], |i| crate::file_classes::call_host(i, "xmpWrite", &[path.clone(), pending.clone()]))?;
+        let safely = Value::Bool(close_flags & CLOSE_UPDATE_SAFELY != 0);
+        let r =
+            i.rooted(&[path.clone(), pending.clone()], |i| crate::file_classes::call_host(i, "xmpWrite", &[path.clone(), pending.clone(), safely]))?;
         let error = i.rooted(std::slice::from_ref(&r), |i| crate::file_classes::record_field(i, &r, "error"))?;
         if let Value::String(_) = error {
             // The file stays open with its packet, so a later `closeFile` tries again.
@@ -1247,8 +1273,12 @@ fn link(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
 }
 
 /// Adds the global `ExternalObject`, which defines `XMPMeta`, `XMPFile` and `XMPConst` when a
-/// script loads the XMP library ([`crate::Realm::define_external_object`]).
+/// script loads the XMP library ([`crate::Realm::define_external_object`]). A second call is
+/// refused and changes nothing, so the namespaces registered stay.
 pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
+    if i.xmp.is_some() {
+        return Err(Abrupt::Internal("ExternalObject is already added".into()));
+    }
     let object_proto = i.intrinsics.object_proto;
     i.reserve_heap(4 * OBJECT_BYTES)?;
     let external_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));

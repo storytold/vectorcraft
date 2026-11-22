@@ -10,19 +10,23 @@
 //! a simple value (text, or a URI in `rdf:resource`), an array of simple items (`rdf:Bag`,
 //! `rdf:Seq` or `rdf:Alt`, each item with an optional `xml:lang`), or any other value (a structure,
 //! a value with qualifiers, an array of structures), which is kept as the XML it was written in and
-//! written back with the namespace declarations it uses. The namespaces of the property, element and
+//! written back with the namespace declarations it uses; a value with qualifiers in the `rdf:value`
+//! form gives the text and the options of its `rdf:value`. The namespaces of the property, element and
 //! attribute names under `rdf:Description` are added to the realm's [`Registry`] with the prefix the
 //! packet gives them, or a new prefix when that one is taken; a namespace the packet declares and no
 //! such name uses is not added.
 //!
 //! VectorCraft's own rules: a packet or a written packet holds at most [`MAX_BYTES`] bytes,
-//! elements nest at most 64 deep, a child of `rdf:RDF` other than `rdf:Description` makes the
-//! packet malformed, a property given twice keeps its first value, and [`find_packet`] finds only a
-//! UTF-8 packet. A realm registers at most [`MAX_NAMESPACES`] namespaces holding at most
+//! elements nest at most 64 deep, and each holds at most 1,024 attributes and has at most 1,024
+//! namespace declarations in scope, both as read and as written; a
+//! child of `rdf:RDF` other than `rdf:Description` and text beside the descriptions or their
+//! properties make the packet malformed, a property given twice keeps its first value, and
+//! [`find_packet`] finds only a UTF-8 packet. A realm registers at most [`MAX_NAMESPACES`] namespaces holding at most
 //! [`MAX_REGISTRY_BYTES`] bytes, each URI at most [`MAX_URI_BYTES`] bytes and each prefix at most
 //! [`MAX_PREFIX_BYTES`] bytes.
 
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use craft_xml::{Doctype, El, Limits, Names, Node, Options, UnknownEntity, XML_NS};
 
@@ -100,6 +104,8 @@ pub(crate) enum XmpError {
     BadText,
     /// A path form not read yet: a structure field, a qualifier or a selector.
     NotYet,
+    /// The metadata a packet gives is larger than the budget [`parse_within`] was given.
+    Heap,
 }
 
 /// The kind of an array.
@@ -148,6 +154,13 @@ pub(crate) struct Item {
     pub(crate) lang: Option<String>,
 }
 
+impl Item {
+    /// Does the item name a language? `xml:lang=""` names none.
+    pub(crate) fn has_lang(&self) -> bool {
+        self.lang.as_deref().is_some_and(|l| !l.is_empty())
+    }
+}
+
 /// A property's value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Value {
@@ -165,6 +178,8 @@ pub(crate) enum Value {
         xml: String,
         options: u32,
         text: Option<String>,
+        /// The most namespace declarations `xml` puts in scope at one of its elements.
+        decls: usize,
     },
 }
 
@@ -180,7 +195,7 @@ impl Value {
                 }
             }
             Value::Array { form, items } => {
-                let alt_text = *form == Form::Alt && !items.is_empty() && items.iter().all(|i| i.lang.is_some());
+                let alt_text = *form == Form::Alt && !items.is_empty() && items.iter().all(Item::has_lang);
                 form.options() | if alt_text { ARRAY_IS_ALTTEXT } else { 0 }
             }
             Value::Other { options, .. } => *options,
@@ -200,7 +215,8 @@ impl Value {
 /// A top-level property.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Prop {
-    pub(crate) ns: String,
+    /// The namespace, which the properties a packet gives in the same namespace share.
+    pub(crate) ns: Rc<str>,
     pub(crate) name: String,
     pub(crate) value: Value,
 }
@@ -232,7 +248,7 @@ impl Meta {
 
     /// The position of the property `name` in the namespace `ns`.
     pub(crate) fn find(&self, ns: &str, name: &str) -> Option<usize> {
-        self.props.iter().position(|p| p.ns == ns && p.name == name)
+        self.props.iter().position(|p| &*p.ns == ns && p.name == name)
     }
 }
 
@@ -445,16 +461,64 @@ fn find_rdf<'a>(el: &'a El, scope: &mut Scope) -> Option<&'a El> {
     None
 }
 
-/// Reads the packet `text`, registering the namespaces it uses in `registry`. A packet that fails
-/// to read leaves `registry` unchanged.
+/// Tests: reads the packet `text` with no budget ([`parse_within`]).
+#[cfg(test)]
 pub(crate) fn parse(text: &str, registry: &mut Registry) -> Result<Meta, XmpError> {
+    parse_within(text, registry, usize::MAX)
+}
+
+/// Reads the packet `text`, registering the namespaces it uses in `registry`, and stops with
+/// [`XmpError::Heap`] as soon as the properties read hold more than `budget` bytes, as
+/// [`Meta::heap_bytes`] counts them. A packet that fails to read leaves `registry` unchanged.
+pub(crate) fn parse_within(text: &str, registry: &mut Registry, budget: usize) -> Result<Meta, XmpError> {
     let mut staged = registry.clone();
-    let meta = parse_into(text, &mut staged)?;
+    let meta = parse_into(text, &mut staged, budget)?;
     *registry = staged;
     Ok(meta)
 }
 
-fn parse_into(text: &str, registry: &mut Registry) -> Result<Meta, XmpError> {
+/// The properties a packet has given so far.
+struct Reading {
+    meta: Meta,
+    /// The names `meta` has.
+    seen: HashSet<(Rc<str>, String)>,
+    /// The namespaces of the properties, each held once.
+    pool: HashSet<Rc<str>>,
+    /// The bytes `meta` holds, and the most it may hold.
+    bytes: usize,
+    budget: usize,
+}
+
+impl Reading {
+    /// The shared copy of the namespace `ns`.
+    fn intern(&mut self, ns: String) -> Rc<str> {
+        if let Some(shared) = self.pool.get(ns.as_str()) {
+            return Rc::clone(shared);
+        }
+        let shared: Rc<str> = ns.into();
+        self.pool.insert(Rc::clone(&shared));
+        shared
+    }
+
+    /// Adds `prop` unless a property of that name was read before.
+    fn add(&mut self, prop: Prop) -> Result<(), XmpError> {
+        if self.seen.insert((Rc::clone(&prop.ns), prop.name.clone())) {
+            self.bytes = self.bytes.saturating_add(prop.heap_bytes());
+            if self.bytes > self.budget {
+                return Err(XmpError::Heap);
+            }
+            self.meta.props.push(prop);
+        }
+        Ok(())
+    }
+}
+
+/// Is `node` text that is not XML whitespace alone?
+fn is_stray_text(node: &Node) -> bool {
+    matches!(node, Node::Text(t) | Node::CData(t) if !t.trim_matches([' ', '\t', '\r', '\n']).is_empty())
+}
+
+fn parse_into(text: &str, registry: &mut Registry, budget: usize) -> Result<Meta, XmpError> {
     if text.len() > MAX_BYTES {
         return Err(XmpError::TooLarge);
     }
@@ -472,19 +536,26 @@ fn parse_into(text: &str, registry: &mut Registry) -> Result<Meta, XmpError> {
     let root = opts.parse(text.as_bytes()).map_err(|e| if e.is_limit() { XmpError::TooLarge } else { XmpError::Malformed })?;
     let mut scope = Scope::new();
     let rdf = find_rdf(&root, &mut scope).ok_or(XmpError::Malformed)?;
-    let mut meta = Meta::default();
-    let mut seen = HashSet::new();
+    // Text beside the descriptions or their properties is not RDF.
+    if rdf.children.iter().any(is_stray_text) {
+        return Err(XmpError::Malformed);
+    }
+    let mut reading = Reading { meta: Meta::default(), seen: HashSet::new(), pool: HashSet::new(), bytes: 32, budget };
     for d in rdf.elements() {
         let mark = scope.len();
         push_decls(d, &mut scope);
-        if !is_named(&d.name, &scope, true, RDF, "Description") {
+        if !is_named(&d.name, &scope, true, RDF, "Description") || d.children.iter().any(is_stray_text) {
             return Err(XmpError::Malformed);
         }
         for (k, v) in attrs(d) {
             let Some((ns, local)) = resolve(k, &scope, false) else { return Err(XmpError::Malformed) };
             if ns == RDF {
-                if local == "about" && meta.about.is_empty() {
-                    meta.about = v.to_string();
+                if local == "about" && reading.meta.about.is_empty() {
+                    reading.meta.about = v.to_string();
+                    reading.bytes = reading.bytes.saturating_add(v.len());
+                    if reading.bytes > reading.budget {
+                        return Err(XmpError::Heap);
+                    }
                 }
                 continue;
             }
@@ -493,26 +564,19 @@ fn parse_into(text: &str, registry: &mut Registry) -> Result<Meta, XmpError> {
             }
             let prefix = k.split_once(':').map_or("ns", |(p, _)| p);
             registry.register(&ns, prefix)?;
-            add(&mut meta, &mut seen, Prop { ns, name: local.to_string(), value: Value::Simple { text: v.to_string(), uri: false } });
+            let ns = reading.intern(ns);
+            reading.add(Prop { ns, name: local.to_string(), value: Value::Simple { text: v.to_string(), uri: false } })?;
         }
         for p in d.elements() {
-            let prop = read_property(p, &mut scope, registry)?;
-            add(&mut meta, &mut seen, prop);
+            let prop = read_property(p, &mut scope, registry, &mut reading)?;
+            reading.add(prop)?;
         }
         scope.truncate(mark);
     }
-    Ok(meta)
+    Ok(reading.meta)
 }
 
-/// Adds `prop` to `meta` unless it already has a property of that name; `seen` holds the names
-/// `meta` has.
-fn add(meta: &mut Meta, seen: &mut HashSet<(String, String)>, prop: Prop) {
-    if seen.insert((prop.ns.clone(), prop.name.clone())) {
-        meta.props.push(prop);
-    }
-}
-
-fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry) -> Result<Prop, XmpError> {
+fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry, reading: &mut Reading) -> Result<Prop, XmpError> {
     let mark = scope.len();
     push_decls(p, scope);
     let (ns, local) = resolve(&p.name, scope, true).ok_or(XmpError::Malformed)?;
@@ -540,10 +604,10 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry) -> Result<P
         }
         register_names(p, scope, registry)?;
         register_nested(p, scope, registry)?;
-        other(p, &own, &children, scope, mark)
+        other(p, &own, &children, scope, mark)?
     };
     scope.truncate(mark);
-    Ok(Prop { ns, name: local.to_string(), value })
+    Ok(Prop { ns: reading.intern(ns), name: local.to_string(), value })
 }
 
 /// Registers the namespaces of the name and the attributes of `el`, with `scope` holding the
@@ -614,41 +678,141 @@ fn array_of(children: &[&El], scope: &mut Scope) -> Option<Value> {
     }
 }
 
-/// A value kept as the XML it was read as.
-fn other(p: &El, own: &[(&str, &str)], children: &[&El], scope: &mut Scope, mark: usize) -> Value {
-    // The first child's name is read with the prefixes it declares itself.
-    let form = children.first().and_then(|c| {
-        let inner = scope.len();
-        push_decls(c, scope);
-        let form = [Form::Bag, Form::Seq, Form::Alt].into_iter().find(|f| is_named(&c.name, scope, true, RDF, &f.element()[4..]));
-        scope.truncate(inner);
-        form
-    });
+/// A value kept as the XML it was read as, refused when the element written for it would hold more
+/// than [`MAX_ATTRS`] attributes or declarations in scope, which a packet could then not read back.
+fn other(p: &El, own: &[(&str, &str)], children: &[&El], scope: &mut Scope, mark: usize) -> Result<Value, XmpError> {
+    let (options, text) = match qualified_value(own, children, scope) {
+        Some(found) => found,
+        None => kept_form(p, own, children, scope),
+    };
+    let mut xml = String::new();
+    let added = write_fragment(p, scope.get(..mark).unwrap_or(&[]), &mut xml);
+    let decls = added + nested_decls(p);
+    if p.attrs.len() + added > MAX_ATTRS || decls > MAX_ATTRS {
+        return Err(XmpError::TooLarge);
+    }
+    Ok(Value::Other { xml, options, text, decls })
+}
+
+/// The most namespace declarations `el` and the elements inside it put in scope at one element.
+fn nested_decls(el: &El) -> usize {
+    el.ns_decls().count() + el.elements().map(nested_decls).max().unwrap_or(0)
+}
+
+/// The array form of the container `el`, read with the prefixes it declares itself.
+fn container_form(el: &El, scope: &mut Scope) -> Option<Form> {
+    let inner = scope.len();
+    push_decls(el, scope);
+    let form = [Form::Bag, Form::Seq, Form::Alt].into_iter().find(|f| is_named(&el.name, scope, true, RDF, &f.element()[4..]));
+    scope.truncate(inner);
+    form
+}
+
+/// The options and text of a kept value that is not in the `rdf:value` form.
+fn kept_form(p: &El, own: &[(&str, &str)], children: &[&El], scope: &mut Scope) -> (u32, Option<String>) {
+    let form = children.first().and_then(|c| container_form(c, scope));
     let resource = own.iter().find(|(k, _)| is_named(k, scope, false, RDF, "resource")).map(|(_, v)| (*v).to_string());
     let lang = own.iter().any(|(k, _)| is_named(k, scope, false, XML, "lang"));
-    let (options, text) = match form {
+    // An empty property element whose attributes are fields is a structure.
+    let fields = own.iter().any(|(k, _)| resolve(k, scope, false).is_some_and(|(ns, _)| !ns.is_empty() && ns != RDF && ns != XML));
+    match form {
         Some(f) if children.len() == 1 => (f.options() | PROP_HAS_QUALIFIERS, None),
         _ if !children.is_empty() || own.iter().any(|(k, _)| is_named(k, scope, false, RDF, "parseType")) => (PROP_IS_STRUCT, None),
+        _ if fields && resource.is_none() && !p.children.iter().any(is_stray_text) => (PROP_IS_STRUCT, None),
         _ => {
             let uri = if resource.is_some() { PROP_VALUE_IS_URI } else { 0 };
             (PROP_HAS_QUALIFIERS | uri | if lang { PROP_HAS_LANG } else { 0 }, Some(resource.unwrap_or_else(|| text_of(p))))
         }
+    }
+}
+
+/// The options and text of a value with qualifiers in the `rdf:value` form (XMP Specification
+/// Part 1, 7.9.2.5): `rdf:value` and the qualifiers are the fields of the property, written with
+/// `rdf:parseType="Resource"`, in its one `rdf:Description`, or as the attributes of an empty
+/// property element. `None` for a value in another form.
+fn qualified_value(own: &[(&str, &str)], children: &[&El], scope: &mut Scope) -> Option<(u32, Option<String>)> {
+    let lang = if own.iter().any(|(k, _)| is_named(k, scope, false, XML, "lang")) { PROP_HAS_LANG | PROP_HAS_QUALIFIERS } else { 0 };
+    let resource_type = own.iter().any(|(k, v)| is_named(k, scope, false, RDF, "parseType") && *v == "Resource");
+    let found = if children.is_empty() || resource_type {
+        value_field(children, own, scope)
+    } else if let [d] = children {
+        let mark = scope.len();
+        push_decls(d, scope);
+        let found = if is_named(&d.name, scope, true, RDF, "Description") {
+            let fields: Vec<&El> = d.elements().collect();
+            value_field(&fields, &attrs(d), scope)
+        } else {
+            None
+        };
+        scope.truncate(mark);
+        found
+    } else {
+        None
     };
-    let mut xml = String::new();
-    write_fragment(p, scope.get(..mark).unwrap_or(&[]), &mut xml);
-    Value::Other { xml, options, text }
+    found.map(|(options, text)| (options | lang, text))
+}
+
+/// The options and text the `rdf:value` among the field elements `fields` and the attributes
+/// `held` of one structure gives; the other fields and the attributes outside the RDF namespace
+/// are its qualifiers.
+fn value_field(fields: &[&El], held: &[(&str, &str)], scope: &mut Scope) -> Option<(u32, Option<String>)> {
+    let is_rdf = |k: &str, scope: &Scope| resolve(k, scope, false).is_some_and(|(ns, _)| ns == RDF);
+    let lang_in = |list: &[(&str, &str)], scope: &Scope| list.iter().any(|(k, _)| is_named(k, scope, false, XML, "lang"));
+    let mut qualifiers = held.iter().any(|(k, _)| !is_rdf(k, scope));
+    let mut lang = lang_in(held, scope);
+    if let Some((_, text)) = held.iter().find(|(k, _)| is_named(k, scope, false, RDF, "value")) {
+        qualifiers |= !fields.is_empty();
+        return Some((option_bits(0, qualifiers, lang), Some((*text).to_string())));
+    }
+    let at = fields.iter().position(|f| {
+        let mark = scope.len();
+        push_decls(f, scope);
+        let found = is_named(&f.name, scope, true, RDF, "value");
+        scope.truncate(mark);
+        found
+    })?;
+    let value = fields.get(at)?;
+    qualifiers |= fields.len() > 1;
+    let mark = scope.len();
+    push_decls(value, scope);
+    let own = attrs(value);
+    lang |= lang_in(&own, scope);
+    let resource = own.iter().find(|(k, _)| is_named(k, scope, false, RDF, "resource")).map(|(_, v)| (*v).to_string());
+    let inner: Vec<&El> = value.elements().collect();
+    let found = match inner.as_slice() {
+        [] => match resource {
+            Some(uri) => (PROP_VALUE_IS_URI, Some(uri)),
+            None => (0, Some(text_of(value))),
+        },
+        [c] => match container_form(c, scope) {
+            Some(f) => (f.options(), None),
+            None => (PROP_IS_STRUCT, None),
+        },
+        _ => (PROP_IS_STRUCT, None),
+    };
+    scope.truncate(mark);
+    Some((option_bits(found.0, qualifiers, lang), found.1))
+}
+
+/// `options` with [`PROP_HAS_QUALIFIERS`] when the value has `qualifiers`, and with
+/// [`PROP_HAS_LANG`] as well when one of them is `xml:lang`.
+fn option_bits(options: u32, qualifiers: bool, lang: bool) -> u32 {
+    let qualifiers = if qualifiers || lang { PROP_HAS_QUALIFIERS } else { 0 };
+    options | qualifiers | if lang { PROP_HAS_LANG } else { 0 }
 }
 
 /// Writes the element `p` as XML, declaring on it the prefixes from `outer` that it and the
-/// elements inside it use and do not declare themselves.
-fn write_fragment(p: &El, outer: &[(String, String)], out: &mut String) {
+/// elements inside it use and do not declare themselves. → the declarations it added.
+fn write_fragment(p: &El, outer: &[(String, String)], out: &mut String) -> usize {
     let mut used: Vec<String> = Vec::new();
     collect_prefixes(p, &mut used);
     let own: Vec<&str> = p.ns_decls().map(|(prefix, _)| prefix).collect();
     out.push('<');
     out.push_str(&p.name);
+    let mut added = 0;
     for prefix in used.iter().filter(|u| !own.contains(&u.as_str())) {
         if let Some((_, uri)) = outer.iter().rev().find(|(q, _)| q == prefix) {
+            added += 1;
             if prefix.is_empty() {
                 out.push_str(" xmlns=\"");
             } else {
@@ -661,6 +825,7 @@ fn write_fragment(p: &El, outer: &[(String, String)], out: &mut String) {
         }
     }
     write_rest(p, out);
+    added
 }
 
 /// The prefixes the names of `el` and the elements inside it use, `""` for an unprefixed element.
@@ -740,11 +905,19 @@ pub(crate) fn serialize(meta: &Meta, registry: &Registry, wrapper: bool) -> Resu
     let mut namespaces: Vec<(&str, &str)> = Vec::new();
     let mut declared = HashSet::new();
     for p in &meta.props {
-        if matches!(p.value, Value::Other { .. }) || !declared.insert(p.ns.as_str()) {
+        if matches!(p.value, Value::Other { .. }) || !declared.insert(&*p.ns) {
             continue;
         }
         let prefix = registry.prefix_of(&p.ns).ok_or(XmpError::BadName)?;
-        namespaces.push((prefix, &p.ns));
+        namespaces.push((prefix, &*p.ns));
+    }
+    // A read takes at most `MAX_ATTRS` declarations in scope at one element: those of `x:xmpmeta`
+    // and `rdf:RDF`, a declaration on `rdf:Description` for each namespace, and the declarations of a
+    // kept value.
+    let around = 2 + namespaces.len();
+    let kept = meta.props.iter().map(|p| if let Value::Other { decls, .. } = p.value { decls } else { 0 }).max().unwrap_or(0);
+    if around + kept > MAX_ATTRS {
+        return Err(XmpError::TooLarge);
     }
     let prefix = |ns: &str| registry.prefix_of(ns).ok_or(XmpError::BadName);
     let mut out = Out(String::new());
@@ -824,37 +997,97 @@ pub(crate) fn pad_size(packet: &str) -> usize {
 /// The first UTF-8 packet in `bytes` that has both ends of its wrapper (XMP Specification Part 1,
 /// 7.3), or `None`. A start is a `<?xpacket begin=` whose header holds the wrapper's `id` within
 /// [`MAX_HEADER`] bytes. A start with no end before the next start is skipped, and so is a trailer
-/// that does not close before the next start.
+/// that does not close before the next start. Inside a packet, a start or a trailer in a CDATA
+/// section or a comment is text, and a packet that is not UTF-8 is passed over for the next one. A
+/// section that does not close, or whose end follows a trailer and then a start, is read as text, so
+/// a later packet's start is not hidden in it. The scan takes time in proportion to the length of
+/// `bytes`.
 pub fn find_packet(bytes: &[u8]) -> Option<PacketSpan> {
     const BEGIN: &[u8] = b"<?xpacket begin=";
     const END: &[u8] = b"<?xpacket end=";
-    let find = |from: usize, to: usize, needle: &[u8]| bytes.get(from..to)?.windows(needle.len()).position(|w| w == needle).map(|i| i + from);
+    const SECTIONS: [(&[u8], &[u8]); 2] = [(b"<![CDATA[", b"]]>"), (b"<!--", b"-->")];
     let len = bytes.len();
+    let rest = |at: usize| bytes.get(at..).unwrap_or_default();
     let ids = [format!("id=\"{WRAPPER_ID}\""), format!("id='{WRAPPER_ID}'")];
-    let is_header = |at: usize| {
-        let head = bytes.get(at..len.min(at.saturating_add(MAX_HEADER))).unwrap_or_default();
-        let head = head.windows(2).position(|w| w == b"?>").and_then(|close| head.get(..close)).unwrap_or_default();
-        ids.iter().any(|id| head.windows(id.len()).any(|w| w == id.as_bytes()))
+    let is_start = |at: usize| {
+        rest(at).starts_with(BEGIN) && {
+            let head = bytes.get(at..len.min(at.saturating_add(MAX_HEADER))).unwrap_or_default();
+            let head = head.windows(2).position(|w| w == b"?>").and_then(|close| head.get(..close)).unwrap_or_default();
+            ids.iter().any(|id| head.windows(id.len()).any(|w| w == id.as_bytes()))
+        }
     };
-    // The first start from `from` that begins before `to`.
-    let start_in = |mut from: usize, to: usize| loop {
-        let at = find(from, to, BEGIN)?;
-        if is_header(at) {
-            return Some(at);
+    // Every start, in order.
+    let starts: Vec<usize> = bytes.windows(BEGIN.len()).enumerate().filter(|(at, w)| *w == BEGIN && is_start(*at)).map(|(at, _)| at).collect();
+    let start_after = |from: usize| starts.get(starts.partition_point(|&s| s < from)).copied();
+    let mut ends = Later::new(END);
+    let mut closes = Later::new(b"?>");
+    let mut section_ends = SECTIONS.map(|(_, close)| Later::new(close));
+    let mut start = None;
+    let mut pos = 0;
+    while let Some(at) = rest(pos).iter().position(|&b| b == b'<').map(|i| i + pos) {
+        pos = at + 1;
+        if starts.binary_search(&at).is_ok() {
+            start = Some(at);
+            pos = at + BEGIN.len();
+            continue;
         }
-        from = at + BEGIN.len();
-    };
-    let mut start = start_in(0, len)?;
-    loop {
-        let end_tag = find(start + BEGIN.len(), len, END)?;
-        while let Some(next) = start_in(start + BEGIN.len(), end_tag) {
-            start = next;
+        let Some(from) = start else {
+            // Nothing before the next start matters.
+            pos = start_after(pos)?;
+            continue;
+        };
+        let here = rest(at);
+        if let Some(kind) = SECTIONS.iter().position(|(open, _)| here.starts_with(open)) {
+            let (open, close) = SECTIONS[kind];
+            let inside = at + open.len();
+            let end = section_ends[kind].find(bytes, inside);
+            // A trailer and then a start inside the section belong to packets of their own.
+            let hides_packet = end.is_some_and(|end| ends.find(bytes, inside).is_some_and(|e| e < end && start_after(e).is_some_and(|s| s < end)));
+            if let (Some(end), false) = (end, hides_packet) {
+                pos = end + close.len();
+            }
+            continue;
         }
-        let after = end_tag + END.len();
-        let next = start_in(after, len);
-        match find(after, next.unwrap_or(len), b"?>") {
-            Some(close) => return Some(PacketSpan { start, end: close + 2, writeable: bytes.get(after + 1) == Some(&b'w') }),
-            None => start = next?,
+        if !here.starts_with(END) {
+            continue;
         }
+        let after = at + END.len();
+        let close = closes.find(bytes, after)?;
+        if let Some(next) = start_after(after).filter(|&next| next < close) {
+            start = Some(next);
+            pos = next + BEGIN.len();
+            continue;
+        }
+        let span = PacketSpan { start: from, end: close + 2, writeable: bytes.get(after + 1) == Some(&b'w') };
+        if bytes.get(span.start..span.end).is_some_and(|p| std::str::from_utf8(p).is_ok()) {
+            return Some(span);
+        }
+        start = None;
+        pos = span.end;
+    }
+    None
+}
+
+/// The next place of a marker at or after a given point. While the points do not go back, each
+/// search starts past the last one, so the searches together read the bytes about once.
+struct Later {
+    marker: &'static [u8],
+    /// The point of the last search, and what it found.
+    from: usize,
+    found: Option<usize>,
+}
+
+impl Later {
+    fn new(marker: &'static [u8]) -> Later {
+        Later { marker, from: usize::MAX, found: None }
+    }
+
+    fn find(&mut self, bytes: &[u8], from: usize) -> Option<usize> {
+        if self.from <= from && self.found.is_none_or(|f| f >= from) {
+            return self.found;
+        }
+        self.from = from;
+        self.found = bytes.get(from..).and_then(|r| r.windows(self.marker.len()).position(|w| w == self.marker)).map(|i| i + from);
+        self.found
     }
 }

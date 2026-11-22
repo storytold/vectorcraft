@@ -3062,29 +3062,39 @@ rules for these objects:
   `setArrayItem`, `deleteArrayItem`, `doesArrayItemExist`, `getLocalizedText` and `setLocalizedText`, and the
   functions `XMPMeta.registerNamespace`, `getNamespacePrefix` and `getNamespaceURI`. A path is a property name,
   `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. Arrays hold simple items; a structure
-  or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options.
-  The namespaces that a packet's property, element and attribute names use are registered with the prefix the packet
+  or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options. A
+  value with qualifiers in the `rdf:value` form also gives the text of its `rdf:value`, and an empty property element
+  whose attributes are fields is a structure. The namespaces that a packet's property, element and attribute names use are registered with the prefix the packet
   gives them, or `prefix_1_` when that prefix names another namespace; a namespace the packet declares but no name
   uses is not registered. At most 4,096 namespaces, holding at most 1 MiB together, are registered. A namespace URI
   over 1,024 bytes, a prefix over 128 bytes, and a namespace past either limit throw `… the XMP data is too large`,
-  both from `registerNamespace` and from a packet that uses the namespace.
+  both from `registerNamespace` and from a packet that uses the namespace. The prefix limit applies to a namespace
+  being registered, with any `_n_` suffix added to its prefix; a namespace already registered keeps its prefix, and
+  `registerNamespace` returns that prefix whatever prefix it is given. An `rdf:Alt` item with `xml:lang=""` has no
+  language, so its array is not a language alternative for `getLocalizedText` and `setLocalizedText`.
 - `XMPFile(path, format, openFlags)` reads a file through the same places as `File`, so a path outside them, a
   missing file and a file over 8 MiB throw the `File` messages (`Script file access denied`, `Script file does not
   exist`, `Script file exceeds 8 MiB`). A `.xmp` file is read whole as its packet (a link counts by the file it leads to,
   when it is opened and again when it is written); any other file, and any file with
   `XMPConst.OPEN_USE_PACKET_SCANNING`, is scanned for its first UTF-8 packet and is read only. A packet starts at a
-  `<?xpacket begin=` whose header holds `id="W5M0MpCehiHzreSzNTczkc9d"` within 256 bytes. Only a `.xmp` file
+  `<?xpacket begin=` whose header holds `id="W5M0MpCehiHzreSzNTczkc9d"` within 256 bytes; inside a packet, a start
+  or a trailer in a CDATA section or a comment is text, except that a section that does not close, or that holds a
+  trailer and then a start, is read as text around them. Only a `.xmp` file
   opened with `XMPConst.OPEN_FOR_UPDATE`, without packet scanning, takes `putXMP`, and opening one that way where
   the script may not write throws `Script file access denied`; other files open read only with that flag.
   After `putXMP`, `closeFile()` writes the packet in
   UTF-8 through a temporary file in the same folder when the script may write there, otherwise straight to the file;
-  when no temporary name is free, nothing is written. A failed write throws and keeps the file open with its
-  packet. While an open `File` of the same file holds changes it has not written, `closeFile()` throws
+  when no temporary name is free, nothing is written. With `XMPConst.CLOSE_UPDATE_SAFELY`, `closeFile()` writes only
+  through a temporary file, and where the script may not make one it throws `Script file could not be written` and
+  leaves the file as it is. A failed write throws and keeps the file open with its packet. While an open `File` of the same file holds changes it has not written, `closeFile()` throws
   `Script file could not be written` and the `File` keeps its changes. `getXMP`, `getPacketInfo`, `getFileInfo` and `canPutXMP` are available. An `XMPFile` is open only in the
   run that opened it.
 - A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
-  and one nested more than 64 elements deep throws; a value is counted as deep as `serialize()` would write it,
-  under `x:xmpmeta`, `rdf:RDF` and `rdf:Description`. Members of the help page that are not built yet (iterators,
+  one with text beside its `rdf:Description` elements or their properties, and one nested more than 64 elements deep
+  throws; a value is counted as deep as `serialize()` would write it, under `x:xmpmeta`, `rdf:RDF` and
+  `rdf:Description`. A packet that would be written with more than 1,024 attributes on one element, or more than
+  1,024 namespace declarations in scope at one element, throws
+  `… the XMP data is too large`, both from `serialize()` and when a packet with such a value is read. Members of the help page that are not built yet (iterators,
   structure fields, qualifiers, aliases, sorting, byte-array packets and `XMPFile.getFormatInfo`) throw
   `… is not available yet`, and so does a flag, format or path form that is not handled yet.
 

@@ -1925,13 +1925,14 @@ fn xmp_open(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     ]))
 }
 
-/// `xmpWrite(path, packet)`: the `.xmp` file at `path` replaced by `packet` in UTF-8, under the
-/// rules for writing. The packet goes to a temporary file in the same folder that then takes the
-/// file's name, when the run may write there; otherwise to the file itself. Open objects of the
-/// file hold the new bytes.
+/// `xmpWrite(path, packet, safely)`: the `.xmp` file at `path` replaced by `packet` in UTF-8, under
+/// the rules for writing. The packet goes to a temporary file in the same folder that then takes the
+/// file's name, when the run may write there; otherwise to the file itself, unless `safely`, which
+/// fails and leaves the file as it is. Open objects of the file hold the new bytes.
 fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let path = arg_text(a, 0);
     let packet = arg_text(a, 1).into_bytes();
+    let safely = matches!(a.get(2), Some(Data::Bool(true)));
     if !is_sidecar(&path) {
         return Ok(error(ACCESS_DENIED));
     }
@@ -1955,12 +1956,16 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     if disk.open.values().any(|o| o.dirty && o.holds(&target)) {
         return Ok(error(WRITE_FAILED));
     }
-    let holders = disk.open.values().filter(|o| o.holds(&target)).count();
-    disk.charge_write(packet.len().saturating_mul(holders.saturating_add(1)))?;
     let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let temp_name = |n: u32| target.with_file_name(format!(".{name}.{}.{n}.tmp", std::process::id()));
     let first = temp_name(0);
     let temp_allowed = disk.target(&first.to_string_lossy(), false).is_ok_and(|t| t == first);
+    // A safe update writes only through a temporary file.
+    if safely && !temp_allowed {
+        return Ok(error(WRITE_FAILED));
+    }
+    let holders = disk.open.values().filter(|o| o.holds(&target)).count();
+    disk.charge_write(packet.len().saturating_mul(holders.saturating_add(1)))?;
     // `changed` is whether the file's bytes may differ from before: after a replacement, or once a
     // direct write has opened (and so emptied) the file.
     let (r, changed) = if temp_allowed {
@@ -1968,7 +1973,15 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
         // none of the names is free the sidecar is left as it is.
         // Each name is checked against the places the run may write before it is made.
         let allowed = |t: &Path| disk.target(&t.to_string_lossy(), false).is_ok_and(|r| r == t);
-        let new_file = |t: &Path| allowed(t).then(|| std::fs::OpenOptions::new().write(true).create_new(true).open(t).ok()).flatten();
+        let new_file = |t: &Path| {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            // On Unix the file starts readable and writable by its owner alone, until the packet is in
+            // it and the sidecar's permission bits are copied to it.
+            #[cfg(unix)]
+            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+            allowed(t).then(|| options.open(t).ok()).flatten()
+        };
         let Some((temp, mut out)) = (0..16).map(temp_name).find_map(|t| new_file(&t).map(|f| (t, f))) else {
             return Ok(error(WRITE_FAILED));
         };
@@ -1976,6 +1989,11 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
             #[cfg(test)]
             if XMP_WRITE_FAILS.with(std::cell::Cell::get) {
                 return Err(std::io::Error::other("write failed"));
+            }
+            #[cfg(all(test, unix))]
+            {
+                let mode = std::os::unix::fs::PermissionsExt::mode(&out.metadata()?.permissions());
+                XMP_TEMP_MODE.with(|m| m.set(Some(mode)));
             }
             std::io::Write::write_all(&mut out, &packet)
         };
@@ -2650,6 +2668,9 @@ thread_local! {
     pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: while set, `xmpWrite` fails after its checks and before it writes.
     pub(crate) static XMP_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: the permission bits of the last temporary file `xmpWrite` made, before it wrote to it.
+    #[cfg(unix)]
+    pub(crate) static XMP_TEMP_MODE: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
 }
 
 #[cfg(test)]

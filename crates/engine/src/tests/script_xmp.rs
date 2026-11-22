@@ -491,33 +491,56 @@ fn a_huge_sidecar_is_refused_before_it_is_read() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The file named `name` in `dir` or a folder inside it.
+fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(dir).ok()?.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_file(&path, name) {
+                return Some(found);
+            }
+        } else if entry.file_name() == name {
+            return Some(path);
+        }
+    }
+    None
+}
+
 /// A write that fails leaves the sidecar as it was and the `XMPFile` open with its packet, so a
-/// later `closeFile` writes it; an `XMPFile` from an earlier run is closed.
+/// later `closeFile` of the same object writes it.
 #[test]
 fn a_failed_write_keeps_the_packet_for_a_later_close() {
     let base = folder("fails");
     let mut s = with_data(&base);
-    let setup = format!(
-        "var p = Folder.userData.fsName + '/k.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close();\n\
-         $.global.kept = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
-         var m = kept.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); kept.putXMP(m);\n\
-         var out = []; try {{ kept.closeFile(); out.push('closed'); }} catch (e) {{ out.push(e.message, kept.getXMP().getProperty(XMPConst.NS_DC, 'format').value); }}\n\
-         vc.log(out); vc.log(p);"
-    );
     crate::script::files::XMP_WRITE_FAILS.with(|f| f.set(true));
-    let log = logged(&mut s, &base, &setup);
-    crate::script::files::XMP_WRITE_FAILS.with(|f| f.set(false));
-    assert_eq!(log[0], json!(["Script file could not be written", "changed"]));
-    let path = PathBuf::from(log[1].as_str().unwrap());
-    assert!(std::fs::read_to_string(&path).unwrap().contains("image/svg+xml"), "the failed write leaves the file as it was");
-    let log = logged(
+    start_framed(
         &mut s,
         &base,
         &format!(
-            "{setup}\nvc.log(new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_READ).getXMP().getProperty(XMPConst.NS_DC, 'format').value);"
+            "var p = Folder.userData.fsName + '/k.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close();\n\
+             var kept = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+             var m = kept.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); kept.putXMP(m);\n\
+             var out = []; try {{ kept.closeFile(); out.push('closed'); }} catch (e) {{ out.push(e.message, kept.getXMP().getProperty(XMPConst.NS_DC, 'format').value); }}\n\
+             File.saveDialog('pause'); kept.closeFile(); out.push('closed'); vc.log(out); vc.log(p);"
         ),
     );
-    assert_eq!(log, json!([["closed"], path.to_string_lossy(), "changed"]));
+    let paused = pump_to_picker(&mut s);
+    crate::script::files::XMP_WRITE_FAILS.with(|f| f.set(false));
+    assert!(paused.is_none(), "the run waits at the dialog: {paused:?}");
+    let path = find_file(&base.join("settings"), "k.xmp").unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), PACKET, "the failed write leaves the file as it was");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"][0], json!(["Script file could not be written", "changed", "closed"]));
+    assert!(std::fs::read_to_string(&path).unwrap().contains("<dc:format>changed</dc:format>"), "the same XMPFile writes on its next close");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An `XMPFile` from an earlier run of a named engine is closed.
+#[test]
+fn an_xmp_file_from_an_earlier_run_is_closed() {
+    let base = folder("earlier");
+    let mut s = with_data(&base);
     let engine = |text: &str| format!("#targetengine xmp\n{LOAD}{text}");
     let main = base.join("main/main.jsx");
     write(&main, engine(&format!("var f = new File(Folder.userData.fsName + '/k2.xmp'); f.open('w'); f.write({PACKET:?}); f.close();")).as_bytes());
@@ -530,5 +553,87 @@ fn a_failed_write_keeps_the_packet_for_a_later_close() {
     write(&main, engine("try { kept.getXMP(); vc.log('open'); } catch (e) { vc.log(e.message); }").as_bytes());
     let r = s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
     assert_eq!(r["log"], json!(["XMPFile.getXMP: the file is closed"]), "an XMPFile from an earlier run is closed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The temporary file a sidecar is replaced through is readable by its owner alone while the
+/// packet is written to it, and the sidecar keeps its own permission bits.
+#[cfg(unix)]
+#[test]
+fn a_temporary_file_starts_private() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = folder("private");
+    let mut s = with_data(&base);
+    let log = logged(
+        &mut s,
+        &base,
+        &format!("var p = Folder.userData.fsName + '/a.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close(); vc.log(p);"),
+    );
+    let path = PathBuf::from(log[0].as_str().unwrap());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    crate::script::files::XMP_TEMP_MODE.with(|m| m.set(None));
+    logged(
+        &mut s,
+        &base,
+        "var x = new XMPFile(Folder.userData.fsName + '/a.xmp', XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+         var m = x.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); x.putXMP(m); x.closeFile();",
+    );
+    assert_eq!(crate::script::files::XMP_TEMP_MODE.with(std::cell::Cell::get).map(|m| m & 0o777), Some(0o600));
+    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o644);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A packet argument whose conversion closes the `XMPFile` leaves it closed: `canPutXMP` and
+/// `putXMP` throw that the file is closed, and nothing is written.
+#[test]
+fn converting_the_packet_cannot_close_the_file() {
+    let base = folder("reentrant");
+    let mut s = with_data(&base);
+    let log = logged(
+        &mut s,
+        &base,
+        &format!(
+            "var p = Folder.userData.fsName + '/r.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close();\n\
+             function closing(x) {{ var m = x.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); var s = m.serialize();\n\
+               return {{ toString: function () {{ x.closeFile(); return s; }} }}; }}\n\
+             var out = [], a = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+             try {{ out.push(a.canPutXMP(closing(a))); }} catch (e) {{ out.push(e.message); }}\n\
+             var b = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+             try {{ b.putXMP(closing(b)); out.push('put'); }} catch (e) {{ out.push(e.message); }}\n\
+             b.closeFile(); vc.log(out); vc.log(p);"
+        ),
+    );
+    assert_eq!(log[0], json!(["XMPFile.canPutXMP: the file is closed", "XMPFile.putXMP: the file is closed"]));
+    assert_eq!(std::fs::read_to_string(log[1].as_str().unwrap()).unwrap(), PACKET);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// With `CLOSE_UPDATE_SAFELY`, a sidecar whose folder takes no temporary file is left as it is and
+/// the `XMPFile` keeps its packet; a later `closeFile()` without the flag writes the file itself.
+#[test]
+fn a_safe_close_writes_only_through_a_temporary_file() {
+    let base = folder("safely");
+    let sidecar = base.join("picked/s.xmp");
+    write(&sidecar, PACKET.as_bytes());
+    let mut s = with_data(&base);
+    start_framed(
+        &mut s,
+        &base,
+        "var a = File.saveDialog('a');\n\
+         var x = new XMPFile(a.fsName, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+         var m = x.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); x.putXMP(m);\n\
+         var out = []; try { x.closeFile(XMPConst.CLOSE_UPDATE_SAFELY); out.push('closed'); } catch (e) { out.push(e.message, x.getXMP().getProperty(XMPConst.NS_DC, 'format').value); }\n\
+         File.saveDialog('pause'); x.closeFile(); out.push('written'); vc.log(out);",
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![sidecar.to_string_lossy().into_owned()], always: false }));
+    assert!(pump_to_picker(&mut s).is_none());
+    assert_eq!(std::fs::read_to_string(&sidecar).unwrap(), PACKET, "the safe close leaves the file as it was");
+    assert!(s.script_pick(crate::script::files::PickAnswer::Deny));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([["Script file could not be written", "changed", "written"]]));
+    assert!(std::fs::read_to_string(&sidecar).unwrap().contains("<dc:format>changed</dc:format>"));
+    let names: Vec<String> = std::fs::read_dir(base.join("picked")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, ["s.xmp"], "no other file is made");
     let _ = std::fs::remove_dir_all(base);
 }

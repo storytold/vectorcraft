@@ -508,7 +508,10 @@ impl Realm {
     /// globals `XMPMeta`, `XMPFile` and `XMPConst`; any other library name throws. `XMPFile` reads
     /// and writes files through the host functions `xmpOpen` and `xmpWrite` of
     /// [`Realm::define_file_classes`], which the host adds first; without `File` and `Folder`,
-    /// `XMPFile` throws. An `XMPFile` is open only in the run that opened it.
+    /// `XMPFile` throws. An `XMPFile` is open only in the run that opened it: each
+    /// [`Realm::reset_folder_current`] begins a new run for it, and [`Realm::run`] and
+    /// [`Realm::start`] do not. A second call fails with an internal error and leaves the realm's
+    /// `ExternalObject` and its registered namespaces as they are.
     pub fn define_external_object(&mut self) -> Result<(), RunError> {
         match crate::xmp_classes::install(&mut self.interp) {
             Ok(()) => Ok(()),

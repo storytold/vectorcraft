@@ -1,7 +1,7 @@
 use proptest::prelude::*;
 
 use crate::xmp::{self, Form, Registry, XmpError};
-use crate::{JsValue, Limits, Realm, RunErrorKind};
+use crate::{JsValue, LimitKind, Limits, Realm, RunErrorKind};
 
 fn realm() -> Realm {
     let mut r = Realm::with_options(crate::Options::default(), Limits::default());
@@ -354,6 +354,7 @@ fn localized_text_updates_a_single_generic_language_item() {
 #[test]
 fn localized_text_past_the_heap_limit_adds_no_array() {
     let mut stopped = 0;
+    let mut created = false;
     let mut seen = vec![];
     for step in 0..128 {
         let mut r = Realm::with_options(crate::Options::default(), Limits { heap_bytes: (256 << 10) + step * (16 << 10), ..Limits::default() });
@@ -365,17 +366,24 @@ fn localized_text_past_the_heap_limit_adds_no_array() {
             seen.push(format!("{step} text {e:?}"));
             continue;
         }
-        if r.run("m.setLocalizedText(XMPConst.NS_DC, 'title', null, s, s);").is_ok() {
-            seen.push(format!("{step} set"));
-            break;
-        }
-        stopped += 1;
-        match r.run("m.doesPropertyExist(XMPConst.NS_DC, 'title')") {
-            Ok(v) => assert_eq!(v, JsValue::Bool(false), "heap step {step}"),
-            Err(e) => panic!("{e:?}"),
+        let set = r.run("m.setLocalizedText(XMPConst.NS_DC, 'title', null, s, s);");
+        let exists = r.run("m.doesPropertyExist(XMPConst.NS_DC, 'title')");
+        match (set, exists) {
+            (Ok(_), Ok(v)) => {
+                assert_eq!(v, JsValue::Bool(true), "heap step {step}: the change adds the array");
+                created = true;
+                break;
+            }
+            (Err(e), Ok(v)) => {
+                assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "heap step {step}: {e:?}");
+                assert_eq!(v, JsValue::Bool(false), "heap step {step}");
+                stopped += 1;
+            }
+            (_, Err(e)) => panic!("{e:?}"),
         }
     }
     assert!(stopped > 0, "no heap limit stopped the change: {seen:?}");
+    assert!(created, "no heap limit let the change through: {seen:?}");
 }
 
 /// Setting the `x-default` item also changes the items that had its text, and leaves the others.
@@ -444,16 +452,208 @@ fn text_beside_an_array_is_kept() {
 #[test]
 fn rdf_and_xml_namespaces_hold_no_properties() {
     for ns in ["http://www.w3.org/1999/02/22-rdf-syntax-ns#", "http://www.w3.org/XML/1998/namespace"] {
-        assert_eq!(
-            thrown(&format!("new XMPMeta().setProperty({ns:?}, 'foo', 'x')")),
-            "Error: XMPMeta.setProperty: foo is not a valid property name",
-            "{ns}"
-        );
+        for name in ["foo", "li"] {
+            assert_eq!(
+                thrown(&format!("new XMPMeta().setProperty({ns:?}, {name:?}, 'x')")),
+                format!("Error: XMPMeta.setProperty: {name} is not a valid property name"),
+                "{ns}"
+            );
+        }
         assert_eq!(
             thrown(&format!("new XMPMeta().appendArrayItem({ns:?}, 'foo', 'x', XMPConst.PROP_IS_ARRAY)")),
             "Error: XMPMeta.appendArrayItem: foo is not a valid property name"
         );
     }
+}
+
+/// A second `define_external_object` is refused and keeps the namespaces the realm registered.
+#[test]
+fn a_second_external_object_is_refused() {
+    let mut r = realm();
+    let kept = r.run("new ExternalObject('lib:AdobeXMPScript'); XMPMeta.registerNamespace('http://kept/', 'kept')");
+    assert_eq!(kept.ok(), Some(JsValue::String("kept:".into())));
+    let again = r.define_external_object();
+    assert_eq!(again.map_err(|e| e.kind), Err(RunErrorKind::Internal));
+    let prefix = r.run("new ExternalObject('lib:AdobeXMPScript'); XMPMeta.getNamespacePrefix('http://kept/')");
+    assert_eq!(prefix.ok(), Some(JsValue::String("kept:".into())));
+}
+
+/// A path argument is converted to text once, so one whose text changes on each conversion names
+/// one property.
+#[test]
+fn paths_are_converted_once() {
+    let src = "function p(a, b) { var k = 0; return { toString: function () { return k++ ? b : a; } }; }
+        [m.getProperty(XMPConst.NS_DC, p('format', 'title')).path, m.getArrayItem(XMPConst.NS_DC, p('subject', 'title'), 1).path].join('|')";
+    assert_eq!(string(&with_packet(src)), "format|subject[1]");
+}
+
+/// A change to a language alternative moves an `x-default` item a packet gave later to the front,
+/// and keeps the order of the others.
+#[test]
+fn localized_text_moves_x_default_first() {
+    let packet = PACKET.replace(
+        "<rdf:li xml:lang=\"x-default\">Hello</rdf:li><rdf:li xml:lang=\"fr-FR\">Bonjour</rdf:li>",
+        "<rdf:li xml:lang=\"en\">Hello</rdf:li><rdf:li xml:lang=\"x-default\">Hello</rdf:li><rdf:li xml:lang=\"fr\">Salut</rdf:li>",
+    );
+    let src = format!(
+        "var m = new XMPMeta({packet:?}); m.setLocalizedText(XMPConst.NS_DC, 'title', null, 'en', 'Hi');
+         [1, 2, 3].map(function (n) {{ var p = m.getArrayItem(XMPConst.NS_DC, 'title', n); return p.locale + '=' + p.value; }}).join('|')"
+    );
+    assert_eq!(string(&src), "x-default=Hi|en=Hi|fr=Salut");
+}
+
+/// An item with `xml:lang=""` names no language, so its `rdf:Alt` is not a language alternative
+/// and has no `ARRAY_IS_ALTTEXT` (0x1000) option, and the empty attribute is written back.
+#[test]
+fn an_empty_language_is_no_language() {
+    let packet = PACKET.replace("<rdf:li xml:lang=\"fr-FR\">Bonjour</rdf:li>", "<rdf:li xml:lang=\"\">Bonjour</rdf:li>");
+    assert!(packet.contains("xml:lang=\"\""));
+    let src = format!(
+        "var m = new XMPMeta({packet:?}); var out = [];
+         try {{ m.getLocalizedText(XMPConst.NS_DC, 'title', null, 'x-default'); out.push('read'); }} catch (e) {{ out.push(e.message); }}
+         try {{ m.setLocalizedText(XMPConst.NS_DC, 'title', null, 'x-default', 'Hi'); out.push('set'); }} catch (e) {{ out.push(e.message); }}
+         out.push((m.getProperty(XMPConst.NS_DC, 'title').options & 0x1000) != 0);
+         out.push(m.serialize().indexOf('xml:lang=\"\"') >= 0);
+         out.join('|')"
+    );
+    assert_eq!(
+        string(&src),
+        "XMPMeta.getLocalizedText: title is not a language alternative array|XMPMeta.setLocalizedText: title is not a language alternative array|false|true"
+    );
+}
+
+/// Text beside the descriptions or their properties makes a packet malformed; whitespace there and
+/// text inside a property do not.
+#[test]
+fn text_beside_descriptions_is_malformed() {
+    let rdf = |body: &str| format!("<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>{body}</rdf:RDF>");
+    for body in [
+        "<rdf:Description xmlns:a='http://a/'>stray<a:p>x</a:p></rdf:Description>",
+        "<rdf:Description xmlns:a='http://a/'><a:p>x</a:p><![CDATA[stray]]></rdf:Description>",
+        "stray<rdf:Description xmlns:a='http://a/'><a:p>x</a:p></rdf:Description>",
+    ] {
+        assert_eq!(xmp::parse(&rdf(body), &mut Registry::default()), Err(XmpError::Malformed), "{body}");
+    }
+    let fine = rdf("\n <rdf:Description xmlns:a='http://a/'>\n  <a:p> x </a:p>\n </rdf:Description>\n");
+    let meta = xmp::parse(&fine, &mut Registry::default()).unwrap();
+    assert_eq!(meta.props.first().and_then(|p| p.value.text()), Some(" x "));
+}
+
+/// The properties of one namespace share its URI, and a read stops at its budget.
+#[test]
+fn many_properties_under_one_long_namespace_share_it() {
+    let uri = format!("http://long/{}/", "u".repeat(1000));
+    let body: String = (0..2000).map(|n| format!("<l:p{n}>v</l:p{n}>")).collect();
+    let packet = format!(
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:l='{uri}'>{body}</rdf:Description></rdf:RDF>"
+    );
+    let meta = xmp::parse(&packet, &mut Registry::default()).unwrap();
+    assert_eq!(meta.props.len(), 2000);
+    assert!(meta.props.windows(2).all(|w| std::rc::Rc::ptr_eq(&w[0].ns, &w[1].ns)), "one copy of the URI");
+    let bytes = meta.heap_bytes();
+    assert_eq!(xmp::parse_within(&packet, &mut Registry::default(), bytes / 2), Err(XmpError::Heap));
+    assert_eq!(xmp::parse_within(&packet, &mut Registry::default(), bytes), Ok(meta));
+    // The `rdf:about` value counts toward the budget too, in a packet with no properties.
+    let about =
+        format!("<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description rdf:about='{}'/></rdf:RDF>", "a".repeat(4096));
+    let meta = xmp::parse(&about, &mut Registry::default()).unwrap();
+    assert!(meta.props.is_empty());
+    assert_eq!(xmp::parse_within(&about, &mut Registry::default(), meta.heap_bytes() - 1), Err(XmpError::Heap));
+    assert_eq!(xmp::parse_within(&about, &mut Registry::default(), meta.heap_bytes()), Ok(meta));
+    let r = realm().run(&format!(
+        "new ExternalObject('lib:AdobeXMPScript'); var s = {packet:?}; var m = new XMPMeta(s); m.getProperty('{uri}', 'p0').value + ':' + m.getProperty('{uri}', 'p1999').value"
+    ));
+    assert_eq!(r.ok(), Some(JsValue::String("v:v".into())));
+}
+
+/// A value with qualifiers in the `rdf:value` form gives the text and options of its `rdf:value`,
+/// and an empty property element with fields as attributes is a structure; both write back as
+/// they were read.
+#[test]
+fn rdf_value_forms_give_their_text() {
+    let packet = PACKET.replace(
+        "<dc:format>",
+        "<dc:source rdf:parseType='Resource' xmlns:q='http://q/'><rdf:value>src</rdf:value><q:k>v</q:k></dc:source>\
+         <dc:rights><rdf:Description xmlns:q='http://q/'><rdf:value xml:lang='en'>r</rdf:value><q:k>v</q:k></rdf:Description></dc:rights>\
+         <dc:relation rdf:value='rel' xmlns:q='http://q/' q:k='v'/>\
+         <dc:coverage xmlns:q='http://q/' q:a='1' q:b='2'/>\
+         <dc:type rdf:parseType='Resource'><rdf:value rdf:resource='http://t/'/><dc:x>1</dc:x></dc:type>\
+         <dc:language><rdf:Description><rdf:value>plain</rdf:value></rdf:Description></dc:language><dc:format>",
+    );
+    let shown = "['source', 'rights', 'relation', 'coverage', 'type', 'language'].map(function (n) {
+        var p = m.getProperty(XMPConst.NS_DC, n); return p.value + ':' + p.options; }).join('|')";
+    let want = "src:16|r:80|rel:16|undefined:256|http://t/:18|plain:0";
+    assert_eq!(string(&format!("var m = new XMPMeta({packet:?}); {shown}")), want);
+    assert_eq!(string(&format!("var m = new XMPMeta(new XMPMeta({packet:?}).serialize()); {shown}")), want);
+}
+
+/// A packet is not written with more attributes on one element than a read takes, and a packet
+/// whose `rdf:RDF` lies deep reads back from what it writes.
+#[test]
+fn written_packets_keep_to_the_read_limits() {
+    let mut registry = Registry::default();
+    let mut meta = xmp::Meta::default();
+    for n in 0..1023 {
+        let uri = format!("http://n/{n}/");
+        registry.register(&uri, "n").unwrap();
+        meta.props.push(xmp::Prop { ns: uri.into(), name: "p".into(), value: xmp::Value::Simple { text: "v".into(), uri: false } });
+    }
+    assert_eq!(xmp::serialize(&meta, &registry, false), Err(XmpError::TooLarge), "1,025 declarations in scope");
+    meta.props.pop();
+    let out = xmp::serialize(&meta, &registry, false).unwrap();
+    assert_eq!(xmp::parse(&out, &mut registry), Ok(meta));
+    let decls: String = (0..600).map(|n| format!(" xmlns:b{n}='http://b/{n}/'")).collect();
+    let fields: String = (0..600).map(|n| format!(" b{n}:k='v'")).collect();
+    let kept = format!(
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description{decls}><b0:p{fields}>x</b0:p></rdf:Description></rdf:RDF>"
+    );
+    assert_eq!(xmp::parse(&kept, &mut Registry::default()), Err(XmpError::TooLarge), "a kept value that takes 600 declarations");
+    let simple: String = (0..600).map(|n| format!("<s{n}:p xmlns:s{n}='http://s/{n}/'>v</s{n}:p>")).collect();
+    let inner: String = (0..500).map(|n| format!(" xmlns:c{n}='http://c/{n}/'")).collect();
+    let spread = format!(
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description>{simple}\
+         <k:q xmlns:k='http://k/' rdf:parseType='Resource'><k:f{inner}>1</k:f></k:q></rdf:Description></rdf:RDF>"
+    );
+    let mut registry = Registry::default();
+    let meta = xmp::parse(&spread, &mut registry).unwrap();
+    assert_eq!(xmp::serialize(&meta, &registry, false), Err(XmpError::TooLarge), "600 declarations around a kept value with 502");
+    let wrap = 60;
+    let deep = format!(
+        "{}<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:a='http://a/'><a:p>v</a:p>\
+         <a:s rdf:parseType='Resource'><a:t>1</a:t></a:s></rdf:Description></rdf:RDF>{}",
+        "<w>".repeat(wrap),
+        "</w>".repeat(wrap)
+    );
+    let mut registry = Registry::default();
+    let meta = xmp::parse(&deep, &mut registry).unwrap();
+    let out = xmp::serialize(&meta, &registry, true).unwrap();
+    assert_eq!(xmp::parse(&out, &mut registry), Ok(meta));
+}
+
+/// Inside a packet, a start or a trailer in a CDATA section or a comment is text, and a packet that
+/// is not UTF-8 is passed over for the next one.
+#[test]
+fn packet_markers_in_sections_are_text() {
+    let start = "<?xpacket begin='' id='W5M0MpCehiHzreSzNTczkc9d'?>";
+    for section in [format!("<![CDATA[{start}]]>"), format!("<!-- {start} -->"), "<![CDATA[<?xpacket end='w'?>]]>".to_string()] {
+        let inner = PACKET.replace("<dc:format>image/svg+xml", &format!("<dc:format>{section}"));
+        let bytes = format!("binary\0{inner}");
+        assert_eq!(xmp::find_packet(bytes.as_bytes()).map(|s| (s.start, s.end)), Some((7, bytes.len())), "{section}");
+    }
+    let mut bad = PACKET.as_bytes().to_vec();
+    if let Some(at) = PACKET.find("image") {
+        bad[at] = 0xFF;
+    }
+    let both = [bad.as_slice(), b"gap", PACKET.as_bytes()].concat();
+    let span = xmp::find_packet(&both).map(|s| (s.start, s.end));
+    assert_eq!(span, Some((bad.len() + 3, both.len())), "the UTF-8 packet after one that is not");
+    // A section that a trailer and then a later packet's start come before the end of does not
+    // hide that start.
+    let first = [start.as_bytes(), b"<![CDATA[\xFF<?xpacket end='w'?>"].concat();
+    let second = PACKET.replace("<dc:format>image/svg+xml", "<dc:format><!-- ]]> -->image/svg+xml");
+    let both = [first.as_slice(), second.as_bytes()].concat();
+    let span = xmp::find_packet(&both).map(|s| (s.start, s.end));
+    assert_eq!(span, Some((first.len(), both.len())), "the packet after an unclosed section");
 }
 
 #[test]
@@ -490,8 +690,68 @@ const PIECES: &[&str] = &[
     "</b:r>",
 ];
 
+/// A property of a generated packet that reads.
+#[derive(Clone, Debug)]
+enum Generated {
+    Simple(String),
+    Uri(String),
+    Array(usize, Vec<(String, Option<String>)>),
+    Kept(String),
+}
+
+fn generated_property() -> impl Strategy<Value = Generated> {
+    let text = "[a-zA-Z0-9 &<>\"']{0,8}";
+    prop_oneof![
+        text.prop_map(Generated::Simple),
+        "[a-z]{1,6}".prop_map(|s| Generated::Uri(format!("http://r/{s}"))),
+        (0..3usize, proptest::collection::vec((text, proptest::option::of("[a-z]{2}(-[A-Z]{2})?")), 0..4))
+            .prop_map(|(f, items)| Generated::Array(f, items)),
+        text.prop_map(Generated::Kept),
+    ]
+}
+
+/// The packet the properties `props` make, each named by its position.
+fn generated_packet(props: &[Generated]) -> String {
+    let mut body = String::new();
+    for (n, p) in props.iter().enumerate() {
+        match p {
+            Generated::Simple(t) => body.push_str(&format!("<a:p{n}>{}</a:p{n}>", craft_xml::esc(t))),
+            Generated::Uri(u) => body.push_str(&format!("<a:p{n} rdf:resource='{u}'/>")),
+            Generated::Array(form, items) => {
+                let form = ["rdf:Bag", "rdf:Seq", "rdf:Alt"][*form];
+                body.push_str(&format!("<a:p{n}><{form}>"));
+                for (t, lang) in items {
+                    let lang = lang.as_ref().map(|l| format!(" xml:lang='{l}'")).unwrap_or_default();
+                    body.push_str(&format!("<rdf:li{lang}>{}</rdf:li>", craft_xml::esc(t)));
+                }
+                body.push_str(&format!("</{form}></a:p{n}>"));
+            }
+            Generated::Kept(t) => body.push_str(&format!("<a:p{n} rdf:parseType='Resource'><a:f>{}</a:f></a:p{n}>", craft_xml::esc(t))),
+        }
+    }
+    format!(
+        "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description rdf:about='' xmlns:a='http://a/'>{body}</rdf:Description></rdf:RDF>"
+    )
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// A packet of simple values, URIs, arrays and kept values reads, and reads back the same from
+    /// what it serializes to.
+    #[test]
+    fn valid_packets_round_trip(props in proptest::collection::vec(generated_property(), 0..12)) {
+        let text = generated_packet(&props);
+        let mut registry = Registry::default();
+        let meta = xmp::parse(&text, &mut registry);
+        prop_assert!(meta.is_ok(), "{}", text);
+        let meta = meta.unwrap_or_default();
+        prop_assert_eq!(meta.props.len(), props.len());
+        let out = xmp::serialize(&meta, &registry, true);
+        prop_assert!(out.is_ok(), "{}", text);
+        let again = xmp::parse(&out.unwrap_or_default(), &mut registry);
+        prop_assert_eq!(again.as_ref().ok(), Some(&meta), "{}", text);
+    }
 
     /// Any arrangement of packet pieces reads without a panic, and what reads serializes to a packet
     /// that reads back the same.
