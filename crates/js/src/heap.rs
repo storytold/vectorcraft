@@ -231,6 +231,9 @@ pub(crate) enum Class {
     Symbol(crate::symbol::Sym),
     /// An Array Iterator or a String Iterator and how far it has gone (sections 22.1.5 and 21.1.5).
     Iterator(Box<crate::builtins::iterator::IterState>),
+    /// The Iterator Record of a `for-of` loop, an array pattern or a spread in progress, on the
+    /// operand stack only.
+    IterRecord(Box<crate::iteration::IterRecord>),
     ForIn(Box<ForIn>),
     /// The `Math` object (section 15.8).
     Math,
@@ -316,7 +319,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -641,6 +644,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.names.len()
             + code.functions.len()
             + code.params.len()
+            + code.pattern_names.len()
             + code.vars.len()
             + 2 * code.fun_decls.len()
             + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
@@ -660,7 +664,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(pattern);
             strings.add(flags);
         }
-        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        let keys = code.names.iter().chain(&code.params).chain(&code.pattern_names).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
         for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
         }
@@ -713,6 +717,15 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             strings.bytes += state.keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         }
         Class::Symbol(s) => strings.add_symbol(s),
+        Class::IterRecord(r) => {
+            mark_value(&r.iterator, work, strings);
+            mark_value(&r.next, work, strings);
+            match &r.walk {
+                Some(crate::iteration::Walk::Array(a, _)) => work.push(a.0),
+                Some(crate::iteration::Walk::String(s, _)) => strings.add(s),
+                None => {}
+            }
+        }
         Class::Iterator(state) => match &**state {
             crate::builtins::iterator::IterState::Array { target, .. } => work.extend(target.iter().map(|o| o.0)),
             crate::builtins::iterator::IterState::String { text, .. } => text.iter().for_each(|s| strings.add(s)),

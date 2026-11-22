@@ -2620,9 +2620,14 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 `.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
 `const` with block scope and their temporal dead zone, a new `let` binding for each `for` loop iteration, function
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
-parameters, and spread in array literals, calls and `new`. Spread reads arrays, strings (by code point) and objects
-with a `length` property, by index, and throws a `TypeError` for any other value; that rule is VectorCraft's own
-until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+parameters, spread in array literals, calls and `new`, `for`-`of` loops, array and object destructuring in `var`,
+`let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
+and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
+`for`-`of` and array patterns use the iterator protocol, and a loop or pattern left early calls the iterator's
+`return` method. Destructuring `undefined` or `null` throws a `TypeError`. Object rest properties
+(`{ a, ...rest }`, ECMAScript 2018) are syntax errors. In an engine that `#targetengine` keeps and a `.jsx` script
+started, which has no `Symbol`, spread, `for`-`of` and array patterns read arrays, `arguments` objects and strings
+(by code point), by index, and throw a `TypeError` for any other value; that rule is VectorCraft's own. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
@@ -2652,9 +2657,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
-A script does not have `Symbol` or the iterators of arrays, strings and `arguments` objects: `typeof Symbol` is
-`"undefined"`, and `Array.prototype.values`, `keys` and `entries` are not defined. The JavaScript engine's ECMAScript
-2015 mode (`Options::es2015` in `vectorcraft-js`) adds them, as `docs/target-app-parity.md` describes.
+A `.jsx` script and a `source` string do not have `Symbol` or the iterators of arrays, strings and `arguments`
+objects: `typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries` are not defined. A `.js`
+script that starts a new engine has them, through the JavaScript engine's ECMAScript 2015 mode (`Options::es2015` in
+`vectorcraft-js`), as `docs/target-app-parity.md` describes; an engine that `#targetengine` keeps has them only when a
+`.js` script started it.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and

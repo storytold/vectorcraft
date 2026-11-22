@@ -49,7 +49,7 @@ pub(crate) type JsResult<T> = Result<T, Abrupt>;
 /// with a NUL, which no identifier holds.
 const ARROW_THIS: &[u16] = &[0, 0x74, 0x68, 0x69, 0x73];
 
-fn internal<T>(message: &str) -> JsResult<T> {
+pub(crate) fn internal<T>(message: &str) -> JsResult<T> {
     Err(Abrupt::Internal(message.into()))
 }
 
@@ -1102,6 +1102,16 @@ impl Interp {
                 self.replace(1, Value::String(s))
             }
             Op::TemplateObject(i) => self.op_template_object(i),
+            Op::GetIterator => self.op_get_iterator(),
+            Op::IterStep(t) => self.op_iter_step(t),
+            Op::IterValue(n) => self.op_iter_value(n),
+            Op::IterRest(n) => self.op_iter_rest(n),
+            Op::IterClose => self.op_iter_close(),
+            Op::IterCloseThrow => self.op_iter_close_throw(),
+            Op::RequireObjectCoercible => self.op_require_object_coercible(),
+            Op::PatternGet(n) => self.op_pattern_get(n),
+            Op::InitIndex => self.op_init_index(),
+            Op::InitAccessorIndex(getter) => self.op_init_accessor_index(getter),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
     }
@@ -1152,6 +1162,26 @@ impl Interp {
         Err(self.throw(ErrorType::Reference, &message))
     }
 
+    /// Throws `v` again from a handler that is not a catch clause, with the stack cut back to
+    /// where the handler took it: the exception keeps the position and mark it was thrown with.
+    pub(crate) fn rethrow(&mut self, v: Value) -> Abrupt {
+        self.passing = v.clone();
+        self.throw_site = None;
+        self.thrown_mark = None;
+        if let Value::Object(o) = v
+            && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
+        {
+            self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
+            self.finally_marks.truncate(i);
+        }
+        let slot = self.stack.len();
+        if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
+            self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
+            self.finally_sites.truncate(i);
+        }
+        Abrupt::Throw(v)
+    }
+
     fn op_end_finally(&mut self, table: u32) -> JsResult<()> {
         let Value::Number(kind) = self.pop()? else { return internal("finally kind is not a number") };
         if kind == 0.0 {
@@ -1159,19 +1189,7 @@ impl Interp {
         }
         if kind == 1.0 {
             let v = self.pop()?;
-            self.passing = v.clone();
-            if let Value::Object(o) = v
-                && let Some(i) = self.finally_marks.iter().rposition(|&(id, _, _)| id == o)
-            {
-                self.thrown_mark = self.finally_marks.get(i).map(|&(_, mark, _)| mark);
-                self.finally_marks.truncate(i);
-            }
-            let slot = self.stack.len();
-            if let Some(i) = self.finally_sites.iter().rposition(|&(_, s)| s == slot) {
-                self.throw_site = self.finally_sites.get(i).map(|(site, _)| site.clone());
-                self.finally_sites.truncate(i);
-            }
-            return Err(Abrupt::Throw(v));
+            return Err(self.rethrow(v));
         }
         let k = (kind - 2.0) as usize;
         let target = self.frame()?.code.finally_tables.get(table as usize).and_then(|t| t.get(k)).copied();
@@ -2078,6 +2096,47 @@ impl Interp {
         self.define(o, name, Prop::Accessor { get, set, flags: ENUMERABLE | CONFIGURABLE })
     }
 
+    /// `object key value` → `object`: a property with a computed name, the key already a name or
+    /// a Symbol.
+    fn op_init_index(&mut self) -> JsResult<()> {
+        let v = self.pop()?;
+        let k = self.pop()?;
+        let Value::Object(o) = self.peek(0)? else { return internal("object literal is not an object") };
+        let prop = Prop::Data { value: v, flags: OPEN };
+        match k {
+            Value::Symbol(s) => self.define_sym(o, s, prop),
+            Value::String(s) => self.define(o, s.flat(), prop),
+            _ => internal("computed property name is not a key"),
+        }
+    }
+
+    /// `object key function` → `object`: a getter (or a setter) with a computed name.
+    fn op_init_accessor_index(&mut self, getter: bool) -> JsResult<()> {
+        let Value::Object(f) = self.pop()? else { return internal("accessor is not a function") };
+        let k = self.pop()?;
+        let Value::Object(o) = self.peek(0)? else { return internal("object literal is not an object") };
+        let current = match &k {
+            Value::Symbol(s) => self.get_own_sym(o, s)?,
+            Value::String(s) => self.object(o)?.props.get(&s.flat()).cloned(),
+            _ => return internal("computed property name is not a key"),
+        };
+        let (mut get, mut set) = match current {
+            Some(Prop::Accessor { get, set, .. }) => (get, set),
+            _ => (None, None),
+        };
+        if getter {
+            get = Some(f);
+        } else {
+            set = Some(f);
+        }
+        let prop = Prop::Accessor { get, set, flags: ENUMERABLE | CONFIGURABLE };
+        match k {
+            Value::Symbol(s) => self.define_sym(o, s, prop),
+            Value::String(s) => self.define(o, s.flat(), prop),
+            _ => internal("computed property name is not a key"),
+        }
+    }
+
     fn op_closure(&mut self, i: u32) -> JsResult<()> {
         let frame = self.frame()?;
         let (env, this) = (frame.env, frame.this.clone());
@@ -2303,77 +2362,6 @@ impl Interp {
     }
 
     // ---- ECMAScript 2015 spread and templates ----
-
-    /// Appends the elements of the value on top to the array under it: an array's elements by
-    /// index (holes read as `undefined`), a string's characters by code point, and an object with
-    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel.
-    fn op_array_spread(&mut self) -> JsResult<()> {
-        let v = self.peek(0)?;
-        let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
-        let items: Vec<Value> = match &v {
-            Value::String(s) => {
-                let units = s.flat();
-                let mut out = Vec::new();
-                let mut held = HeldBytes::new(self);
-                let mut i = 0;
-                while let Some(&u) = units.get(i) {
-                    self.use_fuel()?;
-                    held.add(self, PROP_BYTES)?;
-                    let pair = (0xD800..0xDC00).contains(&u) && units.get(i + 1).is_some_and(|n| (0xDC00..0xE000).contains(n));
-                    let len = if pair { 2 } else { 1 };
-                    out.push(Value::String(Str::from_units(units.get(i..i + len).unwrap_or_default().to_vec())));
-                    i += len;
-                }
-                out
-            }
-            Value::Object(o) if self.has_property(*o, &key("length"))? => {
-                let o = *o;
-                let len = self.get_from(o, &key("length"), &v)?;
-                // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
-                let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
-                let current = match &self.object(a)?.class {
-                    Class::Array { length, .. } => *length,
-                    _ => return internal("spread into something that is not an array"),
-                };
-                let Some(n) = u32::MAX.checked_sub(current).filter(|room| n < f64::from(*room)).map(|_| n as u32) else {
-                    return Err(self.throw(ErrorType::Range, "array literal too long"));
-                };
-                // The elements read so far stay reachable while a getter runs.
-                // The list is counted against the heap limit as it grows.
-                let mark = self.temp_roots.len();
-                let mut held = HeldBytes::new(self);
-                let mut read = || -> JsResult<()> {
-                    for i in 0..n {
-                        self.use_fuel()?;
-                        held.add(self, PROP_BYTES)?;
-                        let item = self.get_from(o, &index_key(i), &v)?;
-                        self.temp_roots.push(item);
-                    }
-                    Ok(())
-                };
-                let r = read();
-                drop(held);
-                let out = self.temp_roots.split_off(mark.min(self.temp_roots.len()));
-                r?;
-                out
-            }
-            _ => {
-                let what = self.describe(&v);
-                return Err(self.type_error(&format!("{what} cannot be spread")));
-            }
-        };
-        let o = self.object_mut(a)?;
-        let Class::Array { length, .. } = &mut o.class else { return internal("spread into something that is not an array") };
-        let start = *length;
-        let Some(end) = u32::try_from(items.len()).ok().and_then(|n| start.checked_add(n)).filter(|&e| e < u32::MAX) else {
-            return Err(self.throw(ErrorType::Range, "array literal too long"));
-        };
-        *length = end;
-        for (i, item) in (start..end).zip(items) {
-            self.define(a, index_key(i), Prop::Data { value: item, flags: OPEN })?;
-        }
-        self.pop().map(drop)
-    }
 
     /// Takes the array of a call's or `new`'s arguments off the stack and pushes its elements.
     fn unpack_args(&mut self) -> JsResult<u32> {
@@ -2737,7 +2725,7 @@ impl Interp {
         if self.frames.len() >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
-        let params = code.params.iter().fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
+        let params = code.params.iter().chain(&code.pattern_names).fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
         let arguments =
             if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
         let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments);
@@ -2802,6 +2790,10 @@ impl Interp {
             b.uninitialized = code.param_init;
             b.lexical = code.param_init;
             bindings.insert(rest.clone(), b);
+        }
+        for name in &code.pattern_names {
+            self.use_fuel()?;
+            bindings.insert(name.clone(), Binding::lexical(false));
         }
         let name_bytes = bindings.iter().map(|(k, _)| string_bytes(k.len())).sum::<usize>();
         let env = self.heap.alloc_env(Env::Decl { bindings, outer: Some(outer) });

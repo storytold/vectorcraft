@@ -205,6 +205,26 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// `value` → its Iterator Record (GetIterator, ECMA-262 11th edition section 7.4.1).
+    GetIterator,
+    /// `record` → `record value`, or jumps with `record` when the iterator is done.
+    IterStep(u32),
+    /// `record x₁…xₙ` → `record x₁…xₙ value`: the next value, `undefined` once it is done.
+    IterValue(u32),
+    /// `record x₁…xₙ` → `record x₁…xₙ array`: the values left, in an array.
+    IterRest(u32),
+    /// `record` → nothing: closes the iterator unless it is done (IteratorClose).
+    IterClose,
+    /// `record exception` → throws the exception after closing the iterator unless it is done.
+    IterCloseThrow,
+    /// `value` → `value`: a `TypeError` when it is `undefined` or `null`.
+    RequireObjectCoercible,
+    /// `object key x₁…xₙ` → `object key x₁…xₙ object[key]`: an object pattern's property.
+    PatternGet(u32),
+    /// `object key value` → `object`: a property with a computed name.
+    InitIndex,
+    /// `object key function` → `object`: a getter (`true`) or a setter with a computed name.
+    InitAccessorIndex(bool),
 }
 
 /// The names a block declares, entered with [`Op::PushBlock`].
@@ -296,9 +316,13 @@ pub(crate) struct Code {
     pub(crate) arrow: bool,
     /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
     pub(crate) uses_this: bool,
-    /// The function has default or rest parameters: its parameters start uninitialized, its
-    /// code initializes them and then enters its body with [`Op::BodyEnv`].
+    /// The function has default, rest or destructured parameters: its parameters start
+    /// uninitialized, its code initializes them and then enters its body with [`Op::BodyEnv`].
     pub(crate) param_init: bool,
+    /// The names the destructured parameters bind, which start uninitialized beside the
+    /// parameters. A destructured parameter's own entry in `params` is a name no script can
+    /// write.
+    pub(crate) pattern_names: Vec<Key>,
 }
 
 impl Code {
@@ -380,7 +404,13 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
-        Op::ToStr => e(1, 1),
+        Op::ToStr | Op::GetIterator | Op::RequireObjectCoercible => e(1, 1),
+        Op::IterStep(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::IterValue(n) | Op::IterRest(n) => e(n.checked_add(1).ok_or("operand too large")?, n.checked_add(2).ok_or("operand too large")?),
+        Op::PatternGet(n) => e(n.checked_add(2).ok_or("operand too large")?, n.checked_add(3).ok_or("operand too large")?),
+        Op::IterClose => e(1, 0),
+        Op::IterCloseThrow => end(2),
+        Op::InitIndex | Op::InitAccessorIndex(_) => e(3, 1),
     })
 }
 

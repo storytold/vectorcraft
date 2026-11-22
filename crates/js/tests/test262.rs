@@ -44,6 +44,11 @@
 //! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
 //! that parse as ES5. Its failures go to `symbol-failures.txt`.
 //!
+//! The last test reads the tests of `for-of` and destructuring (the folders
+//! [`FOR_OF_AND_PATTERN_FOLDERS`] names) with [`Options::es2015`]: tests of any edition whose
+//! feature tags are all in [`FOR_OF_AND_PATTERN_FEATURES`]. Negative parse tests must give a
+//! `SyntaxError`; the others run as the Symbol tests run. Its failures go to `for-of-failures.txt`.
+//!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
 //! [`MAX_FILE_BYTES`] before reading it. A folder or file it cannot read fails the test.
@@ -913,6 +918,114 @@ fn run_symbol_built_ins(dir: &Path) {
     }
     println!("test262 Symbol and iterators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
     assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// The folders of the tests of `for-of` and destructuring, which are read in a realm with
+/// [`Options::es2015`].
+const FOR_OF_AND_PATTERN_FOLDERS: &[&str] = &[
+    "language/statements/for-of",
+    "language/expressions/assignment/destructuring",
+    "language/expressions/assignment/dstr",
+    "language/statements/variable/dstr",
+    "language/statements/let/dstr",
+    "language/statements/const/dstr",
+    "language/statements/function/dstr",
+    "language/expressions/function/dstr",
+    "language/expressions/arrow-function/dstr",
+    "language/statements/try/dstr",
+    "language/statements/for/dstr",
+    "language/statements/for-in/dstr",
+];
+
+/// The feature tags of the tests under [`FOR_OF_AND_PATTERN_FOLDERS`] that are read; a test with
+/// any other tag is skipped.
+const FOR_OF_AND_PATTERN_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "destructuring-binding",
+    "destructuring-assignment",
+    "computed-property-names",
+    "Symbol",
+    "Symbol.iterator",
+];
+
+#[test]
+fn es2015_for_of_and_destructuring_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 for-of and destructuring: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_for_of_and_patterns(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Reads the tests under each folder [`FOR_OF_AND_PATTERN_FOLDERS`] names whose feature tags are
+/// all in [`FOR_OF_AND_PATTERN_FEATURES`] with [`Options::es2015`]: a negative parse test must give
+/// a `SyntaxError`, and the others run as [`run_tagged_tests`] runs them. Prints the counts of each
+/// folder and writes the failures to `for-of-failures.txt` beside the suite.
+fn run_for_of_and_patterns(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in FOR_OF_AND_PATTERN_FOLDERS {
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            println!("test262 {folder}: SKIPPED (not in this suite)");
+            continue;
+        };
+        let mut counts = run_parse_negatives(dir, &root, &options, FOR_OF_AND_PATTERN_FEATURES);
+        counts.add(run_tagged_tests(dir, &root, &missing, &options, FOR_OF_AND_PATTERN_FEATURES));
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no for-of or destructuring tests ran under {}", dir.display());
+    let path = dir.join("for-of-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 for-of and destructuring with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// Parses the negative parse tests under `root` whose feature tags are all in `features`, in
+/// each mode the test names, with `options`; each must give a `SyntaxError`.
+fn run_parse_negatives(dir: &Path, root: &Path, options: &Options, features: &[&str]) -> RunCounts {
+    let mut counts = RunCounts::default();
+    for path in or_fail(test_files(root)) {
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.flags.iter().any(|f| f == "module") || meta.negative_phase.as_deref() != Some("parse") {
+            continue;
+        }
+        if meta.features.iter().any(|f| !features.contains(&f.as_str())) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+            match std::panic::catch_unwind(|| parse(&text, options).is_err()) {
+                Ok(true) => counts.passed += 1,
+                Ok(false) => {
+                    counts.failed += 1;
+                    let mode = if strict { "strict" } else { "sloppy" };
+                    counts.failures.push_str(&format!("{rel} ({mode}): parsed; a SyntaxError was expected\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel}: PANIC\n"));
+                }
+            }
+        }
+    }
+    counts
 }
 
 /// Runs the script tests under `root` of any edition whose feature tags are all in `features`,

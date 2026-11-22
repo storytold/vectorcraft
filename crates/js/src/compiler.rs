@@ -13,17 +13,20 @@
 //! chains and labels are compiled with loops; every other kind of nesting is counted, and code
 //! nested deeper than [`MAX_DEPTH`] gives a `SyntaxError` instead of exhausting the stack.
 
+mod pattern;
+
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, PropertyValue, Stmt, StmtId,
-    TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, Binding, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, PropertyKey, PropertyValue,
+    Stmt, StmtId, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 use crate::bytecode::{BlockScope, Code, CodeKind, Handler, Op, Source, Template, fallthrough_effect, verify};
 use crate::error::{SyntaxError, TOO_DEEP};
 use crate::heap::Key;
 use crate::value::Str;
+use pattern::Mode;
 
 /// How deeply the compiler may recurse: past the parser's default nesting limit, and shallow
 /// enough for a 1 MiB stack.
@@ -61,6 +64,9 @@ enum Ctx {
     Jump { labels: Vec<String>, is_loop: bool, plain_break: bool, brk: Label, cont: Option<Label>, depth: u32, env_depth: u32 },
     /// The protected part (and catch clause) of a `try` with a `finally` block.
     Finally { try_depth: u32, env_depth: u32, entry: Label, exits: Vec<Exit> },
+    /// The body of a `for-of` loop, whose Iterator Record is the top value at `depth`: a jump
+    /// out of the loop closes the iterator.
+    Iterator { depth: u32, env_depth: u32 },
 }
 
 struct FnCompiler<'a> {
@@ -265,7 +271,7 @@ impl<'a> FnCompiler<'a> {
                 scopes.len() - 1
             };
             match stmt {
-                Stmt::Var(decls) => decls.iter().for_each(|d| add_var(&mut out, key_of(&d.name.name))),
+                Stmt::Var(decls) => decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).for_each(|n| add_var(&mut out, key_of(&n.name))),
                 Stmt::Lexical(..) => {}
                 Stmt::FunctionDecl(fid) => {
                     let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
@@ -295,21 +301,23 @@ impl<'a> FnCompiler<'a> {
                 Stmt::For { init, body, .. } => {
                     let s = match init {
                         Some(ForInit::Var(decls)) => {
-                            decls.iter().for_each(|d| add_var(&mut out, key_of(&d.name.name)));
+                            decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).for_each(|n| add_var(&mut out, key_of(&n.name)));
                             scope
                         }
-                        Some(ForInit::Lexical(_, decls)) => enter(decls.iter().map(|d| key_of(&d.name.name)).collect()),
+                        Some(ForInit::Lexical(_, decls)) => {
+                            enter(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| key_of(&n.name)).collect())
+                        }
                         _ => scope,
                     };
                     work.push((*body, nested || inner, s));
                 }
-                Stmt::ForIn { target, body, .. } => {
+                Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
                     let s = match target {
                         ForInTarget::Var(d) => {
-                            add_var(&mut out, key_of(&d.name.name));
+                            self.ast.bound_names(&d.target).iter().for_each(|n| add_var(&mut out, key_of(&n.name)));
                             scope
                         }
-                        ForInTarget::Lexical(_, name) => enter(HashSet::from([key_of(&name.name)])),
+                        ForInTarget::Lexical(_, binding) => enter(self.ast.bound_names(binding).iter().map(|n| key_of(&n.name)).collect()),
                         ForInTarget::Expr(_) => scope,
                     };
                     work.push((*body, nested || inner, s));
@@ -362,7 +370,7 @@ impl<'a> FnCompiler<'a> {
     fn lexical_names(&self, list: &[StmtId]) -> HashSet<Key> {
         list.iter()
             .filter_map(|&s| match self.ast.stmt(s) {
-                Some(Stmt::Lexical(_, decls)) => Some(decls.iter().map(|d| key_of(&d.name.name))),
+                Some(Stmt::Lexical(_, decls)) => Some(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| key_of(&n.name))),
                 _ => None,
             })
             .flatten()
@@ -378,7 +386,9 @@ impl<'a> FnCompiler<'a> {
         let mut scope = BlockScope::default();
         for &s in list {
             match self.ast.stmt(s) {
-                Some(Stmt::Lexical(kind, decls)) => scope.lets.extend(decls.iter().map(|d| (key_of(&d.name.name), *kind == LexKind::Const))),
+                Some(Stmt::Lexical(kind, decls)) => {
+                    scope.lets.extend(decls.iter().flat_map(|d| self.ast.bound_names(&d.target)).map(|n| (key_of(&n.name), *kind == LexKind::Const)));
+                }
                 Some(Stmt::FunctionDecl(fid)) if functions && !self.top_funcs.contains(&s) => {
                     let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
                         return internal("function declaration without a name");
@@ -417,13 +427,12 @@ impl<'a> FnCompiler<'a> {
     /// `let` or `const` declarations: each binding initialized with its value or `undefined`.
     fn lexical_decls(&mut self, decls: &[VarDecl]) -> CResult<()> {
         for d in decls {
-            match d.init {
-                Some(init) => self.expr(init)?,
-                None => self.emit(Op::Undefined),
+            match (d.init, &d.target) {
+                (Some(init), _) => self.expr(init)?,
+                (None, Binding::Name(_)) => self.emit(Op::Undefined),
+                (None, Binding::Pattern(_)) => return internal("a destructuring declaration without an initializer"),
             }
-            self.at(d.name.span.start);
-            let n = self.var_name(&d.name.name);
-            self.emit(Op::InitVar(n));
+            self.bind_to(&d.target, Mode::Lexical)?;
         }
         Ok(())
     }
@@ -473,7 +482,7 @@ impl<'a> FnCompiler<'a> {
             }
             Stmt::Block(list) => self.block(list),
             Stmt::If { .. } => self.if_chain(id),
-            Stmt::DoWhile { .. } | Stmt::While { .. } | Stmt::For { .. } | Stmt::ForIn { .. } => self.loop_stmt(id, Vec::new()),
+            Stmt::DoWhile { .. } | Stmt::While { .. } | Stmt::For { .. } | Stmt::ForIn { .. } | Stmt::ForOf { .. } => self.loop_stmt(id, Vec::new()),
             Stmt::Continue(label) => self.jump_stmt(label.as_ref().map(|l| l.name.as_str()), true),
             Stmt::Break(label) => self.jump_stmt(label.as_ref().map(|l| l.name.as_str()), false),
             Stmt::Return(value) => {
@@ -536,10 +545,7 @@ impl<'a> FnCompiler<'a> {
         for d in decls {
             if let Some(init) = d.init {
                 self.expr(init)?;
-                self.at(d.name.span.start);
-                let n = self.var_name(&d.name.name);
-                self.emit(Op::SetVar(n));
-                self.emit(Op::Pop);
+                self.bind_to(&d.target, Mode::Var)?;
             }
         }
         Ok(())
@@ -581,7 +587,9 @@ impl<'a> FnCompiler<'a> {
             cur = *body;
         }
         match self.ast.stmt(cur) {
-            Some(Stmt::DoWhile { .. } | Stmt::While { .. } | Stmt::For { .. } | Stmt::ForIn { .. }) => self.loop_stmt(cur, labels),
+            Some(Stmt::DoWhile { .. } | Stmt::While { .. } | Stmt::For { .. } | Stmt::ForIn { .. } | Stmt::ForOf { .. }) => {
+                self.loop_stmt(cur, labels)
+            }
             Some(Stmt::Switch { .. }) => self.switch_stmt(cur, labels),
             _ => {
                 let brk = self.new_label();
@@ -653,6 +661,7 @@ impl<'a> FnCompiler<'a> {
                 self.jump(Op::Jump, head);
             }
             Some(Stmt::ForIn { target, object, body, each }) => return self.for_in(target, *object, *body, labels, *each),
+            Some(Stmt::ForOf { target, iterable, body }) => return self.for_of(target, *iterable, *body, labels),
             _ => return internal("not a loop"),
         }
         self.bind(brk);
@@ -674,7 +683,8 @@ impl<'a> FnCompiler<'a> {
         brk: Label,
         cont: Label,
     ) -> CResult<()> {
-        let scope = BlockScope { lets: decls.iter().map(|d| (key_of(&d.name.name), kind == LexKind::Const)).collect(), funcs: Vec::new() };
+        let lets = decls.iter().flat_map(|d| self.bound_keys(&d.target)).map(|k| (k, kind == LexKind::Const)).collect();
+        let scope = BlockScope { lets, funcs: Vec::new() };
         let scope = self.push_scope(scope);
         self.emit(Op::PushBlock(scope));
         self.env_depth += 1;
@@ -707,16 +717,9 @@ impl<'a> FnCompiler<'a> {
 
     /// `for (let x in o)`, `for (const x in o)` and `for each` with them: the object read where
     /// `x` is not yet initialized, then a new binding of `x` for each name.
-    fn for_in_lexical(
-        &mut self,
-        kind: LexKind,
-        name: &crate::ast::Name,
-        object: ExprId,
-        body: StmtId,
-        labels: Vec<String>,
-        each: bool,
-    ) -> CResult<()> {
-        let scope = self.push_scope(BlockScope { lets: vec![(key_of(&name.name), kind == LexKind::Const)], funcs: Vec::new() });
+    fn for_in_lexical(&mut self, kind: LexKind, binding: &Binding, object: ExprId, body: StmtId, labels: Vec<String>, each: bool) -> CResult<()> {
+        let lets = self.bound_keys(binding).into_iter().map(|k| (k, kind == LexKind::Const)).collect();
+        let scope = self.push_scope(BlockScope { lets, funcs: Vec::new() });
         self.emit(Op::PushBlock(scope));
         self.env_depth += 1;
         self.expr(object)?;
@@ -731,15 +734,13 @@ impl<'a> FnCompiler<'a> {
         let outer_env = self.env_depth;
         self.emit(Op::PushBlock(scope));
         self.env_depth += 1;
-        self.at(name.span.start);
-        let n = self.var_name(&name.name);
         if each {
             // The value initializes the binding; the name under it goes next.
             self.emit(Op::ForEachValue(0));
-            self.emit(Op::InitVar(n));
+            self.bind_to(binding, Mode::Lexical)?;
             self.emit(Op::Pop);
         } else {
-            self.emit(Op::InitVar(n));
+            self.bind_to(binding, Mode::Lexical)?;
         }
         self.contexts.push(Ctx::Jump { labels, is_loop: true, plain_break: true, brk, cont: Some(head), depth: self.depth, env_depth: outer_env });
         let r = self.stmt(body);
@@ -755,8 +756,8 @@ impl<'a> FnCompiler<'a> {
     }
 
     fn for_in(&mut self, target: &ForInTarget, object: ExprId, body: StmtId, labels: Vec<String>, each: bool) -> CResult<()> {
-        if let ForInTarget::Lexical(kind, name) = target {
-            return self.for_in_lexical(*kind, name, object, body, labels, each);
+        if let ForInTarget::Lexical(kind, binding) = target {
+            return self.for_in_lexical(*kind, binding, object, body, labels, each);
         }
         if let ForInTarget::Var(d) = target {
             self.var_decls(std::slice::from_ref(d))?;
@@ -770,11 +771,19 @@ impl<'a> FnCompiler<'a> {
         self.jump(Op::ForInNext, brk);
         match target {
             ForInTarget::Var(d) => {
-                let n = self.var_name(&d.name.name);
                 if each {
                     self.emit(Op::ForEachValue(0));
                 }
-                self.emit(Op::SetVar(n));
+                // The target takes a copy; the name or value stays for the pops below.
+                self.emit(Op::Dup);
+                self.bind_to(&d.target, Mode::Var)?;
+            }
+            ForInTarget::Expr(e) if self.is_pattern(*e) => {
+                if each {
+                    self.emit(Op::ForEachValue(0));
+                }
+                self.emit(Op::Dup);
+                self.destructure(*e, Mode::Assign)?;
             }
             ForInTarget::Expr(e) if each => self.store_value_to(*e)?,
             ForInTarget::Expr(e) => self.store_key_to(*e)?,
@@ -928,7 +937,7 @@ impl<'a> FnCompiler<'a> {
                 };
                 hit.then_some(i)
             }
-            Ctx::Finally { .. } => None,
+            Ctx::Finally { .. } | Ctx::Iterator { .. } => None,
         });
         match target {
             Some(i) => self.emit_exit(if is_continue { Exit::Continue(i) } else { Exit::Break(i) }),
@@ -966,6 +975,21 @@ impl<'a> FnCompiler<'a> {
                 Some(&Ctx::Finally { try_depth, env_depth, entry, .. }) => {
                     self.route_through_finally(i, exit, try_depth, env_depth, entry)?;
                     break;
+                }
+                Some(&Ctx::Iterator { depth, env_depth }) => {
+                    // The loop is left: its iterator is closed, a `return` keeping its value.
+                    if exit == Exit::Return {
+                        let Some(under) = self.depth.checked_sub(1 + depth) else { return internal("stack below a for-of loop") };
+                        if under > 0 {
+                            self.emit(Op::PopUnder(under));
+                        }
+                        self.pop_envs(env_depth)?;
+                        self.emit(Op::Swap);
+                    } else {
+                        self.unwind_to(depth, env_depth)?;
+                    }
+                    self.emit(Op::IterClose);
+                    self.env_depth = env_depth;
                 }
                 None => return internal("context out of range"),
             }
@@ -1037,13 +1061,34 @@ impl<'a> FnCompiler<'a> {
             self.handlers.push((start, end, catch, try_depth, env_depth));
             self.bind(catch);
             self.depth = try_depth + 1;
-            self.at(h.param.span.start);
-            let n = self.var_name(&h.param.name);
-            self.emit(Op::PushCatch(n));
-            self.env_depth += 1;
-            self.block(&h.body)?;
-            self.emit(Op::PopEnv);
-            self.env_depth -= 1;
+            match &h.param {
+                Binding::Name(name) => {
+                    self.at(name.span.start);
+                    let n = self.var_name(&name.name);
+                    self.emit(Op::PushCatch(n));
+                    self.env_depth += 1;
+                    self.block(&h.body)?;
+                    self.emit(Op::PopEnv);
+                    self.env_depth -= 1;
+                }
+                Binding::Pattern(p) => {
+                    // The exception is bound to a name no script can write, then destructured
+                    // into the pattern's names (ECMA-262 11th edition section 13.15.7).
+                    self.at(self.ast.expr_span(*p).start);
+                    let n = self.name_key(key_of("\u{0}catch"));
+                    self.emit(Op::PushCatch(n));
+                    self.emit(Op::GetVar(n));
+                    let lets = self.bound_keys(&h.param).into_iter().map(|k| (k, false)).collect();
+                    let scope = self.push_scope(BlockScope { lets, funcs: Vec::new() });
+                    self.emit(Op::PushBlock(scope));
+                    self.env_depth += 2;
+                    self.destructure(*p, Mode::Lexical)?;
+                    self.block(&h.body)?;
+                    self.emit(Op::PopEnv);
+                    self.emit(Op::PopEnv);
+                    self.env_depth -= 2;
+                }
+            }
             self.bind(after);
         }
         let Some(fin) = finalizer else { return Ok(()) };
@@ -1339,6 +1384,10 @@ impl<'a> FnCompiler<'a> {
     fn object_literal(&mut self, props: &[crate::ast::Property]) -> CResult<()> {
         self.emit(Op::NewObject);
         for p in props {
+            if let PropertyKey::Computed(k) = p.key {
+                self.computed_property(k, &p.value)?;
+                continue;
+            }
             let n = self.name_key(p.key.to_utf16().into());
             match &p.value {
                 PropertyValue::Init(e) => {
@@ -1355,6 +1404,25 @@ impl<'a> FnCompiler<'a> {
                     self.emit(Op::Closure(i));
                     self.emit(Op::InitSetter(n));
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// `object` → `object`, with a property whose name is the value of `key` (ECMA-262 11th
+    /// edition section 12.2.6.8).
+    fn computed_property(&mut self, key: ExprId, value: &PropertyValue) -> CResult<()> {
+        self.expr(key)?;
+        self.emit(Op::ToKey);
+        match value {
+            PropertyValue::Init(e) => {
+                self.expr(*e)?;
+                self.emit(Op::InitIndex);
+            }
+            PropertyValue::Get(f) | PropertyValue::Set(f) => {
+                let i = self.function(*f)?;
+                self.emit(Op::Closure(i));
+                self.emit(Op::InitAccessorIndex(matches!(value, PropertyValue::Get(_))));
             }
         }
         Ok(())
@@ -1612,6 +1680,9 @@ impl<'a> FnCompiler<'a> {
     /// Pushes what an assignment to `target` needs before its value: the object and key, and the
     /// current value for a compound assignment.
     fn assign_target(&mut self, op: AssignOp, target: ExprId) -> CResult<()> {
+        if op.is_none() && self.es2015 && self.is_pattern(target) {
+            return Ok(());
+        }
         match self.ast.expr(target) {
             Some(Expr::Ident(name)) => {
                 let n = self.var_name(name);
@@ -1658,6 +1729,11 @@ impl<'a> FnCompiler<'a> {
     }
 
     fn store(&mut self, target: ExprId) -> CResult<()> {
+        if self.es2015 && self.is_pattern(target) {
+            // The assignment's value is the value assigned (ECMA-262 11th edition section 12.15.4).
+            self.emit(Op::Dup);
+            return self.destructure(target, Mode::Assign);
+        }
         match self.ast.expr(target) {
             Some(Expr::Ident(name)) => {
                 let n = self.var_name(name);
@@ -1718,6 +1794,7 @@ impl<'a> FnCompiler<'a> {
                     | Op::JumpIfFalseKeep(t)
                     | Op::JumpIfTrueKeep(t)
                     | Op::ForInNext(t)
+                    | Op::IterStep(t)
                     | Op::XmlFilterNext(t),
                 ) => *t = target,
                 _ => return internal("patching an instruction that is not a jump"),
@@ -1762,6 +1839,7 @@ impl<'a> FnCompiler<'a> {
             arrow: meta.arrow,
             uses_this: self.uses_this,
             param_init: meta.param_init,
+            pattern_names: meta.pattern_names,
         };
         code.max_stack = verify(&code).map_err(CompileFail::Internal)?;
         Ok(Rc::new(code))
@@ -1780,6 +1858,7 @@ struct Meta {
     length: u32,
     arrow: bool,
     param_init: bool,
+    pattern_names: Vec<Key>,
 }
 
 fn len_u32(n: usize) -> u32 {
@@ -1794,37 +1873,49 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     c.es2015 = es2015;
     c.at(f.span.start);
     c.enter()?;
-    let params: Vec<Key> = f.params.iter().map(|p| key_of(&p.name)).collect();
-    let rest = f.rest.as_ref().map(|r| key_of(&r.name));
-    let all_params: Vec<Key> = params.iter().chain(&rest).cloned().collect();
+    // A destructured parameter has a binding of its own under a name no script can write, which
+    // holds its argument until the pattern takes it.
+    let param_key = |c: &FnCompiler, i: usize, p: &Binding| match p {
+        Binding::Name(n) => key_of(&n.name),
+        Binding::Pattern(_) => c.hidden_param(i),
+    };
+    let params: Vec<Key> = f.params.iter().enumerate().map(|(i, p)| param_key(&c, i, p)).collect();
+    let rest = f.rest.as_ref().map(|r| param_key(&c, f.params.len(), r));
+    let pattern_names: Vec<Key> = f.params.iter().chain(&f.rest).filter(|p| matches!(p, Binding::Pattern(_))).flat_map(|p| c.bound_keys(p)).collect();
+    let all_params: Vec<Key> = f.params.iter().chain(&f.rest).flat_map(|p| c.bound_keys(p)).collect();
     let hoisted = c.hoist(&f.body, &all_params)?;
     let top_scope = c.list_scope(&f.body, false)?;
     let param_init = !f.simple_params();
     if param_init {
         // Each parameter is initialized in order, from its argument or, when that is
         // `undefined`, its default value; then the body's environment is entered.
-        for (i, p) in f.params.iter().enumerate() {
-            c.at(p.span.start);
-            let n = c.var_name(&p.name);
+        let all = f.params.iter().enumerate().map(|(i, p)| (p, f.defaults.get(i).copied().flatten())).chain(f.rest.iter().map(|r| (r, None)));
+        for (i, (p, default)) in all.enumerate() {
+            let k = params.get(i).or(rest.as_ref()).cloned().unwrap_or_default();
+            let n = c.name_key(k);
+            c.at(match p {
+                Binding::Name(name) => name.span.start,
+                Binding::Pattern(e) => ast.expr_span(*e).start,
+            });
             c.emit(Op::LoadParam(n));
-            if let Some(Some(default)) = f.defaults.get(i) {
+            if let Some(default) = default {
                 let skip = c.new_label();
                 c.emit(Op::Dup);
                 c.emit(Op::Undefined);
                 c.emit(Op::Binary(BinaryOp::StrictEq));
                 c.jump(Op::JumpIfFalse, skip);
                 c.emit(Op::Pop);
-                c.expr(*default)?;
+                c.expr(default)?;
                 c.bind(skip);
             }
-            c.at(p.span.start);
-            c.emit(Op::InitVar(n));
-        }
-        if let Some(r) = &f.rest {
-            c.at(r.span.start);
-            let n = c.var_name(&r.name);
-            c.emit(Op::LoadParam(n));
-            c.emit(Op::InitVar(n));
+            match p {
+                Binding::Name(name) => {
+                    c.at(name.span.start);
+                    let n = c.var_name(&name.name);
+                    c.emit(Op::InitVar(n));
+                }
+                Binding::Pattern(e) => c.destructure(*e, Mode::Lexical)?,
+            }
         }
         c.emit(Op::BodyEnv);
     }
@@ -1844,6 +1935,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         length: len_u32(length),
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
+        pattern_names,
     };
     c.finish(hoisted, meta)
 }
