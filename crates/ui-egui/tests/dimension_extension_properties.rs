@@ -35,9 +35,29 @@ impl Driver {
             app.ui(ui);
         });
         fx.room(vec2(1800.0, 1500.0));
-        fx.frame(vec![]);
         let host = WindowDialogs::of(fx.ctx(), &WindowKey::main());
-        Driver { app, fx, host }
+        let mut driver = Driver { app, fx, host };
+        driver.idle(1);
+        driver
+    }
+
+    /// Runs the commands the frames since the last call fired, as the window runs them, and gives the fixture the
+    /// app's input for the next frame.
+    fn input(&mut self) {
+        let input = self.app.borrow_mut().frame_input(craft::ui::runtime::frame::take_output(self.fx.ctx()));
+        self.fx.root(input.root).commands(input.commands);
+        if let Some(host) = input.host {
+            self.fx.host(host);
+        }
+    }
+
+    /// `n` frames with no events, each with the app's input.
+    fn idle(&mut self, n: usize) {
+        for _ in 0..n {
+            self.input();
+            self.fx.frame(vec![]);
+        }
+        self.input();
     }
 
     fn run(&self, command: &str, params: Value) -> Value {
@@ -46,8 +66,9 @@ impl Driver {
 
     fn click(&mut self, name: &str) {
         let target = self.fx.by_label(name).unwrap_or_else(|| panic!("no control named {name}"));
+        self.input();
         self.fx.click(&target);
-        self.fx.idle(3);
+        self.idle(3);
     }
 
     /// Types `text` into the number field `name` and commits it with Enter.
@@ -55,8 +76,9 @@ impl Driver {
         self.click(name);
         self.fx.key(Key::A, Modifiers::COMMAND);
         self.fx.type_text(text);
+        self.input();
         self.fx.key(Key::Enter, Modifiers::NONE);
-        self.fx.idle(3);
+        self.idle(3);
     }
 
     /// The number the field `name` shows.
@@ -85,7 +107,7 @@ impl Driver {
     fn cancel(&mut self, id: DialogId) {
         let ctx = self.fx.ctx().clone();
         assert!(self.host.with(|host| host.cancel_by_id(&ctx, id)));
-        self.fx.idle(2);
+        self.idle(2);
     }
 
     /// Opens the colour picker the swatch `name` asks for under `key`, answers it with `hex` and presses its OK.
@@ -95,7 +117,7 @@ impl Driver {
         self.set_field(id, "color", json!(hex));
         let ctx = self.fx.ctx().clone();
         assert!(self.host.with(|host| host.confirm_by_id(&ctx, id)));
-        self.fx.idle(3);
+        self.idle(3);
     }
 }
 
@@ -144,7 +166,7 @@ fn select_properties(d: &mut Driver, id: NodeId) {
     d.app.borrow_mut().select_tool("selection");
     d.run("select.set", json!({"ids": [id.0]}));
     d.run("window.panel", json!({"panel": "properties"}));
-    d.fx.idle(4);
+    d.idle(4);
     assert!(d.fx.by_label("Apply to All").is_some(), "the Dimension section is in Properties");
 }
 
@@ -188,7 +210,7 @@ fn selected_dimension_properties_exposes_extension_weight_and_color() {
     // Tool Options holds both extension values.
     let mut d = Driver::new(app);
     d.run("tool.options", json!({"tool": "dimension"}));
-    d.fx.idle(2);
+    d.idle(2);
     let (tool_options, fields) = d.dialog(TOOL_OPTIONS).expect("Tool Options is open");
     assert_eq!(fields["extensionWeight"], json!(0.5));
     assert_eq!(fields["extensionColor"], json!([0, 0, 0]));
@@ -226,7 +248,7 @@ fn properties_edits_both_extensions_preserves_main_text_and_roundtrips_editable_
     d.run("edit.redo", json!({}));
     assert_eq!(recipe(&d.app.borrow(), id), weighted);
     assert_eq!(d.app.borrow().session.active().unwrap().history.undo.len(), undo, "one typed weight is one step");
-    d.fx.idle(2);
+    d.idle(2);
 
     d.pick_color("Extension Line Color", "extensionColor", "#808080");
     let edited = recipe(&d.app.borrow(), id);
@@ -301,9 +323,8 @@ fn properties_apply_all_copies_full_style_to_editable_dimensions_and_undoes_as_o
 #[test]
 fn properties_set_default_is_inherited_by_an_options_free_new_dimension() {
     let (mut d, id) = fixture();
-    let other = NodeId(
-        d.run("dimension.create", json!({"a": [200,150], "b": [241.13,150], "options": {"extensionWeight": 0.8}}))["id"].as_u64().unwrap(),
-    );
+    let other =
+        NodeId(d.run("dimension.create", json!({"a": [200,150], "b": [241.13,150], "options": {"extensionWeight": 0.8}}))["id"].as_u64().unwrap());
     let other_original = recipe(&d.app.borrow(), other);
     select_properties(&mut d, id);
     d.type_number("Extension Line Weight", "0.35");
@@ -326,7 +347,7 @@ fn properties_set_default_is_inherited_by_an_options_free_new_dimension() {
     assert_eq!(recipe(&d.app.borrow(), other), other_original);
     d.run("window.panel.close", json!({"panel": "properties"}));
     d.run("tool.options", json!({"tool": "dimension"}));
-    d.fx.idle(2);
+    d.idle(2);
     let (tool_options, fields) = d.dialog(TOOL_OPTIONS).expect("Tool Options is open");
     assert_eq!(fields["extensionWeight"], json!(0.35));
     assert_eq!(fields["extensionColor"], json!([128, 128, 128]));

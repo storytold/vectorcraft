@@ -12,7 +12,7 @@ use craft::theme::{Rgba, Srgba};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented, Swatch};
 use craft::ui::contract::overlay::{Dismiss, Outside};
-use craft::ui::contract::{Bind, EditResponse, Entry, Overlay, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, EditResponse, Entry, FieldLabelRole, Overlay, Props as _, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::{
     DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id, serde_fields, set_serde_field,
 };
@@ -467,7 +467,9 @@ fn check_row(ui: &mut Ui, label: &'static str, value: &mut bool) -> bool {
 fn number_row(ui: &mut Ui, o: &mut DimensionOptions, e: &mut Edited, num: Num) {
     let value = *(num.slot)(o);
     let mut edit = None;
-    Field::new(tl!(num.label)).show(ui, |ui, _| {
+    // A field whose visible label repeats another's carries its line in its name, so the label only describes it.
+    let role = if num.name == num.label { FieldLabelRole::Names } else { FieldLabelRole::Describes };
+    Field::new(tl!(num.label)).side(SideLabel::new().role(role)).show(ui, |ui, _| {
         let field = NumberField::new(tl!(num.name), Bind::given(Some(value))).range(num.min..=num.max).unit(num.unit).fixed_decimals(2);
         edit = Some(field.show(ui).edit);
     });
