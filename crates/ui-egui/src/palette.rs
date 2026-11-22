@@ -164,8 +164,17 @@ impl Draft {
     }
 
     /// The English name a query matches before [`distinct_names`] runs: a plug-in item that shows
-    /// a translated name by the manifest's own text ([`Draft::own`]).
+    /// a translated name by the manifest's own text ([`Draft::own`]), and a plug-in command by its
+    /// plug-in's own name and its own label.
     fn plain(&self) -> String {
+        if self.plugin_command
+            && let Some((plugin, command)) = vectorcraft_engine::cmd::plugin::command_of(&self.id)
+        {
+            use vectorcraft_plugins::permissions;
+            let own = permissions::display_text(plugin.manifest().name.trim(), permissions::MAX_SHOWN_NAME);
+            let top = self.path.rsplit_once(" › ").map_or("", |(top, _)| top);
+            return format!("{top} › {own} › {}", command.shown_label());
+        }
         match &self.own {
             Some((path, label)) if path.is_empty() => label.clone(),
             Some((path, label)) => format!("{path} › {label}"),
@@ -3326,6 +3335,25 @@ mod tests {
         assert_eq!(de, format!("{object} › {plugins} › Aufräumen › Wachsen"));
         let (fr, object, plugins) = fr.expect("the command is a result");
         assert_eq!(fr, format!("{object} › {plugins} › Tidy › Grow"));
+    }
+
+    /// A plug-in command whose plug-in translates its name and label into English shows the
+    /// translation, and a search for the manifest's own text still finds it.
+    #[test]
+    fn a_plugin_command_with_english_translations_is_found_by_its_own_text() {
+        use vectorcraft_plugins::wat as tpl;
+        let id = "test.UI.palette_english_command";
+        let manifest = format!(
+            r#"{{"id":"{id}","name":"Trim Pack","version":"1","kind":"filter","commands":[{{"id":"shave","label":"Shave Ends"}}],
+                "translations":{{"en":{{"name":"Trimmer","commands":{{"shave":{{"label":"Cut Tips"}}}}}}}}}}"#
+        );
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+        let key = format!("plugin.{id}.shave");
+        let found = build(Lang::EN).into_iter().find(|e| e.id == key).map(|e| (e.shown, e.haystack));
+        vectorcraft_plugins::registry::remove(id);
+        let (shown, haystack) = found.expect("the command is a result");
+        assert!(shown.ends_with("Trimmer › Cut Tips"), "{shown}");
+        assert!(haystack.contains("trim pack › shave ends"), "{haystack}");
     }
 
     /// A filter whose name the UI language translates shows the translation, English included, and
