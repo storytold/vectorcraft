@@ -129,23 +129,53 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(v) = d.fields.get("relativeRadii") {
         p["relativeRadii"] = v.clone();
     }
-    if d.fields.contains_key("radius") {
-        let relative = d.fields.get("relativeRadii").and_then(|v| v.as_bool()).unwrap_or(false);
-        let mut r = d.f64("radius", 0.0);
-        if relative {
-            let id = NodeId(d.fields.get("id").and_then(|v| v.as_u64()).unwrap_or(0));
-            let st = app.session.active().ok_or("no document")?;
-            if let Some(lc) = st.doc.node(id).and_then(LiveCorners::of) {
-                let corners: BTreeSet<usize> = serde_json::from_value(d.fields.get("corners").cloned().unwrap_or(json!([]))).unwrap_or_default();
-                if let Some(k) = corners.iter().next() {
-                    let max = lc.corner(*k).map(|c| c.max_radius()).unwrap_or(0.0);
-                    r = (r / 100.0).clamp(0.0, 1.0) * max;
-                }
+    if !d.fields.contains_key("radius") {
+        return run_and_close(app, "object.setLiveShape", p);
+    }
+    let relative = d.fields.get("relativeRadii").and_then(|v| v.as_bool()).unwrap_or(false);
+    let r = d.f64("radius", 0.0);
+    if !relative {
+        p["radius"] = json!(r);
+        return run_and_close(app, "object.setLiveShape", p);
+    }
+    // Relative: the percentage is of each corner's own maximum, so corners with different
+    // maximums (a star's points and its inner corners) get different lengths. Corners of the
+    // same length share one `object.setLiveShape`; several run as one undo step.
+    let id = NodeId(d.fields.get("id").and_then(|v| v.as_u64()).unwrap_or(0));
+    let st = app.session.active().ok_or("no document")?;
+    let mut lengths: Vec<(f64, Vec<usize>)> = vec![];
+    if let Some(lc) = st.doc.node(id).and_then(LiveCorners::of) {
+        let corners: BTreeSet<usize> = serde_json::from_value(d.fields.get("corners").cloned().unwrap_or(json!([]))).unwrap_or_default();
+        for k in corners {
+            let len = (r / 100.0).clamp(0.0, 1.0) * lc.corner(k).map(|c| c.max_radius()).unwrap_or(0.0);
+            match lengths.iter_mut().find(|(l, _)| (*l - len).abs() < 1e-9) {
+                Some((_, ks)) => ks.push(k),
+                None => lengths.push((len, vec![k])),
             }
         }
-        p["radius"] = json!(r);
     }
-    run_and_close(app, "object.setLiveShape", p)
+    match &lengths[..] {
+        [] => {
+            p["radius"] = json!(r);
+            run_and_close(app, "object.setLiveShape", p)
+        }
+        [(len, _)] => {
+            p["radius"] = json!(len);
+            run_and_close(app, "object.setLiveShape", p)
+        }
+        _ => {
+            let commands: Vec<Value> = lengths
+                .iter()
+                .map(|(len, ks)| {
+                    let mut step = p.clone();
+                    step["corners"] = json!(ks);
+                    step["radius"] = json!(len);
+                    json!({"command": "object.setLiveShape", "params": step})
+                })
+                .collect();
+            run_and_close(app, "command.batch", json!({"label": "Live Shape", "commands": commands}))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -289,5 +319,40 @@ mod tests {
         let n = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().clone();
         assert!(matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Path { .. })));
         assert_eq!(crate::panels::corner_radius(&app, &n), Some(5.0));
+    }
+
+    /// Relative rounding gives each corner the percentage of its own maximum: a star's point and
+    /// the inner corner beside it differ, and OK rounds both as one undo step.
+    #[test]
+    fn relative_radius_is_a_percentage_of_each_corners_own_maximum() {
+        let (mut app, _) = app();
+        let id = app.run("shape.star", json!({"cx": 200, "cy": 200, "radius1": 60, "radius2": 30})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.setLiveShape", json!({"id": id, "radius": 1})).unwrap();
+        let lc = |app: &VectorcraftApp| {
+            let n = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().clone();
+            let c = LiveCorners::of(&n).unwrap();
+            (c.radii_relative(), c.radius(0), c.radius(1), c.corner(0).unwrap().max_radius(), c.corner(1).unwrap().max_radius())
+        };
+        let (_, _, _, max0, max1) = lc(&app);
+        assert!((max0 - max1).abs() > 1.0, "the corners' maximums differ: {max0} and {max1}");
+        let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+        let n = steps(&app);
+        app.run("ui.corners", json!({"id": id, "corners": [0, 1]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("relativeRadii".into(), json!(true));
+        d.fields.insert("radius".into(), json!(50));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        let (relative, f0, f1, _, _) = lc(&app);
+        assert!(relative);
+        assert!((f0 - 0.5).abs() < 1e-9 && (f1 - 0.5).abs() < 1e-9, "stored fractions: {f0} and {f1}");
+        assert_eq!(steps(&app), n + 1, "one undo step");
+        // The same values again change nothing and record no step.
+        app.run("ui.corners", json!({"id": id, "corners": [0, 1]})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("radius".into(), json!(50));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(steps(&app), n + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(!lc(&app).0, "undo brings back absolute radii");
     }
 }

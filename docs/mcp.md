@@ -7793,7 +7793,8 @@ the Direct Selection tool those of any path. `rectanglesOnly: true` sets them on
 alone and leaves the other objects as they are (the Rectangle Properties corner fields and menus send it with the
 selection, so an action that records them acts on the rectangles selected when it plays). Several objects each with their own corners are one call:
 `items: [{id, corners?}]` in place of `ids` and `corners`. Alt-clicking one cycles their kind and double-clicking one opens Corners (`ui.corners {id?, corners?}`,
-dialog `corners`: `kind`, `radius`; OK runs `object.setLiveShape`).
+dialog `corners`: `kind`, `relativeRadii`, `radius`, a percentage of each corner's own maximum with `relativeRadii`; OK runs
+`object.setLiveShape`, as one undo step for corners whose maximums differ).
 `view.shapeWidgets {on?}` (desktop app, the Hide Shape Widgets and Show Shape Widgets button in the Control bar of the
 Rectangle, Rounded Rectangle, Ellipse, Polygon and Star tools) hides or shows the corner widgets of selected live
 rectangles and polygons, the pie widgets of live ellipses and the side widget of a live polygon, for the Selection tool
