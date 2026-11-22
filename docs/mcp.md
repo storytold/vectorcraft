@@ -2644,6 +2644,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
+A script does not have `Symbol` or the iterators of arrays, strings and `arguments` objects: `typeof Symbol` is
+`"undefined"`, and `Array.prototype.values`, `keys` and `entries` are not defined. The JavaScript engine's ECMAScript
+2015 mode (`Options::es2015` in `vectorcraft-js`) adds them, as `docs/target-app-parity.md` describes.
+
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
 https://extendscript.docsforadobe.dev/extendscript-tools-features/dollar-object/ describes `$.evalFile`, `$.fileName`

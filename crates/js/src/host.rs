@@ -243,6 +243,7 @@ impl Interp {
                 Ok(Data::String(s.to_rust_string()))
             }
             Value::Object(id) => self.read_object(*id, r),
+            Value::Symbol(_) => Err(self.data_error(r, ErrorType::Type, "is a Symbol, not plain data")),
         }
     }
 

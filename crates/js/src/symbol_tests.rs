@@ -1,0 +1,230 @@
+//! `Symbol`, Symbol-keyed properties and the iterators of arrays, strings and `arguments`
+//! objects, in a realm with [`Options::es2015`].
+
+use crate::{JsValue, LimitKind, Limits, Options, Realm, RunError, RunErrorKind};
+
+fn es2015(limits: Limits) -> Realm {
+    Realm::with_options(Options { es2015: true, ..Options::default() }, limits)
+}
+
+fn run(src: &str) -> JsValue {
+    match es2015(Limits::default()).run(src) {
+        Ok(v) => v,
+        Err(e) => panic!("{src}\n{e:?}"),
+    }
+}
+
+fn truth(src: &str) {
+    assert_eq!(run(src), JsValue::Bool(true), "{src}");
+}
+
+fn string(src: &str) -> String {
+    match run(src) {
+        JsValue::String(s) => s,
+        other => panic!("{src}: {other:?}"),
+    }
+}
+
+/// The run throws an error whose message starts with `name`.
+fn throws(src: &str, name: &str) {
+    match es2015(Limits::default()).run(src) {
+        Err(RunError { kind: RunErrorKind::Thrown, message, .. }) => assert!(message.starts_with(name), "{src}: {message}"),
+        other => panic!("{src}: {other:?}"),
+    }
+}
+
+#[test]
+fn symbols_are_unique_values_with_a_description() {
+    truth("typeof Symbol() === 'symbol' && typeof Symbol('a') === 'symbol'");
+    truth("Symbol('a') !== Symbol('a') && Symbol('a') != Symbol('a')");
+    truth("var s = Symbol('a'); s === s && s == Object(s) && Object(s) == s");
+    truth("Symbol('a').description === 'a' && Symbol().description === undefined && Symbol('').description === ''");
+    assert_eq!(string("String(Symbol('a b'))"), "Symbol(a b)");
+    assert_eq!(string("Symbol().toString()"), "Symbol()");
+    truth("var s = Symbol(); Object(s).valueOf() === s && typeof Object(s) === 'object'");
+    truth("Object.prototype.toString.call(Symbol()) === '[object Symbol]'");
+    truth("!!Symbol() && Symbol.length === 0 && Symbol.prototype.constructor === Symbol");
+    throws("new Symbol()", "TypeError");
+    throws("Symbol.prototype.toString.call({})", "TypeError");
+}
+
+#[test]
+fn symbol_for_and_key_for_use_the_registry() {
+    truth("Symbol.for('k') === Symbol.for('k') && Symbol.for('k') !== Symbol('k')");
+    truth("Symbol.keyFor(Symbol.for('k')) === 'k' && Symbol.keyFor(Symbol('k')) === undefined");
+    truth("Symbol.keyFor(Symbol.iterator) === undefined && Symbol.for('x').description === 'x'");
+    throws("Symbol.keyFor('k')", "TypeError");
+    throws("Symbol.for(Symbol())", "TypeError");
+}
+
+#[test]
+fn implicit_conversion_of_a_symbol_throws_a_type_error() {
+    throws("Symbol() + ''", "TypeError");
+    throws("'' + Symbol('a')", "TypeError");
+    throws("+Symbol()", "TypeError");
+    throws("Symbol() * 2", "TypeError");
+    throws("Symbol() < 1", "TypeError");
+    throws("[Symbol()].join()", "TypeError");
+    throws("'abc'.indexOf(Symbol())", "TypeError");
+    throws("Symbol(Symbol())", "TypeError");
+    throws("new String(Symbol())", "TypeError");
+    truth("String(Symbol('x')) === 'Symbol(x)' && Symbol('x').toString() === 'Symbol(x)'");
+}
+
+#[test]
+fn symbol_keys_are_hidden_from_for_in_keys_and_json() {
+    let setup = "var s = Symbol('s'); var o = {a: 1}; o[s] = 2; ";
+    truth(&format!("{setup} var n = []; for (var k in o) n.push(k); n.join() === 'a'"));
+    truth(&format!("{setup} Object.keys(o).join() === 'a' && Object.getOwnPropertyNames(o).join() === 'a'"));
+    truth(&format!("{setup} JSON.stringify(o) === '{{\"a\":1}}'"));
+    truth("JSON.stringify({a: Symbol()}) === '{}' && JSON.stringify([Symbol()]) === '[null]' && JSON.stringify(Symbol()) === undefined");
+    truth(&format!("{setup} var l = Object.getOwnPropertySymbols(o); l.length === 1 && l[0] === s && o[s] === 2"));
+    truth(&format!("{setup} s in o && o.hasOwnProperty(s) && o.propertyIsEnumerable(s) && delete o[s] && !(s in o)"));
+    truth(&format!("{setup} o[Object(s)] === 2 && o[s.toString()] === undefined"));
+    throws("var w = new String('x'); w.toString = function () { return Symbol(); }; JSON.stringify(w)", "TypeError");
+    truth("var o = Object(Symbol()); delete Symbol.prototype[Symbol.toStringTag]; Object.prototype.toString.call(o) === '[object Object]'");
+}
+
+#[test]
+fn define_property_freeze_and_descriptors_take_symbol_keys() {
+    truth(
+        "var s = Symbol(); var o = {}; Object.defineProperty(o, s, {value: 1}); \
+         var d = Object.getOwnPropertyDescriptor(o, s); d.value === 1 && !d.writable && !d.enumerable && !d.configurable",
+    );
+    truth("var s = Symbol(); var o = {}; o[s] = 1; Object.freeze(o); o[s] = 2; o[s] === 1 && Object.isFrozen(o)");
+    truth("var s = Symbol(); var o = {}; o[s] = 1; Object.preventExtensions(o); Object.isSealed(o) === false");
+    truth("var s = Symbol(); var p = {}; p[s] = {value: 3, enumerable: true}; var o = Object.create(null, p); o[s] === 3");
+    throws("'use strict'; var s = Symbol(); var o = Object.freeze((function () { var x = {}; x[s] = 1; return x; })()); o[s] = 2;", "TypeError");
+    truth("var s = Symbol(); var o = {}; o[s] = 1; o[s]++; o[s] === 2");
+}
+
+#[test]
+fn well_known_symbols_hook_the_operations_that_read_them() {
+    truth("var o = {}; o[Symbol.toStringTag] = 'Thing'; Object.prototype.toString.call(o) === '[object Thing]'");
+    truth("var o = {}; o[Symbol.toPrimitive] = function (h) { return h === 'number' ? 7 : 'str'; }; +o === 7 && String(o) === 'str'");
+    throws("var o = {}; o[Symbol.toPrimitive] = function () { return {}; }; +o", "TypeError");
+    throws("var o = {}; o[Symbol.toPrimitive] = 1; +o", "TypeError");
+    truth("var C = {}; C[Symbol.hasInstance] = function (v) { return v === 1; }; (1 instanceof C) && !(2 instanceof C)");
+    truth("function F() {} var B = F.bind(); new F() instanceof B && typeof Function.prototype[Symbol.hasInstance] === 'function'");
+    truth("Function.prototype[Symbol.hasInstance].call(Array, []) === true && Function.prototype[Symbol.hasInstance].call({}, []) === false");
+    truth(
+        "Symbol.iterator.toString() === 'Symbol(Symbol.iterator)' && typeof Symbol.asyncIterator === 'symbol' \
+         && typeof Symbol.hasInstance === 'symbol' && typeof Symbol.toPrimitive === 'symbol' && typeof Symbol.toStringTag === 'symbol'",
+    );
+}
+
+#[test]
+fn an_array_iterator_driven_by_hand_steps_through_values_keys_and_entries() {
+    truth(
+        "var it = [10, 20][Symbol.iterator](); var a = it.next(), b = it.next(), c = it.next(), d = it.next(); \
+         a.value === 10 && !a.done && b.value === 20 && !b.done && c.value === undefined && c.done && d.done",
+    );
+    truth("var it = ['a', 'b'].keys(); it.next().value === 0 && it.next().value === 1 && it.next().done");
+    truth("var e = ['x'].entries().next().value; e.length === 2 && e[0] === 0 && e[1] === 'x'");
+    truth("Array.prototype[Symbol.iterator] === Array.prototype.values");
+    truth("var a = [1]; var it = a.values(); it.next(); a.push(2); it.next().value === 2");
+    truth("var it = [].values(); it[Symbol.iterator]() === it && Object.prototype.toString.call(it) === '[object Array Iterator]'");
+    truth("var it = Array.prototype.values.call({length: 1, 0: 'q'}); it.next().value === 'q'");
+    throws("[].values().next.call({})", "TypeError");
+    throws("[].values().next.call(''[Symbol.iterator]())", "TypeError");
+}
+
+#[test]
+fn a_string_iterator_steps_by_code_point() {
+    truth(
+        "var it = 'a\\uD83D\\uDE00b'[Symbol.iterator](); var x = it.next().value, y = it.next().value, z = it.next().value; \
+         x === 'a' && y === '\\uD83D\\uDE00' && y.length === 2 && z === 'b' && it.next().done",
+    );
+    truth("var it = '\\uDE00\\uD83D'[Symbol.iterator](); it.next().value === '\\uDE00' && it.next().value === '\\uD83D' && it.next().done");
+    truth("Object.prototype.toString.call(''[Symbol.iterator]()) === '[object String Iterator]'");
+    throws("String.prototype[Symbol.iterator].call(null)", "TypeError");
+}
+
+#[test]
+fn arguments_objects_have_the_array_values_iterator() {
+    truth("(function () { return arguments[Symbol.iterator] === Array.prototype.values; })()");
+    truth("(function () { 'use strict'; var it = arguments[Symbol.iterator](); return it.next().value === 5 && it.next().done; })(5)");
+    truth("(function () { return !arguments.propertyIsEnumerable(Symbol.iterator); })()");
+}
+
+#[test]
+fn realms_without_es2015_have_no_symbol() {
+    for options in [Options::default(), Options { e4x: true, preprocessor_lines: true, ..Options::default() }] {
+        let mut realm = Realm::with_options(options, Limits::default());
+        let src = "typeof Symbol === 'undefined' && Array.prototype.values === undefined && Object.getOwnPropertySymbols === undefined";
+        assert_eq!(realm.run(src), Ok(JsValue::Bool(true)));
+        let src = "Object.getOwnPropertyNames((function () { return arguments; })()).join()";
+        assert_eq!(realm.run(src), Ok(JsValue::String("length,callee".into())));
+    }
+}
+
+#[test]
+fn symbols_and_the_registry_count_against_the_heap_limit() {
+    let limits = || Limits { heap_bytes: 1 << 20, fuel: 50_000_000, ..Limits::default() };
+    let mut realm = es2015(limits());
+    match realm.run("for (var i = 0; ; i++) Symbol.for('key' + i);") {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+    let mut realm = es2015(limits());
+    match realm.run("var keep = []; for (var i = 0; ; i++) keep.push(Symbol('d' + i));") {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+    // Symbols nothing holds are collected, so making them one after another does not fill the
+    // heap, and keys survive a collection.
+    let mut realm = es2015(limits());
+    let src = "var s = Symbol('k'); var o = {}; o[s] = 'v'; for (var i = 0; i < 40000; i++) Symbol('x' + i); o[s] === 'v'";
+    assert_eq!(realm.run(src), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn an_error_names_a_long_symbol_by_the_start_of_its_description() {
+    // `d` is a rope of 4,194,304 units whose halves share one node, so it takes little heap until
+    // something copies it whole. Each error names the Symbol by the first 256 units only.
+    let setup = "var d = 'x'; for (var i = 0; i < 22; i++) d = d + d; var s = Symbol(d); \
+                 var shut = Object.preventExtensions({}); var fixed = Object.defineProperty({}, s, { value: 1 }); ";
+    let named = format!("Symbol({}...)", "x".repeat(256));
+    for (attempt, message) in [
+        ("shut[s] = 1", format!("cannot assign to property '{named}': the object is not extensible")),
+        ("Object.defineProperty(shut, s, { value: 1 })", format!("cannot define property '{named}': the object is not extensible")),
+        ("Object.defineProperty(fixed, s, { value: 2 })", format!("cannot define property '{named}': the property cannot be redefined")),
+        ("fixed[s] = 2", format!("cannot assign to property '{named}': it is read-only")),
+        ("delete fixed[s]", format!("cannot delete property '{named}'")),
+        ("null[s]", "cannot read a property of null".to_string()),
+    ] {
+        let src = format!(
+            "{setup} (function () {{ 'use strict'; try {{ {attempt}; return 'none'; }} catch (e) {{ return (e instanceof TypeError) + ' ' + e.message; }} }})()"
+        );
+        let mut realm = es2015(Limits { heap_bytes: 64 << 20, fuel: 1_000_000, ..Limits::default() });
+        assert_eq!(realm.run(&src), Ok(JsValue::String(format!("true {message}"))), "{attempt}");
+    }
+    // A write that does not throw leaves the Symbol's description as it is.
+    let src = format!("{setup} shut[s] = 1; fixed[s] = 2; shut[s] === undefined && fixed[s] === 1");
+    assert_eq!(es2015(Limits { heap_bytes: 64 << 20, fuel: 1_000_000, ..Limits::default() }).run(&src), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn an_array_iterator_keeps_its_object_while_reading_its_length_runs_script() {
+    // The `length` getter finishes the iterator by stepping it again, which lets go of `obj`, and
+    // the length's `valueOf` drops the last reference to `obj`, fills the heap until it collects
+    // and then reuses every free slot. The step still reads the element of `obj`.
+    let src = "var obj = { 0: 'x', 1: 'y' }, it = Array.prototype.values.call(obj), calls = 0, junk, fresh = []; \
+               Object.defineProperty(obj, 'length', { get: function () { \
+                 calls++; if (calls > 1) return 0; it.next(); \
+                 return { valueOf: function () { obj = null; \
+                   for (var i = 0; i < 60000; i++) junk = { a: i }; \
+                   for (var j = 0; j < 70000; j++) fresh.push({ 0: 'wrong' }); return 2; } }; } }); 0; \
+               var r = it.next(); r.value + ' ' + r.done + ' ' + it.next().done";
+    assert_eq!(string(src), "x false true");
+}
+
+#[test]
+fn iterator_steps_take_fuel() {
+    let mut realm = es2015(Limits { fuel: 5_000, ..Limits::default() });
+    let src = "var a = []; a.length = 1e9; var it = a.values(); while (!it.next().done) {}";
+    match realm.run(src) {
+        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
+        other => panic!("{other:?}"),
+    }
+}

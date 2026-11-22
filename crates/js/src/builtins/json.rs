@@ -556,7 +556,7 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
         }
     }
     Ok(match v {
-        Value::Undefined => Item::Skip,
+        Value::Undefined | Value::Symbol(_) => Item::Skip,
         Value::Object(_) if interp.is_callable(&v) => Item::Skip,
         Value::Object(o) => Item::Container(o),
         other => Item::Primitive(other),
@@ -579,7 +579,7 @@ fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult
     };
     let (hint, name) = if string { (Hint::String, "toString") } else { (Hint::Number, "valueOf") };
     let p = if reaches_prototype(interp, *o, proto, name)? { primitive } else { interp.to_primitive(v, hint)? };
-    Ok(Some(if string { Value::String(interp.primitive_to_str(&p)) } else { Value::Number(interp.to_number(&p)?) }))
+    Ok(Some(if string { Value::String(interp.to_str(&p)?) } else { Value::Number(interp.to_number(&p)?) }))
 }
 
 /// Whether looking up `name` from `o` reaches the object `proto` on the prototype chain before
@@ -637,7 +637,7 @@ fn write_primitive(interp: &mut Interp, out: &mut Builder, v: &Value) -> JsResul
             let units = flat_charged(i, s)?;
             write_quoted(i, out, &units)
         }),
-        Value::Undefined | Value::Object(_) => Ok(()),
+        Value::Undefined | Value::Object(_) | Value::Symbol(_) => Ok(()),
     }
 }
 

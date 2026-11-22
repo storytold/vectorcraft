@@ -46,6 +46,17 @@
 //! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
 //! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
 //! node.
+//!
+//! With [`Options::es2015`], the realm also has `Symbol` (ECMA-262 11th edition, section 19.4,
+//! <https://262.ecma-international.org/11.0/>): `Symbol.for` and `Symbol.keyFor` over a registry
+//! that lasts as long as the realm, the well-known Symbols `iterator`, `asyncIterator`,
+//! `hasInstance`, `toPrimitive` and `toStringTag` with the hooks ToPrimitive, `instanceof` and
+//! `Object.prototype.toString` read, Symbol-keyed properties with `Object.getOwnPropertySymbols`,
+//! and iterator objects with a `next` method from `Array.prototype.values`, `keys`, `entries` and
+//! `@@iterator`, `String.prototype[@@iterator]` (by code point) and every `arguments` object. A
+//! Symbol converted to a string or a number without `String(symbol)` or `toString` throws a
+//! `TypeError`. Every iterator step takes fuel, and every Symbol and registry entry counts against
+//! the heap limit.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -68,6 +79,7 @@ mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
 mod string_builtins;
+mod symbol;
 mod token;
 mod value;
 mod xml;
@@ -100,11 +112,15 @@ pub struct Options {
     pub max_source_units: usize,
     /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
     pub e4x: bool,
+    /// Give a realm the later editions' built-ins this engine has: `Symbol` with Symbol-keyed
+    /// properties and the iterators of arrays, strings and `arguments` objects. Off, a realm has
+    /// the ES5.1 built-ins only, as the app's scripts expect.
+    pub es2015: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false }
+        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false, es2015: false }
     }
 }
 
@@ -208,6 +224,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod symbol_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
