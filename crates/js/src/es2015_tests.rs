@@ -365,6 +365,23 @@ fn spread_and_templates_stay_within_the_limits() {
 }
 
 #[test]
+fn spreading_a_rope_counts_its_flattened_length_first() {
+    // `mk` returns a rope whose left half is a flat string of about half the heap, held by
+    // nothing else. Its flattened copy is the other half, so the two don't fit together. Making
+    // the left half takes about 16,400 fuel, and the elements read before the heap fills would
+    // take more than the rest, so only the check before the copy ends the run with the heap limit.
+    let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
+                 function mk() { var a = f('a'); a[0]; return a + 'b'; }";
+    let limits = Limits { heap_bytes: 4 * 262_146, fuel: 20_000, ..Limits::default() };
+    for spread in ["[...mk()]", "Math.max(...mk())"] {
+        let e = Realm::with_options(es_options(), limits.clone()).run(&format!("{build} {spread}; 0")).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread}: {e:?}");
+    }
+    let made = Realm::with_options(es_options(), limits).run(&format!("{build} mk(); 0"));
+    assert_eq!(made, Ok(JsValue::Number(0.0)), "the rope is made within the fuel");
+}
+
+#[test]
 fn new_scopes_survive_collections_while_they_are_made() {
     // Heaps just big enough make the collector run while function bodies and blocks set up their
     // scopes; each run gives the right total or stops at the heap limit.

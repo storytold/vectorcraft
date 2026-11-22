@@ -2292,13 +2292,14 @@ impl Interp {
 
     /// Appends the elements of the value on top to the array under it: an array's elements by
     /// index (holes read as `undefined`), a string's characters by code point, and an object with
-    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel.
+    /// a `length` by index. Any other value is a `TypeError`. Each element takes a unit of fuel,
+    /// and a concatenated string's flattened copy is counted against the heap before it is made.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
         let items: Vec<Value> = match &v {
             Value::String(s) => {
-                let units = s.flat();
+                let units = crate::string_builtins::flat_charged(self, s)?;
                 let mut out = Vec::new();
                 let mut held = HeldBytes::new(self);
                 let mut i = 0;
