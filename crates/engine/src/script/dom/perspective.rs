@@ -6,7 +6,10 @@
 //! `showPerspectiveGrid`, `hidePerspectiveGrid` and `setActivePlane` change view state with
 //! `perspective.grid.show` and `perspective.plane.set`: no undo step, and a failed run puts them
 //! back with the document. `selectPerspectivePreset` runs `perspective.grid.preset`, which shows
-//! the grid and makes one undo step when the grid's geometry changes.
+//! the grid and makes one undo step when the grid's geometry changes. As the Document page
+//! describes, `showPerspectiveGrid` and `setActivePlane` give `true` on success, and
+//! `hidePerspectiveGrid` gives `true` when it hides a grid and `false` when the grid was already
+//! hidden.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `selectPerspectivePreset(gridType, presetName)` throws when no built-in or saved preset has
@@ -15,12 +18,13 @@
 //!   scripting guide says
 //!   (<https://web.archive.org/web/20170622004549/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/AI_ScriptGd.pdf>).
 //!   `INVALIDGRIDPLANETYPE` makes no plane active.
-//! - `showPerspectiveGrid` and `setActivePlane` give `true`, also when nothing changed;
-//!   `hidePerspectiveGrid` gives `false` when the grid was already hidden.
+//! - `showPerspectiveGrid` and `setActivePlane` also give `true` when nothing changed.
 //! - `getPresetSettings(preset)` takes the names `documents.addDocument` takes, and gives a new
 //!   `DocumentPreset` with the settings a new document from that preset starts with, which
-//!   `addDocument` takes back unchanged (settings it cannot take, such as other units or more than
-//!   100 artboards, are left out); changing it changes nothing else.
+//!   `addDocument` takes back unchanged. Settings it cannot take are left out: units other than
+//!   the six `RulerUnits` values, a PPI other than 72, 150 or 300, the artboard count and layout
+//!   of more than 100 artboards, and the layout of a grid by column that no row count lays out the
+//!   same. Changing the result changes nothing else.
 //! - The workspace methods, `loadColorSettings`, `showPresets` and the perspective grid preset
 //!   files are not available yet.
 

@@ -2744,11 +2744,14 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   (https://web.archive.org/web/20170622004549/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/AI_ScriptGd.pdf).
   `getPresetSettings` takes the names `addDocument` takes and gives a new `DocumentPreset` with the settings a
   document from that preset starts with, which `addDocument` takes back unchanged. It leaves out `units` when the
-  preset's units are not one of the six `RulerUnits` values a new document takes, and `numArtboards` and
-  `artboardRowsOrCols` when the preset has more than 100 artboards, so `addDocument` with the same preset keeps the
-  preset's own.
-  VectorCraft's own rules: `showPerspectiveGrid` and `setActivePlane` give `true`, and `hidePerspectiveGrid` gives
-  `false` when the grid was already hidden. `INVALIDGRIDPLANETYPE` makes no plane active. A preset name that is not
+  preset's units are not one of the six `RulerUnits` values a new document takes, `rasterResolution` when the
+  preset's PPI is not 72, 150 or 300, `numArtboards` and `artboardRowsOrCols` when the preset has more than 100
+  artboards, and `artboardRowsOrCols` alone for a grid by column that no row count lays out the same, so
+  `addDocument` with the same preset keeps the preset's own. As the Document page describes,
+  `showPerspectiveGrid` and `setActivePlane` give `true` on success, and `hidePerspectiveGrid` gives `true` when it
+  hides a grid and `false` when the grid was already hidden.
+  VectorCraft's own rules: `showPerspectiveGrid` and `setActivePlane` also give `true` when nothing changed.
+  `INVALIDGRIDPLANETYPE` makes no plane active. A preset name that is not
   listed, a preset whose grid is not of `gridType`, `InvalidPerspectiveGridType` and a name of more than 4,096 bytes
   throw an error with nothing changed. Changing the `DocumentPreset` `getPresetSettings` gives changes nothing else.
   `app.saveWorkspace`, `switchWorkspace`, `deleteWorkspace`, `resetWorkspace`, `loadColorSettings` and
