@@ -14,7 +14,7 @@ use vectorcraft_doc::{AppearanceItem, Dash, Document, ImageObject, LineCap, Line
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape};
 
-use crate::dib::Rgba;
+use craft_metafile::write::Image;
 
 /// How deep symbols, brush art and pattern tiles may nest in one another (deeper art is left out).
 const MAX_NEST: u32 = 8;
@@ -73,7 +73,7 @@ pub(crate) enum Op {
     /// An image: its pixel space (0..w, 0..h) maps into the document by `xf`; its alpha times
     /// `opacity`.
     Image {
-        image: Arc<Rgba>,
+        image: Arc<Image>,
         xf: Affine,
         opacity: f32,
     },
@@ -104,11 +104,6 @@ fn first_solid(n: &Node) -> Option<vectorcraft_color::Color> {
     own.or_else(|| n.children().into_iter().flatten().find_map(|c| first_solid(c)))
 }
 
-/// `bp` cut into its dashes (as it is when `dash` draws none), for pens that can't draw them.
-pub(crate) fn dashed(bp: &BezPath, dash: Option<&Dash>) -> BezPath {
-    dash.and_then(|d| stroke::dash(bp, d)).map_or_else(|| bp.clone(), |d| d.path)
-}
-
 fn q(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0).round() as u8
 }
@@ -124,7 +119,7 @@ pub(crate) struct Scene<'a> {
     ops: Vec<Op>,
     warnings: Vec<String>,
     /// Decoded images by key (`None`: can't be decoded, left out).
-    images: HashMap<String, Option<Arc<Rgba>>>,
+    images: HashMap<String, Option<Arc<Image>>>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// The opacity of the containers around the current object.
     opacity: f32,
@@ -456,7 +451,7 @@ impl<'a> Scene<'a> {
                 })
                 .collect()
         };
-        let image = Rgba { width: u32::from(cols), height: u32::from(rows), pixels };
+        let image = Image { width: u32::from(cols), height: u32::from(rows), rgba: pixels };
         let xf =
             Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width() / f64::from(cols), area.height() / f64::from(rows));
         self.ops.push(Op::Clip { path: bp.clone(), rule });
@@ -518,7 +513,7 @@ impl<'a> Scene<'a> {
 
     /// Image `im`'s pixels (scaled down to what a metafile stores), `None` with a warning when it
     /// has none or can't be decoded.
-    fn decoded(&mut self, im: &ImageObject) -> Option<Arc<Rgba>> {
+    fn decoded(&mut self, im: &ImageObject) -> Option<Arc<Image>> {
         let key = im.key.as_str();
         if let Some(i) = self.images.get(key) {
             return i.clone();
@@ -527,7 +522,7 @@ impl<'a> Scene<'a> {
         let img = blob
             .and_then(|b| craft_image_codecs::decode(&b.bytes).ok())
             .and_then(|i| image::RgbaImage::from_raw(i.width(), i.height(), i.to_rgba8()))
-            .map(Rgba::fitted)
+            .map(crate::dib::fitted)
             .filter(|i| i.width > 0 && i.height > 0)
             .map(Arc::new);
         if img.is_none() {
@@ -541,7 +536,7 @@ impl<'a> Scene<'a> {
 /// The pixels of `img`, drawn by `xf`, that `clip` (a box in the document) shows, with one pixel
 /// more on each side: the part and its top left pixel. The whole image when `xf` cannot be
 /// inverted; `None` when `clip` shows none of it.
-fn cropped(img: &Rgba, xf: Affine, clip: Rect) -> Option<(Rgba, u32, u32)> {
+fn cropped(img: &Image, xf: Affine, clip: Rect) -> Option<(Image, u32, u32)> {
     if xf.determinant().abs() < 1e-12 || !xf.determinant().is_finite() {
         return Some((img.clone(), 0, 0));
     }
@@ -564,9 +559,9 @@ fn cropped(img: &Rgba, xf: Affine, clip: Rect) -> Option<(Rgba, u32, u32)> {
     let mut pixels = Vec::with_capacity((x1 - x0) as usize * (y1 - y0) as usize * 4);
     for y in y0..y1 {
         let start = y as usize * row + x0 as usize * 4;
-        pixels.extend_from_slice(img.pixels.get(start..start + (x1 - x0) as usize * 4)?);
+        pixels.extend_from_slice(img.rgba.get(start..start + (x1 - x0) as usize * 4)?);
     }
-    Some((Rgba { width: x1 - x0, height: y1 - y0, pixels }, x0, y0))
+    Some((Image { width: x1 - x0, height: y1 - y0, rgba: pixels }, x0, y0))
 }
 
 /// Do the instances of `def` stay apart? A grid or brick tiling places its tiles side by side, so

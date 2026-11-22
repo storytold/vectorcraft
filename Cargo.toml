@@ -48,6 +48,7 @@ craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb
 craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0", features = ["egui"] }
+craft-codepage = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }

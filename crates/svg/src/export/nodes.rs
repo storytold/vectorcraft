@@ -1,4 +1,4 @@
-use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_valid};
+use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
@@ -888,7 +888,7 @@ impl Writer<'_> {
                 if !valid_xml_value(url) {
                     self.warn("Link URLs containing invalid XML characters had those characters removed");
                 }
-                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_valid(url)));
+                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_escape(url)));
                 self.depth += 1;
                 self.node_body(n);
                 self.depth -= 1;

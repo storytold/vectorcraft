@@ -191,6 +191,27 @@ fn charge(live: &mut Live, left: &mut u64, cost: u64) -> Result<()> {
     live.store.set_fuel(held - (cost - from_left)).map_err(wasm_err)
 }
 
+/// Resumes a run's call with `step`: the store's storage calls may also pay from `left`
+/// ([`host::Run::fuel_left`]), and what they took from it comes off `left` when the call pauses →
+/// the pause, or the error the call ended with ([`run_err`]).
+fn slice<T>(live: &mut Live, left: &mut u64, step: impl FnOnce(&mut Store<Host>) -> std::result::Result<T, wasmi::Error>) -> Result<T> {
+    live.store.data_mut().run.fuel_left = *left;
+    let paused = step(&mut live.store);
+    *left = std::mem::take(&mut live.store.data_mut().run.fuel_left);
+    paused.map_err(|e| run_err(&mut live.store, e))
+}
+
+/// Why a storage call ended a run of `store` ([`host::Run::storage_stop`]).
+fn stop_reason(store: &mut Store<Host>) -> Error {
+    store.data_mut().run.storage_stop.take().unwrap_or_else(|| Error::Limit("instruction budget".into()))
+}
+
+/// The error `e` that a run of `store` ended with: a storage call's reason ([`host::StorageStop`])
+/// or [`wasm_err`]'s.
+fn run_err(store: &mut Store<Host>, e: wasmi::Error) -> Error {
+    if e.downcast_ref::<host::StorageStop>().is_some() { stop_reason(store) } else { wasm_err(e) }
+}
+
 fn wasm_err(e: wasmi::Error) -> Error {
     if e.as_trap_code() == Some(wasmi::TrapCode::OutOfFuel) { Error::Limit("instruction budget".into()) } else { Error::Trap(e.to_string()) }
 }
@@ -306,7 +327,7 @@ impl Plugin {
             Ok(instance) => instance,
             Err(e) => {
                 *report = std::mem::take(&mut store.data_mut().run.report);
-                return Err(wasm_err(e));
+                return Err(run_err(&mut store, e));
             }
         };
         let memory =
@@ -321,7 +342,9 @@ impl Plugin {
     /// for it. It charges a `memory.fill` or `memory.copy` for its whole length before writing, so
     /// up to that cost can be left in the store at a pause. Each slice tops the store up to the
     /// slice size, keeping that fuel, and a run ends with the instruction budget only when the
-    /// store's fuel and the rest of the budget together can't pay for the next instruction.
+    /// store's fuel and the rest of the budget together can't pay for the next instruction. A
+    /// storage call pays for its bytes ([`host::STORAGE_BYTES_PER_FUEL`]) from the store's fuel and
+    /// the rest of the budget as it is made, and one they can't pay for ends the run.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
         self.call_with(live, f, params, fuel, deadline, None)
     }
@@ -343,11 +366,14 @@ impl Plugin {
         let give = left.min(FUEL_SLICE);
         left -= give;
         live.store.set_fuel(give).map_err(wasm_err)?;
-        let mut call = f.call_resumable(&mut live.store, params).map_err(wasm_err)?;
+        let mut call = slice(live, &mut left, |store| f.call_resumable(store, params))?;
         loop {
             match call {
                 TypedResumableCall::Finished(r) => return Ok(r),
                 TypedResumableCall::HostTrap(inv) => {
+                    if inv.host_error().downcast_ref::<host::StorageStop>().is_some() {
+                        return Err(stop_reason(&mut live.store));
+                    }
                     let pending = live.store.data_mut().run.pending.take();
                     let (Some((id, args, size)), Some(bridge)) = (pending, bridge.as_deref_mut()) else {
                         return Err(Error::Trap("unexpected host trap".into()));
@@ -361,7 +387,7 @@ impl Plugin {
                     charge(live, &mut left, returned as u64 / 64)?;
                     deadline.check()?;
                     vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
-                    call = inv.resume(&mut live.store, &[Val::I32(code)]).map_err(wasm_err)?;
+                    call = slice(live, &mut left, |store| inv.resume(store, &[Val::I32(code)]))?;
                 }
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
@@ -375,7 +401,7 @@ impl Plugin {
                     let fill = total.min(FUEL_SLICE.max(need)).max(held);
                     left -= fill - held;
                     live.store.set_fuel(fill).map_err(wasm_err)?;
-                    call = inv.resume(&mut live.store).map_err(wasm_err)?;
+                    call = slice(live, &mut left, |store| inv.resume(store))?;
                 }
             }
         }
