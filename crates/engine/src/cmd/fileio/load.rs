@@ -1370,6 +1370,20 @@ pub(crate) fn image_clip(blob: &ImageBlob) -> Option<vectorcraft_geom::PathData>
     vectorcraft_geom::path::with_anchor_budget(vectorcraft_geom::path::MAX_READ_ANCHORS, || serde_json::from_slice(json).ok())
 }
 
+/// `blob` with its preview keeping the clipping path its PNG or TIFF keeps ([`image_clip`]), in a
+/// text chunk of the preview PNG as [`png_with_clip`] writes it: a document saved without its
+/// linked files holds the preview alone, and the Links commands then still know a clip group of
+/// that path as the file's. Unchanged without a preview or a clipping path.
+pub(crate) fn preview_with_clip(mut blob: ImageBlob) -> ImageBlob {
+    let Some(proxy) = blob.proxy.clone().filter(|p| !std::sync::Arc::ptr_eq(p, &blob.bytes) && png_clip(p).is_none()) else { return blob };
+    let Some(json) = image_clip(&blob).and_then(|clip| serde_json::to_string(&clip).ok()).filter(|j| j.len() <= MAX_PNG_CLIP) else {
+        return blob;
+    };
+    let png = vectorcraft_render::encode::png::with_text(proxy.to_vec(), &[(CLIP_KEYWORD, json.into())]);
+    blob.proxy = Some(std::sync::Arc::new(png));
+    blob
+}
+
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {

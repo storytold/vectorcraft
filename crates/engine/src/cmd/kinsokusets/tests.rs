@@ -332,6 +332,36 @@ fn pasted_type_brings_its_kinsoku_sets() {
     assert_eq!(style_set(&s), Value::Null);
 }
 
+/// Type pasted back after its set was edited breaks its lines by the set as it is now: with B in
+/// Cannot End Line the first line of `A B C` ends at A, and once the set holds nothing, it ends at B.
+#[test]
+fn pasted_type_relayouts_after_its_kinsoku_set_was_edited() {
+    let mut s = session();
+    s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": "Tight", "cannotEnd": "B"}]})).unwrap();
+    let create = json!({"x": 10, "y": 10, "text": "A B C", "size": 20, "font": "JetBrains Mono", "area": {"width": 40, "height": 120}});
+    let id = s.execute("text.create", &create).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"kinsoku": "Tight"})).unwrap();
+    let lines = |t: &vectorcraft_doc::TextObject| t.baselines().collect::<Vec<_>>();
+    let first_width = |t: &vectorcraft_doc::TextObject| t.baselines().next().map(|(a, b)| b.x - a.x).unwrap_or_default();
+    let copied = text(&s, id);
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": "Tight"}]})).unwrap();
+    // The set's edit lays the type in the document out anew, and its first line takes B.
+    let edited = text(&s, id);
+    assert_eq!(lines(&edited).len(), 2);
+    assert!(first_width(&edited) > first_width(&copied), "{:?} against {:?}", lines(&edited), lines(&copied));
+
+    let v = s.execute("edit.paste", &json!({})).unwrap();
+    let t = text(&s, v["ids"][0].as_u64().unwrap());
+    let now = s.doc().unwrap().doc.kinsoku_sets[0].clone();
+    assert_eq!(t.para_at(0).kinsoku_set.as_deref(), Some(&now));
+    let mut fresh = t.clone();
+    crate::cmd::typecmd::refresh_bounds(&mut fresh);
+    assert_eq!(lines(&t), lines(&fresh), "the pasted type is laid out with the edited set");
+    assert_eq!(first_width(&t), first_width(&edited));
+}
+
 /// A pasted set whose name, at the longest a name can be, the document's set with other
 /// characters already has comes in under a free name that fits: the number takes the place of the
 /// name's last characters, and a space left at the end of them is dropped. A second paste uses

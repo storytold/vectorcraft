@@ -321,7 +321,7 @@ proptest! {
         // The feature sample adds a style table, a clipping container and a lens to the shapes.
         let compress = compress && version >= 700;
         let mut bytes =
-            if features { vectorcraft_cdr::synth::feature_sample(version, compress) } else { vectorcraft_cdr::synth::sample(version, compress) };
+            if features { craft_cdr::synth::feature_sample(version, compress) } else { craft_cdr::synth::sample(version, compress) };
         let n = bytes.len();
         for (at, b) in edits { bytes[at % n] = b; }
         bytes.truncate(cut);
@@ -344,11 +344,11 @@ proptest! {
         // The members are edited before they are zipped, so that the edits reach the drawing
         // rather than stop at the CRC-32; the archive may then be cut short.
         let mut members = if version < 1600 {
-            vec![vectorcraft_cdr::synth::Member { name: "content/riffData.cdr".into(), data: vectorcraft_cdr::synth::sample(version, true), deflate: false }]
+            vec![craft_cdr::synth::Member { name: "content/riffData.cdr".into(), data: craft_cdr::synth::sample(version, true), deflate: false }]
         } else {
-            let mut body = vec![vectorcraft_cdr::synth::chunk(b"vrsn", version.to_le_bytes().to_vec())];
-            body.extend(vectorcraft_cdr::synth::sample_content(version));
-            vectorcraft_cdr::synth::package16_members(version, &body, false, &[])
+            let mut body = vec![craft_cdr::synth::chunk(b"vrsn", version.to_le_bytes().to_vec())];
+            body.extend(craft_cdr::synth::sample_content(version));
+            craft_cdr::synth::package16_members(version, &body, false, &[])
         };
         for (m, at, b) in edits {
             let k = m % members.len();
@@ -358,7 +358,7 @@ proptest! {
                 data[at % n] = b;
             }
         }
-        let mut bytes = vectorcraft_cdr::synth::zip(&members, b"");
+        let mut bytes = craft_cdr::synth::zip(&members, b"");
         if let Some(cut) = cut {
             bytes.truncate(cut);
         }
@@ -395,7 +395,7 @@ proptest! {
         cut in prop::option::of(0usize..1024),
         edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
     ) {
-        let mut bytes = vectorcraft_cdr::synth::wl_sample(marker);
+        let mut bytes = craft_cdr::synth::wl_sample(marker);
         let n = bytes.len();
         for (at, b) in edits { bytes[at % n] = b; }
         if let Some(cut) = cut {
@@ -444,7 +444,7 @@ proptest! {
         cut in prop::option::of(12usize..4096),
         edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
     ) {
-        let mut bytes = vectorcraft_cdr::synth_cmx::sample();
+        let mut bytes = craft_cdr::synth_cmx::sample();
         let n = bytes.len();
         for (at, b) in edits { bytes[at % n] = b; }
         if let Some(cut) = cut {
@@ -464,7 +464,7 @@ proptest! {
     fn cmx_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
         // A 32-bit header, so the garbage is walked as chunks, tables and instructions.
         let mut bytes = b"RIFF".to_vec();
-        let cont = vectorcraft_cdr::synth_cmx::cont(b'4', 1e-7);
+        let cont = craft_cdr::synth_cmx::cont(b'4', 1e-7);
         bytes.extend(((4 + cont.len() + tail.len()) as u32).to_le_bytes());
         bytes.extend(b"CMX1");
         bytes.extend(cont);
@@ -2095,7 +2095,8 @@ proptest! {
 
     /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
     /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
-    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`.)
+    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`, and
+    /// Invert, Threshold and Posterize layers by `tests_psdlayers::damaged_adjustment_layers_never_panic`.)
     /// Neither does `document.psdInfo`, nor placing them with their layers as objects.
     #[test]
     fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {

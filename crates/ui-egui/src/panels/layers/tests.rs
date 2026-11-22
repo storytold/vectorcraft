@@ -400,13 +400,74 @@ fn clicking_a_target_circle_targets_the_layer() {
     }
     let st = app.session.active().unwrap();
     assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(a), vec![a]));
-    // Shift-clicking another object's circle adds it to the selection (#901), and again takes
-    // it out; nothing is targeted meanwhile.
-    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    // Ctrl/Cmd-clicking another object's circle adds it to the selection, as Ctrl/Cmd-clicking a
+    // name adds the row (#901, #8639), and again takes it out; nothing is targeted meanwhile.
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::COMMAND);
     let st = app.session.active().unwrap();
     assert_eq!((st.selection.target, st.selection.objects.clone()), (None, vec![a, b]));
-    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::COMMAND);
     assert_eq!(app.session.active().unwrap().selection.objects, vec![a]);
+}
+
+/// Shift-clicking a target circle selects the art of every row from the last circle clicked to
+/// it, as Shift-clicking a name highlights a range of rows (#8639); Shift+Ctrl/Cmd adds a range to
+/// the selection. Nothing is targeted, and hidden art in the range is left out.
+#[test]
+fn shift_clicking_a_target_circle_selects_a_range_of_rows() {
+    let (mut app, _, [a, b]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let c3 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 120, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let d = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 60, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    let ctx = egui::Context::default();
+    // Rows top down: the layer, d, c3, b, a.
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(c.len(), 5);
+    let selected = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let mut ids = st.selection.objects.clone();
+        ids.sort();
+        (st.selection.target, ids)
+    };
+    // From c3 down to a: b in between is selected too.
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    assert_eq!(selected(&app), (Some(c3), vec![c3]));
+    click_with(&mut app, &ctx, c[4], egui::Modifiers::SHIFT);
+    assert_eq!(selected(&app), (None, vec![a, b, c3]));
+    // A Shift range starts at the last circle clicked, not at the end of the last range.
+    click_with(&mut app, &ctx, c[3], egui::Modifiers::SHIFT);
+    assert_eq!(selected(&app), (None, vec![b, c3]));
+    // Shift+Ctrl/Cmd adds a range: from c3 up to d.
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT | egui::Modifiers::COMMAND);
+    assert_eq!(selected(&app), (None, vec![b, c3, d]));
+    // Hidden art in a range stays unselected.
+    run(&mut app, "select.set", json!({"ids": [b.0]}));
+    run(&mut app, "object.hide", json!({}));
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    click_with(&mut app, &ctx, c[4], egui::Modifiers::SHIFT);
+    assert_eq!(selected(&app), (None, vec![a, c3]));
+}
+
+/// The Shift-click anchor of the target circles belongs to the document it was clicked in: node
+/// ids are per document, so in another document a Shift-click with no circle clicked there yet
+/// targets only its own row, never a range from a row that has the old anchor's id.
+#[test]
+fn the_target_circle_anchor_does_not_carry_over_to_another_document() {
+    let (mut app, _, [a, _]) = two_rects();
+    let ctx = egui::Context::default();
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    // Rows top down: the layer, b, a. The anchor is a.
+    click_with(&mut app, &ctx, c[2], egui::Modifiers::NONE);
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let a2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    let b2 = NodeId(run(&mut app, "shape.rectangle", json!({"x": 60, "y": 0, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    assert_eq!(a2, a, "the new document reuses the old anchor's id, so a stale anchor would find a row");
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    click_with(&mut app, &ctx, c[1], egui::Modifiers::SHIFT);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.selection.target, st.selection.objects.clone()), (Some(b2), vec![b2]));
 }
 
 /// The rows whose target circle shows as targeted (its inner ring drawn), as indexes into the

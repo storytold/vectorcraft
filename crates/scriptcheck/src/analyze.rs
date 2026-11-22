@@ -46,21 +46,25 @@ pub(crate) struct IncludeRef {
 }
 
 /// What variables hold, as a check learns it: the member chains assigned to them, and the ones
-/// holding a File or Folder object.
+/// holding a File or Folder object, with the ones of those that every assignment the check read gave
+/// a Folder object ([`Analyzer::folders`]).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Known {
     pub bound: HashMap<String, String>,
     pub files: HashSet<String>,
+    pub folders: HashSet<String>,
 }
 
 impl Known {
-    /// The names known.
+    /// The names known, a name that may hold a File object counting twice: a Folder that becomes a
+    /// possible File object ([`Known::add`]) changes it too.
     pub fn len(&self) -> usize {
-        self.bound.len() + self.files.len()
+        self.bound.len() + self.files.len().saturating_mul(2).saturating_sub(self.folders.len())
     }
 
     /// What `other` adds, up to [`crate::Limits::entries`] names of each kind: a name already
-    /// bound keeps its chain.
+    /// bound keeps its chain. A name that holds a File or Folder object on both sides holds a Folder
+    /// object only when both sides say so; otherwise it may hold a File object.
     pub fn add(&mut self, other: Known, entries: usize) {
         for (name, chain) in other.bound {
             if self.bound.len() < entries || self.bound.contains_key(&name) {
@@ -68,7 +72,14 @@ impl Known {
             }
         }
         for name in other.files {
-            if self.files.len() < entries {
+            if self.files.contains(&name) {
+                if !other.folders.contains(&name) {
+                    self.folders.remove(&name);
+                }
+            } else if self.files.len() < entries {
+                if other.folders.contains(&name) {
+                    self.folders.insert(name.clone());
+                }
                 self.files.insert(name);
             }
         }
@@ -239,6 +250,10 @@ enum Pending<'s> {
     MenuString(Option<usize>, &'s str),
     /// `.open(`: a string literal with the open mode may follow.
     Open(Option<usize>),
+    /// A File object's `length`, `hidden` or `readonly` (`f.length`, `f['length']`): an assignment
+    /// or an update (`++`, `--`) that sets it may follow. With `true`, a prefix update came before
+    /// the receiver, and it sets the property unless a member or a call follows it.
+    Setter(Option<usize>, bool),
     /// A platform name where a property key or a label may stand (first, or after `{`, `,`, `;` or
     /// `}`): it is a key or a label when `:` follows.
     Name(&'s str, Option<usize>),
@@ -251,10 +266,11 @@ struct Assign {
     after_new: bool,
 }
 
-/// What a value the check follows holds: a member chain, or a File or Folder object.
+/// What a value the check follows holds: a member chain, or a File or Folder object (`folder` when it
+/// is a Folder object whatever the path names: [`Operand::file_step`]).
 enum Held {
     Chain(String),
-    File,
+    File { folder: bool },
 }
 
 /// `name = (`: a value in grouping parentheses. Its value is the last operand in each pair (ECMA-262
@@ -298,8 +314,9 @@ enum Operand {
     FileMember { folder: bool },
     /// `File.openDialog`, `File.saveDialog` or `Folder.selectDialog` came first: its `(` is next.
     FileDialog,
-    /// A call of `File`, `Folder` or one of their dialogs came first, and its `)` is still to come.
-    FileCall,
+    /// A call of `File`, `Folder` or one of their dialogs came first, and its `)` is still to come
+    /// (`folder` for `new Folder(…)`).
+    FileCall { folder: bool },
     /// Grouping parentheses came first, and their `)` is still to come ([`Paren`] only).
     Pair,
     /// A member chain came first and is still being read.
@@ -316,15 +333,23 @@ impl Operand {
     /// `Folder.selectDialog(…)`, `Folder.<place>` ([`catalog::FOLDER_PLACES`]) or a variable holding
     /// one. `file`: `t` is the platform's `File` or `Folder`; `alias`: `t` names a variable holding a
     /// File or Folder object.
+    ///
+    /// Only `new Folder(…)`, `new Folder` and `Folder.<place>` are Folder objects whatever the path
+    /// names. `Folder(…)` gives a File object when the path names a file, `Folder.selectDialog(…)`
+    /// gives a File or Folder object for what the user picks, `Folder.current` is the one place a
+    /// script can assign, and a variable another variable was assigned to may hold a File object.
     fn file_step(self, t: &Sig, file: bool, alias: bool) -> Operand {
         match self {
             Operand::Start if t.word("new") => Operand::New,
             Operand::Start if file => Operand::FileName { new: false, folder: t.text == catalog::FOLDER },
             Operand::New if file => Operand::FileName { new: true, folder: t.text == catalog::FOLDER },
-            Operand::Start if alias => Operand::Done(Held::File),
-            Operand::FileName { .. } | Operand::FileDialog if t.is("(") => Operand::FileCall,
+            Operand::Start if alias => Operand::Done(Held::File { folder: false }),
+            Operand::FileName { new, folder } if t.is("(") => Operand::FileCall { folder: new && folder },
+            Operand::FileDialog if t.is("(") => Operand::FileCall { folder: false },
             Operand::FileName { new: false, folder } if t.is(".") => Operand::FileMember { folder },
-            Operand::FileMember { folder: true } if catalog::FOLDER_PLACES.contains(&t.text) => Operand::Done(Held::File),
+            Operand::FileMember { folder: true } if catalog::FOLDER_PLACES.contains(&t.text) => {
+                Operand::Done(Held::File { folder: t.text != catalog::FOLDER_CURRENT })
+            }
             Operand::FileMember { folder } if (if folder { catalog::FOLDER_DIALOGS } else { catalog::FILE_DIALOGS }).contains(&t.text) => {
                 Operand::FileDialog
             }
@@ -333,9 +358,13 @@ impl Operand {
     }
 
     /// The operand is a File or Folder object when the `)` of its parentheses comes next: a complete
-    /// one, or `new File` or `new Folder` without arguments.
-    fn holds_file(&self) -> bool {
-        matches!(self, Operand::Done(Held::File) | Operand::FileName { new: true, .. })
+    /// one, or `new File` or `new Folder` without arguments. `Some(true)` for a Folder object whatever
+    /// the path names.
+    fn held_file(&self) -> Option<bool> {
+        match self {
+            Operand::Done(Held::File { folder }) | Operand::FileName { new: true, folder } => Some(*folder),
+            _ => None,
+        }
     }
 }
 
@@ -454,6 +483,14 @@ struct Saved {
     chain: Option<String>,
     /// It held a File or Folder object.
     file: bool,
+    /// It held a Folder object.
+    folder: bool,
+    /// It was in [`Analyzer::maybe_files`].
+    maybe_file: bool,
+    /// The function body or `catch` block declares it, so whether an assignment in it gave the name
+    /// a value that may be a File object is put back too. For an outer name an assignment emptied,
+    /// that stays.
+    local: bool,
     /// For a root of the document model: whether the script's own variable hid the root.
     shadowed: Option<bool>,
     /// It was a platform name the script had a meaning of its own for.
@@ -521,6 +558,14 @@ struct Analyzer<'s, 'a, 'l> {
     bound: HashMap<String, String>,
     /// Variables holding a File or Folder object.
     files: HashSet<String>,
+    /// The variables in `files` holding a Folder object whatever the path names ([`Held::File`]).
+    folders: HashSet<String>,
+    /// The variables that an assignment in this scan or in what the scan started with gave a value
+    /// that may be a File object. Assignments in a branch or a function body are read in order, so
+    /// such a variable never counts as holding a Folder object ([`Analyzer::folder`]).
+    maybe_files: HashSet<String>,
+    /// `maybe_files` ran out of room: no variable counts as holding a Folder object.
+    maybe_files_full: bool,
     /// The platform names ([`platform_name`]) the script declares or assigns a meaning of its own
     /// for: they no longer stand for the platform's objects.
     own_names: HashSet<String>,
@@ -547,8 +592,8 @@ struct Analyzer<'s, 'a, 'l> {
     /// block it names.
     catch_names: HashMap<String, usize>,
     /// The calls of `File`, `Folder` and their dialogs still open, by the bracket depth outside their
-    /// `(`, up to [`crate::Limits::nesting`] of them.
-    file_calls: Vec<usize>,
+    /// `(`, up to [`crate::Limits::nesting`] of them, each true for a call that gives a Folder object.
+    file_calls: Vec<(usize, bool)>,
     /// The values in grouping parentheses, the values without them that may hold a File, and the
     /// values of compound assignments, being read, the innermost last, up to
     /// [`crate::Limits::nesting`] of them.
@@ -589,6 +634,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             shadowed: [false; 4],
             bound: known.bound.clone(),
             files: known.files.clone(),
+            folders: known.folders.clone(),
+            maybe_files: known.files.difference(&known.folders).cloned().collect(),
+            maybe_files_full: false,
             own_names: HashSet::new(),
             scopes: vec![],
             declared,
@@ -681,9 +729,12 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let consumed = self.continue_chain(&t);
         let before = self.depth();
         if t.kind == T::Punct {
-            t.file = self.bracket(&t);
+            let held = self.bracket(&t);
+            t.file = held.is_some();
+            t.folder = held == Some(true);
         } else {
             t.file = self.folder_place(&t);
+            t.folder = t.file && t.text != catalog::FOLDER_CURRENT;
         }
         self.conditional(&t);
         self.add_parameter(&t);
@@ -789,17 +840,35 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     fn bind(&mut self, name: String, path: String) {
         self.files.remove(&name);
+        self.folders.remove(&name);
         if self.bound.contains_key(&name) || self.acc.room(self.bound.len()) {
             self.bound.insert(name, path);
         }
     }
 
-    /// `name` holds a File or Folder object.
-    fn hold_file(&mut self, name: String) {
+    /// `name` holds a File or Folder object (`folder` for a Folder object whatever the path names).
+    fn hold_file(&mut self, name: String, folder: bool) {
         self.bound.remove(&name);
+        self.folders.remove(&name);
+        if !folder && !self.maybe_files.contains(&name) {
+            if self.acc.room(self.maybe_files.len()) {
+                self.maybe_files.insert(name.clone());
+            } else {
+                self.maybe_files_full = true;
+            }
+        }
         if self.files.contains(&name) || self.acc.room(self.files.len()) {
+            if folder {
+                self.folders.insert(name.clone());
+            }
             self.files.insert(name);
         }
+    }
+
+    /// `name` holds a Folder object whatever the path names, and no assignment the check read gave it
+    /// a value that may be a File object.
+    fn folder(&self, name: &str) -> bool {
+        !self.maybe_files_full && self.files.contains(name) && self.folders.contains(name) && !self.maybe_files.contains(name)
     }
 
     /// `t`, when it names a parameter of the function whose body's `{` is still to come: kept, up to
@@ -844,6 +913,17 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
+    /// `name` is declared in the innermost function body (`var name`, `function name`, a
+    /// parameter): what it held outside is kept ([`Analyzer::keep_outer`]) as the body's own, and
+    /// the body's variable starts with no assignment read.
+    fn keep_own(&mut self, name: &str) {
+        self.keep_outer(name);
+        if let Some(saved) = self.scopes.last_mut().and_then(|s| s.saved.get_mut(name)) {
+            saved.local = true;
+            self.maybe_files.remove(name);
+        }
+    }
+
     /// The names [`Declared`] has for the function body whose `{` starts at `start`.
     fn declared_in(&mut self, start: usize) -> &'a [&'s str] {
         let declared = self.declared;
@@ -861,7 +941,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// outside is kept to put back when the body closes. A name the body's table has no room for
     /// stays as it is.
     fn hoist(&mut self, name: &str) {
-        self.keep_outer(name);
+        self.keep_own(name);
         if self.scopes.last().is_some_and(|s| s.saved.contains_key(name)) {
             self.empty(name);
         }
@@ -885,7 +965,15 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// What `name` holds now.
     fn saved(&self, name: &str) -> Saved {
         let shadowed = catalog::DOM_ROOTS.iter().position(|r| *r == name).and_then(|i| self.shadowed.get(i).copied());
-        Saved { chain: self.bound.get(name).cloned(), file: self.files.contains(name), shadowed, own: self.own_names.contains(name) }
+        Saved {
+            chain: self.bound.get(name).cloned(),
+            file: self.files.contains(name),
+            folder: self.folders.contains(name),
+            maybe_file: self.maybe_files.contains(name),
+            local: false,
+            shadowed,
+            own: self.own_names.contains(name),
+        }
     }
 
     /// `name` holds `saved` again.
@@ -903,6 +991,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             self.files.insert(name.clone());
         } else {
             self.files.remove(&name);
+        }
+        if saved.folder {
+            self.folders.insert(name.clone());
+        } else {
+            self.folders.remove(&name);
+        }
+        if saved.local && saved.maybe_file {
+            self.maybe_files.insert(name.clone());
+        } else if saved.local {
+            self.maybe_files.remove(&name);
         }
         if saved.own {
             self.own_names.insert(name.clone());
@@ -957,6 +1055,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.make_own(name);
         self.bound.remove(name);
         self.files.remove(name);
+        self.folders.remove(name);
         self.hide_root(name);
     }
 
@@ -971,9 +1070,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     // ---------- brackets ----------
 
-    /// An open or close bracket: true for the `)` that ends a call of `File` or `Folder`, or grouping
-    /// parentheses that hold a File or Folder object ([`Analyzer::close_parens`]).
-    fn bracket(&mut self, t: &Sig<'s>) -> bool {
+    /// An open or close bracket: `Some` for the `)` that ends a call of `File` or `Folder`, or grouping
+    /// parentheses that hold a File or Folder object ([`Analyzer::close_parens`]), `Some(true)` when
+    /// the object is a Folder object.
+    fn bracket(&mut self, t: &Sig<'s>) -> Option<bool> {
         match t.text {
             "(" | "[" | "{" => {
                 if std::mem::take(&mut self.suspend)
@@ -993,17 +1093,20 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 // The first `{` after `catch` and its parentheses at this depth opens its block.
                 let depth = self.depth();
                 let catch = if t.text == "{" { self.catch.take().filter(|(d, _)| *d == depth).and_then(|(_, name)| name) } else { None };
-                let file_call = t.text == "(" && self.calls_for_file();
-                if file_call && self.file_calls.len() < self.acc.limits.nesting {
-                    self.file_calls.push(self.depth());
+                let file_call = if t.text == "(" { self.calls_for_file() } else { None };
+                if let Some(folder) = file_call
+                    && self.file_calls.len() < self.acc.limits.nesting
+                {
+                    self.file_calls.push((self.depth(), folder));
                 }
                 self.open(t);
                 if let Some(name) = catch
                     && self.catches.len() < self.acc.limits.nesting
                 {
-                    let saved = self.saved(&name);
+                    let saved = Saved { local: true, ..self.saved(&name) };
                     let outer = self.catch_names.insert(name.clone(), self.depth());
                     self.empty(&name);
+                    self.maybe_files.remove(&name);
                     self.catches.push(Catch { depth: self.depth(), name, saved, outer });
                 }
                 if params {
@@ -1017,7 +1120,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                         // The parameters are the body's own names, and so are the names it declares.
                         for name in params {
                             self.acc.steps = self.acc.steps.saturating_add(1);
-                            self.keep_outer(&name);
+                            self.keep_own(&name);
                             self.unbind(&name);
                         }
                         for &name in self.declared_in(t.start) {
@@ -1038,16 +1141,18 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     }
                     self.close_scopes();
                     let grouped = self.close_parens(t);
-                    if t.text == ")" && self.file_calls.last() == Some(&self.depth()) {
-                        self.file_calls.pop();
-                        return true;
+                    let depth = self.depth();
+                    if t.text == ")"
+                        && let Some((_, folder)) = self.file_calls.pop_if(|(d, _)| *d == depth)
+                    {
+                        return Some(folder);
                     }
                     return grouped;
                 }
             }
             _ => {}
         }
-        false
+        None
     }
 
     fn open(&mut self, t: &Sig<'s>) {
@@ -1067,18 +1172,18 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
 
     /// A `(` here calls something that gives a File or Folder object: `File` or `Folder` (with or
     /// without `new`), or `File.openDialog`, `File.saveDialog` or `Folder.selectDialog`, each the
-    /// platform's.
-    fn calls_for_file(&self) -> bool {
+    /// platform's. `Some(true)` when it gives a Folder object whatever the path names: only
+    /// `new Folder(…)` ([`Operand::file_step`]).
+    fn calls_for_file(&self) -> Option<bool> {
         let [h0, h1, h2, h3] = self.h;
         let platform = |s: Option<Sig>, name: &str| word(s, name) && !self.own_names.contains(name);
-        let constructor = (platform(h0, catalog::FILE) || platform(h0, catalog::FOLDER)) && !member_mark(h1);
-        let dialog = h0.filter(|s| s.kind == T::Ident).is_some_and(|m| {
-            is(h1, ".")
-                && !member_mark(h3)
-                && ((platform(h2, catalog::FILE) && catalog::FILE_DIALOGS.contains(&m.text))
-                    || (platform(h2, catalog::FOLDER) && catalog::FOLDER_DIALOGS.contains(&m.text)))
-        });
-        constructor || dialog
+        if (platform(h0, catalog::FILE) || platform(h0, catalog::FOLDER)) && !member_mark(h1) {
+            return Some(word(h0, catalog::FOLDER) && word(h1, "new"));
+        }
+        let m = h0.filter(|s| s.kind == T::Ident && is(h1, ".") && !member_mark(h3))?;
+        ((platform(h2, catalog::FILE) && catalog::FILE_DIALOGS.contains(&m.text))
+            || (platform(h2, catalog::FOLDER) && catalog::FOLDER_DIALOGS.contains(&m.text)))
+        .then_some(false)
     }
 
     /// `t` names one of the platform's `Folder` places after `Folder.` (`Folder.temp`): a Folder
@@ -1109,7 +1214,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         if self.in_catch(name.text) {
             self.declare_in_catch(name.text);
         } else if self.scopes.last().is_some_and(|s| !s.saved.contains_key(name.text)) {
-            self.keep_outer(name.text);
+            self.keep_own(name.text);
             self.unbind(name.text);
         }
     }
@@ -1136,7 +1241,15 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             }
         };
         let Some(c) = self.catches.get_mut(i) else { return };
-        let empty = Saved { chain: None, file: false, shadowed: catalog::DOM_ROOTS.contains(&name).then_some(true), own: platform_name(name) };
+        let empty = Saved {
+            chain: None,
+            file: false,
+            folder: false,
+            maybe_file: false,
+            local: false,
+            shadowed: catalog::DOM_ROOTS.contains(&name).then_some(true),
+            own: platform_name(name),
+        };
         let outside = std::mem::replace(&mut c.saved, empty);
         if let Some(scope) = self.scopes.last_mut() {
             scope.saved.insert(name.to_string(), outside);
@@ -1155,8 +1268,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.assign = Some(a);
             } else if (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text) {
                 self.start_value(a.name, Operand::FileName { new: a.after_new, folder: t.text == catalog::FOLDER });
-            } else if !a.after_new && t.kind == T::Ident && self.files.contains(t.text) {
-                self.start_value(a.name, Operand::Done(Held::File));
+            } else if !a.after_new && self.alias(t) {
+                self.start_value(a.name, Operand::Done(Held::File { folder: false }));
             } else if !a.after_new && t.is("(") {
                 self.start_group(a.name);
             } else {
@@ -1253,14 +1366,14 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn group_step(&mut self, t: &Sig<'s>, started: bool, before: usize) {
         let after = self.depth();
         let file = (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text);
-        let alias = t.kind == T::Ident && self.files.contains(t.text);
+        let alias = self.alias(t);
         let Some(g) = self.groups.last_mut().filter(|g| !g.closed) else { return };
         if after < g.level {
             // The `)` of the innermost pair: the operand, when complete, is the pair's value and the
             // operand of the pair around it.
             let held = match std::mem::replace(&mut g.operand, Operand::Other) {
                 Operand::Done(held) => Some(held),
-                Operand::FileName { new: true, .. } => Some(Held::File),
+                Operand::FileName { new: true, folder } => Some(Held::File { folder }),
                 _ => None,
             };
             g.operand = held.map_or(Operand::Other, Operand::Done);
@@ -1271,8 +1384,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         if before > g.level {
             // Inside a bracket of the operand: the `)` back at the pair's depth ends a call of `File`,
             // `Folder` or one of their dialogs.
-            if after == g.level && matches!(g.operand, Operand::FileCall) {
-                g.operand = Operand::Done(Held::File);
+            if after == g.level
+                && let Operand::FileCall { folder } = g.operand
+            {
+                g.operand = Operand::Done(Held::File { folder });
             }
             return;
         }
@@ -1309,7 +1424,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn paren_step(&mut self, t: &Sig<'s>, before: usize) {
         let after = self.depth();
         let file = (t.word(catalog::FILE) || t.word(catalog::FOLDER)) && !self.own_names.contains(t.text);
-        let alias = t.kind == T::Ident && self.files.contains(t.text);
+        let alias = self.alias(t);
         if let Some(p) = self.parens.last_mut() {
             if before == p.level {
                 p.operand = match std::mem::replace(&mut p.operand, Operand::Other) {
@@ -1321,7 +1436,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 // The `)` of a call of `File`, `Folder` or a dialog, or of grouping parentheses, ends a
                 // File or Folder object when [`Analyzer::bracket`] set its [`Sig::file`].
                 p.operand = match p.operand {
-                    Operand::FileCall | Operand::Pair if t.file => Operand::Done(Held::File),
+                    Operand::FileCall { .. } | Operand::Pair if t.file => Operand::Done(Held::File { folder: t.folder }),
                     _ => Operand::Other,
                 };
             }
@@ -1331,11 +1446,17 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// The grouping parentheses that the bracket `t` closed, if any (a bracket closes one level): true
-    /// when `t` is their `)` and their operand is a File or Folder object.
-    fn close_parens(&mut self, t: &Sig<'s>) -> bool {
+    /// The grouping parentheses that the bracket `t` closed, if any (a bracket closes one level): `Some`
+    /// when `t` is their `)` and their operand is a File or Folder object, `Some(true)` for a Folder
+    /// object.
+    fn close_parens(&mut self, t: &Sig<'s>) -> Option<bool> {
         let depth = self.depth();
-        self.parens.pop_if(|p| depth < p.level).is_some_and(|p| t.is(")") && p.operand.holds_file())
+        self.parens.pop_if(|p| depth < p.level).filter(|_| t.is(")")).and_then(|p| p.operand.held_file())
+    }
+
+    /// `t` names a variable holding a File or Folder object.
+    fn alias(&self, t: &Sig<'s>) -> bool {
+        t.kind == T::Ident && self.files.contains(t.text)
     }
 
     /// `t` follows the last `)` of a grouped value, or ends a value without parentheses at the depth
@@ -1361,7 +1482,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let complete = (g.closed || g.bare) && ends;
         match g.operand {
             Operand::Done(Held::Chain(path)) if complete => self.bind(g.name, path),
-            Operand::Done(Held::File) | Operand::FileName { new: true, .. } if complete => self.hold_file(g.name),
+            Operand::Done(Held::File { folder }) | Operand::FileName { new: true, folder } if complete => self.hold_file(g.name, folder),
             _ => self.unbind(&g.name),
         }
     }
@@ -1445,7 +1566,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             let bracket: &str = bracket.encode_utf8(&mut buf);
             self.acc.problem(report::UNCLOSED_BRACKET, Some(line), self.file, Some(bracket));
         }
-        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files) };
+        // A variable that any assignment gave a value that may be a File object leaves as one.
+        let folders = self.folders.iter().filter(|name| self.folder(name)).cloned().collect();
+        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files), folders };
         (std::mem::take(&mut self.includes), module, known)
     }
 }
