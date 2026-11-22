@@ -2,8 +2,8 @@
 //! artboards, layers, guides, live shapes, solid paint and strokes.
 
 use super::*;
+use craft_cdr::synth::{self, V, chunk, list};
 use serde_json::json;
-use vectorcraft_cdr::synth::{self, V, chunk, list};
 use vectorcraft_doc::{LiveShape, Node, NodeKind};
 
 fn walk(nodes: &[std::sync::Arc<Node>], out: &mut Vec<Node>) {
