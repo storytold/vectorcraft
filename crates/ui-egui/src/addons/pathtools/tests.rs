@@ -67,6 +67,8 @@ fn double_clicking_the_brush_opens_its_options_and_ok_sets_them() {
         });
         app.dialogs().expect("the window's dialogs").with(|h| h.confirm::<HostedParamDialog>(&ctx));
         crate::dialogs::host::pump(app, &ctx);
+        // A held OK closes at the dialog's next pass.
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
     };
     app.run("tool.options", json!({"tool": "anchorEraserBrush"})).unwrap();
     assert_eq!(numbers(&app), (Some(20.0), Some(10.0), Some(false)));

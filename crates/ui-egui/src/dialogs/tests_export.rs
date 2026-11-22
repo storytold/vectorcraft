@@ -129,7 +129,12 @@ pub(super) fn fields(app: &VectorcraftApp) -> Value {
 
 /// Sets a value of the top dialog as the user editing it would.
 pub(super) fn set(app: &mut VectorcraftApp, field: &str, value: Value) {
-    on_top(app, |host, ctx, id| host.set_json_field(ctx, id, field, value)).expect("a dialog is open").expect("the field is set");
+    try_set(app, field, value).expect("the field is set");
+}
+
+/// [`set`], with the reason when the row refuses the value (a value the row can't hold, or a greyed-out row).
+pub(super) fn try_set(app: &mut VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
+    on_top(app, |host, ctx, id| host.set_json_field(ctx, id, field, value)).expect("a dialog is open")
 }
 
 /// Presses OK on the top dialog: the first frame runs its confirmation, the second closes it and runs what follows.
@@ -191,6 +196,7 @@ pub(super) fn rgba(bytes: &[u8]) -> image::RgbaImage {
 fn export_as_png_picks_the_file_then_shows_png_options() {
     let (mut app, written) = app(1);
     app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
     assert_eq!(fields(&app)["path"], "/out/Untitled-1.png");
     assert!(written.borrow().is_empty());
@@ -239,7 +245,7 @@ fn export_as_with_a_range_then_png_options_writes_one_file_per_artboard() {
     assert_eq!(fields(&app)["range"], "1-3");
     frame(&mut app);
     set(&mut app, "useArtboards", json!(true));
-    set(&mut app, "all", json!(false));
+    set(&mut app, "all", json!("false"));
     set(&mut app, "range", json!("1, 3"));
     frame(&mut app);
     confirm(&mut app);
@@ -288,12 +294,12 @@ fn a_format_continues_in_its_options_dialog() {
             None,
             None,
         ),
-        ("pdf of the art", 2, json!({"format": "pdf"}), "savePdf", vec!["/out/Untitled-1.pdf"], Some(1), Some((30.0, 20.0))),
+        ("pdf of the art", 2, json!({"format": "pdf"}), "pdf-export", vec!["/out/Untitled-1.pdf"], Some(1), Some((30.0, 20.0))),
         (
             "pdf of two artboards",
             3,
             json!({"format": "pdf", "useArtboards": true, "range": "2-3"}),
-            "savePdf",
+            "pdf-export",
             vec!["/out/Untitled-1.pdf"],
             Some(2),
             None,
@@ -377,7 +383,7 @@ fn export_as_writes_only_the_chosen_artboard_in_every_format() {
             let (mut app, written) = app(3);
             app.run("file.exportAs", json!({"format": format})).unwrap();
             set(&mut app, "useArtboards", json!(true));
-            set(&mut app, "all", json!(false));
+            set(&mut app, "all", json!("false"));
             set(&mut app, "range", json!(range));
             // Export As, the format's own options, then the file.
             for _ in 0..4 {

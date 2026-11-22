@@ -82,13 +82,14 @@ pub(super) fn set_all<'a>(app: &mut VectorcraftApp, fields: impl IntoIterator<It
 }
 
 /// Answers the top dialog OK or Cancel as the control channel does; the frames after it take the answer. Whether the
-/// host took it (a dialog with an open child does not).
+/// host took it (a dialog with an open child does not, nor a held OK the app refuses).
 fn answer(app: &mut VectorcraftApp, ok: bool) -> bool {
     let (id, ctx) = (top(app).0, app.ui_ctx.clone().expect("a window app"));
     let taken = app.dialogs().expect("a window app").with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
     frame(app, vec![]);
     frame(app, vec![]);
-    taken
+    // A held OK reports `false` at the press; the app's answer then closes the dialog.
+    taken || (ok && open_dialogs(app).iter().all(|(open, _)| *open != id))
 }
 
 pub(super) fn confirm(app: &mut VectorcraftApp) -> bool {
@@ -119,10 +120,10 @@ fn objects(app: &VectorcraftApp) -> usize {
 fn confirm_runs_each_dialogs_command() {
     let mut app = app();
     open_tool_dialog(&mut app, "star", json!({"x": 50, "y": 50}));
-    set_all(&mut app, [("radius1", json!("40 pt")), ("radius2", json!("20 pt")), ("points", json!(6))]);
+    set_all(&mut app, [("radius1", json!(40)), ("radius2", json!(20)), ("points", json!(6))]);
     assert!(confirm(&mut app));
     open_tool_dialog(&mut app, "lineSegment", json!({"x": 0, "y": 0}));
-    set_all(&mut app, [("length", json!("30 pt")), ("angle", json!(90))]);
+    set_all(&mut app, [("length", json!(30)), ("angle", json!(90))]);
     assert!(confirm(&mut app));
     assert_eq!(objects(&app), 2);
     app.run("select.all", json!({})).unwrap();
@@ -669,7 +670,7 @@ fn polar_grid_shared_canvas_click_defaults_units_counts_and_history() {
     }
     assert!(is_open(&app), "a canvas click opens the grid form");
     let f = fields(&app);
-    assert_eq!((&f["width"], &f["height"]), (&json!("100 pt"), &json!("100 pt")));
+    assert_eq!((&f["width"], &f["height"]), (&json!(100.0), &json!(100.0)), "100 pt");
     assert_eq!((&f["concentric"], &f["radial"]), (&json!(2), &json!(3)));
     set_all(&mut app, [("width", json!("25.4 mm")), ("height", json!("0.5 in"))]);
     assert!(confirm(&mut app));

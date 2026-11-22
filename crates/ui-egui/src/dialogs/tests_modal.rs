@@ -11,9 +11,8 @@ use super::tests::{SCREEN, confirm, frame, set, settle, window};
 use super::*;
 use crate::VectorcraftApp;
 
-/// The name of the strip's slider in the access tree.
-// PLAN: assumed the strip's slider is named "Level" (od.OS9).
-const STRIP_SLIDER: &str = "Level";
+/// The name of the strip's slider in the access tree: the command's, as production named it.
+const STRIP_SLIDER: &str = "Simplify";
 
 fn key(code: egui::Key) -> Event {
     Event::Key { key: code, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }

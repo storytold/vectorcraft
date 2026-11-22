@@ -2,13 +2,14 @@ use serde_json::json;
 use vectorcraft_engine::cmd::fileio;
 
 use super::png_options;
-use super::tests_export::{app, confirm, frame, kind, try_confirm};
+use super::tests_export::{answer_saves, app, confirm, frame, kind, try_confirm};
 use super::tests_raster_formats::fields;
 
 #[test]
 fn raster_options_preserve_supplied_values_through_the_png_command() {
     let (mut app, written) = app(1);
     app.run("file.export.png", json!({"ppi": 300, "background": "#204080", "antiAlias": "type", "interlaced": true})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
     let f = fields(&app);
     assert_eq!(f.number("ppi"), Some(300.0));

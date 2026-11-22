@@ -46,10 +46,10 @@ fn export_as_eps_shows_eps_options_then_writes_and_remembers_them() {
     frame(&mut app);
     // Every control draws: the black-and-white preview greys out Transparent / Opaque.
     set(&mut app, "previewFormat", json!("tiffBw"));
-    set(&mut app, "level", json!(2));
+    set(&mut app, "level", json!("2"));
     set(&mut app, "cmykPostScript", json!(false));
     frame(&mut app);
-    assert_eq!(text(&fields(&app), "level"), "2", "a number reads as the level");
+    assert_eq!(text(&fields(&app), "level"), "2", "the level's id");
     set(&mut app, "flattenerPreset", json!("High Resolution"));
     confirm(&mut app);
     assert!(kind(&app).is_none());

@@ -718,6 +718,8 @@ mod tests {
         let ctx = ctx(app);
         app.dialogs().unwrap().with(|h| h.confirm::<Hosted>(&ctx));
         crate::dialogs::host::pump(app, &ctx);
+        // A held OK closes at the dialog's next pass.
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
     }
 
     /// Create, then the new document's units.

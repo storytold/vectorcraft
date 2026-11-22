@@ -5,6 +5,9 @@ use craft::ui::dialog::{DialogHost, DialogId, StackDialog};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::doc::{Composer, NodeId, NodeKind, ParaStyle};
 
+/// The rows Hyphenation gates.
+const HYPHENATION_COUNTS: [&str; 4] = ["words_longer_than", "after_first", "hyphen_limit", "hyphenation_zone"];
+
 fn app() -> VectorcraftApp {
     let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
@@ -196,6 +199,10 @@ fn invalid_values_keep_the_dialog_open() {
         ("word_min", "120"),
     ] {
         open(&mut app, "Body");
+        // The hyphenation rows take input while Hyphenation is on.
+        if HYPHENATION_COUNTS.contains(&key) {
+            set(&app, "hyphenate", json!(true));
+        }
         set(&app, key, json!(value));
         assert!(!ok(&mut app), "{key} = {value}");
         assert!(is_open(&app), "{key} = {value}");

@@ -22,7 +22,7 @@ fn app_with(d: &str) -> VectorcraftApp {
 fn opened(app: VectorcraftApp, p: Value) -> ThreeD {
     let mut h = ThreeD::new(app);
     // The first frames give the app its window.
-    h.fixture.settle();
+    h.settle();
     reopen(&mut h, p);
     h
 }
@@ -32,7 +32,7 @@ fn reopen(h: &mut ThreeD, p: Value) {
     if let Err(e) = effect::open(&mut h.app(), &p) {
         panic!("the dialog did not open: {e}");
     }
-    h.fixture.settle();
+    h.settle();
     assert!(h.app().three_d_dialog.is_some(), "the dialog opened");
 }
 
@@ -192,12 +192,12 @@ fn map_art_surfaces_follow_the_active_document() {
     let second = h.surfaces().unwrap();
     let at_second = key(&h);
     assert!(h.app().session.set_active(0));
-    h.fixture.settle();
+    h.settle();
     assert_eq!(key(&h), at_second, "both documents' objects have the same id and revision");
     let first = h.surfaces().unwrap();
     assert_ne!(first, second, "the two objects' solids differ in size");
     assert!(h.app().session.set_active(1));
-    h.fixture.settle();
+    h.settle();
     assert_eq!(h.surfaces().unwrap(), second, "back on the second document its own surfaces");
 }
 
@@ -298,11 +298,11 @@ fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
     assert_ne!(number(&h, "rotationX"), turned[0]);
     h.fixture.key(Key::Escape, Modifiers::NONE);
     h.fixture.frame(vec![button(p + vec2(0.0, 40.0), false)]);
-    h.fixture.settle();
+    h.settle();
     assert!(h.app().three_d_dialog.is_some(), "Escape ends the drag, not the dialog");
     assert_eq!(angles(&h), turned);
     h.fixture.key(Key::PageUp, Modifiers::NONE);
-    h.fixture.settle();
+    h.settle();
     assert!((number(&h, "rotationZ") - (turned[2] - 1.0)).abs() < 0.011, "Page Up turns 1° counterclockwise");
     let last = number(&h, "rotationZ");
     h.ok();

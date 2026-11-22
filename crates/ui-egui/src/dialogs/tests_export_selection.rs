@@ -7,7 +7,7 @@ use std::rc::Rc;
 use serde_json::json;
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{Written, app_saving, confirm, fields, frame, kind, names, on_save, rgba, set};
+use super::tests_export::{Written, answer_saves, app_saving, confirm, fields, frame, kind, names, on_save, rgba, set};
 
 /// The last file written, as text.
 fn last_text(written: &Written) -> String {
@@ -38,11 +38,12 @@ fn paths_in(bytes: &[u8]) -> usize {
 fn export_selection_continues_in_each_formats_options() {
     let (mut app, written) = app_saving(2, |_| String::new());
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
-    for (ext, options) in [("pdf", "savePdf"), ("svg", "svgOptions"), ("png", "pngOptions"), ("eps", "epsOptions"), ("dxf", "dxfOptions")] {
+    for (ext, options) in [("pdf", "pdf-export"), ("svg", "svgOptions"), ("png", "pngOptions"), ("eps", "epsOptions"), ("dxf", "dxfOptions")] {
         let path = format!("/out/sel.{ext}");
         let before = names(&written).len();
         picking(&path);
         app.run("document.exportSelection", json!({})).unwrap();
+        answer_saves(&mut app);
         assert_eq!(kind(&app).as_deref(), Some(options), "{ext}");
         assert_eq!(names(&written).len(), before, "{ext}: nothing is written before OK");
         frame(&mut app);
@@ -78,6 +79,7 @@ fn export_selection_to_text_writes_the_selected_type() {
     app.run("text.create", json!({"x": 10, "y": 10, "text": "Left out"})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 30, "text": "Selected"})).unwrap();
     app.run("document.exportSelection", json!({})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("txtOptions"));
     assert_eq!(fields(&app)["selectionOnly"], json!(true));
     frame(&mut app);
@@ -97,6 +99,7 @@ fn export_selection_to_svg_keeps_the_remembered_use_artboards() {
     assert_eq!(app.ui.svg_options["useArtboards"], true);
     app.run("shape.rectangle", json!({"x": 40, "y": 30, "width": 10, "height": 5})).unwrap();
     app.run("document.exportSelection", json!({})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("svgOptions"));
     confirm(&mut app);
     assert_eq!(app.ui.svg_options["useArtboards"], true, "{}", app.ui.svg_options);
@@ -147,6 +150,7 @@ fn export_selection_after_the_question_before_losing_writes_the_selection() {
     st.imported_from = Some("/out/sel.png".into());
     st.import_losses = vec!["hidden type".into()];
     app.run("document.exportSelection", json!({})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
     frame(&mut app);
     confirm(&mut app);

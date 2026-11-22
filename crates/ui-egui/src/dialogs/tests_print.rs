@@ -108,7 +108,16 @@ pub(super) fn call(app: &mut VectorcraftApp, method: &str, params: Value) -> Val
 pub(super) fn press(app: &mut VectorcraftApp, name: &str) {
     let ctx = ctx(app);
     crate::testing::app_frame(app, &ctx, Default::default());
-    call(app, "ui.click", json!({"control": {"name": name}}));
+    let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
+    match crate::control::handle(app, &ctx, &click) {
+        craft::automation::Reply::Done(r) => assert_eq!(r["ok"], true, "ui.click {name}: {r}"),
+        // The click is queued as input: the frames after it press the control.
+        _ => {
+            for _ in 0..2 {
+                crate::testing::app_frame(app, &ctx, Default::default());
+            }
+        }
+    }
     pump(app);
 }
 

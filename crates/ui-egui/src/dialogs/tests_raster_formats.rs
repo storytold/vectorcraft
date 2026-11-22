@@ -5,7 +5,7 @@ use serde_json::json;
 
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
 
-use super::tests_export::{app, confirm, frame, kind, set, try_confirm};
+use super::tests_export::{app, confirm, frame, kind, set, try_confirm, try_set};
 use crate::VectorcraftApp;
 
 /// The values of the top dialog, a parameter dialog; empty when none is open.
@@ -44,7 +44,7 @@ fn raster_option_rows_reach_the_export_params() {
             assert_eq!(gif[10] & 0x07, 1, "a global colour table of 4 entries");
         }),
         ("png8", &[("reduction", json!("gray"))], |png| assert_eq!(png[25], 3, "indexed")),
-        ("webp", &[("lossless", json!(false)), ("quality", json!(40))], |file| {
+        ("webp", &[("lossless", json!("false")), ("quality", json!(40))], |file| {
             assert!(file.windows(4).any(|w| w == b"VP8 ") && !file.windows(4).any(|w| w == b"VP8L"), "lossy");
         }),
         ("tiff", &[("byteOrder", json!("big")), ("colorModel", json!("cmyk")), ("lzw", json!(false))], |tiff| assert_eq!(&tiff[..4], b"MM\0*")),
@@ -98,8 +98,7 @@ fn text_export_options_write_the_stories() {
     assert_eq!((fields(&app).text("path"), fields(&app).text("encoding")), (Some("/out/Untitled-1.txt"), Some("utf8")));
     frame(&mut app);
     set(&mut app, "lineEndings", json!("crlf"));
-    set(&mut app, "encoding", json!("bogus"));
-    assert!(try_confirm(&mut app).is_err());
+    assert!(try_set(&mut app, "encoding", json!("bogus")).is_err(), "an encoding the list lacks is refused");
     assert_eq!(kind(&app).as_deref(), Some("txtOptions"), "a bad option keeps the dialog open");
     set(&mut app, "encoding", json!("utf8"));
     frame(&mut app);
@@ -130,7 +129,7 @@ fn save_for_office_documents_picks_the_resolution() {
     app.run("document.exportForOffice", json!({})).unwrap();
     assert_eq!(kind(&app).as_deref(), Some("saveForOffice"));
     frame(&mut app);
-    set(&mut app, "ppi", json!(300));
+    set(&mut app, "ppi", json!("300"));
     set(&mut app, "artboard", json!(1));
     set(&mut app, "transparent", json!(true));
     frame(&mut app);

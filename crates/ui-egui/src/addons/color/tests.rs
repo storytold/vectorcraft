@@ -1,3 +1,4 @@
+use craft::ui::dialog::HeldOk;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
@@ -36,8 +37,10 @@ fn set(app: &VectorcraftApp, ctx: &egui::Context, field: &str, value: serde_json
 /// OK on the top dialog, then the pump that takes its answer.
 fn ok(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let (id, _) = top(app);
-    assert!(app.dialogs().expect("a window").with(|host| host.confirm_by_id(ctx, id)));
+    // A held OK reports `false` and files its answer for the app; the dialog closes at its next pass.
+    assert!(app.dialogs().expect("a window").with(|host| host.confirm_by_id(ctx, id) || host.held_state(id) == Some(HeldOk::Waiting)));
     crate::dialogs::host::pump(app, ctx);
+    crate::tests_synthetic::key_frame(app, ctx, vec![]);
 }
 
 /// The effects of the selected object: (id, params).

@@ -8,7 +8,7 @@ use vectorcraft_engine::cmd::fileio;
 
 // PLAN: assumed `fields(&app)` (values of the top hosted dialog) and `press(&mut app, name)` (the control channel's
 // click on a control by name, export-w23) in export-w9's helpers.
-use super::tests_export::{app, cancel, confirm, frame, kind, names, on_save, set, try_confirm};
+use super::tests_export::{answer_saves, app, cancel, confirm, frame, kind, names, on_save, set, try_confirm, try_set};
 use super::tests_print::press;
 use super::tests_raster_formats::fields;
 use super::*;
@@ -105,9 +105,14 @@ fn bad_hpgl_options_keep_the_dialog_open() {
         ("useArtboards", json!("yes"), "useArtboards"),
     ] {
         let before = fields(&app).get(field).and_then(|v| serde_json::to_value(v).ok());
-        set(&mut app, field, value.clone());
-        frame(&mut app);
-        let e = try_confirm(&mut app).unwrap_err();
+        // A value the row can't hold is refused as it is set, the others by OK.
+        let e = match try_set(&mut app, field, value.clone()) {
+            Err(e) => e,
+            Ok(()) => {
+                frame(&mut app);
+                try_confirm(&mut app).unwrap_err()
+            }
+        };
         assert!(e.contains(want), "{field} {value}: {e}");
         assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
         set(&mut app, field, before.unwrap_or_default());
@@ -184,6 +189,7 @@ fn export_selection_to_hpgl_uses_the_selection_and_is_not_remembered() {
     app.run("paint.setStroke", json!({"color": "#0000ff"})).unwrap();
     on_save(|_| Some("/out/sel.plt".to_string()));
     app.run("document.exportSelection", json!({})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
     let d = fields(&app);
     assert!(!d.contains(crate::io::EXPORT_SELECTION));
@@ -273,9 +279,10 @@ fn pen_table_starts_from_the_pens_of_what_the_export_plots() {
     let seed = |app: &VectorcraftApp| hpgl_options::automatic_pens(app, &fields(app), false).unwrap();
     assert_eq!(seed(&app), [on_board[0].as_str(), "#0000ff"], "the art's bounds");
     // The rectangle is the selection.
-    set(&mut app, "selectedOnly", json!(true));
-    assert_eq!(seed(&app), ["#0000ff"]);
-    set(&mut app, "selectedOnly", json!(false));
+    // Export Selected Art Only comes with Export Selection's fields: the dialog has no row for it.
+    let mut selected = fields(&app);
+    selected.set("selectedOnly", true);
+    assert_eq!(hpgl_options::automatic_pens(&app, &selected, false).unwrap(), ["#0000ff"]);
     set(&mut app, "useArtboards", json!(true));
     assert_eq!(seed(&app), on_board);
 }

@@ -79,6 +79,8 @@ fn frame_opened(app: &mut VectorcraftApp) -> Vec<String> {
     let ctx = app.ui_ctx.clone().expect("the app has a window");
     let host = host(app);
     let mut out = ctx.run_ui(Default::default(), |ui| {
+        // The app's tick sends the URLs it was asked to open, as the hosts run it before the window draws.
+        app.tick(ui.ctx());
         host.with(|h| h.run(ui));
         crate::dialogs::host::pump(app, ui.ctx());
     });

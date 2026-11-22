@@ -6,6 +6,7 @@ use std::{
 };
 
 use craft::ui::dialog::StackDialog as _;
+use craft::ui::runtime::frame::take_output;
 use craft::ui::testing::{Fixture, Target};
 use egui::vec2;
 use serde_json::Value;
@@ -35,6 +36,23 @@ impl ThreeD {
         Self { fixture, app }
     }
 
+    /// The app's frame input, given as the hosts give it: the commands the frames since the last call fired run, and
+    /// the runtime gets the app's command catalog, states and host.
+    fn take_input(&mut self) {
+        let input = self.app.borrow_mut().frame_input(take_output(self.fixture.ctx()));
+        self.fixture.root(input.root).commands(input.commands);
+        if let Some(host) = input.host {
+            self.fixture.host(host);
+        }
+    }
+
+    /// Frames until the app settles, each with the app's frame input.
+    pub(crate) fn settle(&mut self) {
+        self.take_input();
+        self.fixture.settle();
+        self.take_input();
+    }
+
     /// The app, for commands and reads between frames.
     pub(crate) fn app(&self) -> RefMut<'_, VectorcraftApp> {
         self.app.borrow_mut()
@@ -45,7 +63,7 @@ impl ThreeD {
         if let Err(e) = three_d::open(&mut self.app(), &p) {
             panic!("the dialog did not open: {e}");
         }
-        self.fixture.settle();
+        self.settle();
     }
 
     /// Sets a field as automation does and lets the preview settle; a refusal fails the test.
@@ -55,7 +73,7 @@ impl ThreeD {
         if let Some(Err(e)) = done {
             panic!("{field} refused: {e}");
         }
-        self.fixture.settle();
+        self.settle();
     }
 
     /// A copy of the dialog's values.
@@ -82,13 +100,13 @@ impl ThreeD {
     /// Presses OK and lets the held answer finish.
     pub(crate) fn ok(&mut self) {
         self.press("OK");
-        self.fixture.settle();
+        self.settle();
     }
 
     /// Presses Cancel.
     pub(crate) fn cancel(&mut self) {
         self.press("Cancel");
-        self.fixture.settle();
+        self.settle();
     }
 
     /// The surfaces Map Art lists, while its page shows.

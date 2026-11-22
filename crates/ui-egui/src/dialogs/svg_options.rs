@@ -462,12 +462,11 @@ mod tests {
         String::from_utf8(w.borrow()[i].1.clone()).unwrap()
     }
 
-    /// The URLs the app asked egui to open in one frame.
+    /// The URLs the app asked egui to open in one frame of the whole app (the frame's tick sends them).
     fn open_urls(app: &mut VectorcraftApp) -> Vec<String> {
         let ctx = app.ui_ctx.clone().expect("a test app has a window");
-        let mut out = ctx.run_ui(Default::default(), |ui| app.ui(ui));
-        out.textures_delta.clear();
-        out.platform_output
+        crate::testing::app_frame(app, &ctx, Default::default())
+            .platform_output
             .commands
             .iter()
             .filter_map(|c| match c {
@@ -506,7 +505,7 @@ mod tests {
         let (mut app, written) = browsing();
         start(&mut app, Mode::Export, "/tmp/out.svg", false);
         set(&mut app, "decimals", json!(1));
-        set(&mut app, "allArtboards", json!(false));
+        set(&mut app, "allArtboards", json!("false"));
         set(&mut app, "range", json!("2"));
         frame(&mut app);
         let remembered = app.ui.svg_options.clone();
@@ -533,7 +532,7 @@ mod tests {
     fn show_in_browser_refuses_a_range_the_document_lacks() {
         let (mut app, written) = browsing();
         start(&mut app, Mode::Export, "/tmp/out.svg", false);
-        set(&mut app, "allArtboards", json!(false));
+        set(&mut app, "allArtboards", json!("false"));
         set(&mut app, "range", json!("5"));
         assert!(show_in_browser(&mut app, Mode::Export, false).is_err());
         assert!(written.borrow().is_empty() && open_urls(&mut app).is_empty());
@@ -650,7 +649,7 @@ mod tests {
         frame(&mut app);
         assert_eq!(kind(&app).as_deref(), Some(KIND));
         set(&mut app, "decimals", json!(1));
-        set(&mut app, "allArtboards", json!(false));
+        set(&mut app, "allArtboards", json!("false"));
         set(&mut app, "range", json!("1"));
         confirm(&mut app);
         assert_eq!(kind(&app), None);
@@ -671,7 +670,7 @@ mod tests {
         let (mut app, written) = app();
         start(&mut app, Mode::Export, "/tmp/out.svg", false);
         let before = app.ui.svg_options.clone();
-        set(&mut app, "allArtboards", json!(false));
+        set(&mut app, "allArtboards", json!("false"));
         set(&mut app, "range", json!("9"));
         assert!(try_confirm(&mut app).is_err());
         assert_eq!(kind(&app).as_deref(), Some(KIND));

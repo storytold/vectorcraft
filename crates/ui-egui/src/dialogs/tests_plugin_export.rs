@@ -6,7 +6,7 @@
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{app, app_saving, fields, frame, kind, names, set, try_confirm};
+use super::tests_export::{app, app_saving, fields, frame, kind, names, set, try_confirm, try_set};
 use super::*;
 use crate::VectorcraftApp;
 
@@ -39,7 +39,7 @@ fn export_as_lists_exporters_and_writes_their_file_whole() {
     assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     assert_eq!(fields(&app)["format"], "plugin.test.ui.whole");
     // Use Artboards is greyed out and doesn't apply: one file of the whole document.
-    set(&mut app, "useArtboards", json!(true));
+    assert!(try_set(&mut app, "useArtboards", json!(true)).is_err(), "Use Artboards is greyed out");
     frame(&mut app);
     try_confirm(&mut app).unwrap();
     assert!(kind(&app).is_none(), "an exporter without parameters writes at once");

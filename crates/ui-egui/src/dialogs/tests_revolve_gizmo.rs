@@ -17,7 +17,7 @@ fn dialog(effect: &str, build: &[(&str, Value)], on: bool) -> ThreeD {
     }
     let mut h = ThreeD::new(app);
     // The first frames give the app its window and lay the canvas out.
-    h.fixture.settle();
+    h.settle();
     h.open(json!({"effect": effect, "item": null}));
     if !on {
         h.set("preview", json!(false));
@@ -74,7 +74,7 @@ fn escape(h: &mut ThreeD) {
 fn release(h: &mut ThreeD, p: Pos2, modifiers: Modifiers) {
     h.fixture.frame(vec![button(p, false, modifiers)]);
     h.fixture.hold(Modifiers::NONE);
-    h.fixture.settle();
+    h.settle();
 }
 
 /// Presses at `from`, drags to `to` in two frames and releases.
@@ -180,7 +180,7 @@ fn free_orbit_and_light_drag_update_the_canvas_and_escape_restores_only_the_gest
     assert_ne!(value(&h, "lightHeight"), 30.0);
     // With no gesture open, Escape is the dialog's: the gizmo does not eat it.
     escape(&mut h);
-    h.fixture.settle();
+    h.settle();
     assert!(!is_open(&h) && !h.app().session.in_interaction());
 }
 
@@ -292,7 +292,7 @@ fn a_refused_3d_effect_says_why_and_turns_ok_off() {
     assert!(!reason.is_empty());
     assert!(!reason.contains("effect.apply"), "the reason is written without the command's id");
     h.fixture.key(Key::Enter, Modifiers::NONE);
-    h.fixture.settle();
+    h.settle();
     assert!(is_open(&h));
 }
 
@@ -317,7 +317,7 @@ fn a_3d_effect_with_preview_off_leaves_another_interaction_alone() {
     assert!(h.app().session.in_interaction(), "the other interaction goes on");
     assert!(refused(&h).is_none(), "nothing has tried the changed values yet");
     h.app().session.cancel_interaction().unwrap();
-    h.fixture.settle();
+    h.settle();
     assert!(refused(&h).is_some());
     assert!(!h.app().session.in_interaction());
 }

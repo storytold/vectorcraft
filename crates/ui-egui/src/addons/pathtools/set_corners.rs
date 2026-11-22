@@ -129,9 +129,11 @@ mod tests {
         set(&app, dialog, "minAngle", json!(120));
         frame(&mut app);
         assert_eq!(cut(&app, id), vec![2, 4], "the roof previewed");
-        // The ends bound each other: the upper end goes first, then the lower one below it.
-        set(&app, dialog, "maxAngle", json!(100));
+        // The ends bound each other, and a row refuses a value past its bound: the lower end goes first, then the
+        // upper one above it.
         set(&app, dialog, "minAngle", json!(80));
+        frame(&mut app);
+        set(&app, dialog, "maxAngle", json!(100));
         frame(&mut app);
         assert_eq!(cut(&app, id), vec![0, 1, 3], "the square corners previewed");
         assert!(confirm(&app, dialog), "OK is on");

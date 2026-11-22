@@ -4,7 +4,7 @@ use std::rc::Rc;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::super::tests_export::{answer_saves, save_panel};
+use super::super::tests_export::save_panel;
 use super::*;
 use crate::Services;
 use craft::ui::dialog::{DialogHost, DialogId};
@@ -89,14 +89,15 @@ fn summary(app: &VectorcraftApp) -> String {
     with_pdf(app, |d| d.summary_text(&words))
 }
 
+/// One frame: the app's pass, the dialog layer's pump, then the save panels answer.
 fn pump(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone().expect("a UI context");
-    crate::dialogs::host::pump(app, &ctx);
-    answer_saves(app);
+    super::super::tests_export::frame(app);
 }
 
+/// OK of the dialog `id`: a held OK is answered in the first frame and the dialog closes in the second.
 fn confirm_id(app: &mut VectorcraftApp, id: DialogId) {
     host(app, |h, c| h.confirm_by_id(c, id));
+    pump(app);
     pump(app);
 }
 
@@ -121,9 +122,9 @@ fn press(app: &mut VectorcraftApp, name: &str) {
     let ctx = app.ui_ctx.clone().expect("a UI context");
     let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
     crate::control::handle(app, &ctx, &click);
-    // The click lands in the passes that draw the dialogs after it.
+    // The click is queued as input: the window's frames after it take it and press the control.
     for _ in 0..2 {
-        crate::tests::picks::draw_dialogs(app, &ctx);
+        crate::testing::app_frame(app, &ctx, Default::default());
     }
     pump(app);
 }
@@ -818,7 +819,7 @@ fn open_advanced(app: &mut VectorcraftApp, params: Value) {
     let mut p = params;
     p["path"] = json!("/tmp/out.pdf");
     app.run("ui.savePdfDialog", p).unwrap();
-    set_field(app, "section", json!("Advanced"));
+    set_field(app, "section", json!("advanced"));
 }
 
 /// Press Custom… and return the dialog it opens over Save PDF.

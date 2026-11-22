@@ -167,6 +167,8 @@ fn answer(app: &mut VectorcraftApp, ok: bool) {
         if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
     });
     pump(app);
+    // A held OK closes at the dialog's next pass.
+    crate::tests_synthetic::key_frame(app, &ctx, vec![]);
 }
 
 fn closed(app: &VectorcraftApp) -> bool {

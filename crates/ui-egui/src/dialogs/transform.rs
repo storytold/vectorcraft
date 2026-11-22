@@ -378,11 +378,12 @@ mod tests {
 
     impl Rig {
         fn new() -> Self {
-            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
             app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
             app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
-            let ctx = crate::testing::ui_context();
-            app.ui_ctx = Some(ctx.clone());
+            let ctx = app.ui_ctx.clone().expect("a window");
+            // The window's first frame gives it its dialog host.
+            crate::testing::app_frame(&mut app, &ctx, Default::default());
             Rig { app, ctx }
         }
 

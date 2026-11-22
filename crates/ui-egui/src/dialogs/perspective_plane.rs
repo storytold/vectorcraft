@@ -103,8 +103,10 @@ mod tests {
     /// OK on the open dialog, then the frame's pump runs the held OK.
     fn ok(app: &mut VectorcraftApp) {
         let (ctx, (id, _)) = (app.ui_ctx.clone().unwrap(), the_dialog(app));
-        assert!(host(app, |h| h.confirm_by_id(&ctx, id)), "OK is enabled");
+        // A held OK reports `false` and files its answer for the app; the dialog closes at its next pass.
+        assert!(host(app, |h| h.confirm_by_id(&ctx, id) || h.held_state(id) == Some(craft::ui::dialog::HeldOk::Waiting)), "OK is enabled");
         crate::dialogs::host::pump(app, &ctx);
+        crate::tests_synthetic::key_frame(app, &ctx, vec![]);
     }
 
     #[test]

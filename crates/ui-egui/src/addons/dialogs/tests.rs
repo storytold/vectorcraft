@@ -1,4 +1,4 @@
-use craft::ui::dialog::DialogId;
+use craft::ui::dialog::{DialogId, HeldOk};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
@@ -36,10 +36,10 @@ pub(crate) fn set(app: &VectorcraftApp, id: DialogId, key: &str, value: Value) {
     app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, key, value)).unwrap();
 }
 
-/// Presses OK of dialog `id`; whether it was enabled.
+/// Presses OK of dialog `id`; whether it was enabled. A held OK reports `false` and files its answer for the app.
 pub(crate) fn confirm(app: &VectorcraftApp, id: DialogId) -> bool {
     let ctx = ctx(app);
-    app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id))
+    app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id) || h.held_state(id) == Some(HeldOk::Waiting))
 }
 
 /// Presses Cancel of dialog `id`.

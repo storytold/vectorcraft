@@ -3,7 +3,7 @@
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use serde_json::json;
 
-use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm};
+use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm, try_set};
 use super::tests_raster_formats::fields;
 use crate::VectorcraftApp;
 
@@ -159,10 +159,8 @@ fn bad_dxf_options_keep_the_dialog_open() {
     assert!(try_confirm(&mut app).is_err());
     assert_eq!(kind(&app).as_deref(), Some("dxfOptions"));
     set(&mut app, "scale", json!(1));
-    set(&mut app, "dxfPreset", json!("laser"));
-    frame(&mut app);
-    let e = try_confirm(&mut app).unwrap_err();
-    assert!(e.contains("custom or cnc"), "{e}");
+    let e = try_set(&mut app, "dxfPreset", json!("laser")).unwrap_err();
+    assert!(e.contains("dxfPreset"), "{e}");
     set(&mut app, "dxfPreset", json!("custom"));
     set(&mut app, "scale", json!(10));
     // Export Selected Art Only with nothing selected.

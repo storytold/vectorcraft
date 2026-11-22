@@ -21,8 +21,9 @@ fn bmp_options_keep_their_choices_writable() {
     );
     frame(&mut app);
     // OS/2 has no 32 bits: the depth falls back to 24.
-    set(&mut app, "fileFormat", json!("os2"));
     set(&mut app, "depth", json!("32"));
+    frame(&mut app);
+    set(&mut app, "fileFormat", json!("os2"));
     frame(&mut app);
     assert_eq!(fields(&app).text("depth"), Some("24"));
     // Compressed rows are bottom-up: RLE turns flipped rows off.

@@ -51,10 +51,14 @@ pub(super) fn try_confirm(app: &mut VectorcraftApp, kind: &str) -> Result<(), St
     let (host, ctx) = host(app);
     host.with(|h| h.confirm_by_id(&ctx, id));
     super::host::pump(app, &ctx);
-    match host.with(|h| h.held_state(id)) {
+    // The app's answer to a held OK reaches the dialog in its next pass, which closes it or shows the refusal.
+    super::tests::frame(app, vec![]);
+    let refused = match host.with(|h| h.held_state(id)) {
         Some(HeldOk::Refused(reason)) => Err(reason.as_str().to_owned()),
         _ => Ok(()),
-    }
+    };
+    super::tests::frame(app, vec![]);
+    refused
 }
 
 /// Press Cancel on the dialog of `kind`.

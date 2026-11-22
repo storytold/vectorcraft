@@ -18,7 +18,7 @@
 use craft::behavior::Mixed;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft::ui::dialog::{DialogHost, DialogId};
+use craft::ui::dialog::{DialogHost, DialogId, FieldRefusal};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
@@ -201,6 +201,8 @@ const APPLIED: &str = "__constrainApplied";
 const BASE: &str = "__ratioBase";
 const MODE: &str = "__mode";
 const SEEN: &str = "__seen";
+/// The width and height the selected objects share ([`shared_size`]), kept for the set-time rule.
+const SHARED: [&str; 2] = ["__sharedH", "__sharedV"];
 
 /// The link and mode rules, run before every pass and before a confirm or an automation set: a
 /// switch to Absolute shows the size the objects share, a turned link or a mode switch takes the
@@ -244,6 +246,26 @@ fn apply_links(f: &mut DialogFields, shared: Shared) {
             f.remove(SEEN);
         }
     }
+}
+
+/// [`shared_size`] as the fields keep it under [`SHARED`].
+fn shared_of(f: &DialogFields) -> Shared {
+    (f.number(SHARED[0]), f.number(SHARED[1]))
+}
+
+/// The Transform row's set-time rule: automation's value is written as the row keeps it (a size may come as text in a
+/// unit, "10 mm"), then the link and mode rules run as before a pass, so a switch to Absolute shows the shared size and
+/// a scale set with the link on sets the other.
+fn set_from_outside(f: &mut DialogFields, key: &str, value: Value) -> Result<(), String> {
+    let refused = || FieldRefusal::Rejects(&value).message(key);
+    match (&value, matches!(key, "relative" | LINK)) {
+        (Value::Bool(on), true) => f.set(key, *on),
+        (Value::Number(n), false) => f.set(key, n.as_f64().ok_or_else(refused)?),
+        (Value::String(text), false) => f.set(key, vectorcraft_doc::Unit::Points.parse(text).ok_or_else(refused)?),
+        _ => return Err(refused()),
+    }
+    apply_links(f, shared_of(f));
+    Ok(())
 }
 
 /// The Absolute targets (`absH`, `absV`) for the selection's [`shared_size`]: the width and height
@@ -408,14 +430,27 @@ fn dialog_params(lengths: LengthUnits) -> Vec<Param> {
     vec![
         Param::custom("scaleH", tl!("Transform"), move |ui, f, _| rows(ui, f, lengths, ScaleLink::Toggle))
             .companions(["scaleV", "absH", "absV", "relative", LINK, "moveH", "moveV", "rotate"])
+            .on_set(set_from_outside)
             .full_width(),
         Param::section(tl!("Options")),
         Param::new("objects", tl!("Transform Objects"), ParamKind::bool(true)),
         Param::new("patterns", tl!("Transform Patterns"), ParamKind::bool(true)),
         Param::new("strokes", tl!("Scale Strokes & Effects"), ParamKind::bool(true)),
         Param::new("corners", tl!("Scale Corners"), ParamKind::bool(true)),
-        Param::custom("reflectX", tl!("Reflect"), |ui, f, _| reflect_checks(ui, f)).companions(["reflectY", "random"]).full_width(),
-        Param::custom("reference", tl!("Reference Point"), |ui, f, _| reference_point(ui, f)).full_width(),
+        Param::custom("reflectX", tl!("Reflect"), |ui, f, _| reflect_checks(ui, f))
+            .companions(["reflectY", "random"])
+            .on_set(|f, key, value| {
+                f.set(key, value.as_bool().ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?);
+                Ok(())
+            })
+            .full_width(),
+        Param::custom("reference", tl!("Reference Point"), |ui, f, _| reference_point(ui, f))
+            .on_set(|f, key, value| {
+                let at = value.as_i64().filter(|at| (0..=8).contains(at)).ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?;
+                f.set(key, at);
+                Ok(())
+            })
+            .full_width(),
     ]
 }
 
@@ -434,6 +469,11 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     let shared = shared_size(app, app.session.general_unit());
     let lengths = crate::canvas::general_lengths(app); // PLAN: assumed path of cv.B5b
     let mut f = opening_fields(app, &ctx);
+    for (key, side) in SHARED.into_iter().zip([shared.0, shared.1]) {
+        if let Some(side) = side {
+            f.set(key, side);
+        }
+    }
     apply_links(&mut f, shared);
     let dialog = HostedParamDialog::new(&ctx, KEY, f, move |fields| form(fields, shared, lengths));
     let options = HeldOptions { cancel: Some(Box::new(cancel)), ..Default::default() };
@@ -697,10 +737,12 @@ mod tests {
             ("random", json!(true)),
             ("reference", json!(0)),
             ("objects", json!(false)),
-            (COPY, json!(true)),
         ] {
             set(&mut h, k, v);
         }
+        // Copy is a footer button, not a row: the fields hold it as the app's Copy action sets it.
+        let dialog = id(&h);
+        h.state().dialogs().unwrap().with(|host| host.get_mut_by_id::<HostedParamDialog>(dialog).map(|d| d.set_field(COPY, FieldValue::Bool(true))));
         confirm(&mut h);
         assert!(h.state().object_dialogs.each.is_none());
         open(h.state_mut());
