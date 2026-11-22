@@ -53,6 +53,22 @@ fn view(app: &VectorcraftApp) -> (usize, f64, vectorcraft_geom::Point) {
     (v.artboard, v.zoom, v.center)
 }
 
+/// Frames until the view stops moving: the canvas places the view a pass after it is asked to, and a view command eases
+/// there under Animated Zoom.
+fn settle(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let (mut last, mut still) = (None, 0);
+    for _ in 0..120 {
+        frame(app, ctx, vec![]);
+        let now = view(app);
+        still = if last == Some(now) { still + 1 } else { 0 };
+        // An ease can leave the view where it was for its first frames.
+        if still >= 5 {
+            return;
+        }
+        last = Some(now);
+    }
+}
+
 /// A check that the document, the selection and the undo steps are still as they are now.
 fn snapshot(app: &VectorcraftApp) -> impl Fn(&VectorcraftApp) -> bool + use<> {
     let st = app.session.active().unwrap();
@@ -201,10 +217,12 @@ fn arrow_keys_go_between_artboards_in_presentation_mode() {
     let centers: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect.center()).collect();
     // All three artboards are 200 × 100, so each fits at the zoom that fits the first.
     app.run("view.fitArtboard", json!({})).unwrap();
+    settle(&mut app, &ctx);
     let fit = view(&app).1;
     for (k, to) in [(ArrowRight, 1), (ArrowRight, 2), (ArrowLeft, 1), (ArrowLeft, 0)] {
         app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
         frame(&mut app, &ctx, key(k));
+        settle(&mut app, &ctx);
         assert_eq!(view(&app), (to, fit, centers[to]), "{k:?}");
     }
     app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
@@ -214,9 +232,11 @@ fn arrow_keys_go_between_artboards_in_presentation_mode() {
         assert_eq!(view(&app), first, "{k:?} on the first artboard");
     }
     app.run("view.goToArtboard", json!({"index": "last"})).unwrap();
+    settle(&mut app, &ctx);
     app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
     let last = view(&app);
     frame(&mut app, &ctx, key(ArrowRight));
+    settle(&mut app, &ctx);
     assert_eq!(view(&app), last, "→ on the last artboard");
     assert!(unchanged(&app), "no arrow key moved the selected rectangle");
 }
@@ -247,6 +267,7 @@ fn a_click_goes_to_the_next_artboard_in_presentation_mode() {
     app.select_tool("rectangle");
     let button = |button, pos, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
     let to = middle + egui::vec2(80.0, 60.0);
+    settle(&mut app, &ctx);
     let second = view(&app);
     let space = |pressed| egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
     for (what, b, with_space) in [
@@ -268,9 +289,11 @@ fn a_click_goes_to_the_next_artboard_in_presentation_mode() {
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(middle), left(middle, true), left(middle, false)]);
     assert_eq!(view(&app).0, 2, "a click with the Rectangle tool, pressed and released in one frame");
     assert!(!app.any_dialog_open(), "opens no Rectangle dialog");
+    settle(&mut app, &ctx);
     app.run("view.setZoom", json!({"zoom": 300, "center": [5, 5]})).unwrap();
     let last = view(&app);
     click(&mut app, &ctx, middle);
+    settle(&mut app, &ctx);
     assert_eq!(view(&app), last, "a click on the last artboard");
     assert!(unchanged(&app), "nothing was selected or drawn");
 }
@@ -368,13 +391,16 @@ fn presentation_mode_fits_the_artboard() {
     frame(&mut app, &ctx, vec![]);
     app.view_mut().unwrap().zoom = 0.5;
     app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
+    settle(&mut app, &ctx);
     let canvas = app.canvas_view().unwrap().rect;
     let zoom = app.view().unwrap().zoom;
     // 200 × 100 pt fitted to the canvas: one side reaches across most of it.
     assert!(200.0 * zoom >= f64::from(canvas.width()) * 0.8 || 100.0 * zoom >= f64::from(canvas.height()) * 0.8, "fitted: {zoom} in {canvas:?}");
     // A bigger canvas (the window gone full screen) fits it again.
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1200.0))), ..Default::default() };
-    crate::testing::app_frame(&mut app, &ctx, raw);
+    // The canvas takes its new size in the first pass and places the view in the next.
+    for _ in 0..3 {
+        crate::testing::app_frame(&mut app, &ctx, raw.clone());
+    }
     assert!(app.view().unwrap().zoom > zoom * 1.5, "fitted again to the larger canvas");
 }

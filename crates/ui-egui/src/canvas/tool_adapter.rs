@@ -172,11 +172,9 @@ impl CanvasTool for SessionTool<'_> {
     fn press(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) -> ToolAction {
         let mut app = self.app();
         if app.ui.screen_mode == 3 {
-            // Presentation Mode: a click steps to the next artboard and the tool gets nothing; a modal blocks it.
-            if !app.any_dialog_open() {
-                crate::shortcuts::presentation_step(&mut app, true);
-            }
-            return ToolAction::Done;
+            // Presentation Mode: the tool gets nothing; the release of a click steps to the next artboard.
+            app.canvas.last_drag = None;
+            return ToolAction::Claimed;
         }
         let mut ev = pointer_event(PointerKind::Down, pointer, cx);
         // Brush Options' Key Color pick samples the click whatever is held: Cmd or Ctrl lends no selection tool.
@@ -204,6 +202,11 @@ impl CanvasTool for SessionTool<'_> {
     }
 
     fn drag(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) {
+        if self.app().ui.screen_mode == 3 {
+            // A drag in Presentation Mode is no click.
+            self.app().canvas.last_drag = Some((pointer.pos, pointer_event(PointerKind::Drag, pointer, cx)));
+            return;
+        }
         // Art carried off the canvas waits where it last moved; back on the canvas the move goes on.
         let carried = super::drops::carry_out(&mut self.app(), cx, pointer);
         if !carried {
@@ -215,6 +218,16 @@ impl CanvasTool for SessionTool<'_> {
     }
 
     fn release(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) {
+        let mut app = self.app();
+        if app.ui.screen_mode == 3 {
+            // Presentation Mode: a click steps to the next artboard, a drag does nothing; a modal blocks it. A press
+            // that becomes a touch gesture is cancelled, so a tap of two fingers steps nowhere.
+            if app.canvas.last_drag.take().is_none() && !app.any_dialog_open() {
+                crate::shortcuts::presentation_step(&mut app, true);
+            }
+            return;
+        }
+        drop(app);
         let carried = super::drops::carried(&self.app(), cx, pointer);
         self.app().canvas.panes.released_from = carried.as_ref().map(|art| (art.document, art.revision));
         if cx.over_drop_target() || carried.is_some() {
@@ -258,6 +271,11 @@ impl CanvasTool for SessionTool<'_> {
 
     fn cancel(&mut self, reason: CancelReason, cx: &mut ToolContext<'_>) {
         let mut app = self.app();
+        if app.ui.screen_mode == 3 {
+            // The tool had no press of Presentation Mode's.
+            app.canvas.last_drag = None;
+            return;
+        }
         app.canvas.grab = None;
         let view = self.view;
         let mods = tool_mods(cx.mods, cx.held(Key::Space));
@@ -329,6 +347,10 @@ impl CanvasTool for SessionTool<'_> {
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
             ToolKey::Submit => self.send_key(EngineKey::Enter, held),
             ToolKey::Cancel => {
+                // In Presentation Mode Escape leaves the mode: the tool takes none.
+                if self.app().ui.screen_mode == 3 {
+                    return false;
+                }
                 let ends = self.app().session.tool_ends_on_escape(self.view);
                 self.send_key(EngineKey::Escape, held) || ends
             }
