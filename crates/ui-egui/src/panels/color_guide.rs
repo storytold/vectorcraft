@@ -21,7 +21,7 @@
 use craft::behavior::IconId;
 use craft::color_ui::ui::{GuideCell, GuideCellAt, HarmonyCommand, HarmonyMenu, HarmonyMenuAction, HarmonyPanel, HarmonyPanelState, HarmonyPicked};
 use craft::theme::Srgba;
-use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, PopupKind, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::Divider;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::primitives::IconSpec;
