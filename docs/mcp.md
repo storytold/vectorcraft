@@ -2620,8 +2620,9 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 `.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
 `const` with block scope and their temporal dead zone, a new `let` binding for each `for` loop iteration, function
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
-parameters, and spread in array literals, calls and `new`. Spread reads arrays, strings (by code point) and objects
-with a `length` property, by index, and throws a `TypeError` for any other value; that rule is VectorCraft's own
+parameters, and spread in array literals, calls and `new`. Spread reads arrays by index, reading the length again
+before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
+throws a `TypeError` for any other value; that rule is VectorCraft's own
 until iterators are added. A `.js` script also has generator functions (ECMA-262 11th edition, sections 14.4 and 25.4,
 https://262.ecma-international.org/11.0/): `function*` declarations and expressions, `*name() {…}` methods in object
 literals, `yield`, and `yield*`, which passes `next`, `throw` and `return` on to the iterator it delegates to. Calling

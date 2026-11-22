@@ -363,7 +363,7 @@ pub enum TokenKind {
     /// A piece of a template literal (read only with [`crate::Options::es2015`]): from its
     /// backtick, or from the `}` that ends a substitution, to the next `${` or the closing
     /// backtick (`tail`). `cooked` is the text with its escapes read and `raw` the text as written,
-    /// both with each line terminator sequence read as a line feed.
+    /// both with each CR LF and each CR read as a line feed; U+2028 and U+2029 stay as written.
     Template {
         cooked: Vec<u16>,
         raw: Vec<u16>,
