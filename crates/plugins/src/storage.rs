@@ -49,12 +49,33 @@ pub enum StorageError {
 pub struct Meter {
     left: u64,
     used: u64,
+    refused: u64,
+    /// Past `free` bytes in all, a read or write happens only before the deadline `until` and
+    /// Cancel ([`vectorcraft_doc::cancel`]); `stopped` records which refused one.
+    free: u64,
+    until: Option<web_time::Instant>,
+    stopped: Option<Gate>,
+}
+
+/// What made a gated [`Meter`] refuse a read or write.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Gate {
+    /// The run was canceled.
+    Cancel,
+    /// The run's deadline passed.
+    Deadline,
 }
 
 impl Meter {
     /// A meter that lets a call read and write `left` bytes.
     pub fn new(left: u64) -> Self {
-        Meter { left, used: 0 }
+        Meter { left, used: 0, refused: 0, free: u64::MAX, until: None, stopped: None }
+    }
+
+    /// A meter that lets a call read and write `left` bytes, those past the first `free` only
+    /// before `until` and Cancel.
+    pub(crate) fn gated(left: u64, free: u64, until: web_time::Instant) -> Self {
+        Meter { free, until: Some(until), ..Meter::new(left) }
     }
 
     /// A meter with no limit, for callers that don't count.
@@ -63,19 +84,45 @@ impl Meter {
     }
 
     /// Counts `bytes` about to be read or written → [`StorageError::Budget`], counting nothing,
-    /// when that is more than is left.
+    /// when that is more than is left, or when they pass the free bytes of a gated meter after its
+    /// deadline or Cancel.
     pub fn take(&mut self, bytes: u64) -> Result<(), StorageError> {
         if bytes > self.left {
+            self.refused = bytes;
             return Err(StorageError::Budget);
+        }
+        if self.used.saturating_add(bytes) > self.free {
+            // The deadline first, as the host checks it between two slices.
+            let closed = if self.until.is_some_and(|at| web_time::Instant::now() >= at) {
+                Some(Gate::Deadline)
+            } else {
+                vectorcraft_doc::cancel::is_cancelled().then_some(Gate::Cancel)
+            };
+            if closed.is_some() {
+                self.stopped = closed;
+                self.refused = bytes;
+                return Err(StorageError::Budget);
+            }
         }
         self.left -= bytes;
         self.used = self.used.saturating_add(bytes);
         Ok(())
     }
 
+    /// What made the meter refuse a read or write past its free bytes ([`Meter::gated`]), if
+    /// anything did.
+    pub(crate) fn stopped(&self) -> Option<Gate> {
+        self.stopped
+    }
+
     /// The bytes counted so far.
     pub fn used(&self) -> u64 {
         self.used
+    }
+
+    /// The bytes of the last read or write the meter refused (0 when it refused none).
+    pub(crate) fn refused(&self) -> u64 {
+        self.refused
     }
 }
 
