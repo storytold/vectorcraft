@@ -582,6 +582,8 @@ fn colour_table_fixed_palette_keeps_an_opaque_color() {
     let clear: Vec<String> = (1..255).map(|i| format!("#00{i:02x}00")).chain(["#0000ee".to_string()]).collect();
     let palette: Vec<String> = std::iter::once("#0000ff".to_string()).chain(clear.iter().cloned()).collect();
     let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": {"customPalette": palette, "transparent": clear}});
+    let v = run(&mut d, "document.exportForWeb.preview", p.clone());
+    assert_eq!(v["mappedToTransparent"], json!(["#0000ee"]), "the color that did not fit is listed: {v}");
     let img = pixels(&one(&mut d, p));
     assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(15, 5).0[3], img.get_pixel(25, 5).0[3]), ([0, 0, 255, 255], 0, 0));
     // Without transparent pixels the colors mapped to transparent still take one slot together.
@@ -596,6 +598,49 @@ fn colour_table_fixed_palette_keeps_an_opaque_color() {
     assert_eq!(v["colors"].as_array().unwrap().len(), 2, "{v}");
     let img = pixels(&one(&mut t, p));
     assert_eq!((img.get_pixel(5, 5).0[3], img.get_pixel(15, 5).0[3], img.get_pixel(25, 5).0), (0, 0, [0, 0, 255, 255]));
+}
+
+/// With transparent pixels, the colors of a fixed palette mapped to transparent share the
+/// transparent pixels' slot, so at 256 colors all 255 opaque colors keep their entries.
+#[test]
+fn colour_table_fixed_palette_with_transparent_pixels_keeps_255_opaque_colors() {
+    // A 16×16 grid of 2×2 squares in 255 colors, the last cell left empty (transparent).
+    let mut s = session(32.0, 32.0);
+    let color = |i: usize| format!("#{:02x}{:02x}80", i, 255 - i);
+    for i in 0..255 {
+        rect(&mut s, [(i % 16) as f64 * 2.0, (i / 16) as f64 * 2.0, 2.0, 2.0], &color(i));
+    }
+    let palette: Vec<String> = (0..255).map(color).chain(["#000000".to_string()]).collect();
+    for table in [json!({"customPalette": palette, "transparent": ["#000000"]}), json!({"customPalette": palette[..255], "transparent": []})] {
+        let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": table});
+        let img = pixels(&one(&mut s, p.clone()));
+        let opaque: std::collections::HashSet<[u8; 4]> = img.pixels().map(|p| p.0).filter(|p| p[3] == 255).collect();
+        assert_eq!(opaque.len(), 255, "{p}");
+        assert_eq!((img.get_pixel(29, 31).0, img.get_pixel(31, 31).0[3]), ([254, 1, 128, 255], 0), "{p}");
+    }
+}
+
+/// When Colors leaves a fixed palette fewer slots than it has colors, its locked and shifted colors
+/// keep their slots first (shifted ones before locked ones), so a shifted color still shows its new
+/// color.
+#[test]
+fn colour_table_fixed_palette_keeps_locked_and_shifted_colors_first() {
+    let mut s = session(30.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#00ff00");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    let palette = json!(["#ff0000", "#00ff00", "#0000ff"]);
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {"customPalette": palette, "shifted": {"#0000ff": "#ff8800"}}});
+    let img = pixels(&one(&mut s, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(25, 5).0), ([255, 0, 0, 255], [255, 136, 0, 255]));
+    // A shifted color keeps its slot before the locked ones.
+    let table = json!({"customPalette": palette, "locked": ["#ff0000", "#00ff00"], "shifted": {"#0000ff": "#ff8800"}});
+    let img = pixels(&one(&mut s, json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": table})));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(25, 5).0), ([255, 0, 0, 255], [255, 136, 0, 255]));
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {"customPalette": palette, "locked": ["#0000ff"]}});
+    let v = run(&mut s, "document.exportForWeb.preview", p);
+    let sources: Vec<&Value> = v["colors"].as_array().unwrap().iter().map(|c| &c["source"]).collect();
+    assert_eq!(sources, vec![&json!("#ff0000"), &json!("#0000ff")], "the palette keeps its order: {v}");
 }
 
 /// A color shifted by hand (`colorTable.shifted`) is written as the color picked wherever it is in

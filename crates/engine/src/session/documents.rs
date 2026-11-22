@@ -24,6 +24,10 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Direct Selection picks and outlines the parts of a dynamic symbol's instance where the
+        // effects of the instance's fill and stroke draw them.
+        vectorcraft_doc::hit::set_instance_row_art(vectorcraft_render::effects::add_instance_row_effects_to_parts);
+        vectorcraft_doc::hit::set_instance_reshapes(vectorcraft_render::effects::has_item_geometry);
         // Clicks inside a clip group fall in the region its clipping path's effects give it.
         vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
         // Clicks and marquees find paths, compound paths, groups and layers where their geometry
