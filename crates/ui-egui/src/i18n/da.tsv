@@ -604,7 +604,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a list of {min_items} to {max_items} numbers	en liste med {min_items} til {max_items} tal
 @msg	a new object needs a `path`	et nyt objekt kræver en `path`
 @msg	a number	et tal
-@msg	a painted live effect returns only `objects`	en malet live-effekt returnerer kun `objects`
+@msg	a painted live effect returns only `objects` and `notice`	en malet live-effekt returnerer kun `objects` og `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	et stykke fra en malet live-effekt har kun `path`, `fillRule`, `fills` og `strokes`
 @msg	a read-only object was left out	et skrivebeskyttet objekt blev udeladt
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {{"id": …}} alene eller som det blev givet

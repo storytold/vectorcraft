@@ -486,7 +486,7 @@
 @msg	a list of {min_items} to {max_items} numbers	daftar berisi {min_items} sampai {max_items} angka
 @msg	a new object needs a `path`	objek baru memerlukan `path`
 @msg	a number	angka
-@msg	a painted live effect returns only `objects`	efek langsung yang dicat hanya mengembalikan `objects`
+@msg	a painted live effect returns only `objects` and `notice`	efek langsung yang dicat hanya mengembalikan `objects` dan `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills` dan `strokes`
 @msg	a read-only object was left out	objek baca-saja dihilangkan
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan

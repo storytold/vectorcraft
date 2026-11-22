@@ -7440,7 +7440,7 @@ axis	Y Axis	Y-akseli
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} luvun luettelo
 @msg	a new object needs a `path`	uusi objekti tarvitsee kentän `path`
 @msg	a number	luku
-@msg	a painted live effect returns only `objects`	maalaava live-tehoste palauttaa vain kentän `objects`
+@msg	a painted live effect returns only `objects` and `notice`	maalaava live-tehoste palauttaa vain kentät `objects` ja `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills` ja `strokes`
 @msg	a read-only object was left out	vain luku -objekti jätettiin pois
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin

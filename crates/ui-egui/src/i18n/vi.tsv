@@ -7024,7 +7024,7 @@ axis	Y Axis	Trục Y
 @msg	a list of {min_items} to {max_items} numbers	một danh sách gồm {min_items} đến {max_items} số
 @msg	a new object needs a `path`	đối tượng mới cần một `path`
 @msg	a number	một số
-@msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
+@msg	a painted live effect returns only `objects` and `notice`	hiệu ứng động kiểu tô chỉ trả về `objects` và `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
 @msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận

@@ -7363,7 +7363,7 @@ axis	Y Axis	Άξονας Y
 @msg	a list of {min_items} to {max_items} numbers	λίστα {min_items} έως {max_items} αριθμών
 @msg	a new object needs a `path`	ένα νέο αντικείμενο χρειάζεται `path`
 @msg	a number	αριθμός
-@msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
+@msg	a painted live effect returns only `objects` and `notice`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects` και `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε

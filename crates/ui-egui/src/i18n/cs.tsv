@@ -7373,7 +7373,7 @@ axis	Y Axis	osa Y
 @msg	a list of {min_items} to {max_items} numbers	seznam {min_items} až {max_items} čísel
 @msg	a new object needs a `path`	nový objekt potřebuje `path`
 @msg	a number	číslo
-@msg	a painted live effect returns only `objects`	malující živý efekt vrací jen `objects`
+@msg	a painted live effect returns only `objects` and `notice`	malující živý efekt vrací jen `objects` a `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	část malujícího živého efektu má jen `path`, `fillRule`, `fills` a `strokes`
 @msg	a read-only object was left out	objekt jen pro čtení byl vynechán
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {{"id": …}} nebo tak, jak byl předán

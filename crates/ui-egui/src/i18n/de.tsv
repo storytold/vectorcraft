@@ -6956,7 +6956,7 @@ axis	Y Axis	Y-Achse
 @msg	a list of {min_items} to {max_items} numbers	eine Liste von {min_items} bis {max_items} Zahlen
 @msg	a new object needs a `path`	ein neues Objekt braucht einen `path`
 @msg	a number	eine Zahl
-@msg	a painted live effect returns only `objects`	ein malender Live-Effekt gibt nur `objects` zurück
+@msg	a painted live effect returns only `objects` and `notice`	ein malender Live-Effekt gibt nur `objects` und `notice` zurück
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills` und `strokes`
 @msg	a read-only object was left out	ein schreibgeschütztes Objekt wurde weggelassen
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde

@@ -833,15 +833,63 @@ pub fn decode_output_with(bytes: &[u8], input: &[u8], read_only: &ReadOnlySpans)
 /// The `notice` of output `v`: `None` when it has none (or `null`), else its text without the
 /// white space around it, as [`crate::permissions::display_text`] shows plug-in text (control,
 /// bidirectional formatting and separator characters escaped) and at most [`MAX_NOTICE_CHARS`]
-/// characters. A `notice` that is not a string, or has no character besides white space, control
-/// and zero-width ones, is an error.
+/// characters. A `notice` that is not a string, or whose shown part has no character besides white
+/// space, control characters and the default-ignorable characters the host does not escape, is an
+/// error.
 pub fn decode_notice(v: &Value) -> Result<Option<String>> {
-    let shows = |c: char| !c.is_whitespace() && !c.is_control() && !matches!(c, '\u{00AD}' | '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}');
     match v.get("notice") {
         None | Some(Value::Null) => Ok(None),
-        Some(Value::String(s)) if s.chars().any(shows) => Ok(Some(crate::permissions::display_text(s.trim(), MAX_NOTICE_CHARS))),
+        Some(Value::String(s)) if shown_part_is_visible(s.trim()) => Ok(Some(crate::permissions::display_text(s.trim(), MAX_NOTICE_CHARS))),
         Some(_) => Err(Error::Output("`notice` must be a string with visible text".into())),
     }
+}
+
+/// Does the part of notice `s` that [`crate::permissions::display_text`] keeps within
+/// [`MAX_NOTICE_CHARS`], escapes counted and room left for the `…` when it cuts, hold a character
+/// that draws something?
+fn shown_part_is_visible(s: &str) -> bool {
+    let shows = |c: char| !c.is_whitespace() && !c.is_control() && !draws_nothing(c);
+    let width = |c: char| crate::permissions::display_text(c.encode_utf8(&mut [0; 4]), usize::MAX).chars().count();
+    // Characters written through the end of `c`, and through the first visible character.
+    let mut used = 0;
+    let mut visible_by = None;
+    for c in s.chars() {
+        used += width(c);
+        if visible_by.is_none() && shows(c) {
+            visible_by = Some(used);
+        }
+        if used > MAX_NOTICE_CHARS {
+            break;
+        }
+    }
+    visible_by.is_some_and(|end| used <= MAX_NOTICE_CHARS || end < MAX_NOTICE_CHARS)
+}
+
+/// Is `c` one of Unicode's default-ignorable characters (soft hyphen, zero-width and invisible
+/// characters, fillers, variation selectors, tags) that [`crate::permissions::display_text`] keeps
+/// as it is, so it draws nothing? The bidirectional ones it escapes are not among them.
+fn draws_nothing(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{115F}'
+            | '\u{1160}'
+            | '\u{17B4}'
+            | '\u{17B5}'
+            | '\u{180B}'..='\u{180F}'
+            | '\u{200B}'..='\u{200D}'
+            | '\u{2060}'..='\u{2065}'
+            | '\u{206A}'..='\u{206F}'
+            | '\u{3164}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{FFA0}'
+            | '\u{FFF0}'..='\u{FFF8}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0000}'..='\u{E0FFF}'
+    )
 }
 
 /// Parses a plug-in's objects: `{"objects": [...]}`, or `{"error": "message"}` when the plug-in

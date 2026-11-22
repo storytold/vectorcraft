@@ -7272,7 +7272,7 @@ axis	Y Axis	Eixo Y
 @msg	a list of {min_items} to {max_items} numbers	uma lista de {min_items} a {max_items} números
 @msg	a new object needs a `path`	um objeto novo precisa de um `path`
 @msg	a number	um número
-@msg	a painted live effect returns only `objects`	um efeito dinâmico de pintura retorna apenas `objects`
+@msg	a painted live effect returns only `objects` and `notice`	um efeito dinâmico de pintura retorna apenas `objects` e `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	um objeto somente leitura foi omitido
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido

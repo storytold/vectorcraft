@@ -1026,9 +1026,21 @@ fn plugin_notice_shows_after_the_plug_in_s_name_and_is_never_translated() {
     app.status("");
     assert!(app.run("plugin.run", json!({"id": bad})).is_err());
     assert!(!app.ui.status.starts_with("Plug-in “"), "{}", app.ui.status);
-    for id in [id, bad] {
-        app.run("plugin.remove", json!({"id": id})).unwrap();
-    }
+    // A plug-in step of a batch, as an action plays it, shows its notice too.
+    app.status("");
+    app.replay("command.batch", json!({"commands": [{"command": "plugin.run", "params": {"id": id}}, {"command": "select.none"}]})).unwrap();
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    // A batch without a plug-in step leaves the status bar as it is.
+    app.status("kept");
+    app.run("command.batch", json!({"commands": [{"command": "select.none"}]})).unwrap();
+    assert_eq!(app.ui.status, "kept");
+    // The notice keeps the plug-in's name when a later step of the batch removes the plug-in.
+    app.status("");
+    let run_and_remove = json!({"commands": [{"command": "plugin.run", "params": {"id": id}}, {"command": "plugin.remove", "params": {"id": id}}]});
+    app.run("command.batch", run_and_remove).unwrap();
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(app.ui.status, format!("Plug-in “Test {id}”: invalid array length"));
+    app.run("plugin.remove", json!({"id": bad})).unwrap();
 }
 
 /// The message of an open that starts with a line about its linked files lists the open's notes on

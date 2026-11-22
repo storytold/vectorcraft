@@ -7358,7 +7358,7 @@ axis	Y Axis	Y tengely
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} számból álló lista
 @msg	a new object needs a `path`	az új objektumhoz `path` kell
 @msg	a number	szám
-@msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
+@msg	a painted live effect returns only `objects` and `notice`	a festő élő effektus csak `objects` és `notice` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta

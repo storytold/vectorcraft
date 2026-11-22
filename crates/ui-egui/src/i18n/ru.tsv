@@ -6995,7 +6995,7 @@ axis	Y Axis	Ось Y
 @msg	a list of {min_items} to {max_items} numbers	список из {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому объекту нужен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	рисующий динамический эффект возвращает только `objects`
+@msg	a painted live effect returns only `objects` and `notice`	рисующий динамический эффект возвращает только `objects` и `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills` и `strokes`
 @msg	a read-only object was left out	пропущен объект только для чтения
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан

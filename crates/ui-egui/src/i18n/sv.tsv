@@ -7385,7 +7385,7 @@ axis	Y Axis	Y-axel
 @msg	a list of {min_items} to {max_items} numbers	en lista med {min_items} till {max_items} tal
 @msg	a new object needs a `path`	ett nytt objekt behöver en `path`
 @msg	a number	ett tal
-@msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
+@msg	a painted live effect returns only `objects` and `notice`	en målande live-effekt returnerar bara `objects` och `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
 @msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs

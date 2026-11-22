@@ -1196,9 +1196,28 @@ fn notice_is_escaped_capped_and_checked() {
     // Escapes count toward the limit, so a notice of right-to-left overrides stays within it too.
     let escaped = out(Some(json!("\u{202E}".repeat(10_000)))).unwrap().unwrap_or_default();
     assert!(escaped.chars().count() <= MAX_NOTICE_CHARS && !escaped.contains('\u{202E}'), "{escaped}");
-    for bad in [json!(""), json!(" \t\n "), json!("\u{200B}\u{FEFF}"), json!(12), json!(["a"]), json!({"text": "a"}), json!(true)] {
+    for bad in [
+        json!(""),
+        json!(" \t\n "),
+        json!("\u{200B}\u{FEFF}"),
+        json!("\u{034F}"),
+        json!("\u{3164}\u{FE0F}\u{E0041}"),
+        // The visible text comes after the cut, so the status bar would show only the `…`.
+        json!(format!("{}AB", "\u{200B}".repeat(MAX_NOTICE_CHARS - 1))),
+        json!(format!("{}A", "\u{7}".repeat(MAX_NOTICE_CHARS / 8))),
+        json!(12),
+        json!(["a"]),
+        json!({"text": "a"}),
+        json!(true),
+    ] {
         assert!(matches!(out(Some(bad.clone())), Err(Error::Output(ref e)) if e.contains("`notice`")), "{bad}");
     }
+    // Text with a visible character keeps the invisible ones, and its bidirectional ones escaped.
+    assert_eq!(out(Some(json!("\u{2067}Done\u{034F}"))).unwrap().as_deref(), Some("\\u{2067}Done\u{034F}"));
+    // A visible character in the last place the limit shows, whole or before the `…`, is enough.
+    let pad = "\u{200B}".repeat(MAX_NOTICE_CHARS - 2);
+    assert_eq!(out(Some(json!(format!("{pad}\u{200B}A")))).unwrap(), Some(format!("{pad}\u{200B}A")));
+    assert_eq!(out(Some(json!(format!("{pad}ABC")))).unwrap(), Some(format!("{pad}A…")));
     // A decline is still a decline.
     assert!(matches!(decode_output(br#"{"error": "No pens.", "notice": "Done"}"#), Err(Error::Failed(_))));
 }

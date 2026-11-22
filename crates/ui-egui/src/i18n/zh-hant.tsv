@@ -7026,7 +7026,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 個數字的清單
 @msg	a new object needs a `path`	新物件需要 `path`
 @msg	a number	數字
-@msg	a painted live effect returns only `objects`	繪製型即時效果只傳回 `objects`
+@msg	a painted live effect returns only `objects` and `notice`	繪製型即時效果只傳回 `objects` 和 `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一個唯讀物件
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它

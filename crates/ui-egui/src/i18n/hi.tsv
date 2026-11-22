@@ -6555,7 +6555,7 @@ arrowhead	Feather	पंख
 @msg	a list of {min_items} to {max_items} numbers	{min_items} से {max_items} संख्याओं की एक सूची
 @msg	a new object needs a `path`	नए ऑब्जेक्ट को `path` चाहिए
 @msg	a number	एक संख्या
-@msg	a painted live effect returns only `objects`	पेंट करने वाला लाइव इफ़ेक्ट केवल `objects` लौटाता है
+@msg	a painted live effect returns only `objects` and `notice`	पेंट करने वाला लाइव इफ़ेक्ट केवल `objects` और `notice` लौटाता है
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	पेंट करने वाले लाइव इफ़ेक्ट के हिस्से में केवल `path`, `fillRule`, `fills` और `strokes` होते हैं
 @msg	a read-only object was left out	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया: इसे केवल {{"id": …}} के रूप में या जैसा दिया गया था वैसा लौटाएँ

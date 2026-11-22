@@ -7445,7 +7445,7 @@ axis	Y Axis	Y ekseni
 @msg	a list of {min_items} to {max_items} numbers	{min_items} ile {max_items} arasında sayıdan oluşan bir liste
 @msg	a new object needs a `path`	yeni bir nesnenin `path` değerine ihtiyacı vardır
 @msg	a number	bir sayı
-@msg	a painted live effect returns only `objects`	boyama türü canlı efekt yalnızca `objects` döndürür
+@msg	a painted live effect returns only `objects` and `notice`	boyama türü canlı efekt yalnızca `objects` ve `notice` döndürür
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills` ve `strokes` bulunur
 @msg	a read-only object was left out	salt okunur bir nesne atlandı
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün

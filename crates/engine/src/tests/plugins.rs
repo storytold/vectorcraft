@@ -204,7 +204,7 @@ fn failing_plugins_leave_the_document_and_history_alone() {
 }
 
 /// A filter's output may report a `notice`, which `plugin.run` returns once the output is applied,
-/// escaped and capped by the host. It needs no permission: a filter granted none reports one too.
+/// escaped and capped by the host, with the plug-in's name as `pluginName`. It needs no permission: a filter granted none reports one too.
 /// A `notice` that is not a string refuses the output, and the document and history stay as they
 /// were.
 #[test]
@@ -215,6 +215,7 @@ fn a_filter_s_notice_is_returned_once_its_output_is_applied() {
     install(&mut s, &asking(quiet, "[]", &json!({"objects": [], "notice": "Nothing to tidy"})));
     let r = run(&mut s, "plugin.run", json!({"id": quiet}));
     assert_eq!((&r["plugin"], &r["notice"]), (&json!(quiet), &json!("Nothing to tidy")));
+    assert_eq!(r["pluginName"], json!(format!("Test {quiet}")));
     let reading = |s: &mut Session, id: &str, output: &Value| {
         let data = vectorcraft_format::base64_encode(&asking(id, r#"["doc.read"]"#, output));
         run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"], "replace": true}))
@@ -227,7 +228,8 @@ fn a_filter_s_notice_is_returned_once_its_output_is_applied() {
     assert_eq!(shown.chars().count(), vectorcraft_plugins::objects::MAX_NOTICE_CHARS);
     let plain = "test.engine.notice.plain";
     reading(&mut s, plain, &json!({"objects": [{"id": id}]}));
-    assert!(run(&mut s, "plugin.run", json!({"id": plain, "ids": [id]})).get("notice").is_none());
+    let r = run(&mut s, "plugin.run", json!({"id": plain, "ids": [id]}));
+    assert!(r.get("notice").is_none() && r.get("pluginName").is_none(), "{r}");
     let bad = "test.engine.notice.bad";
     install(&mut s, &asking(bad, "[]", &json!({"objects": [], "notice": 3})));
     let before = s.doc().unwrap().doc.clone();

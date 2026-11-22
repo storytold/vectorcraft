@@ -6967,7 +6967,7 @@ axis	Y Axis	Y축
 @msg	a list of {min_items} to {max_items} numbers	숫자 {min_items}-{max_items}개의 목록
 @msg	a new object needs a `path`	새 개체에는 `path`가 필요합니다
 @msg	a number	숫자
-@msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
+@msg	a painted live effect returns only `objects` and `notice`	페인트형 라이브 효과는 `objects`와 `notice`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오

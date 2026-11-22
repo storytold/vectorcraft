@@ -7070,7 +7070,7 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	{min_items} から {max_items} 個の数値のリスト
 @msg	a new object needs a `path`	新しいオブジェクトには `path` が必要です
 @msg	a number	数値
-@msg	a painted live effect returns only `objects`	ペイント型のライブ効果が返すのは `objects` だけです
+@msg	a painted live effect returns only `objects` and `notice`	ペイント型のライブ効果が返すのは `objects` と `notice` だけです
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes` だけです
 @msg	a read-only object was left out	読み取り専用のオブジェクトが省かれています
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください

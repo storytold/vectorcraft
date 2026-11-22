@@ -450,7 +450,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	a list of {min_items} to {max_items} numbers	een lijst met {min_items} tot {max_items} getallen
 @msg	a new object needs a `path`	een nieuw object heeft een `path` nodig
 @msg	a number	een getal
-@msg	a painted live effect returns only `objects`	een geschilderd live-effect geeft alleen `objects` terug
+@msg	a painted live effect returns only `objects` and `notice`	een geschilderd live-effect geeft alleen `objects` en `notice` terug
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	een stuk van een geschilderd live-effect heeft alleen `path`, `fillRule`, `fills` en `strokes`
 @msg	a read-only object was left out	een alleen-lezen object is weggelaten
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	een alleen-lezen object is weggelaten: geef het terug, als alleen {{"id": …}} of zoals het is gegeven
