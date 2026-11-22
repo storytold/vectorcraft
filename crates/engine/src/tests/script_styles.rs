@@ -174,6 +174,15 @@ fn a_renamed_style_keeps_its_object_and_a_removed_style_is_stale() {
         ),
     );
     assert!(e.contains("Stale style"), "{e}");
+    // And a style a batch renames and then names back.
+    let e = failure(
+        &mut s,
+        &format!(
+            "{DOC} var a = cs.getByName('B'); vc.run('command.batch', {{commands: [{{command: 'charStyle.rename', params: {{name: 'B', to: 'C'}}}}, \
+             {{command: 'charStyle.rename', params: {{name: 'C', to: 'B'}}}}]}}); a.name;"
+        ),
+    );
+    assert!(e.contains("Stale style"), "{e}");
     // The attributes object of a removed style throws for its typename too.
     let e =
         failure(&mut s, &format!("{DOC} var t = cs.getByName('B').characterAttributes; vc.log(t.typename); cs.getByName('B').remove(); t.typename;"));
@@ -189,6 +198,20 @@ fn a_renamed_style_keeps_its_object_and_a_removed_style_is_stale() {
     assert_eq!(runs(&s, id)[0].1, None);
     assert_ne!(runs(&s, id)[0].2, size);
     assert_eq!(runs(&s, id)[0].2, 40.0);
+}
+
+/// The steps of one batch a script runs keep one copy of a document's style lists, however many of
+/// them change the lists.
+#[test]
+fn the_steps_of_a_batch_keep_one_copy_of_the_style_lists() {
+    let (mut s, _) = doc_with("Hello");
+    let commands: Vec<Value> = (0..20).map(|i| json!({"command": "charStyle.new", "params": {"name": format!("S{i}"), "attrs": {}}})).collect();
+    s.script_in_run = true;
+    let r = s.execute("command.batch", &json!({"commands": commands}));
+    s.script_in_run = false;
+    r.unwrap();
+    assert_eq!(char_names(&s).len(), 20);
+    assert_eq!(crate::script::retained_style_lists(&s), 1);
 }
 
 /// A removal or rename whose result cannot cross to the script is put back, and the style's object

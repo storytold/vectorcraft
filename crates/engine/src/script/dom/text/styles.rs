@@ -76,17 +76,20 @@ pub(super) struct StyleState {
 
 /// Marks stale each style object whose style the command just run removed or renamed, so a style
 /// removed and made again under its name by later commands, or by later steps of the same batch,
-/// is another style. A document whose style lists did not change is not checked again.
+/// is another style. A document whose style lists did not change is not checked again. A live
+/// slot's style was in its document's list when the command started, so a step that removed or
+/// renamed it is in the trail's removed names.
 pub(in crate::script) fn after_command(h: &Host) {
     let trail = std::mem::take(&mut h.session.borrow_mut().script_style_trail);
     let mut slots = h.dom.text.styles.slots.borrow_mut();
     if !slots.iter().any(|s| s.live) {
         return;
     }
-    for (uid, reverts, c, p) in &trail {
-        for slot in slots.iter_mut().filter(|x| x.live && x.uid == *uid) {
-            let list = if slot.para { p } else { c };
-            slot.live = slot.reverts == *reverts && (slot.name == normal(slot.para) || list.iter().any(|d| d.name == slot.name));
+    for slot in slots.iter_mut().filter(|x| x.live) {
+        if trail.reverted.contains(&slot.uid)
+            || (!trail.gone.is_empty() && slot.name != normal(slot.para) && trail.gone.contains(&(slot.uid, slot.para, slot.name.clone())))
+        {
+            slot.live = false;
         }
     }
     let s = h.session.borrow();
