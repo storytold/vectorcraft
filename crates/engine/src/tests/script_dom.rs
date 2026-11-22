@@ -829,6 +829,24 @@ fn document_preset_values_are_bounded_by_the_runs_heap() {
     assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{out:?}");
 }
 
+/// An array a preset holds counts a whole value for each element, so arrays of booleans kept by
+/// many presets stop at the run's heap too.
+#[test]
+fn document_preset_arrays_count_each_element_they_hold() {
+    use crate::script::TEST_ENGINE_HEAP;
+    TEST_ENGINE_HEAP.with(|h| h.set(Some(8 << 20)));
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "#targetengine presets\nvar a = []; for (var i = 0; i < 20000; i++) a.push(true); var m = '';\
+         try { for (var k = 0; k < 40; k++) { var p = new DocumentPreset(); p.title = a; } } catch (e) { m = e.name + ': ' + e.message; }\
+         vc.log(k < 40); vc.log(m);",
+    );
+    TEST_ENGINE_HEAP.with(|h| h.set(None));
+    assert_eq!(out[0], json!(true), "{out:?}");
+    assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{out:?}");
+}
+
 #[test]
 fn the_same_document_or_item_is_the_same_object() {
     let (mut s, a, _) = doc();

@@ -996,7 +996,7 @@ fn new_preset(h: &Host) -> Answer {
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
     ];
-    hold_preset_bytes(h, 0, fields.iter().map(|(_, v)| data_size(v)).sum())?;
+    hold_preset_bytes(h, 0, fields.iter().map(|(_, v)| held_bytes(v)).sum())?;
     presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
@@ -1010,6 +1010,18 @@ fn hold_preset_bytes(h: &Host, replaced: u64, added: u64) -> std::result::Result
     }
     h.dom.preset_bytes.set(total);
     Ok(())
+}
+
+/// The bytes the host's copy of `d` takes: a `Data` for the value and each element or property
+/// in it, plus the text of its strings and property names.
+fn held_bytes(d: &Data) -> u64 {
+    let owned = match d {
+        Data::String(s) => s.len() as u64,
+        Data::Array(a) => a.iter().map(held_bytes).sum(),
+        Data::Object(o) => o.iter().map(|(k, v)| (size_of::<String>() + k.len()) as u64 + held_bytes(v)).sum(),
+        Data::Undefined | Data::Null | Data::Bool(_) | Data::Number(_) => 0,
+    };
+    size_of::<Data>() as u64 + owned
 }
 
 /// The most `DocumentPreset` objects one run can make.
@@ -1067,7 +1079,7 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         // The values the presets hold now count against the run's heap: a value assigned again
         // replaces the one before it.
         let at = fields.iter().position(|(k, _)| k == key);
-        hold_preset_bytes(&h, at.map_or(0, |n| data_size(&fields[n].1)), data_size(&value))?;
+        hold_preset_bytes(&h, at.map_or(0, |n| held_bytes(&fields[n].1)), held_bytes(&value))?;
         match at {
             Some(n) => fields[n].1 = value,
             None => fields.push((key.to_string(), value)),
