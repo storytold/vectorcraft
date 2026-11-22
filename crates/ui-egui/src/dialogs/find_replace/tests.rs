@@ -111,7 +111,7 @@ fn the_edit_menu_rows_open_their_dialogs() {
     ];
     for (label, command, shown) in rows {
         let (app, _) = app_with(&["Hello zqvmisspelt world"]);
-        let mut p = Panel::new(app, draw);
+        let p = Panel::new(app, draw);
         let e = crate::menus::menu_entries(&p.app()).into_iter().find(|e| e.label == label).unwrap_or_else(|| panic!("{label} is in the Edit menu"));
         assert_eq!((e.path.as_slice(), e.command.as_deref(), e.enabled), (&["Edit".to_string()][..], Some(command), true), "{label}");
         choose_command(&p, command);

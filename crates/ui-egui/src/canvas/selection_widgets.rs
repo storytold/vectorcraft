@@ -12,7 +12,7 @@
 //! style}` and `craft::behavior` paths are assumed to be the framework crates' public paths for the items used.
 
 use craft::behavior::{CanvasView, Cursor, HitLevel, HitPriority, HitShape, Metrics, PartKey, PointerButton, PressPhase, PressState, Sense};
-use craft::ui::canvas::{CanvasSpace, canvas_space};
+use craft::ui::canvas::CanvasSpace;
 use craft::ui::contract::{Common, Component, Cx, MeasureCx, Outcome, PaintUi, PartsCx, Pointer as _, Props as _, Role, Show as _};
 use craft::ui::primitives::{PaintShape, StrokeWidth};
 use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};

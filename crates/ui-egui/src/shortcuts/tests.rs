@@ -1029,7 +1029,7 @@ fn arrows_while_dragging_a_grid_change_its_rows_and_columns() {
     app.select_tool("rectangularGrid");
     let view = app.view_info();
     let ctx = ready(&mut app);
-    let mut grid = |app: &mut VectorcraftApp, keys: &[Key]| {
+    let grid = |app: &mut VectorcraftApp, keys: &[Key]| {
         app.session.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 80.0), view).unwrap();
         app.session.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 220.0), view).unwrap();
         for &key in keys {

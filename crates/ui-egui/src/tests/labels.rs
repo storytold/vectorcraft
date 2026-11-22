@@ -123,7 +123,7 @@ fn paint_daubs_brush_type_menu_matches_illustrator() {
     let catalog: Vec<&str> = PAINT_DAUB_BRUSH_TYPES.iter().map(|(label, _)| *label).collect();
     assert_eq!(PAINT_DAUB_BRUSH_TYPE_LABELS.as_slice(), catalog.as_slice());
     let params = Map::new();
-    let shown = crate::dialogs::shown_choices("artistic.paintDaubs", "brushType", &params, false).unwrap();
+    let shown = crate::dialogs::effect_params::shown_choices("artistic.paintDaubs", "brushType", &params, false).unwrap();
     assert_eq!(shown.len(), PAINT_DAUB_BRUSH_TYPES.len());
     for ((label, value), (english, id)) in shown.iter().zip(PAINT_DAUB_BRUSH_TYPES.iter()) {
         assert_eq!((label.as_str(), value.as_str()), (*english, *id));

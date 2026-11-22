@@ -25,8 +25,7 @@ use egui::{Color32, Response, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_effects::{
-    CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, MAP_ART, MAP_INVISIBLE, MAP_SHADE, MAX_MAPS,
-    SurfaceMap,
+    CLASSIC_EXTRUDE, CLASSIC_ROTATE, GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, MAP_ART, MAP_INVISIBLE, MAP_SHADE, MAX_MAPS, SurfaceMap,
 };
 
 use super::revolve::{Place, bevel_row, c3, light_editor};

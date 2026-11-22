@@ -5,7 +5,6 @@ use craft::ui::patterns::preferences::{PageSpec, PreferencesModel};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::prefscmds::PREF_SPECS;
 
-use crate::i18n::LangExt as _;
 use crate::theme::Brightness;
 
 fn app() -> VectorcraftApp {

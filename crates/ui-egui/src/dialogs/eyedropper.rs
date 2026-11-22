@@ -7,7 +7,6 @@
 //! miter, dash}}, character, paragraph}`, each leaf a bool).
 
 use craft::behavior::Mixed;
-use craft::ui::buttons::Button as _;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::display::Text;

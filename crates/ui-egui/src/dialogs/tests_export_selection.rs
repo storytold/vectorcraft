@@ -8,8 +8,6 @@ use serde_json::json;
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
 use super::tests_export::{Written, app_saving, confirm, fields, frame, kind, names, on_save, rgba, set};
-use super::*;
-use crate::VectorcraftApp;
 
 /// The last file written, as text.
 fn last_text(written: &Written) -> String {

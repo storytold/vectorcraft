@@ -19,7 +19,7 @@ use egui::{Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeKind};
 
-use crate::{VectorcraftApp, tl};
+use crate::VectorcraftApp;
 
 /// The live effect a Contour is made of.
 const EFFECT: &str = "path.offsetPath";

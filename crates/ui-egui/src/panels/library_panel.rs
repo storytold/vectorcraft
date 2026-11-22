@@ -562,7 +562,7 @@ pub(crate) fn user_slot(id: &str, prefix: &str, libraries: Vec<LibraryInfo>) -> 
 #[cfg(test)]
 pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(panel) = last_open(&app.ui).map(LibraryPanel::panel) else { return };
-    let area = egui::Area::new(egui::Id::new("test-library-panel")).fixed_pos(egui::pos2(20.0, 20.0));
+    let area = egui::Area::new(egui::Id::unique("test-library-panel")).fixed_pos(egui::pos2(20.0, 20.0));
     area.show(ctx, |ui| crate::dock::panel_body(app, ui, &panel));
 }
 
@@ -620,7 +620,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let items: HashMap<&str, &K::Item> = flat.iter().filter_map(|r| r.item.map(|i| (r.name, i))).collect();
     let selection = selected(app, &panel);
     // The search text and the open groups are the browser's; the view is the panel's setting.
-    let state_id = egui::Id::new(("library-panel-state", &panel));
+    let state_id = egui::Id::unique(("library-panel-state", &panel));
     let mut state: PresetState<LibraryKey> = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
     (state.view, state.zoom) = view.preset();
     let shown = &*app;

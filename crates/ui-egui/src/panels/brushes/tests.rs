@@ -289,7 +289,7 @@ fn drops_on_the_panel_run_their_commands() {
     // Library brushes: a brush is added; a folder and another kind's item are not.
     let library = |kind: &str, id: &str, name: &str, folder: bool| {
         let key = LibraryKey { panel: library_panel::panel_id(kind, id), name: name.into(), folder };
-        ListDrag::new(egui::Id::new("library"), vec![key.clone()], key)
+        ListDrag::new(egui::Id::unique("library"), vec![key.clone()], key)
     };
     for (drag, added) in [
         (library(BrushLibraries::KIND, "pattern-borders", "Beads", false), true),

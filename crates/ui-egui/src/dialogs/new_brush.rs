@@ -10,7 +10,7 @@
 use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::Label;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{brush_options, host};
 use crate::VectorcraftApp;
@@ -78,6 +78,7 @@ fn confirm(app: &mut VectorcraftApp, d: &DialogFields, ids: Option<Value>) -> Re
 #[cfg(test)]
 mod tests {
     use craft::ui::dialog::StackDialog;
+    use serde_json::json;
     use vectorcraft_engine::Session;
 
     use super::*;

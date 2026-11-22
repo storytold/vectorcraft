@@ -429,7 +429,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let order = rows.keys();
     let sel = current_sel(app, node.as_deref());
     let mut selection = node.as_deref().map_or_else(Selection::default, |n| list_selection(app, n, sel));
-    let list_id = ui.id().with("appearance-rows");
+    let list_id = ui.scope_id().with("appearance-rows");
     let has = node.is_some();
     // A dragged fill/stroke or effect row lights Duplicate and Delete up, also with nothing picked.
     let dragged = craft::ui::runtime::drag::active::<ListDrag<RowKey>>(ui.ctx())

@@ -19,8 +19,7 @@ use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{
-    ContentPainterCx, ContentPainterCx as _, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource,
-    ThumbnailOptions, Thumbnails,
+    ContentPainterCx, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
 };
 use craft::ui::primitives::{Revision, ThumbPaint};
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};

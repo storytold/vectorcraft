@@ -10,7 +10,6 @@ use vectorcraft_plugins::wat as tpl;
 
 use super::tests_export::fields;
 use super::tests_plugin_export::top;
-use super::*;
 use crate::VectorcraftApp;
 
 /// A filter whose parameters use every presentation key.

@@ -182,7 +182,11 @@ fn a_selected_clip_group_shows_its_clipping_path_not_its_hidden_art() {
         app.select_tool(tool);
         app.run("select.set", json!({"ids": [group.0]})).unwrap();
         let shown = seen(&app);
-        assert_eq!(shown.iter().map(|o| o.1.clone()).collect::<Vec<_>>(), vec![vec![vectorcraft_geom::Rect::new(100.0, 100.0, 200.0, 200.0)]], "{tool}");
+        assert_eq!(
+            shown.iter().map(|o| o.1.clone()).collect::<Vec<_>>(),
+            vec![vec![vectorcraft_geom::Rect::new(100.0, 100.0, 200.0, 200.0)]],
+            "{tool}"
+        );
     }
 }
 
@@ -205,7 +209,11 @@ fn a_clip_group_over_a_huge_path_shows_its_clipping_path() {
     let group = id_of(&app.run("object.clippingMask.make", json!({})).unwrap());
     app.select_tool("selection");
     app.run("select.set", json!({"ids": [group.0]})).unwrap();
-    assert_eq!(seen(&app)[0].1, vec![vectorcraft_geom::Rect::new(100.0, 100.0, 200.0, 200.0)], "the square's outline, not the bounds of the huge art");
+    assert_eq!(
+        seen(&app)[0].1,
+        vec![vectorcraft_geom::Rect::new(100.0, 100.0, 200.0, 200.0)],
+        "the square's outline, not the bounds of the huge art"
+    );
     assert_eq!(marks(&app).paths.iter().map(|p| p.anchor_count()).sum::<usize>(), 4, "and its four anchors");
 }
 

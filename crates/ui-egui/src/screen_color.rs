@@ -33,7 +33,7 @@ pub(crate) fn target(ctx: &egui::Context) -> u64 {
 
 /// Where the document active when the pick started is kept until its color arrives.
 fn doc_key() -> egui::Id {
-    egui::Id::new("screen-color-doc")
+    egui::Id::unique("screen-color-doc")
 }
 
 fn remember_doc(app: &VectorcraftApp, ctx: &egui::Context) {

@@ -14,7 +14,7 @@ fn every_tool_cursors_hotspot_lies_inside_its_icon_box() {
 #[test]
 fn every_cursor_icon_the_app_names_is_in_its_set() {
     for c in GLYPHS {
-        let (cb::Cursor::Painted(PaintedCursor::Tool { icon, .. } | PaintedCursor::PointerTool { icon, .. })) = tool_cursor(c) else { continue };
+        let cb::Cursor::Painted(PaintedCursor::Tool { icon, .. } | PaintedCursor::PointerTool { icon, .. }) = tool_cursor(c) else { continue };
         if icon.name().starts_with("cursor-") {
             assert!(CURSOR_ICONS.icons.iter().any(|(name, _)| *name == icon.name()), "{c:?} names {}", icon.name());
         }

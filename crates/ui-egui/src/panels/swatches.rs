@@ -41,8 +41,8 @@ mod libraries;
 use actions::{deletable, delete, mergeable, new_swatch, selected_group};
 pub(crate) use actions::{menu_rows, menu_states, run};
 pub(crate) use libraries::{
-    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_entries, library_label, library_list, limit_key, limit_name,
-    load_library, open_library, other_library, user_library, window_menu,
+    DOCUMENT_SWATCHES, SwatchLibraries, USER_SLOT, colour_libraries, library_entries, limit_key, limit_name, load_library, open_library,
+    other_library, user_library, window_menu,
 };
 
 /// View modes of the swatch list (and of the library panels: `ui.libraryPanel {view}`).

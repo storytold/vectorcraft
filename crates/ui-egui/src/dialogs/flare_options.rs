@@ -17,7 +17,7 @@
 
 // PLAN: the `craft_ui` paths and `LivePreview`'s home (`form`) are assumed; `general_lengths` is cv.B5b's.
 use craft::ui::contract::Bind;
-use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamResult};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;

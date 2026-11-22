@@ -38,7 +38,7 @@ fn id() -> DialogId {
 
 /// Where the edited list is kept while the dialog is open.
 fn state_id() -> egui::Id {
-    egui::Id::new("custom-dictionary-words")
+    egui::Id::unique("custom-dictionary-words")
 }
 
 /// The custom dictionary's words.

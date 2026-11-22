@@ -342,7 +342,7 @@ fn the_font_menu_preview_reads_the_menus_when_it_ends() {
     use craft::behavior::Preview;
 
     use crate::font_menu::{apply_preview, end_previews};
-    let owner = egui::Id::new("font-menu-preview-test");
+    let owner = egui::Id::unique("font-menu-preview-test");
     // The app reads the menus after each step as at the end of a frame.
     let read = |m: &mut Mac, step: &dyn Fn(&mut VectorcraftApp)| {
         let synced = m.fake.synced();

@@ -175,14 +175,13 @@ pub mod width_point;
 pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
-pub(crate) use effect_params::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, shown_choices};
+pub(crate) use effect_params::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS};
 pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
     ExportForScreensDialog, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
-pub(crate) use form::{humanize, number_list_text, read_number_list};
 pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document};
 pub use png_options::open as open_raster_options;

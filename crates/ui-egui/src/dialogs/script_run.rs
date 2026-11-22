@@ -31,7 +31,7 @@ use std::path::Path;
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Outcome as _, Props as _, Show as _};
+use craft::ui::contract::{Bind, Outcome as _, Show as _};
 use craft::ui::dialog::{
     DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };

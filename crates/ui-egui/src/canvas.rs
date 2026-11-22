@@ -13,9 +13,9 @@ use egui::Ui;
 use serde_json::json;
 use vectorcraft_geom::{Rect, Size};
 
+use crate::VectorcraftApp;
 use crate::doc_windows::{self, Win};
 use crate::state::ViewMove;
-use crate::{VectorcraftApp, tl};
 
 mod alternates_bar;
 mod artboards;
@@ -49,7 +49,7 @@ use home::home;
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
-pub(crate) use rulers::{general_lengths, stroke_lengths, type_lengths};
+pub(crate) use rulers::{general_lengths, stroke_lengths};
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
 pub use tool_adapter::{apply_requests, dispatch, mods};
 pub(crate) use tool_adapter::{in_gesture, pose_on_page};
@@ -76,7 +76,7 @@ pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
 
 /// The id `Canvas::new("Document")` gets for a body of `win`.
 pub(crate) fn canvas_id(win: Win) -> egui::Id {
-    egui::Id::new("Document").with(win)
+    egui::Id::unique("Document").with(win)
 }
 
 /// Paint the current window's document canvas, or the Home screen, or an empty window.

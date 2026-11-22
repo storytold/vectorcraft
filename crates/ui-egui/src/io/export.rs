@@ -299,11 +299,17 @@ pub(crate) fn run_to_file(
     let ext = given.map_or(ext, |f| f.extensions.first().copied().unwrap_or_default());
     if selection && params.as_object().is_some_and(|o| o.get("format").is_none()) {
         let (id, own_ext) = (id.to_string(), ext.to_string());
-        return target_path_keeping(app, path, ext, |_| true, move |app, picked| {
-            let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| own_ext.clone());
-            params["format"] = serde_json::json!(e);
-            write_output(app, &id, &own_ext, params, Some(picked), then)
-        });
+        return target_path_keeping(
+            app,
+            path,
+            ext,
+            |_| true,
+            move |app, picked| {
+                let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| own_ext.clone());
+                params["format"] = serde_json::json!(e);
+                write_output(app, &id, &own_ext, params, Some(picked), then)
+            },
+        );
     }
     write_output(app, id, ext, params, path, then)
 }

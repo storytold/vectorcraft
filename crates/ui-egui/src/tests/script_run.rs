@@ -3,7 +3,7 @@
 
 use craft::host::{PickKind, Picked};
 use craft::ui::dialog::DialogResult;
-use serde_json::{Value, json};
+use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;

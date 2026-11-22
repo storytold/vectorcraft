@@ -24,7 +24,7 @@ use craft::ui::patterns::form_dialogs::{
     SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebVariant,
 };
 use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
-use craft::ui::runtime::requests::{ColorRequest, PathRequest};
+use craft::ui::runtime::requests::PathRequest;
 use egui::load::SizedTexture;
 
 use super::preview_folders;

@@ -7,7 +7,7 @@
 //! The question is a prompt on the window's dialog host; [`pump`] reads its answer each frame.
 
 use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::VectorcraftApp;
 

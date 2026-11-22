@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use craft::menu::Node;
-use craft::ui::contract::{Props as _, Show as _};
+use craft::ui::contract::Show as _;
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, Prompt, StackDialog, dialog_id};
 use craft::ui::display::{Shade, Text};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};

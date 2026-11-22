@@ -1,7 +1,7 @@
 //! The live preview of a dialog that previews its command on the canvas: the dialog's values run as one interaction
 //! that Cancel rolls back and OK keeps as one undo step.
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::VectorcraftApp;
 
@@ -74,6 +74,7 @@ impl LivePreview {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use vectorcraft_engine::{Session, ViewInfo};
     use vectorcraft_tools::{PointerEvent, PointerKind};
 

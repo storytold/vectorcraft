@@ -166,7 +166,9 @@ pub fn refresh(app: &VectorcraftApp, ctx: &egui::Context) {
     if let Some(queue) = &state.queue {
         let read = root.clone();
         // The app's own folder, read for the person at the keyboard.
-        queue.submit(root, Priority::VISIBLE, move |_| vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read)));
+        queue.submit(root, Priority::VISIBLE, move |_| {
+            vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read))
+        });
     }
     if !state.loaded && state.first_read.is_none() {
         // The menus show the loading note, and a frame comes when it is due to change to SLOW.

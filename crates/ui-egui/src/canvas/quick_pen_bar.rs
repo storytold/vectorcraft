@@ -11,15 +11,15 @@
 //! VectorCraft's own rules: moving to the drawn side where the other side runs off the canvas, the
 //! place with no path being drawn, and Window › Quick Pen Toolbar to show it again.
 
+use craft::behavior::IconId;
 use craft::behavior::overlay::{Align, Side};
-use craft::ui::canvas::CanvasSpace;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _};
 use craft::ui::buttons::IconButton;
+use craft::ui::canvas::CanvasSpace;
+use craft::ui::canvas_controls::TaskBar;
 use craft::ui::choice::Segmented;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::{Direction, Env};
-use craft::ui::canvas_controls::TaskBar;
-use craft::behavior::IconId;
 use vectorcraft_tools::quickpen::{self, Stroke as Action};
 
 use super::{Ui, VectorcraftApp, json};
@@ -51,11 +51,7 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canva
             let heading = dir.map(|d| space.view.to_screen(p + d) - space.view.to_screen(p));
             let right = heading.is_none_or(|d| d.x >= 0.0);
             let down = heading.is_none_or(|d| d.y >= 0.0);
-            (
-                vec![p],
-                if right != rtl { Side::End } else { Side::Start },
-                if down { Align::Start } else { Align::End },
-            )
+            (vec![p], if right != rtl { Side::End } else { Side::Start }, if down { Align::Start } else { Align::End })
         }
         None => (vec![space.view.to_doc(space.view.rect.center_bottom())], Side::Above, Align::Center),
     };

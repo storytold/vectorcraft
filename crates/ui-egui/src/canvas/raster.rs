@@ -2,7 +2,7 @@ use craft::behavior::{CanvasView, PixelSize};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::Tokens;
 use craft::ui::canvas::{AppPaint, CanvasSpace, RasterDisplay};
-use craft::ui::contract::{Props as _, Show as _};
+use craft::ui::contract::Show as _;
 use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::Env;
 use craft::ui::runtime::frame;

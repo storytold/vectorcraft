@@ -281,7 +281,6 @@ fn object_menu(tree: &DocLayers, id: NodeId, ids: &[u64]) -> Vec<MenuRow<String>
     let (hide, hide_params, hide_ok) = super::rows::multi_others_action(doc, ids, true);
     let lock_label = if lock == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
     let hide_label = if hide == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
-    let layers_only = tree.layers_only();
     let export = |multiple: bool| json!({ "ids": ids, "multiple": multiple });
     vec![
         entry("ui.layerOptions", json!({ "ids": ids }), options, true),

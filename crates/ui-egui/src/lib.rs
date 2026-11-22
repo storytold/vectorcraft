@@ -111,7 +111,6 @@ use craft::automation::{ControlChannel, ControlRequest};
 use craft::behavior::GestureId;
 use craft::host::Host;
 use craft::ui::runtime::overlay::{self, OpenFilter};
-use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::file_access::{self, AutomationRoots};
 use vectorcraft_engine::{Session, UndoScope, ViewInfo};

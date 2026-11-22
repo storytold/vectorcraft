@@ -16,7 +16,7 @@ use craft::theme::variant::Tone;
 use craft::theme::{ModelValues, Rgba};
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
-use craft::ui::contract::{Bind, CollectionEvent, Entry, Outcome as _, Props as _, Show as _, ShowCollection as _};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _};
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::PanelRow;
 use craft::ui::notices::Notice;

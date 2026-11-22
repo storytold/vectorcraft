@@ -1008,7 +1008,7 @@ mod tests {
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         let picked = dir.to_string_lossy().into_owned();
         // PLAN: fl.A20's `scripted` and `poll` live in files-w7's test module; `tests::picks` is its guessed path
-        let mut picker = crate::tests::picks::scripted(&mut app);
+        let picker = crate::tests::picks::scripted(&mut app);
         // Nothing missing: no button, and no folder is asked for.
         open(&mut app);
         pump_now(&mut app);

@@ -464,7 +464,7 @@ mod tests {
             (st.doc.clone(), st.uid, st.revision)
         };
         let request = ThumbRequest::for_cell(100.0, 1.0);
-        let mut at = |app: &mut VectorcraftApp, only: bool| {
+        let at = |app: &mut VectorcraftApp, only: bool| {
             let region = region(&doc, uid, revision, only, false, &mut app.canvas);
             let key = NavKey { uid, artboard_only: only, solid_dashes: false };
             (NavThumbs::new(&doc, revision, region).revision(&key, &request), region.x1)

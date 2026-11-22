@@ -8,7 +8,7 @@ use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Grid, Row};
 use craft::ui::pickers::Select;
-use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft::ui::runtime::env::LengthUnits;
 use craft::ui::sections::Section;
 use craft::ui::text::NumberField;
 use egui::Ui;

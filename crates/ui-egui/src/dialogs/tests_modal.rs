@@ -7,7 +7,7 @@ use egui::{Event, Pos2, Rect, Vec2, pos2, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::tests::{SCREEN, app, cancel, confirm, field, fields, flag, frame, is_open, set, set_all, settle, window};
+use super::tests::{SCREEN, confirm, frame, set, settle, window};
 use super::*;
 use crate::VectorcraftApp;
 

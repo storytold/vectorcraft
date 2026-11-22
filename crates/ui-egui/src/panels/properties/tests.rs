@@ -4,6 +4,7 @@ use egui::{Event, Key, Modifiers};
 use serde_json::Value;
 use vectorcraft_engine::Session;
 
+use super::appearance_section::global_edit_results;
 use super::*;
 use crate::tests::panel_harness::Panel;
 use crate::tests::synthetic::key_frame;

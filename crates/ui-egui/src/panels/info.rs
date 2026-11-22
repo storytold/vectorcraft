@@ -4,7 +4,7 @@
 //! stroke colour values.
 
 use craft::keymap::CommandRef;
-use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Picture, Shade, Text};
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;

@@ -269,8 +269,8 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     assert_eq!(h.state().pending_plugin_install.as_ref().unwrap().message, "Install “Tidy 2”, which asks for these permissions?");
     step(&mut h);
     answer(&mut h, false);
-    let installed = |h: &Window| vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone());
-    assert_eq!(installed(&h), Some(name.into()), "Cancel keeps the one installed");
+    let installed = || vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone());
+    assert_eq!(installed(), Some(name.into()), "Cancel keeps the one installed");
     io::open_bytes(h.state_mut(), "tidy2.wasm", &again, None).unwrap();
     assert!(prompt_open(h.state()), "File › Open asks too");
     // The same dialog says it takes the installed one's place, and OK replaces it; Cancel keeps the
@@ -286,12 +286,12 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     assert_eq!(pending.params["replace"], json!(true), "OK replaces the one installed");
     step(&mut h);
     answer(&mut h, false);
-    assert_eq!(installed(&h), Some(name.into()), "Cancel keeps the one installed");
+    assert_eq!(installed(), Some(name.into()), "Cancel keeps the one installed");
     assert_ne!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(again_hash), "Cancel records no grant");
     h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
     approve(&mut h);
     assert!(top(h.state()).is_none(), "one question");
-    assert_eq!(installed(&h), Some("Tidy 2".into()));
+    assert_eq!(installed(), Some("Tidy 2".into()));
     let new_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(new_hash), "OK records the new module's hash");
     // One that asks for another permission asks again.
@@ -301,11 +301,11 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     assert!(h.state().pending_plugin_install.as_ref().unwrap().detail.contains("• Keep data of its own with the document"));
     step(&mut h);
     answer(&mut h, false);
-    assert_eq!(installed(&h), Some("Tidy 2".into()), "Cancel keeps the one installed");
+    assert_eq!(installed(), Some("Tidy 2".into()), "Cancel keeps the one installed");
     // OK keeps the `replace` it was asked with: `false` leaves the installed one in place.
     h.state_mut().run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more), "replace": false})).unwrap();
     approve(&mut h);
-    assert_eq!(installed(&h), Some("Tidy 2".into()), "replace: false is kept");
+    assert_eq!(installed(), Some("Tidy 2".into()), "replace: false is kept");
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 

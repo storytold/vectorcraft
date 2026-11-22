@@ -11,7 +11,7 @@ use crate::font_menu::{apply_family, apply_preview, end_previews, family_pick, p
 
 /// The owner every test preview is made by.
 fn owner() -> egui::Id {
-    egui::Id::new("font-test")
+    egui::Id::unique("font-test")
 }
 
 /// A pick of `after` over `before`, as the picker raises it.
@@ -179,7 +179,7 @@ fn a_family_stepped_to_keeps_the_style_it_has() {
 
 /// The pick `pick_only` saw, kept for the test to read.
 fn picked_id() -> egui::Id {
-    egui::Id::new("font-menu-test-pick")
+    egui::Id::unique("font-menu-test-pick")
 }
 
 /// A picker that only picks, as Find Font's Replace With and the Glyphs panel use it.

@@ -150,7 +150,7 @@ fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
 /// stays listed, though no other type uses it. A pick follows the document, and so does undo.
 #[test]
 fn a_preview_keeps_the_document_filters_families() {
-    let owner = egui::Id::new("font-test");
+    let owner = egui::Id::unique("font-test");
     let mut app = app_with_type(&["Source Serif 4", "Inter"]);
     assert_eq!(used(&mut app), ["inter", "source serif 4"]);
     // The selected text, the only type in Inter, previewed in Source Serif 4.
@@ -233,7 +233,7 @@ fn the_recently_added_filter_finds_its_families_again_when_the_clock_goes_back()
 fn a_preview_size_asked_for_sets_the_preference_and_keeps_the_preview() {
     // PLAN: assumed `craft::font_manager::FontPreviewSize` is the picker's size enum
     use craft::font_manager::picker::FontPreviewSize;
-    let owner = egui::Id::new("font-test");
+    let owner = egui::Id::unique("font-test");
     let mut app = app_with_type(&[]);
     let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Size", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", serde_json::json!({"ids": [id]})).unwrap();

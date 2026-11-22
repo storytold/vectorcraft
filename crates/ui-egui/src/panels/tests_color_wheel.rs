@@ -8,11 +8,11 @@ use craft::ui::testing::focus::AccessActionKind;
 use craft::ui::testing::{Fixture, Target};
 use egui::{Key, Modifiers, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Cms, ColorSettings, delta_e2000};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::Color;
+use vectorcraft_color::cms::{self};
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{Settings, Sliders, display_hsb, oklch_track, remembered_hsb, remembered_hsl, remembered_oklch, set, show, stored};
+use super::color_wheel::{display_hsb, show};
 use crate::VectorcraftApp;
 
 /// The app shown through the panel's `show`, driven by the parts' names and keys.

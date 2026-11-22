@@ -10,7 +10,7 @@ use craft::theme::Srgba;
 use craft::ui::buttons::Button;
 use craft::ui::contract::Entry;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, clicked};
-use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind, ParamRows};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind, ParamRows};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::LengthUnits;
 use craft::ui::runtime::env::UnitKind;

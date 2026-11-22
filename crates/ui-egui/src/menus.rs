@@ -69,7 +69,7 @@ pub use invoke::{click_target, invoke};
 pub(crate) use labels::lists_plugin;
 pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
-pub(crate) use model::{APP_NAME, MAC_LABELS, home_key, home_showing};
+pub(crate) use model::{MAC_LABELS, home_key, home_showing};
 pub use run::{check_params, run_ui_command};
 pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 #[cfg(test)]

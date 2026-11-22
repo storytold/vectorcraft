@@ -511,7 +511,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let uid = st.uid;
     let model = app.ui.asset_export_panel.docs.entry(uid).or_default();
     model.selection.items.retain(|id| st.doc.asset(*id).is_some());
-    let grid_id = ui.id().with(("asset-export-grid", uid));
+    let grid_id = ui.scope_id().with(("asset-export-grid", uid));
     let mut seen = Seen::default();
     let mut events = Vec::new();
     let mut opener = None;

@@ -21,7 +21,7 @@
 // of the draw crate is where `TipEllipse` and `TipAngle` live.
 use craft::draw::ui::brush_settings::{TipAngle, TipEllipse};
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
-use craft::ui::layout_components::{Row, Stack};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{Env, UnitKind};
 use craft::ui::style::rgba_color;

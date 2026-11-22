@@ -19,7 +19,7 @@ use std::time::SystemTime;
 use craft::behavior::{EditEvent, Preview};
 use craft::font_manager::picker::{FamilySet, FilterLayout, FontFilters, FontPicker, FontPickerSettings, FontPreviewSize, FontScript};
 use craft::ui::contract::{Bind, Entry, Show as _};
-use craft::ui::fonts::{FaceBytes, FaceState, FontRef};
+use craft::ui::fonts::{FaceBytes, FaceState};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{ContentPainterCx, DocRun, DocText, FacePaint, FacesCx as _};
 use craft::ui::runtime::env::Label;
@@ -385,7 +385,7 @@ pub(crate) fn paint_family_sample(cx: &ContentPainterCx, rect: Rect, family: &st
     };
     let pad = if on_white { PAPER_PAD } else { 0.0 };
     let color = DataColor::new(if on_white { Color32::BLACK } else { cx.ink() });
-    let runs = [DocRun::new(text, FontRef::named(&face.family), area.height() * SAMPLE_SCALE, color)];
+    let runs = [DocRun::new(text, font, area.height() * SAMPLE_SCALE, color)];
     let layout = cx.layout(&DocText { wrap: Some((area.width() - pad).max(0.0)), ..DocText::new(&runs).elide() });
     let at = egui::pos2(area.left() + pad, area.center().y - layout.galley.size().y / 2.0);
     cx.painter.galley(at, layout.galley.clone(), color.0);

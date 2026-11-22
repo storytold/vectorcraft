@@ -2,7 +2,7 @@
 //! (Classic): a cube drawn at the current X, Y and Z rotation inside a ring, dragged or keyed to turn the object.
 
 // PLAN: assumed the app depends on craft-behavior and craft-ui-patterns (hub-w2 owns Cargo.toml).
-use craft::behavior::{CursorIcon, CursorPriority, Metrics as _, Mixed, PartKey, PointerButton, PressPhase, Sense};
+use craft::behavior::{CursorIcon, CursorPriority, Mixed, PartKey, PointerButton, PressPhase, Sense};
 use craft::ui::contract::{
     Access, Bind, BindMut, Common, Component, Cx, DisabledLook, Edit as _, EditResponse, Focus as _, Input, MeasureCx, Name, PaintUi, PartsCx,
     Pointer as _, Props as _, Remember as _, Role, Show as _,

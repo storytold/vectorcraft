@@ -9,7 +9,7 @@ use craft::i18n::Folder;
 use craft::i18n::matcher::Matcher;
 use craft::menu::Node;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::contract::{ActivateOn, Bind, CollectionEvent, Entry, SelectMode, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id, serde_fields, set_serde_field};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;

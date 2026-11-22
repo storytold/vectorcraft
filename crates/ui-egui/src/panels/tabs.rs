@@ -515,7 +515,7 @@ fn guide_at(axis: (Point, Point, Vec2), position: f64) -> (Point, Point) {
 /// only, and none for type on a path.
 pub(crate) fn stop_guide(app: &mut VectorcraftApp, ui: &mut Ui, _space: &CanvasSpace) {
     // PLAN: `_space` is unused: `SmartGuides` reads the canvas view from the canvas body itself; canvas-w10 still passes it (ty.S13).
-    let Some(drag) = TextRuler::dragging(ui.ctx(), egui::Id::new(RULER_ID)).filter(|d| matches!(d.item, RulerItem::Stop(_))) else { return };
+    let Some(drag) = TextRuler::dragging(ui.ctx(), egui::Id::unique(RULER_ID)).filter(|d| matches!(d.item, RulerItem::Stop(_))) else { return };
     let Some(revision) = app.session.active().map(|doc| (doc.uid, doc.revision)) else { return };
     let Some((node, _, _)) = current_para(app) else { return };
     let NodeKind::Text(t) = &node.kind else { return };
@@ -788,7 +788,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Points are pixels in a document: 72 pixels to the inch.
     let unit = DocUnit::new(unit_kind(app.session.general_unit()), 72.0);
     let mut ruler = TextRuler::new(tl!("Tabs"), Bind::given(values.clone()), span as f32)
-        .id(egui::Id::new(RULER_ID))
+        .id(egui::Id::unique(RULER_ID))
         .unit(unit)
         .scale(scale as f32)
         .tooltip(tl!("Click to add a tab stop, drag to move it, drag it off the ruler to delete it"));

@@ -437,7 +437,7 @@ fn body(ui: &mut egui::Ui, form: &mut Form, lengths: LengthUnits, refusal: Optio
     let titles = if form.target.sets() > 1 { [word(tl!("Incoming")), word(tl!("Outgoing"))] } else { [word(tl!("Width Point Edit")), Label::Empty] };
     match &mut form.target {
         Target::One { sides, out, single, .. } => {
-            let mut rows = |ui: &mut egui::Ui, title: &Label, sides: &mut Sides| {
+            let rows = |ui: &mut egui::Ui, title: &Label, sides: &mut Sides| {
                 let values = [Some(sides.left), Some(sides.right), Some(sides.left + sides.right)];
                 let (edit, link) = set_rows(ui, title, lengths, values, sides.linked);
                 if let Some(edit) = edit {

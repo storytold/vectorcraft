@@ -8,7 +8,6 @@ use craft::ui::dialog::{DialogHost, DialogId, HeldOk};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::*;
 use crate::tests_picks::Picker;
 use crate::{Services, VectorcraftApp};
 

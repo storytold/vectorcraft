@@ -5483,7 +5483,6 @@ fn a_move_stops_snapping_to_guides_hidden_during_it() {
         app.ui.view.guides = true;
         let ctx = egui::Context::default();
         frame(&mut app, &ctx, vec![]);
-        let rect = app.canvas_view().unwrap().rect;
         let xf = app.canvas_view().unwrap();
         let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         // Grabbed at its centre, moved first well away from the guide, then 1.5 px short of it.

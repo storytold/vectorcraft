@@ -163,11 +163,11 @@ impl Drag {
 }
 
 fn drag_state(ui: &Ui, key: &str) -> Option<Drag> {
-    ui.data(|d| d.get_temp::<Drag>(egui::Id::new(key)))
+    ui.data(|d| d.get_temp::<Drag>(egui::Id::unique(key)))
 }
 
 fn set_drag(ui: &Ui, key: &str, state: Option<Drag>) {
-    let id = egui::Id::new(key);
+    let id = egui::Id::unique(key);
     ui.data_mut(|d| match state {
         Some(state) => {
             d.insert_temp(id, state);

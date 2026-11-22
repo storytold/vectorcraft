@@ -1,7 +1,6 @@
 //! History panel: the document's states; click one to go back (or forward) to it.
 
 use craft::keymap::CommandRef;
-use craft::ui::contract::Props as _;
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::panels::{HistoryEvent, HistoryFooter, HistoryKey, HistoryPanel, HistoryRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};

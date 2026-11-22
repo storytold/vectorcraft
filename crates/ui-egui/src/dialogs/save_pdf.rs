@@ -402,7 +402,7 @@ fn summary_key(app: &VectorcraftApp, settings: &Value) -> egui::Id {
     let prefs = &app.session.prefs;
     let presets = serde_json::to_string(&(&prefs.pdf_presets, &prefs.flattener_presets)).unwrap_or_default();
     let shared = (vectorcraft_color::cms::profiles_generation(), vectorcraft_text::FontDb::global().generation());
-    egui::Id::new((settings.to_string(), document, presets, shared))
+    egui::Id::unique((settings.to_string(), document, presets, shared))
 }
 
 /// The host warnings of a document check: its warnings, or the error that refused it, in the

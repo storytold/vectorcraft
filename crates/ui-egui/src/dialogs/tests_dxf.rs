@@ -5,7 +5,6 @@ use serde_json::json;
 
 use super::tests_export::{app, cancel, confirm, frame, kind, names, set, try_confirm};
 use super::tests_raster_formats::fields;
-use super::*;
 use crate::VectorcraftApp;
 
 fn text(bytes: &[u8]) -> String {

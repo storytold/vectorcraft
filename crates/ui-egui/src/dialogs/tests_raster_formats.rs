@@ -6,7 +6,6 @@ use serde_json::json;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog};
 
 use super::tests_export::{app, confirm, frame, kind, set, try_confirm};
-use super::*;
 use crate::VectorcraftApp;
 
 /// The values of the top dialog, a parameter dialog; empty when none is open.

@@ -9,9 +9,7 @@ use craft::behavior::{DisplayOrder, ItemSource};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{
-    Bind, CollectionEvent, Entry, Outcome as _, Props as _, Show as _, ShowCollection as _, ShowContainer as _, WordSetCx as _,
-};
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, ShowContainer as _, WordSetCx as _};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::list::{Finding, FindingsList, FindingsWords, ListRow, Severity};

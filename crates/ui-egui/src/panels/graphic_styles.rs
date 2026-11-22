@@ -327,8 +327,8 @@ fn paint_thumb(cx: &ContentPainterCx<'_>, rect: Rect, thumbs: &Thumbnails<StyleK
 /// document, the style's look or the size changes.
 fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, look: u64, preview: Preview, px: u32) -> Option<TextureHandle> {
     let st = app.session.active()?;
-    let slot = egui::Id::new("gs-large");
-    let key = egui::Id::new((st.uid, st.revision, look, px, preview, app.session.prefs.override_char_color));
+    let slot = egui::Id::unique("gs-large");
+    let key = egui::Id::unique((st.uid, st.revision, look, px, preview, app.session.prefs.override_char_color));
     if let Some((k, tex)) = ctx.data(|d| d.get_temp::<(egui::Id, TextureHandle)>(slot))
         && k == key
     {

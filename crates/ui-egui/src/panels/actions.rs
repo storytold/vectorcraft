@@ -50,7 +50,6 @@ pub use edits::{
     clear, delete_sets, delete_step, duplicate, include_steps, insert_menu_item, insert_select_object, insert_select_path, insert_stop, move_step,
     new_action, rename_action, reset,
 };
-pub(crate) use files::can_load;
 pub use files::{ACTIONS_EXT, LOAD_SET, REPLACE_SET, SAVE_SET, load_set, replace_set, save_set};
 pub use keys::{FUNCTION_KEYS, FunctionKey, function_keys, key_error};
 pub use model::{default_list, default_sets, deserialize_current_set};

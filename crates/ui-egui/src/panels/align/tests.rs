@@ -639,7 +639,7 @@ fn last_sent(app: &VectorcraftApp) -> (String, Value, Option<Value>) {
 /// Align to Artboard. Align to Key Object cannot be chosen.
 #[test]
 fn the_align_buttons_align_the_selected_artboards() {
-    let mut app = selected_artboards();
+    let app = selected_artboards();
     let steps = app.session.active().unwrap().history.undo.len();
     let mut panel = Panel::new(app, show);
     panel.click("Horizontal Align Left");
@@ -661,7 +661,7 @@ fn the_align_buttons_align_the_selected_artboards() {
 /// active artboard stays in place. They are off for one artboard.
 #[test]
 fn the_distribute_buttons_space_the_selected_artboards() {
-    let mut app = selected_artboards();
+    let app = selected_artboards();
     let mut panel = Panel::new(app, show);
     panel.click("Horizontal Distribute Left");
     assert_eq!(artboard_corners(&panel.app()), [(0.0, 0.0), (200.0, 40.0), (400.0, 10.0)], "{}", panel.app().ui.status);

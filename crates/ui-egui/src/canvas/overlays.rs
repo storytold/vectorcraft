@@ -8,7 +8,7 @@ use craft::behavior::{CanvasView, HitLevel, HitPriority, HitShape, PartKey, Sens
 use craft::draw::ui::{HandleStyle, PathOptionsSettings};
 use craft::ui::canvas::{CanvasSpace, canvas_space, hud};
 use craft::ui::canvas_controls::{Marquee, MarqueeLook, Measure, SelectionOutline, SmartGuides, path_runs};
-use craft::ui::contract::{Common, Component, Cx, Input, MeasureCx, PaintUi, PartsCx, Props as _, Role, Show as _};
+use craft::ui::contract::{Common, Component, Cx, Input, MeasureCx, PaintUi, PartsCx, Role, Show as _};
 use craft::ui::primitives::{DataWidth, Draw, PaintShape, StrokeWidth, TextRun};
 use craft::ui::runtime::env::Label;
 use craft::ui::style::{ComponentStyle, DataColor, Metrics, StyleColor, StyleCx, TypeRole, UiTokens};
