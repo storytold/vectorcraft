@@ -255,6 +255,8 @@ pub(crate) fn why_off(app: &VectorcraftApp, id: &str) -> Option<Option<String>> 
 /// Can UI command `id` run now?
 fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
+        // Presentation Mode shows no panel.
+        "window.panel" => app.ui.screen_mode < 3,
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
         "type.bold"

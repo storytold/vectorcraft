@@ -277,7 +277,7 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
         if shown != d.label {
             state = state.title(shown.clone());
         }
-        if let Some(reason) = Some(enabled).filter(|e| !e).and_then(|_| off_reason(app, id, &shown)) {
+        if let Some(reason) = Some(enabled).filter(|e| !e).map(|_| off_reason(app, &d.command, &shown)) {
             state = state.hint(reason);
         }
         states.set(d.command.clone(), state);
@@ -285,9 +285,13 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
     defs
 }
 
-/// What a dimmed row named `label` says: the engine's reason, else that the command is not available right now.
-fn off_reason(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> {
-    why_off(app, id).map(|why| why.unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now"))))
+/// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that
+/// the command is not available right now.
+fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
+    why_off(app, &command.id)
+        .flatten()
+        .or_else(|| crate::palette::refusal(app, command).filter(|_| command.id == "window.panel"))
+        .unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")))
 }
 
 /// The tree turned into the bar's nodes, with the state of every item it keeps.
@@ -353,7 +357,7 @@ impl Build<'_> {
         } else if enabled {
             None
         } else {
-            off_reason(self.app, id, &self.item_title(id, params, &item.label))
+            Some(off_reason(self.app, &command, &self.item_title(id, params, &item.label)))
         };
         if let Some(tip) = tip {
             state = state.hint(tip.clone());
