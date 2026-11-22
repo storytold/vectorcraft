@@ -2231,6 +2231,28 @@ fn string_literals(e: &str, keep: impl Fn(&str, &str) -> bool) -> Vec<String> {
     out
 }
 
+/// Where each string literal (its prefix included, see [`literal_at`]) and character literal in
+/// `code` starts and ends, in order.
+fn literal_spans(code: &str) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    let mut i = 0;
+    while let Some(c) = code[i..].chars().next() {
+        let span = match c {
+            '"' => literal_at(code, i).map(|(start, end, _)| (start, end)),
+            '\'' => quoted_end(code, i).map(|end| (i, end)),
+            _ => None,
+        };
+        match span {
+            Some((start, end)) => {
+                out.push((start, end));
+                i = end;
+            }
+            None => i += c.len_utf8(),
+        }
+    }
+    out
+}
+
 /// For translators, `cargo test -p vectorcraft-ui-egui dump_source_strings` writes every English
 /// interface string to `VECTORCRAFT_I18N_DUMP=<file>`, and every status and error message as a
 /// catalog template that [`untranslated_report`] checks to `VECTORCRAFT_I18N_DUMP_MESSAGES=<file>`,
@@ -4856,6 +4878,25 @@ fn run() -> Result<()> {
     assert_eq!(without_strings(r#"f('"', "a")"#), r#"f('"', "")"#);
 }
 
+/// A marker, an error variant, a `.map_err` or an error helper call written inside a string literal
+/// is text, not code: the scan reads no message from it, while the same call outside a literal
+/// still gives its message.
+#[test]
+fn message_scan_skips_calls_inside_string_literals() {
+    let code = r####"
+const SAMPLE: &str = r##"Err(r#"sample error"#)"##;
+const VARIANT: &str = r##"Error::Lost(r#"variant error"#)"##;
+const CLOSURE: &str = r##"load().map_err(|e| format!(r#"closure error {e}"#))"##;
+const HELPER: &str = r##"bad(cmd, r#"helper error"#)"##;
+fn run() -> Result<()> {
+    let _ = Err(r#"real error"#);
+    Ok(())
+}
+"####;
+    let found = source_messages(code, &[("bad(", 1)], &Default::default());
+    assert_eq!(found, ["real error"]);
+}
+
 /// A bracket in a character literal among a `format!`'s arguments does not end them: the scan
 /// removes the arguments up to the `format!`'s own closing parenthesis.
 #[test]
@@ -7263,25 +7304,33 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
 /// is not a message. A `format!` string and an `#[error(…)]` string are format strings (see
 /// [`as_template`]); in any other literal or constant every brace is literal (see
-/// [`as_literal_key`]).
+/// [`as_literal_key`]). A marker, variant, `.map_err` or helper call inside a string or character
+/// literal is text and gives no message (see [`literal_spans`]).
 fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
+    let spans = &literal_spans(code);
+    // Whether `code[at]` is inside a string or character literal, where a call is text, not code.
+    let in_literal = move |at: usize| {
+        let k = spans.partition_point(|&(start, _)| start <= at);
+        k > 0 && at < spans[k - 1].1
+    };
+    let code_matches = move |pat: &'static str| code.match_indices(pat).filter(move |&(at, _)| !in_literal(at));
     let after_markers =
-        MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| (&code[at + marker.len()..], *marker == "#[error(")));
-    let in_variants = ["Error::", "Fail::"].into_iter().flat_map(|enum_end| code.match_indices(enum_end)).filter_map(|(at, m)| {
+        MESSAGE_MARKERS.iter().flat_map(|marker| code_matches(marker).map(|(at, _)| (&code[at + marker.len()..], *marker == "#[error(")));
+    let in_variants = ["Error::", "Fail::"].into_iter().flat_map(code_matches).filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
         let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
         if named { skip_args(args.strip_prefix('(')?, before).map(|rest| (rest, false)) } else { None }
     });
-    let in_map_err = code.match_indices(".map_err(").flat_map(|(at, m)| {
+    let in_map_err = code_matches(".map_err(").flat_map(|(at, m)| {
         let rest = code[at + m.len()..].trim_start();
         let params = rest.strip_prefix("move").map_or(rest, str::trim_start).strip_prefix('|');
         params.and_then(|p| p.find('|').map(|end| &p[end + 1..])).map(closure_returns).unwrap_or_default()
     });
     let mut handlers = vec![];
-    for (at, m) in code.match_indices(".map_err(") {
+    for (at, m) in code_matches(".map_err(") {
         let rest = &code[at + m.len()..];
         let name = &rest[..rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len())];
         if name.starts_with(|c: char| c.is_ascii_lowercase()) && rest[name.len()..].starts_with(')') && !handlers.contains(&name) {
@@ -7291,6 +7340,7 @@ fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collecti
     let in_handlers = handlers.into_iter().flat_map(|name| handler_returns(code, name));
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
+            .filter(move |&(at, _)| !in_literal(at))
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
             .filter(|&(at, _)| {
                 let owner = code[..at].strip_suffix("::").map(|p| p.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next().unwrap_or(""));
