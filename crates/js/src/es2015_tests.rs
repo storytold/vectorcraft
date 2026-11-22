@@ -408,12 +408,213 @@ fn for_each_takes_let_and_const_with_e4x() {
     assert_eq!(e.kind, RunErrorKind::Syntax, "{e:?}");
 }
 
+// ---- classes ----
+
+#[test]
+fn classes_make_constructors_with_methods_on_their_prototype() {
+    truth("class A { constructor(x) { this.x = x; } get() { return this.x; } } new A(3).get() === 3");
+    truth(
+        "class A {} typeof A === 'function' && Object.getPrototypeOf(A) === Function.prototype && Object.getPrototypeOf(A.prototype) === Object.prototype",
+    );
+    truth("class A { m() {} } var d = Object.getOwnPropertyDescriptor(A.prototype, 'm'); d.writable && !d.enumerable && d.configurable");
+    truth("class A {} var d = Object.getOwnPropertyDescriptor(A, 'prototype'); !d.writable && !d.enumerable && !d.configurable");
+    truth("class A {} var d = Object.getOwnPropertyDescriptor(A.prototype, 'constructor'); d.value === A && !d.enumerable");
+    truth("class A { m() {} } !A.prototype.m.hasOwnProperty('prototype')");
+    truth("var k = 'dyn'; class A { [k + 1]() { return 1; } } new A().dyn1() === 1");
+    truth("var C = class Named { who() { return Named; } }; new C().who() === C && typeof Named === 'undefined'");
+    truth("class A { ;; m() { return 2; }; } new A().m() === 2");
+    assert!(string("class A { m() { return 1; } } String(A)").starts_with("class A"));
+    // A class body is strict mode code.
+    truth("class A { m() { return this; } } A.prototype.m.call(undefined) === undefined");
+    throws("class A { m() { undeclared = 1; } } new A().m();", "ReferenceError");
+}
+
+#[test]
+fn static_and_accessor_members_go_on_the_constructor_and_prototype() {
+    truth("class A { static make() { return new A(); } } A.make() instanceof A");
+    truth("class A { static get n() { return 4; } } A.n === 4 && !A.prototype.hasOwnProperty('n')");
+    truth(
+        "class A { constructor() { this._v = 1; } get v() { return this._v; } set v(x) { this._v = x * 2; } } var a = new A(); a.v = 5; a.v === 10",
+    );
+    truth(
+        "class A { get v() { return 1; } set v(x) {} } var d = Object.getOwnPropertyDescriptor(A.prototype, 'v'); typeof d.get === 'function' && typeof d.set === 'function' && !d.enumerable",
+    );
+    truth(
+        "class A { static() { return 's'; } get() { return 'g'; } set() { return 't'; } } var a = new A(); a.static() + a.get() + a.set() === 'sgt'",
+    );
+    throws("class A { static ['proto' + 'type']() {} }", "TypeError");
+    syntax("class A { static prototype() {} }");
+}
+
+#[test]
+fn subclasses_inherit_and_reach_the_superclass_through_super() {
+    truth(
+        "class A { constructor(x) { this.x = x; } m() { return 'A' + this.x; } } \
+           class B extends A { constructor(x) { super(x + 1); } m() { return 'B' + super.m(); } } \
+           var b = new B(1); b.m() === 'BA2' && b instanceof A && Object.getPrototypeOf(B) === A",
+    );
+    truth("class A { constructor(...a) { this.n = a.length; } } class B extends A {} new B(1, 2, 3).n === 3");
+    truth("class A { static s() { return 1; } } class B extends A { static s() { return super.s() + 1; } } B.s() === 2");
+    truth("class A {} class B extends A { m() { super.x = 5; return this.x; } } var b = new B(); b.m() === 5 && !A.prototype.hasOwnProperty('x')");
+    truth(
+        "class A { get v() { return this.w; } } class B extends A { constructor() { super(); this.w = 7; } get v() { return super.v + 1; } } new B().v === 8",
+    );
+    // `super.n` reads the prototype's property and writes the instance's.
+    truth(
+        "class A {} A.prototype.n = 1; class B extends A { m() { super.n += 2; var a = this.n; super['n']++; return a * 10 + this.n; } } new B().m() === 32 && A.prototype.n === 1",
+    );
+    truth("class A { constructor() { this.made = new.target; } } class B extends A {} new B().made === B && new A().made === A");
+    truth("class A {} class B extends A { constructor() { var f = () => super(); f(); this.ok = true; } } new B().ok");
+    truth("function F() { this.f = 1; } class B extends F {} new B().f === 1");
+    truth("class E extends Error { constructor(m) { super(m); } } var e = new E('x'); e instanceof E && e instanceof Error && e.message === 'x'");
+    truth("class L extends Array {} var l = new L(); l.push(1); l instanceof L && l.length === 1");
+    throws("class A {} class B extends A { m() { delete super.x; } } new B().m();", "ReferenceError");
+    // The constructor's home object is the prototype (section 14.5.14, step 12), so `super.x` in
+    // it reads the superclass's prototype, not the superclass.
+    truth(
+        "class A { m() { return 'p'; } static m() { return 's'; } } \
+           class B extends A { constructor() { super(); this.r = super.m(); } } new B().r === 'p'",
+    );
+}
+
+#[test]
+fn object_literal_methods_are_enumerable_and_reach_super() {
+    truth("var o = { m(x) { return x + 1; } }; o.m(1) === 2 && Object.keys(o).join() === 'm'");
+    truth("var o = { m() {} }; !o.m.hasOwnProperty('prototype')");
+    throws("var o = { m() {} }; new o.m();", "TypeError");
+    // `super` reads the home object's prototype, `Object.prototype`, as it is at the access.
+    truth(
+        "Object.prototype.hi = function () { return 'base ' + this.n; }; var o = { n: 1, hi() { return 'o ' + super.hi(); } }; o.hi() === 'o base 1'",
+    );
+    truth("Object.prototype.v = 1; var o = { v: 9, m() { return super.v; } }; var a = o.m(); Object.prototype.v = 2; a === 1 && o.m() === 2");
+    truth("Object.prototype.v = 3; var o = { v: 9, get g() { return super.v; } }; o.g === 3");
+    truth("Object.prototype.v = 4; var o = { v: 9, m() { return (() => super.v)(); } }; o.m() === 4");
+    truth("var o = { get: 1, set: 2, get() { return 3; } }; o.get() === 3 && o.set === 2");
+    // A `super` write that cannot be made does nothing outside strict mode code.
+    truth("var o = { m() { super.x = 1; Object.freeze(o); super.y = 2; return 1; } }; o.m() === 1 && o.x === 1 && !('y' in o)");
+    throws("var o = { m() { 'use strict'; Object.freeze(o); super.y = 2; } }; o.m();", "TypeError");
+    syntax("var o = { m() { super(); } };");
+    syntax("var o = { f: function () { return super.x; } };");
+    let r = Realm::new().run("var o = { m() {} };");
+    assert!(matches!(r, Err(RunError { kind: RunErrorKind::Syntax, .. })), "{r:?}");
+}
+
+#[test]
+fn this_before_super_is_a_reference_error() {
+    throws("class A {} class B extends A { constructor() { this.x = 1; super(); } } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() { var f = () => this; f(); super(); } } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() {} } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() { super(); super(); } } new B();", "ReferenceError");
+    throws("class A {} class B extends A { constructor() { return 1; } } new B();", "TypeError");
+    truth("class A {} class B extends A { constructor() { return { o: 1 }; } } new B().o === 1");
+    truth("class A {} class B extends A { constructor() { var f = () => this; super(); this.f = f; } } var b = new B(); b.f() === b");
+    // A handler in the constructor does not catch what its return throws.
+    throws("class A {} class B extends A { constructor() { try { return; } catch (e) {} } } new B();", "ReferenceError");
+}
+
+#[test]
+fn extends_null_and_bad_heritage() {
+    truth("class N extends null {} Object.getPrototypeOf(N.prototype) === null && Object.getPrototypeOf(N) === Function.prototype");
+    truth("class N extends null { constructor() { return Object.create(N.prototype); } } new N() instanceof N");
+    throws("class N extends null {} new N();", "TypeError");
+    throws("class B extends 3 {}", "TypeError");
+    throws("var f = () => {}; class B extends f {}", "TypeError");
+    throws("function F() {} F.prototype = 3; class B extends F {}", "TypeError");
+    throws("class B extends B {}", "ReferenceError");
+    throws("class A { m() {} } class B extends A.prototype.m {}", "TypeError");
+}
+
+#[test]
+fn a_class_is_called_only_with_new() {
+    throws("class A {} A();", "TypeError");
+    throws("class A {} A.call({});", "TypeError");
+    throws("class A { m() {} } new A.prototype.m();", "TypeError");
+    throws("class A { static m() {} } new A.m();", "TypeError");
+    throws("class A {} class B extends A {} B();", "TypeError");
+    truth("class A {} var Bound = A.bind(null); new Bound() instanceof A");
+}
+
+#[test]
+fn class_bindings_follow_let_rules() {
+    throws("new A(); class A {}", "ReferenceError");
+    truth("class A {} { class A { m() { return 2; } } } typeof A.prototype.m === 'undefined'");
+    throws("class A { m() { A = 1; } } new A().m();", "TypeError");
+    // The inner name is initialized only after every method is defined (section 14.5.14, steps
+    // 21 and 23), so a computed key that reads it is a `ReferenceError`.
+    throws("class A { [A]() {} }", "ReferenceError");
+    throws("var C = class D { static [D]() {} };", "ReferenceError");
+    truth("class A {} A = 1; A === 1");
+    syntax("class A {} class A {}");
+    syntax("if (1) class A {}");
+    syntax("class {}");
+    syntax("class A { constructor() {} constructor() {} }");
+    syntax("class A { get constructor() {} }");
+    syntax("class A { *g() {} }");
+    syntax("class A { m() { super(); } }");
+    syntax("class A extends Object { m() { super(); } }");
+    syntax("function f() { super.x; }");
+    syntax("super.x");
+    syntax("new.target");
+    syntax("class A { constructor() { var o = { f: function () { super.x; } }; } }");
+}
+
+#[test]
+fn new_target_names_the_constructor_new_was_applied_to() {
+    truth("function F() { return new.target; } new F() === F && F() === undefined");
+    truth("function F() { return (() => new.target)(); } new F() === F");
+    truth("function F() { this.t = new.target; } var B = F.bind(null); new B().t === F");
+}
+
+#[test]
+fn deep_class_chains_stay_within_the_limits() {
+    let src = "var C = class {}; for (var i = 0; i < 2000; i++) { C = class extends C {}; } new C();";
+    let e = Realm::with_options(es_options(), Limits { frames: 500, ..Limits::default() }).run(src).unwrap_err();
+    assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
+    let mut realm = Realm::with_options(es_options(), Limits { fuel: 50_000, ..Limits::default() });
+    let e = realm.run("class A { constructor() { new B(); } } class B extends A {} new B();").unwrap_err();
+    assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
+}
+
+#[test]
+fn classes_survive_collections_while_they_are_made() {
+    let src = "var total = 0; for (var i = 0; i < 200; i++) { \
+        class A { constructor(x) { this.x = x; } m() { return this.x; } static s() { return 1; } get g() { return 1; } } \
+        class B extends A { constructor() { super(1); } m() { return super.m() + 1; } } \
+        total += new B().m() + B.s() + new B().g; } total";
+    let mut completed = 0;
+    for kib in (16..400).step_by(4) {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });
+        match realm.run(src) {
+            Ok(v) => {
+                assert_eq!(v, JsValue::Number(800.0), "{kib} KiB");
+                completed += 1;
+            }
+            Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{kib} KiB: {e:?}"),
+        }
+    }
+    assert!(completed > 0);
+}
+
 // ---- the language mode ----
 
 #[test]
 fn without_the_option_the_new_forms_are_syntax_errors() {
-    for src in ["let x = 1; x", "const c = 1;", "var f = x => x;", "`t`", "function f(a = 1) {}", "function f(...r) {}", "f(...a)", "[...a]"] {
+    for src in [
+        "let x = 1; x",
+        "const c = 1;",
+        "var f = x => x;",
+        "`t`",
+        "function f(a = 1) {}",
+        "function f(...r) {}",
+        "f(...a)",
+        "[...a]",
+        "class A {}",
+        "var C = class {};",
+        "function F() { return new.target; }",
+    ] {
         let r = Realm::new().run(src);
+        assert!(matches!(r, Err(RunError { kind: RunErrorKind::Syntax, .. })), "{src}: {r:?}");
+        let r = Realm::with_options(Options { e4x: true, ..Options::default() }, Limits::default()).run(src);
         assert!(matches!(r, Err(RunError { kind: RunErrorKind::Syntax, .. })), "{src}: {r:?}");
     }
     // `let` stays a name outside strict mode code.
@@ -472,6 +673,13 @@ const FRAGMENTS: &[&str] = &[
     "case ",
     "default:",
     "break;",
+    "class ",
+    " extends ",
+    "super",
+    "static ",
+    "get ",
+    "constructor",
+    "new.target",
 ];
 
 proptest! {

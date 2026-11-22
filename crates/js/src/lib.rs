@@ -62,6 +62,7 @@ pub mod ast;
 mod builtins;
 mod bytecode;
 mod chars;
+mod class_ops;
 mod compiler;
 mod date_builtins;
 mod error;
@@ -85,8 +86,9 @@ mod xml_builtins;
 mod xpath;
 
 pub use ast::{
-    AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LexKind, LogicalOp, Name, Program,
-    Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, CatchClause, ClassDef, ClassElement, ClassKey, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind,
+    LexKind, LogicalOp, MethodKind, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp,
+    VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};

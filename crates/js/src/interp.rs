@@ -44,11 +44,12 @@ pub(crate) enum Abrupt {
 
 pub(crate) type JsResult<T> = Result<T, Abrupt>;
 
-/// The binding that holds an arrow function's `this` in the environment it closes over. It starts
-/// with a NUL, which no identifier holds.
-const ARROW_THIS: &[u16] = &[0, 0x74, 0x68, 0x69, 0x73];
+/// The binding that holds an arrow function's `this` in the environment it closes over, and a
+/// derived class constructor's `this` in its function environment. It starts with a NUL, which no
+/// identifier holds.
+pub(crate) const ARROW_THIS: &[u16] = &[0, 0x74, 0x68, 0x69, 0x73];
 
-fn internal<T>(message: &str) -> JsResult<T> {
+pub(crate) fn internal<T>(message: &str) -> JsResult<T> {
     Err(Abrupt::Internal(message.into()))
 }
 
@@ -177,10 +178,15 @@ pub(crate) struct Frame {
     pub(crate) var_env: EnvId,
     /// `with` and catch environments entered and not yet left.
     env_depth: u32,
-    this: Value,
+    pub(crate) this: Value,
     callee: Option<ObjId>,
     /// The object `new` made, returned unless the function returns an object.
     construct: Option<ObjId>,
+    /// `new.target` of a function that was constructed.
+    pub(crate) new_target: Option<ObjId>,
+    /// The environment of a derived class constructor's `this`, function object and
+    /// `new.target`, which `super(…)` reads.
+    pub(crate) this_env: Option<EnvId>,
     completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
     boundary: bool,
@@ -422,14 +428,14 @@ pub(crate) fn random_seed_from(os: Result<u64, getrandom::Error>) -> u64 {
 }
 
 /// The estimated bytes of a binding or property named by `len` code units.
-fn binding_bytes(len: usize) -> usize {
+pub(crate) fn binding_bytes(len: usize) -> usize {
     PROP_BYTES + string_bytes(len)
 }
 
 /// At least the bytes that a function object made from `code` adds to the heap: the function,
 /// its prototype object, their properties and the environment holding a function expression's
 /// own name.
-fn closure_bytes(code: &Code) -> usize {
+pub(crate) fn closure_bytes(code: &Code) -> usize {
     let props = if code.strict { 5 } else { 3 };
     let named = code.self_name.as_ref().map_or(0, |n| ENV_BYTES + binding_bytes(n.len()));
     2 * OBJECT_BYTES + props * binding_bytes("constructor".len()) + named
@@ -445,13 +451,15 @@ fn declaration_bytes(code: &Code) -> usize {
     code.vars.iter().fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
 }
 
-/// A call to a function written in JavaScript, ready to enter.
-struct Entry {
-    callee: ObjId,
-    code: Rc<Code>,
-    env: EnvId,
-    this: Value,
-    args: Vec<Value>,
+/// A call to a function written in JavaScript, ready to enter; `new_target` is set when it is
+/// constructed.
+pub(crate) struct Entry {
+    pub(crate) callee: ObjId,
+    pub(crate) code: Rc<Code>,
+    pub(crate) env: EnvId,
+    pub(crate) this: Value,
+    pub(crate) args: Vec<Value>,
+    pub(crate) new_target: Option<ObjId>,
 }
 
 /// What a call resolved to.
@@ -627,7 +635,7 @@ impl Interp {
         self.frames.last_mut().ok_or_else(|| Abrupt::Internal("no frame".into()))
     }
 
-    fn base(&self) -> usize {
+    pub(crate) fn base(&self) -> usize {
         self.frames.last().map_or(0, |f| f.base)
     }
 
@@ -783,7 +791,8 @@ impl Interp {
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
-            roots.objects.extend(f.callee.iter().chain(f.construct.iter()));
+            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.new_target.iter()));
+            roots.envs.extend(f.this_env);
             roots.envs.push(f.env);
             roots.envs.push(f.var_env);
             roots.codes.push(&f.code);
@@ -940,7 +949,21 @@ impl Interp {
         }
     }
 
-    fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+    fn return_value(&mut self, mut v: Value) -> JsResult<Option<Value>> {
+        if let Some(env) = self.frames.last().filter(|f| f.code.derived).and_then(|f| f.this_env) {
+            match self.derived_result(env, v) {
+                Ok(result) => v = result,
+                Err(e) => {
+                    // The error is thrown as the frame returns: from its last instruction, outside
+                    // every handler of its code, and reported at the return.
+                    self.note_site();
+                    if let Some(f) = self.frames.last_mut() {
+                        f.pc = f.code.ops.len();
+                    }
+                    return Err(e);
+                }
+            }
+        }
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
@@ -961,7 +984,7 @@ impl Interp {
         Ok(())
     }
 
-    fn name(&self, i: u32) -> JsResult<Key> {
+    pub(crate) fn name(&self, i: u32) -> JsResult<Key> {
         self.frame()?.code.names.get(i as usize).cloned().ok_or_else(|| Abrupt::Internal("name out of range".into()))
     }
 
@@ -996,7 +1019,7 @@ impl Interp {
                 self.push(s.map_or(Value::Undefined, Value::String))
             }
             Op::This => {
-                let this = self.frame()?.this.clone();
+                let this = self.this_value()?;
                 self.push(this)
             }
             Op::Pop => self.pop().map(drop),
@@ -1094,6 +1117,27 @@ impl Interp {
                 self.replace(1, Value::String(s))
             }
             Op::TemplateObject(i) => self.op_template_object(i),
+            Op::Pick(n) => {
+                let v = self.peek(n as usize)?;
+                self.push(v)
+            }
+            Op::ClassStart { ctor, heritage } => self.op_class_start(ctor, heritage),
+            Op::ClassMethod { func, kind, is_static } => self.op_class_method(func, kind, is_static),
+            Op::InitMethod { func, kind, name } => self.op_init_method(func, kind, name),
+            Op::SuperRef => self.op_super_ref(),
+            Op::SuperGet => self.op_super_get(false),
+            Op::SuperGetThis => self.op_super_get(true),
+            Op::SuperSet => self.op_super_set(),
+            Op::SuperDup => self.op_dup(3),
+            Op::SuperInc { prefix, dec } => self.op_super_inc(prefix, dec),
+            Op::SuperCtor => self.op_super_ctor(),
+            Op::SuperCall(n) => self.op_super_call(n),
+            Op::SuperCallSpread => {
+                let n = self.unpack_args()?;
+                self.op_super_call(n)
+            }
+            Op::BindThis => self.op_bind_this(),
+            Op::NewTarget => self.op_new_target(),
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
     }
@@ -1197,7 +1241,7 @@ impl Interp {
         Ok(Resolved::Unresolved)
     }
 
-    fn binding_value(&self, env: EnvId, name: &[u16]) -> JsResult<Value> {
+    pub(crate) fn binding_value(&self, env: EnvId, name: &[u16]) -> JsResult<Value> {
         match self.heap.env(env) {
             Some(Env::Decl { bindings, .. }) => Ok(bindings.get(name).map_or(Value::Undefined, |b| b.value.clone())),
             _ => internal("not a declarative environment"),
@@ -1210,7 +1254,7 @@ impl Interp {
     }
 
     /// The binding `name` of the declarative environment `env` is in its temporal dead zone.
-    fn uninitialized(&self, env: EnvId, name: &[u16]) -> bool {
+    pub(crate) fn uninitialized(&self, env: EnvId, name: &[u16]) -> bool {
         matches!(self.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.get(name).is_some_and(|b| b.uninitialized))
     }
 
@@ -2067,10 +2111,13 @@ impl Interp {
     fn op_closure(&mut self, i: u32) -> JsResult<()> {
         let frame = self.frame()?;
         let (env, this) = (frame.env, frame.this.clone());
+        // In an arrow function or a derived class constructor, `this` is already a binding of the
+        // environment chain, which the new function reads as it is when it runs.
+        let this_bound = frame.code.arrow || frame.code.derived;
         let Some(code) = frame.code.functions.get(i as usize).cloned() else { return internal("function out of range") };
         // An arrow function keeps the `this` of the code it is made in (ECMA-262 2015 section
         // 14.2.16), in an environment of its own that only the call reads.
-        let env = if code.arrow && code.uses_this {
+        let env = if code.arrow && code.uses_this && !this_bound {
             self.reserve_heap(ENV_BYTES + binding_bytes(ARROW_THIS.len()))?;
             let mut bindings = PropMap::default();
             bindings.insert(Rc::from(ARROW_THIS), Binding::new(this, false, false));
@@ -2092,12 +2139,13 @@ impl Interp {
         let proto = self.intrinsics.function_proto;
         let length = code.length;
         let strict = code.strict;
-        let arrow = code.arrow;
+        // An arrow function or a class method has no `prototype` and cannot be constructed
+        // (sections 14.2.16 and 14.3.8); a class constructor gets its `prototype` from the class.
+        let plain = !(code.arrow || code.method || code.class_ctor);
         let self_name = code.self_name.clone();
         let f = self.heap.alloc_object(Object::new(Class::Function(Func::Closure { code, env }), Some(proto)));
         self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
-        // An arrow function has no `prototype` and cannot be constructed (section 14.2.16).
-        if arrow {
+        if !plain {
             return Ok(f);
         }
         let p = self.new_object();
@@ -2115,7 +2163,7 @@ impl Interp {
         Ok(f)
     }
 
-    fn env_insert(&mut self, env: EnvId, name: Key, b: Binding) -> JsResult<()> {
+    pub(crate) fn env_insert(&mut self, env: EnvId, name: Key, b: Binding) -> JsResult<()> {
         let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(env) else { return internal("not a declarative environment") };
         let new = !bindings.contains(&name);
         let name_len = name.len();
@@ -2535,7 +2583,7 @@ impl Interp {
         v.as_object().and_then(|o| self.heap.object(o)).is_some_and(|o| matches!(o.class, Class::Function(_)))
     }
 
-    fn func_of(&self, v: &Value) -> Option<Func> {
+    pub(crate) fn func_of(&self, v: &Value) -> Option<Func> {
         match &self.heap.object(v.as_object()?)?.class {
             Class::Function(f) => Some(f.clone()),
             _ => None,
@@ -2548,9 +2596,12 @@ impl Interp {
         loop {
             let Some(func) = self.func_of(&f) else { return Err(self.type_error("the value is not a function")) };
             match func {
+                Func::Closure { code, .. } if code.class_ctor => {
+                    return Err(self.type_error("a class constructor cannot be called without 'new'"));
+                }
                 Func::Closure { code, env } => {
                     let callee = f.as_object().ok_or_else(|| Abrupt::Internal("callee is not an object".into()))?;
-                    return Ok(Prepared::Closure(Entry { callee, code, env, this, args }));
+                    return Ok(Prepared::Closure(Entry { callee, code, env, this, args, new_target: None }));
                 }
                 Func::Native { kind: NativeKind::Call, .. } => {
                     self.use_fuel()?;
@@ -2681,52 +2732,26 @@ impl Interp {
         let n = argc as usize;
         let start =
             self.stack.len().checked_sub(n + 1).filter(|&s| s >= self.base()).ok_or_else(|| Abrupt::Internal("new below the stack".into()))?;
-        let mut f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
-        let mut args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
-        // A bound function constructs its target with its arguments first (section 15.3.4.5.2);
-        // the bound function on the stack keeps them reachable.
-        while let Some(Func::Bound { target, args: bound_args, .. }) = self.func_of(&f) {
-            self.use_fuel()?;
-            let mut all = bound_args.to_vec();
-            all.append(&mut args);
-            args = all;
-            f = Value::Object(target);
-        }
-        match self.func_of(&f) {
-            Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
-            Some(Func::Closure { code, env }) => {
-                let Some(callee) = f.as_object() else { return internal("callee is not an object") };
-                let proto = match self.get_from(callee, &key("prototype"), &f)? {
-                    Value::Object(p) => p,
-                    _ => self.intrinsics.object_proto,
-                };
-                let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
-                self.stack.truncate(start);
-                self.enter_function(Entry { callee, code, env, this: Value::Object(obj), args }, Some(obj), false)
-            }
-            Some(Func::Native { f: native, constructor: true, .. }) => {
-                let held = self.held_bytes;
-                let r = native(self, Value::Undefined, &args, true);
-                self.held_bytes = held;
-                let v = r?;
-                self.stack.truncate(start);
-                self.push(v)
-            }
-            _ => Err(self.type_error("the value is not a constructor")),
-        }
+        let f = self.stack.get(start).cloned().unwrap_or(Value::Undefined);
+        let args: Vec<Value> = self.stack.get(start + 1..).map(<[Value]>::to_vec).unwrap_or_default();
+        self.construct(start, f, args, None)
     }
 
     /// Pushes a frame for a call to a function written in JavaScript, its operands already off
     /// the stack.
-    fn enter_function(&mut self, entry: Entry, construct: Option<ObjId>, boundary: bool) -> JsResult<()> {
-        let Entry { callee, code, env, this, args } = entry;
+    pub(crate) fn enter_function(&mut self, entry: Entry, construct: Option<ObjId>, boundary: bool) -> JsResult<()> {
+        let Entry { callee, code, env, this, args, new_target } = entry;
         if self.frames.len() >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
         let params = code.params.iter().fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
         let arguments =
             if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
-        let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments);
+        let need = declaration_bytes(&code)
+            .saturating_add(ENV_BYTES)
+            .saturating_add(params)
+            .saturating_add(arguments)
+            .saturating_add(crate::class_ops::hidden_bytes(&code));
         if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
             let mark = self.temp_roots.len();
             self.temp_roots.push(Value::Object(callee));
@@ -2738,7 +2763,7 @@ impl Interp {
             reserved?;
         }
         let this = if code.arrow {
-            if code.uses_this { self.binding_value(env, ARROW_THIS)? } else { Value::Undefined }
+            if code.uses_this { self.arrow_this(env) } else { Value::Undefined }
         } else if code.strict {
             this
         } else {
@@ -2749,6 +2774,7 @@ impl Interp {
             }
         };
         let (fenv, var_env) = self.instantiate_function(&code, env, &args, callee)?;
+        let this_env = self.function_bindings(&code, var_env, callee, new_target)?;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,
@@ -2760,6 +2786,8 @@ impl Interp {
             this,
             callee: Some(callee),
             construct,
+            new_target,
+            this_env,
             completion: Value::Undefined,
             boundary,
         });
@@ -3173,6 +3201,8 @@ impl Interp {
             this,
             callee: None,
             construct: None,
+            new_target: None,
+            this_env: None,
             completion: Value::Undefined,
             boundary,
         });

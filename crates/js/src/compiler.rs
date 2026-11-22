@@ -17,8 +17,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, PropertyValue, Stmt, StmtId,
-    TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, ClassDef, ClassKey, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, MethodKind,
+    PropertyValue, Stmt, StmtId, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 use crate::bytecode::{BlockScope, Code, CodeKind, Handler, Op, Source, Template, fallthrough_effect, verify};
 use crate::error::{SyntaxError, TOO_DEEP};
@@ -93,6 +93,7 @@ struct FnCompiler<'a> {
     scopes: Vec<BlockScope>,
     templates: Vec<Template>,
     uses_this: bool,
+    uses_new_target: bool,
     /// The function declarations at the top of the body, which are var-scoped.
     top_funcs: HashSet<StmtId>,
     /// The function declarations a block scope instantiates.
@@ -143,6 +144,7 @@ impl<'a> FnCompiler<'a> {
             scopes: Vec::new(),
             templates: Vec::new(),
             uses_this: false,
+            uses_new_target: false,
             top_funcs: HashSet::new(),
             block_funcs: HashSet::new(),
             annex: HashSet::new(),
@@ -266,7 +268,7 @@ impl<'a> FnCompiler<'a> {
             };
             match stmt {
                 Stmt::Var(decls) => decls.iter().for_each(|d| add_var(&mut out, key_of(&d.name.name))),
-                Stmt::Lexical(..) => {}
+                Stmt::Lexical(..) | Stmt::Class(_) => {}
                 Stmt::FunctionDecl(fid) => {
                     let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
                         return internal("function declaration without a name");
@@ -358,19 +360,20 @@ impl<'a> FnCompiler<'a> {
         Ok(out)
     }
 
-    /// The `let` and `const` names a statement list declares.
+    /// The `let`, `const` and class names a statement list declares.
     fn lexical_names(&self, list: &[StmtId]) -> HashSet<Key> {
         list.iter()
             .filter_map(|&s| match self.ast.stmt(s) {
-                Some(Stmt::Lexical(_, decls)) => Some(decls.iter().map(|d| key_of(&d.name.name))),
+                Some(Stmt::Lexical(_, decls)) => Some(decls.iter().map(|d| key_of(&d.name.name)).collect::<Vec<_>>()),
+                Some(Stmt::Class(class)) => Some(class.name.iter().map(|n| key_of(&n.name)).collect()),
                 _ => None,
             })
             .flatten()
             .collect()
     }
 
-    /// The scope a statement list declares with [`crate::Options::es2015`]: its `let` and
-    /// `const` names, and (`functions`) its function declarations. `None` when it declares none.
+    /// The scope a statement list declares with [`crate::Options::es2015`]: its `let`, `const`
+    /// and class names, and (`functions`) its function declarations. `None` when it declares none.
     fn list_scope(&mut self, list: &[StmtId], functions: bool) -> CResult<Option<u32>> {
         if !self.es2015 {
             return Ok(None);
@@ -379,6 +382,7 @@ impl<'a> FnCompiler<'a> {
         for &s in list {
             match self.ast.stmt(s) {
                 Some(Stmt::Lexical(kind, decls)) => scope.lets.extend(decls.iter().map(|d| (key_of(&d.name.name), *kind == LexKind::Const))),
+                Some(Stmt::Class(class)) => scope.lets.extend(class.name.iter().map(|n| (key_of(&n.name), false))),
                 Some(Stmt::FunctionDecl(fid)) if functions && !self.top_funcs.contains(&s) => {
                     let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
                         return internal("function declaration without a name");
@@ -431,10 +435,11 @@ impl<'a> FnCompiler<'a> {
     /// Compiles a nested function and returns its index in the function table.
     fn function(&mut self, fid: FunctionId) -> CResult<u32> {
         let code = compile_function(self.ast, fid, self.source, self.recursion, true, self.es2015)?;
-        // An arrow function reads the `this` and `arguments` of the code around it.
+        // An arrow function reads the `this`, `arguments` and `new.target` of the code around it.
         if code.arrow {
             self.uses_this |= code.uses_this;
             self.uses_arguments |= code.uses_arguments;
+            self.uses_new_target |= code.uses_new_target;
         }
         self.functions.push(code);
         Ok(u32::try_from(self.functions.len() - 1).unwrap_or(u32::MAX))
@@ -465,6 +470,14 @@ impl<'a> FnCompiler<'a> {
             Stmt::Var(decls) => self.var_decls(decls),
             Stmt::Lexical(_, decls) => self.lexical_decls(decls),
             Stmt::FunctionDecl(fid) => self.function_decl(id, *fid),
+            Stmt::Class(class) => {
+                self.class(class)?;
+                let Some(name) = &class.name else { return internal("class declaration without a name") };
+                self.at(name.span.start);
+                let n = self.var_name(&name.name);
+                self.emit(Op::InitVar(n));
+                Ok(())
+            }
             Stmt::Empty | Stmt::Debugger => Ok(()),
             Stmt::Expr(e) => {
                 self.expr(*e)?;
@@ -820,6 +833,12 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::Rot3);
                 self.emit(Op::SetIndex);
             }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                self.emit(Op::Pick(3));
+                self.emit(Op::SuperSet);
+                self.emit(Op::Pop);
+            }
             _ => {
                 self.expr(target)?;
                 self.emit(Op::Pop);
@@ -858,6 +877,11 @@ impl<'a> FnCompiler<'a> {
                 self.xml_scope_ref(target, *name)?;
                 self.emit(Op::ForEachValue(2));
                 self.emit(Op::SetIndex);
+            }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                self.emit(Op::ForEachValue(3));
+                self.emit(Op::SuperSet);
             }
             _ => {
                 self.expr(target)?;
@@ -1158,6 +1182,28 @@ impl<'a> FnCompiler<'a> {
             Expr::Template { quasis, exprs } => self.template(quasis, exprs)?,
             Expr::TaggedTemplate { .. } => self.chain(id)?,
             Expr::Spread(_) => return internal("spread outside an array literal or argument list"),
+            Expr::Class(class) => self.class(class)?,
+            Expr::SuperMember(_) | Expr::SuperIndex(_) => {
+                self.super_ref(id)?;
+                self.emit(Op::SuperGet);
+            }
+            Expr::SuperCall(args) => {
+                self.emit(Op::SuperCtor);
+                if self.has_spread(args) {
+                    self.spread_args(args)?;
+                    self.at(self.ast.expr_span(id).start);
+                    self.emit(Op::SuperCallSpread);
+                } else {
+                    self.args(args)?;
+                    self.at(self.ast.expr_span(id).start);
+                    self.emit(Op::SuperCall(len_u32(args.len())));
+                }
+                self.emit(Op::BindThis);
+            }
+            Expr::NewTarget => {
+                self.uses_new_target = true;
+                self.emit(Op::NewTarget);
+            }
             Expr::Update { op, prefix, target } => self.update(*op, *prefix, *target)?,
             Expr::Unary { .. } => self.unary(id)?,
             Expr::Binary { .. } | Expr::Logical { .. } => self.binary_chain(id)?,
@@ -1336,6 +1382,70 @@ impl<'a> FnCompiler<'a> {
         len_u32(self.templates.len() - 1)
     }
 
+    /// A class definition (ECMA-262 2015 section 14.5.14), leaving its constructor on the stack. A
+    /// named class binds its name, uninitialized and constant, in a scope of its own around the
+    /// heritage and the methods, and initializes it only after every method is defined (steps 21
+    /// and 23), so a computed key that reads the name throws a `ReferenceError`.
+    fn class(&mut self, class: &ClassDef) -> CResult<()> {
+        self.at(class.span.start);
+        let scope = class.name.as_ref().map(|n| self.push_scope(BlockScope { lets: vec![(key_of(&n.name), true)], funcs: Vec::new() }));
+        if let Some(s) = scope {
+            self.emit(Op::PushBlock(s));
+            self.env_depth += 1;
+        }
+        if let Some(h) = class.heritage {
+            self.expr(h)?;
+        }
+        let ctor = self.function(class.constructor)?;
+        self.at(class.span.start);
+        self.emit(Op::ClassStart { ctor, heritage: class.heritage.is_some() });
+        for element in &class.elements {
+            match &element.key {
+                ClassKey::Fixed(k) => {
+                    let i = self.string(&k.to_utf16());
+                    self.emit(Op::String(i));
+                }
+                ClassKey::Computed(e) => self.expr(*e)?,
+            }
+            let func = self.function(element.function)?;
+            let kind = match element.kind {
+                MethodKind::Method => 0,
+                MethodKind::Get => 1,
+                MethodKind::Set => 2,
+            };
+            self.at(self.ast.function(element.function).map_or(class.span.start, |f| f.span.start));
+            self.emit(Op::ClassMethod { func, kind, is_static: element.is_static });
+        }
+        self.emit(Op::Pop);
+        if let (Some(name), Some(_)) = (&class.name, scope) {
+            self.emit(Op::Dup);
+            let n = self.var_name(&name.name);
+            self.emit(Op::InitVar(n));
+            self.emit(Op::PopEnv);
+            self.env_depth -= 1;
+        }
+        Ok(())
+    }
+
+    /// Pushes `this`, the prototype of the home object and the key of the `super` property `id`.
+    /// `this` is read before the key is evaluated (ECMA-262 2020 section 12.3.5.1).
+    fn super_ref(&mut self, id: ExprId) -> CResult<()> {
+        self.at(self.ast.expr_span(id).start);
+        self.uses_this = true;
+        self.emit(Op::This);
+        match self.ast.expr(id) {
+            Some(Expr::SuperMember(name)) => {
+                let i = self.string(&name.name.encode_utf16().collect::<Vec<u16>>());
+                self.emit(Op::String(i));
+            }
+            Some(Expr::SuperIndex(index)) => self.expr(*index)?,
+            _ => return internal("not a super property"),
+        }
+        self.at(self.ast.expr_span(id).start);
+        self.emit(Op::SuperRef);
+        Ok(())
+    }
+
     fn object_literal(&mut self, props: &[crate::ast::Property]) -> CResult<()> {
         self.emit(Op::NewObject);
         for p in props {
@@ -1344,6 +1454,16 @@ impl<'a> FnCompiler<'a> {
                 PropertyValue::Init(e) => {
                     self.expr(*e)?;
                     self.emit(Op::InitProp(n));
+                }
+                // A method, and with ES2015 an accessor, has the object as its home object.
+                PropertyValue::Method(f) => {
+                    let func = self.function(*f)?;
+                    self.emit(Op::InitMethod { func, kind: 0, name: n });
+                }
+                PropertyValue::Get(f) | PropertyValue::Set(f) if self.ast.function(*f).is_some_and(|f| f.home) => {
+                    let func = self.function(*f)?;
+                    let kind = if matches!(p.value, PropertyValue::Get(_)) { 1 } else { 2 };
+                    self.emit(Op::InitMethod { func, kind, name: n });
                 }
                 PropertyValue::Get(f) => {
                     let i = self.function(*f)?;
@@ -1392,6 +1512,11 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::GetVarThis(n));
                 base_has_this = true;
                 eval_call = name == "eval";
+            }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) if first_is_call => {
+                self.super_ref(cur)?;
+                self.emit(Op::SuperGetThis);
+                base_has_this = true;
             }
             _ => self.expr(cur)?,
         }
@@ -1534,6 +1659,17 @@ impl<'a> FnCompiler<'a> {
                 self.xml_scope_ref(arg, *name)?;
                 self.emit(Op::DeleteIndex);
             }
+            // Deleting a `super` property is a `ReferenceError` once the reference is made
+            // (ECMA-262 2015 section 12.5.4.2); `this` stands in for the result.
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(arg)?;
+                self.emit(Op::Pop);
+                self.emit(Op::Pop);
+                let s = self.string(&"a super property cannot be deleted".encode_utf16().collect::<Vec<u16>>());
+                let depth = self.depth;
+                self.emit(Op::ThrowReferenceError(s));
+                self.depth = depth;
+            }
             _ => {
                 self.expr(arg)?;
                 self.emit(Op::Pop);
@@ -1647,6 +1783,13 @@ impl<'a> FnCompiler<'a> {
                     self.emit(Op::GetIndex);
                 }
             }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                if op.is_some() {
+                    self.emit(Op::SuperDup);
+                    self.emit(Op::SuperGet);
+                }
+            }
             _ => {
                 self.expr(target)?;
                 if op.is_none() {
@@ -1668,6 +1811,7 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::SetMember(n));
             }
             Some(Expr::Index { .. } | Expr::XmlScopeName(_)) => self.emit(Op::SetIndex),
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => self.emit(Op::SuperSet),
             _ => self.throw_invalid_target(),
         }
         Ok(())
@@ -1694,6 +1838,10 @@ impl<'a> FnCompiler<'a> {
             Some(Expr::XmlScopeName(name)) => {
                 self.xml_scope_ref(target, *name)?;
                 self.emit(Op::IncIndex { prefix, dec });
+            }
+            Some(Expr::SuperMember(_) | Expr::SuperIndex(_)) => {
+                self.super_ref(target)?;
+                self.emit(Op::SuperInc { prefix, dec });
             }
             _ => {
                 self.expr(target)?;
@@ -1762,6 +1910,10 @@ impl<'a> FnCompiler<'a> {
             arrow: meta.arrow,
             uses_this: self.uses_this,
             param_init: meta.param_init,
+            class_ctor: meta.class_ctor,
+            derived: meta.derived,
+            method: meta.method,
+            uses_new_target: self.uses_new_target,
         };
         code.max_stack = verify(&code).map_err(CompileFail::Internal)?;
         Ok(Rc::new(code))
@@ -1780,6 +1932,9 @@ struct Meta {
     length: u32,
     arrow: bool,
     param_init: bool,
+    class_ctor: bool,
+    derived: bool,
+    method: bool,
 }
 
 fn len_u32(n: usize) -> u32 {
@@ -1844,6 +1999,9 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         length: len_u32(length),
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
+        class_ctor: f.is_class_constructor(),
+        derived: f.kind == FunctionKind::DerivedConstructor,
+        method: f.home && !f.is_class_constructor(),
     };
     c.finish(hoisted, meta)
 }
