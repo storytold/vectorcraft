@@ -142,15 +142,19 @@ use std::sync::mpsc::Sender;
 /// reference density that display scaling is set against (a CSS inch).
 pub const REFERENCE_PPI: f64 = 96.0;
 
-/// The densities a measured display may have, in screen points per inch. A size outside them is
-/// a wrong report (a projector or television that gives its aspect ratio as its size, or none).
+/// The pixel densities a measured display may have, in pixels per inch, before the display scale
+/// divides them into screen points. A size outside them is a wrong report (a projector or
+/// television that gives its aspect ratio as its size, or none).
 pub const SCREEN_PPI_RANGE: std::ops::RangeInclusive<f64> = 30.0..=1000.0;
 
 /// The screen points one inch takes at 100% zoom: `None` with Preferences › General › Display
 /// Print Size at 100% Zoom off, else the measured density of the display (`screen_ppi`,
-/// [`crate::Services::screen_ppi`]), or [`REFERENCE_PPI`] when the display has none.
+/// [`crate::Services::screen_ppi`]), or [`REFERENCE_PPI`] when the display has none. A measured
+/// density is taken when it is finite and positive: the host checks the display's pixels against
+/// [`SCREEN_PPI_RANGE`] before the display scale divides them into points, so a point density can
+/// fall outside that range.
 pub fn print_ppi(display_print_size: bool, screen_ppi: Option<f64>) -> Option<f64> {
-    display_print_size.then(|| screen_ppi.filter(|p| SCREEN_PPI_RANGE.contains(p)).unwrap_or(REFERENCE_PPI))
+    display_print_size.then(|| screen_ppi.filter(|p| p.is_finite() && *p > 0.0).unwrap_or(REFERENCE_PPI))
 }
 
 /// The preset zoom stops, in percent.
@@ -1646,7 +1650,7 @@ mod tests {
 
     /// #9051: with Display Print Size on, 100% follows the measured density of the display, so an
     /// inch of the document takes as many screen points as an inch of that display holds. A
-    /// density outside the range a display can have counts as no measurement.
+    /// density that is not finite and positive counts as no measurement.
     #[test]
     fn print_size_follows_the_displays_measured_density() {
         assert_eq!(print_ppi(false, Some(127.0)), None, "the preference off ignores the display");
@@ -1654,9 +1658,11 @@ mod tests {
         assert!(zoom_baseline(dense) > zoom_baseline(print_ppi(true, None)), "a denser display than the reference zooms 100% further in");
         assert!(zoom_baseline(sparse) < zoom_baseline(print_ppi(true, None)), "a sparser one zooms it out");
         assert!((zoom_baseline(dense) * 72.0 - 127.0).abs() < 1e-9, "an inch of the document fills an inch of the display");
-        for wrong in [Some(0.0), Some(-5.0), Some(f64::NAN), Some(f64::INFINITY), Some(5000.0), None] {
+        for wrong in [Some(0.0), Some(-5.0), Some(f64::NAN), Some(f64::INFINITY), Some(f64::NEG_INFINITY), None] {
             assert_eq!(print_ppi(true, wrong), print_ppi(true, None), "{wrong:?} is no measurement");
         }
+        assert_eq!(print_ppi(true, Some(23.15)), Some(23.15), "a display at a large scale factor has few points to an inch");
+        assert_eq!(print_ppi(true, Some(1600.0)), Some(1600.0), "and one at a scale below 1 many");
         assert_eq!(zoom_label(zoom_from_display_percent(100.0, dense), dense), "100%");
         let thin = print_ppi(true, Some(40.0));
         assert!(next_zoom(0.0313, false, thin) >= 0.0313, "the last stop down stays in the zoom range");

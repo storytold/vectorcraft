@@ -123,6 +123,7 @@ pub(crate) fn actual_size_zoom(print: Option<f64>) -> f64 {
 pub(super) fn zoom_about(vm: &mut View, rect: egui::Rect, p: Pos2, zoom: f64, ui_zoom: f32) {
     let before = Xf::at(rect, vm, ui_zoom).to_doc(p);
     vm.zoom = zoom.clamp(0.0313, 640.0);
+    vm.fit_zoom = None;
     vm.center += before - Xf::at(rect, vm, ui_zoom).to_doc(p);
 }
 

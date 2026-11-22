@@ -461,6 +461,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = next_zoom(v.zoom, up, print);
+                    v.fit_zoom = None;
                     if let Some(c) = focus {
                         v.center = c;
                     }
@@ -479,6 +480,8 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             match app.view_mut() {
                 Some(v) => {
                     v.zoom = z.clamp(0.0313, 640.0);
+                    // A percentage, not a fit: the first reading of the display keeps it.
+                    v.fit_zoom = None;
                     v.fitted = true;
                     if let Some(c) = center {
                         v.center = c;

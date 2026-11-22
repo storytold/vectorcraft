@@ -8674,6 +8674,22 @@ fn actual_size_after_a_fit_of_the_same_zoom_stays_at_100_percent() {
     assert!((now - shown).abs() < 1e-9, "a zoom chosen after the fit keeps its percentage: {shown} → {now}");
 }
 
+/// A percentage set with `view.setZoom` keeps its percentage at the first reading, also when it
+/// gives the view the zoom of the fit made before it.
+#[test]
+fn a_set_zoom_of_the_fits_zoom_keeps_its_percentage_at_the_first_reading() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 300, "height": 100})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0)));
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let fitted = app.view().unwrap().zoom;
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    assert_eq!(app.view().unwrap().zoom, fitted, "100% has the fit's zoom before any reading");
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-9, "the reading keeps 100%: {}", app.view().unwrap().zoom * 72.0);
+}
+
 /// Fit Artboard in Window fits the artboard as a rotated view shows it: at 45° every corner is
 /// on the canvas and one is within the 30-point margin of an edge. At 0° the zoom is unchanged.
 #[test]

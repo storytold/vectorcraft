@@ -191,8 +191,14 @@ impl VectorcraftApp {
         }
         if !keep {
             // While the display is being read, the fit counts from the last reading, as the other
-            // views there do, and the reading keeps its zoom.
-            v.shown_ppi = Some(now);
+            // views there do, and the reading keeps its zoom. A floating window whose display has
+            // not answered keeps counting from the density it was last shown at.
+            match now {
+                crate::ScreenPpi::Unread => {
+                    v.shown_ppi.get_or_insert(now);
+                }
+                read => v.shown_ppi = Some(read),
+            }
             v.fit_unread = reading == crate::ScreenPpi::Unread;
             return;
         }

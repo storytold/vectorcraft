@@ -1331,3 +1331,53 @@ fn a_floating_os_window_takes_the_density_of_the_display_it_is_found_on() {
     take_window_ppi(&mut app, &ctx, ((uid, 1), false), win, &mut found(Some(crate::ScreenPpi::Read(Some(110.0)))));
     assert!((inch(&app) - 127.0).abs() < 1e-9, "drawn in the main window, 100% counts from the main window's display: {}", inch(&app));
 }
+
+/// A fit made while a floating OS window is off every display keeps counting from the density the
+/// window was last shown at, and the reading that follows leaves the fit's zoom alone.
+#[test]
+fn a_fit_made_while_a_floating_window_is_unread_counts_from_its_last_reading() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    let found = |ppi: Option<crate::ScreenPpi>| Shown { ppi, ..Default::default() };
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut found(Some(crate::ScreenPpi::Read(Some(150.0)))));
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut found(None));
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let zoom = app.views[1].zoom;
+    assert_eq!(app.print_ppi_of(Some(win)), Some(150.0), "the fit counts from the last reading");
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut found(Some(crate::ScreenPpi::Read(Some(110.0)))));
+    assert_eq!(app.views[1].zoom, zoom, "the reading leaves the fit alone");
+    assert_eq!(app.print_ppi_of(Some(win)), Some(110.0));
+}
+
+/// A floating OS window whose view still fits it, moved between two displays read before, keeps
+/// fitting it at the zoom the new density gives: the fit this frame keeps is the settled one.
+#[test]
+fn a_fitted_floating_window_moved_to_another_density_keeps_fitting() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut Shown { ppi: Some(crate::ScreenPpi::Read(Some(91.0))), ..Default::default() });
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let (zoom, center) = (app.views[1].zoom, app.views[1].center);
+    let body = egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0));
+    let fit = Some((body.size(), zoom, center));
+    if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == 1) {
+        x.fit = fit;
+    }
+    let mut moved = Shown { ppi: Some(crate::ScreenPpi::Read(Some(150.0))), body: Some(body), fit, ..Default::default() };
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, &mut moved);
+    let v = app.views[1];
+    assert_ne!(v.zoom, zoom, "the move to a denser display keeps the zoom percentage");
+    assert_eq!(moved.fit, Some((body.size(), v.zoom, v.center)), "and the fit kept is the settled zoom");
+}

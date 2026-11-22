@@ -301,19 +301,20 @@ impl Tracker {
 /// The density, in points per inch, of a display `size` physical pixels wide and high, drawn at
 /// `scale` pixels to a point, that the system says is `mm` millimeters wide and high. `None` for a
 /// size that is no display's: zero or less, an aspect ratio given in place of the size (16 × 9,
-/// 160 × 90 and the like), axes whose densities disagree in either orientation, or a density
-/// outside [`vectorcraft_ui_egui::state::SCREEN_PPI_RANGE`]. A display turned a quarter turn may
-/// report the size of its panel upright, so the axes are also tried swapped.
+/// 160 × 90 and the like), axes whose densities disagree in either orientation, or a pixel density
+/// outside [`vectorcraft_ui_egui::state::SCREEN_PPI_RANGE`]. The range applies to the pixels, before
+/// the scale divides them into points. A display turned a quarter turn may report the size of its
+/// panel upright, so the axes are also tried swapped.
 pub(crate) fn points_per_inch(size: PhysicalSize<u32>, scale: f64, mm: [f64; 2]) -> Option<f64> {
     if !(scale.is_finite() && scale > 0.0) || mm.iter().any(|v| !(v.is_finite() && *v > 0.0)) || aspect_as_size(mm) {
         return None;
     }
-    let points = [f64::from(size.width) / scale, f64::from(size.height) / scale];
-    let density = |[w, h]: [f64; 2]| [points[0] / (w / MM_PER_INCH), points[1] / (h / MM_PER_INCH)];
+    let pixels = [f64::from(size.width), f64::from(size.height)];
+    let density = |[w, h]: [f64; 2]| [pixels[0] / (w / MM_PER_INCH), pixels[1] / (h / MM_PER_INCH)];
     let agree = |[x, y]: [f64; 2]| (x - y).abs() <= AXES_AGREE * x.max(y);
     let [x, y] = [density(mm), density([mm[1], mm[0]])].into_iter().find(|d| agree(*d))?;
     let ppi = (x + y) / 2.0;
-    vectorcraft_ui_egui::state::SCREEN_PPI_RANGE.contains(&ppi).then_some(ppi)
+    vectorcraft_ui_egui::state::SCREEN_PPI_RANGE.contains(&ppi).then_some(ppi / scale)
 }
 
 /// Whether `mm` is an aspect ratio that a display's EDID gave in place of its size: 16:9, 16:10
@@ -543,6 +544,17 @@ mod tests {
         assert_eq!(points_per_inch(PhysicalSize::new(1920, 1080), 0.0, [527.0, 296.0]), None, "no scale");
         assert_eq!(points_per_inch(PhysicalSize::new(100, 56), 1.0, [5270.0, 2960.0]), None, "under the range");
         assert_eq!(points_per_inch(PhysicalSize::new(7680, 4320), 1.0, [53.0, 30.0]), None, "over it");
+    }
+
+    /// The range applies to the display's pixels: a 1920 × 1080 display of 527 × 296 mm drawn at
+    /// scale 4 has about 23 points to an inch, which is a real density.
+    #[test]
+    fn a_large_scale_factor_does_not_put_a_display_out_of_range() {
+        let ppi = points_per_inch(PhysicalSize::new(1920, 1080), 4.0, [527.0, 296.0]);
+        let pixels = points_per_inch(PhysicalSize::new(1920, 1080), 1.0, [527.0, 296.0]).unwrap_or(0.0);
+        assert!(ppi.is_some_and(|p| p < 30.0 && (p - pixels / 4.0).abs() < 1e-9), "{ppi:?}");
+        let print = vectorcraft_ui_egui::state::print_ppi(true, ppi);
+        assert_eq!(print, ppi, "Actual Size counts from it, not from 96");
     }
 
     /// A 1920 × 1080 display at scale 1 and position `x`, named `name`.

@@ -650,6 +650,10 @@ fn take_window_ppi(app: &mut VectorcraftApp, ctx: &egui::Context, ((uid, number)
     let size = shown.body.map(|b| b.size());
     let following = view(app, win).is_some_and(|v| v.fitted && shown.fit.is_some_and(|(s, z, c)| Some(s) == size && z == v.zoom && c == v.center));
     app.settle_window_ppi(win, !(following && (first || fitted_now)));
+    // A view that still fits its window keeps fitting it at the zoom the new density gave it.
+    if following && let (Some((s, _, _)), Some(v)) = (shown.fit, view(app, win)) {
+        shown.fit = Some((s, v.zoom, v.center));
+    }
     ctx.request_repaint();
 }
 
