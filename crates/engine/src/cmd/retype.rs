@@ -777,14 +777,22 @@ fn set_apart(t: &TextObject, g: &vectorcraft_text::PositionedGlyph, m: &GlyphMat
 /// The most glyphs [`verified`] measures the tracking of after a split.
 const MEASURE_SPAN: usize = 32;
 
+/// One part of shape `id`, by the glyph it matched (face, glyph, origin, turn and scale): the parts
+/// of a compound path share its id.
+type PartKey = (NodeId, u32, u32, [u64; 4]);
+
+fn part_key(id: NodeId, m: &GlyphMatch) -> PartKey {
+    (id, m.face.id(), m.gid, [m.origin.x.to_bits(), m.origin.y.to_bits(), m.angle.to_bits(), m.scale.to_bits()])
+}
+
 /// `lines` checked against their own layout: a line splits where its type stops drawing the
 /// outlines, and a glyph its type cannot draw even on its own stays an outline (`unmatched`).
-/// `spacing` holds, for a shape read as a combining mark, the other character its shape is.
-/// The glyphs laid out are bounded by a multiple of the number of glyphs.
+/// `spacing` holds, for a part of a shape read as a combining mark, the other character that part
+/// is. The glyphs laid out are bounded by a multiple of the number of glyphs.
 fn verified(
     lines: Vec<Line>,
     system_layout: bool,
-    spacing: &std::collections::HashMap<NodeId, GlyphMatch>,
+    spacing: &std::collections::HashMap<PartKey, GlyphMatch>,
     unmatched: &mut Vec<NodeId>,
 ) -> Vec<Line> {
     // Glyphs laid out in all, at most: past it, the glyphs left unchecked stay outlines.
@@ -808,7 +816,7 @@ fn verified(
         // line with one).
         if l.matches.first().is_some_and(|m| vectorcraft_text::retype::is_combining_mark(m.ch)) {
             let first = l.pieces.first().copied();
-            let alone = first.and_then(|id| spacing.get(&id).map(|m| reposed(&l, id, m)));
+            let alone = first.zip(l.matches.first()).and_then(|(id, mark)| spacing.get(&part_key(id, mark)).map(|m| reposed(&l, id, m)));
             if alone.is_none() {
                 unmatched.extend(first);
             }
@@ -1802,7 +1810,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
         let mut unmatched = vec![];
         // An unmatched shape between glyphs ends the line: the type after it is painted after it.
         let mut open = false;
-        let mut spacing: std::collections::HashMap<NodeId, GlyphMatch> = std::collections::HashMap::new();
+        let mut spacing: std::collections::HashMap<PartKey, GlyphMatch> = std::collections::HashMap::new();
         // How many glyphs each shape is: a shape of several becomes type only when all of them do.
         let mut glyphs_of: std::collections::HashMap<NodeId, usize> = std::collections::HashMap::new();
         for (pc, parts) in pieces.iter().zip(&found) {
@@ -1825,7 +1833,8 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                 };
                 // A part that joined a line, perhaps as a mark, that is also another character, in
                 // that face or else in the face most shapes fit of those it is a character in: the
-                // character, should a split leave the shape first on a line ([`verified`]).
+                // character, should a split leave the part first on a line ([`verified`]). Kept by
+                // the glyph the part joined as, since the parts of a compound path share its id.
                 let is_mark = |m: &GlyphMatch| vectorcraft_text::retype::is_combining_mark(m.ch);
                 if joined
                     && cands.iter().any(is_mark)
@@ -1833,8 +1842,9 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
                         .iter()
                         .find(|m| !is_mark(m))
                         .or_else(|| ms.iter().enumerate().filter(|(_, m)| !is_mark(m)).max_by(ranked).map(|(_, m)| m))
+                    && let Some(at) = lines.last().and_then(|l| l.matches.last())
                 {
-                    spacing.insert(pc.id, m.clone());
+                    spacing.insert(part_key(pc.id, at), m.clone());
                 }
                 if !joined {
                     // A part that is only marks in that face may be another character in a face

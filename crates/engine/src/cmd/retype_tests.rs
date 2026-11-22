@@ -201,6 +201,27 @@ fn a_combining_mark_starts_no_line() {
 }
 
 #[test]
+fn marks_of_one_compound_path_each_become_their_own_character() {
+    // Two marks that are also other characters (dot below, dot above; tilde, small tilde), moved
+    // off their base and made one compound path: each becomes the character its own shape is.
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "x\u{323}\u{303}yz", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    let kids: Vec<u64> = s.doc().unwrap().doc.children(Some(NodeId(g))).unwrap().iter().map(|n| n.id.0).collect();
+    assert_eq!(kids.len(), 5);
+    s.execute("select.set", &json!({"ids": [kids[1], kids[2]]})).unwrap();
+    s.execute("object.move", &json!({"dx": 3, "dy": 0})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["unmatched"], json!([]), "{r}");
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    let mut marks = texts.get(1..3).unwrap_or_default().to_vec();
+    marks.sort_unstable();
+    assert_eq!((texts.first(), texts.get(3), texts.len()), (Some(&"x"), Some(&"yz"), 4), "{r}");
+    assert_eq!(marks, ["\u{2d9}", "\u{2dc}"], "{r}");
+}
+
+#[test]
 fn marks_first_after_a_split_leave_other_lines_their_tracking() {
     // Twenty marks moved off their base, each one first on its line in turn, do not use up the
     // measures of the other lines: the tracked line retyped with them keeps its tracking.
