@@ -31,6 +31,12 @@ pub(super) fn pump(app: &mut VectorcraftApp) {
     super::host::pump(app, &ctx);
 }
 
+/// One frame of the window: the host shows the dialogs and closes the answered ones, then the app's dialog pump runs.
+fn frame(app: &mut VectorcraftApp) {
+    let ctx = ctx_of(app);
+    crate::testing::app_frame(app, &ctx, Default::default());
+}
+
 /// The ids of the open dialogs, the top one last.
 pub(super) fn open_ids(app: &VectorcraftApp) -> Vec<DialogId> {
     host(app, |h| h.open_dialogs()).into_iter().map(|d| d.id).collect()
@@ -72,8 +78,11 @@ fn effect_dialog(app: &VectorcraftApp) -> DialogId {
 fn answer_prompt(app: &mut VectorcraftApp, choice: &str) {
     let prompt = *open_ids(app).last().expect("the Edit or Add New prompt");
     set(app, prompt, "choice", json!(choice));
-    pump(app);
-    pump(app);
+    // The choice is picked, then answered with OK, as `ui.dialog.set` then `ui.dialog.confirm` do.
+    let ctx = ctx_of(app);
+    host(app, |h| h.confirm_by_id(&ctx, prompt));
+    frame(app);
+    frame(app);
 }
 
 #[test]
@@ -95,7 +104,7 @@ fn warp_options_style_orientation_clicks_preview_and_cancel_preserve_redo() {
     for (field, value) in [("bend", -30.0), ("horizontal", 20.0), ("vertical", -15.0)] {
         set(&app, dialog, field, json!(value));
     }
-    pump(&mut app);
+    frame(&mut app);
     let state = app.session.doc().unwrap();
     let effects = &state.doc.node(id).unwrap().appearance.effects;
     assert_eq!(effects.len(), 1);
@@ -135,7 +144,7 @@ fn warp_options_existing_style_edit_keeps_stack_target_visibility_and_history() 
         set(&app, dialog, "style", json!("arcLower"));
         set(&app, dialog, "styleChosen", json!(true));
         set(&app, dialog, "bend", json!(35.0));
-        pump(&mut app);
+        frame(&mut app);
         accept(&mut app, dialog);
         let state = app.session.doc().unwrap();
         let target = item.as_u64().map(|n| n as usize);
@@ -169,6 +178,7 @@ fn warp_dialog_remembers_last_confirmed_sliders() {
         set(&app, first, field, value);
     }
     accept(&mut app, first);
+    frame(&mut app);
     app.run("effect.dialog", json!({"effect": "warp.flag", "item": null})).unwrap();
     let fields = json_fields(&app, effect_dialog(&app));
     assert_eq!(fields["style"], "flag");
@@ -188,7 +198,7 @@ fn make_warp_edit(app: &mut VectorcraftApp, dialog: DialogId, edit: &str) {
         }
         _ => {}
     }
-    pump(app);
+    frame(app);
 }
 
 /// OK or Cancel was answered: the document, the history and Redo as each leaves them.
@@ -256,17 +266,17 @@ fn warp_options_mixed_styles_change_only_after_explicit_style_choice() {
                 // Ordinary Effect menu route: first object's Arc is already present, then Edit.
                 let asked = app.run("effect.dialog", json!({"effect": "warp.arc", "item": item})).unwrap();
                 assert_eq!(asked["pending"], "effectExists");
-                answer_prompt(&mut app, "edit");
+                answer_prompt(&mut app, "proceed");
                 let dialog = effect_dialog(&app);
                 assert_eq!(app.session.doc().unwrap().doc, before, "opening must not broadcast the first target's style");
                 make_warp_edit(&mut app, dialog, edit);
                 assert_eq!(app.session.doc().unwrap().doc, expected, "edit={edit}, item={item}");
                 assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
                 set(&app, dialog, "preview", json!(false));
-                pump(&mut app);
+                frame(&mut app);
                 assert_eq!(app.session.doc().unwrap().doc, before);
                 set(&app, dialog, "preview", json!(true));
-                pump(&mut app);
+                frame(&mut app);
                 assert_eq!(app.session.doc().unwrap().doc, expected, "Style intent survives Preview off/on");
                 if approved {
                     accept(&mut app, dialog);
@@ -299,7 +309,7 @@ fn warp_options_edit_keeps_each_targets_map_version() {
     app.run("select.set", json!({"ids": [first.0, second.0]})).unwrap();
     let asked = app.run("effect.dialog", json!({"effect": "warp.arc"})).unwrap();
     assert_eq!(asked["pending"], "effectExists");
-    answer_prompt(&mut app, "edit");
+    answer_prompt(&mut app, "proceed");
     let dialog = effect_dialog(&app);
     make_warp_edit(&mut app, dialog, "bend");
     accept(&mut app, dialog);

@@ -21,8 +21,10 @@ fn advanced_options_label_and_save_with_the_document() {
     app.run("file.print", json!({})).unwrap();
     pump(&mut app);
     assert_eq!(fields(&app)["tileOrigin"]["placed"], true, "the tool's placement comes in");
-    set(&mut app, "advanced", json!({"printAsBitmap": true, "overprints": "simulate", "flattenerPreset": "High Resolution"}));
-    set(&mut app, "color", json!({"profile": vectorcraft_color::cms::GENERIC_CMYK}));
+    set(&mut app, "advanced.printAsBitmap", json!(true));
+    set(&mut app, "advanced.overprints", json!("simulate"));
+    set(&mut app, "advanced.flattenerPreset", json!("High Resolution"));
+    set(&mut app, "color.profile", json!(vectorcraft_color::cms::GENERIC_CMYK));
     pump(&mut app);
     let mut changed = vec![json!({"option": "advanced.overprints", "value": "simulate"})];
     super::print::labelled(&mut changed);

@@ -279,7 +279,9 @@ fn raster_filter_dialogs_preview_and_apply() {
         assert!(confirm(&mut app));
         let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
         assert_eq!(n.appearance.effects.len(), 1, "{effect}");
-        assert_eq!(n.appearance.effects[0].params[key], v, "{effect}");
+        // Whole numbers are stored as JSON integers: a number compares by value.
+        let stored = &n.appearance.effects[0].params[key];
+        assert_eq!(stored.as_f64().map_or_else(|| stored.clone(), Value::from), v, "{effect}");
     }
     // Fields follow the effect's documented order (its dialog's), not the alphabet.
     let doc = vectorcraft_effects::effect_info("blur.smart").unwrap().params;
@@ -322,7 +324,7 @@ fn scribble_dialog_settings_presets_load_parameters() {
     frame(&mut app, vec![]);
     assert_eq!(num(&app, "spacing"), 2.0, "the preset's values read as the preset");
     assert!(confirm(&mut app));
-    assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["spacing"], json!(2.0));
+    assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params["spacing"].as_f64(), Some(2.0));
 }
 
 #[test]

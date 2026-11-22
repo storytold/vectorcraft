@@ -359,7 +359,7 @@ fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
     }
     h.ok();
     let params = stored(&h, EXTRUDE);
-    assert_eq!((params["depth"].clone(), params["bevelBothSides"].clone(), params["bevel"].clone()), (json!(90.0), json!(false), json!("none")));
+    assert_eq!((params["depth"].as_f64(), params["bevelBothSides"].clone(), params["bevel"].clone()), (Some(90.0), json!(false), json!("none")));
     undo(&h);
     assert_eq!(doc(&h), before);
 }

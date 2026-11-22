@@ -111,15 +111,19 @@ mod tests {
     fn press_ok(app: &mut VectorcraftApp, values: Value) {
         let ctx = app.ui_ctx.clone().unwrap();
         let host = app.dialogs().unwrap();
-        host.with(|h| {
+        let id = host.with(|h| {
             let id = h.get::<HostedParamDialog>().expect("a hosted dialog is open").id();
             for (key, value) in values.as_object().unwrap() {
                 h.set_json_field(&ctx, id, key, value.clone()).unwrap();
             }
-            assert!(h.confirm_by_id(&ctx, id));
+            // A held OK files its answer here (`false`): the first frame runs it, the second closes the dialog.
+            h.confirm_by_id(&ctx, id);
+            id
         });
-        super::super::host::pump(app, &ctx);
-        ctx.run_ui(Default::default(), |ui| host.with(|h| h.run(ui))).textures_delta.clear();
+        for _ in 0..2 {
+            crate::testing::app_frame(app, &ctx, Default::default());
+        }
+        assert!(host.with(|h| h.open_dialogs().iter().all(|d| d.id != id)), "OK closed the dialog");
     }
 
     /// OK opens the chosen type's Brush Options for a new brush, named New <Type> Brush; their OK

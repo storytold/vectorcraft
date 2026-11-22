@@ -90,6 +90,11 @@ pub(super) fn options_of(s: &WebSettings) -> SaveForWebOptions {
     if let Some(o) = v.as_object_mut() {
         o.remove("reduction");
         o.insert("colorTable".into(), serde_json::to_value(table_of(s.reduction)).unwrap_or(Value::Null));
+        // The dialog names JPEG `jpeg` and holds the matte as RGB; it has no None matte, which shows as white.
+        if o.get("format").and_then(Value::as_str) == Some("jpg") {
+            o.insert("format".into(), json!("jpeg"));
+        }
+        o.insert("matte".into(), json!(s.matte_rgb().ok().flatten().unwrap_or([255; 3])));
     }
     serde_json::from_value(v).unwrap_or_default()
 }
@@ -99,6 +104,8 @@ pub(super) fn options_of(s: &WebSettings) -> SaveForWebOptions {
 fn settings_of(options: &SaveForWebOptions, table: &Value, path: Option<&str>) -> Value {
     let mut v = serde_json::to_value(options).unwrap_or(Value::Null);
     if let Some(o) = v.as_object_mut() {
+        let [r, g, b] = options.matte;
+        o.insert("matte".into(), json!(format!("#{r:02x}{g:02x}{b:02x}")));
         o.remove("colorTable");
         o.insert("reduction".into(), json!(reduction_of(options.color_table).id()));
         if !table.is_null() {

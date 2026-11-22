@@ -3,8 +3,8 @@
 //! Advanced and Summary, with a preview of the printed page: the arrows step through the pages,
 //! dragging the art moves its placement on the paper.
 //!
-//! The values are the print settings (`print.setup`'s; sections are objects such as `marks`), so
-//! agents fill the dialog with `ui.dialog.set`. The printer, the copies and the like live in the
+//! The values are the print settings (`print.setup`'s; automation reads a section as an object such as
+//! `marks`), and agents fill the dialog with `ui.dialog.set`, a row at a time by its dotted key (`marks.trim`). The printer, the copies and the like live in the
 //! framework's `Settings`. Print (OK) keeps the settings with the document (`print.setup`) and
 //! prints them (`file.print`); Done only keeps them. The preview, the inks and the Summary come
 //! from `print.preview`: the dialog lays nothing out itself. OK is held until the pump has run the
@@ -186,7 +186,7 @@ fn start(app: &mut VectorcraftApp, mode: PrintMode, fields: DialogFields, preset
         .mode(mode)
         .layout(PrintLayout::Sections)
         .header(header)
-        .json_form(|fields, out| out.extend(form::json_of(&KEYS, fields)))
+        .json_form(|fields, out| out.extend(nested(form::json_of(&KEYS, fields))))
         .check_name(move |name: &str| refusal(&taken, &named, name).map(|_| PresetError::NameTaken))
         .held_ok();
     let id = dialogs.with(|h| h.open(hosted));
@@ -207,12 +207,13 @@ pub(super) fn fields_of(set: &PrintSettings) -> Result<DialogFields, String> {
     }
 }
 
-/// `map`'s values into `out` under dotted keys below `prefix`: an object is opened up unless a row holds it whole.
+/// `map`'s values into `out` under dotted keys below `prefix`: every object is opened up, Scale's too (its row keeps
+/// `scale.width`, `scale.height` and `scale.linked`).
 fn flatten_into(prefix: &str, map: Map<String, Value>, out: &mut Map<String, Value>) {
     for (k, v) in map {
         let key = if prefix.is_empty() { k } else { format!("{prefix}.{k}") };
         match v {
-            Value::Object(inner) if !KEYS.iter().any(|p| p.key == key) => flatten_into(&key, inner, out),
+            Value::Object(inner) => flatten_into(&key, inner, out),
             v => {
                 out.insert(key, v);
             }

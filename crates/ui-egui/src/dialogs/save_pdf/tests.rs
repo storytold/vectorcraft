@@ -120,6 +120,8 @@ fn cancel(app: &mut VectorcraftApp) {
 /// Press a control that has no automation field, by its name.
 fn press(app: &mut VectorcraftApp, name: &str) {
     let ctx = app.ui_ctx.clone().expect("a UI context");
+    // The click finds the control in the accessibility tree of a frame drawn first, as a user presses what the window shows.
+    crate::testing::app_frame(app, &ctx, Default::default());
     let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
     crate::control::handle(app, &ctx, &click);
     // The click is queued as input: the window's frames after it take it and press the control.

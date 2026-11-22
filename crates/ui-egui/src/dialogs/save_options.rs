@@ -208,6 +208,9 @@ struct Menus {
     doc: Option<Arc<Document>>,
 }
 
+/// The rows of artboard tiles the legacy picker shows before it scrolls.
+const BOARD_ROWS: u16 = 3;
+
 /// The numeric options a menu sets are held as the text of their value.
 const NUMBER_MENUS: [&str; 3] = ["version", "level", "artboard"];
 
@@ -229,7 +232,11 @@ fn for_rows(f: &Format, mut values: Map<String, Value>) -> Map<String, Value> {
         let outlines = values.get("outlineText").and_then(Value::as_bool).unwrap_or(false);
         values.insert("outlineText".into(), json!(outlines.to_string()));
     }
-    if board_switch(f).is_some() {
+    if let Some(switch) = board_switch(f) {
+        // The check box holds on or off: an option left unset (EPS's Use Artboards) shows off.
+        if values.get(switch).is_none_or(Value::is_null) {
+            values.insert(switch.into(), json!(false));
+        }
         let all = values.get("range").and_then(Value::as_str).is_none_or(|r| r.trim().is_empty());
         values.insert("all".into(), json!(all));
     }
@@ -411,7 +418,7 @@ fn boards_picker(ui: &mut egui::Ui, fields: &mut DialogFields, menus: &Menus) ->
             }
             // PLAN: assumed TileGrid::show_items(ui, &source, &mut |key, _| tile) as the framework's stories call it;
             // the checks arrive as `CollectionEvent::Item(key, TilePartEvent::Check { .. })` in `response.events`.
-            let grid = TileGrid::new("Artboards").checks(true).show_items(ui, &Boards(n), &mut |i, _| {
+            let grid = TileGrid::new("Artboards").checks(true).max_rows(BOARD_ROWS).show_items(ui, &Boards(n), &mut |i, _| {
                 let on = boards.get(*i).copied().unwrap_or(false);
                 let mut tile = Tile::new(menus.names.get(*i).cloned().unwrap_or_default()).check(if on { ToggleState::On } else { ToggleState::Off });
                 if let Some(file) = files.get(*i).cloned().flatten() {

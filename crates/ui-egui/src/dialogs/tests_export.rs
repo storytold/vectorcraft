@@ -80,8 +80,8 @@ pub(super) fn on_save(answer: impl Fn(&PickRequest) -> Option<String> + 'static)
 /// what waited on them runs.
 pub(super) fn frame(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().expect("a test app has a window");
-    let mut out = ctx.run_ui(Default::default(), |ui| app.ui(ui));
-    out.textures_delta.clear();
+    // The window's pass with the app's frame input, as the hosts run it: what its controls fire reaches the app.
+    crate::testing::part_frame(app, &ctx, Default::default(), |app, ui| app.ui(ui));
     super::host::pump(app, &ctx);
     answer_saves(app);
 }
@@ -272,7 +272,8 @@ fn export_as_with_a_range_then_png_options_writes_one_file_per_artboard() {
 fn a_bad_range_keeps_export_as_open() {
     let (mut app, written) = app(2);
     app.run("file.exportAs", json!({"useArtboards": true, "range": "5"})).unwrap();
-    assert_eq!(fields(&app)["all"], json!(false));
+    // All or Range holds its choice's id.
+    assert_eq!(fields(&app)["all"], json!("false"));
     confirm(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     assert!(written.borrow().is_empty());

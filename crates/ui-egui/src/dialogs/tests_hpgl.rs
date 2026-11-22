@@ -115,7 +115,10 @@ fn bad_hpgl_options_keep_the_dialog_open() {
         };
         assert!(e.contains(want), "{field} {value}: {e}");
         assert_eq!(kind(&app).as_deref(), Some("hpglOptions"));
-        set(&mut app, field, before.unwrap_or_default());
+        // A field the dialog doesn't have was never set: there is nothing to put back.
+        if let Some(before) = before {
+            set(&mut app, field, before);
+        }
     }
     assert!(written.borrow().is_empty());
     assert!(app.ui.hpgl_options.is_null(), "nothing is remembered from a refused OK");
@@ -283,8 +286,10 @@ fn pen_table_starts_from_the_pens_of_what_the_export_plots() {
     let mut selected = fields(&app);
     selected.set("selectedOnly", true);
     assert_eq!(hpgl_options::automatic_pens(&app, &selected, false).unwrap(), ["#0000ff"]);
-    set(&mut app, "useArtboards", json!(true));
-    assert_eq!(seed(&app), on_board);
+    // Use Artboards comes with Export As's fields too: the dialog has no row for it.
+    let mut boards = fields(&app);
+    boards.set("useArtboards", true);
+    assert_eq!(hpgl_options::automatic_pens(&app, &boards, false).unwrap(), on_board);
 }
 
 /// OK after another document has become the active one closes HP-GL Options and writes nothing, so

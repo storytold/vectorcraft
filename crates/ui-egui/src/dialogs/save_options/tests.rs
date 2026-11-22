@@ -88,7 +88,9 @@ fn ok(app: &mut VectorcraftApp) -> bool {
     let (ctx, id) = (app.ui_ctx.clone().unwrap(), top(app));
     let took = host(app, |h| h.confirm_by_id(&ctx, id));
     frame(app);
-    took
+    frame(app);
+    // A held OK reports `false` at the press; the app's answer then closes the dialog.
+    took || host(app, |h| h.open_dialogs().iter().all(|d| d.id != id))
 }
 
 /// Runs the save command `cmd`: its save panel answers in the next frame, and the key of the dialog that follows.
@@ -117,7 +119,8 @@ fn a_formats_rows_and_routing() {
     assert_eq!(labels, ["VectorCraft", "VectorCraft Template", "PDF", "SVG", "SVG Compressed", "PDF-compatible .ai", "EPS"]);
     assert_eq!(picks.borrow()[0].file_name.as_deref(), Some("Untitled-1.vectorcraft"));
     assert!(written.borrow().is_empty(), "nothing is written before OK");
-    set(&mut app, "outlineText", json!(true));
+    // The Font menu holds its entries' ids.
+    set(&mut app, "outlineText", json!("true"));
     assert!(ok(&mut app));
     assert_eq!(open_dialogs(&mut app), 0);
     let (path, bytes) = written.borrow()[0].clone();
@@ -358,7 +361,10 @@ fn save_as_pdf_asks_with_the_save_pdf_dialog_and_remembers_its_options() {
     assert!(open_dialogs(&mut app) == 0 && written.borrow()[1].1.starts_with(b"%PDF-1.5"));
     // Save a Copy as PDF starts from them.
     app.run("file.saveCopy", json!({"format": "pdf"})).unwrap();
-    assert_eq!(dialog(&mut app).text("compatibility"), Some("1.5"));
+    // The save panel answers after the command returns; the dialog opens in the frame after.
+    frame(&mut app);
+    let compatibility = host(&app, |h| h.open_dialogs().pop().and_then(|d| d.fields)).map(|f| f["compatibility"].clone());
+    assert_eq!(compatibility, Some(json!("1.5")));
 }
 
 /// The `%%BoundingBox` line of an EPS file.
@@ -489,8 +495,9 @@ fn native_version_is_a_menu_of_the_versions_vectorcraft_writes() {
     let (mut app, written, _) = desktop("art.vectorcraft");
     assert_eq!(save_as(&mut app, "file.saveAs").as_deref(), Some(KIND));
     assert_eq!(native_version_of(&dialog(&mut app)), vectorcraft_format::VERSION);
-    set(&mut app, "version", json!("2"));
+    // Use Compression takes input only while the version can be compressed: set it first.
     set(&mut app, "compress", json!(true));
+    set(&mut app, "version", json!("2"));
     assert!(uncompressed(&dialog(&mut app)));
     assert!(ok(&mut app), "saved: {}", app.ui.status);
     assert_eq!(open_dialogs(&mut app), 0);

@@ -72,10 +72,10 @@ pub(super) fn set(app: &mut VectorcraftApp, name: &str, value: Value) {
     try_set(app, name, value).unwrap();
 }
 
-/// Runs the frame's dialog work: the answers of the open dialogs reach the app.
+/// One frame of the window: the host shows the dialogs, and the frame's dialog work brings their answers to the app.
 pub(super) fn pump(app: &mut VectorcraftApp) {
     let ctx = ctx(app);
-    crate::dialogs::host::pump(app, &ctx);
+    crate::testing::app_frame(app, &ctx, Default::default());
 }
 
 /// Presses the topmost dialog's default button (Print, or Done when `choice` says so), then runs its answer.
@@ -84,6 +84,8 @@ pub(super) fn confirm(app: &mut VectorcraftApp) {
     let (id, _) = top(app).expect("a dialog is open");
     // A refused answer is read from the dialog staying open.
     let _ = app.dialogs().expect("a window host").with(|host| host.confirm_by_id(&ctx, id));
+    // The held OK is answered in the first frame and the dialog closes in the second.
+    pump(app);
     pump(app);
 }
 
@@ -133,7 +135,7 @@ fn print_sends_every_page_to_the_chosen_printer_and_keeps_the_settings() {
     assert_eq!(fields(&app)["printer"], "Proofer", "the system's default printer");
     set(&mut app, "printer", json!("Office"));
     set(&mut app, "copies", json!(2));
-    set(&mut app, "marks", json!({"trim": true}));
+    set(&mut app, "marks.trim", json!(true));
     let undo = app.session.active().unwrap().history.undo.len();
     confirm(&mut app);
     assert!(!is_open(&app), "Print closes the dialog");
@@ -293,10 +295,11 @@ fn dragging_the_preview_moves_the_placement_on_the_paper() {
         let before = app.session.execute("print.preview", &json!({ "settings": settings })).unwrap();
         let (dx, dy) = (f64::from(dx), f64::from(dy));
         let mut dialog_fields = super::print::fields_of(&serde_json::from_value(settings.clone()).unwrap()).unwrap();
+        let placement = super::print::settings(&dialog_fields)["placement"].clone();
         super::print::move_placement(&mut dialog_fields, &before["sheets"][0], (dx, dy));
         let moved = super::print::settings(&dialog_fields);
         if settings.get("tileOrigin").is_some() {
-            assert_eq!(moved["placement"], Value::Null, "the placement stays");
+            assert_eq!(moved["placement"], placement, "the placement stays");
         }
         let after = app.session.execute("print.preview", &json!({ "settings": moved })).unwrap();
         let (t0, t1) = (&before["sheets"][0]["trim"], &after["sheets"][0]["trim"]);
@@ -382,6 +385,8 @@ fn a_print_preset_keeps_the_scale_link() {
     set(&mut app, "preset", json!("[Default]"));
     pump(&mut app);
     assert_eq!(scale(&app), (100.0, 100.0, true));
+    // Scale takes input only while Scaling is Custom or tiles.
+    set(&mut app, "scaling", json!("custom"));
     set(&mut app, "scale", json!({"width": 20, "height": 60}));
     pump(&mut app);
     assert_eq!(scale(&app), (20.0, 60.0, false));
@@ -396,7 +401,8 @@ fn a_scale_set_through_the_dialog_keeps_the_percentage_it_changes() {
     let (mut app, _) = app();
     app.run("file.print", json!({})).unwrap();
     pump(&mut app);
-    // A new H with the link on: W follows it, and Done saves both.
+    // A new H with the link on: W follows it, and Done saves both. Scale takes input only while Scaling is Custom.
+    set(&mut app, "scaling", json!("custom"));
     set(&mut app, "scale", json!({"width": 100, "height": 250, "linked": true}));
     pump(&mut app);
     set(&mut app, "choice", json!("done"));
@@ -429,7 +435,7 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     app.run("file.print", json!({})).unwrap();
     pump(&mut app);
     set(&mut app, "section", json!("Output"));
-    set(&mut app, "output", json!({"mode": "separations"}));
+    set(&mut app, "output.mode", json!("separations"));
     pump(&mut app);
     let inks = |app: &VectorcraftApp| fields(app)["output"]["inks"].clone();
     // Only the spot ink has the icon.
@@ -440,9 +446,7 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     press(&mut app, "Keep Gold as spot");
     assert_eq!(inks(&app), json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
     // Convert All Spot Colors to Process dims the icon, which keeps its own choice.
-    let mut output = fields(&app)["output"].clone();
-    output["spotsToProcess"] = json!(true);
-    set(&mut app, "output", output);
+    set(&mut app, "output.spotsToProcess", json!(true));
     pump(&mut app);
     call_raw(&mut app, "ui.click", json!({"control": {"name": "Keep Gold as spot"}}));
     pump(&mut app);

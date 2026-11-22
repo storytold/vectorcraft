@@ -416,9 +416,11 @@ mod tests {
             self.frame();
         }
 
+        /// OK: the held OK is answered in the first frame and the dialog closes in the second.
         fn confirm(&mut self) {
             let id = self.id();
             self.app.dialogs().unwrap().with(|h| h.confirm_by_id(&self.ctx, id));
+            self.frame();
             self.frame();
         }
 

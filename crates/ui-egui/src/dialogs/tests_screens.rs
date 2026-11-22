@@ -812,8 +812,8 @@ impl Window {
         self.time += 0.1;
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
         let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| app.ui(ui));
-        out.textures_delta.clear();
+        // The window's frame with the app's frame input, as the hosts run it: the controls' commands reach the app.
+        let out = crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui));
         super::host::pump(app, &ctx);
         out
     }

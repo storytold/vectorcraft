@@ -211,7 +211,14 @@ fn options_or_write(
             svg_options::open_with(app, svg_options::Mode::Export, Some(&path), selection);
             // Export Selection shows no artboard choice: the selection is one page.
             if !selection && let Some(id) = app.export_dialogs.last_id() {
-                let rows = [("useArtboards", json!(use_artboards)), ("allArtboards", json!(all)), ("range", json!(range))];
+                // Each row as the user sets it: All or Range holds its choice's id, and a greyed-out row takes nothing.
+                let mut rows = vec![("useArtboards", json!(use_artboards))];
+                if use_artboards {
+                    rows.push(("allArtboards", json!(all.to_string())));
+                    if !all {
+                        rows.push(("range", json!(range)));
+                    }
+                }
                 export_host::set_fields(app, id, &rows)?;
             }
             Ok(Value::Null)
