@@ -528,10 +528,18 @@ fn a_plug_in_slider_in_the_editor_previews_a_drag_and_keeps_it_as_one_step() {
         }
     }
     assert!(seen.len() > 2 && seen.len() < 15, "the canvas showed {} values in 30 frames: {seen:?}", seen.len());
-    frame(&mut app, vec![button(at(0.85), false)]);
+    // One more move, too soon after the last preview to preview, then the release: the drag keeps
+    // the value it ended on, which the canvas had not shown yet.
+    let nodes = frame(&mut app, vec![egui::Event::PointerMoved(at(0.95))]);
+    let ended = nodes
+        .iter()
+        .find(|(_, n)| n.role() == Role::Slider && n.labelled_by().iter().any(|l| label_of(l).starts_with("Amount")))
+        .and_then(|(_, n)| n.numeric_value())
+        .expect("Amount's slider shows the value the drag reached");
+    assert_ne!(params(&app)["amount"].as_f64(), Some(ended), "the last move previewed at once");
+    frame(&mut app, vec![button(at(0.95), false)]);
     frame(&mut app, vec![]);
-    let kept = params(&app)["amount"].as_f64().unwrap();
-    assert!(kept > 70.0 && kept <= 100.0, "the value the drag ended on: {kept}");
+    assert_eq!(params(&app)["amount"].as_f64(), Some(ended), "the value the drag ended on");
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "the drag is one undo step");
     assert!(!app.session.in_interaction(), "the drag's interaction ended");
     // Count's slider: focused, an arrow moves it by its step of 2, as one more undo step.
@@ -551,6 +559,104 @@ fn a_plug_in_slider_in_the_editor_previews_a_drag_and_keeps_it_as_one_step() {
     assert_eq!(params(&app)["count"], json!(6));
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2);
     app.run("plugin.remove", json!({"id": "test.ui.inlineslider"})).unwrap();
+}
+
+/// A drag on a plug-in slider whose end the editor did not see, because the selection changed
+/// while the button was down, keeps what it previewed as its undo step, ends its interaction and
+/// leaves no value behind: the editor then shows each object's own value, for another object with
+/// the same effect and for the object the drag started on.
+#[test]
+fn a_plug_in_slider_drag_s_value_stays_with_its_drag() {
+    use egui::accesskit::Role;
+    use vectorcraft_plugins::wat as tpl;
+    let params = r#"{"amount":{"type":"number","min":0,"max":100,"default":10,"label":"Amount","widget":"slider"}}"#;
+    let src = tpl::module(&tpl::manifest("test.ui.slideselection", "effect", params), tpl::ECHO, "", 1);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let add = |app: &mut VectorcraftApp, x: f64| {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("effect.apply", json!({"effect": "plugin.test.ui.slideselection"})).unwrap();
+        id
+    };
+    let (a, b) = (add(&mut app, 0.0), add(&mut app, 40.0));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, "ap-fx-open-None-0", true);
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 1.0 / 60.0;
+        let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let amount =
+        |app: &VectorcraftApp, id: u64| app.session.doc().unwrap().doc.node(NodeId(id)).unwrap().appearance.effects[0].params["amount"].as_f64();
+    let slider = |nodes: &[(egui::accesskit::NodeId, egui::accesskit::Node)]| {
+        nodes.iter().find(|(_, n)| n.role() == Role::Slider).and_then(|(_, n)| Some((n.numeric_value()?, n.bounds()?)))
+    };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for (back, name) in [(a, "the object the drag started on"), (b, "another object")] {
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        frame(&mut app, vec![]);
+        let (_, rail) = slider(&frame(&mut app, vec![])).expect("the slider shows");
+        let at = |x: f64| egui::pos2((rail.x0 + x * (rail.x1 - rail.x0)) as f32, ((rail.y0 + rail.y1) / 2.0) as f32);
+        frame(&mut app, vec![egui::Event::PointerMoved(at(0.2))]);
+        frame(&mut app, vec![button(at(0.2), true)]);
+        // The first move previews at once; the next comes too soon and waits.
+        frame(&mut app, vec![egui::Event::PointerMoved(at(0.4))]);
+        let (reached, _) = slider(&frame(&mut app, vec![egui::Event::PointerMoved(at(0.7))])).expect("the slider shows");
+        let previewed = amount(&app, a);
+        assert_ne!(previewed, Some(reached), "the second move previewed at once");
+        assert!(app.session.in_interaction(), "the drag previews");
+        // With the button still down, nothing is selected, and the button comes up off the editor:
+        // the drag keeps what it previewed, and its interaction ends.
+        app.run("select.set", json!({"ids": []})).unwrap();
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![button(at(0.7), false)]);
+        assert!(!app.session.in_interaction(), "{name}: the drag's interaction is still open");
+        assert_eq!(amount(&app, a), previewed, "{name}: the drag did not keep its preview");
+        app.run("select.set", json!({"ids": [back]})).unwrap();
+        frame(&mut app, vec![]);
+        let (shown, _) = slider(&frame(&mut app, vec![])).expect("the slider shows");
+        assert_eq!(Some(shown), amount(&app, back), "{name} shows the drag's value");
+    }
+    // A drag whose interaction another one replaced, of the same name on the same document, leaves
+    // that one open when its row goes.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let (_, rail) = slider(&frame(&mut app, vec![])).expect("the slider shows");
+    let at = |x: f64| egui::pos2((rail.x0 + x * (rail.x1 - rail.x0)) as f32, ((rail.y0 + rail.y1) / 2.0) as f32);
+    frame(&mut app, vec![egui::Event::PointerMoved(at(0.2))]);
+    frame(&mut app, vec![button(at(0.2), true)]);
+    frame(&mut app, vec![egui::Event::PointerMoved(at(0.5))]);
+    assert!(app.session.in_interaction(), "the drag previews");
+    app.session.cancel_interaction().unwrap();
+    app.session.begin_interaction("Effect Options").unwrap();
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![button(at(0.5), false)]);
+    assert!(app.session.in_interaction(), "the other interaction was ended");
+    app.session.cancel_interaction().unwrap();
+    // A drag whose panel closes keeps what it previewed at the end of the first pass that does not
+    // draw the panel, as the app checks after its panels.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::PointerMoved(at(0.2))]);
+    frame(&mut app, vec![button(at(0.2), true)]);
+    frame(&mut app, vec![egui::Event::PointerMoved(at(0.6))]);
+    let previewed = amount(&app, a);
+    assert!(app.session.in_interaction(), "the drag previews");
+    for events in [vec![], vec![button(at(0.6), false)]] {
+        time += 1.0 / 60.0;
+        let input = egui::RawInput { events, time: Some(time), ..Default::default() };
+        let _ = ctx.run_ui(input, |ui| crate::panels::appearance::end_stale_slide(&mut app, ui.ctx()));
+        assert!(!app.session.in_interaction(), "the drag's interaction is still open after the panel closed");
+    }
+    assert_eq!(amount(&app, a), previewed, "the drag did not keep its preview");
+    app.run("plugin.remove", json!({"id": "test.ui.slideselection"})).unwrap();
 }
 
 /// Glass with a loaded texture lists Loaded Texture in its Texture menu, as its dialog does.

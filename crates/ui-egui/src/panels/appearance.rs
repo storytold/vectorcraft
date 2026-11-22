@@ -16,7 +16,7 @@
 //! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
 //! Default (100%, Normal).
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -555,6 +555,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // An empty spacer row at the end of the list.
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
+    end_stale_slide(app, ui.ctx());
     bottom(app, ui, node.as_deref(), sel);
     delete_key(app, ui);
     // A row's popup, beside the panel (in the same window when the panel floats).
@@ -1378,6 +1379,8 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     let params = editor_params(e);
     let mut change: Option<(String, Value)> = None;
     let mut slid: Option<(String, Value, widgets::Live)> = None;
+    // The objects a slider drag edits: the editor shows a drag's value for these alone.
+    let target = app.session.active().map(|d| (d.uid, d.selection.subjects().to_vec()));
     let mut edit = false;
     let built_in = built_in_effect(&e.id);
     // A plug-in effect's parameters are labelled, measured and shown as its manifest says.
@@ -1457,7 +1460,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                     let dragged;
                     let v = match manifest.and_then(|m| m.param(key)).and_then(|p| Some((p, p.ui.slider_range(&p.spec)?))) {
                         Some((p, range)) => {
-                            let (shown, edit) = param_slider_edit(ui, (item, k, key.as_str()), p, v, range);
+                            let (shown, edit) = param_slider_edit(ui, (item, k, key.as_str()), &target, p, v, range);
                             slid = edit.map(|(value, phase)| (key.clone(), value, phase)).or(slid.take());
                             dragged = shown;
                             &dragged
@@ -1513,7 +1516,9 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     }
     if let Some((key, v, phase)) = slid {
         let p = aligned(app, json!({"item": item, "index": k, "params": {key: v}}));
-        super::live_run(app, "Effect Options", "effect.setParams", p, phase);
+        super::live_run(app, SLIDE_LABEL, "effect.setParams", p, phase);
+        let owner = if phase == widgets::Live::Dragging { slide_interaction(app) } else { None };
+        set_pstate(ui.ctx(), SLIDE_OWNER, owner);
     }
     if edit {
         app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
@@ -1526,28 +1531,91 @@ const NUMBER_W: f32 = 70.0;
 /// The narrowest a plug-in parameter's slider gets in [`effect_editor`].
 const SLIDER_MIN_W: f32 = 24.0;
 
+/// The UI pass that last drew a drag on a plug-in parameter's slider in [`effect_editor`] that has
+/// not ended with a value to keep ([`end_stale_slide`]).
+const SLIDE_LIVE: &str = "ap-fx-slide-live";
+
+/// The interaction that a drag on a plug-in parameter's slider in [`effect_editor`] previews in
+/// ([`slide_interaction`]).
+const SLIDE_OWNER: &str = "ap-fx-slide-owner";
+
+/// The undo step a drag on a plug-in parameter's slider in [`effect_editor`] is kept as.
+const SLIDE_LABEL: &str = "Effect Options";
+
+/// An interaction: its document's uid and the selection snapshot it previews from, which each
+/// interaction makes anew when it begins and keeps while it lasts.
+type SlideOwner = (u64, Weak<vectorcraft_doc::Selection>);
+
+/// The interaction open in the active document, when it is one a plug-in parameter's slider starts.
+fn slide_interaction(app: &VectorcraftApp) -> Option<SlideOwner> {
+    let d = app.session.active()?;
+    d.interaction.as_ref().filter(|it| it.label == SLIDE_LABEL).map(|it| (d.uid, Arc::downgrade(&it.selection)))
+}
+
+/// A drag on a plug-in parameter's slider that this pass did not draw (its row closed, the
+/// selection changed so the row is gone, or the panel closed), or that ended with no value to
+/// keep, reports no release: the preview it made in its own interaction is kept as one undo step
+/// and the interaction ends. Any other interaction is left alone. The panel runs this after its
+/// rows, and the app at the end of every pass, after the panels.
+pub(crate) fn end_stale_slide(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if pstate::<Option<u64>>(ctx, SLIDE_LIVE).is_some_and(|pass| pass != root_pass(ctx)) {
+        let owner = pstate::<Option<SlideOwner>>(ctx, SLIDE_OWNER);
+        let ours = match (owner, slide_interaction(app)) {
+            (Some((uid, snapshot)), Some((open, now))) => uid == open && snapshot.ptr_eq(&now),
+            _ => false,
+        };
+        if ours {
+            if let Err(e) = app.session.commit_interaction() {
+                app.status(e.to_string());
+            }
+            app.sync_views();
+        }
+        set_pstate(ctx, SLIDE_LIVE, None::<u64>);
+        set_pstate(ctx, SLIDE_OWNER, None::<SlideOwner>);
+    }
+}
+
+/// The main window's pass in progress. A floating window draws inside it and counts its own
+/// passes, so the slider's marks use this one wherever the panel draws.
+fn root_pass(ctx: &egui::Context) -> u64 {
+    ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT)
+}
+
 /// What a drag on the slider of a plug-in effect's parameter in [`effect_editor`] keeps between
-/// frames: the value it reached, and when it last previewed.
+/// frames: the value it reached, and when it last previewed, for the objects (document and
+/// selection) it edits, as of the UI pass that last drew it.
 #[derive(Clone, Debug, Default)]
 struct ParamSlide {
     value: Option<Value>,
     preview: crate::dialogs::SlidePreview,
+    target: Option<(u64, Vec<NodeId>)>,
+    pass: u64,
 }
 
 /// The slider of plug-in parameter `p` with value `v`, which asks for one, over `range`, in the row
-/// `id` (appearance item, effect index and parameter name) → the value the row's number shows (a
-/// drag's in progress, else `v`) and the edit to run with its phase ([`super::live_run`]): a click
-/// or key as one undo step, and a drag previewed on the canvas about ten times a second
-/// ([`crate::dialogs::SlidePreview`]) and kept as one undo step when it ends.
+/// `id` (appearance item, effect index and parameter name) of the objects `target` (document and
+/// selection) → the value the row's number shows (a drag's in progress, else `v`) and the edit to
+/// run with its phase ([`super::live_run`]): a click or key as one undo step, and a drag previewed
+/// on the canvas about ten times a second ([`crate::dialogs::SlidePreview`]) and kept as one undo
+/// step when it ends. A drag's value is dropped when the selection or the document changes, or
+/// after a pass that did not draw the row, so it never shows on or goes to other objects; a drag in
+/// progress is noted under [`SLIDE_LIVE`] until it ends with a value to keep.
 fn param_slider_edit(
     ui: &mut Ui,
     id: (Option<usize>, usize, &str),
+    target: &Option<(u64, Vec<NodeId>)>,
     p: &vectorcraft_plugins::Param,
     v: &Value,
     range: std::ops::RangeInclusive<f64>,
 ) -> (Value, Option<(Value, widgets::Live)>) {
     let memory = egui::Id::unique(("fx-slide", id));
+    let pass = root_pass(ui.ctx());
     let mut slide: ParamSlide = ui.data(|d| d.get_temp(memory)).unwrap_or_default();
+    if slide.target != *target || slide.pass.saturating_add(1) < pass {
+        slide = ParamSlide::default();
+    }
+    slide.target.clone_from(target);
+    slide.pass = pass;
     let cur = slide.value.clone().unwrap_or_else(|| v.clone());
     // The slider takes the room the row has left after the number field after it, so a narrow
     // panel keeps both in view.
@@ -1565,6 +1633,11 @@ fn param_slider_edit(
     } else {
         new.map(|value| (value, widgets::Live::Released))
     };
+    if matches!(edit, Some((_, widgets::Live::Released))) {
+        set_pstate(ui.ctx(), SLIDE_LIVE, None::<u64>);
+    } else if resp.dragged() {
+        set_pstate(ui.ctx(), SLIDE_LIVE, Some(pass));
+    }
     let shown = slide.value.clone().unwrap_or(cur);
     ui.data_mut(|d| {
         if slide.value.is_some() {
