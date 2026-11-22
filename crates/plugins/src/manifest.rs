@@ -114,6 +114,32 @@ impl Budget {
     }
 }
 
+/// What runs a plug-in's code.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Runtime {
+    /// A WebAssembly module ([`crate::Plugin::load`]); the manifest is the module's `vc_manifest`.
+    #[default]
+    Wasm,
+    /// A JavaScript file run on `vectorcraft-js` ([`crate::js`]): an object filter whose manifest
+    /// gives `"runtime": "js"`.
+    Js,
+}
+
+impl Runtime {
+    pub fn name(self) -> &'static str {
+        match self {
+            Runtime::Wasm => "wasm",
+            Runtime::Js => "js",
+        }
+    }
+
+    /// WebAssembly, which a manifest written back leaves out (`skip_serializing_if`).
+    fn is_wasm(&self) -> bool {
+        *self == Runtime::Wasm
+    }
+}
+
 /// One declared parameter.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -348,6 +374,9 @@ pub struct Manifest {
     /// lists any ([`Manifest::validate`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub command_allowlist: Vec<String>,
+    /// What runs its code: WebAssembly when left out, or `"js"` for a JavaScript filter.
+    #[serde(default, skip_serializing_if = "Runtime::is_wasm")]
+    pub runtime: Runtime,
 }
 
 impl Manifest {
@@ -383,6 +412,7 @@ impl Manifest {
             paint_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
+            runtime: Runtime::Wasm,
         }
     }
 
@@ -440,7 +470,30 @@ impl Manifest {
         }
         self.validate_params()?;
         self.validate_commands()?;
-        self.validate_allowlist()
+        self.validate_allowlist()?;
+        self.validate_runtime()
+    }
+
+    /// A JavaScript plug-in (`"runtime": "js"`) is an object filter, and of the host's permissions
+    /// it lists only `progress`: its realm has no settings, cache or command calls.
+    fn validate_runtime(&self) -> Result<()> {
+        if self.runtime == Runtime::Wasm {
+            return Ok(());
+        }
+        if self.kind != Kind::Filter {
+            let kind = self.kind.name();
+            return Err(Error::Manifest(format!("`runtime` \"js\" is for an object filter (`kind` \"filter\"), not `kind` \"{kind}\"")));
+        }
+        let listed = self.permissions.as_deref().unwrap_or_default();
+        for p in [Permission::Settings, Permission::Cache, Permission::Commands] {
+            if listed.iter().any(|n| n == p.name()) {
+                let name = p.name();
+                return Err(Error::Manifest(format!(
+                    "a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`"
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// `commandAllowlist` lists at most [`MAX_ALLOWED_COMMANDS`] distinct command ids

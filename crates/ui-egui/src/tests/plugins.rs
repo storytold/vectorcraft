@@ -720,3 +720,26 @@ fn installing_a_plugin_that_reports_progress_says_so() {
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
+
+/// File › Open of a JavaScript plug-in's `.vcplugin` installs it with the script beside it. Without
+/// a path (the web file picker), the manifest alone is refused, the error says how the script is
+/// given, and nothing is installed.
+#[test]
+fn opening_a_javascript_manifest_installs_it_with_its_script() {
+    let mut app = app();
+    let id = "test.ui.js.open";
+    let dir = std::env::temp_dir().join(format!("vc-ui-js-open-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = json!({"id": id, "name": "Open JS", "kind": "filter", "runtime": "js", "script": "open.js"}).to_string();
+    let path = dir.join("open.vcplugin");
+    std::fs::write(&path, &manifest).unwrap();
+    std::fs::write(dir.join("open.js"), "function run(input) { return input; }").unwrap();
+    let e = io::open_bytes(&mut app, "open.vcplugin", manifest.as_bytes(), None).unwrap_err();
+    assert!(e.contains(vectorcraft_plugins::js::SOURCE_RULE), "{e}");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    io::open_bytes(&mut app, "open.vcplugin", manifest.as_bytes(), Some(path.display().to_string())).unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(vectorcraft_plugins::registry::get(id).and_then(|p| p.script().map(str::to_string)).as_deref(), Some("open.js"));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}

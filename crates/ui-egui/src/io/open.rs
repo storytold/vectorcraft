@@ -20,9 +20,15 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
 /// [`open_bytes`], a document opening with `document.open`'s params `p`.
 fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let opens = opens_as(name);
-    // A WebAssembly plug-in is installed.
+    // A plug-in is installed: a JavaScript plug-in's manifest by its path, which the script it
+    // names is read beside. Without a path the manifest's bytes alone are refused, since they hold
+    // no script (`vectorcraft_plugins::js::SOURCE_RULE`).
     if opens == Some(OpensAs::Plugin) {
-        let module = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)});
+        let js = vectorcraft_plugins::registry::is_js_package(std::path::Path::new(name));
+        let module = match path.as_deref() {
+            Some(path) if js => json!({ "path": path }),
+            _ => json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}),
+        };
         return install_module(app, module).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::ShortcutSet) {
