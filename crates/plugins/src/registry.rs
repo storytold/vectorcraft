@@ -283,19 +283,6 @@ fn open_module(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     open.open(path)
 }
 
-/// Whether this process may read the file at `path`, checked against its permissions without
-/// opening it. On Unix the check uses the effective user and group; elsewhere it passes.
-#[cfg(all(unix, not(target_arch = "wasm32")))]
-pub fn may_read(path: &std::path::Path) -> std::io::Result<()> {
-    rustix::fs::accessat(rustix::fs::CWD, path, rustix::fs::Access::READ_OK, rustix::fs::AtFlags::EACCESS).map_err(std::io::Error::from)
-}
-
-/// [`may_read`] off Unix: it passes, and a file that can't be read fails when its load reads it.
-#[cfg(all(not(unix), not(target_arch = "wasm32")))]
-pub fn may_read(_path: &std::path::Path) -> std::io::Result<()> {
-    Ok(())
-}
-
 /// The most `.wasm` files one [`load_folder`] reads.
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_FOLDER_FILES: usize = 1000;
@@ -443,6 +430,9 @@ impl FolderLoad {
         use crate::loader::{Job, Loads};
         use crate::safe_mode::{self, Item};
         safe_mode::check()?;
+        // A change made elsewhere once the folder starts being listed is one the load doesn't undo.
+        let mut changes = LoadChanges::default();
+        changes.start();
         let (found, left_out) = folder_files(dir)?;
         let allow = std::sync::Arc::new(allow);
         let mut files = Vec::with_capacity(found.len());
@@ -475,8 +465,6 @@ impl FolderLoad {
             None => Loads::deferred(jobs),
         };
         let report = FolderReport { left_out, ..FolderReport::default() };
-        let mut changes = LoadChanges::default();
-        changes.start();
         Ok(FolderLoad { files, loads, loaded: Default::default(), next: 0, report, changes })
     }
 
@@ -569,6 +557,19 @@ impl FolderLoad {
             }
         }
         installed
+    }
+
+    /// Whether [`FolderLoad::install_ready`] turned off the file of a disabled plug-in it matched by
+    /// id ([`crate::safe_mode::disable_file_of`]) since the list of disabled plug-ins was last saved
+    /// ([`FolderLoad::disabled_saved`]).
+    pub fn disabled_changed(&self) -> bool {
+        self.report.disabled_changed
+    }
+
+    /// The list of disabled plug-ins was saved: [`FolderLoad::disabled_changed`] is false until the
+    /// load changes it again.
+    pub fn disabled_saved(&mut self) {
+        self.report.disabled_changed = false;
     }
 
     /// Drops the loads not taken yet: jobs not started don't start, and running ones are given

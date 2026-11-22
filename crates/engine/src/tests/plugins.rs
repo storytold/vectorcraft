@@ -2107,6 +2107,95 @@ fn unreadable_stored_files_leave_the_store_budget_to_the_others() {
     assert!(vectorcraft_plugins::registry::remove(id));
 }
 
+/// A stored file whose read fails on the worker thread gives back what it took of the bytes the
+/// stored plug-ins may read together, so a module after files that use them all up still installs.
+#[test]
+fn stored_files_whose_reads_fail_leave_the_store_budget_to_the_others() {
+    struct Unhook {
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+    impl Drop for Unhook {
+        fn drop(&mut self) {
+            *crate::store::BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    let id = "test.engine.budget.failed";
+    let (folder, module) = store_with("plugin-budget-failed", id);
+    let len = std::fs::metadata(&module).unwrap().len();
+    // Files sorted before the module, as long as it, that use up the bytes this test's store may read.
+    for n in 0..4 {
+        std::fs::write(folder.0.join(format!("a{n:03}.wasm")), vec![0; len as usize]).unwrap();
+    }
+    crate::store::PLUGIN_STORE_BUDGET.with(|b| b.set(4 * len));
+    let _unhook = Unhook { _lock: STORED_HOOK.lock().unwrap_or_else(|e| e.into_inner()) };
+    // Each of those files goes away as its load starts, so its read fails.
+    let dir = folder.0.clone();
+    *crate::store::BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::sync::Arc::new(move |p: &std::path::Path| {
+        if p.parent() == Some(dir.as_path()) && p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('a')) {
+            let _ = std::fs::remove_file(p);
+        }
+    }));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let installed = vectorcraft_plugins::registry::get(id).is_some();
+    crate::store::PLUGIN_STORE_BUDGET.with(|b| b.set(crate::store::MAX_PLUGIN_STORE));
+    assert!(installed, "the files whose reads failed used up the store's bytes");
+    assert!(vectorcraft_plugins::registry::remove(id));
+}
+
+/// A stored file modified moments ago and replaced after its module loaded, by one of the same
+/// length with the same modified time, is skipped when the loads install: its content no longer
+/// holds the module.
+#[test]
+fn a_stored_file_replaced_with_the_same_stamp_while_it_loaded_is_skipped() {
+    let id = "test.engine.background.replaced";
+    let (folder, path) = store_with("plugin-background-replaced", id);
+    // A modified time ahead of the clock counts as moments ago however long the test takes.
+    let modified = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+    std::fs::File::options().write(true).open(&path).unwrap().set_modified(modified).unwrap();
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    {
+        // Nothing installs while the plug-in changes are held.
+        let _held = crate::cmd::plugin::hold_plugin_changes();
+        let load = s.plugin_loads.front_mut().expect("attaching the store queued a load");
+        while !load.ready() {
+            std::thread::yield_now();
+        }
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes.reverse();
+        std::fs::write(&path, &bytes).unwrap();
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(modified).unwrap();
+    }
+    s.finish_plugin_loads();
+    let installed = vectorcraft_plugins::registry::remove(id);
+    assert!(!installed, "the module installed from a file that no longer holds it");
+}
+
+/// While a session loads the plug-ins folder in the background, another session's `plugin.list`
+/// reports the folder as loading; once the load installs, it reports what loaded.
+#[test]
+fn another_session_lists_a_folder_still_loading_as_loading() {
+    // Other tests' `prefs.set` replaces the folder last loaded, which the process keeps.
+    if !in_own_process("another_session_lists_a_folder_still_loading_as_loading") {
+        return;
+    }
+    let id = "test.engine.listedloading";
+    let (folder, _) = store_with("plugin-listed-loading", id);
+    let mut background = session();
+    background.load_plugins_in_background(true);
+    run(&mut background, "prefs.set", json!({"values": {"pluginsFolder": folder.0.display().to_string()}}));
+    let mut other = session();
+    let listed = run(&mut other, "plugin.list", json!({}));
+    assert_eq!(listed["folder"]["loading"], true, "{listed}");
+    background.finish_plugin_loads();
+    let listed = run(&mut other, "plugin.list", json!({}));
+    assert!(vectorcraft_plugins::registry::remove(id));
+    assert_eq!(listed["folder"]["loaded"], json!([id]), "{listed}");
+    assert!(listed["folder"].get("loading").is_none(), "{listed}");
+}
+
 /// A folder listed while the stored plug-ins still load, in the same session, replaces a stored
 /// plug-in with a module of the same id once it loads, as it does when the loads run one after the
 /// other: what an earlier load of the session installed doesn't count as a change made elsewhere.
@@ -2246,6 +2335,43 @@ fn a_stored_module_without_permissions_ends_its_grant_when_it_installs() {
     s.finish_plugin_loads();
     assert!(vectorcraft_plugins::registry::remove(first));
     assert!(vectorcraft_plugins::registry::remove(later));
+}
+
+/// A grant the load removed for a stored module without permissions doesn't go back for a later
+/// file with the same id when another window or process granted the id since: that grant stays, and
+/// the later module, which it doesn't cover, is skipped.
+#[test]
+fn a_grant_given_elsewhere_since_the_load_removed_one_is_kept() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let id = "test.engine.retire.kept";
+    let folder = crate::tests_links::Folder::new("plugin-retire-kept");
+    std::fs::create_dir_all(&folder.0).unwrap();
+    let empty = json!({"objects": []});
+    let (first, later) = (folder.0.join("a.wasm"), folder.0.join("b.wasm"));
+    std::fs::write(&first, wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    std::fs::write(&later, &approved).unwrap();
+    let grants = folder.0.join("grants.json");
+    let entry = |hash: String| serde_json::to_vec(&json!([{"id": id, "hash": hash, "permissions": ["doc.read"]}])).unwrap();
+    std::fs::write(&grants, entry(sha256_hex(&approved))).unwrap();
+    let held = HeldLoad::new(later.clone());
+    let mut s = session();
+    s.load_plugins_in_background(true);
+    s.attach_plugin_store(folder.0.clone());
+    while vectorcraft_plugins::registry::get(id).is_none() && !held.gave_up() {
+        s.poll_plugin_loads();
+        std::thread::yield_now();
+    }
+    // Another process grants the id for another module while the later file loads.
+    let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [{"path": triangle()}]}));
+    std::fs::write(&grants, entry(sha256_hex(&other))).unwrap();
+    drop(held);
+    s.finish_plugin_loads();
+    let source = vectorcraft_plugins::registry::get(id).and_then(|p| p.source().map(str::to_string));
+    assert!(vectorcraft_plugins::registry::remove(id));
+    let listed: Vec<Value> = serde_json::from_slice(&std::fs::read(&grants).unwrap()).unwrap();
+    assert_eq!(source.as_deref(), Some(first.display().to_string().as_str()), "the later module installed");
+    assert_eq!(listed.iter().map(|e| e["hash"].clone()).collect::<Vec<_>>(), [json!(sha256_hex(&other))], "{listed:?}");
 }
 
 /// A session that waits for its loads and sets the plug-ins folder another session is still

@@ -1180,8 +1180,9 @@ fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending
         return pending(Err(json!({"folder": folder, "error": e})));
     }
     // A file in it may be a link to one elsewhere. Each file is checked again on its worker
-    // thread, in the scope in force here (the automation roots and the script gate).
-    let scope = crate::file_access::ScopeHandle::capture();
+    // thread, in the scope in force here (the automation roots and the script gate), as the
+    // folder itself was.
+    let scope = crate::file_access::ScopeHandle::capture_now();
     let allow = move |f: &std::path::Path| {
         scope.clone().run(|| match f.to_str() {
             Some(f) => crate::file_access::check_read(f),
@@ -1213,6 +1214,10 @@ pub(crate) fn install_folder(s: &mut Session, load: &mut FolderPending, turn: &S
     {
         for id in load.install_ready(s.plugin_folder_approver()) {
             s.attach_plugin_storage(turn, &id);
+        }
+        // A disabled plug-in's file matched by its id is saved in the same turn.
+        if load.disabled_changed() && s.store_disabled_plugins_in(turn) {
+            load.disabled_saved();
         }
     }
     #[cfg(target_arch = "wasm32")]

@@ -240,10 +240,16 @@ fn resolved(scope: Option<Scope>, process: Option<&Arc<AutomationRoots>>) -> Sco
 pub struct ScopeHandle(Option<Scope>, Option<Arc<ScriptGate>>, bool);
 
 impl ScopeHandle {
-    /// The scope of the calling thread. A thread with no scope of its own takes the process's
-    /// roots as they are now ([`confine_process`]), so work captured before the process is confined
-    /// stays unconfined on the thread that runs it.
+    /// The scope of the calling thread.
     pub fn capture() -> Self {
+        Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
+    }
+
+    /// [`ScopeHandle::capture`], except that a thread with no scope of its own takes the process's
+    /// roots as they are now ([`confine_process`]): work captured before the process is confined
+    /// stays unconfined on the thread that runs it, as it would have been had it run on the calling
+    /// thread at once.
+    pub fn capture_now() -> Self {
         let scope = resolved(SCOPE.with(|s| s.borrow().clone()), PROCESS.get());
         Self(Some(scope), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
     }
@@ -1167,23 +1173,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(base);
     }
 
-    /// A scope captured on a thread without one keeps the process's roots as they were then: work
-    /// captured before the process was confined stays unconfined, and work captured after is
-    /// confined.
+    /// Work captured with [`ScopeHandle::capture_now`] before the process is confined stays
+    /// unconfined when it runs after; work captured with [`ScopeHandle::capture`] is confined then.
     #[test]
-    fn a_captured_scope_keeps_the_process_roots_of_its_time() {
-        let (base, roots) = folders("captured");
+    fn a_scope_captured_now_stays_unconfined_after_the_process_is_confined() {
+        if !crate::tests::in_own_process("file_access::tests::a_scope_captured_now_stays_unconfined_after_the_process_is_confined") {
+            return;
+        }
+        let (base, roots) = folders("captured-process");
         let outside = s(base.join("outside/secret.svg"));
-        let before = ScopeHandle(Some(resolved(None, None)), None, false);
-        let after = ScopeHandle(Some(resolved(None, Some(&roots))), None, false);
-        confine(Some(&roots), || {
-            assert_eq!(before.run(|| check_read(&outside)), Ok(()), "captured before the roots were in force");
-        });
-        assert!(after.run(|| check_read(&outside)).is_err(), "captured while the roots were in force");
-        // No test confines the process, so a thread without a scope captures an unconfined one,
-        // which roots put in force later don't narrow.
-        let captured = std::thread::spawn(ScopeHandle::capture).join().unwrap();
-        assert!(matches!(captured.0, Some(Scope::Unconfined)), "{captured:?}");
+        let (now, plain) = std::thread::spawn(|| (ScopeHandle::capture_now(), ScopeHandle::capture())).join().unwrap();
+        assert!(confine_process(roots));
+        assert_eq!(now.run(|| check_read(&outside)), Ok(()), "captured now, before the process was confined");
+        assert!(plain.run(|| check_read(&outside)).is_err(), "captured plainly, run after the process was confined");
+        let later = std::thread::spawn(ScopeHandle::capture_now).join().unwrap();
+        assert!(later.run(|| check_read(&outside)).is_err(), "captured now, after the process was confined");
         let _ = std::fs::remove_dir_all(base);
     }
 

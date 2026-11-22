@@ -66,12 +66,13 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let params = &if params.is_object() { params.clone() } else { json!({}) };
     let (selection, params) = take_selection(params)?;
     let params = &params;
+    // An exporter plug-in, or a live effect's, that the launch is still loading is installed
+    // before the format is looked up and the document drawn.
+    app.session.finish_plugin_loads();
     let f = fileio::writable_format(format, path.as_deref())?;
     // A Shape Builder merge still being computed for a click is exported with the document.
     let r = app.session.finish_tool_edit();
     crate::canvas::apply_requests(app, r);
-    // A live effect whose plug-in the launch is still loading is exported drawn.
-    app.session.finish_plugin_loads();
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;

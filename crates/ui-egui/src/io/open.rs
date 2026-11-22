@@ -353,6 +353,8 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 
 /// File → Open…
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
+    // The picker lists the extensions of the importer plug-ins the launch is still loading too.
+    app.session.finish_plugin_loads();
     if crate::picks::open_async(app) {
         return Ok(());
     }

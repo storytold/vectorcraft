@@ -301,9 +301,9 @@ the suite) keep the agent to the folders you give it:
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
   (also in `plugin.info`) are named by their file name, in the errors too. A plug-in turned off for the next
-  launch (`disabled`, and `pendingItem` and `pendingItems` in `plugin.safeMode`) has a file outside the read roots named by its file
-  name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other listed file has
-  it. In `file.recovery.list` and `file.recovery.restore`, a
+  launch (`disabled`, and `pendingItem` and `pendingItems` in `plugin.safeMode`) has a file outside the read roots
+  named by its file name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other
+  listed file has it. In `file.recovery.list` and `file.recovery.restore`, a
   document's original file in `path` is `null`, and so is the recovery folder in `location` (`file.recovery.save`
   too); the restored documents keep their files. In `scriptReport`, a file the run wrote (`written`) and the
   included file a failed run stopped in (`file`, also in `message` and the run's error lines in `console`) are named
@@ -13279,7 +13279,8 @@ error and changes nothing when an object it would expand holds such an effect, i
 plain symbol instance in a group or layer with a raster effect, since the group's image draws the symbol's art. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
-pendingItem, pendingItems}` (`pendingItems` lists every plug-in the choice names, and `pendingItem` is the first); a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
+pendingItem, pendingItems}` (`pendingItems` lists every plug-in the choice names, and `pendingItem` is the first);
+a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
 off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
 now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
 on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved

@@ -36,10 +36,10 @@ impl VectorcraftApp {
             // An automation request sees every plug-in the launch loads: what it reads or writes
             // (rendered artwork, file formats, effect lists) would otherwise depend on timing. It
             // waits in the queue while the frames install them, so the window keeps drawing; one
-            // its caller gave up meanwhile is dropped below.
+            // its caller gave up meanwhile is dropped below. The frame's poll of the loads asks
+            // for the next frame.
             if self.session.plugins_loading() && !req.given_up() {
                 self.deferred_control = Some(req);
-                ctx.request_repaint();
                 break;
             }
             // Its caller stopped waiting (the app was busy or its window not drawn for too long)
