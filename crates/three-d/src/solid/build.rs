@@ -398,18 +398,16 @@ impl<'a> Builder<'a> {
     /// direction (before rotation) the band faces away from the solid, for orienting normals. For a
     /// mesh the quads take their part, texture coordinates and corner normals from `mesh`.
     pub(super) fn band(&mut self, a: &[V3], b: &[V3], cuts: &[usize], outward: impl Fn(usize) -> V3, mesh: &BandMesh) -> Result<(), String> {
-        self.curved_band(a, b, cuts, outward, None, None, mesh)
+        self.curved_band([a, b], cuts, outward, None, None, mesh)
     }
 
-    /// [`Builder::band`], with `curves` the pieces of curve the rings' edges follow and the
-    /// outlines at `a` and `b`: a quad whose edge is not cut keeps its edges along the profile curved.
+    /// [`Builder::band`] between the partner rings `[a, b]`, with `curves` the pieces of curve the
+    /// rings' edges follow and the outlines at `a` and `b`: a quad whose edge is not cut keeps its edges along the profile curved.
     /// With `side`, each quad carries where its corners lie on the side unrolled flat
     /// ([`Facet::surface`]).
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn curved_band(
         &mut self,
-        a: &[V3],
-        b: &[V3],
+        [a, b]: [&[V3]; 2],
         cuts: &[usize],
         outward: impl Fn(usize) -> V3,
         mut curves: Option<WallCurves>,
@@ -1008,7 +1006,7 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             let normals = rows.get(k).zip(rows.get(k + 1)).map(|(na, nb)| (na.as_slice(), nb.as_slice()));
             let v = [across.get(k).copied().unwrap_or(0.5), across.get(k + 1).copied().unwrap_or(0.5)];
             let mesh = BandMesh { part: part_of(s0, s1), u: &u, v, normals };
-            b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves, side, &mesh)?;
+            b.curved_band([a, c], pieces, |i| outward(ring, i, face), curves, side, &mesh)?;
         }
     }
     b.cells = None;
