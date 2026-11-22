@@ -376,14 +376,17 @@ fn cancel_disabled_ignore_sampler(app: &mut VectorcraftApp, params: &Value) {
     }
 }
 
-/// Also runs when the panel is closed: document changes and tool changes end the pick.
-pub(crate) fn refresh_ignore_sampler(app: &mut VectorcraftApp) {
-    let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return };
+/// Also runs when the panel is closed: document changes and tool changes end the pick. Whether it ended it.
+pub(crate) fn refresh_ignore_sampler(app: &mut VectorcraftApp) -> bool {
+    let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return false };
     if !sampler_valid(app, s) {
         cancel_ignore_sampler(app, true);
     } else if !sampler_tool_active(app, s) {
         cancel_ignore_sampler(app, false);
+    } else {
+        return false;
     }
+    true
 }
 
 /// A stale sampler's click must not become a paint/selection click in the restored tool.

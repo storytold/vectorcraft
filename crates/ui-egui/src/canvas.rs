@@ -81,7 +81,10 @@ pub(crate) fn canvas_id(win: Win) -> egui::Id {
 
 /// Paint the current window's document canvas, or the Home screen, or an empty window.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    crate::panels::image_trace::refresh_ignore_sampler(app);
+    // A press in the frame that ends a stale pick is the pick's, not the restored tool's, whichever of the frame's
+    // passes the tool host gives it in.
+    let ended = crate::panels::image_trace::refresh_ignore_sampler(app);
+    app.ui.trace_pick_stale = (ended || app.ui.trace_pick_stale) && ui.input(|i| i.pointer.primary_pressed());
     // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
     // drawn, so a later press elsewhere does not show the source image.
     if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {

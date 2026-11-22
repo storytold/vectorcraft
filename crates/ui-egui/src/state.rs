@@ -1003,9 +1003,13 @@ pub struct UiState {
     /// The Production Preflight panel's options and recheck cache. Not saved.
     #[serde(skip)]
     pub(crate) preflight_panel: crate::panels::preflight::PreflightPanel,
-    /// How many clicks the Image Trace pick has taken, which offsets the next pick. Not saved.
+    /// The press count of the last press that was no click (an Image Trace pick took it, or it dragged), which offsets
+    /// the presses of its run. Not saved.
     #[serde(skip)]
     pub trace_pick_clicks: u32,
+    /// This frame ended a stale Image Trace pick while the primary button went down: the pick takes that press. Not saved.
+    #[serde(skip)]
+    pub(crate) trace_pick_stale: bool,
     /// Where the canvas's context menu opened (screen points), while it is open. Not saved.
     #[serde(skip)]
     pub context_menu_at: Option<egui::Pos2>,
@@ -1506,6 +1510,7 @@ impl Default for UiState {
             css_properties_panel: Default::default(),
             preflight_panel: Default::default(),
             trace_pick_clicks: 0,
+            trace_pick_stale: false,
             context_menu_at: None,
         }
     }

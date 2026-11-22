@@ -86,8 +86,8 @@ pub(crate) fn pointer_event(kind: PointerKind, pointer: &ToolPointer, cx: &ToolC
     }
 }
 
-/// The clicks of the press run `clicks` counts, not counting the Image Trace pick the run began with: a pick consumed
-/// its press, so the next press is a first click. A run that does not outgrow the pick starts over.
+/// The clicks of the press run `clicks` counts, not counting the press the run began with that was no click: an Image
+/// Trace pick consumed it, or it dragged, so the next press is a first click. A run that does not outgrow it starts over.
 fn run_clicks(app: &mut VectorcraftApp, clicks: u32) -> u32 {
     let picked = app.ui.trace_pick_clicks;
     if clicks > picked {
@@ -178,11 +178,20 @@ impl CanvasTool for SessionTool<'_> {
             }
             return ToolAction::Done;
         }
-        let ev = pointer_event(PointerKind::Down, pointer, cx);
-        let sampler = app.ui.trace_ignore_sampler.is_some() && app.session.tool_id() == "eyedropper" && app.session.lent_tool_id(&ev.mods).is_none();
-        if sampler {
-            // The armed pick takes this press whole: no drag or release follows, and it is not a click of a run.
-            dispatch(&mut app, &ev, self.view);
+        let mut ev = pointer_event(PointerKind::Down, pointer, cx);
+        // Brush Options' Key Color pick samples the click whatever is held: Cmd or Ctrl lends no selection tool.
+        let key_pick = crate::dialogs::brush_art_options::key_color_pick_active(&app);
+        if key_pick {
+            (ev.mods.cmd, ev.mods.ctrl) = (false, false);
+        }
+        let sampler = key_pick
+            || app.ui.trace_ignore_sampler.is_some() && app.session.tool_id() == "eyedropper" && app.session.lent_tool_id(&ev.mods).is_none();
+        if sampler || std::mem::take(&mut app.ui.trace_pick_stale) {
+            // An armed pick takes this press whole, as does the one of the pass that ended a stale pick: no drag or
+            // release follows, and it is not a click of a run.
+            if sampler {
+                dispatch(&mut app, &ev, self.view);
+            }
             app.ui.trace_pick_clicks = pointer.clicks;
             return ToolAction::Done;
         }
@@ -220,6 +229,11 @@ impl CanvasTool for SessionTool<'_> {
         }
         self.app().canvas.grab = None;
         self.send(PointerKind::Up, pointer, cx);
+        if self.app().canvas.last_drag.is_some() {
+            // A press that dragged is no click, and the framework counts presses: the next press starts a new run.
+            self.app().ui.trace_pick_clicks = pointer.clicks;
+            return;
+        }
         let clicks = run_clicks(&mut self.app(), pointer.clicks);
         let follow = match clicks {
             2 => PointerKind::DoubleClick,

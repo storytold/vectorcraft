@@ -18,10 +18,68 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> e
     let raw = RawInput { events, focused: true, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1400.0))), ..Default::default() };
     // `before_input` already begins the host iteration; do not begin a second one.
     craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
-    ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
+    run_ui(app, ctx, raw)
+}
+
+thread_local! {
+    /// The input of the first pass of each frame the last step ran, and the pass the step ended on.
+    static FRAME_INPUT: std::cell::RefCell<Option<(Vec<egui::InputState>, u64)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The pointer moves and button events among `events`.
+fn pointer_events(events: &[Event]) -> usize {
+    events.iter().filter(|event| matches!(event, Event::PointerMoved(_) | Event::PointerButton { .. })).count()
+}
+
+/// One step of the app: the frame of `raw`, then empty frames at its time until all its pointer events arrived. A frame
+/// can take more than one pass, and egui gives the frame's events to its first; the framework gives a pass one press,
+/// as its last pointer event, and holds the events after it for the next frame ("Input pacing", one press per pass).
+fn run_ui(app: &mut VectorcraftApp, ctx: &egui::Context, mut raw: RawInput) -> egui::FullOutput {
+    let (sent, time, screen_rect) = (pointer_events(&raw.events), raw.time, raw.screen_rect);
+    let mut frames = Vec::new();
+    let mut arrived = 0;
+    loop {
+        let mut first = None;
+        let out = ctx.run_ui(raw, |ui| {
+            if first.is_none() {
+                first = Some(ui.ctx().input(Clone::clone));
+            }
+            app.tick(ui.ctx());
+            app.ui(ui);
+        });
+        let first = first.expect("a frame runs a pass");
+        arrived += pointer_events(&first.events);
+        frames.push(first);
+        if arrived >= sent {
+            FRAME_INPUT.with(|input| *input.borrow_mut() = Some((frames, ctx.cumulative_pass_nr())));
+            return out;
+        }
+        assert!(frames.len() < 8, "the framework holds this step's pointer events");
+        let mut out = out;
+        out.textures_delta.clear();
+        craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
+        raw = RawInput { time, focused: true, screen_rect, ..Default::default() };
+    }
+}
+
+/// The last step's frames' input, checked to be read right after the step.
+fn with_frames<R>(ctx: &egui::Context, read: impl FnOnce(&[egui::InputState]) -> R) -> R {
+    FRAME_INPUT.with(|input| {
+        let input = input.borrow();
+        let (frames, pass) = input.as_ref().expect("a frame ran");
+        assert_eq!(*pass, ctx.cumulative_pass_nr(), "read right after the frame");
+        read(frames)
     })
+}
+
+/// Reads egui's input as the last step's events left it: the button held, the pointer's place.
+fn frame_input<R>(ctx: &egui::Context, read: impl FnOnce(&egui::InputState) -> R) -> R {
+    with_frames(ctx, |frames| read(frames.last().expect("a frame ran")))
+}
+
+/// Whether egui saw `event` (a press, release or click) in a frame of the last step.
+fn frame_event(ctx: &egui::Context, event: impl Fn(&egui::InputState) -> bool) -> bool {
+    with_frames(ctx, |frames| frames.iter().any(event))
 }
 
 fn settle(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -425,10 +483,7 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Ve
         ..Default::default()
     };
     craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
-    let mut out = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
+    let mut out = run_ui(app, ctx, raw);
     out.textures_delta.clear();
     assert_eq!(ctx.time(), time, "the real UI frame uses the supplied gesture time");
 }
@@ -437,12 +492,12 @@ fn check_next_ordinary_double_click(app: &mut VectorcraftApp, ctx: &egui::Contex
     let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame_at(app, ctx, next, vec![Event::PointerMoved(at), press(true)]);
     frame_at(app, ctx, next + step, vec![press(false)]);
-    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(!frame_event(ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the next ordinary first click selects the group");
     assert_eq!(app.session.active().unwrap().isolation, None);
     frame_at(app, ctx, next + 3.0 * step, vec![press(true)]);
     frame_at(app, ctx, next + 4.0 * step, vec![press(false)]);
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(frame_event(ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the next ordinary double-click still isolates the group");
 }
 
@@ -475,7 +530,7 @@ fn check_sampler_double_click(sampler: bool) {
     let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame_at(&mut app, &ctx, start, vec![Event::PointerMoved(at), press(true)]);
     frame_at(&mut app, &ctx, start + step, vec![press(false)]);
-    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)), "the first canvas click is single");
+    assert!(!frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)), "the first canvas click is single");
     assert_eq!(app.session.active().unwrap().isolation, None);
 
     if sampler {
@@ -493,7 +548,10 @@ fn check_sampler_double_click(sampler: bool) {
         assert!(app.ui.trace_ignore_sampler.is_none());
         assert_eq!(app.session.active().unwrap().selection, selection, "the second press was consumed");
         frame_at(&mut app, &ctx, start + 4.0 * step, vec![press(false)]);
-        assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)), "egui recognizes the timed release as a double-click");
+        assert!(
+            frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)),
+            "egui recognizes the timed release as a double-click"
+        );
         let state = app.session.active().unwrap();
         assert_eq!(state.isolation, None, "the release of the consumed press must not isolate the group");
         assert_eq!(state.doc, document);
@@ -509,7 +567,7 @@ fn check_sampler_double_click(sampler: bool) {
         assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the ordinary first click really selects the group");
         frame_at(&mut app, &ctx, start + 3.0 * step, vec![press(true)]);
         frame_at(&mut app, &ctx, start + 4.0 * step, vec![press(false)]);
-        assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+        assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
         assert_eq!(app.session.active().unwrap().isolation, Some(group), "the legitimate unarmed double-click isolates the same group");
     }
 }
@@ -565,7 +623,7 @@ fn actual_canvas_keeps_its_displayed_view_while_the_original_pixels_are_sampled(
     assert_eq!(pixel_at(&before, &before_key, control), [255; 4]);
     click_control(&mut app, &ctx, SAMPLE_TIP);
     let (armed, armed_key) = capture_canvas(&mut app, &ctx);
-    assert!(!ctx.input(|i| i.pointer.any_down()), "the button press has ended");
+    assert!(!frame_input(&ctx, |i| i.pointer.any_down()), "the button press has ended");
     assert_eq!(armed_key.trace_source, before_key.trace_source, "arming does not override the existing eye hold or trace View");
     assert_eq!(armed.pixels, before.pixels, "sampling original pixels does not change the displayed tracing result");
     assert_eq!(pixel_at(&armed, &armed_key, point), [0, 0, 0, 255]);
@@ -750,8 +808,8 @@ fn review_gesture_state(app: &VectorcraftApp) -> impl PartialEq + std::fmt::Debu
 fn review_gesture_observation(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool, Vec<NodeId>, Option<NodeId>) {
     let state = app.session.active().unwrap();
     (
-        ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)),
-        ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)),
+        frame_event(ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)),
+        frame_event(ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)),
         state.selection.objects.clone(),
         state.isolation,
     )
@@ -761,13 +819,13 @@ fn review_gesture_ordinary_pair(app: &mut VectorcraftApp, ctx: &egui::Context, f
     let (start, step) = review_gesture_times(ctx);
     review_gesture_press(app, ctx, first, start);
     review_gesture_release(app, ctx, first, start + step);
-    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(!frame_event(ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the ordinary first click selects the group");
     assert_eq!(app.session.active().unwrap().isolation, None);
     review_gesture_press(app, ctx, second, start + 3.0 * step);
     frame_at(app, ctx, start + 3.5 * step, vec![]);
     review_gesture_release(app, ctx, second, start + 4.0 * step);
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(frame_event(ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the ordinary held double-click isolates the group");
 }
 
@@ -793,12 +851,12 @@ fn review_followup_sampler_cancelled_mid_hold_keeps_release_owned() {
     app.run("select.none", json!({})).unwrap();
     let expected = review_gesture_state(&app);
     frame_at(&mut app, &ctx, start + 3.5 * step, vec![]);
-    assert!(ctx.input(|i| i.pointer.primary_down()));
-    assert!(!ctx.input(|i| i.pointer.primary_pressed()));
+    assert!(frame_input(&ctx, |i| i.pointer.primary_down()));
+    assert!(!frame_event(&ctx, |i| i.pointer.primary_pressed()));
     assert_eq!(app.session.tool_id(), "selection");
     assert!(app.ui.trace_ignore_sampler.is_none(), "the held frame cancelled the invalid binding");
     review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(review_gesture_state(&app), expected, "a mid-hold cancellation must retain ownership through release");
     assert_eq!(app.session.tool_id(), "selection");
 }
@@ -817,7 +875,7 @@ fn review_followup_consumed_prefix_keeps_two_fresh_clicks_single_then_double() {
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     review_gesture_release(&mut app, &ctx, at, start + step);
-    assert!(!ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(!frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(review_gesture_state(&app), expected, "the single stale prefix itself is consumed");
     assert_eq!(app.session.tool_id(), "selection");
 
@@ -903,7 +961,7 @@ fn review_followup_valid_sampler_down_completes_without_lending_its_release() {
     assert!(app.ui.trace_ignore_sampler.is_none());
     assert_eq!(review_gesture_state(&app), expected, "Preview off sampling changes only the panel draft");
     review_gesture_release(&mut app, &ctx, hit, start + 4.0 * step);
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
     assert_eq!(review_gesture_state(&app), expected, "a completed sampler still owns its matching release");
     assert_eq!(app.session.tool_id(), "selection");
     // A fix that merely cancels the valid Down must not pass without accepting its actual color.
@@ -933,17 +991,22 @@ fn review_preset_checkbox(app: &mut VectorcraftApp, ctx: &egui::Context, label: 
 }
 
 fn review_preset_assert_shown(app: &mut VectorcraftApp, ctx: &egui::Context, preset: &str) {
-    fn contains(shape: &egui::Shape, text: &str) -> bool {
+    fn texts(shape: &egui::Shape, out: &mut Vec<String>) {
         match shape {
-            egui::Shape::Text(drawn) => drawn.galley.text() == text,
-            egui::Shape::Vec(shapes) => shapes.iter().any(|shape| contains(shape, text)),
-            _ => false,
+            egui::Shape::Text(drawn) => out.push(drawn.galley.text().to_string()),
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| texts(shape, out)),
+            _ => {}
         }
     }
     let mut output = frame(app, ctx, vec![]);
-    let shown = output.shapes.iter().any(|clipped| contains(&clipped.shape, preset));
+    let mut shown = Vec::new();
+    output.shapes.iter().for_each(|clipped| texts(&clipped.shape, &mut shown));
     output.textures_delta.clear();
-    assert!(shown, "fixture: the real Preset control must show {preset}");
+    let word = preset.split(' ').next().unwrap_or(preset);
+    let near: Vec<&String> = shown.iter().filter(|text| text.contains(word)).collect();
+    // The framework's preset row marks a built-in preset after its name (ui-patterns `namedPresetRow.builtIn`).
+    let built_in = format!("{preset} (built-in)");
+    assert!(shown.iter().any(|text| *text == preset || *text == built_in), "fixture: the real Preset control must show {preset}; shown: {near:?}");
 }
 
 fn review_preset_click_opaque_source(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -1058,13 +1121,13 @@ fn review_followup_release_position_survives_a_later_hover_move() {
             Event::PointerMoved(hover),
         ],
     );
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
-    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(hover));
+    assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(frame_input(&ctx, |i| i.pointer.interact_pos()), Some(hover));
     assert_eq!(app.session.active().unwrap().selection.objects, vec![group]);
     assert_eq!(app.session.active().unwrap().isolation, None, "the first fresh click remains single");
     review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
     review_gesture_release(&mut app, &ctx, at, start + 7.0 * step);
-    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the fresh pair uses release positions, not subsequent hover positions");
 }
 
@@ -1081,13 +1144,13 @@ fn review_596866_owned_release_then_press(coalesced: bool) {
     review_gesture_press(&mut app, &ctx, at, start);
     assert_eq!(app.session.tool_id(), "selection");
     assert!(app.ui.trace_ignore_sampler.is_none());
-    assert!(ctx.input(|i| i.pointer.primary_down()));
+    assert!(frame_input(&ctx, |i| i.pointer.primary_down()));
     let document = app.session.active().unwrap().doc.clone();
     let paint = app.session.paint.clone();
     let history = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().history.redo.len());
     if coalesced {
         frame_at(&mut app, &ctx, start + step, vec![review_596866_button(at, false), review_596866_button(at, true)]);
-        assert!(ctx.input(|i| i.pointer.primary_released() && i.pointer.primary_pressed() && i.pointer.primary_down()));
+        assert!(frame_input(&ctx, |i| i.pointer.primary_released() && i.pointer.primary_pressed() && i.pointer.primary_down()));
     } else {
         review_gesture_release(&mut app, &ctx, at, start + step);
         assert_eq!(app.session.active().unwrap().selection.objects, Vec::<NodeId>::new(), "CONTROL: the owned Up remains consumed");
@@ -1140,8 +1203,8 @@ fn review_596866_second_corrected_release_uses_its_release_position() {
     assert_eq!(app.session.active().unwrap().isolation, None, "the first fresh click is single");
     review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
     frame_at(&mut app, &ctx, start + 7.0 * step, vec![review_596866_button(at, false), Event::PointerMoved(hover)]);
-    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
-    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(hover));
+    assert!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert_eq!(frame_input(&ctx, |i| i.pointer.interact_pos()), Some(hover));
     assert_eq!(
         app.session.active().unwrap().isolation,
         Some(group),
@@ -1290,16 +1353,21 @@ fn review_596866_coalesced_fresh_suffix(dragged: bool) {
     let (start, step) = review_gesture_times(&ctx);
     review_gesture_press(&mut app, &ctx, at, start);
     assert_eq!(app.session.tool_id(), "selection");
-    assert!(app.ui.trace_ignore_sampler.is_none() && ctx.input(|i| i.pointer.primary_down()));
+    assert!(app.ui.trace_ignore_sampler.is_none() && frame_input(&ctx, |i| i.pointer.primary_down()));
     let mut events = vec![review_596866_button(at, false), review_596866_button(at, true)];
     if dragged {
         events.extend([Event::PointerMoved(away), Event::PointerMoved(at)]);
     }
     events.push(review_596866_button(at, false));
     frame_at(&mut app, &ctx, start + step, events);
-    assert!(ctx.input(|i| i.pointer.primary_pressed() && i.pointer.primary_released() && !i.pointer.primary_down()));
-    assert!(ctx.input(|i| i.pointer.button_clicked(PointerButton::Primary)), "the old owned release really contributed a raw click");
-    assert_eq!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)), !dragged, "only the valid fresh suffix is a second raw click");
+    assert!(frame_event(&ctx, |i| i.pointer.primary_pressed()) && frame_event(&ctx, |i| i.pointer.primary_released()));
+    assert!(!frame_input(&ctx, |i| i.pointer.primary_down()));
+    assert!(frame_event(&ctx, |i| i.pointer.button_clicked(PointerButton::Primary)), "the old owned release really contributed a raw click");
+    assert_eq!(
+        frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)),
+        !dragged,
+        "only the valid fresh suffix is a second raw click"
+    );
     assert_eq!(app.session.active().unwrap().selection.objects, vec![group], "the fresh Down still selects the group");
     assert_eq!(app.session.active().unwrap().isolation, None, "neither the first fresh click nor an out-and-back drag may isolate");
     // The ordinary tool receives its Up in the next empty frame; no document/history oracle
@@ -1309,13 +1377,13 @@ fn review_596866_coalesced_fresh_suffix(dragged: bool) {
     review_gesture_press(&mut app, &ctx, at, start + 3.0 * step);
     review_gesture_release(&mut app, &ctx, at, start + 4.0 * step);
     if dragged {
-        assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
+        assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
         assert_eq!(app.session.active().unwrap().selection.objects, vec![group]);
         assert_eq!(app.session.active().unwrap().isolation, None, "the invalid suffix must not advance ordinary click history");
         review_gesture_press(&mut app, &ctx, at, start + 6.0 * step);
         review_gesture_release(&mut app, &ctx, at, start + 7.0 * step);
     }
-    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the second qualifying ordinary click still isolates: dragged={dragged}");
 }
 
@@ -1359,7 +1427,7 @@ fn review_597048_down_pixel(later_move: bool) {
         events.push(Event::PointerMoved(hover));
     }
     frame(&mut app, &ctx, events).textures_delta.clear();
-    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(if later_move { hover } else { pressed }));
+    assert_eq!(frame_input(&ctx, |i| i.pointer.interact_pos()), Some(if later_move { hover } else { pressed }));
     assert_eq!(app.session.tool_id(), "selection");
     assert!(app.ui.trace_ignore_sampler.is_none());
     assert_eq!(review_gesture_state(&app), expected, "Preview off stores a panel draft only");
@@ -1400,13 +1468,13 @@ fn review_597048_coalesced_pair(sampler_prefix: bool) {
             review_596866_button(at, false),
         ],
     );
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
-    assert_eq!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)), sampler_prefix);
+    assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert_eq!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)), sampler_prefix);
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "two ordinary clicks isolate after an earlier-frame prefix");
     app.run("object.exitIsolation", json!({"all": true})).unwrap();
     review_gesture_press(&mut app, &ctx, at, start + 5.0 * step);
     review_gesture_release(&mut app, &ctx, at, start + 6.0 * step);
-    assert!(ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)));
+    assert!(frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)));
     assert_eq!(app.session.active().unwrap().isolation, None, "the next ordinary Triple must not inherit a corrected Double");
 }
 
@@ -1444,8 +1512,8 @@ fn review_597048_a_later_drag_release_does_not_replace_a_qualified_double_click(
             review_596866_button(away, false),
         ],
     );
-    assert!(ctx.input(|i| i.pointer.button_double_clicked(PointerButton::Primary)));
-    assert!(!ctx.input(|i| i.pointer.button_triple_clicked(PointerButton::Primary)), "the out-of-slop drag is not a third click");
-    assert_eq!(ctx.input(|i| i.pointer.interact_pos()), Some(away));
+    assert!(frame_event(&ctx, |i| i.pointer.button_double_clicked(PointerButton::Primary)));
+    assert!(!frame_event(&ctx, |i| i.pointer.button_triple_clicked(PointerButton::Primary)), "the out-of-slop drag is not a third click");
+    assert_eq!(frame_input(&ctx, |i| i.pointer.interact_pos()), Some(away));
     assert_eq!(app.session.active().unwrap().isolation, Some(group), "the qualified Double belongs to the earlier group release");
 }

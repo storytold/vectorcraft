@@ -809,7 +809,7 @@ fn key_color_owner_valid(app: &VectorcraftApp) -> bool {
 }
 
 /// Whether the Eyedropper tool still samples for the pick.
-fn key_color_pick_active(app: &VectorcraftApp) -> bool {
+pub(crate) fn key_color_pick_active(app: &VectorcraftApp) -> bool {
     key_color_owner_valid(app) && app.session.tool_id() == "eyedropper" && app.session.tool_options()["brushKeyColor"] == true
 }
 
