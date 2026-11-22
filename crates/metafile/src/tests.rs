@@ -342,7 +342,7 @@ fn the_pieces_of_a_distorted_image_store_only_the_pixels_they_show() {
         })
         .collect();
     let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
-    let parts: Vec<(&crate::dib::Rgba, Affine)> = ops
+    let parts: Vec<(&craft_metafile::write::Image, Affine)> = ops
         .iter()
         .filter_map(|o| match o {
             crate::scene::Op::Image { image, xf, .. } => Some((&**image, *xf)),
@@ -355,12 +355,12 @@ fn the_pieces_of_a_distorted_image_store_only_the_pixels_they_show() {
     assert!(stored * 4 < 64 * 64 * parts.len() as u64, "{stored} pixels in {} pieces", parts.len());
     for ((part, xf), full) in parts.iter().zip(&whole) {
         // The part's first pixel names where it starts in the image.
-        let (x0, y0) = (f64::from(part.pixels[0] / 4), f64::from(part.pixels[1] / 4));
+        let (x0, y0) = (f64::from(part.rgba[0] / 4), f64::from(part.rgba[1] / 4));
         let want = *full * Affine::translate((x0, y0));
         assert!(xf.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{xf:?} against {want:?}");
         // Each row runs on from that pixel.
         let last = (part.width as usize - 1) * 4;
-        assert_eq!(f64::from(part.pixels[last] / 4), x0 + f64::from(part.width - 1));
+        assert_eq!(f64::from(part.rgba[last] / 4), x0 + f64::from(part.width - 1));
     }
 }
 
@@ -394,7 +394,7 @@ fn ruby_is_written_with_its_type() {
     let reading = contours(&lay.ruby);
     assert!(reading >= 3, "the reading has ink: {reading}");
     let doc = |ruby: bool| doc_with(100.0, 100.0, vec![Node::new(NodeId(0), NodeKind::Text(Box::new(typed(ruby))))]);
-    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), crate::emf::MOVETOEX);
+    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), 27 /* EMR_MOVETOEX */);
     assert_eq!(moves(&doc(true)), moves(&doc(false)) + reading, "the reading's contours are written");
     assert!(wmf(&doc(true)).bytes.len() > wmf(&doc(false)).bytes.len(), "WMF writes the reading too");
 }
@@ -411,7 +411,6 @@ fn wmf_placeable_header_checksum_and_record_sizes() {
     assert_eq!(u16_at(b, 14), 1440);
     let xor = (0..10).fold(0u16, |a, i| a ^ u16_at(b, 2 * i));
     assert_eq!(u16_at(b, 20), xor, "the checksum");
-    assert_eq!(crate::wmf::checksum(&b[..20]), xor);
     // The WMF header: a memory metafile of 9 words, its size in words, the largest record.
     assert_eq!([u16_at(b, 22), u16_at(b, 24), u16_at(b, 26)], [1, 9, 0x0300]);
     assert_eq!(u32_at(b, 28) as usize * 2, b.len() - 22);
@@ -431,12 +430,12 @@ fn wmf_placeable_header_checksum_and_record_sizes() {
 
 #[test]
 fn wmf_sizes_fit_sixteen_bits() {
-    assert_eq!(crate::wmf::units_per_inch(612.0, 792.0), 1440);
-    let inch = crate::wmf::units_per_inch(3000.0, 1000.0);
-    assert!(inch < 1440 && f64::from(inch) * 3000.0 / 72.0 <= 32767.0);
+    let ordinary = wmf(&doc_with(612.0, 792.0, Vec::new())).bytes;
+    assert_eq!(u16_at(&ordinary, 14), 1440);
     let d = doc_with(3000.0, 1000.0, vec![path(shapes::rectangle(Rect::new(0.0, 0.0, 3000.0, 1000.0)), red(), Paint::None, 0.0)]);
     let b = wmf(&d).bytes;
-    assert_eq!(u16_at(&b, 14), inch);
+    let inch = u16_at(&b, 14);
+    assert!(inch < 1440 && f64::from(inch) * 3000.0 / 72.0 <= 32767.0);
     assert!(u16_at(&b, 10) <= 32767);
 }
 
@@ -483,10 +482,7 @@ fn export_baking_each_region(doc: &Document, region: Rect, kind: Kind) -> Result
     let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     let (ops, mut warnings) = crate::scene::Scene::new(doc, r, kind == Kind::Emf).run();
-    let bytes = match kind {
-        Kind::Emf => crate::emf::write(&ops, r, doc.info_title()),
-        Kind::Wmf => crate::wmf::write(&ops, r, &mut warnings),
-    };
+    let bytes = crate::encode::write(ops, r, kind, doc.info_title(), &mut warnings)?;
     Ok(Output { bytes, warnings })
 }
 
