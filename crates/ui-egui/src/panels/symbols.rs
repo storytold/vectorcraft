@@ -274,6 +274,12 @@ fn selected_instances(app: &mut VectorcraftApp) -> Option<&mut SymbolInstances> 
     app.canvas.symbol_instances.as_mut().map(|(_, found)| found)
 }
 
+/// Walks the selection for its symbol instances unless this document version was walked already, for the readers
+/// that only borrow the app ([`instance_flags`]).
+pub(crate) fn cache_instances(app: &mut VectorcraftApp) {
+    selected_instances(app);
+}
+
 fn has_instances_selected(app: &mut VectorcraftApp) -> bool {
     selected_instances(app).is_some_and(|found| !found.ids.is_empty())
 }
@@ -297,9 +303,7 @@ struct InstanceFlags {
 
 /// [`InstanceFlags`] read without writing the canvas cache: from the cache while it holds the
 /// active document version, else from a walk of the selection.
-// PLAN: A15's `menu_rows(&VectorcraftApp)` and `menu_states(&VectorcraftApp, ..)` cannot fill
-// `CanvasCache::symbol_instances`; they read it while it is fresh (the panel and the Properties
-// panel fill it) and walk the selection otherwise (hub-w2: passing `&mut` would let them fill it).
+/// The menus' rebuild fills the cache first ([`cache_instances`]), so the panel menu's states read it.
 fn instance_flags(app: &VectorcraftApp) -> InstanceFlags {
     let Some(st) = app.session.active() else { return InstanceFlags::default() };
     let walked;

@@ -184,6 +184,8 @@ fn hash_listed_names(ui: &UiState, h: &mut DefaultHasher) {
 }
 
 fn rebuild(app: &mut VectorcraftApp, target: Target) {
+    // The Symbols panel menu's states read the selection's instances from the walk this keeps.
+    crate::panels::symbols::cache_instances(app);
     let listed = Listed::of(app);
     let mut build = Build { app, lang: crate::i18n::current(), states: CommandStates::new(), refs: Vec::new() };
     let menus: Vec<Menu> = menu_tree_named(app.session.prefs.font_names_in_english, &listed)
