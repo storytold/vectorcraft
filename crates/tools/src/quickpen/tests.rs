@@ -1,7 +1,7 @@
 use super::*;
 use crate::testutil::*;
 use vectorcraft_doc::Selection;
-use vectorcraft_geom::{ParamCurve, PathData};
+use vectorcraft_geom::{ParamCurve, PathData, PathSeg};
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -194,6 +194,109 @@ fn the_first_click_starts_a_path() {
     assert!(matches!(&a[0], Action::Exec(c, v) if c == COMMAND && v["start"] == json!([10.0, 10.0]) && v["pieces"] == json!([])), "{a:?}");
     assert_eq!(a[1], Action::Notify("created".into()));
     assert_eq!(t.cursor(&cx, pt(400.0, 400.0), Mods::default()), Cursor::Pen);
+}
+
+/// The circle `arc_circle` gives is the one `append` draws the arc on, for sharp-corner arcs of
+/// less and more than a half circle, flipped, and continuous arcs; a line has none.
+#[test]
+fn the_arc_circle_is_the_circle_the_arc_is_drawn_on() {
+    let line = build(&start(pt(0.0, 0.0)), &[piece(100.0, 0.0, Stroke::Line)], false);
+    let cases = [
+        (start(pt(0.0, 0.0)), Piece { turn: 90.0, ..piece(100.0, 0.0, Stroke::SharpArc) }),
+        (start(pt(0.0, 0.0)), Piece { turn: 270.0, flip: true, ..piece(100.0, 30.0, Stroke::SharpArc) }),
+        (line.clone(), piece(200.0, 100.0, Stroke::ContinuousArc)),
+        (line.clone(), piece(40.0, 60.0, Stroke::ContinuousArc)),
+    ];
+    for (sp, pc) in cases {
+        let arc = arc_circle(&sp, &pc).unwrap();
+        let from = sp.anchors.len() - 1;
+        let mut drawn = sp.clone();
+        append(&mut drawn, &pc);
+        assert!(on_circle(&drawn, from, arc.center, arc.radius), "{pc:?} {arc:?}");
+        assert_eq!(arc.start, sp.anchors.last().unwrap().p);
+    }
+    assert!(arc_circle(&line, &piece(200.0, 100.0, Stroke::Line)).is_none());
+}
+
+/// A continuous arc's end goes to the protractor tick nearest it: on the same circle, where the
+/// sweep is a whole number of 15° steps, so an end that sweeps 61° goes to the drawn 60° tick. A
+/// sharp-corner arc and a sweep that rounds to a whole circle have no tick to go to.
+#[test]
+fn a_continuous_arc_end_goes_to_the_nearest_tick() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let sp = build(&start(pt(0.0, 0.0)), &[piece(100.0, 0.0, Stroke::Line)], false);
+    let half = 30.5f64.to_radians();
+    let to = pt(100.0 + 80.0 * half.cos(), 80.0 * half.sin());
+    let pc = Piece { to, ..piece(0.0, 0.0, Stroke::ContinuousArc) };
+    let arc = arc_circle(&sp, &pc).unwrap();
+    assert!((arc.sweep.to_degrees() - 61.0).abs() < 1e-9, "{arc:?}");
+    let b = tick_end(&sp, &pc).unwrap();
+    let after = arc_circle(&sp, &Piece { to: b, ..pc }).unwrap();
+    assert!((after.sweep.to_degrees() - 60.0).abs() < 1e-9, "{after:?}");
+    assert!(after.center.distance(arc.center) < 1e-9 && (after.radius - arc.radius).abs() < 1e-9, "the same circle");
+    let ticks = protractor(&cx, &arc);
+    let on_a_tick = ticks.segments().any(|seg| (seg.eval(1.0) - seg.eval(0.0)).cross(b - seg.eval(0.0)).abs() < 1e-6);
+    assert!(on_a_tick, "{b:?} lies across a drawn tick");
+    assert!(tick_end(&sp, &Piece { stroke: Stroke::SharpArc, ..pc }).is_none());
+    // Nearly straight behind: the sweep rounds to 360°.
+    assert!(tick_end(&sp, &Piece { to: pt(20.0, 0.5), ..pc }).is_none());
+}
+
+/// An end inside the document's coordinate limit whose tick lies past it has no tick to go to: a
+/// 59° sweep whose 60° tick is 0.4 pt past the limit.
+#[test]
+fn a_tick_past_the_coordinate_limit_is_not_used() {
+    let x = vectorcraft_doc::MAX_COORD - 87.5;
+    let sp = build(&start(pt(x - 100.0, 0.0)), &[piece(x, 0.0, Stroke::Line)], false);
+    let half = 29.5f64.to_radians();
+    let pc = Piece { to: pt(x + 100.0 * half.cos(), 100.0 * half.sin()), ..piece(0.0, 0.0, Stroke::ContinuousArc) };
+    assert!(pc.to.x < vectorcraft_doc::MAX_COORD);
+    assert!(tick_end(&sp, &pc).is_none());
+    let inside = Piece { to: pt(pc.to.x - 10.0, pc.to.y), ..pc };
+    assert!(tick_end(&sp, &inside).is_some(), "a tick inside the limit is used");
+}
+
+/// A continuous arc that starts a path has no direction to follow and sweeps the arc size, so its
+/// end has no tick to go to: with a 100° arc size, a tick at 105° would move the end off the arc
+/// the click draws.
+#[test]
+fn a_continuous_arc_without_a_direction_has_no_tick() {
+    let sp = start(pt(0.0, 0.0));
+    let pc = Piece { turn: 100.0, ..piece(100.0, 10.0, Stroke::ContinuousArc) };
+    let arc = arc_circle(&sp, &pc).unwrap();
+    assert!((arc.sweep.to_degrees() - 100.0).abs() < 1e-9, "{arc:?}");
+    assert!(tick_end(&sp, &pc).is_none());
+    // After a line, the same end has a tick.
+    let sp = build(&start(pt(-100.0, 0.0)), &[piece(0.0, 0.0, Stroke::Line)], false);
+    assert!(tick_end(&sp, &pc).is_some());
+}
+
+/// The protractor has a tick every 15° of the sweep, each across the arc's circle, the first
+/// through the arc's start; a sweep that is not a whole number of steps adds a tick at its end.
+#[test]
+fn the_protractor_ticks_lie_across_the_arc() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let sp = start(pt(0.0, 0.0));
+    for (turn, ticks) in [(90.0, 7), (100.0, 8)] {
+        let pc = Piece { turn, ..piece(100.0, 0.0, Stroke::SharpArc) };
+        let arc = arc_circle(&sp, &pc).unwrap();
+        let segs: Vec<_> = protractor(&cx, &arc).segments().collect();
+        assert_eq!(segs.len(), ticks, "{turn}");
+        for seg in &segs {
+            let (a, b) = (seg.eval(0.0), seg.eval(1.0));
+            assert!((a.midpoint(b).distance(arc.center) - arc.radius).abs() < 1e-9);
+            assert!((b - a).cross(arc.center - a).abs() < 1e-6, "points at the center");
+        }
+        let through = |seg: &PathSeg, q: Point| (seg.eval(1.0) - seg.eval(0.0)).cross(q - seg.eval(0.0)).abs() < 1e-6;
+        assert!(through(segs.first().unwrap(), arc.start));
+        assert!(through(segs.last().unwrap(), pc.to));
+    }
 }
 
 /// The rubber band previews exactly the piece a click adds.
