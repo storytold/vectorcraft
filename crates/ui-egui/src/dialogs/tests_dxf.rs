@@ -14,11 +14,11 @@ fn text(bytes: &[u8]) -> String {
 /// A value as the old tests compared it.
 fn show(d: &DialogFields, key: &str) -> String {
     match d.get(key) {
-        Some(FieldValue::Text(s)) => s.clone(),
         Some(FieldValue::Number(n)) => format!("{n:?}"),
         Some(FieldValue::Int(n)) => n.to_string(),
         Some(FieldValue::Bool(b)) => b.to_string(),
-        _ => String::new(),
+        // Text, also as automation sets a companion's: a JSON string.
+        _ => d.text(key).unwrap_or_default().to_string(),
     }
 }
 

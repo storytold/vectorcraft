@@ -42,6 +42,7 @@ fn raster_options_preserve_supplied_values_through_the_png_command() {
     // Opening again replaces the open dialog of the same kind.
     for omitted in [json!({}), json!({"ppi": null, "background": null, "antiAlias": null, "interlaced": null})] {
         app.run("file.export.png", omitted).unwrap();
+        answer_saves(&mut app);
         let f = fields(&app);
         assert_eq!(f.number("ppi"), Some(72.0));
         assert_eq!(f.text("background"), Some("transparent"));
@@ -50,6 +51,7 @@ fn raster_options_preserve_supplied_values_through_the_png_command() {
     }
 
     app.run("file.export.png", json!({"ppi": 0})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(fields(&app).number("ppi"), Some(0.0));
     assert!(try_confirm(&mut app).unwrap_err().contains("ppi must be a positive number"));
     assert_eq!(written.borrow().len(), 2);

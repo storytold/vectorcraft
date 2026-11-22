@@ -169,8 +169,9 @@ fn field_value(row: Option<&Param>, value: &Value) -> Option<FieldValue> {
         },
         // A pair of radio buttons over a flag (Relative / Absolute): the ids are "true" and "false".
         Some(ParamKind::Radio { .. }) if value.is_boolean() => value.as_bool().map(|b| FieldValue::Text(b.to_string())),
-        // A list of whole numbers would read back as a grid, and one of two or three as a point or colour.
-        Some(ParamKind::Custom(_)) if value.is_array() => Some(FieldValue::Json(value.clone())),
+        // A custom row's list, and one a key no row has carries through (an export's `artboards: [0, 1]`), stay JSON: a
+        // list of whole numbers would read back as a grid, and one of two or three as a point or colour.
+        Some(ParamKind::Custom(_)) | None if value.is_array() => Some(FieldValue::Json(value.clone())),
         _ => serde_json::from_value(value.clone()).ok(),
     }
 }

@@ -956,8 +956,8 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
     w.press(&mut app, "Format", Role::ComboBox);
     w.press(&mut app, "TIFF", Role::ListBoxOption);
     assert_eq!(field(&app, "formats"), json!([{"format": "tiff", "scale": "2x", "suffix": "@2x"}]));
-    // Only the first of two boards stays checked.
-    w.press(&mut app, "2  Artboard 2", Role::CheckBox);
+    // Only the first of two boards stays checked (a tile's check box is named for what it selects).
+    w.press(&mut app, "Select 2  Artboard 2", Role::CheckBox);
     assert_eq!((field(&app, "boards"), field(&app, "range")), (json!([true, false]), json!("1")));
     set(&mut app, "__settings", json!("tiff"));
     let mut settings = field(&app, "settings");

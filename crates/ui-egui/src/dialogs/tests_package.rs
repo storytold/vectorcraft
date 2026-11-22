@@ -67,6 +67,10 @@ fn press_ok_on(app: &mut VectorcraftApp, id: DialogId) -> bool {
     let dialogs = app.dialogs().unwrap();
     dialogs.with(|host| host.confirm_by_id(&ctx, id));
     crate::dialogs::host::pump(app, &ctx);
+    // A refused answer keeps the dialog open with its reason: another press would file the answer again.
+    if matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))) {
+        return false;
+    }
     dialogs.with(|host| host.confirm_by_id(&ctx, id))
 }
 

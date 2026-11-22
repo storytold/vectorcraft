@@ -448,9 +448,6 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
-        if let Some(u) = self.pending_url.take() {
-            ctx.open_url(egui::OpenUrl::new_tab(u));
-        }
         self.flush_clipboard_out();
         self.drain_inbox();
         // An action playing at Step by Step or Pause For runs its next step when it is due, after
@@ -567,6 +564,10 @@ impl VectorcraftApp {
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         dialogs::host::pump(self, &ctx);
+        // A link a command, panel or dialog opened in this pass (the pump takes a dialog's) opens in this pass.
+        if let Some(u) = self.pending_url.take() {
+            ctx.open_url(egui::OpenUrl::new_tab(u));
+        }
         prefs_dialog::show(self, ui);
         crate::shortcut_editor::show(self, ui);
         credits::open_taken_link(self);

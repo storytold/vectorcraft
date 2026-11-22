@@ -6,7 +6,7 @@
 use serde_json::{Value, json};
 use vectorcraft_plugins::wat::{self as tpl, Echo};
 
-use super::tests_export::{app, app_saving, fields, frame, kind, names, set, try_confirm, try_set};
+use super::tests_export::{answer_saves, app, app_saving, fields, frame, kind, names, set, try_confirm, try_set};
 use super::*;
 use crate::VectorcraftApp;
 
@@ -92,6 +92,7 @@ fn an_exporter_is_told_its_file_whatever_the_options_are() {
     let (mut app, written) = app_saving(1, |_| "/out/plotter-job.tnb".into());
     install(&mut app, &tpl::echo_exporter(&tpl::exporter("test.ui.nulloptions", r#"["tna","tnb"]"#, "{}"), Echo::Params));
     crate::io::export(&mut app, Some("plugin.test.ui.nulloptions"), None, &Value::Null).unwrap();
+    answer_saves(&mut app);
     assert_eq!(names(&written), ["/out/plotter-job.tnb"]);
     let sent: Value = serde_json::from_slice(&written.borrow()[0].1).unwrap();
     assert_eq!(sent, json!({"_context": {"mode": "export", "extension": "tnb", "name": "plotter-job"}}));

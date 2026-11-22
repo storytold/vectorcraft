@@ -16,7 +16,13 @@ fn split_into_grid_names_row_and_column_fields_with_context() {
     settle(&mut app);
     let out = frame(&mut app, vec![]);
     let update = out.platform_output.accesskit_update.expect("an accessibility tree");
-    let names: Vec<&str> = update.nodes.iter().filter(|(_, node)| node.role() == Role::TextInput).filter_map(|(_, node)| node.label()).collect();
+    // The fields are number fields, which the framework exposes as spin buttons.
+    let names: Vec<&str> = update
+        .nodes
+        .iter()
+        .filter(|(_, node)| matches!(node.role(), Role::TextInput | Role::SpinButton))
+        .filter_map(|(_, node)| node.label())
+        .collect();
     for name in ["Rows: Gutter:", "Columns: Gutter:", "Rows: Total:", "Columns: Total:"] {
         assert!(names.contains(&name), "{name} among the text inputs: {names:?}");
     }
