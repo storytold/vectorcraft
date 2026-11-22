@@ -388,6 +388,19 @@ pub fn mix() -> Scene {
     s
 }
 
+/// One connected shape: a wide disc with three thin arms of 2, 3 and 5 px reaching out of it,
+/// and nothing else; Stroke width 6.
+pub fn mixed_width_body() -> Scene {
+    let mut s = Scene::new("mixed-width body", 260, 220, 6.0);
+    s.offset = P::new(0.27, 0.41);
+    let c = P::new(100.0, 100.0);
+    s.fills.push(GtFill::Disc(c + s.offset, 24.0));
+    s.line(&[c, P::new(220.0, 100.0)], 3.0);
+    s.line(&[c, P::new(100.0, 20.0)], 5.0);
+    s.line(&[c, P::new(25.0, 185.0)], 2.0);
+    s
+}
+
 /// Strokes whose width varies: tapers, a lens, a swelling brush curve; Stroke width 12.
 pub fn varying() -> Scene {
     let mut s = Scene::new("varying", 480, 300, 12.0);
@@ -441,6 +454,7 @@ pub fn all() -> Vec<Scene> {
         v.push(letters(w));
     }
     v.push(mix());
+    v.push(mixed_width_body());
     v.push(varying());
     v
 }

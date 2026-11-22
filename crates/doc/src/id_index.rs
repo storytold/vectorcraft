@@ -82,6 +82,16 @@ impl Paths {
     pub(crate) fn len(&self) -> usize {
         self.ids.len()
     }
+    /// The entry of `id` in the table: `Some(None)` when the id appears more than once, `None`
+    /// when it isn't in the table.
+    pub(crate) fn entry(&self, id: &NodeId) -> Option<Option<u32>> {
+        self.ids.get(id).copied()
+    }
+    /// Entry `e`'s parent entry (`u32::MAX` for a top-level layer) and its index among its
+    /// siblings.
+    pub(crate) fn place(&self, e: u32) -> Option<(u32, u32)> {
+        self.at.get(e as usize).copied()
+    }
 }
 
 /// Lookups that had to walk (the cache didn't have the id, or its path no longer checks out)
@@ -89,6 +99,40 @@ impl Paths {
 /// a lookup's cost within a small factor of a walk whatever the edit pattern (say, delete an
 /// object and look the next one up, again and again).
 const MISSES_PER_REBUILD: u32 = 4;
+
+thread_local! {
+    /// [`tree_walks`] of this thread.
+    static TREE_WALKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times lookups by id on this thread have walked a document's tree, reading up to all of
+/// its nodes: one count per search of the tree and per rebuild of the cache. An edit that looks its
+/// objects up one at a time counts about one walk per object; one that looks them all up at once
+/// counts a few.
+pub fn tree_walks() -> u64 {
+    TREE_WALKS.get()
+}
+
+/// Adds one to [`tree_walks`].
+pub(crate) fn note_tree_walk() {
+    TREE_WALKS.set(TREE_WALKS.get().saturating_add(1));
+}
+
+thread_local! {
+    /// [`path_lookups`] of this thread.
+    static PATH_LOOKUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times [`crate::Document::index_path`] has run on this thread, the lookups that
+/// [`crate::Document::node`] and [`crate::Document::ancestry`] make through it included.
+pub fn path_lookups() -> u64 {
+    PATH_LOOKUPS.get()
+}
+
+/// Adds one to [`path_lookups`].
+pub(crate) fn note_path_lookup() {
+    PATH_LOOKUPS.set(PATH_LOOKUPS.get().saturating_add(1));
+}
 
 /// The cache, shared by clones of a document (each checks every path it uses against its own tree).
 #[derive(Default)]
@@ -125,6 +169,7 @@ impl IdIndex {
                 }
             }
         }
+        note_tree_walk();
         let mut out = Paths::default();
         walk(layers, u32::MAX, &mut out);
         let out = Arc::new(out);

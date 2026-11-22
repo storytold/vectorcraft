@@ -453,9 +453,10 @@ fn simplify_slider_escape_puts_the_paths_back() {
     let undo_len = app.session.doc().unwrap().history.undo.len();
     crate::menus::invoke(&mut app, "object.path.simplify", json!({}));
     settle(&ctx, &mut app);
+    // Level 0's tolerance of 32 pt takes out the path's 0.1 pt zigzag; level 100's 1/32 pt keeps it.
     let (_, _, rail, _) = slider_strip(&ctx);
-    drag(&ctx, &mut app, rail, vec2(100.0, 0.0));
-    assert_eq!(simplify_preview(&app), json!({"level": 100.0}));
+    drag(&ctx, &mut app, rail + vec2(90.0, 0.0), vec2(-190.0, 0.0));
+    assert_eq!(simplify_preview(&app), json!({"level": 0.0}));
     assert_ne!(app.session.doc().unwrap().doc, before, "the preview changes the path");
     let escape = Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
     let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), events: vec![escape], ..Default::default() };
@@ -531,7 +532,7 @@ fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path()
     let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 20 + i * 8, "y": 150.0 + 60.0 * (f64::from(i) / 6.0).sin()})).collect();
     let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
     let path = |app: &VectorcraftApp| {
-        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.clone()
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.to_vec()
     };
     let original = path(&app);
     let run: Vec<_> = (10..=30).map(|i| json!([0, i])).collect();
@@ -677,6 +678,14 @@ fn simplify_dialog_preview_counts_and_cancel_restore_the_original() {
     let texts = frame(&ctx, &mut app, vec![]);
     let preview = texts.iter().find(|(t, _)| t == "Preview").map(|(_, r)| *r).expect("a Preview checkbox");
     assert!(texts.iter().any(|(t, _)| t == "Anchor Points: 20 → 2"), "the reduction is visible: {texts:?}");
+    // In French the label ends in a no-break space and a colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = frame(&ctx, &mut app, vec![]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let want = format!("{}\u{a0}: 20 → 2", crate::i18n::tr(fr, "Anchor Points"));
+    assert!(french.iter().any(|(t, _)| *t == want), "{want:?} in {french:?}");
+    frame(&ctx, &mut app, vec![]);
     assert!(app.session.in_interaction());
     assert!(app.session.doc().unwrap().selection.anchors.is_empty());
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len);

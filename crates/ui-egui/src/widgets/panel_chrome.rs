@@ -1,5 +1,41 @@
 use super::{Color32, CornerRadius, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, pos2, theme, vec2};
 
+pub(crate) const PANEL_FOOTER: &str = "vectorcraft-panel-footer";
+const FOOTER_HEIGHT: f32 = 31.0;
+
+/// The finite body edge supplied by a sized dock, float or user-resized flyout.
+/// Untouched flyouts omit it so their content can still determine their height.
+pub(crate) fn panel_footer_bottom(ui: &Ui) -> Option<f32> {
+    ui.stack().iter().find_map(|stack| stack.tags().get_downcast::<Option<f32>>(PANEL_FOOTER)).copied().flatten()
+}
+
+/// Space left for a list above the footer and any intervening controls, or its unfitted fallback.
+pub(crate) fn panel_list_height(ui: &Ui, fallback: f32, after: f32) -> f32 {
+    panel_footer_bottom(ui).map_or(fallback, |bottom| (bottom - ui.next_widget_position().y - FOOTER_HEIGHT - after).max(0.0))
+}
+
+/// Pad short content so a footer of `height` ends at the panel's saved bottom edge.
+pub(crate) fn panel_footer_space(ui: &mut Ui, height: f32) {
+    if let Some(bottom) = panel_footer_bottom(ui) {
+        ui.add_space((bottom - ui.next_widget_position().y - height).max(0.0));
+    }
+}
+
+/// Pin a custom footer (for example the Variables panel's two rows).
+pub(crate) fn panel_footer(ui: &mut Ui, height: f32, add: impl FnOnce(&mut Ui)) {
+    let Some(bottom) = panel_footer_bottom(ui) else { return add(ui) };
+    let top = bottom - height;
+    if ui.next_widget_position().y > top {
+        ui.add_space(height);
+    }
+    let rect = Rect::from_min_size(pos2(ui.max_rect().left(), top), vec2(ui.available_width(), height));
+    ui.painter().rect_filled(rect, 0.0, Tokens::get(ui.ctx()).panel);
+    // Own the blank parts too, so a click cannot select a scrolled row behind the footer.
+    let _background = ui.interact(rect, ui.scope_id().with("panel-footer-background"), Sense::CLICK);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), add);
+    ui.advance_cursor_after_rect(rect);
+}
+
 /// A bordered list box (Swatches tiles, Appearance rows, Artboards list).
 pub fn list_box<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get(ui.ctx());
@@ -9,6 +45,25 @@ pub fn list_box<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 /// A bottom button bar separated from the content by a divider (panel footers).
 pub fn bottom_bar(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
     let t = Tokens::get(ui.ctx());
+    if let Some(bottom) = panel_footer_bottom(ui) {
+        // Reserve scrollable room after long content so its final row can move above
+        // the pinned footer instead of remaining hidden underneath its buttons.
+        let top = bottom - FOOTER_HEIGHT;
+        if ui.next_widget_position().y > top {
+            ui.add_space(FOOTER_HEIGHT);
+        }
+        let footer = Rect::from_min_size(pos2(ui.max_rect().left(), top), vec2(ui.available_width(), FOOTER_HEIGHT));
+        ui.painter().rect_filled(footer, 0.0, t.panel);
+        let _background = ui.interact(footer, ui.scope_id().with("panel-footer-background"), Sense::CLICK);
+        ui.painter().hline(footer.x_range(), top + 4.0, Stroke::new(1.0, t.divider));
+        let row = Rect::from_min_max(pos2(footer.left(), top + 7.0), footer.max);
+        ui.scope_builder(egui::UiBuilder::new().max_rect(row).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            add(ui);
+        });
+        ui.advance_cursor_after_rect(footer);
+        return;
+    }
     ui.add_space(4.0);
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter().rect_filled(r, 0.0, t.divider);
@@ -117,10 +172,78 @@ pub fn layout_button(ui: &mut Ui, tiles: &[(u8, u8)], selected: bool, tip: &str)
     resp.on_hover_text(tip).clicked()
 }
 
-/// The chevron cell on the right of a field that opens its preset list (rounded on the right).
+/// The field at `field`, before a preset chevron, when it has the keyboard focus and Alt+↓ (with
+/// no other modifier) was pressed. The key is taken before the field is drawn, so that the field
+/// does not step on it; the caller then opens the preset list ([`open_presets_from_keys`]).
+pub(super) fn alt_down_in_field(ui: &Ui, field: Rect) -> Option<egui::Id> {
+    let focused = ui.memory(|m| m.focused())?;
+    let in_field = ui.ctx().read_response(focused).is_some_and(|r| field.expand(1.0).contains_rect(r.rect));
+    let alt_down = |e: &egui::Event| matches!(e, egui::Event::Key { key: egui::Key::ArrowDown, pressed: true, modifiers, .. } if modifiers.matches_exact(egui::Modifiers::ALT));
+    let pressed = in_field
+        && ui.is_enabled()
+        && ui.input_mut(|i| {
+            let before = i.events.len();
+            i.events.retain(|e| !alt_down(e));
+            i.events.len() != before
+        });
+    pressed.then_some(focused)
+}
+
+/// Opens the preset list of `chevron` when Alt+↓ was pressed in `field` ([`alt_down_in_field`]),
+/// and remembers the field so that [`return_focus_from_presets`] gives it the keyboard focus back
+/// once the list closes. Returns whether it opened the list.
+pub(super) fn open_presets_from_keys(ui: &Ui, chevron: &Response, field: Option<egui::Id>) -> bool {
+    let Some(field) = field else { return false };
+    let popup = egui::Popup::default_response_id(chevron);
+    egui::Popup::open_id(ui.ctx(), popup);
+    ui.data_mut(|d| d.insert_temp(popup.with("return focus"), field));
+    true
+}
+
+/// Whether the preset list of `chevron` is open, read before the list is drawn for
+/// [`keep_enter_in_presets`].
+pub(super) fn presets_open(ui: &Ui, chevron: &Response) -> bool {
+    egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(chevron))
+}
+
+/// Takes this frame's Enter presses after an open preset list was drawn: Enter picks the focused
+/// entry and does not also reach the dialog's OK, as in [`super::dropdowns`]' combo boxes.
+pub(super) fn keep_enter_in_presets(ui: &Ui, was_open: bool) {
+    if was_open {
+        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    }
+}
+
+/// After the preset list of `chevron` was drawn: when a list that Alt+↓ opened has closed (an
+/// entry was picked, or Escape or a click outside closed it), the field gets the keyboard focus
+/// back, unless the focus has moved on to a widget outside the list.
+pub(super) fn return_focus_from_presets(ui: &Ui, chevron: &Response) {
+    let popup = egui::Popup::default_response_id(chevron);
+    let key = popup.with("return focus");
+    let Some(field) = ui.data(|d| d.get_temp::<egui::Id>(key)) else { return };
+    if egui::Popup::is_id_open(ui.ctx(), popup) {
+        return;
+    }
+    ui.data_mut(|d| d.remove::<egui::Id>(key));
+    // The list's entries are drawn in the popup's own layer, whose id is the popup id.
+    let elsewhere = ui.memory(|m| m.focused()).and_then(|id| ui.ctx().read_response(id)).is_some_and(|r| r.layer_id.id != popup);
+    if !elsewhere {
+        ui.memory_mut(|m| m.request_focus(field));
+    }
+}
+
+/// The entry of a preset list that gets the keyboard focus when Alt+↓ opened the list: the
+/// chosen one, else the first. `None` when the list was not opened from the keys.
+pub(super) fn entry_to_focus(opened_from_keys: bool, chosen: impl IntoIterator<Item = bool>) -> Option<usize> {
+    opened_from_keys.then(|| chosen.into_iter().position(|c| c).unwrap_or(0))
+}
+
+/// The chevron cell on the right of a field that opens its preset list (rounded on the right). It
+/// is not a Tab stop: Tab goes from the field to the next field, and Alt+↓ in the field opens the
+/// list ([`alt_down_in_field`]).
 pub(super) fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
     let t = Tokens::get(ui.ctx());
-    let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::click());
+    let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::CLICK);
     ui.painter().rect_filled(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, t.input);
     ui.painter().rect_stroke(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
     let c = if !ui.is_enabled() {
@@ -133,4 +256,41 @@ pub(super) fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
     icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), Vec2::splat(12.0)), c);
     dresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Presets")));
     dresp
+}
+
+#[cfg(test)]
+mod footer_tests {
+    use super::{PANEL_FOOTER, bottom_bar, panel_footer};
+
+    /// Blank footer space intercepts clicks instead of selecting list rows underneath it.
+    #[test]
+    fn blank_footer_space_does_not_click_a_row_scrolled_behind_it() {
+        use egui::{Event, PointerButton, Rect, Sense, UiBuilder, UiStackInfo, pos2};
+        for custom in [false, true] {
+            let ctx = egui::Context::default();
+            let mut clicked = false;
+            let at = pos2(150.0, 190.0);
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            for events in [vec![], vec![], vec![Event::PointerMoved(at), button(true)], vec![button(false)]] {
+                let input =
+                    egui::RawInput { screen_rect: Some(Rect::from_min_max(pos2(0.0, 0.0), pos2(200.0, 200.0))), events, ..Default::default() };
+                let mut output = ctx.run_ui(input, |ui| {
+                    let info = UiStackInfo::default().with_tag_value(PANEL_FOOTER, Some(200.0_f32));
+                    ui.scope_builder(UiBuilder::new().ui_stack_info(info), |ui| {
+                        clicked |= ui.allocate_rect(Rect::from_min_max(pos2(0.0, 100.0), pos2(200.0, 200.0)), Sense::click()).clicked();
+                        let contents = |ui: &mut egui::Ui| {
+                            let _button = ui.button("Footer button");
+                        };
+                        if custom {
+                            panel_footer(ui, 31.0, contents);
+                        } else {
+                            bottom_bar(ui, contents);
+                        }
+                    });
+                });
+                output.textures_delta.clear();
+            }
+            assert!(!clicked, "custom={custom}: a hidden row received the footer click");
+        }
+    }
 }

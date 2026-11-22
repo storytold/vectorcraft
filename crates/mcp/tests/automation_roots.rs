@@ -5,8 +5,11 @@
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::path::{Path, PathBuf};
+mod common;
 
+use std::path::Path;
+
+use common::TempFolder;
 use serde_json::{Value, json};
 use vectorcraft_engine::file_access::AutomationRoots;
 use vectorcraft_mcp::{Headless, Server};
@@ -14,9 +17,10 @@ use vectorcraft_mcp::{Headless, Server};
 const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="20" height="10" fill="red"/></svg>"#;
 
 /// A folder holding `in` (the read root, with `a.svg`), `out` (the write root), `outside` (with
-/// `b.svg`) and `in2`, and a server confined to `in` and `out` (either may be left out).
-fn confined(tag: &str, read: bool, write: bool) -> (Server, PathBuf) {
-    let base = vectorcraft_testkit::temp_dir(&format!("roots-{tag}"));
+/// `b.svg`) and `in2`, and a server confined to `in` and `out` (either may be left out). The
+/// folder is removed when the returned [`TempFolder`] is dropped.
+fn confined(tag: &str, read: bool, write: bool) -> (Server, TempFolder) {
+    let base = TempFolder::new(&format!("roots-{tag}"));
     for d in ["in", "out", "outside", "in2"] {
         std::fs::create_dir_all(base.join(d)).unwrap();
     }
@@ -53,6 +57,29 @@ fn ok(server: &mut Server, name: &str, args: Value) -> String {
 fn refused(server: &mut Server, name: &str, args: Value, why: &str) {
     let (error, text) = call(server, name, args.clone());
     assert!(error && text.contains(why), "{name} {args} should be refused ({why}): {text}");
+}
+
+/// A `TempFolder` is removed with the files and folders in it when dropped, also when the test
+/// that holds it panics.
+#[test]
+fn temp_folders_are_removed_when_dropped() {
+    let dir = TempFolder::new("roots-drop-check");
+    std::fs::create_dir(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub/a.svg"), SVG).unwrap();
+    let path = dir.to_path_buf();
+    drop(dir);
+    assert!(!path.exists(), "{} is removed", path.display());
+
+    let mut held = None;
+    let panicked = vectorcraft_testkit::catch_quiet(|| {
+        let dir = TempFolder::new("roots-panic-check");
+        std::fs::write(dir.join("a.svg"), SVG).unwrap();
+        held = Some(dir.to_path_buf());
+        panic!("the test fails with {} in use", dir.display());
+    });
+    assert!(panicked.is_err());
+    let path = held.unwrap();
+    assert!(!path.exists(), "{} is removed after a panic", path.display());
 }
 
 #[test]
