@@ -42,7 +42,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// documents; `Document.saveAs`, `close` and the perspective grid preset files, and the workspace
+/// methods, `loadColorSettings` and `showPresets` of `Application`, throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -75,14 +76,16 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem Document \
          DocumentArtboardLayout DocumentColorSpace DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
-         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits \
-         ZOrderMethod",
+         DocumentTransparencyGrid Documents ElementPlacement GroupItem GroupItems Layer Layers PageItem PageItems \
+         PerspectiveGridPlaneType PerspectiveGridType RulerUnits ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
-        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= deleteWorkspace \
+         deleteWorkspace= documents getIsFileOpen getPresetSettings loadColorSettings loadColorSettings= resetWorkspace \
+         resetWorkspace= saveWorkspace saveWorkspace= selection showPresets showPresets= switchWorkspace switchWorkspace= \
+         typename",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -90,8 +93,10 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
-         documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         documentColorSpace exportPerspectiveGridPreset exportPerspectiveGridPreset= getPerspectiveActivePlane groupItems \
+         height hidePerspectiveGrid importPerspectiveGridPreset importPerspectiveGridPreset= layers name pageItems parent \
+         pathItems pathItems= rulerOrigin rulerOrigin= rulerUnits saveAs saveAs= selectPerspectivePreset selection \
+         selection= setActivePlane showPerspectiveGrid swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
@@ -153,6 +158,8 @@ const INSIDE: &[(&str, &str)] = &[
          TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("PerspectiveGridPlaneType.", "GRIDFLOORPLANETYPE GRIDLEFTPLANETYPE GRIDRIGHTPLANETYPE INVALIDGRIDPLANETYPE"),
+    ("PerspectiveGridType.", "InvalidPerspectiveGridType OnePointPerspectiveGridType ThreePointPerspectiveGridType TwoPointPerspectiveGridType"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];

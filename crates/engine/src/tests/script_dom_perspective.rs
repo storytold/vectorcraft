@@ -62,6 +62,19 @@ fn grid_view_commands_in_a_run_add_no_undo_step_but_an_edit_still_does() {
 }
 
 #[test]
+fn a_grid_view_run_after_an_edit_adds_no_undo_step() {
+    let mut s = doc();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let before = undo_steps(&s);
+    let drawn = s.active().unwrap().doc.node_count();
+    run(&mut s, "app.activeDocument.showPerspectiveGrid(); vc.run('perspective.plane.set', {plane: 'ground'});").unwrap();
+    assert_eq!((grid(&mut s)["visible"].clone(), grid(&mut s)["plane"].clone()), (json!(true), json!("ground")));
+    assert_eq!(undo_steps(&s), before);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.active().unwrap().doc.node_count(), drawn - 1);
+}
+
+#[test]
 fn a_grid_edit_that_changes_only_view_fields_keeps_its_undo_step_in_a_run() {
     let mut s = doc();
     let before = undo_steps(&s);

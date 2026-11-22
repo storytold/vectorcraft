@@ -2251,8 +2251,9 @@ impl Session {
             };
             // The perspective grid's view state changes without an undo step, as it does outside a
             // run, when no command in the run recorded an undo step of its own on the working copy.
-            let (now, was) = (&st.history.undo, &b.history.undo);
-            let recorded = now.len() != was.len() || !now.last().zip(was.last()).map_or(now.is_empty(), |(x, y)| Arc::ptr_eq(&x.doc, &y.doc));
+            // The working copy starts with no undo steps (`World::working`), so any step it holds now
+            // was recorded in the run.
+            let recorded = !st.history.undo.is_empty();
             let changed = !st.same_content(&b.doc) && (recorded || !cmd::distortcmds::only_grid_view_changed(&st.doc, &b.doc));
             st.history = std::mem::take(&mut b.history);
             st.recovery.clone_from(&b.recovery);
