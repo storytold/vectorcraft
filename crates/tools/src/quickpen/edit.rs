@@ -19,6 +19,9 @@ use crate::draw2::{anchor_in, segment_in, shown_paths};
 use crate::guides::{PointSnap, Targets};
 use crate::{Action, Cursor, Overlay, ToolContext};
 
+/// The notice the tool asks for after each preview of a drag, to see the document's revision then.
+pub(super) const MOVED: &str = "moved";
+
 /// What a press holds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Grab {
@@ -83,6 +86,11 @@ pub(super) struct Edit {
     pub(super) began: bool,
     /// Whether the last drag left what the press holds away from where it started.
     pub(super) moved: bool,
+    /// The document's revision ([`ToolContext::revision`]) after the drag's last preview.
+    pub(super) revision: Option<(u64, u64)>,
+    /// Whether another command changed the document or the selection during the drag: the drag
+    /// then previews no more, and its undo step keeps that edit with the move as last shown.
+    pub(super) interrupted: bool,
     /// The grabbed path as the document had it when the press went down.
     pressed: Option<Arc<Node>>,
     snap: Option<PointSnap>,
@@ -92,7 +100,16 @@ pub(super) struct Edit {
 impl Edit {
     pub(super) fn new(cx: &ToolContext, grab: Grab, start: Point, shift: bool) -> Self {
         let pressed = shared_node(cx.doc, grab.id()).cloned();
-        Self { grab, start, shift, began: false, moved: false, pressed, snap: None, guides: vec![] }
+        Self { grab, start, shift, began: false, moved: false, revision: None, interrupted: false, pressed, snap: None, guides: vec![] }
+    }
+
+    /// Whether the drag began and still previews: no other command changed the document or the
+    /// selection since its last preview.
+    pub(super) fn open(&mut self, cx: &ToolContext) -> bool {
+        if self.began && self.revision.is_some_and(|r| r != cx.revision) {
+            self.interrupted = true;
+        }
+        self.began && !self.interrupted
     }
 
     /// Whether the grabbed path is as the document had it when the press went down.
@@ -106,9 +123,13 @@ impl Edit {
     /// Moves what the press holds by the drag to `p`. The first move selects the anchor, or the
     /// segment, unless it is already selected, and begins the undo step; a drag that starts on
     /// one of several selected anchors moves them all. When the grabbed path changed after the
-    /// press went down, the drag does not begin.
+    /// press went down, the drag does not begin, and after another command's edit during the
+    /// drag it moves nothing more.
     pub(super) fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let mut out = vec![];
+        if self.began && !self.open(cx) {
+            return out;
+        }
         if !self.began {
             let id = self.grab.id();
             if !self.unchanged(cx) {
@@ -153,11 +174,11 @@ impl Edit {
             }
             _ => p - self.start,
         };
-        if !d.x.is_finite() || !d.y.is_finite() {
-            return out;
+        if d.x.is_finite() && d.y.is_finite() {
+            self.moved = d.x != 0.0 || d.y != 0.0;
+            out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y, "interpolate": true})));
         }
-        self.moved = d.x != 0.0 || d.y != 0.0;
-        out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y, "interpolate": true})));
+        out.push(Action::Notify(MOVED.into()));
         out
     }
 }

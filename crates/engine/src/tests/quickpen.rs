@@ -698,6 +698,32 @@ fn an_edit_during_an_edit_press_stops_the_move() {
     }
 }
 
+/// An edit made by another command during an anchor drag stays: the rest of the drag and the
+/// release move nothing more, and one undo step holds the move as last shown with the edit.
+#[test]
+fn an_edit_during_an_anchor_drag_stays() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 90, "y": 90})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 210.0), v).unwrap();
+    assert_eq!(points(&s), [pt(90.0, 90.0), pt(200.0, 150.0), pt(300.0, 100.0)], "the edit and the move as last shown");
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(!s.in_interaction(), "the step is committed");
+    // Escape after such an edit keeps it too.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 150.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 80, "y": 80})).unwrap();
+    key(&mut s, ToolKey::Escape);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 200.0), v).unwrap();
+    assert_eq!(points(&s), [pt(80.0, 80.0), pt(200.0, 150.0), pt(300.0, 150.0)]);
+    assert!(!s.in_interaction(), "the step is committed");
+}
+
 /// When another command edits the path while a click is down, the click neither selects the
 /// anchor nor goes on drawing from the open end it found.
 #[test]

@@ -484,15 +484,14 @@ impl QuickPenTool {
     }
 
     /// Ends the path being drawn; a press that added a piece, or moved part of a path, is taken
-    /// back.
-    fn end(&mut self) -> Vec<Action> {
+    /// back. A move that another command's edit interrupted is kept with that edit.
+    fn end(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.drawing = None;
         self.snap.clear();
-        let moved = self.edit.take().is_some_and(|e| e.began);
+        let moved = self.edit.take().filter(|e| e.began).map(|mut e| if e.open(cx) { Action::Cancel } else { Action::Commit });
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Cancel],
-            _ if moved => vec![Action::Cancel],
-            _ => vec![],
+            _ => moved.into_iter().collect(),
         }
     }
 
@@ -505,10 +504,11 @@ impl QuickPenTool {
     fn release_edit(&mut self, cx: &ToolContext, mut e: Edit, p: Point) -> Vec<Action> {
         if e.began || p.distance(e.start) >= cx.tol(DRAG_PX) {
             let mut out = e.drag(cx, p);
-            // A drag that could not begin (its path changed under the press) has no step to end,
-            // and one that came back to where it started records none.
+            // A drag that could not begin (its path changed under the press) has no step to end.
+            // One that came back to where it started records none, unless another command's
+            // edit during the drag is in the step.
             if e.began {
-                out.push(if e.moved { Action::Commit } else { Action::Cancel });
+                out.push(if e.moved || e.interrupted { Action::Commit } else { Action::Cancel });
             }
             return out;
         }
@@ -622,6 +622,12 @@ impl Tool for QuickPenTool {
     }
 
     fn notify(&mut self, cx: &ToolContext, what: &str) {
+        if what == edit::MOVED {
+            if let Some(e) = self.edit.as_mut() {
+                e.revision = Some(cx.revision);
+            }
+            return;
+        }
         let Some(dr) = self.drawing.as_mut() else { return };
         if what == "created"
             && let [id] = cx.selection.objects.as_slice()
@@ -686,7 +692,7 @@ impl Tool for QuickPenTool {
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
-            ToolKey::Escape | ToolKey::Enter => self.end(),
+            ToolKey::Escape | ToolKey::Enter => self.end(cx),
             ToolKey::Letter('c') => {
                 if self.last_sharp_arc(cx).is_none() {
                     return vec![];
