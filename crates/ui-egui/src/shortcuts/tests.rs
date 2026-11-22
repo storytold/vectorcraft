@@ -218,15 +218,14 @@ fn named_panel_default_chords_toggle_their_panels() {
     }
 }
 
-/// A panel command with no `toggle` param reveals its panel and keeps it shown.
+/// A shortcut on a panel without a function key of its own runs `window.panel` with the params it has: no toggle is
+/// added, as production checked.
 #[test]
 fn other_panel_shortcuts_keep_plain_panel_params() {
-    let mut app = new_app();
     for panel in ["character", "swatches"] {
-        for _ in 0..2 {
-            app.run("window.panel", json!({"panel": panel})).unwrap();
-            assert!(crate::panel_docking::showing(&app.ui, panel), "{panel} stays shown");
-        }
+        let params = super::shortcut_params(&craft::keymap::CommandRef::with_params("window.panel", json!({"panel": panel})));
+        assert!(params.get("toggle").is_none(), "{panel} gained toggle");
+        assert!(params.get("toggleGroup").is_none(), "{panel} gained toggleGroup");
     }
 }
 
@@ -1426,8 +1425,9 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
         key_frame(&mut app, &ctx, vec![]);
         assert_eq!(dialog_kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
         assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
-        // With its default values only Reflect changes the art.
+        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass.
         key_frame(&mut app, &ctx, enter());
+        key_frame(&mut app, &ctx, vec![]);
         let after = (before.0 + usize::from(dialog == "object.reflect"), before.1 + 1);
         assert_eq!((dialog_kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
     }
@@ -1465,9 +1465,12 @@ fn enter_after_a_drag_repeats_its_offset() {
     assert_eq!(dialog_field(&app, "dx").and_then(|v| v.as_f64()).map(f64::round), Some(step));
     set_top_field(&mut app, "copy", json!(true));
     key_frame(&mut app, &ctx, enter());
+    // A held OK closes its dialog on the window's next pass.
+    key_frame(&mut app, &ctx, vec![]);
     for _ in 0..2 {
         key_frame(&mut app, &ctx, enter());
         key_frame(&mut app, &ctx, enter());
+        key_frame(&mut app, &ctx, vec![]);
     }
     assert!(dialog_kind(&app).is_none());
     assert_eq!(lefts(&app), (0..4).map(|i| moved + step * f64::from(i)).collect::<Vec<_>>());

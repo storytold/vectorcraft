@@ -79,8 +79,9 @@ impl Trailing {
         if matches!(self, Trailing::Safe | Trailing::Switcher) { FitKeep::Pinned } else { FitKeep::Free }
     }
 
-    /// Shows the control; the fit measures it through the same call.
-    fn show(self, app: &mut VectorcraftApp, ui: &mut Ui) {
+    /// Shows the control, in its shorter form when `short` (the search as its icon); the fit measures it through the
+    /// same call.
+    fn show(self, app: &mut VectorcraftApp, ui: &mut Ui, short: bool) {
         match self {
             Trailing::Safe => {
                 let shown = Button::new(tl!("Safe Mode")).variant(Variant::GHOST).tooltip(tl!("Safe Mode…")).show(ui);
@@ -97,6 +98,9 @@ impl Trailing {
                     .show(ui);
             }
             Trailing::Arrange => arrange_documents(app, ui),
+            Trailing::Search if short => {
+                IconButton::command(IconId::new("search"), PALETTE).label(tl!("Search commands")).show(ui);
+            }
             Trailing::Search => {
                 // PLAN: assumed `Button::command` is bound by a `&str` command id; the command opens the palette.
                 // Named as production's field, not after the command's menu row.
@@ -173,12 +177,20 @@ fn trailing(ui: &mut Ui, app: &mut VectorcraftApp) {
     let order: Vec<Trailing> = Trailing::DROPPED_LAST_FIRST.into_iter().filter(|t| safe || *t != Trailing::Safe).collect();
     let gap = ui.spacing().item_spacing.x;
     let room = ui.available_width();
-    let items: Vec<FitItem> = order.iter().map(|t| FitItem::new(measure_slot(ui, room, |ui| t.show(app, ui)).x, 0, t.keep())).collect();
+    let mut measure = |t: Trailing, short: bool| measure_slot(ui, room, |ui| t.show(app, ui, short)).x;
+    let items: Vec<FitItem> = order
+        .iter()
+        .map(|&t| {
+            let item = FitItem::new(measure(t, false), 0, t.keep());
+            // The search narrows to its icon before it goes.
+            if t == Trailing::Search { item.short(measure(t, true)) } else { item }
+        })
+        .collect();
     let fit = fit_items(&items, room, gap, gap, 0.0);
     ui.horizontal_centered(|ui| {
         for t in Trailing::SHOWN {
-            if order.iter().position(|o| *o == t).is_some_and(|at| fit.shown.contains(&at)) {
-                t.show(app, ui);
+            if let Some(at) = order.iter().position(|o| *o == t).filter(|at| fit.shown.contains(at)) {
+                t.show(app, ui, fit.short.contains(&at));
             }
         }
     });
