@@ -18,10 +18,6 @@
 //! library or the document's swatches; Edit or Apply Colors opens Recolor Artwork with the
 //! harmony colours, limited the same way.
 
-// PLAN: `HarmonyPanelState` holds the framework's `Harmony` and `GuideOptions` (craft color-ui
-// `harmony`); this file passes `vectorcraft_color::harmony`'s, as the sheet does. They must be one
-// type (the color crate re-exporting the framework's), or `panel_state` needs a conversion.
-
 use craft::behavior::IconId;
 use craft::color_ui::ui::{GuideCell, GuideCellAt, HarmonyCommand, HarmonyMenu, HarmonyMenuAction, HarmonyPanel, HarmonyPanelState, HarmonyPicked};
 use craft::theme::Srgba;
@@ -646,7 +642,7 @@ fn save_group(app: &mut VectorcraftApp, cells: &[GuideCell]) {
     if colors.is_empty() {
         colors = g.colors.iter().map(color_json).collect();
     }
-    app.run("swatch.newGroup", json!({"name": app.ui.color_guide_panel.rule.label(), "colors": colors, "keepModel": true})).ok();
+    app.run("swatch.newGroup", json!({"name": harmony::label(app.ui.color_guide_panel.rule), "colors": colors, "keepModel": true})).ok();
 }
 
 /// A cell of the guide was clicked: apply its paint to the active proxy (the inactive one with Alt
@@ -955,7 +951,7 @@ mod tests {
         assert_eq!(st.doc.swatches.len(), swatches, "no loose swatches");
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
         let (name, made) = last_group(&app);
-        assert_eq!(name, app.ui.color_guide_panel.rule.label());
+        assert_eq!(name, harmony::label(app.ui.color_guide_panel.rule));
         assert_eq!(made, [g.grid[0][0], g.grid[0][8], g.grid[1][4]]);
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.doc().unwrap().doc.swatch_groups.len(), groups, "Undo removes the group");

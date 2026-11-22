@@ -6,7 +6,6 @@
 
 use craft::behavior::kurbo::Point;
 use craft::behavior::{CancelReason, Cursor, CursorIcon, EditEvent, IconId, Selection, SelectionChange, keyed};
-use craft::color_ui::harmony::Harmony as RuleName;
 use craft::color_ui::ui::{DiscLook, DiscRadius, HarmonyWheel, HarmonyWords};
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
@@ -164,9 +163,9 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
 /// new colours.
 fn top_row(ui: &mut Ui, d: &mut Fields, target: &SliderTarget, rows: &mut [Value], active: &[usize], base: Option<usize>) -> bool {
     let words = Env::of(ui).words::<HarmonyWords>();
-    let rules: Vec<Entry<RuleName>> = RuleName::ALL.iter().map(|&rule| Entry::new(rule, words.rule_name(rule).clone())).collect();
+    let rules: Vec<Entry<Harmony>> = Harmony::ALL.iter().map(|&rule| Entry::new(rule, words.rule_name(rule).clone())).collect();
     let rule = d.str("rule");
-    let current = RuleName::ALL.into_iter().find(|r| r.id() == rule).unwrap_or_default();
+    let current = Harmony::ALL.into_iter().find(|r| r.id() == rule).unwrap_or_default();
     let linked = d.bool("linked");
     let all = rows.iter().any(|r| in_group(r) && to_color(r).is_some());
     let any_prominent = d.bool("__art") && prominent_parts(d, rows).iter().any(|p| rows.get(p.0).and_then(to_color).is_some());
@@ -208,9 +207,7 @@ fn top_row(ui: &mut Ui, d: &mut Fields, target: &SliderTarget, rows: &mut [Value
     let mut changed = false;
     if let Some(rule) = picked {
         d.fields.insert("rule".into(), json!(rule.id()));
-        // The rule's id is the same in both harmony models; the rows' colours are the app's.
-        let from = base.and_then(|b| Some((b, rows.get(b).and_then(to_color)?)));
-        if let (Some(rule), Some((b, c))) = (Harmony::parse(rule.id()), from) {
+        if let Some((b, c)) = base.and_then(|b| Some((b, rows.get(b).and_then(to_color)?))) {
             apply_rule(rows, rule, b, c, active);
             changed = true;
         }

@@ -4,7 +4,7 @@
 use serde_json::json;
 use vectorcraft_color::Color;
 use vectorcraft_color::cms;
-use vectorcraft_color::harmony::Harmony;
+use vectorcraft_color::harmony::{self, Harmony};
 use vectorcraft_engine::Session;
 
 use super::color_wheel::{Settings, View, display_hsb, harmony_rules};
@@ -42,7 +42,7 @@ fn a_complementary_marker_sits_opposite_and_a_click_applies_it() {
     assert_eq!(p.value("Harmony color").as_deref(), Some("#00ffff"));
     let undo = undo_len(&p.app());
     p.click("Harmony color");
-    let want = Harmony::Complementary.apply(Color::rgb(1.0, 0.0, 0.0))[1];
+    let want = harmony::apply(Harmony::Complementary, Color::rgb(1.0, 0.0, 0.0))[1];
     assert_eq!(fill(&p.app()).to_hex(), want.to_hex());
     assert_eq!(undo_len(&p.app()), undo + 1);
 }

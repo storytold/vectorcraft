@@ -1,7 +1,7 @@
 //! The Color Guide: `color.harmony` and saving several colours as swatches at once.
 
 use serde_json::{Value, json};
-use vectorcraft_color::Color;
+use vectorcraft_color::{Color, harmony};
 
 use crate::*;
 
@@ -38,9 +38,9 @@ fn harmony_query_returns_the_group_and_its_grid() {
     assert_eq!(r2["rule"], "splitComplementary");
     assert_eq!(r2["grid"][0].as_array().unwrap().len(), 9, "4 steps by default");
     // Every rule answers, base first.
-    for h in vectorcraft_color::harmony::Harmony::ALL {
+    for h in harmony::Harmony::ALL {
         let r = s.execute("color.harmony", &json!({"color": "#3366cc", "rule": h.id()})).unwrap();
-        assert_eq!(r["colors"][0], "#3366cc", "{}", h.label());
+        assert_eq!(r["colors"][0], "#3366cc", "{}", harmony::label(h));
     }
     assert!(s.execute("color.harmony", &json!({"color": "#ff0000", "rule": "square"})).is_err());
     assert!(s.execute("color.harmony", &json!({"rule": "triad"})).is_err());

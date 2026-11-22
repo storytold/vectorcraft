@@ -30,7 +30,7 @@ use craft::ui::text::{HexField, TextField};
 use egui::{Rect, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
+use vectorcraft_color::harmony::{self, Harmony, THEME_SIZE, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
 use super::color::{color_of_values, working_rgb};
@@ -86,7 +86,7 @@ impl ThemesUi {
 
     /// Load saved theme `t` into the Create tab to edit it.
     fn edit(&mut self, t: &ColorTheme) {
-        let rule = t.rule.as_deref().and_then(Harmony::parse);
+        let rule = t.rule.as_deref().and_then(harmony::parse);
         self.draft = Some(Draft { colors: t.colors.clone(), rule, sel: 0, name: t.name.clone(), editing: Some(t.name.clone()) });
         self.tab = CREATE;
     }
@@ -108,14 +108,14 @@ pub(crate) struct Draft {
 impl Draft {
     /// A new theme from `base` by `rule`.
     fn new(base: Color, rule: Option<Harmony>) -> Self {
-        let colors = rule.map_or_else(|| DEFAULT_RULE.theme(base), |r| r.theme(base));
+        let colors = harmony::theme(rule.unwrap_or(DEFAULT_RULE), base);
         Self { colors, rule, ..Default::default() }
     }
     /// Set the selected colour to `c`: with a rule the theme follows from it as the new base.
     fn set_selected(&mut self, c: Color) {
         match self.rule {
             Some(r) => {
-                self.colors = r.theme(c);
+                self.colors = harmony::theme(r, c);
                 self.sel = 0;
             }
             None => {
@@ -481,13 +481,13 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut d = draft(app);
     let before = d.clone();
     let (mut mode, mut held) = (app.ui.color_themes_panel.mode, app.ui.color_themes_panel.held.clone());
-    let labels: Vec<&str> = std::iter::once("Custom").chain(Harmony::ALL.iter().map(|h| h.label())).collect();
+    let labels: Vec<&str> = std::iter::once("Custom").chain(Harmony::ALL.into_iter().map(harmony::label)).collect();
     let at = d.rule.and_then(|r| Harmony::ALL.iter().position(|h| *h == r)).map_or(0, |i| i + 1);
     // A rule makes the theme from the selected colour; Custom frees the colours.
     if let Some(i) = select(ui, tl!("Rule:"), at, &labels) {
         d.rule = i.checked_sub(1).and_then(|i| Harmony::ALL.get(i).copied());
         if let (Some(r), Some(&base)) = (d.rule, d.colors.get(d.sel)) {
-            d.colors = r.theme(base);
+            d.colors = harmony::theme(r, base);
             d.sel = 0;
         }
     }
@@ -661,7 +661,7 @@ mod tests {
         let mut app = app();
         app.run("paint.setFill", json!({"color": "#cc4422"})).unwrap();
         let d = draft(&mut app);
-        assert_eq!(d.colors, DEFAULT_RULE.theme(Color::from_hex("#cc4422").unwrap()), "a theme from the current colour");
+        assert_eq!(d.colors, harmony::theme(DEFAULT_RULE, Color::from_hex("#cc4422").unwrap()), "a theme from the current colour");
         save(&mut app);
         assert_eq!(themes(&app).len(), 1);
         assert_eq!((themes(&app)[0].name.as_str(), &themes(&app)[0].colors), ("Theme 1", &d.colors));
@@ -673,7 +673,7 @@ mod tests {
         let base = d.colors[2];
         d.rule = Some(Harmony::Triad);
         d.set_selected(base);
-        assert_eq!((d.colors.clone(), d.sel), (Harmony::Triad.theme(base), 0));
+        assert_eq!((d.colors.clone(), d.sel), (harmony::theme(Harmony::Triad, base), 0));
         set_draft(&mut app, d.clone());
         save(&mut app);
         assert_eq!(themes(&app).len(), 1, "saving an edited theme overwrites it");
@@ -983,7 +983,7 @@ mod tests {
         let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
         let base = color_of_values(&held.values);
         let now = draft(&mut app.borrow_mut());
-        assert_eq!((now.colors, now.sel), (Harmony::Triad.theme(base), 0));
+        assert_eq!((now.colors, now.sel), (harmony::theme(Harmony::Triad, base), 0));
     }
 
     /// A CMYK edit keeps the color CMYK, through Save and Add to Swatches in a CMYK document.

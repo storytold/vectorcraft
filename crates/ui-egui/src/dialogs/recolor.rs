@@ -149,7 +149,7 @@ use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use craft::ui::text::{HexField, TextField};
 use egui::Ui;
 use serde_json::{Value, json};
-use vectorcraft_color::harmony::{Harmony, move_on_wheel};
+use vectorcraft_color::harmony::{self, Harmony, move_on_wheel};
 use vectorcraft_color::recolor::{ColorKey, GlobalAdjust, Method};
 use vectorcraft_color::{Color, keep_model};
 use vectorcraft_engine::cmd::color_value;
@@ -3010,7 +3010,7 @@ fn move_bar(rows: &mut [Value], active: &[usize], from: usize, to: usize) -> Opt
 /// first, then the others in order, the rule's colours repeating), each in its row's model. A row
 /// whose new color changes loses its tint.
 fn apply_rule(rows: &mut [Value], rule: Harmony, base: usize, b: Color, active: &[usize]) {
-    let colors = rule.apply(b);
+    let colors = harmony::apply(rule, b);
     let order = std::iter::once(base).chain(active.iter().copied().filter(|i| *i != base));
     for (n, i) in order.enumerate() {
         let old = to_color(&rows[i]).unwrap_or(b);

@@ -65,7 +65,7 @@ use egui::Ui;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ProofSetup, ProofTarget};
-use vectorcraft_color::harmony::Harmony;
+use vectorcraft_color::harmony::{self, Harmony};
 use vectorcraft_color::oklab::{self, CHROMA_FULL};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to_hsl};
 use vectorcraft_doc::{ColorMode, NodeId};
@@ -236,7 +236,7 @@ pub fn harmony_rules() -> impl Iterator<Item = Harmony> {
 
 /// The wheel's harmony rule named by `s`, its id or its label.
 fn parse_rule(s: &str) -> Option<Harmony> {
-    Harmony::parse(s).filter(|h| h.hues_differ())
+    harmony::parse(s).filter(|h| h.hues_differ())
 }
 
 fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
@@ -245,7 +245,7 @@ fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::E
 }
 
 fn serialize_rule<S: serde::Serializer>(h: &Harmony, s: S) -> Result<S::Ok, S::Error> {
-    s.serialize_str(&h.id())
+    s.serialize_str(h.id())
 }
 
 fn deserialize_rule<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Harmony, D::Error> {
@@ -334,7 +334,7 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
         None | Some(Value::Null) => {}
         Some(v) => {
             set.harmony_rule = v.as_str().and_then(parse_rule).ok_or_else(|| {
-                let ids: Vec<String> = harmony_rules().map(Harmony::id).collect();
+                let ids: Vec<&str> = harmony_rules().map(Harmony::id).collect();
                 format!("`{key}` must be one of {}", ids.join(", "))
             })?
         }
@@ -405,7 +405,7 @@ fn items(set: &Settings, srgb: bool) -> Vec<Item> {
     for rule in harmony_rules() {
         out.push(item(
             rule_row_id(rule),
-            &rule.label().to_string(),
+            harmony::label(rule),
             rule == set.harmony_rule,
             set.view == View::Wheel,
             json!({ "harmonyRule": rule.id() }),
