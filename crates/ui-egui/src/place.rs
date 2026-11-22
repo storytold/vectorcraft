@@ -205,7 +205,10 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         o.remove("showImportOptions");
         set_aside = o.remove(SET_ASIDE);
     }
-    if !ask {
+    // A file placed with an importer plug-in `importer` names goes to that importer, without the
+    // import options of a built-in format that reads its extension.
+    let builtin = p.get("importer").is_none_or(Value::is_null);
+    if !ask && builtin {
         // Placed with the options confirmed last for the format.
         if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
             p["text"] = crate::dialogs::text_import::last_options(app);
@@ -215,7 +218,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         }
         crate::dialogs::psd_import::last_options(app, &mut p);
     }
-    if p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
+    if builtin && p.get("text").is_none() && crate::dialogs::text_import::is_text(&p) {
         return Ok(crate::dialogs::text_import::open(app, &p));
     }
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
@@ -234,18 +237,18 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
     // A PDF with several pages or a password asks for the page, box and password first; with
     // Show Import Options off, or with a `page` given, only an encrypted one asks, for its password.
-    let offered = (ask && crate::dialogs::import_pdf::offer_place(app, &p)) || crate::dialogs::import_pdf::offer_place_password(app, &p);
+    let offered = builtin && ((ask && crate::dialogs::import_pdf::offer_place(app, &p)) || crate::dialogs::import_pdf::offer_place_password(app, &p));
     if offered {
         return Ok(Value::Null);
     }
     // A DXF drawing asks for its import options.
-    if ask && crate::dialogs::dxf_import::offer_place(app, &p) {
+    if builtin && ask && crate::dialogs::dxf_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::dxf_import::KIND }));
     }
     // A PSD file with several layers or with slices that the user embeds asks for its import
     // options. A place run as a command (MCP, scripts) places at once and takes `layers` and
     // `importSlices` itself.
-    if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
+    if builtin && ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
     }
     if let (Some(Value::Object(kept)), Some(o)) = (set_aside, p.as_object_mut()) {
@@ -286,7 +289,7 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
     let paths = if app.services.pick_open_multi.is_some() {
         crate::picks::open_many(app)
     } else {
-        crate::picks::open(app, &crate::FilePick { filters: crate::FilePick::filters(fileio::place_filters()), ..Default::default() })
+        crate::picks::open(app, &crate::FilePick { filters: crate::FilePick::filters(fileio::place_dialog_filters()), ..Default::default() })
             .into_iter()
             .collect()
     };

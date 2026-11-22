@@ -482,10 +482,12 @@ fn services(
             let inbox = picked.clone();
             let ctx = place_ctx.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let dialog =
-                    fileio::place_filters().fold(rfd::AsyncFileDialog::new().set_title(vectorcraft_ui_egui::i18n::t("Place")), |d, (name, exts)| {
+                let dialog = fileio::place_dialog_filters().fold(
+                    rfd::AsyncFileDialog::new().set_title(vectorcraft_ui_egui::i18n::t("Place")),
+                    |d, (name, exts)| {
                         d.add_filter(vectorcraft_ui_egui::i18n::tr_ctx(vectorcraft_ui_egui::i18n::current(), "file-filter", name), exts)
-                    });
+                    },
+                );
                 let Some(files) = dialog.pick_files().await else {
                     return;
                 };

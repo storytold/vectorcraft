@@ -716,6 +716,7 @@ impl PluginIntField {
             inputs: Vec::new(),
             params: vec![("seed".into(), vectorcraft_plugins::ParamSpec::Int { min, max, default: 0 }.into())],
             extensions: Vec::new(),
+            place: false,
             budget: Default::default(),
             paint_output: false,
             commands: Vec::new(),

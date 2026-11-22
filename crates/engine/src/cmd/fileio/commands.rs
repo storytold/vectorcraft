@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "File Formats",
             [],
             None,
-            "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}, plugin?: the id of the exporter plug-in (write only) or importer plug-in (read only) that adds the format (its id is plugin.<plug-in id>; see plugin.list)}], readable: [id…], writable: [id…], openExtensions: [ext…] (the importers' extensions that no built-in format reads included), unsupported: [{id, label, extensions, hint}] (formats asked for that can be neither opened nor written, such as DWG and PageMaker, with what to use instead)}",
+            "{} → {formats: [{id, label, extensions, mime, read, write, raster, options: {name: {type, default, description}}, plugin?: the id of the exporter plug-in (write only) or importer plug-in (read only) that adds the format (its id is plugin.<plug-in id>; see plugin.list), place?: true (an importer's format whose files file.place also reads, see file.place's importer)}], readable: [id…], writable: [id…], openExtensions: [ext…] (the importers' extensions that no built-in format reads included), unsupported: [{id, label, extensions, hint}] (formats asked for that can be neither opened nor written, such as DWG and PageMaker, with what to use instead)}",
             always,
             formats
         ),

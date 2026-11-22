@@ -225,6 +225,54 @@ fn a_dropped_file_only_an_importer_reads_opens() {
     app.run("plugin.remove", json!({"id": "test.ui.dropshare"})).unwrap();
 }
 
+/// A file only an importer that places its files reads, dropped on the canvas, is placed there as
+/// one group by that importer, as one undo step; dropped where the platform gives no position, it
+/// opens as its own document, as a vector file does.
+#[test]
+fn a_dropped_file_a_placing_importer_reads_is_placed_on_the_canvas() {
+    use crate::place::{DropTarget, drop_files};
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.sync_views();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0)));
+    let on_canvas = Some(egui::pos2(400.0, 300.0));
+    let manifest = tpl::importer("test.ui.dropplace", r#"["tdp"]"#, "{}").replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    assert!(manifest.contains(r#""place":true"#), "{manifest}");
+    install(&mut app, &tpl::returning(&manifest, RECT));
+
+    let target = app.drop_target("Drawing.tdp", on_canvas, false);
+    assert!(matches!(target, DropTarget::Place(_)), "{target:?}");
+    assert_eq!(app.drop_target("Drawing.tdp", None, false), DropTarget::Open);
+    let steps = app.session.active().unwrap().history.undo.len();
+    drop_files(&mut app, vec![(target, ("Drawing.tdp".into(), None, b"?".to_vec()))]);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.history.undo.len(), steps + 1, "one undo step");
+    let [id] = st.selection.objects[..] else { panic!("one placed object: {:?}", st.selection.objects) };
+    let n = st.doc.node(id).unwrap();
+    assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. }) && n.name.as_deref() == Some("Drawing.tdp"), "{n:?}");
+
+    app.run("plugin.remove", json!({"id": "test.ui.dropplace"})).unwrap();
+}
+
+/// A text file or DXF drawing placed with the importer `importer` names goes to that importer,
+/// without the text or DXF import options File › Place asks for those formats.
+#[test]
+fn a_named_placing_importer_skips_built_in_import_options() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let manifest = tpl::importer("test.ui.namedplace", r#"["txt","dxf"]"#, "{}").replace(r#""kind":"importer""#, r#""kind":"importer","place":true"#);
+    install(&mut app, &tpl::returning(&manifest, RECT));
+    for name in ["Notes.txt", "Plan.dxf"] {
+        let steps = app.session.active().unwrap().history.undo.len();
+        let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(b"0\nSECTION\n"), "importer": "plugin.test.ui.namedplace"});
+        let r = app.run("file.place", p).unwrap();
+        assert!(app.ui.dialog.is_none(), "{name}: no import options dialog");
+        assert_eq!(r["format"], "plugin.test.ui.namedplace", "{name}: {r}");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "{name}");
+    }
+    app.run("plugin.remove", json!({"id": "test.ui.namedplace"})).unwrap();
+}
+
 /// The extensions File › Open's filters leave out of importers' (`fileio::opens_as_other`) are the
 /// ones File › Open installs, imports, checks or loads as something other than a document.
 #[test]
