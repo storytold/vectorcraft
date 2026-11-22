@@ -19,11 +19,10 @@ fn brackets(app: &VectorcraftApp, id: NodeId) -> (f64, Option<f64>) {
     }
 }
 
-/// One frame of the app, then the dialog pump: the dialog host runs inside the app's pass, and a held OK or a
+/// One whole frame of the app, then the dialog pump: the dialog host runs inside the app's pass, and a held OK or a
 /// Cancel is answered by the pump.
 pub(super) fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.ui(ui));
-    out.textures_delta.clear();
+    crate::testing::app_frame(app, ctx, egui::RawInput::default());
     dialogs::host::pump(app, ctx);
 }
 

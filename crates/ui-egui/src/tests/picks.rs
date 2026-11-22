@@ -86,6 +86,11 @@ pub(crate) fn install_files(app: &mut VectorcraftApp, files: Arc<ScriptedFiles>)
     Host::clone(&app.host).install(&ctx);
 }
 
+/// Runs `command` with no path: it asks for a file and replies that it waits for the pick (fl.A3).
+pub(crate) fn asks(app: &mut VectorcraftApp, command: &str) {
+    assert_eq!(app.run(command, json!({})), Ok(json!({"pending": "fileDialog"})), "{command} waits for its pick");
+}
+
 /// Run what the frame runs for the picks: their continuations, then the saves.
 pub(crate) fn poll(app: &mut VectorcraftApp, ctx: &egui::Context) {
     file_asks::poll(app);
@@ -183,9 +188,11 @@ fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }
 
+/// The picks' answers, then the rest of a frame's pumps (Save Changes goes on once its save is written).
 fn settle(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     poll(app, &ctx);
+    crate::dialogs::host::pump(app, &ctx);
 }
 
 /// The id of the open dialog with `key`.
@@ -202,13 +209,13 @@ fn fields_of(app: &VectorcraftApp, id: DialogId) -> Option<Value> {
     open_dialogs(app).into_iter().find(|d| d.id == id).and_then(|d| d.fields)
 }
 
-/// One pass of the app's `poll` as a frame → the URLs the frame asked egui to open.
+/// One whole frame of the app (its `tick` polls the picks and opens the URL a save asked for) → the URLs the frame
+/// asked egui to open.
 fn opened_urls(app: &mut VectorcraftApp) -> Vec<String> {
     let ctx = app.ui_ctx.clone().unwrap_or_default();
     let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| poll(app, ui.ctx()));
-    out.textures_delta.clear();
-    out.platform_output
+    crate::testing::app_frame(app, &ctx, raw)
+        .platform_output
         .commands
         .iter()
         .filter_map(|c| match c {
@@ -332,7 +339,7 @@ fn a_command_asks_for_a_file_and_goes_on_with_the_answer() {
         let picker = scripted(&mut a);
         a.run("file.new", json!({"width": 100, "height": 80})).unwrap();
         a.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
-        assert!(a.run(command, json!({})).is_err(), "{command} waits for its pick");
+        asks(&mut a, command);
         assert_eq!(picker.requests().iter().map(|r| r.kind).collect::<Vec<_>>(), [kind], "{command}");
         settle(&mut a);
         assert!(a.file_dialog_open(), "{command}");
@@ -345,7 +352,7 @@ fn a_command_asks_for_a_file_and_goes_on_with_the_answer() {
         let mut a = app();
         let picker = scripted(&mut a);
         a.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-        assert!(a.run(command, json!({})).is_err());
+        asks(&mut a, command);
         picker.cancel();
         settle(&mut a);
         assert!(!a.file_dialog_open(), "{command}");
@@ -390,10 +397,12 @@ fn a_dialogs_folder_button_fills_its_field_when_the_picker_answers() {
     assert_eq!(picker.requests().iter().map(|r| r.kind).collect::<Vec<_>>(), [PickKind::Folder]);
     picker.answer(&["/out"]);
     settle(&mut app);
+    // The dialog writes the answer into its field in its next pass.
+    let ctx = app.ui_ctx.clone().unwrap();
+    draw_dialogs(&mut app, &ctx);
     assert_eq!(fields_of(&app, id).map(|f| f["folder"].clone()), Some(json!("/out")));
 
     browse_folder(&mut app, id);
-    let ctx = app.ui_ctx.clone().unwrap();
     app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id));
     picker.answer(&["/late"]);
     settle(&mut app);
@@ -412,6 +421,7 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
         Ok(())
     }));
     // PLAN: the working set is the active set's defaults here; shortcuts-w6's `Overrides` setter is not named.
+    app_frame(&app.ui_ctx.clone().unwrap(), &mut app, false);
     let _ = app.run("shortcuts.exportText", json!({}));
     let requests = picker.requests();
     let [request] = requests.as_slice() else { panic!("{requests:?}") };
@@ -422,7 +432,7 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     let texts = texts.borrow();
     let [(path, text)] = texts.as_slice() else { panic!("{texts:?}") };
     assert_eq!(path, "/keys/list.txt");
-    assert!(text.starts_with("Keyboard Shortcuts\n"), "{text}");
+    assert!(text.starts_with("Keyboard Shortcuts · VectorCraft Defaults\n"), "{text}");
     assert!(text.contains(&format!("\t{}\n", crate::keymap::chord_text("Ctrl+S"))), "{text}");
 }
 
@@ -436,7 +446,7 @@ fn keyboard_shortcuts_export_text_writes_the_format_picked_in_its_save_dialog() 
         ("/keys/list.csv", None, "/keys/list.csv", csv),
         ("/keys/table", Some(2), "/keys/table.csv", csv),
         ("/keys/sheet", Some(1), "/keys/sheet.pdf", &b"%PDF-"[..]),
-        ("/keys/plain", Some(0), "/keys/plain.txt", &b"Keyboard Shortcuts\n"[..]),
+        ("/keys/plain", Some(0), "/keys/plain.txt", "Keyboard Shortcuts · ".as_bytes()),
     ] {
         let mut app = app();
         let picker = scripted(&mut app);
@@ -446,6 +456,7 @@ fn keyboard_shortcuts_export_text_writes_the_format_picked_in_its_save_dialog() 
             f.borrow_mut().push((path.to_string(), b.to_vec()));
             Ok(())
         }));
+        app_frame(&app.ui_ctx.clone().unwrap(), &mut app, false);
         let _ = app.run("shortcuts.exportText", json!({}));
         picker.answer_saved(answer, file_type);
         settle(&mut app);
@@ -467,9 +478,10 @@ fn keyboard_shortcuts_import_opens_a_text_set_over_the_dialog() {
     let set = dir.join("Mine.kys");
     std::fs::write(&set, "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n").unwrap();
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    app_frame(&app.ui_ctx.clone().unwrap(), &mut app, false);
     app.run("edit.keyboardShortcuts", json!({})).unwrap();
     let shortcuts = top(&app);
-    assert_eq!(app.run("shortcuts.import", json!({})), Err("cancelled".to_string()));
+    asks(&mut app, "shortcuts.import");
     picker.answer(&[&set.to_string_lossy()]);
     settle(&mut app);
     // PLAN: assumed the review is a dialog of its own over Keyboard Shortcuts (shortcuts-w8).
@@ -502,7 +514,7 @@ fn keyboard_shortcuts_commands_reject_a_path_that_is_not_a_string() {
         }
     }
     assert!(picker.written().is_empty() && read.borrow().is_empty());
-    assert_eq!(app.run("shortcuts.export", json!({"path": null})), Err("cancelled".to_string()));
+    assert_eq!(app.run("shortcuts.export", json!({"path": null})), Ok(json!({"pending": "fileDialog"})));
     assert_eq!(picker.requests().iter().map(|r| r.kind).collect::<Vec<_>>(), [PickKind::Save]);
 }
 
@@ -516,7 +528,7 @@ fn save_as_saves_the_document_that_asked() {
     app.run("file.new", json!({"width": 200, "height": 160})).unwrap();
     let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
     app.run("document.activate", json!({"index": 0})).unwrap();
-    assert!(app.run("file.saveAs", json!({})).is_err());
+    asks(&mut app, "file.saveAs");
     app.run("document.activate", json!({"index": 1})).unwrap();
     picker.answer_saved("/art/a.svg", None);
     settle(&mut app);
@@ -538,7 +550,7 @@ fn an_answer_for_a_closed_document_is_dropped() {
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 160})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
-    assert!(app.run("file.saveAs", json!({})).is_err());
+    asks(&mut app, "file.saveAs");
     app.session.execute("file.close", &json!({"index": 0})).unwrap();
     app.sync_views();
     picker.answer_saved("/art/a.svg", None);
@@ -560,7 +572,7 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 160})).unwrap();
     assert!(!app.file_dialog_open() && !app.file_sheet_open());
-    assert!(app.run("file.open", json!({})).is_err());
+    asks(&mut app, "file.open");
     assert!(app.file_dialog_open() && app.file_sheet_open());
     let refused = |app: &mut VectorcraftApp| {
         for (id, p) in [("app.quit", json!({})), ("file.close", json!({})), ("file.close", json!({"index": 0})), ("file.closeAll", json!({}))] {
@@ -579,14 +591,14 @@ fn nothing_closes_or_quits_while_a_sheet_is_open() {
     app.run("file.close", json!({})).unwrap();
     assert_eq!(app.session.documents().len(), 2);
     // Cancelled: the same.
-    assert!(app.run("file.saveAs", json!({})).is_err());
+    asks(&mut app, "file.saveAs");
     refused(&mut app);
     picker.cancel();
     settle(&mut app);
     assert!(!app.file_dialog_open());
     app.run("file.closeAll", json!({})).unwrap();
     assert!(app.session.documents().is_empty());
-    assert!(app.run("file.open", json!({})).is_err());
+    asks(&mut app, "file.open");
     assert!(app.run("app.quit", json!({})).is_err());
     picker.cancel();
     settle(&mut app);
@@ -601,7 +613,7 @@ fn no_view_closes_while_a_sheet_is_open() {
     let picker = scripted_sheets(&mut app, true);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("window.newWindow", json!({})).unwrap();
-    assert!(app.run("file.open", json!({})).is_err());
+    asks(&mut app, "file.open");
     assert_eq!(app.run("file.close", json!({})), Err(file_asks::busy().to_string()));
     assert_eq!(crate::doc_windows::windows(&app), [(0, 1), (0, 2)]);
     picker.cancel();
@@ -619,7 +631,7 @@ fn on_linux_documents_close_while_a_dialog_is_open() {
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("file.new", json!({"width": 200, "height": 160})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
-    assert!(app.run("file.saveAs", json!({})).is_err());
+    asks(&mut app, "file.saveAs");
     assert!(app.file_dialog_open() && !app.file_sheet_open());
     app.run("file.close", json!({})).unwrap();
     assert_eq!(app.session.documents().len(), 1);
@@ -629,7 +641,7 @@ fn on_linux_documents_close_while_a_dialog_is_open() {
     assert!(picker.written().is_empty());
     assert!(find(&app, "svgOptions").is_none());
     // Quit goes on too.
-    assert!(app.run("file.open", json!({})).is_err());
+    asks(&mut app, "file.open");
     assert!(app.file_dialog_open());
     app.run("app.quit", json!({})).unwrap();
     assert_eq!(app.ui.status, "quit");
@@ -642,7 +654,7 @@ fn an_open_answer_goes_on_after_the_active_document_closes() {
     let mut app = app();
     let picker = scripted_sheets(&mut app, false);
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    assert!(app.run("file.open", json!({})).is_err());
+    asks(&mut app, "file.open");
     app.run("file.close", json!({})).unwrap();
     assert!(app.session.documents().is_empty());
     picker.answer(&["/art/b.svg"]);
@@ -724,7 +736,7 @@ fn the_window_stays_open_while_a_sheet_is_on_it() {
         let ctx = app.ui_ctx.clone().unwrap();
         app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
         app_frame(&ctx, &mut app, false);
-        assert!(app.run("file.open", json!({})).is_err());
+        asks(&mut app, "file.open");
         let commands = app_frame(&ctx, &mut app, true);
         assert_eq!(commands.contains(&egui::ViewportCommand::CancelClose), sheets, "sheets: {sheets}");
         assert_eq!(app.ui.status == file_asks::busy(), sheets, "sheets: {sheets}: {}", app.ui.status);
@@ -748,9 +760,9 @@ fn inspect_tells_the_file_dialog_open() {
     /// What asks for a kind of pick.
     type Ask = fn(&mut VectorcraftApp);
     let asks: [(&str, Ask); 4] = [
-        ("open", |app| assert!(app.run("file.open", json!({})).is_err())),
-        ("save", |app| assert!(app.run("file.saveAs", json!({})).is_err())),
-        ("place", |app| assert!(app.run("file.place", json!({})).is_err())),
+        ("open", |app| asks(app, "file.open")),
+        ("save", |app| asks(app, "file.saveAs")),
+        ("place", |app| asks(app, "file.place")),
         ("folder", |app| {
             let id = browse_dialog(app);
             browse_folder(app, id);
@@ -784,6 +796,8 @@ fn missing_fonts_says_why_the_folder_picked_wasnt_searched() {
     app.run("document.save", json!({"path": doc.to_string_lossy()})).unwrap();
     app.session.execute("file.close", &json!({})).unwrap();
     crate::io::open_path(&mut app, &doc.to_string_lossy()).unwrap();
+    // Missing Fonts opens from the frame's pump after the open.
+    settle(&mut app);
     let missing = find(&app, "missingFonts").expect("Missing Fonts");
     // The test's folder is the home folder: its Library holds other apps' folders.
     app.session.search_rules = Some(vectorcraft_engine::cmd::findfiles::Rules { home: Some(root.clone()), ..Default::default() });

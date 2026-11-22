@@ -69,15 +69,15 @@ fn previewing(app: &VectorcraftApp) -> Option<bool> {
     app.dialogs().and_then(|d| d.with(|host| host.get::<HostedParamDialog>().map(HostedParamDialog::is_previewing)))
 }
 
-/// One frame of the window, and the pump of the dialogs' answers.
-fn frame(h: &mut Harness<'_, VectorcraftApp>) {
-    h.step();
+/// One whole app frame of the window, and the pump of the dialogs' answers.
+fn frame(h: &mut Harness<'static, VectorcraftApp>) {
+    super::plugins::app_step(h);
     let ctx = h.state().ui_ctx.clone().unwrap();
     dialogs::host::pump(h.state_mut(), &ctx);
 }
 
 /// Answers the open dialog: OK when `ok`, else Cancel; then a frame, so the pump acts on it.
-fn answer(h: &mut Harness<'_, VectorcraftApp>, ok: bool) {
+fn answer(h: &mut Harness<'static, VectorcraftApp>, ok: bool) {
     let ctx = h.state().ui_ctx.clone().unwrap();
     let id = open_id(h.state()).unwrap();
     h.state().dialogs().unwrap().with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
@@ -85,7 +85,7 @@ fn answer(h: &mut Harness<'_, VectorcraftApp>, ok: bool) {
 }
 
 /// Sets the Preview check box of the open dialog.
-fn set_preview(h: &mut Harness<'_, VectorcraftApp>, on: bool) {
+fn set_preview(h: &mut Harness<'static, VectorcraftApp>, on: bool) {
     let ctx = h.state().ui_ctx.clone().unwrap();
     let id = open_id(h.state()).unwrap();
     h.state().dialogs().unwrap().with(|host| host.set_json_field(&ctx, id, "preview", json!(on))).unwrap();

@@ -90,8 +90,18 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(w) = shown {
         strip = strip.selected(w);
     }
+    // The strip selects a tab on the press; the tab is shown once the press ends without moving it, as a drag along
+    // the strip or off it is not a switch.
+    let pressed = egui::Id::new("vectorcraft.tabPressed");
+    let held = ui.input(|i| i.pointer.primary_down());
     for event in strip.show(ui).events {
+        if matches!(event, DocumentTabsEvent::Reordered { .. } | DocumentTabsEvent::TornOff { .. }) {
+            ui.data_mut(|d| d.remove::<Win>(pressed));
+        }
         match event {
+            DocumentTabsEvent::Selected(w) if held => {
+                ui.data_mut(|d| d.insert_temp(pressed, w));
+            }
             DocumentTabsEvent::Selected(w) | DocumentTabsEvent::Picked(w) => doc_windows::show_window(app, w),
             DocumentTabsEvent::CloseRequested(w) => {
                 if let Err(e) = doc_windows::close_window(app, w) {
@@ -120,6 +130,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             // This strip has no context menu, activation, OS file drop or empty-room double click.
             _ => {}
         }
+    }
+    if !held && let Some(w) = ui.data_mut(|d| d.remove_temp::<Win>(pressed)) {
+        doc_windows::show_window(app, w);
     }
 }
 

@@ -151,6 +151,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     for uid in busy {
         if !app.session.documents().iter().any(|d| d.uid == uid) {
             terminate(app, uid, Err(file_asks::closed().into()));
+            app.status(file_asks::closed());
             if let Some(mut flow) = app.saves.flows.remove(&uid) {
                 flow.cancel(app.host.files());
             }
@@ -369,9 +370,21 @@ pub(crate) fn write_named(
     bytes: Vec<u8>,
     then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
+    write_named_as(app, path, name, file_types(&fileio::extension(name)), bytes, then)
+}
+
+/// [`write_named`] with a save panel that shows `filters`, for a file whose extension names no one
+/// type (`.json` holds shortcut sets as well as preferences).
+pub(crate) fn write_named_as(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    name: &str,
+    filters: Vec<FileFilter>,
+    bytes: Vec<u8>,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
     let ext = fileio::extension(name);
     let (_, folder) = suggested(app, "");
-    let filters = file_types(&ext);
     ask_path(
         app,
         path,

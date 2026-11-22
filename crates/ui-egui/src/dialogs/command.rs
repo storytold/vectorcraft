@@ -81,6 +81,8 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
         HostedParamDialog::command(&ctx, command, fields, move |_: &mut DialogFields| {
             ParamDialog::command(key.clone(), heading.clone(), command_params(&key, &opening, setting)).previews(previews)
         })
+        // The Preview box starts off, as production's dialogs did (#5360).
+        .preview_off()
     };
     let ok_token = token.clone();
     let cancel_token = token.clone();

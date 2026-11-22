@@ -61,10 +61,21 @@ fn current(app: &VectorcraftApp) -> String {
     app.session.active().map(|d| d.title()).unwrap_or_default()
 }
 
+/// `name`'s tab.
+fn tab_rect(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> egui::Rect {
+    let (texts, _) = frame(app, ctx, time, vec![]);
+    texts.iter().find(|(t, _)| t.starts_with(name)).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name}'s tab: {texts:?}"))
+}
+
 /// The middle of `name`'s tab.
 fn tab(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> Pos2 {
-    let (texts, _) = frame(app, ctx, time, vec![]);
-    texts.iter().find(|(t, _)| t.starts_with(name)).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{name}'s tab: {texts:?}"))
+    tab_rect(app, ctx, time, name).center()
+}
+
+/// A point on the left edge of `name`'s tab: a tab dropped there goes before it.
+fn before(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, name: &str) -> Pos2 {
+    let r = tab_rect(app, ctx, time, name);
+    egui::pos2(r.left() + 4.0, r.center().y)
 }
 
 /// Press at `from`, move to `to` in steps, and release there; → the output of the frame before
@@ -98,8 +109,8 @@ fn a_tab_dragged_along_the_strip_moves_its_document_and_the_current_one_stays() 
 
     // And back to the start, before Bravo.
     let alpha = tab(&mut app, &ctx, 1.1, "Alpha");
-    let bravo = tab(&mut app, &ctx, 1.15, "Bravo");
-    drag(&mut app, &ctx, 1.2, alpha, bravo - egui::vec2(80.0, 0.0));
+    let bravo = before(&mut app, &ctx, 1.15, "Bravo");
+    drag(&mut app, &ctx, 1.2, alpha, bravo);
     assert_eq!(order(&app), NAMES);
     assert_eq!(current(&app), "Delta");
 }
@@ -167,8 +178,8 @@ fn a_tab_dragged_off_the_strip_still_floats_and_moves_nothing() {
 fn next_document_steps_through_the_tabs_in_their_new_order() {
     let (mut app, ctx) = app();
     let delta = tab(&mut app, &ctx, 0.1, "Delta");
-    let alpha = tab(&mut app, &ctx, 0.15, "Alpha");
-    drag(&mut app, &ctx, 0.2, delta, alpha - egui::vec2(80.0, 0.0));
+    let alpha = before(&mut app, &ctx, 0.15, "Alpha");
+    drag(&mut app, &ctx, 0.2, delta, alpha);
     assert_eq!(order(&app), ["Delta", "Alpha", "Bravo", "Charlie"]);
     assert_eq!(current(&app), "Delta");
     app.run("window.nextDocument", json!({})).unwrap();

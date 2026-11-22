@@ -28,8 +28,7 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
-    out.textures_delta.clear();
+    let out = crate::testing::part_frame(app, ctx, raw, draw);
     fn walk(s: &egui::Shape, v: &mut Vec<(String, Rect)>) {
         match s {
             egui::Shape::Text(t) => v.push((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size()))),
@@ -40,6 +39,20 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw
     let mut texts = vec![];
     out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
     texts
+}
+
+/// How many fields show `v` points: painted as one run, or as its number with the unit as the next run on its row.
+fn shown(texts: &[(String, Rect)], v: f64) -> usize {
+    let whole = Unit::Points.format(v);
+    let Some((number, unit)) = whole.rsplit_once(' ') else { return texts.iter().filter(|(t, _)| *t == whole).count() };
+    let unit_next = |r: &Rect| {
+        texts
+            .iter()
+            .filter(|(_, u)| u.left() >= r.right() && (u.center().y - r.center().y).abs() < 4.0)
+            .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))
+            .is_some_and(|(t, _)| t == unit)
+    };
+    texts.iter().filter(|(t, r)| *t == whole || (t == number && unit_next(r))).count()
 }
 
 fn press(at: Pos2, pressed: bool) -> Event {
@@ -195,14 +208,14 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
 #[test]
 fn ruler_origin_position_fields_show_relative_values_and_edit_absolute_positions() {
     for draw in [panels::properties::show as fn(&mut VectorcraftApp, &mut Ui), panels::transform::show, chrome::control_bar] {
-        for (label, arrow) in [("X:", (1.0, 0.0)), ("Y:", (0.0, 1.0))] {
+        for (label, arrow) in [("X", (1.0, 0.0)), ("Y", (0.0, 1.0))] {
             let mut app = app();
             let id = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap());
             app.run("document.setRulerOrigin", json!({"x": 120, "y": 50})).unwrap();
             let ctx = context();
             frame(&mut app, &ctx, vec![], draw);
             let texts = frame(&mut app, &ctx, vec![], draw);
-            assert!(texts.iter().filter(|(t, _)| t == &Unit::Points.format(20.0)).count() >= 2, "{texts:?}");
+            assert!(shown(&texts, 20.0) >= 2, "{texts:?}");
             let label = texts.iter().find(|(t, _)| t == label).unwrap().1;
             let at = pos2(label.right() + 40.0, label.center().y);
             frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(at, true)], draw);
@@ -220,7 +233,7 @@ fn ruler_origin_position_fields_show_relative_values_and_edit_absolute_positions
 #[test]
 fn ruler_origin_artboard_fields_preserve_the_absolute_reference_point() {
     for draw in [panels::properties::show as fn(&mut VectorcraftApp, &mut Ui), panels::transform::show] {
-        for label in ["X:", "Y:"] {
+        for label in ["X", "Y"] {
             let mut app = app();
             app.run("document.setRulerOrigin", json!({"x": 120, "y": 50})).unwrap();
             app.select_tool("artboard");
@@ -233,7 +246,7 @@ fn ruler_origin_artboard_fields_preserve_the_absolute_reference_point() {
             frame(&mut app, &ctx, vec![press(at, false)], draw);
             frame(&mut app, &ctx, vec![key(Key::ArrowUp)], draw);
             let ab = app.session.doc().unwrap().doc.artboards[0].rect;
-            assert_eq!((ab.x0, ab.y0), if label == "X:" { (1.0, 0.0) } else { (0.0, 1.0) });
+            assert_eq!((ab.x0, ab.y0), if label == "X" { (1.0, 0.0) } else { (0.0, 1.0) });
             assert_eq!((ab.width(), ab.height()), (400.0, 300.0));
         }
     }
@@ -263,10 +276,10 @@ fn artboard_rulers_position_fields_count_from_the_active_artboard() {
         let texts = frame(&mut app, &ctx, vec![], draw);
         // The reference point is the centre (760, -210): 60 and 40 from artboard 2's corner.
         for v in [60.0, 40.0] {
-            assert!(texts.iter().any(|(t, _)| t == &Unit::Points.format(v)), "X and Y count from artboard 2: {texts:?}");
+            assert!(shown(&texts, v) > 0, "X and Y count from artboard 2: {texts:?}");
         }
         // Typing a position puts the object there on the active artboard's rulers.
-        let label = texts.iter().find(|(t, _)| t == "X:").unwrap().1;
+        let label = texts.iter().find(|(t, _)| t == "X").unwrap().1;
         let at = pos2(label.right() + 40.0, label.center().y);
         frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(at, true)], draw);
         frame(&mut app, &ctx, vec![press(at, false)], draw);
@@ -278,8 +291,8 @@ fn artboard_rulers_position_fields_count_from_the_active_artboard() {
         assert_eq!(app.ruler_origin(), Point::ZERO);
         frame(&mut app, &ctx, vec![], draw);
         let texts = frame(&mut app, &ctx, vec![], draw);
-        assert!(texts.iter().any(|(t, _)| t == &Unit::Points.format(761.0)), "{texts:?}");
-        assert!(!texts.iter().any(|(t, _)| t == &Unit::Points.format(61.0)), "{texts:?}");
+        assert!(shown(&texts, 761.0) > 0, "{texts:?}");
+        assert_eq!(shown(&texts, 61.0), 0, "{texts:?}");
     }
 }
 

@@ -17,8 +17,7 @@ pub(super) fn window(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 /// One frame of the whole window with `events`. → The rect of the first text drawn as `text`.
 fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, text: &str) -> Option<Rect> {
     let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0)));
-    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect, ..Default::default() }, |ui| window(app, ui));
-    out.textures_delta.clear();
+    let out = crate::testing::app_frame(app, ctx, egui::RawInput { events, screen_rect, ..Default::default() });
     fn find(shape: &egui::Shape, text: &str) -> Option<Rect> {
         match shape {
             egui::Shape::Text(t) if t.galley.text() == text => Some(t.galley.rect.translate(t.pos.to_vec2())),
@@ -49,11 +48,11 @@ fn objects(doc: &DocState) -> usize {
 }
 
 /// Drag the W label by `dx` in four moves (`escape`: Escape before the release).
-// PLAN: assumed the ported Transform W field (object-panels-w9) is labelled "W:" and scrubs by that label.
+// The Transform panel's W field scrubs by its label, "W".
 fn drag_w(app: &mut VectorcraftApp, ctx: &egui::Context, dx: f32, escape: bool) {
     let mut w = None;
     for _ in 0..4 {
-        w = app_frame(app, ctx, vec![], "W:");
+        w = app_frame(app, ctx, vec![], "W");
     }
     let at = w.expect("the W label is shown").center();
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
@@ -171,7 +170,7 @@ fn a_scrub_closes_its_group_in_its_own_document_after_a_switch() {
     let undo = undo_len(&app);
     let mut w = None;
     for _ in 0..4 {
-        w = app_frame(&mut app, &ctx, vec![], "W:");
+        w = app_frame(&mut app, &ctx, vec![], "W");
     }
     let at = w.expect("the W label is shown").center();
     let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };

@@ -241,7 +241,8 @@ fn the_view_menu_lists_the_status_bar_angles_and_checks_the_current_one() {
 #[test]
 fn rotate_view_without_an_angle_asks_for_one() {
     assert!(crate::palette::items().iter().any(|(label, id)| (label.as_str(), id.as_str()) == ("Rotate View", "view.rotate")));
-    let mut app = with_document();
+    // The dialog opens on the window's host.
+    let mut app = crate::testing::windowed(with_document());
     app.run("view.rotate", json!({"angle": 30})).unwrap();
     menus::invoke(&mut app, "view.rotate", json!({}));
     assert!(app.any_dialog_open(), "Rotate View dialog");

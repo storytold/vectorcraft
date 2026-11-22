@@ -192,7 +192,7 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Some(params) => io::open_path_with(app, &path, params),
                 None => io::open_path(app, &path),
             },
-            None => io::open_dialog(app).map(|_| Value::Null),
+            None => io::open_dialog(app),
         },
         "file.openWith" => io::open_with(app, p),
         // Saves write through the app (save panel, download); with no path known the panel and the

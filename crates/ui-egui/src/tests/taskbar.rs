@@ -40,39 +40,69 @@ impl Rig {
         self.app.borrow_mut()
     }
 
+    /// Runs the commands the frames since the last call fired, as the window runs them, and gives the fixture the
+    /// app's input for the next frame.
+    pub(crate) fn run_fired(&mut self) {
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fx);
+    }
+
+    /// Frames until the app is at rest, with the commands they fired run.
+    fn settle(&mut self) -> &mut Fixture {
+        self.run_fired();
+        self.fx.settle();
+        self.run_fired();
+        &mut self.fx
+    }
+
     /// The node named `name` once the frames have settled.
     pub(crate) fn target(&mut self, name: &str) -> Option<Target> {
-        self.fx.settle().by_label(name)
+        self.settle().by_label(name)
     }
 
     /// Clicks the node named `name`.
     pub(crate) fn click(&mut self, name: &str) {
         let target = self.target(name).unwrap_or_else(|| panic!("no node named {name:?}"));
         self.fx.click(&target);
-        self.fx.settle();
+        self.settle();
     }
 
     /// The runs of text the latest frame painted, with their rects.
     fn texts(&mut self) -> Vec<(String, Rect)> {
-        self.fx.settle().texts().iter().map(|t| (t.text.clone(), t.rect)).collect()
+        self.settle().texts().iter().map(|t| (t.text.clone(), t.rect)).collect()
+    }
+
+    /// Where `text` is painted: a run of it, or a field's value painted as its number with the unit apart right
+    /// after it on its row ("10 pt" as "10" then "pt").
+    fn painted(&mut self, text: &str) -> Vec<Rect> {
+        let texts = self.texts();
+        let unit_after = |r: &Rect, unit: &str| {
+            texts
+                .iter()
+                .any(|(u, ur)| u == unit && ur.left() >= r.right() && ur.left() - r.right() < 24.0 && (ur.center().y - r.center().y).abs() < 4.0)
+        };
+        texts
+            .iter()
+            .filter(|(t, r)| t == text || text.rsplit_once(' ').is_some_and(|(number, unit)| t == number && unit_after(r, unit)))
+            .map(|(_, r)| *r)
+            .collect()
     }
 
     fn has_text(&mut self, text: &str) -> bool {
-        self.texts().iter().any(|(t, _)| t == text)
+        !self.painted(text).is_empty()
     }
 
     fn count_text(&mut self, text: &str) -> usize {
-        self.texts().iter().filter(|(t, _)| t == text).count()
+        self.painted(text).len()
     }
 
     /// Clicks the first painted run of `text`, or with `last` the last: an open list is painted after the
     /// closed menu that shows the same name.
     fn click_text(&mut self, text: &str, last: bool) {
-        let centers: Vec<Pos2> = self.texts().into_iter().filter(|(t, _)| t == text).map(|(_, r)| r.center()).collect();
+        let centers: Vec<Pos2> = self.painted(text).iter().map(Rect::center).collect();
         let at = if last { centers.last() } else { centers.first() };
         let at = *at.unwrap_or_else(|| panic!("no `{text}` painted"));
         self.fx.click_at(at);
-        self.fx.settle();
+        self.settle();
     }
 
     /// Where the field painted right of `label`, on its row, centers.
@@ -81,7 +111,8 @@ impl Rig {
         let l = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no `{label}` in {texts:?}")).1;
         texts
             .iter()
-            .filter(|(_, r)| r.left() > l.right() && (r.center().y - l.center().y).abs() < 8.0)
+            // Tops, not centres: a label's painted rect can reach below its row.
+            .filter(|(_, r)| r.left() > l.right() && (r.top() - l.top()).abs() < 8.0)
             .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))
             .unwrap_or_else(|| panic!("no field after `{label}` in {texts:?}"))
             .1
@@ -90,7 +121,7 @@ impl Rig {
 
     /// Types `value` into the field painting `field` and presses Enter.
     fn type_into(&mut self, field: &str, value: &str) {
-        let at = self.texts().into_iter().find(|(t, _)| t == field).unwrap_or_else(|| panic!("no `{field}` painted")).1.center();
+        let at = self.painted(field).first().unwrap_or_else(|| panic!("no `{field}` painted")).center();
         self.enter_value(at, value);
     }
 
@@ -99,7 +130,7 @@ impl Rig {
         // The click selected the whole field, so the text typed replaces it.
         self.fx.type_text(value);
         self.fx.key(Key::Enter, Modifiers::NONE);
-        self.fx.settle();
+        self.settle();
     }
 }
 
@@ -113,7 +144,9 @@ pub(super) fn driven<R>(app: &mut VectorcraftApp, room: Vec2, show: fn(&mut Vect
     // The window's dialog host is the fixture's, as a real window's frame gives the app its context.
     held.borrow_mut().adopt_context(fx.ctx());
     let mut rig = Rig { app: held, fx };
+    rig.run_fired();
     let out = f(&mut rig);
+    rig.run_fired();
     let Rig { app: held, fx } = rig;
     drop(fx);
     *app = Rc::into_inner(held).expect("the fixture's closure is gone").into_inner();

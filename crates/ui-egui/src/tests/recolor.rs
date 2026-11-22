@@ -1094,7 +1094,7 @@ fn a_markers_menu_sets_the_base_color_that_the_rules_build_from() {
     key(&mut r, Key::Escape);
     // The selected color is another one; the rule still builds from the base.
     put(&mut r, "__sel", json!([0]));
-    tap(&mut r, "Harmony Rules:");
+    tap(&mut r, "Harmony Rules");
     tap(&mut r, "Triad");
     let now = new_hsb(&r);
     assert!(hue_gap(now[1][0], hsb[1][0]) < 1.0, "the base color keeps its hue: {hsb:?} -> {now:?}");

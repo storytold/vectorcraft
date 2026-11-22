@@ -263,7 +263,7 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     if p.get("path").is_none() && p.get("dataBase64").is_none() {
         let files: Vec<Value> = match p.get("paths").and_then(Value::as_array) {
             Some(a) => a.iter().filter_map(Value::as_str).map(|path| json!({ "path": path })).collect(),
-            None => return pick(app).map(|_| Value::Null),
+            None => return Ok(pick(app)),
         };
         if files.is_empty() {
             return Err("paths: give at least one file".into());
@@ -316,8 +316,9 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     }
 }
 
-/// Pick files to place: the Place dialog opens with them (on the web once they arrive).
-fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
+/// Pick files to place: the Place dialog opens with them (on the web once they arrive). Returns
+/// what [`crate::file_asks::ask`] returns.
+fn pick(app: &mut VectorcraftApp) -> Value {
     let request = fileio::place_filters().fold(PickRequest::open_many("place"), |request, (name, extensions)| request.filter(name, extensions));
     // The web answers with the files' contents instead of paths.
     crate::file_asks::ask(app, request, Owner::Document, |app, picked| {
@@ -337,8 +338,7 @@ fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
         };
         open_dialog(app, files, None);
         Ok(Value::Null)
-    });
-    Ok(())
+    })
 }
 
 /// The Place dialog for `files` (`{path}`, or `{name}` with the bytes in [`PlaceState`]), with Show

@@ -388,10 +388,10 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
     app.ui.recent_files.iter().find_map(|p| fileio::dialog_folder(p)).or_else(|| suggested(app, "").1)
 }
 
-/// File → Open…
-pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
+/// File → Open…: `{pending: "fileDialog"}` while its picker is open.
+pub fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
     let request = open_request("document", open_dialog_folder(app), fileio::open_filters());
-    ask_open(app, request, Owner::Document, |app, path| open_reporting(app, &path)).map(|_| ())
+    ask_open(app, request, Owner::Document, |app, path| open_reporting(app, &path))
 }
 
 /// File › Open With: opens the file `p` names (`path`), else one picked among the files with the

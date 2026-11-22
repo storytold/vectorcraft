@@ -30,19 +30,34 @@ pub(super) fn window(app: VectorcraftApp) -> Window {
                 crate::testing::install(ui.ctx());
                 return;
             }
+            app.tick(ui.ctx());
             app.ui(ui);
         },
         app,
     );
     // The first frame installs the fonts; the second gives the app its context and host.
-    h.step();
+    app_step(&mut h);
     h
+}
+
+/// One frame of `h` as the hosts run the window's (`testing::part_frame`): the app gives the frame's input, and the
+/// commands the pass fired run as the next frame begins.
+pub(super) fn app_step(h: &mut Window) {
+    let ctx = h.ctx.clone();
+    let input = |h: &mut Window| {
+        let app = h.state_mut();
+        app.adopt_context(&ctx);
+        craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+    };
+    input(h);
+    h.step();
+    input(h);
 }
 
 /// Draws a frame of `h` at `time` seconds.
 pub(super) fn at(h: &mut Window, time: f64) {
     h.input_mut().time = Some(time);
-    h.step();
+    app_step(h);
 }
 
 /// Draws a frame a tenth of a second after the one before.

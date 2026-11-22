@@ -1369,7 +1369,8 @@ fn export(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = text_param(p, "path")?;
     let sets = &app.ui.shortcut_sets;
     let json = sets.export(sets.active_name(&BUILTINS), &BUILTINS).map_err(|e| e.to_string())?;
-    crate::io::save::write_named(app, path, "VectorCraft Shortcuts.json", json.into_bytes(), |_, path| Ok(json!({ "path": path })))
+    let filters = file_asks::filters(&[("Shortcut sets", &["json"])]);
+    crate::io::save::write_named_as(app, path, "VectorCraft Shortcuts.json", filters, json.into_bytes(), |_, path| Ok(json!({ "path": path })))
 }
 
 /// `shortcuts.exportText {path?, format?, pageSize?}`: the set in use as text, a shortcut sheet or

@@ -14,8 +14,8 @@ fn output_and_advanced_choices_reach_the_pdf() {
     let ctx = shown(&mut app);
     app.run("ui.savePdfDialog", json!({"path": "/tmp/press.pdf"})).unwrap();
     frame(&mut app, &ctx);
-    // PLAN: field keys assumed from the old dialog fields (`__section` is `section`); export-w6's `json_fields` names them.
-    set_field(&app, &ctx, "section", json!("Output"));
+    // The section ids are the framework dialog's `json_fields` ones.
+    set_field(&app, &ctx, "section", json!("output"));
     set_field(
         &app,
         &ctx,
@@ -25,7 +25,7 @@ fn output_and_advanced_choices_reach_the_pdf() {
     set_field(&app, &ctx, "advanced", json!({"outlineText": false}));
     set_field(&app, &ctx, "compression", json!({"compressText": false}));
     set_field(&app, &ctx, "standard", json!("none"));
-    set_field(&app, &ctx, "section", json!("Advanced"));
+    set_field(&app, &ctx, "section", json!("advanced"));
     frame(&mut app, &ctx);
     confirm(&mut app, &ctx);
     assert!(app.ui.status.starts_with("Saved /tmp/press.pdf") && !app.ui.status.contains("note"), "{}", app.ui.status);

@@ -15,9 +15,11 @@ pub(super) fn host(app: &mut VectorcraftApp) {
     crate::testing::install(&ctx);
 }
 
-/// One frame of the host (which opens a queued question), then the pump.
+/// One frame of the host (which opens a queued question), then the pump; first the answers of the save panels, as a
+/// frame's tick takes them.
 pub(super) fn pass(app: &mut VectorcraftApp) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
+    crate::tests_svg::picked(app);
     let Some(dialogs) = app.dialogs() else { return };
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui)));
     out.textures_delta.clear();
@@ -66,7 +68,8 @@ fn save_as_native_asks_for_its_options_and_writes_every_artboard() {
     host(&mut app);
     three_boards(&mut app);
     let r = app.run("file.saveAs", Value::Null).unwrap();
-    assert_eq!(r["pending"], "saveOptions");
+    assert_eq!(r["pending"], "fileDialog");
+    pass(&mut app);
     let open = open_dialogs(&app);
     assert_eq!(open.len(), 1);
     let f = open[0].fields.clone().unwrap();

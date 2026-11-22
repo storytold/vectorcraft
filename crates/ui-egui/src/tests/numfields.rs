@@ -99,8 +99,8 @@ fn a_press_on_the_canvas_commits_to_the_object_being_edited() {
     let shared = app.clone();
     let mut fixture = Fixture::new(move |ui| window(&mut shared.borrow_mut(), ui));
     fixture.settle();
-    // PLAN: assumed the ported W field's label is "W:" and a click on it focuses the field (object-panels-w9).
-    let label = fixture.by_label("W:").expect("the Transform panel shows the W field");
+    // The Transform panel's W field is named by its label, "W"; a click on it focuses the field.
+    let label = fixture.by_label("W").expect("the Transform panel shows the W field");
     fixture.click(&label).idle(2).key(Key::A, Modifiers::COMMAND).type_text("42").idle(1);
     // PLAN: assumed the artboard is centred in the window, so the window's centre is on the big rectangle only.
     let canvas = fixture.ctx().content_rect().center();
