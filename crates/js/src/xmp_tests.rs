@@ -329,6 +329,17 @@ fn localized_text_updates_a_single_generic_language_item() {
     assert_eq!(string(src), "2|Color|Color|4|Couleur|Color");
 }
 
+/// Setting the `x-default` item also changes the items that had its text, and leaves the others.
+#[test]
+fn localized_text_for_x_default_changes_the_items_that_matched_it() {
+    let src = "var ns = 'http://example.com/lt/'; XMPMeta.registerNamespace(ns, 'lt'); var m = new XMPMeta();
+        m.setLocalizedText(ns, 'label', null, 'en-US', 'old');
+        m.setLocalizedText(ns, 'label', null, 'fr-FR', 'vieux');
+        m.setLocalizedText(ns, 'label', null, 'x-default', 'new');
+        ['x-default', 'en-US', 'fr-FR'].map(function (l) { return m.getLocalizedText(ns, 'label', null, l); }).join('|')";
+    assert_eq!(string(src), "new|new|vieux");
+}
+
 /// A packet read from `rdf:RDF` alone reads back from what it serializes to, which adds the
 /// `x:xmpmeta` element around it, also with values nested near the depth limit.
 #[test]

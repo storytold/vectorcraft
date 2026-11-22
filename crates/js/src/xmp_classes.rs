@@ -770,7 +770,15 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
             meta_of(i, o)?.find(&ns, &name).unwrap_or(0)
         }
     };
-    let grow = 2 * (64 + value.len() + specific.len());
+    // An item and the `x-default` item change, or every item with the text of the `x-default` one.
+    let changed = match meta_of(i, o)?.props.get(at).map(|p| &p.value) {
+        Some(xmp::Value::Array { items, .. }) if specific.eq_ignore_ascii_case("x-default") => {
+            let old = items.iter().find(|i| same_lang(i.lang.as_deref(), "x-default")).map(|i| &i.text);
+            items.iter().filter(|i| Some(&i.text) == old).count().max(2)
+        }
+        _ => 2,
+    };
+    let grow = changed.saturating_mul(64 + value.len() + specific.len());
     change(i, o, grow, |m, _| {
         let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|p| &mut p.value) else { return };
         set_lang(items, &generic, &specific, value);
@@ -781,14 +789,14 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
 /// Sets the item of `items` in `specific` to `value`, or, when there is none, the one item in the
 /// language `generic` or a variant of it. VectorCraft's own rule: the `x-default` item is first; it
 /// is added with the value when there is none, and follows a change to an item that had the same
-/// text.
+/// text; a change to the `x-default` item also changes the items that had its text.
 fn set_lang(items: &mut Vec<Item>, generic: &str, specific: &str, value: String) {
     let default = items.iter().position(|i| same_lang(i.lang.as_deref(), "x-default"));
     if specific.eq_ignore_ascii_case("x-default") {
-        match default {
-            Some(d) => {
-                if let Some(item) = items.get_mut(d) {
-                    item.text = value;
+        match default.and_then(|d| items.get(d)).map(|i| i.text.clone()) {
+            Some(old) => {
+                for item in items.iter_mut().filter(|i| i.text == old) {
+                    item.text.clone_from(&value);
                 }
             }
             None => items.insert(0, Item { text: value, lang: Some("x-default".into()) }),
@@ -917,9 +925,10 @@ not_yet_fns! {
 
 // ---- XMPFile ----
 
-/// The `XMPFile` `this`, refused when it is not one.
+/// The `XMPFile` `this`, refused when the `XMPFile` constructor did not make it.
 fn this_file(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
     if let Some(o) = this.as_object()
+        && matches!(i.heap.object(o).map(|ob| &ob.class), Some(Class::XmpFile))
         && matches!(slot(i, o, PATH)?, Value::String(_))
     {
         return Ok(o);
@@ -970,7 +979,7 @@ fn file_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
         let reported = if format == FILE_UNKNOWN && sidecar { FILE_XML } else { format };
         let file_proto = ids(i)?.file_proto;
         i.reserve_heap(OBJECT_BYTES + 12 * PROP_BYTES)?;
-        let o = i.heap.alloc_object(Object::new(Class::Ordinary, Some(file_proto)));
+        let o = i.heap.alloc_object(Object::new(Class::XmpFile, Some(file_proto)));
         i.rooted(&[Value::Object(o)], |i| {
             let packet = field(i, "packet")?;
             let fields = [

@@ -163,7 +163,8 @@ fn a_scanned_sidecar_is_read_only() {
 
 /// The state an `XMPFile` keeps cannot be changed by the script: a sidecar opened for reading is
 /// not written by `closeFile` after the script assigns, defines or deletes the properties that
-/// hold the packet, the path and the open flags.
+/// hold the packet, the path and the open flags, or calls `closeFile` on another object that holds
+/// properties of the same names, plain or made from `XMPFile.prototype`.
 #[test]
 fn a_script_cannot_change_the_state_of_an_xmp_file() {
     let base = folder("state");
@@ -177,10 +178,14 @@ fn a_script_cannot_change_the_state_of_an_xmp_file() {
              x.__vcXmpPending = 'not a packet'; x.__vcXmpFlags = XMPConst.OPEN_FOR_UPDATE;\n\
              try {{ Object.defineProperty(x, '__vcXmpPending', {{ value: 'not a packet' }}); out.push('defined'); }} catch (e) {{ out.push(e.name); }}\n\
              out.push(typeof x.__vcXmpPending, x.getFileInfo().openFlags == XMPConst.OPEN_FOR_READ);\n\
+             [{{}}, Object.create(XMPFile.prototype)].forEach(function (fake) {{\n\
+               fake.__vcXmpPath = p; fake.__vcXmpRun = x.__vcXmpRun; fake.__vcXmpOpen = true; fake.__vcXmpPending = 'not a packet';\n\
+               try {{ XMPFile.prototype.closeFile.call(fake); out.push('closed'); }} catch (e) {{ out.push(e.name); }}\n\
+             }});\n\
              x.closeFile(); out.push(delete x.__vcXmpPath); vc.log(out); vc.log(p);"
         ),
     );
-    assert_eq!(log[0], json!(["TypeError", "undefined", true, false]));
+    assert_eq!(log[0], json!(["TypeError", "undefined", true, "TypeError", "TypeError", false]));
     let text = std::fs::read_to_string(log[1].as_str().unwrap()).unwrap();
     assert_eq!(text, PACKET);
     let _ = std::fs::remove_dir_all(base);

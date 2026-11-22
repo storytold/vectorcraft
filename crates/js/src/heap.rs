@@ -248,6 +248,8 @@ pub(crate) enum Class {
     XmlFilter(Box<XmlFilterState>),
     /// An `XMPMeta` object and its metadata ([`crate::xmp_classes`]).
     Xmp(Box<crate::xmp::Meta>),
+    /// An object the `XMPFile` constructor made ([`crate::xmp_classes`]).
+    XmpFile,
 }
 
 /// What an XML value is.
@@ -311,7 +313,7 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) | Class::Xmp(_) => "Object",
+            Class::XmlFilter(_) | Class::Xmp(_) | Class::XmpFile => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
             Class::Ordinary | Class::ForIn(_) => "Object",
