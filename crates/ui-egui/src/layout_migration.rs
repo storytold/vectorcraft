@@ -63,6 +63,11 @@ impl UiState {
         let mut saved: Value = serde_json::from_slice(bytes).ok()?;
         let fields = saved.as_object_mut()?;
         help_bar_visibility(fields, "status_bar", "help_bar");
+        // Before the shared dock, `dock` was whether Tab had hidden the panels; the key now holds the arrangement, which
+        // the legacy fields below convert.
+        if fields.get("dock").is_some_and(|dock| !dock.is_object()) {
+            fields.remove("dock");
+        }
         let mut intact = recover(fields, Keys::SNAKE);
         for key in ["custom_workspaces", "workspace_changes"] {
             if let Some(Value::Array(workspaces)) = fields.get_mut(key) {

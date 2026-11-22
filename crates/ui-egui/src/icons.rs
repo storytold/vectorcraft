@@ -19,7 +19,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-group-select" => "dc-group-select",
         "tool-magic-wand" => "wand_sparkles",
         "tool-lasso" => "lasso",
-        "tool-pen" => "pen_tool",
+        "tool-pen" => "pen-tool",
         "tool-pen-add" => "pen-tool-add",
         "tool-pen-delete" => "pen-tool-delete",
         "tool-anchor" => "dc-anchor",
