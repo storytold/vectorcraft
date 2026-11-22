@@ -288,17 +288,29 @@ impl CanvasTool for SessionTool<'_> {
         let held = tool_mods(cx.mods, space);
         match key {
             ToolKey::Nudge { direction, mods, .. } => {
-                let k = match (direction.x.abs() > direction.y.abs(), direction.x < 0.0, direction.y < 0.0) {
-                    (true, true, _) => EngineKey::Left,
-                    (true, false, _) => EngineKey::Right,
-                    (false, _, true) => EngineKey::Up,
-                    (false, _, false) => EngineKey::Down,
+                let (k, arrow) = match (direction.x.abs() > direction.y.abs(), direction.x < 0.0, direction.y < 0.0) {
+                    (true, true, _) => (EngineKey::Left, Key::Left),
+                    (true, false, _) => (EngineKey::Right, Key::Right),
+                    (false, _, true) => (EngineKey::Up, Key::Up),
+                    (false, _, false) => (EngineKey::Down, Key::Down),
                 };
-                // An arrow the tool leaves moves the selection; with Backtick held, only its pattern paints.
-                self.send_key(k, tool_mods(*mods, space)) || {
-                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, cx.held(Key::Backtick));
-                    true
+                if self.send_key(k, tool_mods(*mods, space)) {
+                    return true;
                 }
+                // An arrow an application command is bound to runs it, as production's keymap ran it first; one it
+                // leaves moves the selection, with Backtick held only its pattern paint. A panel's own arrows (a page
+                // preview's) are not the canvas's.
+                let chord = Chord::new(*mods, arrow);
+                let bound = self.app().ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).is_some_and(|keymap| {
+                    let global = |command: &craft::keymap::CommandRef| {
+                        keymap.bindable(command).is_some_and(|def| keymap.scopes().kind(&def.scope) == craft::keymap::ScopeKind::Application)
+                    };
+                    !matches!(keymap.lookup_where(&chord, false, &craft::keymap::Active::NONE, &[], &global), craft::keymap::Lookup::None)
+                });
+                if !bound {
+                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, cx.held(Key::Backtick));
+                }
+                !bound
             }
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
             ToolKey::Submit => self.send_key(EngineKey::Enter, held),

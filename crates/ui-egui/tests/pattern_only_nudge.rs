@@ -118,7 +118,7 @@ fn geometry_unchanged(before: &Node, after: &Node) {
 
 #[test]
 fn pattern_nudge_baseline_backtick_arrows_move_paints_not_mixed_art() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut s = Scene::new();
     let (fill, stroke, solid, other) = (s.node(s.fill), s.node(s.stroke), s.node(s.solid), s.node(s.other));
     let selection = s.app.session.active().unwrap().selection.clone();
@@ -147,7 +147,7 @@ fn pattern_nudge_baseline_backtick_arrows_move_paints_not_mixed_art() {
 
 #[test]
 fn pattern_nudge_baseline_ordinary_arrow_keeps_existing_geometry_behavior() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut s = Scene::new();
     let before = s.node(s.fill);
     let pattern = before.appearance.fill_paint();
@@ -166,7 +166,7 @@ fn pattern_nudge_baseline_ordinary_arrow_keeps_existing_geometry_behavior() {
 
 #[test]
 fn pattern_nudge_partial_anchors_and_idle_shape_tool_preserve_owner_geometry() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     for tool in ["directSelection", "rectangle"] {
         let mut s = Scene::new();
         s.app.run("select.set", json!({"ids": [s.fill.0]})).unwrap();
@@ -206,7 +206,7 @@ fn pattern_nudge_partial_anchors_and_idle_shape_tool_preserve_owner_geometry() {
 
 #[test]
 fn pattern_nudge_shift_constrain_release_and_undo_use_press_time_increment() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut s = Scene::new();
     s.app.run("prefs.set", json!({"values": {"keyboardIncrement": 3, "constrainAngle": 90}})).unwrap();
     let before = s.node(s.fill);
@@ -235,7 +235,7 @@ fn pattern_nudge_shift_constrain_release_and_undo_use_press_time_increment() {
 
 #[test]
 fn pattern_nudge_same_frame_event_order_uses_backtick_at_arrow_press() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut s = Scene::new();
     let before = s.node(s.fill);
     s.backtick(true);
@@ -267,7 +267,7 @@ fn pattern_nudge_same_frame_event_order_uses_backtick_at_arrow_press() {
 
 #[test]
 fn pattern_nudge_solid_and_guide_only_are_noops_but_ordinary_arrows_work() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut s = Scene::new();
     s.app.run("select.set", json!({"ids": [s.solid.0]})).unwrap();
     let before = s.app.session.active().unwrap().doc.clone();
@@ -306,7 +306,7 @@ fn pattern_nudge_solid_and_guide_only_are_noops_but_ordinary_arrows_work() {
 
 #[test]
 fn pattern_nudge_user_shortcut_precedes_global_arrow_dispatch() {
-    let _input = INPUT.lock().unwrap();
+    let _input = INPUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut s = Scene::new();
     s.app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Right", "force": true})).unwrap();
     let before = s.app.session.active().unwrap().doc.clone();
