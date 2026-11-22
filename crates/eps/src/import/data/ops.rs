@@ -915,6 +915,27 @@ impl Interp<'_> {
         Ok(Spec { w, h, bpc, space, decode: vec![], matrix, sources, mask_color: None, stencil })
     }
 
+    /// Decode the filters image source `f` waits to run. `false` when the decoded data is past
+    /// what the reader holds and the image is `reduced` (read at a lower resolution): a decode that
+    /// fails leaves the file empty (`materialize`), but such an image is left out with its data
+    /// still to skip, so its filters are put back for that.
+    fn decode_source(&mut self, f: &Rc<RefCell<Stream>>, reduced: bool) -> Res<bool> {
+        let pending = match &*f.borrow() {
+            Stream::Pending { chain, from } => Some((chain.clone(), from.clone())),
+            _ => None,
+        };
+        match self.materialize(f) {
+            Ok(()) => Ok(true),
+            Err(PsError::Limit(_)) if reduced => {
+                if let Some((chain, from)) = pending {
+                    *f.borrow_mut() = Stream::Pending { chain, from };
+                }
+                Ok(false)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// The image's pixels, straight RGBA, rows from the first one read, and a CMYK image's ink
     /// amounts.
     fn decode_image(&mut self, s: Spec) -> Res<Option<Pixels>> {
@@ -935,25 +956,12 @@ impl Interp<'_> {
             Err(e) => return Err(e),
         };
         for src in s.sources.iter().filter(|_| streamed.is_none()) {
-            if let Source::File(f) = src {
-                // A decode that fails leaves the file empty (`materialize`), but a reduced image
-                // that is left out still has its data to skip: its filters are put back for that.
-                let pending = match &*f.borrow() {
-                    Stream::Pending { chain, from } => Some((chain.clone(), from.clone())),
-                    _ => None,
-                };
-                match self.materialize(f) {
-                    Ok(()) => {}
-                    // Decoded data past the cap: a reduced image is left out (its data skipped)
-                    // rather than failing the file, as an image too large to read at all is.
-                    Err(PsError::Limit(_)) if step > 1 => {
-                        if let Some((chain, from)) = pending {
-                            *f.borrow_mut() = Stream::Pending { chain, from };
-                        }
-                        return Ok(self.leave_out(&s));
-                    }
-                    Err(e) => return Err(e),
-                }
+            // Decoded data past the cap: a reduced image is left out (its data skipped) rather
+            // than failing the file, as an image too large to read at all is.
+            if let Source::File(f) = src
+                && !self.decode_source(f, step > 1)?
+            {
+                return Ok(self.leave_out(&s));
             }
         }
         // A decoded JPEG gives 8-bit gray, RGB or CMYK samples whatever the color space says.
