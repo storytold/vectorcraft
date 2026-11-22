@@ -2938,9 +2938,19 @@ VectorCraft reads files by these rules of its own:
   folder gives `null` with `Script folder mask takes too many steps to match`.
 - A path longer than 32,767 characters throws a `RangeError` (`Script file path exceeds 32,767 characters`) when a
   `File` or `Folder` is made from it.
-- `createAlias` returns `false` with `Script files cannot make aliases`, setting `hidden` sets `error` to `Script
-  file hidden setting cannot be changed` and changes nothing, and `execute` opens nothing and returns `false`. In the
-  web build every lookup fails with `Script file access is unavailable on the web`.
+- On Unix a file is hidden when its name starts with a dot. Setting `hidden` renames the file in its folder with one
+  dot added, or with its leading dots taken off, under the rules for `rename`, and the object takes the new path,
+  where a file it has open stays open; a
+  file already as asked keeps its name, and a name of dots alone or a folder gives `false` with `error` set.
+  `createAlias(target)` makes a symbolic link at the object's path to a file, a path or a `File`, and returns `true`;
+  the link leads to the file's real path. On Windows setting `hidden` sets `error` to `Script file hidden setting
+  cannot be changed`, `createAlias` returns `false` with `Script files cannot make aliases`, and neither changes
+  anything. `execute` opens nothing and returns `false`. In the web build every lookup fails with `Script file access
+  is unavailable on the web`.
+- `alias` is true for a link and `resolve()` gives the file it leads to, and reading or writing through the link reads
+  or writes that file. `hidden` tells whether the link's own name is hidden, and setting `hidden`, `rename` and
+  `remove` change the link and not the file it leads to, as the help page describes
+  (<https://extendscript.docsforadobe.dev/file-system-access/using-file-and-folder-objects/>).
 
 The help page's writing members work as it describes
 (<https://extendscript.docsforadobe.dev/file-system-access/file-object/>,
@@ -2984,6 +2994,14 @@ VectorCraft writes files by these rules of its own:
   been made, apart from the script's own `Folder.userData`, and a folder that holds it cannot be renamed. Anything
   else gives `false` with
   `Script file access denied`.
+- Setting `hidden` needs both the old and the new name to be places the script may write. `createAlias` needs the
+  link's place to be one the script may write where nothing is, not even a link that leads nowhere (`Script file
+  name is already in use`), and the file it leads to to be one the script may read, never a folder (`Script file is
+  not a regular file`) or a file that is not there (`Script file does not exist`). A link is looked up again each
+  time it is used: one that leads out of the script's places afterward is refused like any other path, and writing
+  through a link needs the file it leads to to be a place the script may write. When a folder above the link's place
+  is replaced by a link while the alias is made, the new link is removed again and `createAlias` gives `Script file
+  access denied`.
 - What a script writes is written when it closes the file or when the run ends, also when the run fails. At the
   run's end the files left open are written in the order they were opened. A file
   that `close` could not write stays open, so a later `close` tries again, and is written again when the run ends; a
