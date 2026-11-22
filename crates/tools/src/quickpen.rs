@@ -499,17 +499,14 @@ impl QuickPenTool {
     /// go past the drag distance after shorter drag events, moves what it holds to `p` and ends
     /// its undo step. A click on an end of an open path goes on drawing from it, a click on another
     /// anchor selects it alone (with Shift, adds it to the selected anchors or takes it out), and a
-    /// click on a segment starts a new path there. A click whose path another command edited while
-    /// the press was down does nothing.
+    /// click on a segment starts a new path there. A click whose path or selection another command
+    /// changed while the press was down does nothing.
     fn release_edit(&mut self, cx: &ToolContext, mut e: Edit, p: Point) -> Vec<Action> {
         if e.began || p.distance(e.start) >= cx.tol(DRAG_PX) {
             let mut out = e.drag(cx, p);
-            // A drag that could not begin (its path changed under the press) has no step to end.
-            // One that came back to where it started records none, unless another command's
-            // edit during the drag is in the step.
-            if e.began {
-                out.push(if e.moved || e.interrupted { Action::Commit } else { Action::Cancel });
-            }
+            // A drag that could not begin (its path or the selection changed under the press) has
+            // no step to end.
+            out.extend(e.finish(cx));
             return out;
         }
         if !e.unchanged(cx) {
@@ -734,14 +731,13 @@ impl Tool for QuickPenTool {
         }
     }
 
-    fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.drawing = None;
         self.snap.clear();
-        let moved = self.edit.take().is_some_and(|e| e.began);
+        let moved = self.edit.take().and_then(|mut e| e.finish(cx));
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Commit],
-            _ if moved => vec![Action::Commit],
-            _ => vec![],
+            _ => moved.into_iter().collect(),
         }
     }
 

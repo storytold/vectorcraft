@@ -676,6 +676,37 @@ fn a_drag_back_to_its_start_records_no_undo_step() {
         assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)], "press at {at:?}");
         assert_eq!(undo_steps(&s), undo, "press at {at:?}");
     }
+    // Choosing another tool during such a drag records none either.
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 100.0), v).unwrap();
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)]);
+    assert_eq!(undo_steps(&s), undo);
+}
+
+/// When another command changes the selection while the press is down, neither a click nor a drag
+/// selects or moves the anchor the press found.
+#[test]
+fn a_selection_change_during_an_edit_press_stops_it() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let v = view();
+    for drag in [false, true] {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let undo = undo_steps(&s);
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        let y = if drag { 150.0 } else { 100.0 };
+        if drag {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, y), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, y), v).unwrap();
+        assert!(s.doc().unwrap().selection.objects.is_empty(), "drag: {drag}");
+        assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)], "drag: {drag}");
+        assert_eq!(undo_steps(&s), undo, "drag: {drag}");
+    }
 }
 
 /// When another command edits the path while the press is down, neither a drag nor a release past

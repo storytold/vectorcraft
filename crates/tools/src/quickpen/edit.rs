@@ -93,6 +93,8 @@ pub(super) struct Edit {
     pub(super) interrupted: bool,
     /// The grabbed path as the document had it when the press went down.
     pressed: Option<Arc<Node>>,
+    /// The selection when the press went down.
+    pressed_selection: Selection,
     snap: Option<PointSnap>,
     pub(super) guides: Vec<Overlay>,
 }
@@ -100,7 +102,20 @@ pub(super) struct Edit {
 impl Edit {
     pub(super) fn new(cx: &ToolContext, grab: Grab, start: Point, shift: bool) -> Self {
         let pressed = shared_node(cx.doc, grab.id()).cloned();
-        Self { grab, start, shift, began: false, moved: false, revision: None, interrupted: false, pressed, snap: None, guides: vec![] }
+        let pressed_selection = cx.selection.clone();
+        Self {
+            grab,
+            start,
+            shift,
+            began: false,
+            moved: false,
+            revision: None,
+            interrupted: false,
+            pressed,
+            pressed_selection,
+            snap: None,
+            guides: vec![],
+        }
     }
 
     /// Whether the drag began and still previews: no other command changed the document or the
@@ -112,18 +127,28 @@ impl Edit {
         self.began && !self.interrupted
     }
 
-    /// Whether the grabbed path is as the document had it when the press went down.
+    /// What ends a drag that began when the press is let go: a commit, or a cancel when the drag
+    /// came back to where it started and no other command's edit is in its undo step.
+    pub(super) fn finish(&mut self, cx: &ToolContext) -> Option<Action> {
+        if !self.began {
+            return None;
+        }
+        Some(if self.open(cx) && !self.moved { Action::Cancel } else { Action::Commit })
+    }
+
+    /// Whether the grabbed path and the selection are as they were when the press went down.
     pub(super) fn unchanged(&self, cx: &ToolContext) -> bool {
-        match (cx.doc.node(self.grab.id()), self.pressed.as_ref()) {
+        let path = match (cx.doc.node(self.grab.id()), self.pressed.as_ref()) {
             (Some(now), Some(then)) => same_node(now, then),
             _ => false,
-        }
+        };
+        path && *cx.selection == self.pressed_selection
     }
 
     /// Moves what the press holds by the drag to `p`. The first move selects the anchor, or the
     /// segment, unless it is already selected, and begins the undo step; a drag that starts on
-    /// one of several selected anchors moves them all. When the grabbed path changed after the
-    /// press went down, the drag does not begin, and after another command's edit during the
+    /// one of several selected anchors moves them all. When the grabbed path or the selection
+    /// changed after the press went down, the drag does not begin, and after another command's edit during the
     /// drag it moves nothing more.
     pub(super) fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let mut out = vec![];
