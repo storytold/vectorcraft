@@ -479,8 +479,8 @@ mod tests {
         new_doc(&mut app, true);
         let ctx = ready_for_test(&mut app);
         let quit = |app: &mut VectorcraftApp| {
-            let (req, _rx) = crate::control::ControlRequest::new("app.quit", json!({}));
-            let crate::control::Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+            let (req, _rx) = craft::automation::ControlRequest::new("app.quit", json!({}));
+            let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
             r
         };
         assert_eq!(quit(&mut app), json!({"ok": true, "result": {"pending": KIND}}));

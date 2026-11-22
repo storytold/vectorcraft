@@ -1615,7 +1615,7 @@ fn refused_sets(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRe
 fn dialog_set_cannot_redirect_person_opened_confirm() {
     let (mut app, tx) = controlled();
     let rect = json!({"x": 10, "y": 10, "width": 20, "height": 20});
-    crate::dialogs::confirm::ask(&mut app, "Add a rectangle?", "", "shape.rectangle", rect.clone());
+    crate::dialogs::confirm::ask(&mut app, "Add a rectangle?", "", "shape.rectangle", rect);
     let other = json!({"x": 0, "y": 0, "width": 90, "height": 90});
     refused_sets(
         &mut app,
@@ -1627,7 +1627,8 @@ fn dialog_set_cannot_redirect_person_opened_confirm() {
             json!({"fields": [{"field": "__params", "value": other}, {"field": "detail", "value": "Sure?"}], "action": "confirm"}),
         ],
     );
-    assert_eq!(crate::dialogs::confirm::open_question(&app), Some(("shape.rectangle".to_string(), rect)), "it asks about its command still");
+    let command = crate::dialogs::confirm::open_question(&app).map(|(_, _, command)| command);
+    assert_eq!(command.as_deref(), Some("shape.rectangle"), "it asks about its command still");
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
     assert_eq!(r["ok"], true, "{r}");
     assert!(open_dialogs(&app).is_empty() && objects(&app) == 1, "OK ran the command it asked about");

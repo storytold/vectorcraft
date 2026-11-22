@@ -328,7 +328,7 @@ fn capture_from_ui(range: Option<(usize, usize)>, redefine: bool, unicode: bool)
     let undo = undo_len(&app);
     assert!(!app.session.doc().unwrap().is_dirty());
     let label = if redefine { "Redefine Character Style" } else { "New Character Style…" };
-    let action = if redefine { TextStyleAction::Redefine } else { TextStyleAction::new_style(true, false) };
+    let action = if redefine { TextStyleAction::Redefine(style_id(&mut app, Kind::Char, "Body")) } else { TextStyleAction::new_style(true, false) };
     act(&mut app, Kind::Char, action);
     draw(&mut app, &ctx, Kind::Char);
     assert_eq!(text_editing(&app), range.map(|(start, end)| (id, start, end)), "Type selection after {label}");
@@ -954,7 +954,7 @@ fn capture_during_live_typing(redefine: bool) {
 }
 
 fn capture_style_from_typing(app: &mut VectorcraftApp, redefine: bool) {
-    let action = if redefine { TextStyleAction::Redefine } else { TextStyleAction::new_style(true, false) };
+    let action = if redefine { TextStyleAction::Redefine(style_id(app, Kind::Char, "Body")) } else { TextStyleAction::new_style(true, false) };
     act(app, Kind::Char, action);
 }
 

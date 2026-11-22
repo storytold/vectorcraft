@@ -120,7 +120,7 @@ fn cancel(app: &mut VectorcraftApp) {
 /// Press a control that has no automation field, by its name.
 fn press(app: &mut VectorcraftApp, name: &str) {
     let ctx = app.ui_ctx.clone().expect("a UI context");
-    let (click, _reply) = crate::control::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
+    let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
     crate::control::handle(app, &ctx, &click);
     // The click lands in the passes that draw the dialogs after it.
     for _ in 0..2 {

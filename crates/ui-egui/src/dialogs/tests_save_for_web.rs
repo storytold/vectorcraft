@@ -22,7 +22,6 @@ pub(super) fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
     let l = log.clone();
     let mut services = Services::default();
     if web {
-        // PLAN: assumed `Services::download` stays (hub-w3 names its replacement).
         services.download = Some(Box::new(move |name: &str, b: &[u8]| {
             l.borrow_mut().push(format!("download {name} {}", b.len()));
             Ok(())
@@ -280,7 +279,6 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     let (mut app, _) = app(&dir, false);
     app.run("file.saveForWeb", json!({})).unwrap();
     // A preset field loads the preset; the keys set after it win.
-    // PLAN: assumed the `preset` field of ex.W7: it applies a listed preset.
     set(&mut app, "preset", json!("JPEG, quality 50"));
     frame(&mut app);
     assert_eq!(fields(&app)["quality"].as_f64(), Some(50.0));
@@ -691,16 +689,17 @@ fn optimize_to_file_size_takes_the_settings_that_fit() {
     set(&mut app, "quality", json!(100));
     settle(&mut app);
     let full = encoded_bytes(&mut app, json!({"format": "jpg", "quality": 100}));
-    // PLAN: assumed the optimize fields of ex.W8 (`optimizeOpen`, `optimizeK`, `optimizeStart`, `optimizeGo`).
     set(&mut app, "optimizeOpen", json!(true));
     settle(&mut app);
     // A size of 0 is refused: the settings and the rows stay.
-    set(&mut app, "optimizeK", json!(0));
+    let start = fields(&app)["optimizeK"].as_f64();
+    let ctx = app.ui_ctx.clone().expect("the app has a window");
+    let dialog = id(&app);
+    assert!(host(&app).with(|h| h.set_json_field(&ctx, dialog, "optimizeK", json!(0))).is_err());
     set(&mut app, "optimizeStart", json!("current"));
-    set(&mut app, "optimizeGo", json!(true));
     settle(&mut app);
     assert_eq!(fields(&app)["quality"].as_f64(), Some(100.0));
-    assert_eq!(fields(&app)["optimizeK"].as_f64(), Some(0.0));
+    assert_eq!(fields(&app)["optimizeK"].as_f64(), start);
     assert!(app.web_export.optimized.is_none());
     // OK takes the settings found and closes the rows.
     set(&mut app, "optimizeK", json!(full as f64 * 0.8 / 1024.0));

@@ -769,8 +769,8 @@ mod tests {
     fn percentages_convert_against_the_image_scaled_while_the_dialog_is_open() {
         let ctx = Context::default();
         let control = |app: &mut VectorcraftApp, field: &str, value: Value| {
-            let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
-            let crate::control::Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("expected an immediate reply") };
+            let (req, _) = craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
+            let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("expected an immediate reply") };
             r
         };
         let mut app = app_with_image();

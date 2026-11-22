@@ -1,6 +1,6 @@
 //! Applying the edits a framework component reports to the document, one undo step per gesture.
 
-use craft::behavior::{CancelReason, EditEvent};
+use craft::behavior::{CancelReason, EditEvent, GestureId};
 use craft::ui::contract::EditResponse;
 
 use crate::VectorcraftApp;
@@ -31,7 +31,6 @@ pub(crate) fn apply_edits<V: Clone>(
 
 /// Applies one event. Only the events of the pass that received the input are applied, so a rerun
 /// pass gives none and nothing runs twice.
-// PLAN: assumed `app.edit_scopes: HashMap<GestureId, UndoScope>` (hub-w1).
 pub(crate) fn apply_event<V: Clone>(
     app: &mut VectorcraftApp,
     event: &EditEvent<V>,
@@ -68,6 +67,17 @@ pub(crate) fn apply_event<V: Clone>(
     }
 }
 
+/// Ends the undo scopes of the gestures whose component went away while they ran
+/// (`FrameOutput::removed_gestures`), whose `Cancel` never comes: what they applied stays, as one
+/// step, as a removed preview keeps what it showed.
+pub(crate) fn end_removed(app: &mut VectorcraftApp, removed: &[GestureId]) {
+    for id in removed {
+        if let Some(scope) = app.edit_scopes.remove(id) {
+            app.session.end_undo_scope(scope, false);
+        }
+    }
+}
+
 /// Ends a preview that did not commit: rolled back, except where the document moved or the
 /// component went away, which keep what was previewed.
 fn end_preview(app: &mut VectorcraftApp, reason: CancelReason) {
@@ -87,7 +97,7 @@ mod tests {
     use std::cell::Cell;
     use std::sync::Arc;
 
-    use craft::behavior::{GestureId, Mixed};
+    use craft::behavior::Mixed;
     use serde_json::json;
     use vectorcraft_engine::Session;
 
@@ -109,7 +119,6 @@ mod tests {
         crate::panels::live_run(app, "Rectangle", "shape.rectangle", json!({"x": x, "y": 0, "width": 5, "height": 5}), phase);
     }
 
-    // PLAN: assumed the `commit`, `cancel` and `set` constructors beside `begin` and `update`.
     fn begin(id: u64) -> EditEvent<f64> {
         EditEvent::begin(GestureId::new(id), Mixed::Same(0.0), Arc::from("Test"), None)
     }

@@ -91,8 +91,8 @@ pub(super) fn confirm(app: &mut VectorcraftApp) {
 /// One control request, answered as the control channel answers it.
 pub(super) fn call_raw(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
     let ctx = ctx(app);
-    let (req, _reply) = crate::control::ControlRequest::new(method, params);
-    let crate::control::Outcome::Done(reply) = crate::control::handle(app, &ctx, &req) else { panic!("{method} is answered at once") };
+    let (req, _reply) = craft::automation::ControlRequest::new(method, params);
+    let craft::automation::Reply::Done(reply) = crate::control::handle(app, &ctx, &req) else { panic!("{method} is answered at once") };
     pump(app);
     reply
 }

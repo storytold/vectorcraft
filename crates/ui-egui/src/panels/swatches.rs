@@ -69,7 +69,7 @@ impl View {
         matches!(self, View::SmallList | View::LargeList)
     }
     /// The browser's view and thumbnail zoom this mode stands for.
-    fn preset(self) -> (PresetView, f64) {
+    pub(crate) fn preset(self) -> (PresetView, f64) {
         match self {
             View::SmallThumb => (PresetView::Grid, 0.5),
             View::MediumThumb => (PresetView::Grid, 0.75),
@@ -117,7 +117,7 @@ type SelectedArt = (u64, Vec<u64>);
 /// What the panel keeps between passes (`UiState::swatches_panel`): the framework's state (browser view, open
 /// groups, the selected rows), the swatch kept lit for the active paint, what the last pass saw and the panel's own
 /// switches.
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct Model {
     /// The framework's panel state; its `selection` holds the selected groups and swatches by name.
     pub(crate) state: SwatchesState,

@@ -173,7 +173,6 @@ pub struct VectorcraftApp {
     /// moves ([`menus::native::sync`]).
     run_count: u64,
     /// The control channel's requests and their replies, while the host opened one.
-    // PLAN: an `Option` because `new` has no receiver; shell-w12's `run_control` reads `self.channel` as one.
     pub(crate) channel: Option<ControlChannel>,
     /// Where a control-channel Rotate View drag began, kept between its requests.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
@@ -307,7 +306,6 @@ pub struct VectorcraftApp {
     /// The Bullets and Numbering dialog's live preview.
     pub(crate) bullets_preview: dialogs::preview::LivePreview,
     /// The paste that waits for the answer to its colour profile question.
-    // PLAN: assumed `crate::dialogs::profile_mismatch::PasteAsk` (fl.A16 names the type, not its module; files-w11).
     pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
     /// The missing links' questions, while they are asked.
     pub(crate) link_asks: Option<dialogs::missing_links::LinkAsk>,

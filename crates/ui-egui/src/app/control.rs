@@ -62,8 +62,28 @@ impl VectorcraftApp {
                 channel.settle(req, reply, document, settle);
             }
         }
+        self.answer_pointer_waits(ctx);
         if let Some(channel) = self.channel.as_mut() {
             channel.poll_input(&host);
+        }
+    }
+
+    /// Answers the `ui.pointer` replies held on the tool's edit ([`control::PointerWait`]). The canvas
+    /// checks on the tool each pass it is drawn; this checks too, for passes without it.
+    fn answer_pointer_waits(&mut self, ctx: &egui::Context) {
+        // Those whose events the canvas's check made go first, before this check makes the input
+        // held after them.
+        control::answer_pointer_waits(self);
+        if self.pointer_waits.is_empty() {
+            return;
+        }
+        if self.session.tool_editing() {
+            let r = self.session.tool_poll(self.view_info(), false);
+            crate::canvas::apply_requests(self, r);
+        }
+        control::answer_pointer_waits(self);
+        if !self.pointer_waits.is_empty() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
     }
 

@@ -32,9 +32,6 @@ use vectorcraft_geom::{Point, Rect, Vec2};
 use super::first_selected;
 use crate::VectorcraftApp;
 use crate::caches::PixelAligned;
-// PLAN: assumed `crate::edits::{EditPath, apply_edits, apply_event}` (wg.A16), `crate::fields::stops_stepper` (wg.S8),
-// `crate::canvas::rulers::general_rulers` / `general_lengths` (cv.B5b/B5c), `craft::ui::display::Shade`,
-// `craft::behavior::{IconId, geometry::BoxState}` and `craft::draw::ui::transform::FieldArrangement` (op.F12).
 use crate::canvas::rulers::{general_lengths, general_rulers};
 use crate::edits::{EditPath, apply_edits, apply_event};
 use crate::fields::stops_stepper;
@@ -380,7 +377,7 @@ pub(crate) fn object_bar_fields(app: &mut VectorcraftApp, ui: &mut Ui) -> Option
 /// A field of an angle: its icon as a scrubbing label, the value in degrees and the presets on a ladder of stops.
 fn angle_field(
     ui: &mut Ui,
-    label: &str,
+    label: &'static str,
     icon: &'static str,
     shown: f64,
     range: RangeInclusive<f64>,

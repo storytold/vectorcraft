@@ -74,7 +74,6 @@ fn shift_arrow_nudges_ten_points_and_alt_arrow_copies() {
 #[test]
 fn a_pointer_release_after_a_key_waits_for_the_key() {
     let (tx, rx) = std::sync::mpsc::channel();
-    // PLAN: assumed `with_control(rx)` takes the framework channel's receiver (shell-w12).
     let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
     app.run("tool.select", json!({"tool": "arc"})).unwrap();

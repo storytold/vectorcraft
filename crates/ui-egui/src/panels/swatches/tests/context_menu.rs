@@ -36,7 +36,8 @@ fn item_commands_run_on_the_clicked_swatch_and_paint_nothing() {
     assert_eq!(doc(&app), before);
     // Delete asks first; Cancel keeps the swatch, OK deletes only the clicked one.
     menu(&mut app, "Red", "delete");
-    assert_eq!(crate::dialogs::confirm::open_question(&app), Some(("swatch.delete".to_string(), json!({"names": ["Red"]}))));
+    let (message, _, command) = crate::dialogs::confirm::open_question(&app).expect("Delete asks first");
+    assert!(command == "swatch.delete" && message.contains("Red") && !message.contains("Black"), "{command}: {message}");
     assert_eq!((doc(&app), undo_steps(&app)), (before.clone(), undo));
     cancel(&mut app, key);
     assert_eq!(doc(&app), before);

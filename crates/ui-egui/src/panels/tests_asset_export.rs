@@ -4,7 +4,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-// PLAN: assumed crate paths for the framework items below; none is used elsewhere in this crate yet.
 use craft::keymap::CommandRef;
 use craft::ui::dialog::StackDialog;
 use craft::ui::menu::PanelRow;
@@ -13,7 +12,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use super::asset_export::{menu_rows, menu_states};
-use crate::dialogs::ExportForScreensDialog; // PLAN: assumed path of ex.A8's dialog
+use crate::dialogs::ExportForScreensDialog;
 use crate::tests::panel_harness::Panel;
 use crate::{Services, VectorcraftApp};
 

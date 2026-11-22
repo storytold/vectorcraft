@@ -476,7 +476,6 @@ fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::s
         }
     }
     if deleted {
-        // PLAN: assumed the dialog's `colorSelection` field takes an empty list.
         let id = asked.id;
         host.with(|h| h.set_json_field(ctx, id, "colorSelection", json!([])).ok());
     }

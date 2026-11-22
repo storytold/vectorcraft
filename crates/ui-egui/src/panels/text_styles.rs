@@ -308,8 +308,8 @@ pub(crate) fn run_action(app: &mut VectorcraftApp, kind: Kind, action: TextStyle
                 app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
             }
         }
-        TextStyleAction::Redefine => {
-            if let Some(n) = current_name {
+        TextStyleAction::Redefine(id) => {
+            if let Some(n) = name(id) {
                 end_typing(app);
                 app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": n }))).ok();
             }

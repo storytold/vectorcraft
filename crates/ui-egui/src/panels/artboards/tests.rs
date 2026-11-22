@@ -92,9 +92,9 @@ fn list_events_and_menu_rows_reach_their_commands() {
 
     // A name goes to every picked artboard the row is one of, numbered, in one undo step; a blank one changes nothing.
     let steps = undo_steps(&app);
-    apply(&mut app, vec![PageListEvent::rename(1, "  ".into())]);
+    apply(&mut app, vec![PageListEvent::rename(1, "  ")]);
     assert_eq!(undo_steps(&app), steps);
-    apply(&mut app, vec![PageListEvent::rename(1, "Page".into())]);
+    apply(&mut app, vec![PageListEvent::rename(1, "Page")]);
     assert_eq!(board_names(&app), ["Artboard 1", "Page-1", "Artboard 3", "Page-2"]);
     assert_eq!(undo_steps(&app), steps + 1);
 
@@ -281,7 +281,7 @@ fn the_panel_menus_rename_numbers_several_selected_artboards() {
     app.session.set_tool_option("selected", &json!([2, 0, 3]));
     run(&mut app, "ui.artboards.rename", &json!({})).unwrap().unwrap();
     assert_eq!(app.ui.artboards_ui.rename.take(), Some(2), "the field opens on the active artboard's row");
-    apply(&mut app, vec![PageListEvent::rename(2, "abc".into())]);
+    apply(&mut app, vec![PageListEvent::rename(2, "abc")]);
     assert_eq!(board_names(&app), ["abc-1", "Artboard 2", "abc-2", "abc-3"]);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Artboard 3", "Artboard 4"], "one undo step");
@@ -289,7 +289,7 @@ fn the_panel_menus_rename_numbers_several_selected_artboards() {
     select(&mut app, 1);
     run(&mut app, "ui.artboards.rename", &json!({})).unwrap().unwrap();
     assert_eq!(app.ui.artboards_ui.rename.take(), Some(1));
-    apply(&mut app, vec![PageListEvent::rename(1, "Solo".into())]);
+    apply(&mut app, vec![PageListEvent::rename(1, "Solo")]);
     assert_eq!(board_names(&app), ["Artboard 1", "Solo", "Artboard 3", "Artboard 4"]);
 }
 
@@ -308,7 +308,7 @@ fn the_panel_menus_rename_opens_on_a_selected_artboard() {
     assert_eq!((selected(&app, 3), picked(&app, 3)), (1, vec![2]), "Artboard 2 is active, and the pasted Artboard 3 is selected");
     run(&mut app, "ui.artboards.rename", &json!({})).unwrap().unwrap();
     assert_eq!(app.ui.artboards_ui.rename, Some(2), "the field opens on Artboard 3's row");
-    apply(&mut app, vec![PageListEvent::rename(2, "Pasted".into())]);
+    apply(&mut app, vec![PageListEvent::rename(2, "Pasted")]);
     assert_eq!(board_names(&app), ["Artboard 1", "Artboard 2", "Pasted"]);
 }
 

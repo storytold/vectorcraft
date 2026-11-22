@@ -172,8 +172,8 @@ fn row_state(app: &VectorcraftApp, form: GlyphForm) -> (bool, bool) {
     let mut states = CommandStates::new();
     menu_states(app, &mut states);
     let state = states.get(&form_ref(form)).unwrap_or_else(|| panic!("no state for {form:?}"));
-    // PLAN: assumed CommandState::is_checked(&self) -> bool
-    (state.is_checked(), state.is_enabled())
+    // PLAN: assumed CommandState::is_checked(&self) -> Option<bool>
+    (state.is_checked() == Some(true), state.is_enabled())
 }
 
 #[test]

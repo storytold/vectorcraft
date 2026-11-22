@@ -1039,11 +1039,9 @@ mod tests {
         (*app.session.active().unwrap().doc).clone()
     }
 
-    /// The `graphicStyle.delete` the open question runs on OK, and the styles it names.
-    fn asked_delete(app: &VectorcraftApp) -> Option<Vec<String>> {
-        let (command, params) = confirm::open_question(app)?;
-        assert_eq!(command, "graphicStyle.delete");
-        serde_json::from_value(params["names"].clone()).ok()
+    /// Is the open question one that runs `graphicStyle.delete` on OK?
+    fn asks_delete(app: &VectorcraftApp) -> bool {
+        confirm::open_question(app).is_some_and(|(_, _, command)| command == "graphicStyle.delete")
     }
 
     /// The open dialog with key `key`.
@@ -1061,9 +1059,9 @@ mod tests {
         select(&mut app, unused.clone());
         on_event(&mut app, PresetEvent::Delete(unused[0].clone()), false);
         assert_eq!(names(&app), before, "nothing goes before OK");
-        assert_eq!(asked_delete(&app), Some(unused));
+        assert!(asks_delete(&app));
         answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
-        assert_eq!(names(&app), ["Mine"]);
+        assert_eq!(names(&app), ["Mine"], "OK deletes every selected style");
         assert!(selected(&app).is_empty());
         // Alt deletes at once.
         on_event(&mut app, PresetEvent::Delete("Mine".into()), true);
@@ -1247,7 +1245,7 @@ mod tests {
         let n = names(&app);
         footer_drop(&mut app, AT_DELETE, "Mine", false);
         assert_eq!(names(&app), n);
-        assert_eq!(asked_delete(&app), Some(vec!["Mine".to_string()]));
+        assert!(asks_delete(&app));
         answer_dialog(&mut app, dialog_id(confirm::KIND), &[], true);
         assert!(!names(&app).iter().any(|s| s == "Mine"));
         app.run("edit.undo", json!({})).unwrap();

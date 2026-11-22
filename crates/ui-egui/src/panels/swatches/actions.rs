@@ -8,7 +8,6 @@ use super::libraries::SwatchLibraries;
 use super::library_panel;
 use super::{View, active_paint, selected};
 use crate::VectorcraftApp;
-use crate::menus::Sep;
 
 /// The selected swatches and groups that can be deleted: every color group in the document and
 /// every swatch that `Swatch::is_reserved` does not reserve (None and Registration). Names the
@@ -162,7 +161,7 @@ pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
         cmd("spotColors"),
         PanelRow::Separator,
         PanelRow::Submenu(tl!("Open Swatch Library").into(), library_rows(app)),
-        cmd("saveLibrary"),
+        PanelRow::Command(CommandRef::with_params("ui.saveSwatchLibrary", json!({ "names": deletable(app, &selected(app)) }))),
     ]);
     rows
 }
@@ -185,7 +184,6 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
         ("spotColors", doc),
     ];
     for (row, on) in enabled {
-        // PLAN: assumed `CommandState::new().enabled(bool).checked(bool)`.
         states.set(CommandRef::new(id(row)), CommandState::new().enabled(on));
     }
     states.set(CommandRef::new(id("showFind")), CommandState::new().checked(app.ui.swatches_panel.show_find));
@@ -255,11 +253,6 @@ pub(crate) fn run(app: &mut VectorcraftApp, row: &str, params: &Value) -> Option
             None => done,
         },
         "spotColors" => app.run("ui.spotColors", json!({})),
-        "saveLibrary" => app.run("ui.saveSwatchLibrary", json!({ "names": del })),
         _ => return None,
     })
 }
-
-// The panel menu's separators come from the shared menu model.
-#[allow(unused_imports)]
-use Sep as _;

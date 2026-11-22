@@ -34,7 +34,6 @@ impl Gate {
 /// where the test says.
 pub(crate) fn with_jobs(app: &mut VectorcraftApp, jobs: Arc<dyn craft::host::Jobs>) {
     let ctx = egui::Context::default();
-    // PLAN: assumed `Host::builder(AppInfo { .. }).jobs(..).install(&ctx)` as craft-host lib.rs:48, :147, :174 give it.
     craft::host::Host::builder(craft::host::AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
         .jobs(jobs)
         .install(&ctx);

@@ -9,7 +9,8 @@
 // the editor input types, so they come through the `craft::behavior` facade.
 use craft::behavior::{EditCommand, EditorInput, Granularity, Metrics, MoveMods, NavMove, PartKey, Sense, SurroundingUnit as ImeUnit, TextPos};
 use craft::ui::contract::{
-    CommandSet, Commands as _, Common, Component, Cx, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _, Role, Show as _,
+    CommandSet, Commands as _, Common, Component, Cx, Focus as _, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _, Remember as _, Role,
+    Show as _,
 };
 use craft::ui::primitives::{EditorPurpose, EditorState};
 use craft::ui::runtime::focus::KeyUse;

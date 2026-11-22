@@ -36,6 +36,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use craft::automation::control::JobId;
+use craft::automation::dialogs::MAX_DIALOG_FIELDS;
+use craft::automation::protocol::Params;
 use craft::automation::synthetic::{self, Click, Move, Release};
 use craft::automation::{ControlRequest, Reply};
 use craft::behavior::CanvasView;
@@ -141,6 +143,10 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
     // the layout.
     if let Some(fields) = ui.as_object_mut() {
         fields.remove("floating_panels");
+        // Preferences is the app's own window, not a hosted dialog: its draft shows as an open dialog's fields.
+        if let Some(prefs) = crate::prefs_dialog::fields(app) {
+            fields.insert("dialog".into(), json!({"kind": "preferences", "fields": prefs}));
+        }
         leave_out_unreadable_paths(fields);
     }
     json!({
@@ -228,9 +234,11 @@ fn unreadable_library_ids(app: &VectorcraftApp) -> Hiding {
     for field in PANEL_FIELDS {
         collect_library_panel_ids(&ui[field], &mut rest);
     }
-    // A shortcut for showing a panel is keyed `panel:<id>`, saved and in an open Keyboard Shortcuts dialog.
-    for overrides in [&ui["shortcut_overrides"], &ui["dialog"]["fields"]["overrides"]] {
-        for panel in overrides.as_object().into_iter().flat_map(|o| o.keys()).filter_map(|key| key.strip_prefix("panel:")) {
+    // A shortcut for showing a panel is kept under its `window.panel {panel}` command, in the saved sets and in an
+    // open Keyboard Shortcuts dialog.
+    let editing = app.shortcuts_dialog.iter().filter_map(|d| d.keymap.as_ref()).map(|keymap| keymap.overrides());
+    for (key, _) in app.ui.shortcut_sets.sets().values().chain(editing).flat_map(|overrides| overrides.iter()) {
+        if let Some(panel) = crate::keymap::entry_of_stored(key).strip_prefix("panel:") {
             collect_library_panel_ids(&json!(panel), &mut rest);
         }
     }
@@ -1419,6 +1427,12 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
             // Create Object Mosaic and Width Point convert against the selection as it is now.
             crate::dialogs::host::sync(app);
             let Some(dialogs) = app.dialogs() else { return err("no window") };
+            // Preferences takes a request that names it, or the top dialog while no hosted dialog is open
+            // over it.
+            let top = p.get("dialog").is_none_or(|d| d.is_null() || d == "top");
+            if crate::prefs_dialog::is_open(app) && (p["dialog"] == "preferences" || (top && dialogs.with(|host| host.stack().is_empty()))) {
+                return wrap(preferences_method(app, method, p));
+            }
             // The dialog asked for is `dialog`, the top one when it is missing.
             let mut params = if p.is_object() { p.clone() } else { json!({}) };
             if params.get("dialog").is_none_or(Value::is_null) {
@@ -1565,6 +1579,54 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
         // about; otherwise null, and the host closes the window (#830).
         "app.quit" => wrap(app.run("app.quit", json!({}))),
         other => err(format!("unknown method `{other}`")),
+    }
+}
+
+/// `ui.dialog.set`, `ui.dialog.confirm` or `ui.dialog.cancel` (`method`) on the Preferences window, in the
+/// forms the hosted dialogs take: `field` and `value` or a `fields` list, and `ui.dialog.set`'s `action`.
+fn preferences_method(app: &mut VectorcraftApp, method: &str, p: &Value) -> Result<Value, String> {
+    let keys: &[&str] = if method == "ui.dialog.set" { &["dialog", "field", "value", "fields", "action"] } else { &["dialog"] };
+    let p = Params(p).only(None, keys)?;
+    let action = match method {
+        "ui.dialog.set" => match p.get("action").map(Value::as_str) {
+            None => None,
+            Some(Some(action @ ("confirm" | "cancel"))) => Some(action),
+            Some(_) => return Err("`action` must be confirm or cancel".into()),
+        },
+        "ui.dialog.confirm" => Some("confirm"),
+        _ => Some("cancel"),
+    };
+    let fields = match (p.get("fields"), p.get("field")) {
+        (Some(_), field) if field.is_some() || p.get("value").is_some() => return Err("`fields` takes the place of `field` and `value`".into()),
+        (Some(list), _) => {
+            let items = list.as_array().ok_or("`fields` is not a list")?;
+            if items.len() > MAX_DIALOG_FIELDS {
+                return Err(format!("`fields` holds {} items; at most {MAX_DIALOG_FIELDS}", items.len()));
+            }
+            items
+                .iter()
+                .map(|item| {
+                    let field = item.get("field").and_then(Value::as_str).ok_or("an item of `fields` has no string `field`")?;
+                    Ok((field.to_owned(), item.get("value").cloned().unwrap_or(Value::Null)))
+                })
+                .collect::<Result<Vec<_>, String>>()?
+        }
+        (None, Some(field)) => {
+            vec![(field.as_str().ok_or("`field` must be a string")?.to_owned(), p.get("value").cloned().unwrap_or(Value::Null))]
+        }
+        (None, None) if method != "ui.dialog.set" || action.is_some() => Vec::new(),
+        (None, None) => return Err("missing `field`".into()),
+    };
+    for (field, value) in fields {
+        crate::prefs_dialog::set_field(app, &field, value)?;
+    }
+    match action {
+        Some("confirm") => crate::prefs_dialog::confirm(app),
+        Some(_) => {
+            crate::prefs_dialog::cancel(app);
+            Ok(Value::Null)
+        }
+        None => Ok(Value::Null),
     }
 }
 

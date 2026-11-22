@@ -504,18 +504,12 @@ pub fn sync(ui: &UiState) {
     }
 }
 
-/// Window › Toolbars: Advanced, Double Column, Compact Tools and Keep Tools Beside the Canvas,
-/// the toolbars made with New Toolbar (each checked while it shows), New Toolbar… and Manage
-/// Toolbars….
+/// Window › Toolbars: Advanced, Double Column and Compact Tools, the toolbars made with New
+/// Toolbar (each checked while it shows), New Toolbar… and Manage Toolbars….
 pub fn menu_items() -> Vec<crate::menus::Node> {
     use crate::menus::{Sep, c, named};
-    let mut v = vec![
-        c("Advanced", "window.toolbarAdvanced"),
-        c("Double Column", "window.toolbarColumns"),
-        c("Compact Tools", "window.toolbarCompact"),
-        c("Keep Tools Beside the Canvas", "window.toolsBesideCanvas"),
-        Sep,
-    ];
+    let mut v =
+        vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns"), c("Compact Tools", "window.toolbarCompact"), Sep];
     let names = names_store().read().map(|v| v.clone()).unwrap_or_default();
     if !names.is_empty() {
         v.extend(names.into_iter().map(|n| named(n, "window.toolbar.custom", json!({ "name": n }))));

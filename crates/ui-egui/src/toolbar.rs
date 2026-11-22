@@ -14,7 +14,7 @@ use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
 use craft::color_ui::ui::PaintChip;
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
-use craft::theme::Size; // PLAN: assumed path of the theme's `Size` through the facade
+use craft::theme::Size;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};

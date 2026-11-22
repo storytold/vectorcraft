@@ -272,7 +272,6 @@ fn rectangle(app: &mut VectorcraftApp, x: f64) -> Value {
 fn square_on_screen(app: &VectorcraftApp) -> bool {
     let st = app.session.active().unwrap();
     let corners = st.doc.oriented_bounds(&st.selection.objects, false).unwrap().corners();
-    // PLAN: assumed cv.S4: the canvas view of a laid-out frame gives the document-to-screen affine.
     let to_screen = app.canvas_view().unwrap().affine();
     let [a, b, c, _] = corners.map(|p| to_screen * p);
     let (top, side) = (b - a, c - b);

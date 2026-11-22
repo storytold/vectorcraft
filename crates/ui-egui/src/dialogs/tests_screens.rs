@@ -1153,7 +1153,7 @@ fn saved_keys_no_longer_read_are_left_out_of_the_dialog_s_export() {
 /// the sub-folder controls change (in the dialog or by `ui.dialog.set`).
 #[test]
 fn an_applied_preset_keeps_its_item_folders() {
-    use crate::control::{ControlRequest, Outcome};
+    use craft::automation::{ControlRequest, Reply};
     for mode in ["item", "itemFormat"] {
         let (mut app, _) = app(2, false);
         app.run("document.exportPresets.save", json!({"name": "Items", "settings": {"formats": [{"format": "png"}], "folders": mode}})).unwrap();
@@ -1176,7 +1176,7 @@ fn an_applied_preset_keeps_its_item_folders() {
             set(&mut app, "exportPreset", json!("Items"));
             set(&mut app, "folder", json!(dir.to_string_lossy()));
             let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "subfolders", "value": on}));
-            let Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+            let Reply::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
             assert_eq!(r["ok"], true, "{r}");
             try_confirm(&mut app).unwrap();
             assert_eq!(files_under(&dir).first().map(String::as_str), Some(first), "subfolders {on}");
@@ -1272,13 +1272,13 @@ fn an_exported_preset_file_is_named_after_the_preset() {
 /// leaves the dialog as it was.
 #[test]
 fn setting_the_export_preset_field_applies_the_preset() {
-    use crate::control::{ControlRequest, Outcome};
+    use craft::automation::{ControlRequest, Reply};
     let (mut app, _) = app(1, false);
     let ctx = egui::Context::default();
     open(&mut app);
     let set_preset = |app: &mut VectorcraftApp, name: &str| {
         let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "exportPreset", "value": name}));
-        let Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+        let Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
         r
     };
     let r = set_preset(&mut app, "Logo Package");
@@ -1294,13 +1294,13 @@ fn setting_the_export_preset_field_applies_the_preset() {
     // A request that fails on a later field changes none of its fields.
     let fields = json!({"fields": [{"field": "subfolderBy", "value": "scale"}, {"field": "exportPreset", "value": "Never saved"}]});
     let (req, _rx) = ControlRequest::new("ui.dialog.set", fields);
-    let Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    let Reply::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
     assert_eq!(r["ok"], false, "{r}");
     assert_eq!((field(&app, "exportPreset"), field(&app, "subfolderBy")), (json!("Logo Package"), json!("format")));
     // In one request the fields apply in order: a field after the preset goes over it.
     let fields = json!({"fields": [{"field": "exportPreset", "value": "Logo Package"}, {"field": "subfolderBy", "value": "scale"}]});
     let (req, _rx) = ControlRequest::new("ui.dialog.set", fields);
-    let Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    let Reply::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
     assert_eq!(r["ok"], true, "{r}");
     assert_eq!((field(&app, "exportPreset"), field(&app, "subfolderBy")), (json!("Logo Package"), json!("scale")));
 }

@@ -113,7 +113,6 @@ pub struct Services {
     /// (web). Without it Print saves the job as a PDF.
     pub print: Option<Box<dyn print::PrintService>>,
     /// The macOS menu bar, when the desktop app installed one: the in-window menus are hidden then.
-    // PLAN: assumed `craft::menu::NativeMenu` is the facade path of `craft::menu::NativeMenu`
     pub native_menu: Option<craft::menu::NativeMenu>,
     /// The host's rewrites of a window's raw input (pen barrel button) for floating panels in OS
     /// windows of their own: eframe runs the host's `raw_input_hook` for the main window only.

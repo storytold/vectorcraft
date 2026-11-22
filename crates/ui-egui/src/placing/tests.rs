@@ -596,9 +596,9 @@ fn a_synchronous_paste_replaces_a_deferred_swatch_dialog() {
     let result = crate::control::handle(
         &mut app,
         &egui::Context::default(),
-        &crate::control::ControlRequest::new("engine.execute", json!({"command": "edit.pasteInPlace", "params": {}})).0,
+        &craft::automation::ControlRequest::new("engine.execute", json!({"command": "edit.pasteInPlace", "params": {}})).0,
     );
-    let crate::control::Outcome::Done(result) = result else { panic!("expected command result") };
+    let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };
     assert_eq!(result["ok"], true, "{result}");
     assert_eq!(open_dialogs(&app).len(), 1, "the paste's own question replaced the deferred one");
     answer_swatches(&mut app, true);
@@ -636,9 +636,9 @@ fn a_find_font_dialog_releases_a_deferred_swatch_paste_before_queued_work() {
         let result = crate::control::handle(
             &mut app,
             &egui::Context::default(),
-            &crate::control::ControlRequest::new("engine.execute", json!({"command": "type.findFont", "params": {}})).0,
+            &craft::automation::ControlRequest::new("engine.execute", json!({"command": "type.findFont", "params": {}})).0,
         );
-        let crate::control::Outcome::Done(result) = result else { panic!("expected command result") };
+        let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };
         assert_eq!(result["ok"], true, "{result}");
         assert!(top_dialog(&app).is_some() && !swatches_asked(&app), "Find Font takes the window");
         assert!(app.placing.swatch_paste.is_none());
@@ -684,9 +684,9 @@ fn a_deferred_swatch_paste_rejects_a_changed_token_or_closed_document() {
             let result = crate::control::handle(
                 &mut app,
                 &egui::Context::default(),
-                &crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
+                &craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
             );
-            let crate::control::Outcome::Done(result) = result else { panic!("expected dialog result") };
+            let craft::automation::Reply::Done(result) = result else { panic!("expected dialog result") };
             assert_ne!(result["ok"], true, "automation cannot set the paste the question hands back: {result}");
             crate::dialogs::swatch_conflict::defer(&app, 999999);
         }
@@ -1349,8 +1349,8 @@ fn what_the_user_places_is_read_off_the_ui_thread_and_commands_read_at_once() {
     assert_eq!(app.placing.pending.len(), 1, "both files are read together");
     assert_eq!(app.ui.status, "Placing a.tif, b.bmp…");
     assert_eq!(app.session.tool_id(), "selection");
-    let (inspect, _) = crate::control::ControlRequest::new("ui.inspect", json!({}));
-    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &inspect) else { panic!("not done") };
+    let (inspect, _) = craft::automation::ControlRequest::new("ui.inspect", json!({}));
+    let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &inspect) else { panic!("not done") };
     assert_eq!(r["result"]["placing"], json!(["a.tif, b.bmp"]), "ui.inspect lists the files being read");
     placed(&mut app);
     assert_eq!((app.session.tool_id(), app.session.tool_options()["count"].as_u64()), ("place", Some(2)));

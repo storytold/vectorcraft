@@ -34,7 +34,7 @@ use vectorcraft_engine::cmd::TransparencyInfo;
 use super::{current_paints, current_transparency, live_run, selection_len};
 use crate::VectorcraftApp;
 use crate::edits::{EditPath, apply_edits};
-use crate::fields::blend_entries; // PLAN: assumed path of wg.S8's `blend_entries`
+use crate::fields::blend_entries;
 
 /// The side of the mask row's thumbnails, in points.
 // PLAN: should come from the `size.thumb.lg` token; the row's `ThumbSize::Large` gives the rect, this only sizes the render.
