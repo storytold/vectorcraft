@@ -68,7 +68,8 @@ fn the_halftone_effect_dialog_has_the_command_fields_and_edits_the_effect() {
     let ctx = app.ui_ctx.clone().expect("a window");
     open(&mut app, &ctx, json!({"effect": "addon.color.halftone"}));
     let (_, fields) = top(&app);
-    let shown: std::collections::BTreeSet<&str> = fields.as_object().unwrap().keys().map(String::as_str).collect();
+    // Preview is the dialog's own switch, not a value of the effect.
+    let shown: std::collections::BTreeSet<&str> = fields.as_object().unwrap().keys().map(String::as_str).filter(|k| *k != "preview").collect();
     let info = vectorcraft_effects::effect_info("addon.color.halftone").unwrap();
     let live: std::collections::BTreeSet<&str> = info.defaults.as_object().unwrap().keys().map(String::as_str).collect();
     assert_eq!(shown, live, "the effect's own values");

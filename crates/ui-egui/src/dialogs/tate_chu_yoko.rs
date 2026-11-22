@@ -95,8 +95,8 @@ mod tests {
         }
     }
 
-    /// `ui.tateChuYokoSettings` opens on the characters' values; OK sets both in one undo step,
-    /// and a length typed with its unit is converted to points.
+    /// `ui.tateChuYokoSettings` opens on the characters' values; OK sets both in one undo step.
+    /// Automation sets the offsets in points, as a number row takes them.
     #[test]
     fn tate_chu_yoko_settings_dialog_sets_up_down_and_left_right() {
         let (mut app, id) = app();
@@ -104,7 +104,7 @@ mod tests {
         let f = driver::fields(&app);
         assert_eq!((f.number("tcyUpDown"), f.number("tcyLeftRight")), (Some(0.0), Some(0.0)));
         driver::set(&mut app, "tcyUpDown", json!(3));
-        driver::set(&mut app, "tcyLeftRight", json!("-1 in"));
+        driver::set(&mut app, "tcyLeftRight", json!(-72));
         let undo = app.session.active().unwrap().history.undo.len();
         driver::ok(&mut app);
         assert!(!driver::is_open(&app));

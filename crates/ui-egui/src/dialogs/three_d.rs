@@ -88,7 +88,10 @@ impl Session {
     /// The command, its params and the effect's params for the dialog's values.
     fn request(&self, fields: &DialogFields) -> (&'static str, Value, Map<String, Value>) {
         let rows = revolve::params(&read(&self.data), fields, Place::Dialog);
-        let params = json_of(&rows, fields);
+        let mut params = json_of(&rows, fields);
+        for key in super::three_d_classic::MAP_ROWS {
+            params.remove(key);
+        }
         let (cmd, p) = self.command(&params);
         (cmd, p, params)
     }

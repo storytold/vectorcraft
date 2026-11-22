@@ -153,7 +153,11 @@ mod tests {
         if let Some(dialog) = dialog {
             params["dialog"] = json!(dialog);
         }
-        app.run("ui.dialog.set", params).unwrap();
+        // A control channel method, not an engine command.
+        let ctx = app.ui_ctx.clone().unwrap();
+        let (req, _) = craft::automation::ControlRequest::new("ui.dialog.set", params);
+        let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("ui.dialog.set answers at once") };
+        assert_eq!(r["ok"], true, "{field}: {r}");
     }
 
     fn ok(app: &mut VectorcraftApp, id: DialogId) {

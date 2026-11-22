@@ -973,7 +973,12 @@ mod tests {
         set(&app, &fx, "ellipse", "width", json!(64.0)).unwrap();
         set(&app, &fx, "ellipse", "height", json!(30.0)).unwrap();
         settle(&mut app, &mut fx);
-        let height = fx.by_label("Height:").expect("the Height caption");
+        // The caption, not the Height field its name also labels.
+        let height = fx
+            .by_role(craft::ui::contract::Role::LABEL)
+            .into_iter()
+            .find(|t| fx.tree().name_of(t.node) == Some("Height:"))
+            .expect("the Height caption");
         fx.click(&height);
         settle(&mut app, &mut fx);
         assert_eq!(open_fields(&app, "ellipse").number("height"), Some(64.0));

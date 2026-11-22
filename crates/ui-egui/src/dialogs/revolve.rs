@@ -717,7 +717,18 @@ pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
         .response
     })
     .companions(LIGHT_KEYS.iter().map(|(_, k)| *k).chain(["__light", "__lightPick"]))
+    .on_set(set_light_field)
     .full_width()
+}
+
+/// The light editor's set-time rule: a light setting set from outside goes to the selected light, as its rows do.
+fn set_light_field(fields: &mut DialogFields, key: &str, value: Value) -> Result<(), String> {
+    if LIGHT_KEYS.iter().any(|(_, k)| *k == key) {
+        set_light_value(fields, key, value);
+    } else {
+        set_value(fields, key, &value);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

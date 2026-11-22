@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use craft::ui::dialog::DialogId;
-use craft::ui::patterns::form_dialogs::{HostedPdfExport, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfExportWords, PdfPresetEvent, PresetDraft};
+use craft::ui::patterns::form_dialogs::{
+    HostedPdfExport, ParamResult, PdfArtboards, PdfExportAnswer, PdfExportMode, PdfExportWords, PdfPresetEvent, PresetDraft,
+};
 use craft::ui::patterns::presets::PresetError;
 use craft::ui::runtime::env::{Label, UnitKind};
 use serde_json::{Map, Value, json};
@@ -24,6 +26,7 @@ use vectorcraft_engine::cmd::FlattenOptions;
 use vectorcraft_engine::cmd::fileio::{SaveMode, pdf};
 use vectorcraft_pdf::{APP, ActiveProfiles, PdfSettings, default_preset_name};
 
+use super::host::{HeldOptions, open_held_with};
 use crate::{VectorcraftApp, io};
 
 /// The `pending` reply of a save that waits for the Save PDF dialog.
@@ -259,12 +262,10 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
         && let Some(job) = &open.job
     {
         let saved = super::flatten::preset_rows(app).1;
-        dialogs.with(|host| {
-            if let Some(parent) = host.get_mut_by_id::<HostedPdfExport>(id) {
-                let child = super::flatten::custom_dialog(ctx, parent, job, &saved);
-                host.open_child(child, id);
-            }
-        });
+        let child = dialogs.with(|host| host.get_by_id::<HostedPdfExport>(id).map(|parent| super::flatten::custom_dialog(ctx, parent, job, &saved)));
+        if let Some(child) = child {
+            open_held_with(app, child, custom_ok, HeldOptions { parent: Some(id), ..HeldOptions::default() });
+        }
     }
     if let Some(text) = filed.summary
         && let Err(e) = write_summary(app, None, &text)
@@ -302,6 +303,27 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
         });
     }
     false
+}
+
+/// OK of Custom…: the open save flattens with its options ([`super::flatten::apply_custom`]); when the saved preset
+/// they started from is gone, Save PDF's flattener preset shows no name.
+fn custom_ok(app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
+    let mut open = app.save_pdf.take().ok_or(NOT_OPEN)?;
+    let saved = app.session.prefs.flattener_presets.clone();
+    let id = open.id;
+    let dialogs = app.dialogs().ok_or(NOT_OPEN)?;
+    let applied = match open.job.as_mut() {
+        Some(job) => dialogs
+            .with(|host| host.get_by_id::<HostedPdfExport>(id).map(|parent| super::flatten::apply_custom(job, parent, &answer.fields, &saved)))
+            .unwrap_or_else(|| Err(NOT_OPEN.to_string())),
+        None => Err(NOT_OPEN.to_string()),
+    };
+    app.save_pdf = Some(open);
+    if applied? {
+        let ctx = app.ui_ctx.clone().ok_or(NOT_OPEN)?;
+        dialogs.with(|host| host.set_json_field(&ctx, id, "flattenerPreset", json!("")))?;
+    }
+    Ok(())
 }
 
 /// Carry out a change the dialog made to the saved presets.

@@ -314,6 +314,8 @@ fn save_summary_writes_files_on_disk_within_the_automation_roots() {
     let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services).with_automation_roots(roots.clone()));
     app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
     app.run("file.export.pdf", json!({})).unwrap();
+    // The Summary lists the changed options: one gives it a line.
+    set_field(&app, "thumbnails", json!(true));
     let mut save = |path: &std::path::Path| {
         let p = json!({"path": path.to_string_lossy()});
         vectorcraft_engine::file_access::confine(roots.as_ref(), || app.run(SAVE_SUMMARY, p))

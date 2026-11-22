@@ -222,8 +222,8 @@ fn opening_uses_the_active_artboard_in_a_multiselection_and_preserves_other_sett
     app.run("tool.setOption", json!({"key": "selected", "value": [1, 0]})).unwrap();
     assert_eq!(app.view().unwrap().artboard, 1);
     assert_eq!(crate::panels::artboards::picked(&app, 2), [0, 1]);
-    let mut expected = serde_json::to_value(options_of(&saved)).unwrap();
-    expected["artboard"] = json!(1);
+    // The remembered settings as the dialog names them, on the active artboard.
+    let expected = json!({"quality": 73, "width": 96, "metadata": "all", "artboard": 1});
     app.run("file.saveForWeb", json!({})).unwrap();
     for key in ["quality", "width", "metadata", "artboard"] {
         assert_eq!(fields(&app)[key], expected[key], "{key}");
@@ -314,7 +314,7 @@ fn html_output_with_slices_saves_the_page_and_images() {
     let (mut app, _) = app(&dir, false);
     app.run("object.slice.create", json!({"x": 0, "y": 0, "width": 30, "height": 20})).unwrap();
     app.run("file.saveForWeb", json!({})).unwrap();
-    set(&mut app, "output", json!("html"));
+    set(&mut app, "html", json!(true));
     frame(&mut app);
     save(&mut app);
     let n = app.session.execute("slice.list", &json!({})).unwrap()["slices"].as_array().unwrap().len();
@@ -661,11 +661,14 @@ fn saving_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     let dir = vectorcraft_testkit::temp_dir("sfw-undecoded");
     let (mut desktop, _) = app(&dir, false);
     desktop.run("file.saveForWeb", json!({"format": "png24"})).unwrap();
+    // The save panel answers on the next poll.
+    answer_saves(&mut desktop);
     assert!(!desktop.ui.status.contains("note"), "{}", desktop.ui.status);
     place(&mut desktop);
     for p in [json!({"format": "png24"}), json!({"format": "jpg", "output": "html"})] {
         desktop.status("");
         desktop.run("file.saveForWeb", p.clone()).unwrap();
+        answer_saves(&mut desktop);
         assert!(desktop.ui.status.starts_with("Saved ") && desktop.ui.status.ends_with(NOTE), "{p}: {}", desktop.ui.status);
     }
     desktop.status("");

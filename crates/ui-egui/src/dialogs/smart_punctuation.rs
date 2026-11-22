@@ -112,13 +112,15 @@ mod tests {
         app.dialogs().unwrap().with(|h| h.set_json_field(&ctx, id, field, value)).unwrap();
     }
 
-    /// OK as the button does it, then the pump that runs the command, then the close the accepted OK waits for.
+    /// OK as the button does it, then the pump that runs the command, then the close the accepted OK waits for, and
+    /// a frame that opens what waited for the dialog (the report).
     fn ok(app: &mut VectorcraftApp) {
         let (ctx, id) = (app.ui_ctx.clone().unwrap(), entry(app, COMMAND).unwrap().id);
         let host = app.dialogs().unwrap();
         host.with(|h| h.confirm_by_id(&ctx, id));
         crate::dialogs::host::pump(app, &ctx);
         host.with(|h| h.confirm_by_id(&ctx, id));
+        crate::testing::app_frame(app, &ctx, Default::default());
     }
 
     /// The menu item opens the dialog; OK replaces in one undo step, reports each chosen

@@ -42,6 +42,8 @@ const SHADING_CUSTOM: &str = "shadingCustom";
 /// Keys of the map rows; they hold no value of their own: `set_map_value` writes the number into `mapArt`.
 const MAP_KEYS: [&str; 5] = ["mapX", "mapY", "mapScaleX", "mapScaleY", "mapRotation"];
 const MAP_SYMBOL: &str = "mapSymbol";
+/// The Map Art page's rows of the shown surface's map: views of `mapArt`, never effect parameters.
+pub(super) const MAP_ROWS: [&str; 6] = [MAP_SYMBOL, MAP_KEYS[0], MAP_KEYS[1], MAP_KEYS[2], MAP_KEYS[3], MAP_KEYS[4]];
 
 /// The unit of the general-unit length rows.
 fn length_unit(unit: Unit) -> UnitKind {

@@ -575,9 +575,10 @@ mod tests {
         pump(app, ctx);
     }
 
+    /// `files` as the app's file service, on its host and on the window's context, where the picks find it.
     fn scripted(app: &mut VectorcraftApp, files: ScriptedFiles) -> Arc<ScriptedFiles> {
         let files = Arc::new(files);
-        app.host = Arc::new(app.host.with_files(files.clone()));
+        crate::tests_picks::install_files(app, files.clone());
         files
     }
 

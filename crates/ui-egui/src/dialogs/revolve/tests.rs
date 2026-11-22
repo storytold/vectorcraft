@@ -1,4 +1,5 @@
 //! The 3D dialog through the app frame: what its controls do to the document.
+use craft::ui::patterns::form_dialogs::FieldValue;
 use egui::{Event, Key, Modifiers, PointerButton, vec2};
 use serde_json::{Value, json};
 use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, INFLATE, REVOLVE, ROTATE, ROTATION_PRESETS, merged_params};
@@ -53,6 +54,13 @@ fn with_symbol(d: &str) -> VectorcraftApp {
 
 fn doc(h: &ThreeD) -> std::sync::Arc<vectorcraft_doc::Document> {
     h.app().session.doc().unwrap().doc.clone()
+}
+
+/// The document as the dialog found it: the snapshot of the interaction its preview runs in, else the document.
+fn source(h: &ThreeD) -> std::sync::Arc<vectorcraft_doc::Document> {
+    let app = h.app();
+    let state = app.session.doc().unwrap();
+    state.interaction.as_ref().map_or_else(|| state.doc.clone(), |it| it.doc.clone())
 }
 
 /// The effect's stored params with the defaults filled in.
@@ -110,7 +118,7 @@ fn a_3d_row_sets_its_param_previews_and_applies_in_one_step() {
         let name = format!("{effect}.{key}");
         for confirm in [false, true] {
             let mut h = drawn(SQUARE, effect);
-            let before = doc(&h);
+            let before = source(&h);
             h.set("__page", json!(page));
             h.set(key, value.clone());
             assert!(same(&stored(&h, effect)[key], &value), "{name}: the preview follows the row");
@@ -133,8 +141,7 @@ fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
     let count = h.surfaces().map_or(0, |s| s.len());
     assert!(count >= 6, "a square's solid has at least six surfaces: {count}");
     // The Symbol menu maps the symbol onto the surface shown, the first.
-    h.press("None");
-    h.press("Mark");
+    h.choose("Symbol", "None", "Mark");
     assert_eq!(maps(&h).iter().map(|m| (m.surface, m.symbol.as_str(), m.scale_x)).collect::<Vec<_>>(), [(1, "Mark", 100.0)]);
     h.set("__mapSurface", json!(2));
     assert_eq!(maps(&h).len(), 1, "the next surface has no map until it is given one");
@@ -154,11 +161,11 @@ fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
 #[test]
 fn map_art_maps_no_more_surfaces_than_an_object_takes() {
     let max = vectorcraft_effects::MAX_MAPS;
-    let n = max + 1;
-    let corners: Vec<String> = (0..n)
+    // A star with 36 points has 72 corners, so its solid has two caps and 72 walls.
+    let corners: Vec<String> = (0..72)
         .map(|i| {
-            let a = std::f64::consts::TAU * i as f64 / n as f64;
-            format!("{:.2} {:.2}", 150.0 + 100.0 * a.cos(), 150.0 + 100.0 * a.sin())
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 60.0 }, f64::from(i) * std::f64::consts::TAU / 72.0);
+            format!("{:.3} {:.3}", 150.0 + r * a.cos(), 150.0 + r * a.sin())
         })
         .collect();
     let mut h = opened(with_symbol(&format!("M{}Z", corners.join(" L"))), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
@@ -168,7 +175,7 @@ fn map_art_maps_no_more_surfaces_than_an_object_takes() {
     let full: Vec<Value> = (1..=max).map(|surface| json!({"surface": surface, "symbol": "Mark"})).collect();
     h.set("mapArt", json!(full));
     h.set("__mapSurface", json!(max + 1));
-    h.press("None");
+    h.press("Symbol");
     if let Some(mark) = h.fixture.by_label("Mark") {
         h.fixture.click(&mark);
     }
@@ -188,6 +195,8 @@ fn map_art_surfaces_follow_the_active_document() {
         (st.selection.objects.first().copied(), st.revision)
     };
     let mut h = opened(app, json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    // Without a preview the second document keeps its revision, so only the document tells the two objects apart.
+    h.set("preview", json!(false));
     h.set("__page", json!("mapArt"));
     let second = h.surfaces().unwrap();
     let at_second = key(&h);
@@ -222,7 +231,7 @@ fn automatic_smooth_shading_previews_saves_and_respects_cancel_and_one_step_undo
     };
     for confirm in [false, true] {
         let mut h = drawn("M150 40 L180 60 L180 140 L150 160", REVOLVE);
-        let before = doc(&h);
+        let before = source(&h);
         h.set("__page", json!("lighting"));
         assert!(!h.fields().contains("smoothShading"));
         assert!(gradients(&h) > 0, "default rendering uses vector gradients");
@@ -280,7 +289,7 @@ fn button(pos: egui::Pos2, pressed: bool) -> Event {
 #[test]
 fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
     let mut h = drawn(SQUARE, CLASSIC_ROTATE);
-    let before = doc(&h);
+    let before = source(&h);
     h.set("__page", json!("rotation"));
     let angles = |h: &ThreeD| ["rotationX", "rotationY", "rotationZ"].map(|k| number(h, k));
     let start = angles(&h);
@@ -328,17 +337,19 @@ fn the_track_cube_is_off_while_a_rotation_is_mixed() {
         craft::ui::patterns::form_dialogs::ParamRows::new("Rotation", &params, craft::ui::contract::Bind::bound(&mut *shown.borrow_mut())).show(ui);
     });
     fixture.settle();
+    // A mixed value holds no number: the drag leaves the three as they were.
+    let start = ["rotationX", "rotationY", "rotationZ"].map(|k| fields.borrow().number(k));
     let cube = fixture.by_label("Track cube").expect("the cube is shown");
     fixture.drag(&cube, vec2(30.0, 0.0));
     let f = fields.borrow();
-    assert_eq!(["rotationX", "rotationY", "rotationZ"].map(|k| f.number(k)), [Some(0.0), Some(10.0), Some(0.0)]);
+    assert_eq!(["rotationX", "rotationY", "rotationZ"].map(|k| f.number(k)), start);
     assert!(f.is_mixed("rotationX"), "the drag leaves the mixed rotation mixed");
 }
 
 #[test]
 fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
     let mut h = drawn(SQUARE, EXTRUDE);
-    let before = doc(&h);
+    let before = source(&h);
     h.set("__page", json!("object"));
     let changed = json!({"bevel": "step", "bevelWidth": 12.0, "bevelHeight": 3.0, "bevelRepeat": 4, "bevelSpace": 30.0, "bevelInside": true, "bevelBothSides": true, "depth": 90.0, "twist": 45.0});
     for (key, value) in changed.as_object().unwrap() {
@@ -368,9 +379,12 @@ fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
 fn reset_all_keeps_map_art_and_its_options() {
     let mut h = drawn(SQUARE, CLASSIC_EXTRUDE);
     let maps = json!([{"surface": 1, "symbol": "Mark"}]);
-    h.set("mapArt", maps.clone());
-    h.set("mapShade", json!(true));
-    h.set("mapInvisible", json!(true));
+    // The maps and their options as the Map Art page leaves them.
+    super::super::three_d::with_fields(&mut h.app(), |d| {
+        d.set_field("mapArt", FieldValue::Json(maps.clone()));
+        d.set_field("mapShade", true.into());
+        d.set_field("mapInvisible", true.into());
+    });
     h.set("__page", json!("rotation"));
     h.set("rotationX", json!(40.0));
     h.press("Reset all");
@@ -385,7 +399,7 @@ fn reset_all_keeps_map_art_and_its_options() {
 fn light_list_add_select_edit_delete_and_reset_keep_each_light_independent() {
     for effect in [REVOLVE, EXTRUDE] {
         let mut h = drawn(SQUARE, effect);
-        let before = doc(&h);
+        let before = source(&h);
         h.set("__page", json!("lighting"));
         let one = doc(&h);
         h.press("Delete Light");
@@ -395,14 +409,13 @@ fn light_list_add_select_edit_delete_and_reset_keep_each_light_independent() {
         let first = lights[0].clone();
         assert_eq!(lights.as_array().map(Vec::len), Some(2));
         assert_eq!(h.json("__light"), json!(1));
-        assert_eq!(number(&h, "lightHeight"), 90.0, "a new light starts at Height 90");
+        assert_eq!(super::selected_light(&h.fields()).number("lightHeight"), Some(90.0), "a new light starts at Height 90");
         h.set("lightHeight", json!(55.0));
         let lights = h.json("lights");
         assert_eq!(lights[1]["height"], json!(55.0));
         assert_eq!(lights[0], first, "an edit changes only the selected light");
         let two = doc(&h);
-        h.press("Light 2");
-        h.press("Light 1");
+        h.choose("Lights", "Light 2", "Light 1");
         assert_eq!(doc(&h), two, "selection changes no effect params");
         assert_eq!(h.json("__light"), json!(0));
         h.press("Delete Light");
@@ -419,7 +432,7 @@ fn light_list_add_select_edit_delete_and_reset_keep_each_light_independent() {
 #[test]
 fn light_list_stops_at_ten_and_cancel_restores_the_source() {
     let mut h = drawn("M150 40 L180 60 L180 140 L150 160", REVOLVE);
-    let before = doc(&h);
+    let before = source(&h);
     h.set("__page", json!("lighting"));
     for _ in 0..11 {
         h.press("Add Light");
@@ -433,27 +446,21 @@ fn light_list_stops_at_ten_and_cancel_restores_the_source() {
 #[test]
 fn lighting_presets_preview_custom_edits_reset_and_commit_as_one_undo_step() {
     let mut h = drawn(SQUARE, REVOLVE);
-    let before = doc(&h);
+    let before = source(&h);
     h.set("__page", json!("lighting"));
     let view = h.json("rotationX");
-    let pick = |h: &mut ThreeD, from: &str, to: &str| {
-        h.press(from);
-        h.press(to);
-    };
+    let pick = |h: &mut ThreeD, from: &str, to: &str| h.choose("Presets", from, to);
     pick(&mut h, "Standard", "Right");
     assert_eq!(number(&h, "lightRotation"), 0.0);
     assert_eq!(h.json("rotationX"), view, "a preset keeps the view");
     h.set("lightHeight", json!(70.0));
-    h.target("Custom");
     pick(&mut h, "Custom", "Diffuse");
     assert_eq!((number(&h, "lightSoftness"), number(&h, "ambient")), (100.0, 35.0));
     h.press("Add Light");
-    h.target("Custom");
     pick(&mut h, "Custom", "Top Left");
     assert!(h.json("lights").is_null());
     assert_eq!((h.json("__light"), number(&h, "lightRotation")), (json!(0), 135.0));
     h.press("Reset all");
-    h.target("Standard");
     pick(&mut h, "Standard", "Right");
     h.ok();
     undo(&h);
@@ -470,8 +477,7 @@ fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
     let before = doc(&h);
     reopen(&mut h, json!({"effect":REVOLVE,"index":0,"item":null}));
     h.set("__page", json!("lighting"));
-    h.press("Custom");
-    h.press("Right");
+    h.choose("Presets", "Custom", "Right");
     assert_ne!(doc(&h), before);
     h.cancel();
     assert_eq!(doc(&h), before);

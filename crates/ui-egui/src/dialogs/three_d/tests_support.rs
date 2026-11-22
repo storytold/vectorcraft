@@ -97,6 +97,20 @@ impl ThreeD {
         self.fixture.click(&target);
     }
 
+    /// The value the control named `name` shows.
+    pub(crate) fn shown(&self, name: &str) -> Option<String> {
+        let target = self.target(name);
+        self.fixture.tree().value_of(target.node).map(str::to_owned)
+    }
+
+    /// Opens the select named `name`, which shows `from`, and picks its entry `to`.
+    pub(crate) fn choose(&mut self, name: &str, from: &str, to: &str) {
+        assert_eq!(self.shown(name).as_deref(), Some(from), "{name} shows {from}");
+        self.press(name);
+        self.press(to);
+        self.settle();
+    }
+
     /// Presses OK and lets the held answer finish.
     pub(crate) fn ok(&mut self) {
         self.press("OK");

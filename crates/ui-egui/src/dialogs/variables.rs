@@ -348,11 +348,12 @@ mod tests {
         app.dialogs().unwrap().with(|h| h.open_dialogs().iter().any(|d| d.key.as_deref() == Some(KEY)))
     }
 
-    /// Presses OK on the open dialog and runs the host pass that answers it.
+    /// Presses OK on the open dialog, runs the host pass that answers it and the frame that closes it.
     fn ok(app: &mut VectorcraftApp) {
         let (ctx, id) = (ctx(app), open_id(app));
         app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id));
         crate::dialogs::host::pump(app, &ctx);
+        crate::testing::app_frame(app, &ctx, Default::default());
     }
 
     fn kind_of(app: &VectorcraftApp, name: &str) -> Option<VariableKind> {

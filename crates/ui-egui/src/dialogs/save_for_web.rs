@@ -17,11 +17,12 @@ use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::webexport::{self, Optimized, WebOutput, WebRender, WebSettings};
 use vectorcraft_render::encode::quantize::Reduction;
 
+use craft::behavior::PixelSize;
 use craft::host::PickRequest;
 use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
 use craft::ui::patterns::form_dialogs::{
     BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart,
-    SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebVariant,
+    SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebSlices, WebVariant,
 };
 use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
 use craft::ui::runtime::requests::PathRequest;
@@ -82,19 +83,46 @@ fn table_of(reduction: Reduction) -> ColorTable {
     }
 }
 
-/// The dialog's options for the engine's settings. The engine's `colorTable` is the host's edited
-/// table ([`WebExport::table`]); the dialog's colour-table choice is the engine's reduction.
-// PLAN: assumed every other field of `SaveForWebOptions` serializes as the engine's `WebSettings` does (ex.W2).
-pub(super) fn options_of(s: &WebSettings) -> SaveForWebOptions {
-    let mut v = s.to_json();
-    if let Some(o) = v.as_object_mut() {
-        o.remove("reduction");
+/// The dialog's options for the engine's settings `s`, over the dialog's defaults for what the engine has no setting
+/// of. A width or a height given alone keeps the proportions of `natural`, the image at 100%. The engine's
+/// `colorTable` is the host's edited table ([`WebExport::table`]); the dialog's colour-table choice is the engine's
+/// reduction.
+pub(super) fn options_of(s: &WebSettings, natural: Option<PixelSize>) -> SaveForWebOptions {
+    let mut v = serde_json::to_value(SaveForWebOptions::default()).unwrap_or(Value::Null);
+    if let (Some(o), Value::Object(engine)) = (v.as_object_mut(), s.to_json()) {
+        for (key, value) in engine {
+            if o.contains_key(&key) {
+                o.insert(key, value);
+            }
+        }
         o.insert("colorTable".into(), serde_json::to_value(table_of(s.reduction)).unwrap_or(Value::Null));
         // The dialog names JPEG `jpeg` and holds the matte as RGB; it has no None matte, which shows as white.
-        if o.get("format").and_then(Value::as_str) == Some("jpg") {
+        if s.format == webexport::WebFormat::Jpg {
             o.insert("format".into(), json!("jpeg"));
         }
         o.insert("matte".into(), json!(s.matte_rgb().ok().flatten().unwrap_or([255; 3])));
+        o.insert("convertSrgb".into(), json!(s.convert_to_srgb));
+        o.insert("percent".into(), json!(s.percent.unwrap_or(100.0)));
+        if s.metadata == webexport::WebMetadata::Contact {
+            o.insert("metadata".into(), json!("copyrightAndContact"));
+        }
+        // The dialog's whole image is the engine's no slices, and its user slices the engine's every slice.
+        // shortcut: the selected slices are the document's in the engine; the dialog starts with none picked.
+        let slices = match s.slices {
+            webexport::SliceScope::None => json!("all"),
+            webexport::SliceScope::All => json!("user"),
+            webexport::SliceScope::Selected => json!({"selected": []}),
+        };
+        o.insert("slices".into(), slices);
+        o.insert("html".into(), json!(s.output == WebOutput::Html));
+        let scaled = |side: u32, from: u32, to: u32| ((f64::from(side) * f64::from(to) / f64::from(from.max(1))).round() as u32).max(1);
+        let size = match (s.width, s.height, natural) {
+            (Some(width), Some(height), _) => Some((width, height)),
+            (Some(width), None, Some(n)) => Some((width, scaled(width, n.width, n.height))),
+            (None, Some(height), Some(n)) => Some((scaled(height, n.height, n.width), height)),
+            _ => None,
+        };
+        o.insert("size".into(), size.map_or(Value::Null, |(width, height)| json!({"width": width, "height": height})));
     }
     serde_json::from_value(v).unwrap_or_default()
 }
@@ -111,6 +139,22 @@ fn settings_of(options: &SaveForWebOptions, table: &Value, path: Option<&str>) -
         if !table.is_null() {
             o.insert("colorTable".into(), table.clone());
         }
+        // The keys the engine names its own way (see `options_of`).
+        o.insert("convertToSrgb".into(), json!(options.convert_srgb));
+        if o.get("metadata").and_then(Value::as_str) == Some("copyrightAndContact") {
+            o.insert("metadata".into(), json!("contact"));
+        }
+        let slices = match &options.slices {
+            WebSlices::All => "none",
+            WebSlices::User => "all",
+            _ => "selected",
+        };
+        o.insert("slices".into(), json!(slices));
+        o.insert("output".into(), json!(if options.html { "html" } else { "images" }));
+        let size = options.size;
+        o.insert("width".into(), json!(size.map(|s| s.width)));
+        o.insert("height".into(), json!(size.map(|s| s.height)));
+        o.insert("percent".into(), if size.is_some() { Value::Null } else { json!(options.percent) });
         if let Some(p) = path {
             o.insert("path".into(), json!(p));
         }
@@ -138,16 +182,18 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
             .collect();
         (st.doc.title.clone(), st.doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>(), slices)
     };
-    let (size, original) = match render_for(app, &s) {
+    // The dialog sizes the output against the image at 100%.
+    let natural = WebSettings { width: None, height: None, percent: None, ..s.clone() };
+    let (size, original) = match render_for(app, &natural) {
         Ok((key, r)) => {
             let texture = original_texture(&ctx, &key, &r);
             app.web_export.original = Some(texture.clone());
-            (craft::behavior::PixelSize::new(r.width, r.height), texture)
+            (PixelSize::new(r.width, r.height), texture)
         }
         // The panes show why the rendering failed; the Original pane has nothing to show.
         Err(_) => {
             let blank = egui::ColorImage::from_rgba_unmultiplied([1, 1], &[0; 4]);
-            (craft::behavior::PixelSize::new(1, 1), textures(&ctx).put(&ctx, ORIGINAL, Revision::of(&"blank"), blank).sized())
+            (PixelSize::new(1, 1), textures(&ctx).put(&ctx, ORIGINAL, Revision::of(&"blank"), blank).sized())
         }
     };
     let mut dialog = HostedSaveForWeb::new(name, size, original)
@@ -161,7 +207,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
             ColorTable::BlackWhite,
             ColorTable::Grayscale,
         ])
-        .options(options_of(&s))
+        .options(options_of(&s, Some(size)))
         .presets(dialog_presets(app))
         .optimize()
         .browser_preview(if io::is_web(app) { BrowserPreview::Unavailable(tl!("Needs the desktop app").into()) } else { BrowserPreview::Available });
@@ -191,7 +237,7 @@ fn dialog_presets(app: &VectorcraftApp) -> Vec<WebPreset> {
     all.iter()
         .enumerate()
         .map(|(i, p)| {
-            let mut preset = WebPreset::new(p.name.clone(), options_of(&p.settings));
+            let mut preset = WebPreset::new(p.name.clone(), options_of(&p.settings, None));
             preset.built_in = i < built_in;
             preset
         })
@@ -567,8 +613,10 @@ fn run_optimize(app: &mut VectorcraftApp, req: &OptimizeRequest) -> Result<Optim
     app.web_export.optimized = Some(
         json!({ "settings": r["settings"], "bytes": r["bytes"], "targetBytes": r["targetBytes"], "achieved": r["achieved"], "art": art_key(app) }),
     );
+    let natural = WebSettings { width: None, height: None, percent: None, ..found.clone() };
+    let natural = render_for(app, &natural).ok().map(|(_, r)| PixelSize::new(r.width, r.height));
     Ok(OptimizeAnswer::new(
-        Some(options_of(&found)),
+        Some(options_of(&found, natural)),
         r["bytes"].as_u64().unwrap_or(0),
         r["targetBytes"].as_u64().unwrap_or(0),
         r["achieved"] == json!(true),

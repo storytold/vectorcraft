@@ -185,12 +185,11 @@ fn each_addon_dialog_opens_on_its_items_values_and_runs_its_command() {
                 weed_with(app, id, &[("spacing", json!(-5))]);
                 assert_eq!((steps(app), closed(app)), (n, false), "refused");
                 answer(app, false);
-                // A Spacing with no value, or of 0, leaves the Count in use: a Count of 0 draws the box alone.
-                for spacing in [Value::Null, json!(0)] {
-                    weed_with(app, id, &[("spacing", spacing.clone()), ("count", json!(0))]);
-                    assert_eq!(nodes(app), start.node_count() + 2, "{spacing}: a group and the box");
-                    app.run("edit.undo", json!({})).unwrap();
-                }
+                // A Spacing of 0 leaves the Count in use: a Count of 0 draws the box alone. The row holds a number,
+                // so it has no empty value to try.
+                weed_with(app, id, &[("spacing", json!(0)), ("count", json!(0))]);
+                assert_eq!(nodes(app), start.node_count() + 2, "a group and the box");
+                app.run("edit.undo", json!({})).unwrap();
             },
         },
         Row {

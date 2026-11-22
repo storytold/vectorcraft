@@ -208,8 +208,8 @@ mod tests {
     }
 
     /// `ui.warichuSettings` opens on the characters' values; OK sets the changed ones in one undo
-    /// step without turning Warichu on, a length typed with its unit is converted to points, and
-    /// values past the ends are kept to them.
+    /// step without turning Warichu on, and values past the ends are kept to them. Automation sets
+    /// the gap in points, as a number row takes it.
     #[test]
     fn warichu_settings_dialog_sets_lines_gap_scale_and_alignment() {
         let (mut app, id) = app();
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!((f.number("warichuLines"), f.number("warichuGap"), f.number("warichuScale")), (Some(2.0), Some(0.0), Some(50.0)));
         assert_eq!(f.text("warichuAlign"), Some("auto"));
         driver::set(&mut app, "warichuLines", json!(3));
-        driver::set(&mut app, "warichuGap", json!("0.5 in"));
+        driver::set(&mut app, "warichuGap", json!(36));
         driver::set(&mut app, "warichuScale", json!(400));
         driver::set(&mut app, "warichuAlign", json!("center"));
         let undo = app.session.active().unwrap().history.undo.len();

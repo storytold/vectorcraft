@@ -21,7 +21,8 @@ fn pass(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let dialogs = app.dialogs().expect("a window");
     for _ in 0..2 {
         ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
-        super::pump(app, ctx);
+        // The dialog layer's pump: the module's, then the held OKs it answers.
+        crate::dialogs::host::pump(app, ctx);
     }
 }
 

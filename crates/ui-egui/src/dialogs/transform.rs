@@ -601,7 +601,8 @@ mod tests {
         rig.confirm();
         let kids = rig.app.session.doc().unwrap().doc.layers[0].children().unwrap();
         let lefts: Vec<f64> = kids.iter().map(|n| n.geometric_bounds().unwrap().x0).collect();
-        assert_eq!(lefts, [100.0, 130.0, 160.0], "a copy at 30 pt each time");
+        // The drag moved the rectangle from 100 to 120; each copy is 30 pt further.
+        assert_eq!(lefts, [120.0, 150.0, 180.0], "a copy at 30 pt each time");
     }
 
     /// The Move dialog's Transform Patterns is as it was last confirmed with: its OK sets General ›

@@ -174,7 +174,8 @@ fn each_section_sets_its_attributes_and_keeps_the_others() {
     open(&mut app, "Body");
     set(&app, "space_before", json!(""));
     for key in JUSTIFICATION_FIELDS {
-        set(&app, key, if key == "single_word" { Value::Null } else { json!("") });
+        // Single Word Justification's unset entry is the empty choice.
+        set(&app, key, json!(""));
     }
     assert!(ok(&mut app));
     let a = def(&app, "Body");
@@ -386,8 +387,9 @@ fn tabs_section_edits_the_style_stops() {
     p.click("Add");
     {
         let app = p.app();
-        assert_eq!((tab_rows(&app).len(), fields(&app)["__tabSel"].clone()), (3, json!(2)));
-        set(&app, "__tabSel", json!(0));
+        // The stops list is a choice row: it holds the stop's index as its id.
+        assert_eq!((tab_rows(&app).len(), fields(&app)["__tabSel"].clone()), (3, json!("2")));
+        set(&app, "__tabSel", json!("0"));
     }
     p.click("Delete Tab");
     assert!(ok(&mut p.app()));
@@ -443,6 +445,8 @@ fn add_leaves_a_stop_at_the_largest_position_alone() {
     let mut p = Panel::new(app, dialogs);
     open_tabs(&mut p.app(), "Body");
     let before = tab_rows(&p.app());
+    // The dialog opened after the last frame: one shows it.
+    p.frame();
     assert!(!p.enabled("Add"), "Add is disabled");
     p.click("Add");
     assert_eq!(tab_rows(&p.app()), before, "no stop is added");

@@ -171,11 +171,18 @@ mod tests {
     }
 
     /// OK in the editor, then the pump that saves it and reopens the manager.
+    /// OK of the editor; true once it closed. Its OK is held: the pump answers it, and the press after the answer
+    /// closes the dialog.
     fn confirm_editor(app: &mut VectorcraftApp) -> bool {
         let ctx = ctx(app);
-        let confirmed = host(app, |h| h.confirm::<HostedPdfExport>(&ctx));
-        super::super::host::pump(app, &ctx);
-        confirmed
+        for _ in 0..2 {
+            let closed = host(app, |h| h.confirm::<HostedPdfExport>(&ctx));
+            super::super::host::pump(app, &ctx);
+            if closed {
+                return true;
+            }
+        }
+        false
     }
 
     #[test]

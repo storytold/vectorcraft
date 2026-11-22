@@ -220,7 +220,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
         }
         Some(Work::Run(mut values, image)) => {
             follow_ratio(&mut values, image);
-            let answer = app.run(COMMAND, params(&values, image)).map(|_| ()).map_err(Label::from);
+            // With no image selected the dialog says what it needs, not that the command is unavailable.
+            let answer = match image_size(app) {
+                Some(_) => app.run(COMMAND, params(&values, image)).map(|_| ()).map_err(Label::from),
+                None => Err(Label::from(NO_IMAGE.to_string())),
+            };
             dialogs.with(|host| {
                 if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
                     dialog.held.answer(answer);
