@@ -2770,21 +2770,6 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	the script passed more data to and from commands than one run may pass	το σενάριο μετέφερε περισσότερα δεδομένα προς και από εντολές από όσα επιτρέπονται σε μία εκτέλεση
 @msg	the script added more objects and data to the documents than one run may add	το σενάριο πρόσθεσε στα έγγραφα περισσότερα αντικείμενα και δεδομένα από όσα επιτρέπονται σε μία εκτέλεση
 @msg	{what}: the object is not a File or a Folder	{what}: το αντικείμενο δεν είναι File ούτε Folder
-@msg	{what}: the library {name} is not available	{what}: η βιβλιοθήκη {name} δεν είναι διαθέσιμη
-@msg	{what} is not available yet	{what} δεν είναι ακόμη διαθέσιμο
-@msg	{what}: the value {value} is not available yet	{what}: η τιμή {value} δεν είναι ακόμη διαθέσιμη
-@msg	{what}: the object is not an {class} object	{what}: το αντικείμενο δεν είναι αντικείμενο {class}
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: το πακέτο XMP δεν είναι σωστά διαμορφωμένο XMP
-@msg	{what}: the XMP data is too large	{what}: τα δεδομένα XMP είναι πολύ μεγάλα
-@msg	{what}: {name} is not a valid property name	{what}: το {name} δεν είναι έγκυρο όνομα ιδιότητας
-@msg	{what}: the text holds a character XML does not allow	{what}: το κείμενο περιέχει χαρακτήρα που η XML δεν επιτρέπει
-@msg	{what}: {name} is not an array	{what}: το {name} δεν είναι πίνακας
-@msg	{what}: {name} is not a simple property	{what}: το {name} δεν είναι απλή ιδιότητα
-@msg	{what}: {name} is not a language alternative array	{what}: το {name} δεν είναι πίνακας γλωσσικών εναλλακτικών
-@msg	{what}: the array index {index} is out of range	{what}: ο δείκτης πίνακα {index} είναι εκτός εύρους
-@msg	{what}: the namespace {uri} is not registered	{what}: ο χώρος ονομάτων {uri} δεν είναι καταχωρισμένος
-@msg	{what}: the file is closed	{what}: το αρχείο είναι κλειστό
-@msg	{what}: the file cannot be updated	{what}: το αρχείο δεν μπορεί να ενημερωθεί
 @msg	{what}: the count must be a finite number, 0 or more	{what}: το πλήθος πρέπει να είναι πεπερασμένος αριθμός, 0 ή περισσότερο
 @msg	File.seek: the position must be a finite number	File.seek: η θέση πρέπει να είναι πεπερασμένος αριθμός
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: ο τρόπος πρέπει να είναι 0, 1 ή 2

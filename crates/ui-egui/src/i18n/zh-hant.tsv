@@ -2928,21 +2928,6 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the script passed more data to and from commands than one run may pass	指令碼與命令之間傳遞的資料超過一次執行允許的數量
 @msg	the script added more objects and data to the documents than one run may add	指令碼加入文件的物件和資料超過一次執行允許的數量
 @msg	{what}: the object is not a File or a Folder	{what}：此物件既不是 File 也不是 Folder
-@msg	{what}: the library {name} is not available	{what}：程式庫 {name} 無法使用
-@msg	{what} is not available yet	{what} 尚無法使用
-@msg	{what}: the value {value} is not available yet	{what}：值 {value} 尚無法使用
-@msg	{what}: the object is not an {class} object	{what}：此物件不是 {class} 物件
-@msg	{what}: the XMP packet is not well-formed XMP	{what}：XMP 封包不是格式正確的 XMP
-@msg	{what}: the XMP data is too large	{what}：XMP 資料過大
-@msg	{what}: {name} is not a valid property name	{what}：{name} 不是有效的屬性名稱
-@msg	{what}: the text holds a character XML does not allow	{what}：文字含有 XML 不允許的字元
-@msg	{what}: {name} is not an array	{what}：{name} 不是陣列
-@msg	{what}: {name} is not a simple property	{what}：{name} 不是簡單屬性
-@msg	{what}: {name} is not a language alternative array	{what}：{name} 不是語言替代陣列
-@msg	{what}: the array index {index} is out of range	{what}：陣列索引 {index} 超出範圍
-@msg	{what}: the namespace {uri} is not registered	{what}：命名空間 {uri} 未註冊
-@msg	{what}: the file is closed	{what}：檔案已關閉
-@msg	{what}: the file cannot be updated	{what}：檔案無法更新
 @msg	{what}: the count must be a finite number, 0 or more	{what}：數量必須是 0 或更大的有限數
 @msg	File.seek: the position must be a finite number	File.seek：位置必須是有限數
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必須是 0, 1 或 2

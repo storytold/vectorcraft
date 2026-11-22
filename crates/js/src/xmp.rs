@@ -62,6 +62,9 @@ pub(crate) const MAX_REGISTRY_BYTES: usize = 1 << 20;
 const ENTRY_BYTES: usize = 96;
 /// The `id` of a packet wrapper (XMP Specification Part 1, 7.3.2).
 const WRAPPER_ID: &str = "W5M0MpCehiHzreSzNTczkc9d";
+/// The most bytes [`find_packet`] reads of a packet header, from its `<?xpacket begin=` to its
+/// `?>`.
+const MAX_HEADER: usize = 256;
 
 /// The property is a URI (`rdf:resource`).
 pub(crate) const PROP_VALUE_IS_URI: u32 = 0x2;
@@ -819,21 +822,36 @@ pub(crate) fn pad_size(packet: &str) -> usize {
 }
 
 /// The first UTF-8 packet in `bytes` that has both ends of its wrapper (XMP Specification Part 1,
-/// 7.3), or `None`. A start with no end before the next start is skipped, and so is a trailer that
-/// does not close before the next start.
+/// 7.3), or `None`. A start is a `<?xpacket begin=` whose header holds the wrapper's `id` within
+/// [`MAX_HEADER`] bytes. A start with no end before the next start is skipped, and so is a trailer
+/// that does not close before the next start.
 pub fn find_packet(bytes: &[u8]) -> Option<PacketSpan> {
     const BEGIN: &[u8] = b"<?xpacket begin=";
     const END: &[u8] = b"<?xpacket end=";
     let find = |from: usize, to: usize, needle: &[u8]| bytes.get(from..to)?.windows(needle.len()).position(|w| w == needle).map(|i| i + from);
     let len = bytes.len();
-    let mut start = find(0, len, BEGIN)?;
+    let ids = [format!("id=\"{WRAPPER_ID}\""), format!("id='{WRAPPER_ID}'")];
+    let is_header = |at: usize| {
+        let head = bytes.get(at..len.min(at.saturating_add(MAX_HEADER))).unwrap_or_default();
+        let head = head.windows(2).position(|w| w == b"?>").and_then(|close| head.get(..close)).unwrap_or_default();
+        ids.iter().any(|id| head.windows(id.len()).any(|w| w == id.as_bytes()))
+    };
+    // The first start from `from` that begins before `to`.
+    let start_in = |mut from: usize, to: usize| loop {
+        let at = find(from, to, BEGIN)?;
+        if is_header(at) {
+            return Some(at);
+        }
+        from = at + BEGIN.len();
+    };
+    let mut start = start_in(0, len)?;
     loop {
         let end_tag = find(start + BEGIN.len(), len, END)?;
-        while let Some(next) = find(start + BEGIN.len(), end_tag, BEGIN) {
+        while let Some(next) = start_in(start + BEGIN.len(), end_tag) {
             start = next;
         }
         let after = end_tag + END.len();
-        let next = find(after, len, BEGIN);
+        let next = start_in(after, len);
         match find(after, next.unwrap_or(len), b"?>") {
             Some(close) => return Some(PacketSpan { start, end: close + 2, writeable: bytes.get(after + 1) == Some(&b'w') }),
             None => start = next?,

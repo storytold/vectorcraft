@@ -5075,21 +5075,6 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	the script passed more data to and from commands than one run may pass	скрипт передав командам і отримав від них більше даних, ніж дозволено одному запуску
 @msg	the script added more objects and data to the documents than one run may add	скрипт додав до документів більше об'єктів і даних, ніж дозволено одному запуску
 @msg	{what}: the object is not a File or a Folder	{what}: об'єкт не є ні File, ні Folder
-@msg	{what}: the library {name} is not available	{what}: бібліотека {name} недоступна
-@msg	{what} is not available yet	{what} поки що недоступне
-@msg	{what}: the value {value} is not available yet	{what}: значення {value} поки що недоступне
-@msg	{what}: the object is not an {class} object	{what}: об'єкт не є об'єктом {class}
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: пакет XMP не є правильно побудованим XMP
-@msg	{what}: the XMP data is too large	{what}: дані XMP завеликі
-@msg	{what}: {name} is not a valid property name	{what}: {name} не є допустимою назвою властивості
-@msg	{what}: the text holds a character XML does not allow	{what}: текст містить символ, який XML не дозволяє
-@msg	{what}: {name} is not an array	{what}: {name} не є масивом
-@msg	{what}: {name} is not a simple property	{what}: {name} не є простою властивістю
-@msg	{what}: {name} is not a language alternative array	{what}: {name} не є масивом мовних варіантів
-@msg	{what}: the array index {index} is out of range	{what}: індекс масиву {index} поза діапазоном
-@msg	{what}: the namespace {uri} is not registered	{what}: простір імен {uri} не зареєстровано
-@msg	{what}: the file is closed	{what}: файл закрито
-@msg	{what}: the file cannot be updated	{what}: файл неможливо оновити
 @msg	{what}: the count must be a finite number, 0 or more	{what}: кількість має бути скінченним числом, 0 або більше
 @msg	File.seek: the position must be a finite number	File.seek: позиція має бути скінченним числом
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: режим має бути 0, 1 або 2

@@ -5885,21 +5885,6 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	the script passed more data to and from commands than one run may pass	a parancsfájl több adatot adott át a parancsoknak és a parancsoktól, mint amennyit egy futás átadhat
 @msg	the script added more objects and data to the documents than one run may add	a parancsfájl több objektumot és adatot adott a dokumentumokhoz, mint amennyit egy futás hozzáadhat
 @msg	{what}: the object is not a File or a Folder	{what}: az objektum nem File és nem Folder
-@msg	{what}: the library {name} is not available	{what}: a(z) {name} könyvtár nem érhető el
-@msg	{what} is not available yet	{what} még nem érhető el
-@msg	{what}: the value {value} is not available yet	{what}: a(z) {value} érték még nem érhető el
-@msg	{what}: the object is not an {class} object	{what}: az objektum nem {class} objektum
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: az XMP-csomag nem jól formázott XMP
-@msg	{what}: the XMP data is too large	{what}: az XMP-adatok túl nagyok
-@msg	{what}: {name} is not a valid property name	{what}: a(z) {name} nem érvényes tulajdonságnév
-@msg	{what}: the text holds a character XML does not allow	{what}: a szöveg olyan karaktert tartalmaz, amelyet az XML nem enged meg
-@msg	{what}: {name} is not an array	{what}: a(z) {name} nem tömb
-@msg	{what}: {name} is not a simple property	{what}: a(z) {name} nem egyszerű tulajdonság
-@msg	{what}: {name} is not a language alternative array	{what}: a(z) {name} nem nyelvi alternatívák tömbje
-@msg	{what}: the array index {index} is out of range	{what}: a(z) {index} tömbindex a tartományon kívül esik
-@msg	{what}: the namespace {uri} is not registered	{what}: a(z) {uri} névtér nincs regisztrálva
-@msg	{what}: the file is closed	{what}: a fájl be van zárva
-@msg	{what}: the file cannot be updated	{what}: a fájl nem frissíthető
 @msg	{what}: the count must be a finite number, 0 or more	{what}: a darabszámnak véges számnak kell lennie, 0 vagy több
 @msg	File.seek: the position must be a finite number	File.seek: a pozíciónak véges számnak kell lennie
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: a mód csak 0, 1 vagy 2 lehet

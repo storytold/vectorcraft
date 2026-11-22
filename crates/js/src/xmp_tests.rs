@@ -211,6 +211,11 @@ fn packets_are_found_in_file_bytes() {
     let open_end = format!("<?xpacket begin='' ?> junk <?xpacket end= no close {PACKET}");
     let span = xmp::find_packet(open_end.as_bytes()).map(|s| (s.start, s.end));
     assert_eq!(span, Some((open_end.len() - PACKET.len(), open_end.len())), "a trailer that does not close before the next start is skipped");
+    // A start's header must carry the wrapper id, so the same text inside a value does not start a
+    // packet.
+    let inner = PACKET.replace("<dc:format>image/svg+xml", "<dc:format><![CDATA[<?xpacket begin='' ?>]]>");
+    let bytes = format!("binary\0{inner}");
+    assert_eq!(xmp::find_packet(bytes.as_bytes()).map(|s| (s.start, s.end)), Some((7, bytes.len())));
 }
 
 /// An array whose container declares the RDF prefix itself is read as an array, also when its
@@ -342,6 +347,35 @@ fn localized_text_updates_a_single_generic_language_item() {
         m.setLocalizedText(ns, 'label', 'en', 'en-CA', 'Couleur');
         one.concat([m.countArrayItems(ns, 'label'), m.getLocalizedText(ns, 'label', null, 'en-CA'), m.getLocalizedText(ns, 'label', null, 'en-GB')]).join('|')";
     assert_eq!(string(src), "2|Color|Color|4|Couleur|Color");
+}
+
+/// A `setLocalizedText` that stops at the heap limit adds no array. The heap limits tried run from
+/// one that holds the text to one that also holds the change.
+#[test]
+fn localized_text_past_the_heap_limit_adds_no_array() {
+    let mut stopped = 0;
+    let mut seen = vec![];
+    for step in 0..128 {
+        let mut r = Realm::with_options(crate::Options::default(), Limits { heap_bytes: (256 << 10) + step * (16 << 10), ..Limits::default() });
+        if let Err(e) = r.define_external_object() {
+            panic!("{e:?}");
+        }
+        let text = "new ExternalObject('lib:AdobeXMPScript'); var m = new XMPMeta(); var s = 'x'; for (var k = 0; k < 18; k++) s += s;";
+        if let Err(e) = r.run(text) {
+            seen.push(format!("{step} text {e:?}"));
+            continue;
+        }
+        if r.run("m.setLocalizedText(XMPConst.NS_DC, 'title', null, s, s);").is_ok() {
+            seen.push(format!("{step} set"));
+            break;
+        }
+        stopped += 1;
+        match r.run("m.doesPropertyExist(XMPConst.NS_DC, 'title')") {
+            Ok(v) => assert_eq!(v, JsValue::Bool(false), "heap step {step}"),
+            Err(e) => panic!("{e:?}"),
+        }
+    }
+    assert!(stopped > 0, "no heap limit stopped the change: {seen:?}");
 }
 
 /// Setting the `x-default` item also changes the items that had its text, and leaves the others.

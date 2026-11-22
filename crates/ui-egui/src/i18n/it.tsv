@@ -5091,21 +5091,6 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	the script passed more data to and from commands than one run may pass	lo script ha passato ai comandi e dai comandi più dati di quanti ne possa passare un'esecuzione
 @msg	the script added more objects and data to the documents than one run may add	lo script ha aggiunto ai documenti più oggetti e dati di quanti ne possa aggiungere un'esecuzione
 @msg	{what}: the object is not a File or a Folder	{what}: l'oggetto non è un File né un Folder
-@msg	{what}: the library {name} is not available	{what}: la libreria {name} non è disponibile
-@msg	{what} is not available yet	{what} non è ancora disponibile
-@msg	{what}: the value {value} is not available yet	{what}: il valore {value} non è ancora disponibile
-@msg	{what}: the object is not an {class} object	{what}: l'oggetto non è un oggetto {class}
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: il pacchetto XMP non è XMP ben formato
-@msg	{what}: the XMP data is too large	{what}: i dati XMP sono troppo grandi
-@msg	{what}: {name} is not a valid property name	{what}: {name} non è un nome di proprietà valido
-@msg	{what}: the text holds a character XML does not allow	{what}: il testo contiene un carattere che XML non consente
-@msg	{what}: {name} is not an array	{what}: {name} non è un array
-@msg	{what}: {name} is not a simple property	{what}: {name} non è una proprietà semplice
-@msg	{what}: {name} is not a language alternative array	{what}: {name} non è un array di alternative di lingua
-@msg	{what}: the array index {index} is out of range	{what}: l'indice di array {index} è fuori intervallo
-@msg	{what}: the namespace {uri} is not registered	{what}: lo spazio dei nomi {uri} non è registrato
-@msg	{what}: the file is closed	{what}: il file è chiuso
-@msg	{what}: the file cannot be updated	{what}: il file non può essere aggiornato
 @msg	{what}: the count must be a finite number, 0 or more	{what}: il conteggio deve essere un numero finito, 0 o più
 @msg	File.seek: the position must be a finite number	File.seek: la posizione deve essere un numero finito
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: la modalità deve essere 0, 1 o 2

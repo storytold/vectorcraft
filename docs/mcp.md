@@ -3072,7 +3072,8 @@ rules for these objects:
   missing file and a file over 8 MiB throw the `File` messages (`Script file access denied`, `Script file does not
   exist`, `Script file exceeds 8 MiB`). A `.xmp` file is read whole as its packet (a link counts by the file it leads to,
   when it is opened and again when it is written); any other file, and any file with
-  `XMPConst.OPEN_USE_PACKET_SCANNING`, is scanned for its first UTF-8 packet and is read only. Only a `.xmp` file
+  `XMPConst.OPEN_USE_PACKET_SCANNING`, is scanned for its first UTF-8 packet and is read only. A packet starts at a
+  `<?xpacket begin=` whose header holds `id="W5M0MpCehiHzreSzNTczkc9d"` within 256 bytes. Only a `.xmp` file
   opened with `XMPConst.OPEN_FOR_UPDATE`, without packet scanning, takes `putXMP`, and opening one that way where
   the script may not write throws `Script file access denied`; other files open read only with that flag.
   After `putXMP`, `closeFile()` writes the packet in

@@ -8586,21 +8586,6 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	the script passed more data to and from commands than one run may pass	სკრიპტმა ბრძანებებს და ბრძანებებიდან იმაზე მეტი მონაცემი გადასცა, ვიდრე ერთ გაშვებას შეუძლია
 @msg	the script added more objects and data to the documents than one run may add	სკრიპტმა დოკუმენტებს იმაზე მეტი ობიექტი და მონაცემი დაამატა, ვიდრე ერთ გაშვებას შეუძლია
 @msg	{what}: the object is not a File or a Folder	{what}: ობიექტი არც File-ია და არც Folder
-@msg	{what}: the library {name} is not available	{what}: ბიბლიოთეკა {name} მიუწვდომელია
-@msg	{what} is not available yet	{what} ჯერ მიუწვდომელია
-@msg	{what}: the value {value} is not available yet	{what}: მნიშვნელობა {value} ჯერ მიუწვდომელია
-@msg	{what}: the object is not an {class} object	{what}: ობიექტი არ არის {class} ობიექტი
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: XMP პაკეტი არ არის სწორად აგებული XMP
-@msg	{what}: the XMP data is too large	{what}: XMP მონაცემები ზედმეტად დიდია
-@msg	{what}: {name} is not a valid property name	{what}: {name} არ არის თვისების სწორი სახელი
-@msg	{what}: the text holds a character XML does not allow	{what}: ტექსტი შეიცავს სიმბოლოს, რომელსაც XML არ უშვებს
-@msg	{what}: {name} is not an array	{what}: {name} არ არის მასივი
-@msg	{what}: {name} is not a simple property	{what}: {name} არ არის მარტივი თვისება
-@msg	{what}: {name} is not a language alternative array	{what}: {name} არ არის ენობრივი ალტერნატივების მასივი
-@msg	{what}: the array index {index} is out of range	{what}: მასივის ინდექსი {index} დიაპაზონს გარეთაა
-@msg	{what}: the namespace {uri} is not registered	{what}: სახელთა სივრცე {uri} არ არის რეგისტრირებული
-@msg	{what}: the file is closed	{what}: ფაილი დახურულია
-@msg	{what}: the file cannot be updated	{what}: ფაილის განახლება შეუძლებელია
 @msg	{what}: the count must be a finite number, 0 or more	{what}: რაოდენობა უნდა იყოს სასრული რიცხვი, 0 ან მეტი
 @msg	File.seek: the position must be a finite number	File.seek: პოზიცია უნდა იყოს სასრული რიცხვი
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: რეჟიმი უნდა იყოს 0, 1 ან 2

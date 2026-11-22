@@ -5368,21 +5368,6 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	the script passed more data to and from commands than one run may pass	skript předal příkazům a z příkazů více dat, než smí předat jeden běh
 @msg	the script added more objects and data to the documents than one run may add	skript přidal do dokumentů více objektů a dat, než smí přidat jeden běh
 @msg	{what}: the object is not a File or a Folder	{what}: objekt není File ani Folder
-@msg	{what}: the library {name} is not available	{what}: knihovna {name} není k dispozici
-@msg	{what} is not available yet	{what} zatím není k dispozici
-@msg	{what}: the value {value} is not available yet	{what}: hodnota {value} zatím není k dispozici
-@msg	{what}: the object is not an {class} object	{what}: objekt není objekt {class}
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: paket XMP není správně utvořené XMP
-@msg	{what}: the XMP data is too large	{what}: data XMP jsou příliš velká
-@msg	{what}: {name} is not a valid property name	{what}: {name} není platný název vlastnosti
-@msg	{what}: the text holds a character XML does not allow	{what}: text obsahuje znak, který XML nepovoluje
-@msg	{what}: {name} is not an array	{what}: {name} není pole
-@msg	{what}: {name} is not a simple property	{what}: {name} není jednoduchá vlastnost
-@msg	{what}: {name} is not a language alternative array	{what}: {name} není pole jazykových alternativ
-@msg	{what}: the array index {index} is out of range	{what}: index pole {index} je mimo rozsah
-@msg	{what}: the namespace {uri} is not registered	{what}: obor názvů {uri} není registrován
-@msg	{what}: the file is closed	{what}: soubor je zavřený
-@msg	{what}: the file cannot be updated	{what}: soubor nelze aktualizovat
 @msg	{what}: the count must be a finite number, 0 or more	{what}: počet musí být konečné číslo, 0 nebo více
 @msg	File.seek: the position must be a finite number	File.seek: pozice musí být konečné číslo
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: režim musí být 0, 1 nebo 2

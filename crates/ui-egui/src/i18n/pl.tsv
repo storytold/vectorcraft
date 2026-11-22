@@ -5196,21 +5196,6 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the script passed more data to and from commands than one run may pass	skrypt przekazał do poleceń i z poleceń więcej danych, niż może przekazać jedno uruchomienie
 @msg	the script added more objects and data to the documents than one run may add	skrypt dodał do dokumentów więcej obiektów i danych, niż może dodać jedno uruchomienie
 @msg	{what}: the object is not a File or a Folder	{what}: obiekt nie jest ani File, ani Folder
-@msg	{what}: the library {name} is not available	{what}: biblioteka {name} jest niedostępna
-@msg	{what} is not available yet	{what} nie jest jeszcze dostępne
-@msg	{what}: the value {value} is not available yet	{what}: wartość {value} nie jest jeszcze dostępna
-@msg	{what}: the object is not an {class} object	{what}: obiekt nie jest obiektem {class}
-@msg	{what}: the XMP packet is not well-formed XMP	{what}: pakiet XMP nie jest poprawnie zbudowanym XMP
-@msg	{what}: the XMP data is too large	{what}: dane XMP są za duże
-@msg	{what}: {name} is not a valid property name	{what}: {name} nie jest prawidłową nazwą właściwości
-@msg	{what}: the text holds a character XML does not allow	{what}: tekst zawiera znak niedozwolony w XML
-@msg	{what}: {name} is not an array	{what}: {name} nie jest tablicą
-@msg	{what}: {name} is not a simple property	{what}: {name} nie jest prostą właściwością
-@msg	{what}: {name} is not a language alternative array	{what}: {name} nie jest tablicą alternatyw językowych
-@msg	{what}: the array index {index} is out of range	{what}: indeks tablicy {index} jest poza zakresem
-@msg	{what}: the namespace {uri} is not registered	{what}: przestrzeń nazw {uri} nie jest zarejestrowana
-@msg	{what}: the file is closed	{what}: plik jest zamknięty
-@msg	{what}: the file cannot be updated	{what}: nie można zaktualizować pliku
 @msg	{what}: the count must be a finite number, 0 or more	{what}: liczba musi być liczbą skończoną, 0 lub większą
 @msg	File.seek: the position must be a finite number	File.seek: pozycja musi być liczbą skończoną
 @msg	File.seek: the mode must be 0, 1 or 2	File.seek: tryb musi wynosić 0, 1 lub 2

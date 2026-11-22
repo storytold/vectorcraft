@@ -772,25 +772,29 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     }
     let value = xml_text(i, &arg(args, 4), what)?;
     let found = array_items(i, o, &ns, &name, what)?;
-    let at = match found {
+    // A new array is added in the same change that sets its item, so a refused change adds nothing.
+    let (at, new) = match found {
         Some((at, _, _)) if !is_alt_text(i, o, at)? => return Err(not_alt_text(i, what, &name)),
-        Some((at, _, _)) => at,
-        None => {
-            let prop = xmp::Prop { ns: ns.clone(), name: name.clone(), value: xmp::Value::Array { form: Form::Alt, items: Vec::new() } };
-            change(i, o, prop.heap_bytes(), |m, _| m.props.push(prop))?;
-            meta_of(i, o)?.find(&ns, &name).unwrap_or(0)
-        }
+        Some((at, _, _)) => (Some(at), None),
+        None => (None, Some(xmp::Prop { ns, name, value: xmp::Value::Array { form: Form::Alt, items: Vec::new() } })),
     };
     // An item and the `x-default` item change, or every item with the text of the `x-default` one.
-    let changed = match meta_of(i, o)?.props.get(at).map(|p| &p.value) {
+    let changed = match at.and_then(|at| meta_of(i, o).ok()?.props.get(at)).map(|p| &p.value) {
         Some(xmp::Value::Array { items, .. }) if specific.eq_ignore_ascii_case("x-default") => {
             let old = items.iter().find(|i| same_lang(i.lang.as_deref(), "x-default")).map(|i| &i.text);
             items.iter().filter(|i| Some(&i.text) == old).count().max(2)
         }
         _ => 2,
     };
-    let grow = changed.saturating_mul(64 + value.len() + specific.len());
+    let grow = changed.saturating_mul(64 + value.len() + specific.len()).saturating_add(new.as_ref().map_or(0, xmp::Prop::heap_bytes));
     change(i, o, grow, |m, _| {
+        let at = match new {
+            Some(prop) => {
+                m.props.push(prop);
+                m.props.len() - 1
+            }
+            None => at.unwrap_or(usize::MAX),
+        };
         let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|p| &mut p.value) else { return };
         set_lang(items, &generic, &specific, value);
     })?;
