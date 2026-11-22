@@ -647,12 +647,18 @@ fn tile_on(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, cross: f64) -> Opti
 }
 
 /// A tile placed on [s0, s1] of the track, `k(s)` across at arc length `s` when the scale varies
-/// (`marks`: the arc lengths of the recorded pen samples, between which the scale runs in a
-/// straight line), else `k` at the middle of the span across all of it ([`tile_on`]), as it is
-/// too when the scale is the same at both ends of the span and at every sample within it.
+/// (`marks`: the arc lengths of the recorded pen samples in order, between which the scale runs
+/// in a straight line), else `k` at the middle of the span across all of it ([`tile_on`]), as it
+/// is too when the scale is the same at both ends of the span and at every sample within it.
 fn tile_scaled(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, k: &dyn Fn(f64) -> f64, marks: Option<&[f64]>) -> Option<Node> {
     let mid = k((s0 + s1) / 2.0);
-    let even = |marks: &[f64]| k(s0) == mid && k(s1) == mid && marks.iter().filter(|&&s| s > s0 && s < s1).all(|&s| k(s) == mid);
+    // Only the samples within the span are looked at.
+    let within = |marks: &[f64]| {
+        let from = marks.partition_point(|&s| s <= s0);
+        let to = from + marks[from..].partition_point(|&s| s < s1);
+        marks[from..to].iter().all(|&s| k(s) == mid)
+    };
+    let even = |marks: &[f64]| k(s0) == mid && k(s1) == mid && within(marks);
     if mid <= 0.0 || marks.is_none_or(even) {
         return tile_on(t, tile, s0, s1, mid);
     }
@@ -749,7 +755,7 @@ fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64, breaks: &[
 
 /// Where along a track `l` long `stroke` recorded the pen input `mode` follows: each sample at its
 /// arc length, and again a track's length before and after it, for tiles of a closed track that
-/// wrap round.
+/// wrap round, in order.
 fn pen_marks(stroke: &StrokeLayer, mode: Variation, l: f64) -> Vec<f64> {
     let points = match mode {
         Variation::Fixed | Variation::Random => None,
@@ -759,7 +765,9 @@ fn pen_marks(stroke: &StrokeLayer, mode: Variation, l: f64) -> Vec<f64> {
         Variation::Rotation => stroke.rotation.as_ref().map(|p| &p.points),
         Variation::StylusWheel => stroke.wheel.as_ref().map(|p| &p.points),
     };
-    points.into_iter().flatten().flat_map(|&(f, _)| [f * l - l, f * l, f * l + l]).collect()
+    let mut marks: Vec<f64> = points.into_iter().flatten().flat_map(|&(f, _)| [f * l - l, f * l, f * l + l]).collect();
+    marks.sort_by(f64::total_cmp);
+    marks
 }
 
 /// Whether `stroke` recorded the pen input `mode` follows.
