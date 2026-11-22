@@ -282,6 +282,8 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     assert_eq!(check(&e("stylize.dropShadow", json!({"x": 2.0})), true), Ok(()));
     assert_eq!(check(&e("brushStrokes.accentedEdges", json!({"edgeWidth": 14.0})), false), Ok(()));
     assert_eq!(check(&e("distort.transform", json!({"copies": 1000})), false), Ok(()));
+    // A parameter documented right after a comma has its range checked too.
+    assert_eq!(check(&e("artistic.paintDaubs", json!({"sharpness": 25})), false), Ok(()));
     // Every effect's own defaults pass the check, so each documented range holds its default.
     for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id) && !crate::is_pathfinder(i.id)) {
         assert_eq!(check(&e(info.id, info.defaults.clone()), false), Ok(()), "{}", info.id);
@@ -297,6 +299,7 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         (e("path.offsetPath", json!({"inset": 4.0})), false),
         (e("path.offsetPath", json!({"offset": "4"})), false),
         (e("brushStrokes.accentedEdges", json!({"edgeWidth": 15.0})), false),
+        (e("artistic.paintDaubs", json!({"sharpness": 41})), false),
         (e("path.offsetPath", json!([4.0])), false),
         (e("path.offsetPath", json!({"offset": 4.0})), true),
     ] {
@@ -304,7 +307,7 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     }
     let why = check(&e("pathfinder.add", serde_json::Value::Null), false).unwrap_err();
     assert!(why.contains("Pathfinder effects are not allowed"), "{why}");
-    // The values `effect.apply` checks for one effect are refused with the parameter named.
+    // The values checked for one effect are refused with the parameter named.
     for (id, params, key) in [
         (crate::SVG_FILTER, json!({"axes": [1, 0, 0, 0]}), "axes"),
         (crate::SVG_FILTER, json!({"scale": 0.0}), "scale"),
@@ -317,6 +320,8 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("blur.gaussian", json!({"linear": 1}), "linear"),
         ("pixelate.colorHalftone", json!({"channel1": 400.0}), "channel1"),
         ("distort.twist", json!({"angle": 4000.0}), "angle"),
+        ("distort.freeDistort", json!({"corners": []}), "corners"),
+        ("distort.freeDistort", json!({"corners": [[0, 0], [1, 0], [1, 1], [0]]}), "corners"),
     ] {
         let why = check(&e(id, params.clone()), false).expect_err(&format!("{id} {params}"));
         assert!(why.contains(key), "{id} {params}: {why}");
@@ -549,6 +554,23 @@ fn a_piece_s_raster_effects_follow_its_transform_effect() {
     assert!((at("x") - 6.0).abs() < 1e-9 && (at("y") - 8.0).abs() < 1e-9, "{shadow:?}");
     assert_eq!(kept.iter().filter(|e| **e == hidden).count(), 1, "{kept:?}");
     assert!(kept.iter().all(|e| e.id != "distort.transform"), "{kept:?}");
+}
+
+/// A piece's Transform effect with no copies and Scale Strokes & Effects on moves the piece: no
+/// copies were asked for, so none are missing.
+#[test]
+fn a_piece_s_transform_without_copies_scaling_strokes_moves_it() {
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let look = vectorcraft_plugins::painted::Look {
+        effects: vec![Effect { id: "distort.transform".into(), params: json!({"moveH": 30.0, "copies": 0, "strokes": true}), visible: true }],
+        ..Default::default()
+    };
+    crate::reshape::dress_piece(&mut n, &look, Budget::EFFECTS, None).expect("the piece is dressed");
+    let mut paths = vec![];
+    n.walk(&mut |c| paths.extend(c.path_data().and_then(PathData::bounds)));
+    assert_eq!(paths.len(), 1, "{paths:?}");
+    assert!((paths[0].x0 - 30.0).abs() < 0.5 && (paths[0].x1 - 50.0).abs() < 0.5, "{paths:?}");
 }
 
 /// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's

@@ -1928,7 +1928,7 @@ impl Step<'_> {
                         if options.objects {
                             moved_ids.insert(leaf.id);
                         }
-                        short |= counts(leaf.id) && copied(leaf) <= copies;
+                        short |= copies > 0 && counts(leaf.id) && copied(leaf) <= copies;
                     } else {
                         kept_ids.insert(leaf.id);
                     }

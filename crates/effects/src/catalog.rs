@@ -64,7 +64,7 @@ pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f
 /// description or the next parameter; `None` when its documentation gives none.
 pub(crate) fn any_documented_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
-    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    let starts = |at: usize| starts_key(doc, at);
     doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
         let rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
@@ -88,7 +88,7 @@ pub(crate) fn any_documented_range(id: &str, key: &str) -> Option<std::ops::Rang
 /// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
 fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
-    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    let starts = |at: usize| starts_key(doc, at);
     let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
         rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?.strip_prefix(unit)?.strip_prefix(' ')
@@ -96,6 +96,12 @@ fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeIn
     let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
     let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
     (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi)
+}
+
+/// Can a parameter name start at byte `at` of parameter documentation `doc`: after `{`, a space or
+/// a comma?
+fn starts_key(doc: &str, at: usize) -> bool {
+    doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| matches!(c, '{' | ' ' | ','))
 }
 
 /// The distance parameters of effect `id` (none for unknown effects).

@@ -174,8 +174,8 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
 }
 
 /// The values in `given`, the parameters of built-in effect `id` that a painted live-effect plug-in
-/// returned, that `effect.apply` also checks: an SVG filter's XML, `scale`, `origin`, `axes` and
-/// `name`; a Warp's `version`; a `color` the effect can draw; a Levels or Curves `channel`; a Radial
+/// returned, that are checked further: an SVG filter's XML, `scale`, `origin`, `axes` and
+/// `name`; a Free Distort's four `corners`; a Warp's `version`; a `color` the effect can draw; a Levels or Curves `channel`; a Radial
 /// Blur's center; and the type of each parameter without a default.
 fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), String> {
     let number = |key: &str| given.get(key).is_some_and(|v| !v.is_number());
@@ -199,6 +199,10 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
         if given.contains_key("name") && !given.contains_key("xml") {
             return Err("an SVG filter is named by its id: give `xml` with `name`".into());
         }
+    }
+    let pair = |p: &Value| p.as_array().is_some_and(|p| p.len() == 2 && p.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)));
+    if id == "distort.freeDistort" && given.get("corners").is_some_and(|c| !c.as_array().is_some_and(|c| c.len() == 4 && c.iter().all(pair))) {
+        return Err("`corners` must be four [x, y] pairs of numbers".into());
     }
     if id.starts_with("warp.") && given.get("version").is_some_and(|v| crate::warp_version(v).is_none()) {
         return Err(format!("`version` must be 0 or {}", crate::WARP_NET));

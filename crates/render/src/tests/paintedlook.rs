@@ -14,21 +14,35 @@ fn square_at(x: f64) -> PathData {
     PathData::single(SubPath::polyline(&[Point::new(x, 40.0), Point::new(x + 20.0, 40.0), Point::new(x + 20.0, 60.0), Point::new(x, 60.0)], true))
 }
 
-/// Installs live-effect plug-in `id`, which declares `appearanceOutput` and returns one piece: the
-/// square at 120, 40 filled red, with `look`'s keys added to it.
-fn install(id: &str, look: serde_json::Value) {
-    use vectorcraft_plugins::wat as tpl;
+/// The output of a plug-in that returns one piece: the square at `x`, 40 filled red, with `look`'s
+/// keys added to it.
+fn output(x: f64, look: &serde_json::Value) -> String {
     let red = serde_json::to_value(Paint::solid(Color::rgb(1.0, 0.0, 0.0))).unwrap();
-    let mut piece = json!({"path": square_at(120.0), "fills": [red]});
+    let mut piece = json!({"path": square_at(x), "fills": [red]});
     if let (Some(p), Some(l)) = (piece.as_object_mut(), look.as_object()) {
         p.extend(l.clone());
     }
-    let output = json!({ "objects": [piece] }).to_string();
-    let manifest = format!(
-        r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#
-    );
-    let module = wat::parse_str(tpl::returning(&manifest, &output)).unwrap();
+    json!({ "objects": [piece] }).to_string()
+}
+
+/// The manifest of live-effect plug-in `id`, which declares `appearanceOutput`.
+fn manifest(id: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#)
+}
+
+/// Installs live-effect plug-in `id`, which returns one piece: the square at 120, 40 filled red,
+/// with `look`'s keys added to it.
+fn install(id: &str, look: serde_json::Value) {
+    let module = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest(id), &output(120.0, &look))).unwrap();
     vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+}
+
+/// Installs live-effect plug-in `id` as [`install`] does, except that it returns the square at 160,
+/// 40 when its input holds the text `moved`.
+fn install_moving(id: &str, look: serde_json::Value, moved: &str) {
+    use vectorcraft_plugins::wat as tpl;
+    let module = tpl::when_given_else(&manifest(id), tpl::Given::Input, moved, &output(160.0, &look), &output(120.0, &look));
+    vectorcraft_plugins::registry::install_bytes(&wat::parse_str(module).unwrap()).unwrap();
 }
 
 /// A document with a blue rectangle over all of it and, above it, the square at `x`, 40 filled
@@ -51,8 +65,13 @@ fn document(plugin: &str, x: f64) -> Document {
 
 /// The color a new renderer draws `d` with at (`x`, `y`).
 fn pixel(d: &Document, x: f64, y: f64) -> [u8; 4] {
+    pixel_with(&mut Renderer::new(), d, x, y)
+}
+
+/// The color renderer `r` draws `d` with at (`x`, `y`).
+fn pixel_with(r: &mut Renderer, d: &Document, x: f64, y: f64) -> [u8; 4] {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
-    Renderer::new().render(d, 1, 1, Affine::translate((-x, -y)), &opts).pixel(0, 0)
+    r.render(d, 1, 1, Affine::translate((-x, -y)), &opts).pixel(0, 0)
 }
 
 fn near(got: [u8; 4], want: [u8; 3]) -> bool {
@@ -60,18 +79,24 @@ fn near(got: [u8; 4], want: [u8; 3]) -> bool {
 }
 
 /// A piece at 50% opacity with Multiply draws red multiplied with the blue under it (black) at
-/// half strength: half blue. Moved, the source runs the plug-in again, and the new piece draws the
+/// half strength: half blue. Moved in the same document and drawn by the same renderer, the source
+/// runs the plug-in again, which now returns the square at 160, 40, and the new piece draws the
 /// same way. Without the look the piece is plain red.
 #[test]
 fn a_piece_s_opacity_and_blending_mode_draw_and_survive_a_rerun() {
     const ID: &str = "test.render.paintedlook.multiply";
-    install(ID, json!({"opacity": 0.5, "blend": "Multiply"}));
-    for x in [0.0, 2.0] {
-        let d = document(ID, x);
-        let p = pixel(&d, 130.0, 50.0);
-        assert!(near(p, [0, 0, 128]), "source at {x}: {p:?}");
-        assert!(near(pixel(&d, 10.0, 50.0), [0, 0, 255]), "the source is not drawn");
-    }
+    install_moving(ID, json!({"opacity": 0.5, "blend": "Multiply"}), "33.25");
+    let mut d = document(ID, 0.0);
+    let source = d.layers[0].children().and_then(|c| c.last()).map(|n| n.id).unwrap();
+    let mut r = Renderer::new();
+    let p = pixel_with(&mut r, &d, 130.0, 50.0);
+    assert!(near(p, [0, 0, 128]), "before the move: {p:?}");
+    assert!(near(pixel_with(&mut r, &d, 10.0, 50.0), [0, 0, 255]), "the source is not drawn");
+    d.node_mut(source).unwrap().transform(Affine::translate((33.25, 0.0)), false);
+    let p = pixel_with(&mut r, &d, 170.0, 50.0);
+    assert!(near(p, [0, 0, 128]), "after the move: {p:?}");
+    assert!(near(pixel_with(&mut r, &d, 130.0, 50.0), [0, 0, 255]), "the earlier piece is not drawn");
+    assert!(near(pixel_with(&mut r, &d, 43.0, 50.0), [0, 0, 255]), "the moved source is not drawn");
     assert_eq!(vectorcraft_plugins::effect::last_error(ID), None);
     install(ID, json!({}));
     assert!(near(pixel(&document(ID, 4.0), 130.0, 50.0), [255, 0, 0]));
