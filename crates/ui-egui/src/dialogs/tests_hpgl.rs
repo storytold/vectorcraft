@@ -9,7 +9,7 @@ use vectorcraft_engine::cmd::fileio;
 // PLAN: assumed `fields(&app)` (values of the top hosted dialog) and `press(&mut app, name)` (the control channel's
 // click on a control by name, export-w23) in export-w9's helpers.
 use super::tests_export::{answer_saves, app, cancel, confirm, frame, kind, names, on_save, set, try_confirm, try_set};
-use super::tests_print::press;
+use super::tests_print::press_control;
 use super::tests_raster_formats::fields;
 use super::*;
 use crate::VectorcraftApp;
@@ -155,7 +155,7 @@ fn pen_table_starts_from_the_art_s_pens_and_comes_back() {
     assert_eq!(pens(&d), json!(["#000000"]));
     // The Pen Table button asks the host, which starts the table from the art's pens.
     frame(&mut app);
-    press(&mut app, "Pen Table");
+    press_control(&mut app, json!({"name": "Pen Table", "role": "RadioButton"}));
     frame(&mut app);
     assert_eq!(pens(&fields(&app)), json!(automatic));
 }

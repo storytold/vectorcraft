@@ -21,6 +21,7 @@ use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::layout_components::Row;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
+use craft::ui::runtime::focus::Initial;
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::value_drag::Slider;
 use egui::{Pos2, Rect as ScreenRect};
@@ -91,6 +92,8 @@ pub(crate) struct Strip {
     pub bounds: Option<Rect>,
     /// Whether the popover is open.
     pub open: bool,
+    /// The level the auto button picked: while the slider stays there, the canvas previews `{auto: true}`.
+    pub auto: Option<f64>,
     /// The canvas preview of `kind`'s command.
     pub preview: LivePreview,
 }
@@ -102,7 +105,10 @@ impl Strip {
     }
 
     fn params(&self) -> Value {
-        json!({ "level": self.level() })
+        match self.auto {
+            Some(level) if level == self.level() => json!({ "auto": true }),
+            _ => json!({ "level": self.level() }),
+        }
     }
 }
 
@@ -120,7 +126,8 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: StripKind) {
     if let Some(old) = app.object_dialogs.strip.take() {
         old.preview.cancel(app);
     }
-    let strip = Strip { kind, level: opening_level(app, kind), bounds: app.selection_bounds(), open: true, preview: LivePreview::default() };
+    let strip =
+        Strip { kind, level: opening_level(app, kind), bounds: app.selection_bounds(), open: true, auto: None, preview: LivePreview::default() };
     app.object_dialogs.strip = Some(strip);
 }
 
@@ -152,9 +159,10 @@ pub(super) fn auto_of(app: &mut VectorcraftApp, kind: StripKind) -> Result<Value
     }
     let Some(mut strip) = app.object_dialogs.strip.take() else { return Err(not_open(kind)) };
     let answer = strip.preview.run(app, true, kind.label(), kind.cmd(), &json!({ "auto": true }));
-    let result = answer.unwrap_or_else(|| Ok(strip.params()));
+    let result = answer.unwrap_or_else(|| Ok(json!({ "level": strip.level() })));
     if let Ok(v) = &result {
         strip.level = v["level"].as_f64().unwrap_or(kind.default_level());
+        strip.auto = Some(strip.level());
     }
     let level = strip.level();
     app.object_dialogs.strip = Some(strip);
@@ -201,12 +209,14 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, view: &CanvasVie
     let shown = Popover::new(tl!(kind.label()), Bind::bound(&mut open))
         .overlay(|o| o.place(Place::anchored(Anchor::Rect(anchor), Side::Below, Align::Center)))
         .dismiss(Dismiss::new().outside(Outside::Absorb))
+        // The keyboard opens on the slider: arrows move it, Enter keeps the result.
+        .initial_focus(Initial::Default)
         .close_on_enter(true)
         .escape(true)
         .show(ui, |ui, _| {
             Row::new().show(ui, |ui, _| {
                 auto_clicked = IconButton::new(IconSpec::svg(IconId::new("wand-sparkles"))).label(tl!(kind.auto_tip())).show(ui).clicked();
-                Slider::new(Bind::bound(&mut level), 0.0..=100.0).step(1.0).label(tl!(kind.label())).show(ui);
+                Slider::new(Bind::bound(&mut level), 0.0..=100.0).step(1.0).label(tl!(kind.label())).default_stop().show(ui);
                 if kind.has_more_options() {
                     more_clicked = IconButton::new(IconSpec::svg(IconId::new("ellipsis"))).label(tl!("More Options")).show(ui).clicked();
                 }

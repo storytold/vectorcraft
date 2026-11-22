@@ -56,7 +56,7 @@ fn raster_option_rows_reach_the_export_params() {
             assert_eq!(i16::from_be_bytes([psd[at + 8], psd[at + 9]]), -3);
         }),
         // Flat, flattened on white; Preserve Text Editability, still ticked, isn't sent: the export refuses it without layers.
-        ("psd", &[("preserveText", json!(true)), ("layers", json!(false)), ("colorModel", json!("gray"))], |psd| {
+        ("psd", &[("preserveText", json!(true)), ("layers", json!("false")), ("colorModel", json!("gray"))], |psd| {
             assert_eq!((u16::from_be_bytes([psd[12], psd[13]]), u16::from_be_bytes([psd[24], psd[25]])), (1, 1), "one grey channel");
         }),
     ];
@@ -130,7 +130,8 @@ fn save_for_office_documents_picks_the_resolution() {
     assert_eq!(kind(&app).as_deref(), Some("saveForOffice"));
     frame(&mut app);
     set(&mut app, "ppi", json!("300"));
-    set(&mut app, "artboard", json!(1));
+    // The Artboard row is a choice keyed by the artboard's index.
+    set(&mut app, "artboard", json!("1"));
     set(&mut app, "transparent", json!(true));
     frame(&mut app);
     confirm(&mut app);

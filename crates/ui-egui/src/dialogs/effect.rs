@@ -305,8 +305,12 @@ fn command(open: &Open, fields: &DialogFields) -> (&'static str, Value) {
     params.retain(|k, v| open.opened.get(k) != Some(v));
     // The Style row's companion says the user chose a style: the other targets keep their own
     // Warp ids otherwise.
-    let style = (fields.bool("styleChosen") == Some(true)).then(|| fields.text("warpStyle").map(str::to_string)).flatten();
-    params.remove("warpStyle");
+    // Warp's Style row is `style` (`warp_effect::params`); the style is the effect's id, no parameter.
+    let warp = super::warp_effect::is_warp(&open.cx.id);
+    let style = (warp && fields.bool("styleChosen") == Some(true)).then(|| fields.text("style").map(str::to_string)).flatten();
+    if warp {
+        params.remove("style");
+    }
     params.remove("styleChosen");
     // Load Texture's path is the dialog's: the image it loaded is in `textureImage`.
     params.remove("texturePath");

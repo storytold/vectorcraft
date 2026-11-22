@@ -215,23 +215,27 @@ fn export_as_png_exports_the_active_artboard() {
     let opaque = |bytes: &[u8]| rgba(bytes).pixels().any(|p| p.0[3] > 0);
     app.view_mut().unwrap().artboard = 1;
     app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
     assert_eq!(fields(&app)["artboard"], json!(1));
     frame(&mut app);
     confirm(&mut app);
     assert!(!opaque(&written.borrow()[0].1), "the second artboard, which is empty");
     app.view_mut().unwrap().artboard = 0;
     app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
     frame(&mut app);
     confirm(&mut app);
     assert!(opaque(&written.borrow()[1].1), "the first artboard, with the ellipse");
     // A choice given is kept.
     app.run("file.export.png", json!({"useArtboards": false})).unwrap();
+    answer_saves(&mut app);
     assert!(fields(&app).get("artboard").is_none_or(Value::is_null));
     cancel(&mut app);
     // Artboards the Artboard tool selected: one file each.
     app.select_tool("artboard");
     app.session.set_tool_option("selected", &json!([0, 1]));
     app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
     frame(&mut app);
     confirm(&mut app);
     assert_eq!(names(&written)[2..], ["/out/Untitled-1-Artboard-1.png", "/out/Untitled-1-Artboard-2.png"]);

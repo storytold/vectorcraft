@@ -85,7 +85,8 @@ fn export_selection_to_text_writes_the_selected_type() {
     frame(&mut app);
     confirm(&mut app);
     assert_eq!(names(&written), ["/out/sel.txt"]);
-    assert_eq!(last_text(&written), "Selected\n");
+    // Line endings default to the platform's.
+    assert_eq!(last_text(&written), if cfg!(windows) { "Selected\r\n" } else { "Selected\n" });
 }
 
 /// SVG Options opened by Export Selection hides Use Artboards, and its OK leaves the Use
@@ -115,6 +116,7 @@ fn export_selection_without_a_dialog_and_to_plug_ins_writes_the_selection() {
     let all = paths_in(&written.borrow().last().unwrap().1);
     picking("/out/sel.vectorcraft");
     app.run("document.exportSelection", json!({})).unwrap();
+    answer_saves(&mut app);
     assert!(kind(&app).is_none(), "written at once");
     assert_eq!(names(&written).last().map(String::as_str), Some("/out/sel.vectorcraft"));
     let selected = paths_in(&written.borrow().last().unwrap().1);
@@ -127,6 +129,7 @@ fn export_selection_without_a_dialog_and_to_plug_ins_writes_the_selection() {
         app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
         picking(&format!("/out/sel.{ext}"));
         app.run("document.exportSelection", json!({})).unwrap();
+        answer_saves(&mut app);
         if params != "{}" {
             assert!(kind(&app).is_some(), "{id} asks for its parameters");
             frame(&mut app);

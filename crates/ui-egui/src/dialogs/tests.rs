@@ -226,8 +226,12 @@ fn effect_dialogs_edit_a_color_that_document_color_mode_converted() {
             .to_hex();
         app.run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
         settle(&mut app);
-        let shown = fields(&app)["color"].to_string();
-        assert!(shown.to_lowercase().contains(&hex.to_lowercase()), "{effect}: {hex} in {shown}");
+        // A colour row reads as the framework's `[r, g, b]`.
+        let shown = fields(&app)["color"].clone();
+        let rgb: [f64; 3] = serde_json::from_value(shown.clone()).unwrap_or_else(|e| panic!("{effect}: {shown}: {e}"));
+        let shown_hex =
+            format!("#{:02x}{:02x}{:02x}", (rgb[0] * 255.0).round() as u8, (rgb[1] * 255.0).round() as u8, (rgb[2] * 255.0).round() as u8);
+        assert_eq!(shown_hex, hex.to_lowercase(), "{effect}: {shown}");
         assert!(confirm(&mut app));
         assert_eq!(color(&app), converted, "{effect}");
     }
@@ -273,7 +277,12 @@ fn raster_filter_dialogs_preview_and_apply() {
         app.run("select.all", json!({})).unwrap();
         app.run("effect.dialog", json!({"effect": effect})).unwrap();
         let v: Value = value.parse::<f64>().map_or_else(|_| json!(value), |n| json!(n));
-        set(&mut app, key, v.clone());
+        // A colour row takes the framework's `[r, g, b]`; the effect stores it as hex.
+        let sent = match value.strip_prefix('#').and_then(|hex| u32::from_str_radix(hex, 16).ok()) {
+            Some(n) => json!([16, 8, 0].map(|shift| f64::from((n >> shift) & 255) / 255.0)),
+            None => v.clone(),
+        };
+        set(&mut app, key, sent);
         frame(&mut app, vec![]);
         assert!(app.session.in_interaction(), "{effect}: previews");
         assert!(confirm(&mut app));
@@ -674,7 +683,8 @@ fn polar_grid_shared_canvas_click_defaults_units_counts_and_history() {
     let f = fields(&app);
     assert_eq!((&f["width"], &f["height"]), (&json!(100.0), &json!(100.0)), "100 pt");
     assert_eq!((&f["concentric"], &f["radial"]), (&json!(2), &json!(3)));
-    set_all(&mut app, [("width", json!("25.4 mm")), ("height", json!("0.5 in"))]);
+    // 25.4 mm and 0.5 in, in points: the rows take numbers.
+    set_all(&mut app, [("width", json!(72.0)), ("height", json!(36.0))]);
     assert!(confirm(&mut app));
     assert!(!is_open(&app));
     let group = last_group(&app);
@@ -743,7 +753,7 @@ fn polar_grid_shared_cancel_reopen_zero_counts_and_failed_creation() {
 /// document in centimetres a typed value still commits as pixels, within the documented 4 to 127 px.
 #[test]
 fn color_halftones_max_radius_stays_in_pixels_whatever_the_units() {
-    for (typed, applied) in [("10", 10.0), ("2", 4.0), ("500", 127.0), ("4.5 px", 4.5)] {
+    for (typed, applied) in [(10.0, 10.0), (2.0, 4.0), (500.0, 127.0), (4.5, 4.5)] {
         let mut app = app();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
         app.run("document.setup", json!({"units": "Centimeters"})).unwrap();

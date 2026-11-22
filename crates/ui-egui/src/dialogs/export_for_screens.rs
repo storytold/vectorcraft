@@ -67,7 +67,7 @@ pub const KIND: &str = "exportForScreens";
 const TABS: [&str; 2] = ["artboards", "assets"];
 
 /// The fields `ui.dialog.set` takes and `ui.inspect` lists; the other `__` keys are the dialog's own.
-const SETTABLE: [&str; 19] = [
+const SETTABLE: [&str; 20] = [
     "tab",
     "view",
     "boards",
@@ -79,6 +79,7 @@ const SETTABLE: [&str; 19] = [
     "subfolderBy",
     "pdfs",
     "prefix",
+    "preset",
     "formats",
     "settings",
     "includeBleed",

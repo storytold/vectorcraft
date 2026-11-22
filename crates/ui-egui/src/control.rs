@@ -1467,6 +1467,13 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                     (Some(Ok(_)), Some(answer)) => {
                         craft::automation::dialogs::dialog_method(host, ctx, answer, &json!({ "dialog": params["dialog"] }))
                     }
+                    // A set answers with the dialog it set, `{id, parent, key, fields}`, as production did.
+                    (Some(Ok(_)), None) if method == "ui.dialog.set" => {
+                        let open = craft::automation::dialogs::inspect(host);
+                        let list = open.as_array().map_or(&[][..], Vec::as_slice);
+                        let set = if params["dialog"] == "top" { list.last() } else { list.iter().find(|d| d["id"] == params["dialog"]) };
+                        Some(Ok(set.cloned().unwrap_or(Value::Null)))
+                    }
                     (set, _) => set,
                 }
             });

@@ -258,7 +258,8 @@ fn warp_options_mixed_styles_change_only_after_explicit_style_choice() {
                     let node = std::sync::Arc::make_mut(&mut expected).node_mut(id).unwrap();
                     let effects = node.appearance.effects_mut(item.as_u64().map(|i| i as usize)).unwrap();
                     match edit {
-                        "bend" => effects[1].params["bend"] = json!(25.0),
+                        // Whole numbers are stored as JSON integers.
+                        "bend" => effects[1].params["bend"] = json!(25),
                         "style" => effects[1].id = "warp.arcLower".into(),
                         _ => {}
                     }
@@ -316,7 +317,8 @@ fn warp_options_edit_keeps_each_targets_map_version() {
     assert!(open_ids(&app).is_empty());
     let doc = app.session.doc().unwrap().doc.clone();
     let params = |id: NodeId| doc.node(id).unwrap().appearance.effects[0].params.clone();
-    assert_eq!((&params(first)["bend"], &params(first)["version"]), (&json!(25.0), &json!(vectorcraft_doc::live::WARP_NET)));
-    assert_eq!(params(second)["bend"], json!(25.0));
+    // Whole numbers are stored as JSON integers: Bend compares by value.
+    assert_eq!((params(first)["bend"].as_f64(), &params(first)["version"]), (Some(25.0), &json!(vectorcraft_doc::live::WARP_NET)));
+    assert_eq!(params(second)["bend"].as_f64(), Some(25.0));
     assert!(params(second).get("version").is_none(), "{:?}", params(second));
 }

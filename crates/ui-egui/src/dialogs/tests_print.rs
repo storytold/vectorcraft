@@ -108,9 +108,15 @@ pub(super) fn call(app: &mut VectorcraftApp, method: &str, params: Value) -> Val
 /// Presses the control named `name` in a frame drawn first, as a user presses what the window shows, then runs the
 /// frame's dialog work.
 pub(super) fn press(app: &mut VectorcraftApp, name: &str) {
+    press_control(app, json!({ "name": name }));
+}
+
+/// [`press`] of the control `control` names (`{name, role?, within?, index?}`, as `ui.click` takes it).
+pub(super) fn press_control(app: &mut VectorcraftApp, control: Value) {
     let ctx = ctx(app);
     crate::testing::app_frame(app, &ctx, Default::default());
-    let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
+    let name = control["name"].clone();
+    let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({ "control": control }));
     match crate::control::handle(app, &ctx, &click) {
         craft::automation::Reply::Done(r) => assert_eq!(r["ok"], true, "ui.click {name}: {r}"),
         // The click is queued as input: the frames after it press the control.

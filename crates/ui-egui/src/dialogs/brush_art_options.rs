@@ -25,8 +25,9 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use craft::behavior::IconId;
 use craft::theme::Srgba;
-use craft::ui::buttons::Button;
+use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{CellMarks, Segmented, Swatch};
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::dialog::{FieldRefusal, StackDialog};
@@ -36,6 +37,7 @@ use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
+use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::runtime::requests::EyedropperRequest;
 use craft::ui::text::NumberField;
@@ -712,8 +714,11 @@ fn colorization_rows() -> Vec<Param> {
                         f.set("keyColor", FieldValue::Json(serde_json::to_value(c).unwrap_or_default()));
                     }
                 }
-                let dropper = Button::new(tl!("Eyedropper")).id_salt("pipette").show(ui);
-                if clicked(&dropper) {
+                let dropper = IconButton::new(IconSpec::svg(IconId::new("pipette")))
+                    .label(tl!("Eyedropper: click the art to sample the key color"))
+                    .id_salt("pipette")
+                    .show(ui);
+                if dropper.clicks > 0 {
                     pick = !pick;
                 }
             })
