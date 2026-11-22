@@ -266,27 +266,77 @@ fn in_the_app_the_runs_are_queued_and_the_launch_marker_names_the_running_startu
 }
 
 #[test]
-fn in_the_app_a_chosen_script_that_cannot_start_leaves_the_startup_scripts_result() {
+fn a_chosen_script_that_cannot_start_is_refused_before_any_startup_script_runs() {
     let _f = fresh();
     let dir = tmp_dir("app-then");
     write(&dir, "a.jsx", "vc.log(1);");
+    let missing = dir.join("gone").join("missing.jsx");
+    let then = json!({"path": missing.to_string_lossy()});
+    for frames in [false, true] {
+        let mut s = session(&dir);
+        s.script_frames = frames;
+        let alone = s.execute("script.run", &then).unwrap_err().to_string();
+        let e = s.execute("script.startup.run", &json!({"reason": "menu", "then": then})).unwrap_err();
+        assert_eq!(e.to_string(), alone, "the error script.run gives, frames {frames}");
+        assert!(!s.script_running());
+        assert!(started(&s).is_empty(), "no startup script ran, frames {frames}");
+        assert!(s.take_startup_failures().is_empty());
+        let e = s.execute("script.startup.run", &json!({"reason": "menu", "then": {"name": "neither"}})).unwrap_err();
+        assert!(e.to_string().contains("exactly one of"), "{e}");
+        assert!(started(&s).is_empty());
+    }
+}
+
+#[test]
+fn in_the_app_a_stopped_startup_script_keeps_its_report_until_the_next_pump_starts_the_queued_run() {
+    let _f = fresh();
+    let dir = tmp_dir("app-stop");
+    write(&dir, "a.jsx", "for (;;) {}");
     let mut s = session(&dir);
     s.script_frames = true;
-    let missing = dir.join("gone").join("missing.jsx");
-    let r = s.execute("script.startup.run", &json!({"reason": "menu", "then": {"path": missing.to_string_lossy()}})).unwrap();
-    assert_eq!((r["running"].clone(), r["queued"].clone()), (json!(true), json!(2)));
-    let mut results = vec![];
-    for _ in 0..10_000 {
-        if !s.script_running() {
-            break;
+    s.execute("script.startup.run", &json!({"reason": "menu", "then": {"source": "vc.log(2);", "name": "chosen"}})).unwrap();
+    assert!(s.script_pump().is_none(), "the endless one runs");
+    assert!(s.script_request_stop());
+    let ended = (0..10_000).find_map(|_| s.script_pump()).unwrap();
+    assert!(ended.is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped", "the ended run's report is still there");
+    assert!(s.script_running(), "the chosen script waits for the next pump");
+    // Nothing else starts ahead of the queued run.
+    let e = s.execute("script.run", &json!({"source": "vc.log(9);", "name": "direct"})).unwrap_err();
+    assert!(matches!(e, vectorcraft_engine::EngineError::Busy), "{e}");
+    assert_eq!(started(&s), ["a.jsx"]);
+    let r = (0..10_000).find_map(|_| s.script_pump()).unwrap();
+    assert_eq!(r.unwrap()["ok"], true);
+    assert_eq!(started(&s), ["a.jsx", "chosen"]);
+    assert!(!s.script_running());
+}
+
+#[test]
+fn in_the_app_a_stop_between_two_runs_stops_the_run_that_starts_next() {
+    let _f = fresh();
+    let dir = tmp_dir("app-stop-between");
+    write(&dir, "a.jsx", "vc.log(1);");
+    write(&dir, "b.jsx", "for (;;) {}");
+    for by_interrupt in [false, true] {
+        let mut s = session(&dir);
+        s.script_frames = true;
+        let then = json!({"source": "vc.log(3);", "name": "chosen"});
+        s.execute("script.startup.run", &json!({"reason": "menu", "then": then, "maxFuel": 1_000_000})).unwrap();
+        assert_eq!((0..10_000).find_map(|_| s.script_pump()).unwrap().unwrap()["ok"], true, "a.jsx ends");
+        assert!(s.script_running(), "b.jsx waits for the next pump");
+        if by_interrupt {
+            // The status bar's Stop button.
+            s.script_interrupt().set();
+        } else {
+            assert!(s.script_request_stop(), "script.stop has a run to stop");
         }
-        if let Some(r) = s.script_pump() {
-            results.push(r.is_ok());
-        }
+        let ended = (0..10_000).find_map(|_| s.script_pump()).unwrap();
+        assert!(ended.is_err());
+        assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+        assert_eq!(s.script_report().unwrap()["name"], "b.jsx");
+        assert_eq!((0..10_000).find_map(|_| s.script_pump()).unwrap().unwrap()["ok"], true, "the chosen script still runs");
+        assert_eq!(started(&s), ["a.jsx", "b.jsx", "chosen"]);
     }
-    assert_eq!(results, [true], "the startup script's own result");
-    let failures = s.take_startup_failures();
-    assert_eq!(failures.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["missing.jsx"]);
 }
 
 #[test]
@@ -301,5 +351,5 @@ fn in_the_app_startup_scripts_that_cannot_start_are_in_the_reply() {
     let r = s.execute("script.startup.run", &json!({"reason": "launch"})).unwrap();
     assert_eq!(r["running"], json!(false));
     assert_eq!(r["failed"], json!([{"name": "big.jsx", "error": vectorcraft_engine::cmd::scripts::TOO_LARGE}]));
-    assert_eq!(s.take_startup_failures().len(), 1, "and kept for the app's status bar");
+    assert!(s.take_startup_failures().is_empty(), "the reply names them, so the status bar does not again");
 }

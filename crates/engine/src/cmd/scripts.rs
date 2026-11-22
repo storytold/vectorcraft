@@ -158,6 +158,17 @@ const NOT_TEXT: &str = "the script is not UTF-8 text";
 pub const TOO_LARGE: &str = "the script is too large to run";
 
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
+    let request = prepare(s, p)?;
+    let name = s.script_start(request)?;
+    if s.script_frames {
+        return Ok(json!({"running": true, "name": name}));
+    }
+    s.script_run_to_end()
+}
+
+/// The run `script.run`'s parameters `p` ask for, with its file read and checked, or the error that
+/// keeps it from starting.
+fn prepare(s: &Session, p: &Value) -> Result<script::Request> {
     let optional_str = |key: &str| match p.get(key) {
         None => Ok(None),
         Some(Value::String(t)) => Ok(Some(t.as_str())),
@@ -216,7 +227,7 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let name = given_name.map(str::to_string).or_else(|| path.map(super::fileio::file_name)).unwrap_or_else(|| "script".to_string());
     let locale = script::dollar::ui_locale(s.ui_language.as_deref().unwrap_or(&s.prefs.interface_language));
-    let request = script::Request {
+    Ok(script::Request {
         name,
         name_given: given_name.is_some(),
         file: path.map(str::to_string),
@@ -226,12 +237,7 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         fuel,
         locale,
         answers,
-    };
-    let name = s.script_start(request)?;
-    if s.script_frames {
-        return Ok(json!({"running": true, "name": name}));
-    }
-    s.script_run_to_end()
+    })
 }
 
 fn stop(s: &mut Session, _: &Value) -> Result<Value> {
@@ -441,8 +447,12 @@ impl Session {
     /// [`Self::take_startup_failures`], and the next one starts. → the reply of the script queued
     /// after them when it ran to its end at once.
     pub(crate) fn start_queued(&mut self) -> Option<Value> {
-        while !self.script_running() {
-            match self.script_queue.pop_front()? {
+        // Held aside while a run starts, so that the queue does not count as a running script then.
+        let mut queue = std::mem::take(&mut self.script_queue);
+        let mut reply = None;
+        while self.script_key.is_none() {
+            let Some(next) = queue.pop_front() else { break };
+            match next {
                 script::startup::Queued::Startup { path, fuel } => {
                     if let Err(e) = self.start_startup(&path, fuel) {
                         self.startup_failures.push((file_name_of(&path), e));
@@ -450,15 +460,16 @@ impl Session {
                 }
                 script::startup::Queued::Then(params) => {
                     match run(self, &params) {
-                        Ok(_) if self.script_running() => {}
-                        Ok(v) => return Some(v),
+                        Ok(_) if self.script_key.is_some() => {}
+                        Ok(v) => reply = Some(v),
                         Err(e) => self.startup_failures.push((then_name(&params), e.to_string())),
                     }
-                    return None;
+                    break;
                 }
             }
         }
-        None
+        self.script_queue = queue;
+        reply
     }
 
     /// The runs `script.startup.run` queued that could not start since the last call, as (name,
@@ -517,6 +528,10 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
     if s.script_running() {
         return Err(EngineError::Busy);
     }
+    // A chosen script that cannot start ends the request before any startup script runs.
+    if let Some(then) = &then {
+        prepare(s, then)?;
+    }
     let root = match (s.startup_skip(), s.startup_scripts_dir()) {
         (None, Some(root)) => root.to_path_buf(),
         (why, _) => {
@@ -541,7 +556,7 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
         let queued = s.script_queue.len();
         s.startup_failures.clear();
         let then = s.start_queued();
-        let failed: Vec<Value> = s.startup_failures.iter().map(|(name, error)| json!({"name": name, "error": error})).collect();
+        let failed: Vec<Value> = s.take_startup_failures().into_iter().map(|(name, error)| json!({"name": name, "error": error})).collect();
         let mut out = json!({
             "reason": reason,
             "skipped": false,

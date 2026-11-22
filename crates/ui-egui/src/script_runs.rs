@@ -12,10 +12,7 @@ use crate::state::Dialog;
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
     script_run::drain(app);
-    // Each run `script.startup.run` queued that could not start.
-    for (name, error) in app.session.take_startup_failures() {
-        app.status(format!("{name}: {error}"));
-    }
+    startup_failures(app);
     if !app.session.script_running() {
         return;
     }
@@ -26,6 +23,9 @@ pub fn poll(app: &mut VectorcraftApp) {
     let name = app.session.script_name().unwrap_or_default();
     let cursor_settings = (app.session.caps_lock, app.session.prefs.use_precise_cursors);
     let Some(result) = app.session.script_pump() else {
+        // A pump that started the next queued run shows the runs before it that could not start
+        // in this frame: with none left running, the app may draw no next one.
+        startup_failures(app);
         // The app draws no more frames while the run waits: its question opens in this one.
         ask(app);
         return;
@@ -47,6 +47,13 @@ pub fn poll(app: &mut VectorcraftApp) {
         Err(e) => failed(app, e.to_string()),
     }
     app.sync_views();
+}
+
+/// Shows each run `script.startup.run` queued that could not start.
+fn startup_failures(app: &mut VectorcraftApp) {
+    for (name, error) in app.session.take_startup_failures() {
+        app.status(format!("{name}: {error}"));
+    }
 }
 
 /// Opens what the run waits at, once no other dialog is open: the script's own dialog, or the

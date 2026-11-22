@@ -601,6 +601,71 @@ fn with_run_startup_scripts_on_other_script_and_the_launch_run_the_startup_scrip
 }
 
 #[test]
+fn a_stopped_startup_script_says_it_was_stopped_and_the_chosen_script_still_runs() {
+    let dir = folder("startup-stop");
+    let mut app = app(&dir);
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    std::fs::write(startup.join("a.jsx"), "for (;;) {}").unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.script_request_stop());
+    app.status("before");
+    for _ in 0..10_000 {
+        if app.ui.status != "before" {
+            break;
+        }
+        script_runs::poll(&mut app);
+    }
+    assert_eq!(app.ui.status, "The script was stopped and its changes were undone");
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx", "chosen"]);
+    assert_eq!(app.ui.status, "Ran chosen");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_last_startup_script_that_cannot_start_shows_in_the_status_bar_when_the_runs_end() {
+    let dir = folder("startup-last-fails");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    let mut big = "//".to_string();
+    big.push_str(&"x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES));
+    std::fs::write(dir.join("Startup Scripts").join("b.jsx"), big).unwrap();
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    script_runs::run_at_launch(&mut app);
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx", "b.jsx"]);
+    assert_eq!(app.ui.status, format!("b.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn with_run_startup_scripts_on_other_script_with_a_missing_file_fails_before_the_startup_scripts() {
+    let dir = folder("startup-missing");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let missing = dir.join("gone.jsx").to_string_lossy().into_owned();
+    let alone = app.run("script.run", json!({ "path": missing })).unwrap_err();
+    for warning in [false, true] {
+        app.session.prefs.show_external_script_warning = warning;
+        let e = match menus::run_ui_command(&mut app, "ui.runScript", &json!({ "path": missing })).unwrap() {
+            Err(e) => e,
+            // The warning opens first; its Run button gives the error.
+            Ok(_) => crate::dialogs::confirm(&mut app).unwrap_err(),
+        };
+        assert_eq!(e, alone, "the error script.run gives, warning {warning}");
+        assert!(!app.session.script_running());
+        assert!(started(&app).is_empty(), "no startup script ran, warning {warning}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_startup_scripts_folder_that_cannot_be_read_shows_in_the_status_bar_at_launch_and_a_missing_one_does_not() {
     let dir = folder("startup-unreadable");
     let mut app = app(&dir);

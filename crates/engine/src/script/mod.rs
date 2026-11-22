@@ -1653,9 +1653,10 @@ fn relocated(message: &str, old_line: u32, old_column: u32, line: u32, column: u
 }
 
 impl Session {
-    /// Is a script running? While one is, the commands that change anything are refused.
+    /// Is a script running, or a run `script.startup.run` queued waiting to start at the next
+    /// [`Self::script_pump`]? While one is, the commands that change anything are refused.
     pub fn script_running(&self) -> bool {
-        self.script_key.is_some()
+        self.script_key.is_some() || !self.script_queue.is_empty()
     }
 
     /// The named engine of the running script.
@@ -1868,9 +1869,10 @@ impl Session {
         }
     }
 
-    /// Asks the running script to stop; it is rolled back at the next slice. False with none running.
+    /// Asks the running script to stop; it is rolled back at the next slice. Between two runs
+    /// `script.startup.run` queued, the next one stops as it starts. False with none running.
     pub fn script_request_stop(&mut self) -> bool {
-        if self.script_key.is_none() {
+        if !self.script_running() {
             return false;
         }
         self.script_stop.set();
@@ -2124,12 +2126,27 @@ impl Session {
 
     /// Advances the running script by one slice. `None` while it is still running; otherwise the
     /// run has ended: its report, or the error that ended it, with the documents put back. When
-    /// `script.startup.run` queued more runs, the next one starts then, and a queued run that cannot
-    /// start is kept for [`Self::take_startup_failures`].
+    /// `script.startup.run` queued more runs, the next one starts at the pump after that, so the
+    /// ended run's report ([`Self::script_report`]) stays until then; a queued run that cannot start
+    /// is kept for [`Self::take_startup_failures`].
     pub fn script_pump(&mut self) -> Option<Result<Value>> {
-        let result = self.pump_one()?;
+        if self.script_key.is_none() {
+            // A stop asked for between two runs stops the run that starts now, which clears it.
+            let stop = self.script_stop.is_set();
+            self.start_queued();
+            if stop && self.script_key.is_some() {
+                self.script_stop.set();
+            } else {
+                self.script_stop.clear();
+            }
+            return None;
+        }
+        // Held aside while the run ends, so that its commit does not see the queue as a running script.
+        let queue = std::mem::take(&mut self.script_queue);
+        let result = self.pump_one();
+        self.script_queue = queue;
+        let result = result?;
         self.startup_ended();
-        self.start_queued();
         Some(result)
     }
 

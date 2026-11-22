@@ -3191,13 +3191,16 @@ The rest of this section is VectorCraft's own rules:
   `vectorcraft-cli` uses the same folder and runs it only through `script.startup.run`.
 
 `script.startup.run {reason: launch|menu, then?, maxFuel?}` runs the folder now. `then` holds `script.run`'s
-parameters for a script that runs after the startup scripts; `maxFuel` limits each startup script's instructions
+parameters for a script that runs after the startup scripts. A `then` that `script.run` would refuse, such as a
+missing file or one larger than 8 MiB, ends the request with `script.run`'s error before any startup script runs.
+`maxFuel` limits each startup script's instructions
 (from 1 to 100,000,000,000, default 1,000,000,000). It returns `{reason, skipped: true, why}` with `why` set to `off`,
 `safeMode` or `noFolder` when nothing runs, and otherwise `{reason, skipped: false, ran, failed: [{name, error}],
 disabled, truncated, unreadable}`, with `then` holding `script.run`'s reply. In the app the runs are queued and the
 reply is `{reason, skipped: false, running, queued, failed, disabled, truncated, unreadable}`, with `failed` naming
-the runs that could not start before the first one did; each run then reports as a `script.run` in the app does, and
-a later run that cannot start, the chosen script included, is named in the status bar. Under `--automation-read-root` it reads the folder only when the folder lies inside a
+the runs that could not start before the first one did. Each run then reports as a `script.run` in the app does, the
+next one starts at the frame after, and a later run that cannot start, the chosen script included, is named in the
+status bar. Stop (`script.stop`) asked for between two runs stops the run that starts next. Under `--automation-read-root` it reads the folder only when the folder lies inside a
 read root.
 
 ```sh
