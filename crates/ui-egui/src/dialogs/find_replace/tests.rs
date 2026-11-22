@@ -115,7 +115,9 @@ fn the_edit_menu_rows_open_their_dialogs() {
         let e = crate::menus::menu_entries(&p.app()).into_iter().find(|e| e.label == label).unwrap_or_else(|| panic!("{label} is in the Edit menu"));
         let shown_path: Vec<&str> = e.path.iter().map(String::as_str).collect();
         assert_eq!((shown_path.as_slice(), e.command.as_deref(), e.enabled), (path, Some(command), true), "{label}");
-        choose_command(&p, command);
+        // A click on the row: Check Spelling and Edit Custom Dictionary carry no params.
+        let (id, params) = crate::menus::click_target(&e.label, command, &e.params);
+        crate::menus::invoke(&mut p.app(), &id, params);
         assert!(p.app().dialogs().expect("a window").with(|host| shown(host)), "{label} opens its dialog");
     }
 }

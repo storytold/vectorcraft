@@ -36,13 +36,10 @@ fn picked(app: &VectorcraftApp) -> String {
     dialog(app, |d| d.json_fields().unwrap()["name"].as_str().unwrap().to_owned())
 }
 
-/// OK as the button does it, the pump that runs the command, then the close an accepted OK waits for.
+/// OK as the button does it, then the frames whose pump runs the command and whose next pass closes an accepted OK. A
+/// second OK in between would file the answer again, which a refused name's next OK then waits behind.
 fn pump(app: &mut VectorcraftApp) {
-    let ctx = app.ui_ctx.clone().unwrap();
-    let host = app.dialogs().unwrap();
-    host.with(|h| h.confirm::<KinsokuDialog>(&ctx));
-    crate::dialogs::host::pump(app, &ctx);
-    host.with(|h| h.confirm::<KinsokuDialog>(&ctx));
+    crate::dialogs::tests::confirm(app);
 }
 
 fn cancel(app: &VectorcraftApp) {

@@ -176,6 +176,13 @@ mod tests {
         crate::dialogs::host::pump(app, ui.ctx());
     }
 
+    /// Types `text` in the Entry field without Enter, which runs the first action, Done.
+    fn enter(p: &mut Panel, text: &str) {
+        p.click("Entry:");
+        p.key(egui::Key::A, egui::Modifiers::COMMAND);
+        p.type_text(text);
+    }
+
     fn is_open(app: &VectorcraftApp) -> bool {
         app.dialogs().expect("a window").with(|host| host.get_by_id::<HostedListManager>(super::id()).is_some())
     }
@@ -197,7 +204,7 @@ mod tests {
         let mut p = Panel::new(app, draw);
         super::open(&mut p.app()).unwrap();
         // Add: the Entry field's word (kept in lower case) joins the list.
-        p.type_into("Entry:", " ZqvDictB ");
+        enter(&mut p, " ZqvDictB ");
         p.click("Add");
         assert_eq!(words(&p.app(), &[A, B, C]), [A, B]);
         assert!(!has(&mut p.app(), B), "not until Done");
@@ -216,9 +223,9 @@ mod tests {
         super::open(&mut p.app()).unwrap();
         p.click(A);
         p.click("Delete");
-        p.type_into("Entry:", B);
+        enter(&mut p, B);
         p.click("Add");
-        p.type_into("Entry:", C);
+        enter(&mut p, C);
         p.click("Add");
         p.click("Done");
         assert!(!is_open(&p.app()), "Done closes it");
@@ -244,7 +251,7 @@ mod tests {
         super::open(&mut p.app()).unwrap();
         p.click(P);
         p.click("Delete");
-        p.type_into("Entry:", Q);
+        enter(&mut p, Q);
         p.click("Add");
         assert_eq!(words(&p.app(), &[P, Q]), [Q]);
         p.click("Done");

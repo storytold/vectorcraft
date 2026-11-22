@@ -313,13 +313,10 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    /// A frame: the pump, then an empty egui pass.
-    // PLAN: assumed the hub's shell pass runs the dialog host; this only advances the context.
+    /// A frame of the whole app: the shell pass runs the dialog host, then the pump.
     fn frame(app: &mut VectorcraftApp) {
         let ctx = app.ui_ctx.clone().unwrap();
-        pump(app, &ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, &ctx, egui::RawInput::default());
     }
 
     /// A document with a half-transparent red square over a blue one, both selected.

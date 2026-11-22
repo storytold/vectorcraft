@@ -25,8 +25,8 @@ fn set_through_dialog(app: &mut VectorcraftApp, tool: &str, fields: &[(&str, Val
     for (field, value) in fields {
         host.with(|host| host.set_json_field(&ctx, id, field, value.clone())).unwrap();
     }
-    host.with(|host| host.confirm_by_id(&ctx, id));
-    crate::dialogs::host::pump(app, &ctx);
+    // The frames after OK take the held answer and close the dialog, before the next open.
+    assert!(crate::dialogs::tests::confirm(app), "{tool}: OK closes the dialog");
 }
 
 #[test]
@@ -89,11 +89,18 @@ fn ok_sets_each_tools_options() {
             "twirl",
             json!({"width": 80.0, "intensity": 0.3, "rate": -120.0, "simplifyOn": false, "showBrush": false}),
         ),
-        // One brush serves the eight Symbolism tools.
+        // One brush serves the eight Symbolism tools. Each tool's dialog takes the rows that tool shows and enables
+        // (od.OD4): the Sprayer's own options in its dialog, Intensity, Method, pressure and the Sizer's own in the
+        // Sizer's.
         (
             "symbolSprayer",
-            json!({"diameter": 120, "intensity": 9, "density": 2, "method": "random", "usePressure": true, "showBrush": false,
-                   "sprayStain": "userDefined", "spraySpin": "userDefined", "proportional": false, "affectsDensity": true}),
+            json!({"diameter": 120, "density": 2, "showBrush": false, "sprayStain": "userDefined", "spraySpin": "userDefined"}),
+            "symbolScreener",
+            json!({"diameter": 120.0, "density": 2.0, "showBrush": false, "sprayStain": "userDefined", "spraySpin": "userDefined"}),
+        ),
+        (
+            "symbolSizer",
+            json!({"intensity": 9, "method": "random", "usePressure": true, "proportional": false, "affectsDensity": true}),
             "symbolScreener",
             json!({"diameter": 120.0, "intensity": 9.0, "density": 2.0, "method": "random", "usePressure": true, "showBrush": false,
                    "sprayStain": "userDefined", "spraySpin": "userDefined", "proportional": false, "affectsDensity": true}),

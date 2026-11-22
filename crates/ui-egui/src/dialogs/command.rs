@@ -597,7 +597,10 @@ mod tests {
         ];
         for row in rows {
             let (mut app, id) = prepared(row.command);
-            crate::menus::invoke(&mut app, row.command, json!({}));
+            // A click on the menu row: Create Gradient Mesh… carries the values its dialog opens on.
+            let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some(row.command)).expect("a menu row");
+            let (cmd, p) = crate::menus::click_target(&item.label, row.command, &item.params);
+            crate::menus::invoke(&mut app, &cmd, p);
             set(&mut app, row.field, row.value);
             answer_ok(&mut app);
             assert!((row.effect)(&app, id), "{} {}", row.command, row.field);

@@ -632,13 +632,10 @@ mod tests {
         app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, dialog_id(KEY), field, value))
     }
 
-    /// Presses OK: the dialog files its fields, the pump runs the app's OK, a second OK closes the dialog. Whether it closed.
+    /// Presses OK: the dialog files its fields, and the frames after it run the app's OK and close an accepted dialog
+    /// (a second OK would file a refused answer again). Whether it closed.
     fn press_ok(app: &mut VectorcraftApp) -> bool {
-        let ctx = app.ui_ctx.clone().unwrap_or_default();
-        let dialogs = app.dialogs().unwrap();
-        dialogs.with(|host| host.confirm_by_id(&ctx, dialog_id(KEY)));
-        crate::dialogs::host::pump(app, &ctx);
-        dialogs.with(|host| host.confirm_by_id(&ctx, dialog_id(KEY)))
+        crate::dialogs::tests::confirm(app)
     }
 
     fn held_state(app: &VectorcraftApp) -> Option<HeldOk> {
