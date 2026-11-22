@@ -3145,24 +3145,32 @@ impl Interp {
             }
         }
         if self.options.es2015 {
-            // The test `declare` makes for a function in an object environment (section 15.1.8,
-            // step 8, CanDeclareGlobalFunction).
-            for (name, _) in &code.fun_decls {
-                let replaceable = match self.find_property(global, name)? {
-                    None => true,
-                    Some(p) if p.configurable() => true,
-                    Some(Prop::Data { flags, .. }) => flags & (WRITABLE | ENUMERABLE) == WRITABLE | ENUMERABLE,
-                    Some(_) => false,
-                };
-                if !replaceable {
-                    let ident = String::from_utf16_lossy(name);
-                    return Err(self.type_error(&format!("cannot declare function {ident}")));
-                }
-            }
+            self.check_global_functions(code)?;
         }
         for (name, constant) in lets {
             let b = Binding::lexical(*constant);
             self.env_insert(lex, name.clone(), b)?;
+        }
+        Ok(())
+    }
+
+    /// The test `declare` makes for a function in an object environment, on the global object's
+    /// own property, for every function `code` declares before any is (ECMA-262 2015 sections
+    /// 15.1.8, step 8, and 18.2.1.2, step 8, CanDeclareGlobalFunction): a function that cannot
+    /// replace its property is a `TypeError`.
+    fn check_global_functions(&mut self, code: &Code) -> JsResult<()> {
+        let global = self.global;
+        for (name, _) in &code.fun_decls {
+            let replaceable = match self.get_own_property(global, name)? {
+                None => self.object(global)?.extensible,
+                Some(p) if p.configurable() => true,
+                Some(Prop::Data { flags, .. }) => flags & (WRITABLE | ENUMERABLE) == WRITABLE | ENUMERABLE,
+                Some(_) => false,
+            };
+            if !replaceable {
+                let ident = String::from_utf16_lossy(name);
+                return Err(self.type_error(&format!("cannot declare function {ident}")));
+            }
         }
         Ok(())
     }
@@ -3198,6 +3206,9 @@ impl Interp {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
+            if var_env == self.global_env {
+                self.check_global_functions(code)?;
+            }
         }
         let lex = match code.top_scope {
             _ if !is_eval && env == self.global_lex => {
@@ -3273,7 +3284,16 @@ impl Interp {
                     None if declared => Ok(()),
                     None => self.define(object, name.clone(), Prop::Data { value: Value::Undefined, flags }),
                     Some(v) => {
-                        let existing = self.find_property(object, name)?;
+                        // ECMA-262 2015 section 8.1.1.4.18 reads the object's own property, and
+                        // section 10.5 of the 5.1 edition the property it inherits as well.
+                        let existing = if self.options.es2015 { self.get_own_property(object, name)? } else { self.find_property(object, name)? };
+                        // A new own property needs an extensible object (ECMA-262 2015 section
+                        // 8.1.1.4.16; section 8.12.9 of the 5.1 edition, step 3).
+                        let defines = existing.as_ref().is_none_or(Prop::configurable);
+                        if defines && !self.object(object)?.extensible && self.get_own_property(object, name)?.is_none() {
+                            let ident = String::from_utf16_lossy(name);
+                            return Err(self.type_error(&format!("cannot declare function {ident}")));
+                        }
                         match existing {
                             None => self.define(object, name.clone(), Prop::Data { value: v, flags }),
                             Some(p) if p.configurable() => self.define(object, name.clone(), Prop::Data { value: v, flags }),

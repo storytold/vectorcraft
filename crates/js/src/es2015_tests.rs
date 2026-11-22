@@ -170,6 +170,37 @@ fn a_global_function_that_cannot_be_declared_declares_nothing() {
 }
 
 #[test]
+fn a_global_function_is_judged_by_the_global_objects_own_property() {
+    // ECMA-262 2015 sections 8.1.1.4.16 and 8.1.1.4.18 read the global object's own property, so
+    // a fixed property the global object inherits does not stop the declaration.
+    let mut realm = es();
+    let setup = "Object.defineProperty(Object.prototype, 'fixed', { value: 1 }); \
+                 Object.defineProperty(Object.prototype, 'getter', { get: function () { return 1; } }); 0";
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("function fixed() { return 2; } function getter() { return 3; } fixed() + getter()"), Ok(JsValue::Number(5.0)));
+    let own = "var d = Object.getOwnPropertyDescriptor(this, 'fixed'); d.writable && d.enumerable && !d.configurable && ({}).fixed === 1";
+    assert_eq!(realm.run(own), Ok(JsValue::Bool(true)));
+    // A global object that is not extensible takes no new function, inherited name or not, and
+    // a function declared next to one it cannot take is not declared either.
+    let mut realm = es();
+    assert_eq!(realm.run(&format!("{setup}; var kept = 1; Object.preventExtensions(this); 0")), Ok(JsValue::Number(0.0)));
+    for decl in [
+        "function fixed() {}",
+        "function fresh() {}",
+        "(0, eval)('function fixed() {}')",
+        "(0, eval)('function fresh() {}')",
+        "(0, eval)('function kept() {} function fresh() {}')",
+    ] {
+        let failed = realm.run(decl);
+        assert!(
+            matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")),
+            "{decl}: {failed:?}"
+        );
+    }
+    assert_eq!(realm.run("this.hasOwnProperty('fixed') || this.hasOwnProperty('fresh') || kept !== 1"), Ok(JsValue::Bool(false)));
+}
+
+#[test]
 fn eval_code_keeps_its_let_and_const_to_itself() {
     truth("eval('let e = 1; e') === 1 && typeof e === 'undefined'");
     truth("function f() { eval('var v = 2; let l = 3;'); return v + typeof l; } f() === '2undefined'");
