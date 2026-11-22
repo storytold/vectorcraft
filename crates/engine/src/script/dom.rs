@@ -89,8 +89,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
 /// page items, kept while that document is unchanged, the point changes of a path not written yet,
-/// how many times it removed or replaced each path's points, and whether a call's own savepoint
-/// ([`atomically`]) is open.
+/// how many times each path's points went stale and each path as the run last saw its points, and
+/// whether a call's own savepoint ([`atomically`]) is open.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -100,9 +100,18 @@ pub(super) struct State {
     /// A path and its subpaths with the point changes the run has made to it and not written yet
     /// ([`flush`]).
     pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
-    /// How many times the run has removed or replaced points of each path, by document uid and
-    /// path id ([`paths`]).
+    /// How many times the points the run read of each path went stale, by document uid and path id
+    /// ([`paths`]).
     point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
+    /// Each path whose points the run read, as the run last saw it, by document uid and path id
+    /// ([`paths`]).
+    point_nodes: RefCell<std::collections::HashMap<(u64, u64), Arc<crate::doc::Node>>>,
+    /// Each document, by uid, as it was when the run last looked at all the paths in it whose
+    /// points it read ([`paths`]).
+    point_docs: RefCell<std::collections::HashMap<u64, Arc<Document>>>,
+    /// The item the object model is changing ([`edit_item`]), whose points stay valid through the
+    /// change.
+    editing: Cell<Option<Item>>,
     saving: Cell<bool>,
 }
 
@@ -167,6 +176,12 @@ fn call(link: &Link, f: Member, flushing: bool) -> HostFunction {
 /// Writes the point changes of a path that wait in [`State`] with one command ([`paths::flush`]).
 pub(super) fn flush(h: &Host) -> std::result::Result<(), HostError> {
     paths::flush(h)
+}
+
+/// Notes the changes a command made to the points of the paths the run has read
+/// ([`paths::see_all_points`]).
+pub(super) fn see_points(h: &Host) {
+    paths::see_all_points(h)
 }
 
 fn get(link: &Link, f: Member) -> HostMember {
@@ -621,9 +636,14 @@ fn on_doc<T>(
     Ok(v)
 }
 
-/// Runs `id` with `params` on the item's document, its selection kept.
+/// Runs `id` with `params` on the item's document, its selection kept. The points the run read of
+/// the item's paths stay valid through the change ([`paths::see_all_points`]).
 fn edit_item(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
-    on_doc(h, item.doc.uid, true, |h| command(h, id, params))
+    paths::see_all_points(h);
+    let kept = h.dom.editing.replace(Some(item));
+    let r = on_doc(h, item.doc.uid, true, |h| command(h, id, params));
+    h.dom.editing.set(kept);
+    r
 }
 
 /// Reads the document of `doc` with `f`.

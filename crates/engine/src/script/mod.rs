@@ -1350,6 +1350,9 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    if crossed.is_ok() {
+        dom::see_points(host);
+    }
     crossed.map(|data| (data, value))
 }
 

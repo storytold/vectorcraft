@@ -2716,7 +2716,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   points with no handles, keeping the path closed when it was; moving `anchor` leaves its handles where they are, and
   `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
   whose index is past the end of its path throws `Stale path point`, and so does a point read before the script removed
-  a point of its path (`remove()`, `removeAll()`) or replaced its points (`setEntirePath`). Color components left out
+  a point of its path (`remove()`, `removeAll()`) or replaced its points (`setEntirePath`), or before anything other
+  than the object model changed the path's points (a command run with `vc.run`, such as `path.setAnchors`,
+  `object.move` or `edit.undo`); points stay valid through the object model's other changes to the path or to an
+  object that holds it, such as `translate()`. Color components left out
   count as 0, `new
   cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
   range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest

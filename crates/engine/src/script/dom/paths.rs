@@ -30,7 +30,10 @@
 //!   Removing the last points leaves the path, with no points.
 //! - A point whose index is past the end of its path throws `Stale path point`, and so does a
 //!   point read before the run removed a point of its path or replaced its points
-//!   (`PathPoint.remove()`, `PathPoints.removeAll()`, `setEntirePath`).
+//!   (`PathPoint.remove()`, `PathPoints.removeAll()`, `setEntirePath`), or before anything other
+//!   than the object model changed the path's points (a command run with `vc.run`, such as
+//!   `path.setAnchors`, `object.move` or `edit.undo`). Points stay valid through the object
+//!   model's other changes to the path or to an object that holds it, such as `translate()`.
 //! - Shape creators take sizes and radii that are finite and not negative; `sides` is a whole
 //!   number from 3 to 1000 and `points` one from 2 to 1000. `inscribed` true throws an error that
 //!   says it is not available yet. `rotateAbout` and `scaleAbout` default to
@@ -41,6 +44,7 @@
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -1071,17 +1075,111 @@ fn point_ref(h: &super::Host, item: Item, i: usize) -> Data {
     host_ref("PathPoint", &[float(h.run), float(item.doc.uid), high, low, float(i as u64), float(point_cuts(h, item))])
 }
 
-/// How many times the run has removed or replaced points of `item`.
+/// How many times the points read of `item` have gone stale, after [`see_points`] notes a change
+/// made to them since the run last saw them.
 fn point_cuts(h: &super::Host, item: Item) -> u64 {
-    h.dom.point_cuts.borrow().get(&(item.doc.uid, item.id.0)).copied().unwrap_or(0)
+    let key = (item.doc.uid, item.id.0);
+    see_points(h, key, || false);
+    h.dom.point_cuts.borrow().get(&key).copied().unwrap_or(0)
 }
 
 /// Notes that the run removed or replaced points of `item`, which makes the points read before
 /// stale.
 fn cut_points(h: &super::Host, item: Item) {
+    cut_key(h, (item.doc.uid, item.id.0));
+}
+
+/// [`cut_points`] for the path of document uid and path id `key`.
+fn cut_key(h: &super::Host, key: (u64, u64)) {
     let mut cuts = h.dom.point_cuts.borrow_mut();
-    let n = cuts.entry((item.doc.uid, item.id.0)).or_insert(0);
+    let n = cuts.entry(key).or_insert(0);
     *n = n.saturating_add(1);
+}
+
+/// The node of `id` in `d`, as the document holds it.
+fn node_arc(d: &crate::Document, id: NodeId) -> Option<&Arc<crate::doc::Node>> {
+    let at = d.index_path(id)?;
+    let (first, rest) = at.split_first()?;
+    let mut cur = d.layers.get(*first)?;
+    for &i in rest {
+        cur = cur.children()?.get(i)?;
+    }
+    Some(cur)
+}
+
+/// Keeps the path of document uid and path id `key` as it is now, the first time the run reads its
+/// points and after each later look. When its points differ from the ones the run last saw, the
+/// points read before go stale, unless `own`: the object model made the change
+/// ([`see_all_points`]), which `own` is asked only after a change. The kept node is shared with
+/// the document, so a node whose pointer is unchanged has unchanged points, and any change to it
+/// makes a new node.
+fn see_points(h: &super::Host, key: (u64, u64), own: impl FnOnce() -> bool) {
+    let node = {
+        let s = h.session.borrow();
+        s.documents().iter().find(|d| d.uid == key.0).and_then(|st| node_arc(&st.doc, NodeId(key.1)).cloned())
+    };
+    // A path that is gone makes its points stale, so that an undo that brings it back leaves them
+    // stale.
+    let Some(node) = node else {
+        if h.dom.point_nodes.borrow_mut().remove(&key).is_some() {
+            cut_key(h, key);
+        }
+        return;
+    };
+    let changed = match h.dom.point_nodes.borrow_mut().insert(key, node.clone()) {
+        Some(old) => !Arc::ptr_eq(&old, &node) && old.path_data().map(|pd| &pd.subpaths) != node.path_data().map(|pd| &pd.subpaths),
+        None => false,
+    };
+    if changed && !own() {
+        cut_key(h, key);
+    }
+}
+
+/// [`see_points`] for each path whose points the run has read, after each command, so that a
+/// change that a later command reverses still makes the points stale. Paths under the object that
+/// the object model is changing ([`super::State`]), or that object itself, take the change as the
+/// object model's own, and their points stay valid. A document that is the one the run last looked
+/// at is skipped, as are its paths.
+pub(super) fn see_all_points(h: &super::Host) {
+    let keys: Vec<(u64, u64)> = {
+        let seen = h.dom.point_nodes.borrow();
+        if seen.is_empty() {
+            return;
+        }
+        let s = h.session.borrow();
+        let mut docs = h.dom.point_docs.borrow_mut();
+        // The documents that changed since the last look, kept as they are now.
+        let mut changed = std::collections::HashSet::new();
+        for (uid, _) in seen.keys() {
+            if changed.contains(uid) {
+                continue;
+            }
+            match s.documents().iter().find(|d| d.uid == *uid) {
+                Some(st) if docs.get(uid).is_some_and(|d| Arc::ptr_eq(d, &st.doc)) => {}
+                Some(st) => {
+                    docs.insert(*uid, st.doc.clone());
+                    changed.insert(*uid);
+                }
+                None => {
+                    docs.remove(uid);
+                    changed.insert(*uid);
+                }
+            }
+        }
+        seen.keys().copied().filter(|(uid, _)| changed.contains(uid)).collect()
+    };
+    let editing = h.dom.editing.get();
+    for (uid, id) in keys {
+        let own = || match editing {
+            Some(e) if e.doc.uid == uid => {
+                let s = h.session.borrow();
+                let id = NodeId(id);
+                id == e.id || s.documents().iter().find(|d| d.uid == uid).and_then(|st| st.doc.ancestry(id)).is_some_and(|a| a.contains(&e.id))
+            }
+            _ => false,
+        };
+        see_points(h, (uid, id), own);
+    }
 }
 
 fn points_at(h: &super::Host, a: &[Data]) -> Answer {

@@ -285,6 +285,44 @@ fn points_read_before_a_removal_or_replacement_go_stale() {
 }
 
 #[test]
+fn points_read_before_a_command_changes_the_path_go_stale() {
+    let (mut s, a, _) = doc();
+    let source = format!(
+        "function A(x, y) {{ return {{x: x, y: y, in: [x, y], out: [x, y], smooth: false}}; }}\
+         var p = app.activeDocument.pathItems[0], id = {id}, first = p.pathPoints[1];\
+         vc.run('path.setAnchors', {{id: id, subpaths: [{{anchors: [A(0, 0), A(20, 0), A(20, 20), A(0, 20)], closed: true}}]}});\
+         try {{ first.anchor = [1, 1]; }} catch (e) {{ vc.log(e.message); }} try {{ first.anchor; }} catch (e) {{ vc.log(e.message); }}\
+         var second = p.pathPoints[1]; vc.log(second.anchor);\
+         vc.run('stroke.set', {{ids: [id], weight: 3}}); vc.log(second.anchor);\
+         p.translate(5, 0); vc.log(second.anchor);\
+         vc.run('object.move', {{ids: [id], dx: 5, dy: 0}}); try {{ second.anchor; }} catch (e) {{ vc.log(e.message); }}\
+         var third = p.pathPoints[1]; vc.log(third.anchor);\
+         vc.run('object.move', {{ids: [id], dx: 5, dy: 0}}); vc.run('edit.undo');\
+         try {{ third.anchor; }} catch (e) {{ vc.log(e.message); }} vc.log(p.pathPoints.length);\
+         var fourth = p.pathPoints[1]; vc.run('edit.clear', {{ids: [id]}}); vc.run('edit.undo');\
+         try {{ fourth.anchor; }} catch (e) {{ vc.log(e.message); }} vc.log(p.pathPoints.length);",
+        id = a.0
+    );
+    let out = log(&mut s, &source);
+    assert_eq!(
+        out,
+        vec![
+            json!("Stale path point"),
+            json!("Stale path point"),
+            json!([20, 300]),
+            json!([20, 300]),
+            json!([25, 300]),
+            json!("Stale path point"),
+            json!([30, 300]),
+            json!("Stale path point"),
+            json!(4),
+            json!("Stale path point"),
+            json!(4)
+        ]
+    );
+}
+
+#[test]
 fn fill_color_round_trips_rgb_cmyk_gray_lab() {
     let (mut s, a, _) = doc();
     let out = log(
