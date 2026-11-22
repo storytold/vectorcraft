@@ -586,8 +586,8 @@ fn an_edit_of_a_symbol_outlines_its_instance_again() {
 }
 
 /// A selected linked image and a selected placed document are crossed from corner to corner, on a
-/// turned image along its frame; a selected embedded image shows its outline alone, and output of
-/// the linked image shows no cross (#9080).
+/// turned or distorted image along its frame; a selected embedded image shows its outline alone,
+/// along its frame when turned or distorted. A render of the document is not crossed (#9080).
 #[test]
 fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
     use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
@@ -608,10 +608,9 @@ fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
     let document = place(&mut app, &placed, true, [200.0, 230.0]);
     let ctx = egui::Context::default();
     let view = xf(1.0, VIEW, 0.0);
-    // Whether the marks draw within a pixel of each of the points a quarter and three quarters of
+    // Whether `picture` draws within a pixel of each of the points a quarter and three quarters of
     // the way along each diagonal of `corners`, clear of the outline.
-    let crossed = |app: &VectorcraftApp, corners: [Point; 4]| -> [bool; 4] {
-        let picture = picture(&ctx, 1.0, |p| paint(&mut SelectionMarks::default(), app, p, &view, false));
+    let crossed_in = |picture: &Picture, corners: [Point; 4]| -> [bool; 4] {
         let drawn = |q: Point| {
             let s = view.to_screen(q);
             (-1..=1).any(|dy| {
@@ -625,6 +624,10 @@ fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
         assert!([(tl, tr), (tr, br), (br, bl), (bl, tl)].into_iter().all(|(a, b)| drawn(a.midpoint(b))), "the outline runs along the frame");
         [tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)].map(drawn)
     };
+    // The same for the selection marks.
+    let crossed = |app: &VectorcraftApp, corners: [Point; 4]| {
+        crossed_in(&picture(&ctx, 1.0, |p| paint(&mut SelectionMarks::default(), app, p, &view, false)), corners)
+    };
     let corners = |app: &VectorcraftApp, id: NodeId| {
         let n = app.session.active().unwrap().doc.node(id).unwrap();
         match &n.kind {
@@ -637,19 +640,56 @@ fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
     assert_eq!(crossed(&app, corners(&app, document)), [true; 4], "a placed document");
     assert_eq!(crossed(&app, corners(&app, embedded)), [false; 4], "an embedded image");
     assert_matches_plain(&ctx, &mut SelectionMarks::default(), &app, &view, 1.0, "linked and embedded images");
-    app.run("select.set", json!({"ids": [linked.0]})).unwrap();
+    app.run("select.set", json!({"ids": [linked.0, embedded.0]})).unwrap();
     app.run("object.rotate", json!({"angle": 30})).unwrap();
     assert_eq!(crossed(&app, corners(&app, linked)), [true; 4], "a turned linked image, along its frame");
+    assert_eq!(crossed(&app, corners(&app, embedded)), [false; 4], "a turned embedded image, outlined along its frame");
+    {
+        let doc = &app.session.active().unwrap().doc;
+        let [tl, tr, br, bl] = corners(&app, linked);
+        let bounds = doc.node(linked).unwrap().geometric_bounds().unwrap();
+        let out = vectorcraft_testkit::raster::render_region(doc, bounds, 1.0);
+        let pixel = |q: Point| out.pixel((q.x - bounds.x0).round() as u32, (q.y - bounds.y0).round() as u32);
+        // Halfway between the middle of the left side and the center: clear of both diagonals.
+        let clear = pixel(tl.midpoint(bl).midpoint(tl.midpoint(br)));
+        assert!(clear[0] > 150 && clear[1] < 100 && clear[3] == 255, "the render shows the image: {clear:?}");
+        let on_lines = [tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)];
+        assert!(on_lines.iter().all(|q| pixel(*q) == clear), "output of a selected linked image is not crossed");
+    }
+    // Move each image's bottom right corner up its right side, so its corners no longer make a
+    // parallelogram and one diagonal turns away from where it ran.
+    app.session
+        .edit("Distort", |doc, _| {
+            for id in [linked, embedded] {
+                if let Some(n) = doc.node_mut(id)
+                    && let Some([tl, tr, br, bl]) = n.image_corners()
+                {
+                    n.set_image_corners([tl, tr, br.lerp(tr, 0.4), bl]).map_err(|e| vectorcraft_engine::EngineError::Other(format!("{e:?}")))?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
     let doc = &app.session.active().unwrap().doc;
-    let [tl, tr, br, bl] = corners(&app, linked);
-    let bounds = doc.node(linked).unwrap().geometric_bounds().unwrap();
-    let out = vectorcraft_testkit::raster::render_region(doc, bounds, 1.0);
-    let pixel = |q: Point| out.pixel((q.x - bounds.x0).round() as u32, (q.y - bounds.y0).round() as u32);
-    // Halfway between the middle of the left side and the centre: clear of both diagonals.
-    let clear = pixel(tl.midpoint(bl).midpoint(tl.midpoint(br)));
-    assert!(clear[0] > 150 && clear[1] < 100 && clear[3] == 255, "the render shows the image: {clear:?}");
-    let on_lines = [tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)];
-    assert!(on_lines.iter().all(|q| pixel(*q) == clear), "output of a selected linked image is not crossed");
+    assert!([linked, embedded].iter().all(|id| doc.node(*id).unwrap().is_distorted_image()), "both images are distorted");
+    assert_eq!(crossed(&app, corners(&app, linked)), [true; 4], "a distorted linked image, corner to corner");
+    assert_eq!(crossed(&app, corners(&app, embedded)), [false; 4], "a distorted embedded image, outlined along its frame");
+    // The key object's outline alone, with no other selection marks.
+    for id in [linked, embedded] {
+        let st = app.session.active_mut().unwrap();
+        st.selection.objects.clear();
+        st.selection.key = Some(id);
+        let key = picture(&ctx, 1.0, |p| paint(&mut SelectionMarks::default(), &app, p, &view, false));
+        assert_eq!(crossed_in(&key, corners(&app, id)), [false; 4], "the key object's outline of a distorted image, {id:?}");
+    }
+    // The hover highlight outlines a linked image along its frame and does not cross it.
+    app.run("select.set", json!({"ids": []})).unwrap();
+    for id in [linked, embedded] {
+        let [tl, tr, br, bl] = corners(&app, id);
+        app.hover_doc = Some(tl.midpoint(tr).midpoint(bl.midpoint(br)));
+        let hovered = picture(&ctx, 1.0, |p| super::super::overlays::hover_highlight(&app, p, &view));
+        assert_eq!(crossed_in(&hovered, [tl, tr, br, bl]), [false; 4], "the hover highlight of a distorted image, {id:?}");
+    }
 }
 
 /// A frame of the whole canvas keeps entries for the selected objects only.

@@ -802,6 +802,47 @@ fn the_overlay_limit_counts_crossing_lines_only_where_they_are_drawn() {
     assert!(!too_many_anchors(&embedded) && !too_many_marks(&embedded), "embedded images");
 }
 
+/// View › Hide Edges hides the lines across a selected linked image along with its outline
+/// (#9080).
+#[test]
+fn hide_edges_hides_the_lines_across_a_linked_image() {
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    let dir = vectorcraft_testkit::temp_dir("hide-edges-linked");
+    let png = dir.join("red.png");
+    let image = Image::from_raw(40, 40, ChannelLayout::Rgba, SampleType::U8, [200u8, 40, 40, 255].repeat(40 * 40)).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let mut place =
+        |link: bool, at: [f64; 2]| app.run("file.place", json!({"path": png, "link": link, "at": at})).unwrap()["ids"][0].as_u64().unwrap();
+    let (linked, embedded) = (place(true, [100.0, 120.0]), place(false, [250.0, 120.0]));
+    let ctx = egui::Context::default();
+    let select = |app: &mut VectorcraftApp, id: u64| {
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        frame(app, &ctx, vec![]);
+    };
+    // The vertices the next canvas frame draws in the layer color of `id`.
+    let marks = |app: &mut VectorcraftApp, id: u64| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let color = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+        let mesh = |p: &egui::ClippedPrimitive| match &p.primitive {
+            egui::epaint::Primitive::Mesh(m) => m.vertices.iter().filter(|v| v.color == color).count(),
+            egui::epaint::Primitive::Callback(_) => 0,
+        };
+        ctx.tessellate(out.shapes, out.pixels_per_point).iter().map(mesh).sum::<usize>()
+    };
+    select(&mut app, embedded);
+    let shown_embedded = marks(&mut app, embedded);
+    select(&mut app, linked);
+    let shown_linked = marks(&mut app, linked);
+    assert!(shown_linked > shown_embedded, "the lines across the linked image draw: {shown_linked} > {shown_embedded}");
+    // The linked image stays selected, and the first frame after edges are hidden is checked.
+    app.ui.view.edges = false;
+    assert_eq!(marks(&mut app, linked), 0, "with edges hidden, a selected linked image draws nothing in its layer's color");
+}
+
 /// #2422: the art inside a clip group still shows its whole outline when it is picked on its
 /// own: by Edit Contents, by a Direct Selection or Group Selection click, and in isolation mode;
 /// so does its Group Selection hover highlight.
