@@ -7112,6 +7112,14 @@ VectorCraft's own values.
 `` `width` must be from 0.001 to 1000 ``. The document and the selection do not change and no undo step is recorded.
 Left out or null, `width` is 8 pt. The range is VectorCraft's own value.
 
+`path.smoothRegion` (the Smooth tool) refuses a `radius` outside 0.001 to 1000 pt with
+`` `radius` must be from 0.001 to 1000 `` and a `fidelity` outside 0.000078125 to about 3195 pt (the Smooth tool's
+0.05 to 100 px at the highest and the lowest zoom) with `` `fidelity` must be from 0.000078125 to 3194.8881789137376 pt ``.
+`path.joinScrub` (the Join tool) refuses a `tolerance` outside 0.001 to 1000 pt with
+`` `tolerance` must be from 0.001 to 1000 ``. The document and the selection do not change and no undo step is
+recorded. Left out or null, `radius` is 12 pt, `fidelity` is 2.5 pt and `tolerance` is 12 pt. The tools send these in screen
+pixels divided by the zoom, kept within the ranges. The `radius` and `tolerance` ranges are VectorCraft's own values.
+
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
 `independent` in `path.close` and `path.setHandle`; `symmetric` and `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
