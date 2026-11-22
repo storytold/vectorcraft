@@ -64,21 +64,27 @@ fn a_swatch_color_on_a_stop_or_a_point_keeps_its_model_in_a_cmyk_document() {
 }
 
 /// While the Shape Builder paints with a freeform fill, which lies on no object, the panel shows
-/// that fill's stops, and a swatch color recolors the selected stop instead of a point.
+/// that fill's stops, and a swatch color recolors the selected stop instead of a point. Lines
+/// mode gives the fill a freeform state without points, which the stops edit keeps.
 #[test]
 fn the_shape_builders_freeform_fill_is_edited_by_its_stops() {
     use egui_kittest::kittest::Queryable;
     let mut app = app(json!({"color": "#000000"}));
     app.select_tool("shapeBuilder");
-    app.run("paint.editGradient", json!({"stroke": false, "kind": "freeform"})).unwrap();
+    app.run("paint.editGradient", json!({"stroke": false, "kind": "freeform", "mode": "lines"})).unwrap();
     let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
     app.run("paint.editGradient", json!({"stroke": false, "stops": stops})).unwrap();
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.freeform.as_ref().map(|f| (f.points.len(), f.mode)), Some((0, FreeformMode::Lines)));
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0), "the stops edit keeps the supplied stops");
     app.run("gradient.selectStop", json!({"index": 1})).unwrap();
     let orange = Color::rgb8(255, 128, 0);
     assert!(recolor_selected(&mut app, orange, &json!({})), "the selected stop takes the color");
     let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
     assert_eq!(g.gradient.kind, GradientKind::Freeform);
+    assert_eq!(g.gradient.stops[0].color, Color::rgb8(255, 0, 0));
     assert_eq!(g.gradient.stops[1].color, orange);
+    assert_eq!(g.freeform.map(|f| f.mode), Some(FreeformMode::Lines));
     let mut fonts = false;
     let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(280.0, 640.0)).with_accessibility_check(false).build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
