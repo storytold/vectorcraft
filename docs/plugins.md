@@ -873,24 +873,26 @@ fill and stroke the piece returns, three more keys:
   `{"id", "params"?, "visible"?}`, and one result carries at most 4,096 of them over all its pieces, fills and strokes.
 - A fill that carries any of them is written `{"paint": <paint>, "opacity"?, "blend"?, "effects"?}`; a fill without
   them may stay a bare paint. A stroke takes them beside its `paint`, `width`, `join`, `cap` and `miterLimit`.
-- An effect record names a built-in effect that `effect.list` lists, other than a 3D effect, with parameters that
-  effect takes, each of the type of its default and within the range `effect.list` gives for it, where it gives one.
-  The values `effect.apply` checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`,
-  `axes` and `name`, a Warp's `version`, a `color`, a Levels or Curves `channel`, a Radial Blur's center and the
-  Pathfinder Options. Omitted parameters take the effect's defaults. On a fill or stroke only raster effects are
-  taken, and only from an effect in the object's stack: the fills or strokes that an effect on a fill or a stroke
-  returns take `opacity` and `blend` but no `effects` (its pieces still take them). A plug-in effect (`plugin.<id>`),
-  this effect's own included, is refused, so the effects a piece carries never run a plug-in.
+- An effect record names a built-in effect that `effect.list` lists, other than a 3D effect or a Pathfinder effect
+  (`pathfinder.*`, which has nothing to combine on a piece's one path), with parameters that effect takes, each of the
+  type of its default and within the range `effect.list` gives for it, where it gives one. The values `effect.apply`
+  checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`, `axes` and `name`, a
+  Warp's `version`, a `color`, a Levels or Curves `channel` and a Radial Blur's center. Omitted parameters take the
+  effect's defaults. On a fill or stroke only raster effects are taken, and only from an effect in the object's stack:
+  the fills or strokes that an effect on a fill or a stroke returns take `opacity` and `blend` but no `effects` (its
+  pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a
+  piece carries never run a plug-in.
 - Left out, a piece's opacity is the object's, its blending mode Normal and its effects none; a fill or stroke keeps
   the opacity, blending and effects it would have without the keys. Given, a piece's opacity multiplies the object's,
   and its effects and a fill's or stroke's come after the ones it already has. The object's own opacity, blending mode
   and later effects still apply once to all the pieces together.
 - A piece's geometry effects reshape it before the effects after this one in the object's stack, which then run on
-  the reshaped piece once. Its raster effects draw on the piece. What the geometry effects make counts against the
-  budget of the object's geometry effects, with the pieces: each piece's effects run within what the pieces and the
-  pieces before it leave of it. When a piece's effects would go past that, or a Transform effect would make fewer
-  copies than it asks for, the pieces after it are not built, none of the effect's pieces are drawn, and the object, or
-  the fill or stroke the effect is on, draws the geometry it was given.
+  the reshaped piece once. Its raster effects draw on the piece, and those listed before a Transform effect follow it
+  as an object's do: a Drop Shadow before a scale of 200% draws at twice its offset. What the geometry effects make
+  counts against the budget of the object's geometry effects, with the pieces: each piece's effects run within what
+  the pieces and the pieces before it leave of it. When a piece's effects would go past that, or a Transform effect
+  would make fewer copies than it asks for, the pieces after it are not built, none of the effect's pieces are drawn,
+  and the object, or the fill or stroke the effect is on, draws the geometry it was given.
 - A bad value refuses the whole result as any other fault does, naming the field: for example
   `objects[1].blend: unknown blending mode; …` or `objects[0].fills[1].effects[2]: plug-in effects are not allowed in
   returned effects`. Without `appearanceOutput`, the three keys are refused as before.

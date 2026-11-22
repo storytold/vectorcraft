@@ -119,7 +119,7 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
 
 /// Checks an effect record that a painted live-effect plug-in returns on a piece, or on one of its
 /// fills or strokes (`row`) ([`vectorcraft_plugins::painted::CheckEffect`]): a built-in effect other
-/// than a 3D effect, a raster effect only on a fill or stroke, and parameters that effect takes. A
+/// than a 3D or Pathfinder effect, a raster effect only on a fill or stroke, and parameters that effect takes. A
 /// parameter is one its defaults or its parameter documentation name, of the type its default has,
 /// within the range its documentation gives ([`crate::catalog::any_documented_range`]); a texture is one as `effect.list`
 /// gives it, and an SVG filter's XML one drawable filter. A plug-in effect, the plug-in itself
@@ -133,6 +133,9 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
     };
     if is_three_d(&e.id) {
         return Err("3D effects are not allowed in returned effects".into());
+    }
+    if is_pathfinder(&e.id) {
+        return Err("Pathfinder effects are not allowed in returned effects; a piece is one path, with nothing to combine".into());
     }
     if row && !is_raster(&e.id) {
         return Err(format!("{:?} is not a raster effect; a fill or stroke takes raster effects only", e.id));
@@ -173,7 +176,7 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
 /// The values in `given`, the parameters of built-in effect `id` that a painted live-effect plug-in
 /// returned, that `effect.apply` also checks: an SVG filter's XML, `scale`, `origin`, `axes` and
 /// `name`; a Warp's `version`; a `color` the effect can draw; a Levels or Curves `channel`; a Radial
-/// Blur's center; Pathfinder Options; and the type of each parameter without a default.
+/// Blur's center; and the type of each parameter without a default.
 fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), String> {
     let number = |key: &str| given.get(key).is_some_and(|v| !v.is_number());
     let switch = |key: &str| given.get(key).is_some_and(|v| !v.is_boolean());
@@ -212,14 +215,6 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
             if given.get(key).is_some_and(|v| !v.as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))) {
                 return Err(format!("`{key}` must be a number from 0 to 1"));
             }
-        }
-    }
-    if crate::takes_pathfinder_options(id) {
-        if given.get("precision").is_some_and(|v| !v.as_f64().is_some_and(|p| crate::PATHFINDER_EFFECT_PRECISION.contains(&p))) {
-            return Err("precision must be from 0.001 to 10 pt".into());
-        }
-        if let Some(key) = ["removeRedundantPoints", "removeUnpainted"].into_iter().find(|k| switch(k)) {
-            return Err(format!("`{key}` must be true or false"));
         }
     }
     let numbers: &[&str] = match id {

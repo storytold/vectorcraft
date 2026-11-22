@@ -2604,8 +2604,10 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
     if let Some(b) = look.blend {
         one.blend = b;
     }
-    let (shape, rest): (Vec<Effect>, Vec<Effect>) = look.effects.iter().cloned().partition(|e| e.visible && is_geometry(&e.id));
-    one.appearance.effects.extend(rest);
+    let shape: Vec<Effect> = look.effects.iter().filter(|e| e.visible && is_geometry(&e.id)).cloned().collect();
+    // The raster effects before a Transform effect follow it, as an object's do once its geometry
+    // effects are applied ([`crate::raster::without_geometry`]); hidden records stay as they are.
+    one.appearance.effects.extend(crate::raster::followed(&look.effects).iter().filter(|e| !(e.visible && is_geometry(&e.id))).cloned());
     let mut extra = none;
     if !shape.is_empty() {
         let before = art_cost(one);

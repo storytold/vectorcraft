@@ -270,9 +270,9 @@ fn a_built_in_result_on_the_path_before_it_is_taken_near_the_budget() {
 }
 
 /// The host takes a built-in effect with parameters it has, of their type and in range, on a piece,
-/// and a raster effect on a fill or stroke; it refuses a plug-in effect, a 3D effect, an unknown
-/// effect or parameter, a value of another type or out of range, and a geometry effect on a fill
-/// or stroke.
+/// and a raster effect on a fill or stroke; it refuses a plug-in effect, a 3D effect, a Pathfinder
+/// effect (a piece is one path, with nothing to combine), an unknown effect or parameter, a value
+/// of another type or out of range, and a geometry effect on a fill or stroke.
 #[test]
 fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     let e = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
@@ -283,7 +283,7 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     assert_eq!(check(&e("brushStrokes.accentedEdges", json!({"edgeWidth": 14.0})), false), Ok(()));
     assert_eq!(check(&e("distort.transform", json!({"copies": 1000})), false), Ok(()));
     // Every effect's own defaults pass the check, so each documented range holds its default.
-    for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id)) {
+    for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id) && !crate::is_pathfinder(i.id)) {
         assert_eq!(check(&e(info.id, info.defaults.clone()), false), Ok(()), "{}", info.id);
     }
     for (effect, row) in [
@@ -291,6 +291,8 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         (e("path.offsetPath", json!({"offset": null})), false),
         (e("plugin.test.effects.self", json!({})), false),
         (e("threeD.extrude", json!({})), false),
+        (e("pathfinder.add", serde_json::Value::Null), false),
+        (e("pathfinder.divide", json!({"precision": 1.0})), false),
         (e("stylize.nope", json!({})), false),
         (e("path.offsetPath", json!({"inset": 4.0})), false),
         (e("path.offsetPath", json!({"offset": "4"})), false),
@@ -300,6 +302,8 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     ] {
         assert!(check(&effect, row).is_err(), "{effect:?} on a fill or stroke: {row}");
     }
+    let why = check(&e("pathfinder.add", serde_json::Value::Null), false).unwrap_err();
+    assert!(why.contains("Pathfinder effects are not allowed"), "{why}");
     // The values `effect.apply` checks for one effect are refused with the parameter named.
     for (id, params, key) in [
         (crate::SVG_FILTER, json!({"axes": [1, 0, 0, 0]}), "axes"),
@@ -310,8 +314,6 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("stylize.dropShadow", json!({"color": "#zz0000"}), "color"),
         ("adjust.levels", json!({"channel": "cyan"}), "channel"),
         ("blur.radial", json!({"centerX": 1.5}), "centerX"),
-        ("pathfinder.add", json!({"precision": 20.0}), "precision"),
-        ("pathfinder.add", json!({"removeUnpainted": 1}), "removeUnpainted"),
         ("blur.gaussian", json!({"linear": 1}), "linear"),
         ("pixelate.colorHalftone", json!({"channel1": 400.0}), "channel1"),
         ("distort.twist", json!({"angle": 4000.0}), "angle"),
@@ -521,6 +523,32 @@ fn a_reshaped_piece_s_opacity_and_blending_mode_apply_once() {
     });
     assert!((opacity - 0.5).abs() < 1e-6, "{opacity}");
     assert_eq!(blends, [BlendMode::Screen]);
+}
+
+/// A piece's raster effect listed before its Transform effect follows the Transform, as an
+/// object's does: a Drop Shadow before a scale of 200% keeps twice its offset. A hidden record
+/// stays as it is.
+#[test]
+fn a_piece_s_raster_effects_follow_its_transform_effect() {
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let hidden = Effect { id: "path.offsetPath".into(), params: json!({"offset": 10.0}), visible: false };
+    let look = vectorcraft_plugins::painted::Look {
+        effects: vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true },
+            hidden.clone(),
+            Effect { id: "distort.transform".into(), params: json!({"scaleH": 200, "scaleV": 200}), visible: true },
+        ],
+        ..Default::default()
+    };
+    crate::reshape::dress_piece(&mut n, &look, Budget::EFFECTS, None).unwrap();
+    let mut kept = vec![];
+    n.walk(&mut |c| kept.extend(c.appearance.effects.iter().cloned()));
+    let shadow = kept.iter().find(|e| e.id == "stylize.dropShadow").expect("the piece keeps its Drop Shadow");
+    let at = |k: &str| shadow.params.get(k).and_then(serde_json::Value::as_f64).unwrap_or(f64::NAN);
+    assert!((at("x") - 6.0).abs() < 1e-9 && (at("y") - 8.0).abs() < 1e-9, "{shadow:?}");
+    assert_eq!(kept.iter().filter(|e| **e == hidden).count(), 1, "{kept:?}");
+    assert!(kept.iter().all(|e| e.id != "distort.transform"), "{kept:?}");
 }
 
 /// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's
