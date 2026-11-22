@@ -26,7 +26,9 @@ pub use perspective::perspective_click;
 use perspective::{
     attach, edit_text, grid_set, grid_show, persp_draw, persp_move, persp_nudge, persp_transform, plane_match, plane_move, plane_set, release,
 };
-pub(crate) use perspective::{finish_edit_text, grid_kept, grid_of, perspective_rewrite, silent, store_grid, transform_again};
+pub(crate) use perspective::{
+    finish_edit_text, grid_kept, grid_of, only_grid_view_changed, perspective_rewrite, silent, store_grid, transform_again,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![

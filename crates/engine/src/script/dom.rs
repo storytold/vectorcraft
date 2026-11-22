@@ -39,6 +39,7 @@ use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 pub(super) mod layers;
+mod perspective;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -1718,6 +1719,10 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    for (name, members) in perspective::enums() {
+        let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
+        realm.define_host_object(name, items)?;
+    }
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -1728,6 +1733,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("getIsFileOpen", method(l, app_is_open)),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(perspective::application_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -1769,6 +1775,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     ]);
     document.extend(["pathItems", "textFrames", "swatches", "symbols", "views", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)));
     document.extend(layers::document_members(l));
+    document.extend(perspective::document_members(l));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",

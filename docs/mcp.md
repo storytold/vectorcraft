@@ -2728,6 +2728,32 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
   `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
   `GroupItems.createFromFile` throw an error that says they are not available yet.
+- A document also has `showPerspectiveGrid()`, `hidePerspectiveGrid()`, `getPerspectiveActivePlane()`,
+  `setActivePlane(gridPlane)` and `selectPerspectivePreset(gridType, presetName)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/), and `app` has `getPresetSettings(preset)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Application/). `showPerspectiveGrid` and `hidePerspectiveGrid`
+  run `perspective.grid.show`, and `setActivePlane` runs `perspective.plane.set`; none of them adds an undo step, and
+  a failed run puts the grid back. `selectPerspectivePreset` runs `perspective.grid.preset` with a built-in or saved
+  preset of `perspective.presets.list` (its name in any case), which shows the grid and is part of the run's undo
+  step when the grid changes. The enumerations `PerspectiveGridType` (`OnePointPerspectiveGridType`,
+  `TwoPointPerspectiveGridType`, `ThreePointPerspectiveGridType`, `InvalidPerspectiveGridType`) and
+  `PerspectiveGridPlaneType` (`GRIDLEFTPLANETYPE`, `GRIDRIGHTPLANETYPE`, `GRIDFLOORPLANETYPE`,
+  `INVALIDGRIDPLANETYPE`) come from https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/. A
+  one-point grid takes only the left and the floor plane as its active plane, as the archived scripting guide
+  describes
+  (https://web.archive.org/web/20170622004549/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/AI_ScriptGd.pdf).
+  `getPresetSettings` takes the names `addDocument` takes and gives a new `DocumentPreset` with the settings a
+  document from that preset starts with, which `addDocument` takes back unchanged. It leaves out `units` when the
+  preset's units are not one of the six `RulerUnits` values a new document takes, and `numArtboards` and
+  `artboardRowsOrCols` when the preset has more than 100 artboards, so `addDocument` with the same preset keeps the
+  preset's own.
+  VectorCraft's own rules: `showPerspectiveGrid` and `setActivePlane` give `true`, and `hidePerspectiveGrid` gives
+  `false` when the grid was already hidden. `INVALIDGRIDPLANETYPE` makes no plane active. A preset name that is not
+  listed, a preset whose grid is not of `gridType`, `InvalidPerspectiveGridType` and a name of more than 4,096 bytes
+  throw an error with nothing changed. Changing the `DocumentPreset` `getPresetSettings` gives changes nothing else.
+  `app.saveWorkspace`, `switchWorkspace`, `deleteWorkspace`, `resetWorkspace`, `loadColorSettings` and
+  `showPresets`, and `Document.exportPerspectiveGridPreset` and `importPerspectiveGridPreset`, throw an error that
+  says they are not available yet.
 - `object.newGroup {parent?, index?}` adds an empty group to a shown, unlocked layer or group (`parent`; default:
   the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group, index 0
   puts it directly above the clipping path), as one undo step named Group, and

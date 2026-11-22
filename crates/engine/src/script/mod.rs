@@ -2249,7 +2249,11 @@ impl Session {
                 changed_names.push(st.title());
                 continue;
             };
-            let changed = !st.same_content(&b.doc);
+            // The perspective grid's view state changes without an undo step, as it does outside a
+            // run, when no command in the run recorded an undo step of its own on the working copy.
+            let (now, was) = (&st.history.undo, &b.history.undo);
+            let recorded = now.len() != was.len() || !now.last().zip(was.last()).map_or(now.is_empty(), |(x, y)| Arc::ptr_eq(&x.doc, &y.doc));
+            let changed = !st.same_content(&b.doc) && (recorded || !cmd::distortcmds::only_grid_view_changed(&st.doc, &b.doc));
             st.history = std::mem::take(&mut b.history);
             st.recovery.clone_from(&b.recovery);
             if changed {
