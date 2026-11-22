@@ -354,7 +354,7 @@ pub(crate) struct Code {
     pub(crate) arrow: bool,
     /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
     pub(crate) uses_this: bool,
-    /// The function has default or rest parameters: its parameters start uninitialized, its
+    /// The function has parameters with default values: its parameters start uninitialized, its
     /// code initializes them and then enters its body with [`Op::BodyEnv`].
     pub(crate) param_init: bool,
     /// The code is a class constructor's: calling it without `new` is a `TypeError`.
@@ -378,6 +378,12 @@ impl Code {
     pub(crate) fn line_column(&self, pc: usize) -> (u32, u32) {
         let offset = self.positions.get(pc).copied().unwrap_or(self.span.0);
         self.source.lines.line_column(offset)
+    }
+
+    /// The parameters are plain names, without default values or a rest parameter, so outside
+    /// strict mode code the `arguments` object follows them (ECMA-262 2015 section 9.2.12).
+    pub(crate) fn simple_params(&self) -> bool {
+        !self.param_init && self.rest.is_none()
     }
 }
 

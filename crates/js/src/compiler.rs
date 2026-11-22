@@ -2006,7 +2006,10 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     let all_params: Vec<Key> = params.iter().chain(&rest).cloned().collect();
     let hoisted = c.hoist(&f.body, &all_params)?;
     let top_scope = c.list_scope(&f.body, false)?;
-    let param_init = !f.simple_params();
+    // Only default values are expressions (ContainsExpression, ECMA-262 2015 section 14.1.5): a
+    // rest parameter alone leaves the parameters and the body in one environment (section 9.2.12,
+    // step 27).
+    let param_init = f.defaults.iter().any(Option::is_some);
     if param_init {
         // Each parameter is initialized in order, from its argument or, when that is
         // `undefined`, its default value; then the body's environment is entered.

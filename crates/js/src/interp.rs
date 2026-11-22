@@ -2310,7 +2310,7 @@ impl Interp {
         self.push(v)
     }
 
-    /// Enters the body of a function with default or rest parameters: a variable environment
+    /// Enters the body of a function with default values for its parameters: a variable environment
     /// inside the parameters' one, whose variables start with the value of a parameter of the
     /// same name (ECMA-262 2015 section 9.2.12, step 28), and the body's function declarations
     /// and `let` and `const` names.
@@ -2368,11 +2368,13 @@ impl Interp {
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
+        // The list of elements is counted against the heap limit as it grows, and stays counted
+        // until its elements have become the array's properties.
+        let mut held = HeldBytes::new(self);
         let items: Vec<Value> = match &v {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
                 let mut out = Vec::new();
-                let mut held = HeldBytes::new(self);
                 let mut i = 0;
                 while let Some(&u) = units.get(i) {
                     self.use_fuel()?;
@@ -2397,9 +2399,7 @@ impl Interp {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
                 };
                 // The elements read so far stay reachable while a getter runs.
-                // The list is counted against the heap limit as it grows.
                 let mark = self.temp_roots.len();
-                let mut held = HeldBytes::new(self);
                 let mut read = || -> JsResult<()> {
                     for i in 0..n {
                         self.use_fuel()?;
@@ -2410,7 +2410,6 @@ impl Interp {
                     Ok(())
                 };
                 let r = read();
-                drop(held);
                 let out = self.temp_roots.split_off(mark.min(self.temp_roots.len()));
                 r?;
                 out
@@ -2438,6 +2437,7 @@ impl Interp {
         for (i, item) in (start..end).zip(items) {
             self.define(a, index_key(i), Prop::Data { value: item, flags: OPEN })?;
         }
+        drop(held);
         self.pop().map(drop)
     }
 
@@ -2846,7 +2846,7 @@ impl Interp {
     /// Declaration binding instantiation for function code (section 10.5). Each parameter and
     /// declaration takes a unit of fuel.
     /// Gives the environment the body runs in and its variable environment. A function with
-    /// default or rest parameters gets its parameters uninitialized, and its code enters the
+    /// default values for its parameters gets its parameters uninitialized, and its code enters the
     /// body's environments with [`Op::BodyEnv`] once they are initialized (ECMA-262 2015 section
     /// 9.2.12).
     fn instantiate_function(&mut self, code: &Rc<Code>, outer: EnvId, args: &[Value], callee: ObjId) -> JsResult<(EnvId, EnvId)> {
@@ -2975,7 +2975,7 @@ impl Interp {
     /// strict mode code in a function with plain parameters (ECMA-262 2015 section 9.2.12).
     fn create_arguments(&mut self, code: &Code, env: EnvId, args: &[Value], callee: ObjId) -> JsResult<ObjId> {
         let mut names = vec![None; args.len()];
-        if !code.strict && !code.param_init {
+        if !code.strict && code.simple_params() {
             let mut mapped = std::collections::HashSet::new();
             for (i, p) in code.params.iter().enumerate().take(args.len()).rev() {
                 if mapped.insert(p.clone())
@@ -2991,7 +2991,7 @@ impl Interp {
             self.define(a, index_key(u32::try_from(i).unwrap_or(u32::MAX)), Prop::Data { value: v.clone(), flags: OPEN })?;
         }
         self.define(a, key("length"), Prop::Data { value: Value::Number(args.len() as f64), flags: HIDDEN })?;
-        if code.strict || code.param_init {
+        if code.strict || !code.simple_params() {
             let thrower = Some(self.intrinsics.throw_type_error);
             for name in ["callee", "caller"] {
                 self.define(a, key(name), Prop::Accessor { get: thrower, set: thrower, flags: 0 })?;
@@ -3309,8 +3309,9 @@ impl Interp {
                 self.check_global_declarations(code)?;
             }
         }
+        let global_lets = !is_eval && env == self.global_lex;
         let lex = match code.top_scope {
-            _ if !is_eval && env == self.global_lex => {
+            _ if global_lets => {
                 self.declare_global_lexical(code, env)?;
                 env
             }
@@ -3318,6 +3319,23 @@ impl Interp {
             None => env,
         };
         self.temp_envs.push(lex);
+        let r = self.declare_global_functions_and_vars(code, lex, var_env, configurable);
+        if r.is_err() && global_lets {
+            // A script that stops before it runs, at a limit, leaves none of its `let` and `const`
+            // names behind, so running it again in the same realm does not redeclare them.
+            let lets = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[][..], |s| &s.lets);
+            if let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(lex) {
+                for (name, _) in lets {
+                    bindings.remove(name);
+                }
+            }
+        }
+        r.map(|()| lex)
+    }
+
+    /// Declares the functions and variables of global or eval code for
+    /// [`Self::instantiate_global_in`], each taking a unit of fuel.
+    fn declare_global_functions_and_vars(&mut self, code: &Rc<Code>, lex: EnvId, var_env: EnvId, configurable: u8) -> JsResult<()> {
         // Functions close over the code's own environment with ES2015's scoping, and over its
         // variable environment otherwise (ECMA-262 5.1 section 13). Global code's functions close
         // over the global scope in either language, which sees the global object's names too.
@@ -3333,7 +3351,7 @@ impl Interp {
             self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
         }
-        Ok(lex)
+        Ok(())
     }
 
     /// A `var` or function that eval code outside strict mode code declares must not take the name

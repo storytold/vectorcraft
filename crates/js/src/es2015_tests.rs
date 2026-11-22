@@ -161,6 +161,26 @@ fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
 }
 
 #[test]
+fn a_script_stopped_at_a_limit_before_it_runs_leaves_no_global_lexical_bindings() {
+    // The 200 functions take a unit of fuel each after the `let` is declared, so each of these
+    // fuel limits stops the script before it runs. A second run with the default limits then
+    // declares `pending` again; a thrown error once the script runs keeps the binding.
+    let functions: String = (0..200).map(|k| format!("function f{k}() {{}} ")).collect();
+    let src = format!("let pending = 1; {functions} pending");
+    for fuel in (2..150).step_by(7) {
+        let mut realm = Realm::with_options(es_options(), Limits { fuel, ..Limits::default() });
+        let e = realm.run(&src).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "fuel {fuel}: {e:?}");
+        realm.set_limits(Limits::default());
+        assert_eq!(realm.run(&src), Ok(JsValue::Number(1.0)), "fuel {fuel}");
+    }
+    let mut realm = es();
+    assert!(realm.run("let thrown = 1; throw 0;").is_err());
+    let again = realm.run("let thrown = 2;");
+    assert!(matches!(&again, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("SyntaxError")), "{again:?}");
+}
+
+#[test]
 fn functions_from_earlier_runs_see_later_global_lexical_bindings() {
     let mut realm = Realm::new();
     let first = realm.run("function read() { return x; } function call(f) { return f(); }");
@@ -370,6 +390,14 @@ fn rest_parameters_collect_the_remaining_arguments() {
     truth("function f(a, ...r) { return Array.isArray(r) && r.length === 2 && r[0] === 2 && r[1] === 3; } f(1, 2, 3)");
     truth("function f(...r) { return r.length; } f() === 0");
     truth("function f(...r) { r.push(1); return r.length; } f(0) === 2");
+    // Without default values the parameters and the body share one environment, so a `var` of a
+    // parameter's name, in the body or in direct eval, is the parameter.
+    truth("function f(...r) { return eval('var r; r[0]'); } f(3) === 3");
+    truth("function f(a, ...r) { eval('var a = 5; var r = 6'); return a + r; } f(1, 2) === 11");
+    truth("function f(...r) { var r; return r[0]; } f(4) === 4");
+    // The arguments object still does not follow the parameters, and its callee throws.
+    truth("function f(a, ...r) { a = 9; return arguments[0]; } f(1) === 1");
+    throws("function f(...r) { return arguments.callee; } f();", "TypeError");
     syntax("function f(...r, a) {}");
     syntax("function f(...r = []) {}");
     syntax("function f(a, a = 1) {}");
@@ -544,6 +572,29 @@ fn spread_checks_the_heap_before_its_elements_are_added() {
     let e = realm.run("[...big].length").unwrap_err();
     assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
     assert!(realm.interp().heap.bytes <= heap_bytes, "{} > {heap_bytes}", realm.interp().heap.bytes);
+}
+
+#[test]
+fn spread_counts_its_list_of_elements_while_the_array_grows() {
+    // The list of elements read (64 bytes each) fits in the room left over, and so do the array's
+    // new properties (116 bytes each), but the two together do not. The list is still held while
+    // the properties are added, so the spread ends with the heap limit.
+    let cases = [
+        ("var big = { length: 25000 }; 0", "[...big].length", 3584 << 10),
+        ("var big = 'x'; for (var i = 0; i < 15; i++) big += big; big[0]; 0", "[...big].length", 4608 << 10),
+    ];
+    for (setup, spread, room) in cases {
+        let mut measure = Realm::with_options(es_options(), Limits::default());
+        assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)), "{setup}");
+        measure.interp().collect_garbage();
+        let heap_bytes = measure.interp().heap.bytes + room;
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+        assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)), "{setup}");
+        assert_eq!(realm.run("[...'abc', ...{ length: 10 }].length"), Ok(JsValue::Number(13.0)), "{setup}");
+        let e = realm.run(spread).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{setup}: {e:?}");
+        assert!(realm.interp().heap.bytes <= heap_bytes, "{setup}: {} > {heap_bytes}", realm.interp().heap.bytes);
+    }
 }
 
 #[test]
