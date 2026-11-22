@@ -2517,7 +2517,8 @@ fn copy_leaf(leaf: &mut Node, path: &PathData, m: Affine, copies: usize, scaling
 /// path or compound path, as one of its object's effects with reference box `bounds`: `leaf`
 /// becomes a group with its id and name of one object for each piece returned, in order, each with
 /// the piece's geometry and the leaf's appearance with the piece's fills and strokes in place of
-/// its own ([`vectorcraft_plugins::painted::appearance`]). The swatches and patterns the pieces
+/// its own ([`vectorcraft_plugins::painted::appearance`]), and the piece's opacity, blending mode
+/// and effects ([`dress_piece`]). The swatches and patterns the pieces
 /// name must be in `doc`, and without one the pieces may name none. Returns what the pieces cost
 /// ([`piece_cost`]); `None` (the leaf stays as it is) when the plug-in fails, the pieces are
 /// refused, or they would pass `budget`. A deferred run is listed by `at`.
@@ -2531,26 +2532,72 @@ fn paint_leaf(
     at: Option<vectorcraft_plugins::deferred::Stage>,
 ) -> Option<Budget> {
     let (path, rule) = leaf_geometry(leaf)?;
+    crate::params::check_returned_effects();
     let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&leaf.appearance), item: None, at };
     let pieces = vectorcraft_plugins::effect::apply_painted(plugin, params, &path, bounds, rule, paints, doc)?;
-    let made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
+    let mut made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
     if !budget.fits(made) {
         return None;
     }
-    let children = pieces
-        .iter()
-        .map(|p| {
-            let mut one = leaf.clone();
-            one.name = None;
-            one.appearance = vectorcraft_plugins::painted::appearance(&leaf.appearance, p).into();
-            set_geometry(&mut one, p.path.clone(), p.rule);
-            Arc::new(one)
-        })
-        .collect();
+    let mut children = Vec::with_capacity(pieces.len());
+    for p in pieces.iter() {
+        let mut one = leaf.clone();
+        one.name = None;
+        one.appearance = vectorcraft_plugins::painted::appearance(&leaf.appearance, p).into();
+        set_geometry(&mut one, p.path.clone(), p.rule);
+        made = made.plus(dress_piece(&mut one, &p.look, doc));
+        // The pieces' own geometry effects keep to the budget too.
+        if !budget.fits(made) {
+            return None;
+        }
+        children.push(Arc::new(one));
+    }
     let mut g = Node::group(leaf.id, children);
     g.name = leaf.name.clone();
     *leaf = g;
     Some(made)
+}
+
+/// Gives `one`, the object a painted piece becomes, the piece's `look`: its opacity times the
+/// object's, its blending mode, and its effects after the object's own. The visible geometry effects
+/// among them, and only those, reshape the piece at once ([`reshape_leaves`], with `doc`), so they run
+/// before the source's later effects and the effects of its fills and strokes stay for their own
+/// stage; the object becomes a group with its id around the reshaped piece, carrying its
+/// transparency and effects. The piece's raster effects stay on it and draw on it. When the object
+/// has a blending mode other than Normal and the piece gives one, the same one included, the object
+/// becomes a group with its blending mode around the piece, so both apply. Returns what the reshaped piece costs
+/// past its own path.
+pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::Look, doc: Option<&Document>) -> Budget {
+    use vectorcraft_doc::color::BlendMode;
+    let none = Budget { anchors: 0, lines: 0 };
+    if look.is_empty() {
+        return none;
+    }
+    let outer = look.blend.filter(|_| one.blend != BlendMode::Normal).map(|_| one.blend);
+    if let Some(o) = look.opacity {
+        one.opacity *= o;
+    }
+    if let Some(b) = look.blend {
+        one.blend = b;
+    }
+    let (shape, rest): (Vec<Effect>, Vec<Effect>) = look.effects.iter().cloned().partition(|e| e.visible && is_geometry(&e.id));
+    one.appearance.effects.extend(rest);
+    let mut extra = none;
+    if !shape.is_empty() {
+        let before = art_cost(one);
+        let mut art = one_piece(one);
+        reshape_leaves(&mut art, &shape.iter().collect::<Vec<_>>(), &shape, doc);
+        let mut art = dressed(art, one);
+        art.appearance.effects = one.appearance.effects.clone();
+        extra = art_cost(&art).minus(before);
+        *one = art;
+    }
+    if let Some(blend) = outer {
+        let mut g = Node::group(one.id, vec![Arc::new(one.clone())]);
+        g.blend = blend;
+        *one = g;
+    }
+    extra
 }
 
 /// What a painted piece with geometry `path` costs: its anchors and lines, plus a share of the
@@ -2572,7 +2619,8 @@ fn piece_share() -> Budget {
 /// order. The plug-in is given `appearance`'s fills and strokes and told that it is on item `index`
 /// of them. A piece that gives fills (on a fill) or strokes (on a stroke) is painted by copies of
 /// `item` with those paints ([`vectorcraft_plugins::painted::items`]), under the leaf's other fills
-/// and strokes; one that gives none keeps the leaf's. Returns
+/// and strokes; one that gives none keeps the leaf's. Each path takes its piece's opacity, blending
+/// mode and effects ([`dress_piece`]). Returns
 /// what the paths cost ([`piece_cost`]); `None` (the leaf stays as it is) when the plug-in fails,
 /// the pieces are refused (a swatch or pattern not in `doc`, or any without one), or they would pass
 /// `budget`. A deferred run is listed by `at`.
@@ -2588,9 +2636,10 @@ fn paint_piece(
     at: Option<vectorcraft_plugins::deferred::Stage>,
 ) -> Option<Budget> {
     let (path, rule) = leaf_geometry(leaf)?;
+    crate::params::check_returned_effects();
     let paints = vectorcraft_plugins::effect::Paints { appearance: Some(appearance), item: Some(index), at };
     let pieces = vectorcraft_plugins::effect::apply_painted(plugin, params, &path, bounds, rule, paints, doc)?;
-    let made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
+    let mut made = pieces.iter().map(|p| piece_cost(&p.path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
     if !budget.fits(made) {
         return None;
     }
@@ -2613,6 +2662,10 @@ fn paint_piece(
         let mut one = leaf.clone();
         one.appearance.items = items;
         set_geometry(&mut one, p.path.clone(), p.rule);
+        made = made.plus(dress_piece(&mut one, &p.look, doc));
+        if !budget.fits(made) {
+            return None;
+        }
         children.push(Arc::new(one));
     }
     *leaf = Node::group(leaf.id, children);
@@ -2766,18 +2819,32 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
             let it = one.items.pop().unwrap_or(it);
             let stage = vectorcraft_plugins::deferred::Stage { object: ctx.seed, effect: at, item: Some(i) };
             let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&original.appearance), item: Some(i), at: Some(stage) };
+            crate::params::check_returned_effects();
             let painted = vectorcraft_plugins::effect::apply_painted(plugin, &params, &g, tb, rule, paints, doc)
-                .map(|pieces| pieces.iter().map(|p| (p.path.clone(), p.rule, vectorcraft_plugins::painted::items(&it, p))).collect::<Vec<_>>())
+                .map(|pieces| {
+                    pieces.iter().map(|p| (p.path.clone(), p.rule, vectorcraft_plugins::painted::items(&it, p), p.look.clone())).collect::<Vec<_>>()
+                })
                 .filter(|pieces| room.fits(pieces.iter().map(|(p, ..)| piece_cost(p)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus)));
-            // A failed run draws the fill or stroke on the geometry it was given.
-            let returned = painted.unwrap_or_else(|| vec![(g.clone(), rule, vec![it])]);
-            let mut group: Vec<Arc<Node>> = vec![];
-            for (path, rule, items) in returned.into_iter().filter(|(_, _, items)| !items.is_empty()) {
-                *used = used.plus(piece_cost(&path));
-                let mut p = piece(items);
-                set_geometry(&mut p, path, rule);
-                group.push(Arc::new(p));
-            }
+            // The paths the pieces become, with their own geometry effects applied, and what they cost.
+            let build = |returned: Vec<(PathData, FillRule, Vec<AppearanceItem>, vectorcraft_plugins::painted::Look)>| {
+                let mut group: Vec<Arc<Node>> = vec![];
+                let mut made = Budget { anchors: 0, lines: 0 };
+                for (path, rule, items, look) in returned.into_iter().filter(|(_, _, items, _)| !items.is_empty()) {
+                    made = made.plus(piece_cost(&path));
+                    let mut p = piece(items);
+                    set_geometry(&mut p, path, rule);
+                    made = made.plus(dress_piece(&mut p, &look, doc));
+                    group.push(Arc::new(p));
+                }
+                (group, made)
+            };
+            // A failed run, or pieces whose own geometry effects would pass the budget, draws the
+            // fill or stroke on the geometry it was given.
+            let (group, made) = painted
+                .map(&build)
+                .filter(|(_, made)| room.fits(*made))
+                .unwrap_or_else(|| build(vec![(g.clone(), rule, vec![it], Default::default())]));
+            *used = used.plus(made);
             let mut p = Node::group(leaf.id, group);
             transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), true, limit, used, doc);
             pieces.push(Arc::new(p));

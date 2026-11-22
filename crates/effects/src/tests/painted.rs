@@ -268,3 +268,214 @@ fn a_built_in_result_on_the_path_before_it_is_taken_near_the_budget() {
     let height = |b: Option<Rect>| b.map_or(0.0, |b| b.height());
     assert!((height(*bounds) - height(tall.bounds())).abs() < 1.0, "{bounds:?} is not {:?} tall", tall.bounds());
 }
+
+/// The host takes a built-in effect with parameters it has, of their type and in range, on a piece,
+/// and a raster effect on a fill or stroke; it refuses a plug-in effect, a 3D effect, an unknown
+/// effect or parameter, a value of another type or out of range, and a geometry effect on a fill
+/// or stroke.
+#[test]
+fn returned_effects_are_built_in_effects_with_their_own_parameters() {
+    let e = |id: &str, params: serde_json::Value| Effect { id: id.into(), params, visible: true };
+    let check = crate::check_returned_effect;
+    assert_eq!(check(&e("path.offsetPath", json!({"offset": 4.0})), false), Ok(()));
+    assert_eq!(check(&e("path.offsetPath", serde_json::Value::Null), false), Ok(()));
+    assert_eq!(check(&e("stylize.dropShadow", json!({"x": 2.0})), true), Ok(()));
+    assert_eq!(check(&e("brushStrokes.accentedEdges", json!({"edgeWidth": 14.0})), false), Ok(()));
+    assert_eq!(check(&e("distort.transform", json!({"copies": 1000})), false), Ok(()));
+    // Every effect's own defaults pass the check, so each documented range holds its default.
+    for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id)) {
+        assert_eq!(check(&e(info.id, info.defaults.clone()), false), Ok(()), "{}", info.id);
+    }
+    for (effect, row) in [
+        (e("distort.transform", json!({"copies": 1001})), false),
+        (e("path.offsetPath", json!({"offset": null})), false),
+        (e("plugin.test.effects.self", json!({})), false),
+        (e("threeD.extrude", json!({})), false),
+        (e("stylize.nope", json!({})), false),
+        (e("path.offsetPath", json!({"inset": 4.0})), false),
+        (e("path.offsetPath", json!({"offset": "4"})), false),
+        (e("brushStrokes.accentedEdges", json!({"edgeWidth": 15.0})), false),
+        (e("path.offsetPath", json!([4.0])), false),
+        (e("path.offsetPath", json!({"offset": 4.0})), true),
+    ] {
+        assert!(check(&effect, row).is_err(), "{effect:?} on a fill or stroke: {row}");
+    }
+    // The values `effect.apply` checks for one effect are refused with the parameter named.
+    for (id, params, key) in [
+        (crate::SVG_FILTER, json!({"axes": [1, 0, 0, 0]}), "axes"),
+        (crate::SVG_FILTER, json!({"scale": 0.0}), "scale"),
+        (crate::SVG_FILTER, json!({"origin": [1.0]}), "origin"),
+        (crate::SVG_FILTER, json!({"name": "f"}), "name"),
+        ("warp.arc", json!({"version": 99}), "version"),
+        ("stylize.dropShadow", json!({"color": "#zz0000"}), "color"),
+        ("adjust.levels", json!({"channel": "cyan"}), "channel"),
+        ("blur.radial", json!({"centerX": 1.5}), "centerX"),
+        ("pathfinder.add", json!({"precision": 20.0}), "precision"),
+        ("pathfinder.add", json!({"removeUnpainted": 1}), "removeUnpainted"),
+        ("blur.gaussian", json!({"linear": 1}), "linear"),
+        ("pixelate.colorHalftone", json!({"channel1": 400.0}), "channel1"),
+        ("distort.twist", json!({"angle": 4000.0}), "angle"),
+    ] {
+        let why = check(&e(id, params.clone()), false).expect_err(&format!("{id} {params}"));
+        assert!(why.contains(key), "{id} {params}: {why}");
+    }
+}
+
+/// A painted effect on a fill whose piece fits the budget, but whose piece's own Transform copy
+/// would not fit beside the source: the fill is drawn on the source's path, and nothing is drawn
+/// where the piece would be.
+#[test]
+fn a_piece_s_own_geometry_effects_keep_to_the_budget() {
+    let id = "test.effects.look.budget";
+    let source = drawn_share(0.45, 0.0);
+    let piece = json!({"path": drawn_share(0.3, 2_000.0), "effects": [{"id": "distort.transform", "params": {"copies": 1, "moveH": 10.0}}]});
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, &json!({ "objects": [piece] }).to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut n = Node::path(NodeId(9), source.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let fill = n.appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    n.appearance.items[fill].effects_mut().push(Effect { id: format!("plugin.{id}"), params: json!({}), visible: true });
+    let art = reshape(None, &n, None).unwrap();
+    let mut bounds = vec![];
+    art.walk(&mut |c| {
+        if let Some(b) = c.path_data().and_then(PathData::bounds) {
+            bounds.push(b);
+        }
+    });
+    assert!(!bounds.is_empty() && bounds.iter().all(|b| b.x1 < 2_000.0), "{bounds:?}");
+    vectorcraft_plugins::registry::remove(id);
+}
+
+/// A piece's own geometry effect reshapes it before the source's later effects run, and those run
+/// on it once: the square at 120, 40 grown by a 10 pt Offset Path, then moved 100 pt right by the
+/// source's Transform effect. The piece's opacity and blending mode stay on the path it becomes.
+#[test]
+fn later_source_effects_run_after_generated_effects_once() {
+    let id = "test.effects.look.offset";
+    let piece = json!({"path": shapes::rectangle(Rect::new(120.0, 40.0, 140.0, 60.0)), "opacity": 0.5, "blend": "Multiply",
+        "effects": [{"id": "path.offsetPath", "params": {"offset": 10.0}}]});
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, &json!({ "objects": [piece] }).to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    n.appearance.effects.push(Effect { id: format!("plugin.{id}"), params: json!({}), visible: true });
+    n.appearance.effects.push(Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+    let art = reshape(None, &n, None).unwrap();
+    let (mut paths, mut looks) = (vec![], vec![]);
+    art.walk(&mut |c| {
+        if let Some(p) = c.path_data() {
+            paths.push(p.bounds());
+        }
+        if c.opacity != 1.0 || c.blend != vectorcraft_doc::color::BlendMode::Normal {
+            looks.push((c.opacity, c.blend));
+        }
+    });
+    assert_eq!(paths.len(), 1, "{paths:?}");
+    // Once, on the piece and what holds it.
+    assert_eq!(looks, [(0.5, vectorcraft_doc::color::BlendMode::Multiply)]);
+    let b = paths[0].unwrap();
+    assert!((b.x0 - 210.0).abs() < 0.5 && (b.x1 - 250.0).abs() < 0.5 && (b.y0 - 30.0).abs() < 0.5, "{b:?}");
+    vectorcraft_plugins::registry::remove(id);
+}
+
+/// A piece's look reshapes it by its own geometry effects alone: the Transform effect of the fill
+/// it carries stays on the fill for its own stage and does not move the piece now.
+#[test]
+fn a_piece_s_look_runs_only_its_own_geometry_effects() {
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let fill = n.appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    n.appearance.items[fill].effects_mut().push(Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+    let look = vectorcraft_plugins::painted::Look {
+        effects: vec![Effect { id: "path.offsetPath".into(), params: json!({"offset": 10.0}), visible: true }],
+        ..Default::default()
+    };
+    crate::reshape::dress_piece(&mut n, &look, None);
+    let mut paths = vec![];
+    n.walk(&mut |c| {
+        if let Some(b) = c.path_data().and_then(PathData::bounds) {
+            paths.push((b, c.appearance.items.iter().map(|i| i.effects().len()).sum::<usize>()));
+        }
+    });
+    assert_eq!(paths.len(), 1, "{paths:?}");
+    let (b, kept) = paths[0];
+    assert!((b.x0 + 10.0).abs() < 0.5 && (b.x1 - 30.0).abs() < 0.5, "{b:?}");
+    assert_eq!(kept, 1, "the fill keeps its Transform effect");
+}
+
+/// A piece's blending mode on an object that blends in the same mode keeps both: the object
+/// becomes a group in its mode around the piece in the piece's.
+#[test]
+fn a_piece_s_blending_mode_nests_in_the_object_s_same_mode() {
+    use vectorcraft_doc::color::BlendMode;
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    n.blend = BlendMode::Multiply;
+    let look = vectorcraft_plugins::painted::Look { blend: Some(BlendMode::Multiply), ..Default::default() };
+    crate::reshape::dress_piece(&mut n, &look, None);
+    let mut blends = vec![];
+    n.walk(&mut |c| blends.push(c.blend));
+    assert_eq!(blends, [BlendMode::Multiply, BlendMode::Multiply]);
+}
+
+/// A piece with an opacity, a blending mode and a geometry effect draws them once: the group the
+/// reshaped piece becomes carries them, and the path inside it draws at full opacity in Normal.
+#[test]
+fn a_reshaped_piece_s_opacity_and_blending_mode_apply_once() {
+    use vectorcraft_doc::color::BlendMode;
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let look = vectorcraft_plugins::painted::Look {
+        opacity: Some(0.5),
+        blend: Some(BlendMode::Screen),
+        effects: vec![Effect { id: "path.offsetPath".into(), params: json!({"offset": 10.0}), visible: true }],
+    };
+    crate::reshape::dress_piece(&mut n, &look, None);
+    let (mut opacity, mut blends) = (1.0f32, vec![]);
+    n.walk(&mut |c| {
+        opacity *= c.opacity;
+        if c.blend != BlendMode::Normal {
+            blends.push(c.blend);
+        }
+    });
+    assert!((opacity - 0.5).abs() < 1e-6, "{opacity}");
+    assert_eq!(blends, [BlendMode::Screen]);
+}
+
+/// The same on a fill: the plug-in and the Transform effect after it are the fill's. The piece's
+/// Offset Path runs on it alone, so the plug-in runs once and the square moves once.
+#[test]
+fn a_fill_s_later_effects_run_after_its_piece_s_effects_once() {
+    let id = "test.effects.look.rowoffset";
+    let piece = json!({"path": shapes::rectangle(Rect::new(120.0, 40.0, 140.0, 60.0)), "opacity": 0.5,
+        "effects": [{"id": "path.offsetPath", "params": {"offset": 10.0}}]});
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, &json!({ "objects": [piece] }).to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let mut n =
+        Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let fill = n.appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    let fx = n.appearance.items[fill].effects_mut();
+    fx.push(Effect { id: format!("plugin.{id}"), params: json!({}), visible: true });
+    fx.push(Effect { id: "distort.transform".into(), params: json!({"moveH": 100.0}), visible: true });
+    let art = reshape(None, &n, None).unwrap();
+    let mut paths = vec![];
+    art.walk(&mut |c| {
+        if let Some(b) = c.path_data().and_then(PathData::bounds)
+            && c.appearance.items.iter().any(|i| i.is_fill() && crate::paints(i))
+        {
+            paths.push(b);
+        }
+    });
+    assert_eq!(paths.len(), 1, "{paths:?}");
+    let b = paths[0];
+    assert!((b.x0 - 210.0).abs() < 0.5 && (b.x1 - 250.0).abs() < 0.5 && (b.y0 - 30.0).abs() < 0.5, "{b:?}");
+    vectorcraft_plugins::registry::remove(id);
+}

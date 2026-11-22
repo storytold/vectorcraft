@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, INPUTS_API, PROGRESS_API, Permission};
+use crate::permissions::{self, API_LEVEL, APPEARANCE_API, INPUTS_API, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -340,6 +340,11 @@ pub struct Manifest {
     /// manifest has `"paintOutput": true`, the only value the key may hold.
     #[serde(default, rename = "paintOutput", skip_serializing_if = "std::ops::Not::not")]
     pub paint_output: bool,
+    /// A live effect at `api` 3 that declares `paintOutput` and whose pieces, and their fills and
+    /// strokes, may also carry opacity, a blending mode and effects ([`crate::painted`]): `true`
+    /// when the manifest has `"appearanceOutput": true`, the only value the key may hold.
+    #[serde(default, rename = "appearanceOutput", skip_serializing_if = "std::ops::Not::not")]
+    pub appearance_output: bool,
     /// The menu commands it adds, in menu order (a filter or a live effect only).
     #[serde(default, deserialize_with = "ordered_commands", skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<Command>,
@@ -357,8 +362,13 @@ impl Manifest {
             return Err(Error::Manifest(format!("manifest is {} bytes (limit {MAX_MANIFEST_BYTES})", bytes.len())));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
-        if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
+        let value = serde_json::from_str::<Value>(text).ok();
+        let not_true = |key: &str| value.as_ref().is_some_and(|v| v.get(key).is_some_and(|p| *p != Value::Bool(true)));
+        if not_true("paintOutput") {
             return Err(Error::Manifest("`paintOutput` may only be true".into()));
+        }
+        if not_true("appearanceOutput") {
+            return Err(Error::Manifest("`appearanceOutput` may only be true".into()));
         }
         let man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
         man.validate()?;
@@ -381,6 +391,7 @@ impl Manifest {
             extensions: Vec::new(),
             budget: Budget::Light,
             paint_output: false,
+            appearance_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
         }
@@ -424,6 +435,9 @@ impl Manifest {
         self.validate_inputs()?;
         if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
             return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
+        }
+        if self.appearance_output && (!self.paint_output || self.api < APPEARANCE_API) {
+            return Err(Error::Manifest("`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3".into()));
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -1119,7 +1133,7 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["settings"]}"#, "`settings` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["doc.read","cache"]}"#, "`cache` needs plug-in API level 2"),
-            (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":4}"#, "`api` is 4"),
             (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
             (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
         ] {
@@ -1205,6 +1219,35 @@ mod tests {
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains("paintOutput") || e.contains("effect.render"), "{bad}: {e}");
+        }
+    }
+
+    /// A live effect at `api` 3 that declares `paintOutput` may also declare
+    /// `"appearanceOutput": true`, and only that value, with no permission beyond `doc.read` and `effect.render`;
+    /// without `paintOutput`, below `api` 3, on another kind, or with `false`, `null` or another
+    /// type, it is refused naming the key. Without the key, at `api` 3, the effect paints as at 2.
+    #[test]
+    fn manifest_accepts_api3_appearance_output_only_for_painted_effects() {
+        let m = Manifest::parse(
+            br#"{"id":"org.example.tone","name":"Tone","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"permissions":["doc.read","effect.render"]}"#,
+        )
+        .unwrap();
+        assert!(m.paint_output && m.appearance_output);
+        assert_eq!(serde_json::to_value(&m).unwrap()["appearanceOutput"], json!(true));
+        let plain = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true}"#).unwrap();
+        assert!(plain.paint_output && !plain.appearance_output);
+        assert!(serde_json::to_value(&plain).unwrap().get("appearanceOutput").is_none());
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":false}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":null}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":1}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"appearanceOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"appearanceOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"filter","api":3,"appearanceOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","api":3,"extensions":["plt"],"appearanceOutput":true}"#,
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains("appearanceOutput"), "{bad}: {e}");
         }
     }
 

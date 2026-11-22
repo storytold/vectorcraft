@@ -27,7 +27,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, appearanceOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects), and `appearanceOutput: true` one whose pieces carry [opacity, blending and effects](#opacity-blending-and-effects-on-pieces); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
@@ -324,10 +324,10 @@ capability model proposed for PhotoCraft plug-ins
 - The host enforces the grant on a filter run and a command run: without `doc.read` the filter is given no objects;
   without `state` its `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that
   changes the document is refused. A refused output leaves the document as it was.
-- `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds the [host
+- `api` is the plug-in API level the manifest is written for: `1` (the default), `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
-  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects). A higher one
-  is refused. `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for
+  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects), or `3`, which
+  adds a painted live effect's [`appearanceOutput`](#opacity-blending-and-effects-on-pieces). A higher one is refused. `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for
   are read under `doc.read`, which a filter that lists `inputs` must list in `permissions`, so installing it asks the
   user to grant them. A level 2 effect that declares `paintOutput` needs no other permission than `doc.read` and
   `effect.render`.
@@ -560,7 +560,12 @@ the module's start function, in a run that isn't a filter's run on a document, o
   instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
   `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
   geometry, at any level. Hosts at `api` 1 refuse the manifest for its `api`, so such an effect never draws unpainted
-  there.
+  there. A painted effect may say `"api": 3` without other changes.
+- `appearanceOutput` (painted live effects at `api` 3 only): `true` lets the pieces, and the fills and strokes they
+  return, carry [opacity, a blending mode and effects](#opacity-blending-and-effects-on-pieces). `true` is the only value
+  the key takes; `false`, `null`, another type, an effect without `paintOutput`, another kind or an `api` below 3 is
+  refused when the module is installed, and the error names `appearanceOutput`. It needs no permission beyond
+  `doc.read` and `effect.render`, which every live effect already has. Hosts at `api` 2 refuse the manifest for its `api`, so such an effect never draws without its looks.
 - `extensions` (exporters and importers only, and required): 1–8 file extensions, lower-case letters and digits
   without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
@@ -811,7 +816,7 @@ is a piece drawn by itself, in the order returned, with paints of its own:
 
 - `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
   ignored. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level `documentData`…) refuses the
-  result, as does a key that a paint, its color, a gradient stop, a gradient's placement or a freeform point does not
+  result (an effect that declares `appearanceOutput` also takes `opacity`, `blend` and `effects`, [below](#opacity-blending-and-effects-on-pieces)), as does a key that a paint, its color, a gradient stop, a gradient's placement or a freeform point does not
   have, such as `opacity` on a solid paint.
 - `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
   painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
@@ -846,6 +851,46 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
   ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern
   fills expands the fills of each piece, and leaves a piece with other paints as it is drawn.
+
+#### Opacity, blending and effects on pieces
+
+A painted live effect whose manifest also has `"api": 3` and `"appearanceOutput": true` may give each piece, and each
+fill and stroke the piece returns, three more keys:
+
+```json
+{"objects": [
+  {"path": {…}, "opacity": 0.5, "blend": "Multiply", "effects": [{"id": "path.offsetPath", "params": {"offset": 4}}],
+   "fills": [{"type": "solid", …}, {"paint": {"type": "solid", …}, "opacity": 0.25, "blend": "Screen"}],
+   "strokes": [{"paint": {…}, "width": 2, "effects": [{"id": "stylize.dropShadow"}]}]}
+]}
+```
+
+- `opacity` is a number from 0 to 1 (nothing is clamped). `blend` is one of `Normal`, `Darken`, `Multiply`,
+  `ColorBurn`, `Lighten`, `Screen`, `ColorDodge`, `Overlay`, `SoftLight`, `HardLight`, `Difference`, `Exclusion`, `Hue`,
+  `Saturation`, `Color` and `Luminosity`, spelled exactly so. `effects` is a list of at most 16 effect records
+  `{"id", "params"?, "visible"?}`, and one result carries at most 4,096 of them over all its pieces, fills and strokes.
+- A fill that carries any of them is written `{"paint": <paint>, "opacity"?, "blend"?, "effects"?}`; a fill without
+  them may stay a bare paint. A stroke takes them beside its `paint`, `width`, `join`, `cap` and `miterLimit`.
+- An effect record names a built-in effect that `effect.list` lists, other than a 3D effect, with parameters that
+  effect takes, each of the type of its default and within the range `effect.list` gives for it, where it gives one.
+  The values `effect.apply` checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`,
+  `axes` and `name`, a Warp's `version`, a `color`, a Levels or Curves `channel`, a Radial Blur's center and the
+  Pathfinder Options. Omitted parameters take the effect's defaults. On a fill or stroke only raster effects are
+  taken, and only from an effect in the object's stack: the fills or strokes that an effect on a fill or a stroke
+  returns take `opacity` and `blend` but no `effects` (its pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a piece carries never
+  run a plug-in.
+- Left out, a piece's opacity is the object's, its blending mode Normal and its effects none; a fill or stroke keeps
+  the opacity, blending and effects it would have without the keys. Given, a piece's opacity multiplies the object's,
+  and its effects and a fill's or stroke's come after the ones it already has. The object's own opacity, blending mode
+  and later effects still apply once to all the pieces together.
+- A piece's geometry effects reshape it before the effects after this one in the object's stack, which then run on
+  the reshaped piece once. Its raster effects draw on the piece. What the geometry effects make counts against the
+  budget of the object's geometry effects, with the pieces.
+- A bad value refuses the whole result as any other fault does, naming the field: for example
+  `objects[1].blend: unknown blending mode; …` or `objects[0].fills[1].effects[2]: plug-in effects are not allowed in
+  returned effects`. Without `appearanceOutput`, the three keys are refused as before.
+- The effect stays live: the document holds only the effect record, and the looks are drawn, exported and expanded
+  (Object › Expand Appearance) as the pieces are.
 
 An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file, in base64, which the host writes as it
 is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
@@ -888,7 +933,6 @@ per change of their input, parameters or paints (results are cached), not per fr
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, and
   importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
   artboards.
-- Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
-  it returns), and filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
+- Filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
   [`inputs`](#reading-type-images-and-symbols)).
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.

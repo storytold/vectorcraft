@@ -58,6 +58,33 @@ pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f
     documented_range(id, key, "px")
 }
 
+/// The range parameter `key` of effect `id` is documented with, after any number of unit words
+/// (`key: lo..hi`, `key: unit lo..hi`, `key: screen angle deg lo..hi`) or as the first word of its
+/// description in parentheses (`key: unit (lo..hi, default)`), and before the rest of that
+/// description or the next parameter; `None` when its documentation gives none.
+pub(crate) fn any_documented_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    let doc = catalog_index().get(id)?.params;
+    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        let rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        for word in rest.split_whitespace() {
+            let opens = word.starts_with('(');
+            if let Some((lo, hi)) = word.trim_start_matches('(').split_once("..") {
+                let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches([',', ';', ')', '}']).parse::<f64>().ok()?);
+                return (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi);
+            }
+            if opens {
+                return None;
+            }
+            if word.ends_with([',', '}']) {
+                return None;
+            }
+        }
+        None
+    })
+}
+
 /// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
 fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;

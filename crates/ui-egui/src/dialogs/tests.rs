@@ -718,6 +718,7 @@ impl PluginIntField {
             extensions: Vec::new(),
             budget: Default::default(),
             paint_output: false,
+            appearance_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
         };

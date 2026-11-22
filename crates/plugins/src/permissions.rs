@@ -15,8 +15,12 @@ use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
 /// this. Level 2 adds the host imports ([`PROGRESS_API`]) and a live effect's `paintOutput`
-/// ([`crate::painted`]).
-pub const API_LEVEL: u32 = 2;
+/// ([`crate::painted`]); level 3 adds its `appearanceOutput` ([`APPEARANCE_API`]).
+pub const API_LEVEL: u32 = 3;
+
+/// The API level that adds a painted live effect's `appearanceOutput`: opacity, a blending mode
+/// and effects on the pieces it returns and on their fills and strokes ([`crate::painted`]).
+pub const APPEARANCE_API: u32 = 3;
 
 /// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`,
 /// `settings`, `cache` and `commands` permissions they need.

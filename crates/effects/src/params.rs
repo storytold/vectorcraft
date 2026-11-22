@@ -117,6 +117,154 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
     Some(Effect { id: id.to_string(), params, visible: true })
 }
 
+/// Checks an effect record that a painted live-effect plug-in returns on a piece, or on one of its
+/// fills or strokes (`row`) ([`vectorcraft_plugins::painted::CheckEffect`]): a built-in effect other
+/// than a 3D effect, a raster effect only on a fill or stroke, and parameters that effect takes. A
+/// parameter is one its defaults or its parameter documentation name, of the type its default has,
+/// within the range its documentation gives ([`crate::catalog::any_documented_range`]); a texture is one as `effect.list`
+/// gives it, and an SVG filter's XML one drawable filter. A plug-in effect, the plug-in itself
+/// included, is refused, so the effects a plug-in returns never run a plug-in.
+pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
+    if e.id.starts_with(vectorcraft_plugins::effect::PREFIX) {
+        return Err("plug-in effects are not allowed in returned effects".into());
+    }
+    let Some(info) = catalog_index().get(e.id.as_str()) else {
+        return Err(format!("unknown effect {:?}", e.id));
+    };
+    if is_three_d(&e.id) {
+        return Err("3D effects are not allowed in returned effects".into());
+    }
+    if row && !is_raster(&e.id) {
+        return Err(format!("{:?} is not a raster effect; a fill or stroke takes raster effects only", e.id));
+    }
+    let given = match &e.params {
+        Value::Null => return Ok(()),
+        Value::Object(m) => m,
+        _ => return Err("`params` must be an object".into()),
+    };
+    let defaults = info.defaults.as_object();
+    for (key, v) in given {
+        let default = defaults.and_then(|d| d.get(key));
+        if default.is_none() && !documents_key(info.params, key) {
+            return Err(format!("`{key}` is not a parameter of {:?}", e.id));
+        }
+        let kind = |v: &Value| std::mem::discriminant(v);
+        if let Some(d) = default
+            && !d.is_null()
+            && kind(d) != kind(v)
+        {
+            return Err(format!("`{key}` must be of the type its default {d} has"));
+        }
+        let range = crate::catalog::any_documented_range(&e.id, key);
+        if let (Some(r), Some(x)) = (range, v.as_f64())
+            && !r.contains(&x)
+        {
+            return Err(format!("`{key}` must be from {} to {}", r.start(), r.end()));
+        }
+    }
+    if let Some(t) = given.get(crate::pixel::TEXTURE_IMAGE)
+        && t.as_str().is_none_or(|t| crate::pixel::texture(t).is_none())
+    {
+        return Err("`textureImage` must be a texture as effect.list gives it".into());
+    }
+    check_returned_values(&e.id, given)
+}
+
+/// The values in `given`, the parameters of built-in effect `id` that a painted live-effect plug-in
+/// returned, that `effect.apply` also checks: an SVG filter's XML, `scale`, `origin`, `axes` and
+/// `name`; a Warp's `version`; a `color` the effect can draw; a Levels or Curves `channel`; a Radial
+/// Blur's center; Pathfinder Options; and the type of each parameter without a default.
+fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), String> {
+    let number = |key: &str| given.get(key).is_some_and(|v| !v.is_number());
+    let switch = |key: &str| given.get(key).is_some_and(|v| !v.is_boolean());
+    if id == crate::SVG_FILTER {
+        if let Some(xml) = given.get("xml") {
+            crate::svg_filter::check(xml.as_str().ok_or("`xml` must be a string")?)?;
+        }
+        if given.get("scale").is_some_and(|s| !s.as_f64().is_some_and(|k| (0.001..=1000.0).contains(&k))) {
+            return Err("`scale` must be a number from 0.001 to 1000".into());
+        }
+        if given
+            .get("origin")
+            .is_some_and(|o| !o.as_array().is_some_and(|o| o.len() == 2 && o.iter().all(|v| v.as_f64().is_some_and(f64::is_finite))))
+        {
+            return Err("`origin` must be [x, y] in points".into());
+        }
+        if given.get("axes").is_some_and(|a| crate::svg_filter::valid_axes(a).is_none()) {
+            return Err("`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0".into());
+        }
+        if given.contains_key("name") && !given.contains_key("xml") {
+            return Err("an SVG filter is named by its id: give `xml` with `name`".into());
+        }
+    }
+    if id.starts_with("warp.") && given.get("version").is_some_and(|v| crate::warp_version(v).is_none()) {
+        return Err(format!("`version` must be 0 or {}", crate::WARP_NET));
+    }
+    let takes_color = catalog_index().get(id).is_some_and(|info| info.defaults.get("color").is_some_and(Value::is_string));
+    if takes_color && given.get("color").is_some_and(|v| !is_color(v)) {
+        return Err("`color` must be a #rrggbb color".into());
+    }
+    if matches!(id, "adjust.levels" | "adjust.curves") && given.get("channel").is_some_and(|v| !v.as_str().is_some_and(crate::is_channel)) {
+        return Err(format!("`channel` must be one of {}", crate::CHANNELS.join(", ")));
+    }
+    if id == "blur.radial" {
+        for key in ["centerX", "centerY"] {
+            if given.get(key).is_some_and(|v| !v.as_f64().is_some_and(|x| (0.0..=1.0).contains(&x))) {
+                return Err(format!("`{key}` must be a number from 0 to 1"));
+            }
+        }
+    }
+    if crate::takes_pathfinder_options(id) {
+        if given.get("precision").is_some_and(|v| !v.as_f64().is_some_and(|p| crate::PATHFINDER_EFFECT_PRECISION.contains(&p))) {
+            return Err("precision must be from 0.001 to 10 pt".into());
+        }
+        if let Some(key) = ["removeRedundantPoints", "removeUnpainted"].into_iter().find(|k| switch(k)) {
+            return Err(format!("`{key}` must be true or false"));
+        }
+    }
+    let numbers: &[&str] = match id {
+        "stylize.scribble" => &["variation"],
+        "path.outlineStroke" => &["width"],
+        _ => &[],
+    };
+    if let Some(key) = numbers.iter().find(|k| number(k)) {
+        return Err(format!("`{key}` must be a number"));
+    }
+    if id == "blur.gaussian" && switch("linear") {
+        return Err("`linear` must be true or false".into());
+    }
+    Ok(())
+}
+
+/// Can an effect read `v` as its `color`: a hex color or name [`Color::from_hex`] reads, `[r, g, b]`
+/// with three numbers first, or a color object?
+///
+/// [`Color::from_hex`]: vectorcraft_doc::color::Color::from_hex
+fn is_color(v: &Value) -> bool {
+    use vectorcraft_doc::color::Color;
+    match v {
+        Value::String(s) => Color::from_hex(s).is_some(),
+        Value::Array(a) => a.len() >= 3 && a.iter().take(3).all(Value::is_number),
+        Value::Object(_) => serde_json::from_value::<Color>(v.clone()).is_ok(),
+        _ => false,
+    }
+}
+
+/// Does parameter documentation `doc` (`{edgeWidth: pt 1..14 (2), …}`) name parameter `key`?
+fn documents_key(doc: &str, key: &str) -> bool {
+    doc.match_indices(key).any(|(at, _)| {
+        let before = doc.get(..at).and_then(|s| s.chars().last());
+        let after = doc.get(at + key.len()..).unwrap_or_default();
+        matches!(before, Some('{' | ' ' | ',' | '|')) && (after.starts_with(':') || after.starts_with('?'))
+    })
+}
+
+/// Makes [`check_returned_effect`] how this process checks the effect records painted live-effect
+/// plug-ins return ([`vectorcraft_plugins::painted::set_effect_check`]).
+pub(crate) fn check_returned_effects() {
+    vectorcraft_plugins::painted::set_effect_check(check_returned_effect);
+}
+
 /// Scale the distance parameters of `e` by `s` (Scale Strokes & Effects; see
 /// [`EffectInfo::lengths`]), and its sizes in raster pixels ([`crate::raster_px_range`]), which
 /// keep their share of the object so. A distance left at its default is written out scaled; one
