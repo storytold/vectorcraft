@@ -894,7 +894,7 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     let command = |c: &str| vectorcraft_engine::cmd::plugin::command_id(id, c);
     let commands = r#"[{"id":"tidy","label":"Tidy","menu":{"context":[{"menu":"canvas"},{"menu":"layers","when":"oneObject"}]}},
         {"id":"text","label":"Text Only","menu":{"context":[{"menu":"canvas","when":"typeObject"},{"menu":"layers","when":"layerRow"}]}},
-        {"id":"size","label":"Size","menu":{"context":[{"menu":"layers"}]},"params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
+        {"id":"size","label":"Size","menu":{"context":[{"menu":"canvas"},{"menu":"layers"}]},"params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
         {"id":"plain","label":"Plain"}]"#;
     app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
     let target = red_rect(&mut app);
@@ -908,7 +908,7 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     app.run("select.set", json!({"ids": [target.0]})).unwrap();
     let ids = json!({"ids": [target.0]});
     let listed = canvas_plugin_items(&app);
-    let expected = [("Ctx", "Tidy", command("tidy")), ("Ctx", "Text Only", command("text"))];
+    let expected = [("Ctx", "Tidy", command("tidy")), ("Ctx", "Text Only", command("text")), ("Ctx", "Size…", command("size"))];
     assert_eq!(listed.iter().map(|(p, l, c, _)| (p.as_str(), l.as_str(), c.clone())).collect::<Vec<_>>(), expected);
     assert!(listed.iter().all(|(.., p)| *p == ids), "{listed:?}");
     let shown = |app: &VectorcraftApp, c: &str| menus::shown_state(app, c, &ids).map(|(enabled, _)| enabled);
@@ -930,6 +930,14 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Tidy"));
     assert!(st.doc.node(target).is_none() && st.doc.node(other).is_some(), "the plug-in was given Target alone");
     app.run("edit.undo", json!({})).unwrap();
+
+    // Clicking the canvas item of a command with parameters opens the plug-in's own dialog for the
+    // selection, not the generic parameter dialog.
+    let (_, label, c, p) = listed.iter().find(|(_, l, ..)| l == "Size…").unwrap();
+    let (cmd, p) = menus::click_target(label, c, p);
+    menus::invoke(&mut app, &cmd, p);
+    let d = app.ui.dialog.take().expect("Size opens its dialog from the canvas");
+    assert_eq!((d.kind.as_str(), d.str("__command"), d.fields.get("__ids")), (dialogs::plugin::KIND, command("size"), Some(&json!([target.0]))));
 
     // A row's item runs on that row's object, not on the selection; one with parameters asks first.
     app.run("select.set", json!({"ids": [other.0]})).unwrap();
