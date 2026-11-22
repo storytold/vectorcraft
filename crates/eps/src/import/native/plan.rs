@@ -69,7 +69,7 @@ pub(super) fn make_slots(
             let node = story.node(NodeId(0), info.frame, t, to_doc)?;
             tabs_left_out |= story.tabs_left_out();
             kinsoku_left_out |= story.kinsoku_sets_left_out();
-            let (mut node, region) = placed(info, story, node, t, to_doc);
+            let (mut node, mut region) = placed(info, story, node, t, to_doc);
             if let NodeKind::Text(text) = &mut node.kind
                 && story.fit_first_line(text)
             {
