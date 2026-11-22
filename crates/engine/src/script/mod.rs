@@ -2064,7 +2064,7 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
-            dom: dom::State::default(),
+            dom: dom::State::new(self.documents()),
         });
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {
@@ -2290,7 +2290,7 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
-        if let Some(boards) = dom::layers::active_artboards(&host.dom.active_artboards.borrow(), self.documents()) {
+        if let Some(boards) = dom::layers::active_artboards(&host.dom.active_artboards.borrow(), &host.dom.boards_at_start, self.documents()) {
             report["activeArtboards"] = boards;
         }
         close_run(self, host, &mut report, console::Ending::Finished);
