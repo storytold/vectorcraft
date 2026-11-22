@@ -30,6 +30,7 @@ mod dnd;
 mod libraries;
 mod tiles;
 
+pub(crate) use actions::follow_drag;
 pub use actions::menu;
 #[cfg(test)]
 use actions::{deletable, delete, mergeable, new_swatch, selected_group};

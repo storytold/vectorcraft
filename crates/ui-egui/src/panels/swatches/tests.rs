@@ -788,8 +788,9 @@ fn swatches_dropped_on_delete_swatch_are_deleted_after_asking() {
 /// Delete Swatch takes only swatches dragged from the active document's list: a paint dragged from
 /// elsewhere, art, and a swatch dragged from another document whose name the active document also
 /// has delete nothing, ask nothing and are not outlined. A secondary button released while a swatch
-/// is held over the button ends the drag without asking, and a swatch deleted while it is dragged
-/// leaves alone a new swatch made under its name.
+/// is held over the button ends the drag without asking, and a swatch deleted or undone while it is
+/// dragged leaves alone a new swatch made under its name, and the swatch an undo brings back. A
+/// swatch dragged while an undo takes back a step that left it alone is still deleted.
 #[test]
 fn delete_swatch_ignores_other_drags() {
     let mut app = app();
@@ -866,6 +867,50 @@ fn delete_swatch_ignores_other_drags() {
     frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 5.5);
     assert_eq!(dialog_message(&app), None, "the new swatch of that name asks nothing");
     assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (replaced, undo_replaced), "the new swatch of that name is kept");
+    // A swatch the newest undo step made, undone while it is dragged, and a new swatch made under
+    // its name before the drop, both inside one command (run on the session, so the panel does
+    // not check the rows between them).
+    let hold_orange = |app: &mut VectorcraftApp, time: f64| {
+        frame_out(app, &ctx, vec![], Modifiers::NONE, time);
+        let from = tile_center(&ctx, "Orange");
+        frame_out(app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, time + 0.1);
+        frame_out(app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, time + 0.2);
+        let drag = egui::DragAndDrop::payload::<PanelDrag>(&ctx);
+        assert!(matches!(drag.as_deref(), Some(PanelDrag::Paint { rows: Some(r), .. }) if r.names == ["Orange"]), "Orange is dragged");
+    };
+    hold_orange(&mut app, 6.0);
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    app.session.execute("swatch.new", &json!({"name": "Orange", "color": "#f7931e"})).unwrap();
+    let (replaced, undo_replaced) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 6.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 6.4);
+    assert!(!outlined(&held, trash), "the new swatch made after the undo is not outlined");
+    frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 6.5);
+    assert_eq!(dialog_message(&app), None, "the new swatch made after the undo asks nothing");
+    assert_eq!(
+        (app.session.doc().unwrap().doc.clone(), undo_steps(&app)),
+        (replaced.clone(), undo_replaced),
+        "the new swatch made after the undo is kept"
+    );
+    // A swatch deleted while it is dragged and brought back by an undo, inside one command.
+    hold_orange(&mut app, 6.6);
+    app.session.execute("swatch.delete", &json!({"names": ["Orange"]})).unwrap();
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc.clone(), replaced, "the undo brings Orange back");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 6.85);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 6.9);
+    assert!(!outlined(&held, trash), "a swatch brought back by an undo is not outlined");
+    frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 6.95);
+    assert_eq!(dialog_message(&app), None, "a swatch brought back by an undo asks nothing");
+    // A swatch dragged while an undo takes back a step that left it alone is still deleted.
+    app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 20, "height": 20})).unwrap();
+    hold_orange(&mut app, 7.0);
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 7.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(trash.center())], Modifiers::NONE, 7.4);
+    assert!(outlined(&held, trash), "a swatch an undo left alone is outlined");
+    frame_out(&mut app, &ctx, vec![release(trash.center())], Modifiers::NONE, 7.5);
+    assert!(dialog_message(&app).is_some(), "a swatch an undo left alone is deleted after asking");
 }
 
 /// Swatches dragged from the list onto New Swatch are duplicated without a dialog, in thumbnail
@@ -939,7 +984,8 @@ fn swatches_dropped_on_new_swatch_are_duplicated() {
 /// New Swatch duplicates only swatches dragged from the active document's list that are still in
 /// it: a paint dragged from elsewhere, art, a swatch dragged from another document, and a swatch
 /// deleted while it is dragged duplicate nothing, nor does a new swatch made under the name of a
-/// swatch deleted while it is dragged. A secondary button released while a swatch is
+/// swatch deleted or undone while it is dragged, or the swatch an undo brings back after deleting it
+/// while it is dragged. A secondary button released while a swatch is
 /// held over the button ends the drag without duplicating, and a click still opens New Swatch.
 #[test]
 fn new_swatch_ignores_other_drags() {
@@ -1028,14 +1074,69 @@ fn new_swatch_ignores_other_drags() {
     assert_eq!((app.session.doc().unwrap().doc.clone(), undo_steps(&app)), (other, undo_new), "the other document duplicates nothing");
     assert!(app.session.set_active(0));
     unchanged(&app, "the first document");
+    // A swatch the newest undo step made, undone while it is dragged, and a new swatch made under
+    // its name before the drop, both inside one command (run on the session, so the panel does
+    // not check the rows between them).
+    let glass = json!({"name": "Sea Glass", "color": "#00a99d"});
+    let steps = json!([{"command": "swatch.new", "params": glass}, {"command": "swatch.move", "params": {"name": "Sea Glass", "to": 2}}]);
+    app.run("command.batch", json!({"label": "New Swatch", "commands": steps})).unwrap();
+    let made = app.session.doc().unwrap().doc.swatch("Sea Glass").cloned();
+    assert!(made.is_some(), "Sea Glass is made");
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 5.6);
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 5.65);
+    let from = tile_center(&ctx, "Sea Glass");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from), press(from, PointerButton::Primary, true)], Modifiers::NONE, 5.7);
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], Modifiers::NONE, 5.8);
+    let drag = egui::DragAndDrop::payload::<PanelDrag>(&ctx);
+    assert!(matches!(drag.as_deref(), Some(PanelDrag::Paint { rows: Some(r), .. }) if r.names == ["Sea Glass"]), "Sea Glass is dragged");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert!(app.session.doc().unwrap().doc.swatch("Sea Glass").is_none(), "the undo takes Sea Glass away");
+    app.session.execute("swatch.new", &glass).unwrap();
+    let (replaced, undo_replaced) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    assert_eq!(replaced.swatch("Sea Glass").cloned(), made, "the new swatch is the same as the one undone");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 5.85);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 5.9);
+    assert!(!outlined(&held, new), "the new swatch made after the undo is not outlined");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 5.95);
+    assert!(app.ui.dialog.is_none(), "the new swatch made after the undo opens no dialog");
+    assert_eq!(
+        (app.session.doc().unwrap().doc.clone(), undo_steps(&app)),
+        (replaced, undo_replaced),
+        "the new swatch made after the undo is not duplicated"
+    );
+    app.run("edit.undo", json!({})).unwrap();
+    unchanged(&app, "after the undo case");
+    // A swatch deleted while it is dragged and brought back by an undo, then an edit that clears
+    // the redo steps, each a command of its own before the panel is drawn again. The app checks the
+    // rows after each command it runs with the window's context.
+    app.ui_ctx = Some(ctx.clone());
+    hold_orange(&mut app, 6.0);
+    app.run("swatch.delete", json!({"names": ["Orange"]})).unwrap();
+    app.run("edit.undo", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 60, "y": 0, "width": 20, "height": 20})).unwrap();
+    let (restored, undo_restored) = (app.session.doc().unwrap().doc.clone(), undo_steps(&app));
+    assert!(restored.swatch("Orange").is_some(), "the undo brings Orange back");
+    frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 6.3);
+    let held = frame_out(&mut app, &ctx, vec![Event::PointerMoved(new.center())], Modifiers::NONE, 6.4);
+    assert!(!outlined(&held, new), "a swatch brought back by an undo is not outlined");
+    frame_out(&mut app, &ctx, vec![release(new.center())], Modifiers::NONE, 6.5);
+    assert!(app.ui.dialog.is_none(), "a swatch brought back by an undo opens no dialog");
+    assert_eq!(
+        (app.session.doc().unwrap().doc.clone(), undo_steps(&app)),
+        (restored, undo_restored),
+        "a swatch brought back by an undo is not duplicated"
+    );
+    app.run("edit.undo", json!({})).unwrap();
+    app.ui_ctx = None;
+    unchanged(&app, "after the restored case");
     // A click still opens New Swatch.
-    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 6.0);
+    frame_out(&mut app, &ctx, vec![], Modifiers::NONE, 7.0);
     let click = vec![
         Event::PointerMoved(new.center()),
         press(new.center(), PointerButton::Primary, true),
         press(new.center(), PointerButton::Primary, false),
     ];
-    frame_out(&mut app, &ctx, click, Modifiers::NONE, 6.1);
+    frame_out(&mut app, &ctx, click, Modifiers::NONE, 7.1);
     assert!(app.ui.dialog.is_some(), "a click opens the New Swatch dialog");
 }
 

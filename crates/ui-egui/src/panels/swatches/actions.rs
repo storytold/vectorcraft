@@ -1,7 +1,7 @@
 use std::sync::{Arc, Weak};
 
 use vectorcraft_color::SwatchGroup;
-use vectorcraft_engine::DocState;
+use vectorcraft_engine::{DocState, History, HistoryEntry};
 
 use super::dnd::{group_of, selection};
 use super::libraries::SwatchLibraries;
@@ -149,14 +149,37 @@ impl HeldRow {
     }
 }
 
-/// The rows being dragged from the list, in the order of the drag's names, and the document they
-/// were last checked against. A row is `None` once a state of the document since the drag started
-/// did not hold it unchanged: deleted, edited, or deleted and made again under its name, also with
-/// the same paint.
+/// The rows being dragged from the list, in the order of the drag's names, and the document and
+/// undo history they were last checked against. A row is `None` once a state of the document since
+/// the drag started did not hold it unchanged: deleted, edited, or deleted and made again under its
+/// name, also with the same paint.
 #[derive(Clone, Default)]
 struct HeldRows {
     doc: Weak<Document>,
+    /// The newest undo step of the document and the one under it, and the next redo step and the
+    /// one under it ([`steps`]).
+    steps: [u64; 4],
     rows: Vec<(String, Option<HeldRow>)>,
+    /// For each row, whether the document undoing the newest step gives back (that step's
+    /// document) holds it unchanged.
+    back: Vec<bool>,
+}
+
+/// The newest undo step of `st` and the one under it, and the next redo step and the one under it
+/// ([`HistoryEntry::serial`]), 0 for none.
+fn steps(st: &DocState) -> [u64; 4] {
+    let serial = |list: &[HistoryEntry], back: usize| list.len().checked_sub(back).and_then(|i| list.get(i)).map_or(0, HistoryEntry::serial);
+    let h = &st.history;
+    [serial(&h.undo, 1), serial(&h.undo, 2), serial(&h.redo, 1), serial(&h.redo, 2)]
+}
+
+impl HeldRows {
+    /// `rows`, checked against document `st` as it is now.
+    fn at(st: &DocState, rows: Vec<(String, Option<HeldRow>)>) -> Self {
+        let last = st.history.undo.last();
+        let back = rows.iter().map(|(_, r)| r.as_ref().zip(last).is_some_and(|(r, e)| r.unchanged_in(&e.doc))).collect();
+        HeldRows { doc: Arc::downgrade(&st.doc), steps: steps(st), rows, back }
+    }
 }
 
 /// Records the document and the rows a drag from the list started with this frame, so that New
@@ -166,7 +189,7 @@ pub(super) fn drag_started(app: &VectorcraftApp, ctx: &egui::Context) {
     set_pstate(ctx, DRAG_DOC, st.map(|st| st.uid));
     let held = match (st, egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref()) {
         (Some(st), Some(PanelDrag::Paint { rows: Some(r), .. })) => {
-            HeldRows { doc: Arc::downgrade(&st.doc), rows: r.names.iter().map(|n| (n.clone(), HeldRow::of(&st.doc, n))).collect() }
+            HeldRows::at(st, r.names.iter().map(|n| (n.clone(), HeldRow::of(&st.doc, n))).collect())
         }
         _ => HeldRows::default(),
     };
@@ -174,24 +197,63 @@ pub(super) fn drag_started(app: &VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// The dragged rows ([`HeldRows`]) checked against every state document `st` passed through since
-/// they were last checked: the states its undo steps kept since then, and the current one. When
-/// the last checked state is not among them (an undo, or steps dropped past the history's limits),
-/// only the current state is checked.
+/// they were last checked, and the current one. Those states are the ones the redo steps made
+/// since then keep (the states an undo left), and:
+/// - While the newest undo step of then is still in the history, the states the undo steps made
+///   since then keep.
+/// - After an undo of that step, or an edit merged into it, the state before that step and the
+///   states the undo steps made since then keep.
+///
+/// Otherwise (more than one step undone, or steps dropped past the history's limits) the states in
+/// between are not known, and every row is left out of the drop. The panel checks the rows after
+/// every command the app runs ([`follow_drag`]), so only the steps of one command go unseen. One
+/// undo step is one change: the states between the commands of a `command.batch` are not kept, and
+/// a row the batch leaves as it found it stays in the drop.
 fn held_rows(st: &DocState, ctx: &egui::Context) -> HeldRows {
-    let mut held: HeldRows = pstate(ctx, DRAG_ROWS);
-    if std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&st.doc)) {
+    let held: HeldRows = pstate(ctx, DRAG_ROWS);
+    let now = steps(st);
+    let same = std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&st.doc));
+    if same && held.steps == now {
         return held;
     }
-    let since = st.history.undo.iter().rposition(|e| std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&e.doc)));
-    let between = since.and_then(|i| st.history.undo.get(i + 1..)).unwrap_or_default();
-    for (_, row) in &mut held.rows {
-        if row.as_ref().is_some_and(|r| !(between.iter().all(|e| r.unchanged_in(&e.doc)) && r.unchanged_in(&st.doc))) {
-            *row = None;
+    let (undo, redo) = (&st.history.undo, &st.history.redo);
+    // Where the steps made after the step with `serial` start in `list`: 0 for none.
+    let after = |list: &[HistoryEntry], serial: u64| {
+        if serial == 0 { Some(0) } else { list.iter().rposition(|e| e.serial() == serial).map(|i| i + 1) }
+    };
+    let [newest, below, next, further] = held.steps;
+    // The redo steps made since: above the next redo step of then, or above the one under it once a
+    // redo took that step.
+    let left = redo.get(after(redo, next).or_else(|| after(redo, further)).unwrap_or(0)..).unwrap_or_default();
+    // The states in between, and whether they start with the state an undo of the newest step gave back.
+    let (between, undone) = match after(undo, newest) {
+        // With no step before it, the first step keeps the last checked state, unless steps were
+        // dropped past the history's limits, which leave at least that many steps.
+        Some(0) => {
+            let kept = same
+                || undo.len() < st.history.limit.min(History::MIN_STEPS)
+                || undo.first().is_none_or(|e| std::ptr::eq(held.doc.as_ptr(), Arc::as_ptr(&e.doc)));
+            (kept.then_some(undo.as_slice()), false)
         }
-    }
-    held.doc = Arc::downgrade(&st.doc);
+        Some(i) => (undo.get(i..), false),
+        None => (after(undo, below).and_then(|i| undo.get(i..)), true),
+    };
+    let unchanged = |r: &HeldRow, b: &[HistoryEntry]| b.iter().chain(left).all(|e| r.unchanged_in(&e.doc)) && r.unchanged_in(&st.doc);
+    let rows = held
+        .rows
+        .into_iter()
+        .zip(held.back)
+        .map(|((name, row), back)| (name, row.filter(|r| (back || !undone) && between.is_some_and(|b| unchanged(r, b)))))
+        .collect();
+    let held = HeldRows::at(st, rows);
     set_pstate(ctx, DRAG_ROWS, held.clone());
     held
+}
+
+/// Checks the rows being dragged from the list against the active document after a command ran
+/// ([`held_rows`]), so that the commands after it cannot replace one unseen.
+pub(crate) fn follow_drag(app: &VectorcraftApp, ctx: &egui::Context) {
+    dragged_rows(app, ctx);
 }
 
 /// The swatches and color groups of the active document being dragged from the list that Delete

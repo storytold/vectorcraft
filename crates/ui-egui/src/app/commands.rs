@@ -275,9 +275,11 @@ impl VectorcraftApp {
                 }
                 // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
                 panels::color_guide::after_command(self, id, &params, v, spot_base);
-                // A renamed color group stays selected in the Swatches panel.
+                // A renamed color group stays selected in the Swatches panel, and the rows dragged
+                // from its list are checked against what the command left.
                 if let Some(ctx) = self.ui_ctx.clone() {
                     panels::swatches::after_command(&ctx, id, &params, v);
+                    panels::swatches::follow_drag(self, &ctx);
                 }
                 if id == "file.new" {
                     self.status("");

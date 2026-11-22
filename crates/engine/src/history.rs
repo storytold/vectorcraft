@@ -109,6 +109,12 @@ impl HistoryEntry {
         self.named.as_ref().filter(|n| n.label() == self.label)
     }
 
+    /// A number no other step takes ([`History::step`]). Undo and Redo make the step they move
+    /// with a new number, and so does an edit merged into the newest step.
+    pub fn serial(&self) -> u64 {
+        self.serial
+    }
+
     /// The step that undoing (redoing) the step `costs` came from makes: it keeps `doc`, the
     /// document before the undo, whose next state is now `now` (that step's document). Its figures
     /// are that step's the other way round when `doc` is still the document they were taken
