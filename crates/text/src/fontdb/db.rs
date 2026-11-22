@@ -361,7 +361,8 @@ impl FontDb {
         let _change = self.catalog.is_ready().then(crate::test_fonts::font_change);
         // The first scan, or a rescan once it is done (never both at once).
         let n = self.catalog.rescan();
-        // Files may have been installed since: other versions are looked for again.
+        // Files may have been installed since: other versions are looked for again, in the catalog
+        // the rescan published. A version lookup made during the scan read the previous one.
         self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
         let installed: std::collections::HashSet<PathBuf> = self.catalog.faces().iter().filter_map(|f| f.path.clone()).collect();
         // Faces loaded from a file this scan did not catalog (the font was removed, or its folder

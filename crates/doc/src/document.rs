@@ -551,13 +551,19 @@ impl Document {
     }
 
     /// Insert `node` into `parent` at `index` (clamped; `usize::MAX` = top). In a layer, art goes
-    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]).
+    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]). A
+    /// node that is or holds a dimension (a pasted one) sets [`Document::dimensions`].
     pub fn insert(&mut self, parent: Option<NodeId>, index: usize, node: Node) -> Result<NodeId, DocError> {
+        fn holds_dimension(n: &Node) -> bool {
+            n.extras().dimension.is_some() || n.children().into_iter().flatten().any(|c| holds_dimension(c))
+        }
         let id = node.id;
         self.check_ruler_guide_place(&node, parent)?;
+        let dimension = !self.dimensions && holds_dimension(&node);
         let ch = self.children_mut(parent)?;
         let i = Node::insert_index(ch, index, &node);
         ch.insert(i, Arc::new(node));
+        self.dimensions |= dimension;
         Ok(id)
     }
 
@@ -654,6 +660,21 @@ impl Document {
             }
             let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
             children.extend(nodes.into_iter().map(Arc::new));
+        })?;
+        self.index.clear();
+        Ok(())
+    }
+
+    /// Put each list of nodes in `items` directly below its anchor, in list order, in one pass over
+    /// the children of each parent. It fails as [`Document::insert_beside`] does.
+    pub fn insert_below(&mut self, items: Vec<(NodeId, Vec<Node>)>) -> Result<(), DocError> {
+        let anchors: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+        let places = self.places(&anchors)?;
+        let mut lists: Vec<Vec<Node>> = items.into_iter().map(|(_, nodes)| nodes).collect();
+        self.edit_children(places, |k, anchor, children| {
+            let nodes = lists.get_mut(k).map(std::mem::take).unwrap_or_default();
+            children.extend(nodes.into_iter().map(Arc::new));
+            children.push(anchor);
         })?;
         self.index.clear();
         Ok(())

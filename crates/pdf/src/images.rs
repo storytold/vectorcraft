@@ -840,6 +840,21 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
     Some(img.pixels().map(|p| ((u32::from(p[0]) * u32::from(p[3]) + back * (255 - u32::from(p[3])) + 127) / 255) as u8).collect())
 }
 
+/// The alpha of each pixel of image `blob` (255 for an image without alpha), when it is `width` ×
+/// `height` pixels. `None` for a CMYK image, another size, or one too large to hold as RGBA or
+/// that can't be decoded; as in [`mask_alpha`], the size is read from the header first.
+pub(crate) fn image_alpha(blob: &ImageBlob, width: u32, height: u32) -> Option<Vec<u8>> {
+    if blob.is_cmyk() {
+        return None;
+    }
+    let reader = ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?;
+    if reader.into_dimensions().ok()? != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
+        return None;
+    }
+    let img = decoded(&blob.bytes)?.into_rgba8();
+    (img.dimensions() == (width, height)).then(|| img.pixels().map(|p| p[3]).collect())
+}
+
 /// Opaque colour `samples` (grey, RGB, or CMYK ink amounts, as `space` says) as a JPEG at
 /// `quality`, tagged with ICC profile `icc` when given. CMYK JPEGs hold Adobe's inverted samples,
 /// which the PDF writer's Decode array undoes.
