@@ -2056,7 +2056,7 @@ arrowhead	Feather	இறகு
 	Find Font	எழுத்துருவைக் கண்டுபிடி
 	Find Font Files	எழுத்துரு கோப்புகளைக் கண்டுபிடி
 	Find Font…	எழுத்துருவைக் கண்டுபிடி…
-	Retype	மறுதட்டச்சு
+	Retype	மறுதட்டச்சு செய்
 	Find Matching Fonts	பொருந்தும் எழுத்துருக்களைக் கண்டறி
 	Find more font matches	மேலும் பொருந்தும் எழுத்துருக்களைக் கண்டறி
 	Type your text to preview	முன்காட்சிக்கு உங்கள் உரையைத் தட்டச்சு செய்யவும்
@@ -2069,7 +2069,7 @@ arrowhead	Feather	இறகு
 @msg	`count` must be a whole number from 1 to 96	`count` 1 முதல் 96 வரையிலான ஒரு முழு எண்ணாக இருக்க வேண்டும்
 @msg	`size` must be small, medium or large	`size` small, medium அல்லது large ஆக இருக்க வேண்டும்
 @msg	`text` must be a string of at most 100 characters	`text` அதிகபட்சம் 100 எழுத்துகள் கொண்ட உரைச்சரமாக இருக்க வேண்டும்
-@msg	Retype: select outlined text (paths or compound paths)	மறுதட்டச்சு: வெளிரேகையாக்கப்பட்ட உரையைத் தேர்ந்தெடுக்கவும் (பாதைகள் அல்லது கூட்டுப் பாதைகள்)
+@msg	Retype: select outlined text (paths or compound paths)	மறுதட்டச்சு செய்: வெளிரேகையாக்கப்பட்ட உரையைத் தேர்ந்தெடுக்கவும் (பாதைகள் அல்லது கூட்டுப் பாதைகள்)
 	Find Fonts	எழுத்துருக்களைக் கண்டுபிடி
 	Find Fonts in Folder…	கோப்புறையில் எழுத்துருக்களைக் கண்டுபிடி…
 	Find in Folder…	கோப்புறையில் கண்டுபிடி…
@@ -4413,7 +4413,7 @@ arrowhead	Feather	இறகு
 	Dragging sideways on a numeric field's label changes the field's value.	எண் புலத்தின் லேபிளின் மீது பக்கவாட்டில் இழுத்தால் அந்தப் புலத்தின் மதிப்பு மாறும்.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	டிராக்பேடில் இரு விரல் சுழற்சிச் சைகை கேன்வாஸ் காட்சியைச் சுழற்றும்.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	ஒரு விசையை அழுத்திப் பிடித்தால், விசைப்பலகை குறுக்குவழிகளில் அதன் பிடி நெடுவரிசையில் உள்ள கருவி அல்லது கட்டளை இயங்கும்; விரைவாக அழுத்தினால் அதன் வழக்கமான குறுக்குவழி இயங்கும்.
-	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	ஒரு விசையின் வழக்கமான குறுக்குவழிக்குப் பதிலாக அதன் அழுத்திப்பிடி குறுக்குவழி இயங்க, அந்த விசையை எத்தனை வினாடிகள் அழுத்திப் பிடிக்க வேண்டும் என்பது.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	ஒரு விசையின் வழக்கமான குறுக்குவழிக்குப் பதிலாக, அதைக் குறுக்குவழியாக அழுத்திப்பிடிப்பதற்கான கருவி அல்லது கட்டளை இயங்க, அந்த விசையை எத்தனை வினாடிகள் அழுத்திப் பிடிக்க வேண்டும் என்பது.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	நீங்கள் நங்கூரப் புள்ளிகளை நகர்த்தும்போது, ஒரு முனை நகர்ந்த ஒவ்வொரு வளைவும் அதன் முனைகளைப் பொறுத்துத் தன் வடிவத்தைத் தக்கவைக்கும்.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ஒரு கருவியின் குறுக்குவழி விசையை அழுத்திப் பிடித்தால், நீங்கள் விடும் வரை அந்தக் கருவி தேர்ந்தெடுக்கப்படும்; பிறகு முந்தைய கருவி மீண்டும் தேர்ந்தெடுக்கப்படும்.
 	Shows the bounding box while you move the selection or draw a shape.	நீங்கள் தேர்வை நகர்த்தும்போது அல்லது வடிவத்தை வரையும்போது எல்லைப்பெட்டியைக் காட்டும்.
@@ -6644,7 +6644,7 @@ arrowhead	Feather	இறகு
 	Packaging Tools	பொதியிடல் கருவிகள்
 	Fold Lines	மடிப்புக் கோடுகள்
 	Make Cut Line	வெட்டுக் கோடாக்கு
-	Make Crease Line	அழுத்த மடிப்புக் கோடாக்கு
+	Make Crease Line	அழுத்தி மடிக் கோடாக்கு
 	Make Partial Cut Line	பகுதி வெட்டுக் கோடாக்கு
 	Make Perforation Line	துளையிடல் கோடாக்கு
 	Make Fold Line	மடிப்புக் கோடாக்கு
@@ -6652,7 +6652,7 @@ arrowhead	Feather	இறகு
 	Role Swatches	பங்கு வண்ண மாதிரிகள்
 	Role	பங்கு
 	Cut Line	வெட்டுக் கோடு
-	Crease Line	அழுத்த மடிப்புக் கோடு
+	Crease Line	அழுத்தி மடிக் கோடு
 	Partial Cut Line	பகுதி வெட்டுக் கோடு
 	Perforation Line	துளையிடல் கோடு
 	No objects are selected.	எந்தப் பொருளும் தேர்ந்தெடுக்கப்படவில்லை.
@@ -6692,14 +6692,14 @@ arrowhead	Feather	இறகு
 	Places dimension lines that show measured lengths.	அளந்த நீளங்களைக் காட்டும் அளவீட்டுக் கோடுகளை வைக்கிறது.
 	Tap	தட்டு
 	Clear Hold	பிடியை அழி
-	Hold Shortcuts	அழுத்திப்பிடி குறுக்குவழிகள்
-	Hold Shortcut Delay	அழுத்திப்பிடி குறுக்குவழித் தாமதம்
-	How hold shortcuts work	அழுத்திப்பிடி குறுக்குவழிகள் எப்படிச் செயல்படுகின்றன
+	Hold Shortcuts	குறுக்குவழிகளை அழுத்திப்பிடி
+	Hold Shortcut Delay	குறுக்குவழியை அழுத்திப்பிடிக்கும் தாமதம்
+	How hold shortcuts work	குறுக்குவழிகளை அழுத்திப்பிடித்தல் எப்படிச் செயல்படுகிறது
 	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	சொடுக்கி, இதற்காக அழுத்திப் பிடிக்கும் விசையை அழுத்தவும் (Esc ரத்துசெய்யும்). விசையை அழுத்திப் பிடித்தால் இது இயங்கும்; விரைவாக அழுத்தினால் அந்த விசையின் சொந்தக் குறுக்குவழி இயங்கும்.
-	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	ஒரு விசையை விரைவாக அழுத்தினால் அதன் குறுக்குவழி இயங்கும். தாமத நேரம் வரை விசையை அழுத்திப் பிடித்தால், அதற்குப் பதிலாக அதன் பிடி நெடுவரிசையிலுள்ள கருவி அல்லது கட்டளை இயங்கும். அழுத்திப்பிடி குறுக்குவழி என்பது தனியாகவோ Shift உடனோ அழுத்தும் ஓர் எழுத்து, இலக்கம் அல்லது நிறுத்தக்குறி விசை ஆகும்.
-@msg	Hold {_1} is already used by {_2}	அழுத்திப்பிடி குறுக்குவழி {_1} ஏற்கனவே {_2} ஆல் பயன்படுத்தப்படுகிறது
-@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	அழுத்திப்பிடி குறுக்குவழி என்பது தனியாகவோ Shift உடனோ ஓர் எழுத்தைத் தட்டச்சு செய்யும் விசையாகும் ({shown} இல் Cmd, Ctrl அல்லது Alt உள்ளது)
-@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} அழுத்திப்பிடி குறுக்குவழியாக இருக்க முடியாது: ஓர் எழுத்து, ஓர் இலக்கம் அல்லது ஒரு நிறுத்தக்குறி விசையைப் பயன்படுத்தவும்
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	ஒரு விசையை விரைவாக அழுத்தினால் அதன் குறுக்குவழி இயங்கும். தாமத நேரம் வரை விசையை அழுத்திப் பிடித்தால், அதற்குப் பதிலாக அதன் பிடி நெடுவரிசையிலுள்ள கருவி அல்லது கட்டளை இயங்கும். குறுக்குவழியாக அழுத்திப்பிடிக்கும் விசை, தனியாகவோ Shift உடனோ அழுத்தும் ஓர் எழுத்து, இலக்கம் அல்லது நிறுத்தக்குறி விசை ஆகும்.
+@msg	Hold {_1} is already used by {_2}	{_1} ஐக் குறுக்குவழியாக அழுத்திப்பிடித்தல் ஏற்கனவே {_2} ஆல் பயன்படுத்தப்படுகிறது
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	குறுக்குவழியாக அழுத்திப்பிடிக்கும் விசை, தனியாகவோ Shift உடனோ ஓர் எழுத்தைத் தட்டச்சு செய்யும் விசையாக இருக்க வேண்டும் ({shown} இல் Cmd, Ctrl அல்லது Alt உள்ளது)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ஐக் குறுக்குவழியாக அழுத்திப்பிடிக்க முடியாது: ஓர் எழுத்து, ஓர் இலக்கம் அல்லது ஒரு நிறுத்தக்குறி விசையைப் பயன்படுத்தவும்
 	Check	சரிபார்
 	Check Fold Lines	மடிப்புக் கோடுகளைச் சரிபார்
 @msg	No cut lines are in the selection.	தேர்வில் வெட்டுக் கோடுகள் இல்லை.
@@ -6708,16 +6708,16 @@ arrowhead	Feather	இறகு
 @msg	A cut line ends without meeting another cut line.	ஒரு வெட்டுக் கோடு மற்றொரு வெட்டுக் கோட்டைச் சந்திக்காமல் முடிகிறது.
 @msg	A gap between cut lines was closed.	வெட்டுக் கோடுகளுக்கு இடையிலான ஓர் இடைவெளி மூடப்பட்டது.
 @msg	The fold lines are too complex to check.	மடிப்புக் கோடுகள் சரிபார்க்க முடியாத அளவுக்குச் சிக்கலானவை.
-@msg	A cut line and a crease lie on top of each other.	ஒரு வெட்டுக் கோடும் ஓர் அழுத்த மடிப்பும் ஒன்றின்மேல் ஒன்றாக உள்ளன.
+@msg	A cut line and a crease lie on top of each other.	ஒரு வெட்டுக் கோடும் ஓர் அழுத்தி மடியும் ஒன்றின்மேல் ஒன்றாக உள்ளன.
 @msg	No cut lines are among the given objects.	கொடுக்கப்பட்ட பொருட்களில் வெட்டுக் கோடுகள் இல்லை.
 @msg	Two fold lines lie on top of each other.	இரண்டு மடிப்புக் கோடுகள் ஒன்றின்மேல் ஒன்றாக உள்ளன.
-@msg	A crease ends inside a panel.	ஓர் அழுத்த மடிப்பு ஒரு பலகைக்குள் முடிகிறது.
-@msg	A crease does not divide two panels.	ஓர் அழுத்த மடிப்பு இரண்டு பலகைகளைப் பிரிக்கவில்லை.
-@msg	A crease lies outside the cut outline, wholly or in part.	ஓர் அழுத்த மடிப்பு வெட்டு வெளிரேகைக்கு முழுமையாகவோ பகுதியாகவோ வெளியே உள்ளது.
+@msg	A crease ends inside a panel.	ஓர் அழுத்தி மடி ஒரு பலகைக்குள் முடிகிறது.
+@msg	A crease does not divide two panels.	ஓர் அழுத்தி மடி இரண்டு பலகைகளைப் பிரிக்கவில்லை.
+@msg	A crease lies outside the cut outline, wholly or in part.	ஓர் அழுத்தி மடி வெட்டு வெளிரேகைக்கு முழுமையாகவோ பகுதியாகவோ வெளியே உள்ளது.
 @msg	The pieces of a hinge are not on one straight line.	ஒரு கீலின் துணுக்குகள் ஒரே நேர்கோட்டில் இல்லை.
 @msg	A gap between cut lines is too narrow to tell apart.	வெட்டுக் கோடுகளுக்கு இடையிலான ஓர் இடைவெளி பிரித்தறிய முடியாத அளவுக்கு மிகக் குறுகியது.
 @msg	A cut-out area holds other fold lines or another blank.	வெட்டி அகற்றப்படும் ஒரு பரப்பில் பிற மடிப்புக் கோடுகள் அல்லது மற்றொரு வெட்டுத்தாள் உள்ளது.
-@msg	A panel is not joined to the rest by a crease.	ஒரு பலகை மற்றவற்றுடன் ஓர் அழுத்த மடிப்பால் இணைக்கப்படவில்லை.
+@msg	A panel is not joined to the rest by a crease.	ஒரு பலகை மற்றவற்றுடன் ஓர் அழுத்தி மடியால் இணைக்கப்படவில்லை.
 @msg	A fold line is on a non-printing layer.	ஒரு மடிப்புக் கோடு அச்சிடாத அடுக்கில் உள்ளது.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	பலகைகள்: {panels}, கீல்கள்: {hinges}, பிழைகள்: {errors}, எச்சரிக்கைகள்: {warnings}
 	Nature Icons	இயற்கைப் படவுருக்கள்
@@ -9937,7 +9937,7 @@ swatch	Espresso	எஸ்பிரெசோ
 swatch	Grays	சாம்பல்கள்
 swatch	Green	பச்சை
 swatch	Indigo	அவுரிநீலம்
-swatch	Lime	எலுமிச்சைப் பச்சை
+swatch	Lime	எலுமிச்சை
 swatch	Magenta	மெஜந்தா
 swatch	Ocean	கடல்
 swatch	Orange	ஆரஞ்சு
@@ -10237,7 +10237,7 @@ theme	Appearance	தோற்றப்பாணி
 	Pastel Orange	மென்வெளிர் ஆரஞ்சு
 	Pastel Amber	மென்வெளிர் அம்பர்
 	Pastel Yellow	மென்வெளிர் மஞ்சள்
-	Pastel Lime	மென்வெளிர் எலுமிச்சைப் பச்சை
+	Pastel Lime	மென்வெளிர் எலுமிச்சை
 	Pastel Green	மென்வெளிர் பச்சை
 	Pastel Teal	மென்வெளிர் கரும் நீல-பச்சை
 	Pastel Cyan	மென்வெளிர் சியான்
@@ -10249,7 +10249,7 @@ theme	Appearance	தோற்றப்பாணி
 	Soft Orange	மென்மையான ஆரஞ்சு
 	Soft Amber	மென்மையான அம்பர்
 	Soft Yellow	மென்மையான மஞ்சள்
-	Soft Lime	மென்மையான எலுமிச்சைப் பச்சை
+	Soft Lime	மென்மையான எலுமிச்சை
 	Soft Green	மென்மையான பச்சை
 	Soft Teal	மென்மையான கரும் நீல-பச்சை
 	Soft Cyan	மென்மையான சியான்
@@ -10261,7 +10261,7 @@ theme	Appearance	தோற்றப்பாணி
 	Vivid Orange	துடிப்பான ஆரஞ்சு
 	Vivid Amber	துடிப்பான அம்பர்
 	Vivid Yellow	துடிப்பான மஞ்சள்
-	Vivid Lime	துடிப்பான எலுமிச்சைப் பச்சை
+	Vivid Lime	துடிப்பான எலுமிச்சை
 	Vivid Green	துடிப்பான பச்சை
 	Vivid Teal	துடிப்பான கரும் நீல-பச்சை
 	Vivid Cyan	துடிப்பான சியான்
@@ -10274,7 +10274,7 @@ theme	Appearance	தோற்றப்பாணி
 	Deep Orange	ஆழமான ஆரஞ்சு
 	Deep Amber	ஆழமான அம்பர்
 	Deep Yellow	ஆழமான மஞ்சள்
-	Deep Lime	ஆழமான எலுமிச்சைப் பச்சை
+	Deep Lime	ஆழமான எலுமிச்சை
 	Deep Green	ஆழமான பச்சை
 	Deep Teal	ஆழமான கரும் நீல-பச்சை
 	Deep Cyan	ஆழமான சியான்
@@ -10311,9 +10311,9 @@ theme	Appearance	தோற்றப்பாணி
 	Soft Spectrum	மென்மையான நிறமாலை
 	Red to Amber	சிவப்பு முதல் அம்பர் வரை
 	Orange to Yellow	ஆரஞ்சு முதல் மஞ்சள் வரை
-	Amber to Lime	அம்பர் முதல் எலுமிச்சைப் பச்சை வரை
+	Amber to Lime	அம்பர் முதல் எலுமிச்சை வரை
 	Yellow to Green	மஞ்சள் முதல் பச்சை வரை
-	Lime to Teal	எலுமிச்சைப் பச்சை முதல் கரும் நீல-பச்சை வரை
+	Lime to Teal	எலுமிச்சை முதல் கரும் நீல-பச்சை வரை
 	Green to Cyan	பச்சை முதல் சியான் வரை
 	Teal to Azure	கரும் நீல-பச்சை முதல் வான நீலம் வரை
 	Cyan to Blue	சியான் முதல் நீலம் வரை
@@ -10363,7 +10363,7 @@ theme	Appearance	தோற்றப்பாணி
 	Polar Glint	துருவப் பளிச்சிடல்
 	Pastel Orbit	பேஸ்டல் சுற்றுப்பாதை
 	Coral and Navy	பவளமும் கருநீலமும்
-	Plum and Lime	பிளமும் எலுமிச்சைப் பச்சையும்
+	Plum and Lime	பிளமும் எலுமிச்சையும்
 	Teal and Gold	கரும் நீல-பச்சையும் தங்கமும்
 	Indigo and Peach	அவுரியும் பீச் நிறமும்
 	Forest and Rose	காட்டுப் பச்சையும் ரோஜாவும்
@@ -10371,7 +10371,7 @@ theme	Appearance	தோற்றப்பாணி
 	Orange Glow	ஆரஞ்சு ஒளிர்வு
 	Amber Glow	அம்பர் ஒளிர்வு
 	Yellow Glow	மஞ்சள் ஒளிர்வு
-	Lime Glow	எலுமிச்சைப் பச்சை ஒளிர்வு
+	Lime Glow	எலுமிச்சை ஒளிர்வு
 	Green Glow	பச்சை ஒளிர்வு
 	Teal Glow	கரும் நீல-பச்சை ஒளிர்வு
 	Cyan Glow	சியான் ஒளிர்வு
@@ -10447,7 +10447,7 @@ theme	Appearance	தோற்றப்பாணி
 	Cyan Neon	சியான் நியான்
 	Magenta Laser	மெஜந்தா லேசர்
 	Amber Tube	அம்பர் குழாய்
-	Electric Lime	மின்னொளி எலுமிச்சைப் பச்சை
+	Electric Lime	மின்னொளி எலுமிச்சை
 	Pulse Violet	துடிப்பு வயலட்
 	Cobalt Phosphor	கோபால்ட் பாஸ்பர்
 	Burst	வெடிப்பு
