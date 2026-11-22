@@ -21,7 +21,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use serde_json::{Map, Value, json};
-use vectorcraft_js::{Arg, Data, HostError, HostFunction, Realm, RunError};
+use vectorcraft_js::{Arg, Data, HostError, HostFunction, LimitKind, Realm, RunError, RunErrorKind};
 
 use super::scriptui::{self, ScriptUiDialog, Showing, UiEvent, UiStep};
 use super::{Host, console};
@@ -258,6 +258,11 @@ impl Dialogs {
         self.window.borrow().as_ref().map(|s| s.dialog.clone())
     }
 
+    /// The ScriptUI dialog whose `show()` is running, as it last waited, also while a handler runs.
+    pub(crate) fn showing_window(&self) -> Option<ScriptUiDialog> {
+        self.window.borrow().as_ref().map(|s| s.dialog.clone())
+    }
+
     /// Gives the waiting ScriptUI dialog `event`, once it is checked against the dialog.
     pub(crate) fn window_answer(&self, realm: &mut Realm, event: UiEvent) -> Result<(), String> {
         if !self.window_waiting.get() {
@@ -347,10 +352,19 @@ impl Dialogs {
         self.window_waiting.set(false);
         let Some(showing) = self.window.borrow_mut().take() else { return Ok(()) };
         let left = showing.steps.as_ref().map_or(0, std::collections::VecDeque::len);
+        let steps = if left == 1 { "step" } else { "steps" };
+        let unused = format!("show: the dialog's answer in `answers` has {left} {steps} the dialog did not use");
         if normal && left > 0 {
             self.push_record(showing.record(json!("missing")));
-            let steps = if left == 1 { "step" } else { "steps" };
-            return Err(HostError::Abort(format!("show: the dialog's answer in `answers` has {left} {steps} the dialog did not use")));
+            return Err(HostError::Abort(unused));
+        }
+        // A show that a handler's error ended still ends the run when steps are left: the script
+        // can catch that error, and the run must not finish as if it took every step.
+        if left > 0 {
+            let mut failed = self.failed.borrow_mut();
+            if failed.is_none() {
+                *failed = Some(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message: unused, line: 0, column: 0, authored: false });
+            }
         }
         let answer = match result {
             _ if !normal => json!("error"),

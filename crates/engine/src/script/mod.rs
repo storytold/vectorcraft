@@ -1833,6 +1833,15 @@ impl Session {
         self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.waiting_window())).flatten()
     }
 
+    /// The ScriptUI dialog whose `show()` the running script is in, whether it waits at it or runs
+    /// one of its handlers. A run asked to stop is in none.
+    pub fn script_window_showing(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.showing_window())).flatten()
+    }
+
     /// Gives the ScriptUI dialog the running script waits at `event`; the next
     /// [`Session::script_pump`] runs the control's handler. → an error, and the dialog still
     /// waits, when nothing waits or the dialog cannot take the event ([`scriptui::check_event`]).
@@ -2158,6 +2167,12 @@ impl Session {
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
+        // A failure a dialog recorded in the slice (steps a show left unused) ends the run, even
+        // when the script went on.
+        let outcome = match (outcome, job.host.dialogs.take_failure()) {
+            (Ok(Ok(_)), Some(e)) => Ok(Err(e)),
+            (outcome, _) => outcome,
+        };
         match outcome {
             Err(panic) => {
                 let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0, authored: false };

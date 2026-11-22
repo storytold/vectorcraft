@@ -28,7 +28,9 @@
 //! script cannot change. The description lists the dialog first and every control after the
 //! container that holds it; it is read with a loop, and a dialog with more than [`MAX_CONTROLS`]
 //! controls, nested more than [`MAX_DEPTH`] deep, with more than [`MAX_ITEMS`] list items, or with a
-//! text longer than [`MAX_TEXT_BYTES`] throws a `RangeError`. These are VectorCraft's own limits.
+//! text longer than [`MAX_TEXT_BYTES`] throws a `RangeError`. These are VectorCraft's own limits. A
+//! getter that changes a list's items after the list was read makes `show()` read the dialog again,
+//! and a list that changes again throws an `Error`.
 
 use crate::HostItem;
 use crate::builtins::{arg, constructor, method, native, pausable_method};
@@ -363,33 +365,66 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
             }
             _ => {}
         }
+        // A new list's items take their places in the dialog only once the list is added.
+        let mut staged = 0usize;
         if list_kind {
             match arg(args, 2) {
                 Value::Undefined | Value::Null => {}
                 Value::Object(a) if matches!(i.object(a)?.class, Class::Array { .. }) => {
-                    for item in list_values(i, a)? {
-                        add_item(i, c, &item)?;
+                    let length = match &i.object(a)?.class {
+                        Class::Array { length, .. } => *length as usize,
+                        _ => 0,
+                    };
+                    if length > MAX_ITEMS.saturating_sub(number_slot(i, win, ITEM_COUNT)? as usize) {
+                        return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
+                    }
+                    let values = list_values(i, a)?;
+                    i.temp_roots.extend(values.iter().cloned());
+                    for item in &values {
+                        let text = text_arg(i, item)?;
+                        new_item(i, c, text)?;
+                        staged += 1;
                     }
                 }
                 _ => return Err(i.type_error("add: give a list's items as an array")),
             }
         }
+        // A getter or a conversion above may have added controls or items itself.
+        let count = number_slot(i, win, COUNT)?;
+        if count as usize >= MAX_CONTROLS {
+            return Err(range(i, &format!("add: a dialog can hold at most {MAX_CONTROLS} controls")));
+        }
+        let items = number_slot(i, win, ITEM_COUNT)?;
+        if items as usize + staged > MAX_ITEMS {
+            return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
+        }
         append(i, o, KIDS, "children", Value::Object(c))?;
         set_slot(i, win, COUNT, Value::Number(count + 1.0))?;
+        set_slot(i, win, ITEM_COUNT, Value::Number(items + staged as f64))?;
         Ok(Value::Object(c))
     })();
     i.temp_roots.truncate(mark);
     r
 }
 
-/// Adds an item with `text` to the list `o`.
+/// Adds an item with `text` to the list `o`, which the dialog holds.
 fn add_item(i: &mut Interp, o: ObjId, text: &Value) -> JsResult<Value> {
     let Some(win) = object_slot(i, o, WINDOW)? else { return Err(Abrupt::Internal("a list without its window".into())) };
-    let count = number_slot(i, win, ITEM_COUNT)?;
-    if count as usize >= MAX_ITEMS {
-        return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
-    }
+    // The conversion runs first: it may add or remove items itself.
     let text = text_arg(i, text)?;
+    i.rooted(std::slice::from_ref(&text), |i| {
+        let count = number_slot(i, win, ITEM_COUNT)?;
+        if count as usize >= MAX_ITEMS {
+            return Err(range(i, &format!("add: a dialog's lists hold at most {MAX_ITEMS} items in all")));
+        }
+        let item = new_item(i, o, text.clone())?;
+        i.rooted(std::slice::from_ref(&item), |i| set_slot(i, win, ITEM_COUNT, Value::Number(count + 1.0)))?;
+        Ok(item)
+    })
+}
+
+/// Adds an item with `text` to the end of the list `o`, without counting it in the dialog's items.
+fn new_item(i: &mut Interp, o: ObjId, text: Value) -> JsResult<Value> {
     let proto = classes(i)?.item_proto;
     i.rooted(std::slice::from_ref(&text), |i| {
         i.reserve_heap(OBJECT_BYTES.saturating_add(PROP_BYTES.saturating_mul(4)))?;
@@ -398,7 +433,6 @@ fn add_item(i: &mut Interp, o: ObjId, text: &Value) -> JsResult<Value> {
             set_slot(i, item, LIST, Value::Object(o))?;
             set_open(i, item, "text", text.clone())?;
             append(i, o, ITEMS, "items", Value::Object(item))?;
-            set_slot(i, win, ITEM_COUNT, Value::Number(count + 1.0))?;
             Ok(Value::Object(item))
         })
     })
@@ -610,7 +644,7 @@ fn show(i: &mut Interp, this: Value, _: &[Value]) -> JsResult<Pause> {
     set_showing(i, Some(win));
     set_slot(i, win, CLOSING, Value::Undefined)?;
     let described = describe(i, win);
-    let (desc, nodes, def, cancel) = match described {
+    let (desc, nodes, def, cancel, lists) = match described {
         Ok(d) => d,
         Err(e) => {
             set_showing(i, None);
@@ -621,7 +655,7 @@ fn show(i: &mut Interp, this: Value, _: &[Value]) -> JsResult<Pause> {
     Ok(Pause {
         host: open,
         args: vec![desc],
-        keep: vec![Value::Object(win), Value::Object(nodes), Value::Number(def), Value::Number(cancel)],
+        keep: vec![Value::Object(win), Value::Object(nodes), Value::Number(def), Value::Number(cancel), Value::Object(lists)],
         resume: opened,
         failed: Some(failed),
     })
@@ -664,12 +698,12 @@ fn next(i: &mut Interp, win: ObjId) -> JsResult<Value> {
             }
             continue;
         }
-        let (desc, nodes, def, cancel) = describe(i, win)?;
+        let (desc, nodes, def, cancel, lists) = describe(i, win)?;
         let wait = host_fn(i, "wait")?;
         i.again = Some(Pause {
             host: wait,
             args: vec![desc],
-            keep: vec![Value::Object(win), Value::Object(nodes), Value::Number(def), Value::Number(cancel)],
+            keep: vec![Value::Object(win), Value::Object(nodes), Value::Number(def), Value::Number(cancel), Value::Object(lists)],
             resume: answered,
             failed: Some(failed),
         });
@@ -761,6 +795,14 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
                             Value::Number(n) => n,
                             _ => -1.0,
                         };
+                        // The index is into the items the person saw.
+                        let shown = match arg(keep, 4).as_object() {
+                            Some(lists) => list_values(i, lists)?.get(id).cloned().unwrap_or(Value::Undefined),
+                            None => Value::Undefined,
+                        };
+                        if !same(&slot(i, c, ITEMS)?, &shown) {
+                            return Err(error(i, "show: a list's items changed before the person's choice was taken"));
+                        }
                         set_slot(i, c, SELECTION, Value::Number(n))?;
                     }
                 }
@@ -783,6 +825,13 @@ fn text_of(i: &mut Interp, v: &Value, what: &str) -> JsResult<String> {
 
 fn get(i: &mut Interp, o: ObjId, name: &str) -> JsResult<Value> {
     i.get_value(&Value::Object(o), &key(name))
+}
+
+/// [`get`], keeping the value in the roots [`describe`] lets go of when it returns.
+fn get_kept(i: &mut Interp, o: ObjId, name: &str) -> JsResult<Value> {
+    let v = get(i, o, name)?;
+    i.temp_roots.push(v.clone());
+    Ok(v)
 }
 
 fn number_of(i: &mut Interp, o: ObjId, name: &str) -> JsResult<Data> {
@@ -850,15 +899,35 @@ fn margins(i: &mut Interp, v: &Value) -> JsResult<Data> {
 
 /// The dialog's description: its elements in order, each after the container that holds it, as
 /// [`Data`] for the host's `open` and `wait`, with the elements in that order, and the indices of
-/// its default and cancel elements (-1 for none).
-fn describe(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f64)> {
-    let mark = i.temp_roots.len();
-    let r = describe_rooted(i, win);
-    i.temp_roots.truncate(mark);
-    r
+/// its default and cancel elements (-1 for none), and each element's array of list items as it
+/// was described (`undefined` for an element that is not a list). When a getter changes a list
+/// after it was read, the dialog is read again once; a list that changes again throws an `Error`.
+fn describe(i: &mut Interp, win: ObjId) -> JsResult<Described> {
+    for _ in 0..2 {
+        let mark = i.temp_roots.len();
+        let r = describe_rooted(i, win);
+        i.temp_roots.truncate(mark);
+        if let Some(d) = r? {
+            return Ok(d);
+        }
+    }
+    Err(error(i, "show: a list's items changed while the dialog was read"))
 }
 
-fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f64)> {
+/// A description, the elements in its order, the default and cancel elements, and the lists' items.
+type Described = (Value, ObjId, f64, f64, ObjId);
+
+/// Has each list in `order` the array of items it had when it was described?
+fn lists_unchanged(i: &Interp, order: &[(ObjId, String, f64)], snapshot: &[Value]) -> JsResult<bool> {
+    for ((o, ..), kept) in order.iter().zip(snapshot) {
+        if !matches!(kept, Value::Undefined) && !same(&slot(i, *o, ITEMS)?, kept) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
     let mut order: Vec<(ObjId, String, f64)> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let mut stack: Vec<(Value, f64, usize)> = vec![(Value::Object(win), -1.0, 0)];
@@ -885,8 +954,11 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
     let mut nodes = Vec::with_capacity(order.len());
     let mut names = Vec::with_capacity(order.len());
     let mut items_total = 0usize;
+    // Each list's array of items as it is read; a change to it means a later getter changed the list.
+    let mut snapshot = Vec::with_capacity(order.len());
     for (o, kind, parent) in &order {
         let o = *o;
+        let mut listed = Value::Undefined;
         let name_v = get(i, o, "name")?;
         let name = text_of(i, &name_v, "a control's name")?;
         let text_v = get(i, o, "text")?;
@@ -902,19 +974,20 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
         let visible = get(i, o, "visible")?.truthy();
         d.push(("enabled".into(), Data::Bool(enabled)));
         d.push(("visible".into(), Data::Bool(visible)));
-        let b = get(i, o, "bounds")?;
+        // A value a getter gives is kept from collection while its own properties are read.
+        let b = get_kept(i, o, "bounds")?;
         d.push(("bounds".into(), bounds(i, &b)?));
-        let size = get(i, o, "preferredSize")?;
+        let size = get_kept(i, o, "preferredSize")?;
         d.push(("size".into(), numbers(i, &size, &["width", "height"], "preferredSize")?));
-        let a = get(i, o, "alignment")?;
+        let a = get_kept(i, o, "alignment")?;
         d.push(("alignment".into(), alignment(i, &a)?));
         if matches!(kind.as_str(), "dialog" | "group" | "panel") {
             let orientation = get(i, o, "orientation")?;
             d.push(("orientation".into(), Data::String(text_of(i, &orientation, "an orientation")?.to_lowercase())));
-            let ac = get(i, o, "alignChildren")?;
+            let ac = get_kept(i, o, "alignChildren")?;
             d.push(("alignChildren".into(), alignment(i, &ac)?));
             d.push(("spacing".into(), number_of(i, o, "spacing")?));
-            let m = get(i, o, "margins")?;
+            let m = get_kept(i, o, "margins")?;
             d.push(("margins".into(), margins(i, &m)?));
         }
         match kind.as_str() {
@@ -928,7 +1001,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
                 d.push(("maxvalue".into(), number_of(i, o, "maxvalue")?));
             }
             "edittext" => {
-                let props = get(i, o, "properties")?;
+                let props = get_kept(i, o, "properties")?;
                 let (multiline, readonly) = match props {
                     Value::Object(_) => (i.get_value(&props, &key("multiline"))?.truthy(), i.get_value(&props, &key("readonly"))?.truthy()),
                     _ => (false, false),
@@ -937,6 +1010,9 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
                 d.push(("readonly".into(), Data::Bool(readonly)));
             }
             "dropdownlist" | "listbox" => {
+                let kept = slot(i, o, ITEMS)?;
+                i.temp_roots.push(kept.clone());
+                listed = kept;
                 let items = items_of(i, o)?;
                 items_total = items_total.saturating_add(items.len());
                 if items_total > MAX_ITEMS {
@@ -954,6 +1030,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
             _ => {}
         }
         nodes.push(Data::Object(d));
+        snapshot.push(listed);
     }
     let target = |i: &mut Interp, name: &str, word: &str| -> JsResult<f64> {
         let given = get(i, win, name)?;
@@ -968,6 +1045,9 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
     };
     let def = target(i, "defaultElement", "ok")?;
     let cancel = target(i, "cancelElement", "cancel")?;
+    if !lists_unchanged(i, &order, &snapshot)? {
+        return Ok(None);
+    }
     let desc = Data::Object(vec![
         ("nodes".into(), Data::Array(nodes)),
         ("defaultElement".into(), Data::Number(def)),
@@ -976,7 +1056,9 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<(Value, ObjId, f64, f
     let desc = i.write_data(desc, 0, true)?;
     i.temp_roots.push(desc.clone());
     let kept = list(i, &objects, false)?;
-    Ok((desc, kept, def, cancel))
+    i.temp_roots.push(Value::Object(kept));
+    let lists = list(i, &snapshot, false)?;
+    Ok(Some((desc, kept, def, cancel, lists)))
 }
 
 /// Adds `Window`, its prototype's methods, and the host functions in `items`.

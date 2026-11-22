@@ -148,6 +148,23 @@ pub struct UiNode {
     bounds: Option<UiRect>,
 }
 
+impl UiNode {
+    /// How much of a progress bar is done, from 0 to 1.
+    pub fn fraction(&self) -> f32 {
+        if self.max <= self.min || self.value <= self.min {
+            return 0.0;
+        }
+        if self.value >= self.max {
+            return 1.0;
+        }
+        let span = self.max - self.min;
+        // A range wider than the largest number is measured at half scale.
+        let part =
+            if span.is_finite() { (self.value - self.min) / span } else { (self.value / 2.0 - self.min / 2.0) / (self.max / 2.0 - self.min / 2.0) };
+        part.clamp(0.0, 1.0) as f32
+    }
+}
+
 /// A dialog a run shows, checked and laid out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScriptUiDialog {
@@ -302,8 +319,8 @@ pub(crate) fn step_event(dialog: &ScriptUiDialog, step: &UiStep) -> Result<UiEve
     let event = match (step.event.as_str(), &step.value) {
         ("click", _) => UiEvent::Click(id),
         (_, Some(Value::String(t))) => UiEvent::Change(id, UiValue::Text(t.clone())),
-        (_, Some(Value::Number(n))) if matches!(dialog.nodes[id].kind, UiKind::DropDownList | UiKind::ListBox) => match n.as_u64() {
-            Some(k) => UiEvent::Change(id, UiValue::Index(Some(usize::try_from(k).unwrap_or(usize::MAX)))),
+        (_, Some(Value::Number(n))) if matches!(dialog.nodes[id].kind, UiKind::DropDownList | UiKind::ListBox) => match list_index(n) {
+            Some(k) => UiEvent::Change(id, UiValue::Index(Some(k))),
             None => return Err("a list's `value` must be an item index or null".into()),
         },
         (_, Some(Value::Number(n))) => UiEvent::Change(id, UiValue::Number(n.as_f64().unwrap_or(f64::NAN))),
@@ -311,6 +328,18 @@ pub(crate) fn step_event(dialog: &ScriptUiDialog, step: &UiStep) -> Result<UiEve
         _ => return Err("a change's `value` must be a string, a number or null".into()),
     };
     check_event(dialog, event)
+}
+
+/// A list's item index written as a JSON number: a whole number of 0 or more, as an integer or as
+/// a float such as `1.0`; an index past the end stays past it. `None` for a fraction or a negative
+/// number.
+pub fn list_index(n: &serde_json::Number) -> Option<usize> {
+    if let Some(k) = n.as_u64() {
+        return Some(usize::try_from(k).unwrap_or(usize::MAX));
+    }
+    let f = n.as_f64()?;
+    // `as` saturates a whole number too large for usize at usize::MAX.
+    (f >= 0.0 && f.fract() == 0.0).then_some(f as usize)
 }
 
 fn field<'a>(fields: &'a [(String, Data)], name: &str) -> &'a Data {

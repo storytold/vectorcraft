@@ -85,11 +85,17 @@ fn ask(app: &mut VectorcraftApp) -> bool {
         if app.ui.dialog.is_none() {
             script_window::open(app, &window);
         }
+        // Its heading follows a title a handler changed.
+        if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == script_window::KIND) {
+            d.fields.insert("title".into(), serde_json::Value::from(window.title()));
+        }
         return true;
     }
-    // While a handler runs, the ScriptUI dialog stays open, until the run ends or asks about its
-    // growth.
-    if app.session.script_waiting() && app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND) {
+    // While a handler runs, the ScriptUI dialog stays open, until its show() ends or the run asks
+    // about its growth.
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND)
+        && (app.session.script_waiting() || app.session.script_window_showing().is_none())
+    {
         app.ui.dialog = None;
     }
     if app.session.script_waiting() {

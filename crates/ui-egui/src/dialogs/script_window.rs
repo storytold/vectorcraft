@@ -5,8 +5,9 @@
 //! Its fields are `title` and, for `ui.dialog.set` and `ui.dialog.confirm`, `event` (`click`,
 //! `change` or `close`), `control` (a control's index in the dialog's list of elements, or its
 //! name or text) and `value` (an edit field's text, a slider's number, or a list's item index or
-//! null). `ui.dialog.confirm` gives the script that event and leaves the dialog open; an event the
-//! dialog cannot take is an error. An edit field gives its text when it loses the keyboard focus,
+//! null). `ui.dialog.confirm` gives the script that event and leaves the dialog open, giving the
+//! text still typed in its fields first when the event is a click or a close; an event the dialog
+//! cannot take is an error. An edit field gives its text when it loses the keyboard focus,
 //! when Enter is pressed in a one-line field, or before a click on another control or a close. Events given in
 //! one frame reach the script one at a time, in order. Enter outside a field clicks the default button,
 //! and Escape or `ui.dialog.cancel` clicks the cancel button, or closes the dialog when it has
@@ -83,7 +84,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
         ui.add_enabled_ui(waiting, |ui| {
             for (i, n) in w.nodes.iter().enumerate().skip(1) {
                 if n.visible
-                    && let Some(e) = control(ui, d, area.min, i, n, w.default_element == Some(i))
+                    && let Some(e) = control(ui, d, area.min, (i, n, prompt_of(&w, i)), w.default_element == Some(i))
                 {
                     events.push(e);
                 }
@@ -101,7 +102,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
         app.ui.dialog = None;
         return DialogAction::None;
     }
-    let typing = ui.ctx().memory(|m| m.focused().is_some());
+    // Enter in a field belongs to the field; with the focus on any other control, it clicks the
+    // default button.
+    let typing = ui.ctx().memory(egui::Memory::focused).is_some_and(|id| egui::TextEdit::load_state(ui.ctx(), id).is_some());
     if events.is_empty() && waiting && !typing && crate::shortcuts::pressed_anew(ui.ctx(), egui::Key::Enter) {
         events.extend(w.default_element.map(UiEvent::Click));
     }
@@ -158,8 +161,20 @@ fn draft_key(i: usize) -> String {
     format!("text{i}")
 }
 
-/// Draws control `i` at its place from `origin`. → the event it gives.
-fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, i: usize, n: &UiNode, default: bool) -> Option<UiEvent> {
+/// The text of the visible static text just before control `i` in its container: the visible prompt
+/// of an edit field, a list box or a drop-down list, which screen readers call one without a name
+/// by. Empty when there is none.
+pub(crate) fn prompt_of(w: &ScriptUiDialog, i: usize) -> &str {
+    let Some(parent) = w.nodes.get(i).map(|n| n.parent) else { return "" };
+    match w.nodes[..i].iter().skip(1).rev().find(|n| n.parent == parent && n.visible) {
+        Some(n) if n.kind == UiKind::StaticText => &n.text,
+        _ => "",
+    }
+}
+
+/// Draws control `i` (`n`, with the prompt [`prompt_of`] gives) at its place from `origin`. → the
+/// event it gives.
+fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, (i, n, prompt): (usize, &UiNode, &str), default: bool) -> Option<UiEvent> {
     let rect = egui::Rect::from_min_size(origin + egui::vec2(n.rect.x, n.rect.y), egui::vec2(n.rect.w, n.rect.h));
     let t = Tokens::get(ui.ctx());
     let mut event = None;
@@ -199,18 +214,23 @@ fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, i: usize, n: &
                     event = Some(UiEvent::Click(i));
                 }
             }
-            UiKind::EditText => event = edit(ui, d, rect, i, n),
+            UiKind::EditText => event = edit(ui, d, rect, (i, n, prompt)),
             UiKind::DropDownList => {
                 let shown = n.selection.and_then(|k| n.items.get(k)).cloned().unwrap_or_default();
                 let mut picked = None;
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    craft_ui::ComboBox::from_id_salt(("script-window-list", i)).selected_text(shown).width(rect.width()).show_ui(ui, |ui| {
+                    let r = craft_ui::ComboBox::from_id_salt(("script-window-list", i)).selected_text(shown).width(rect.width()).show_ui(ui, |ui| {
                         for (k, item) in n.items.iter().enumerate() {
                             if ui.selectable_label(n.selection == Some(k), item).clicked() {
                                 picked = Some(k);
                             }
                         }
                     });
+                    // Screen readers call the drop-down by its name or the static text before it.
+                    let label = list_name(n, prompt);
+                    if !label.is_empty() {
+                        ui.ctx().accesskit_node_builder(r.response.id, |node| node.set_label(label));
+                    }
                 });
                 if let Some(k) = picked.filter(|k| n.selection != Some(*k)) {
                     event = Some(UiEvent::Change(i, UiValue::Index(Some(k))));
@@ -219,6 +239,19 @@ fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, i: usize, n: &
             UiKind::ListBox => {
                 ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect.shrink(3.0)), |ui| {
+                    // Screen readers read the box as a list box, by its name or the static text
+                    // before it, with the selected item as its value.
+                    let label = list_name(n, prompt);
+                    let selected = n.selection.and_then(|k| n.items.get(k)).cloned();
+                    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+                        node.set_role(egui::accesskit::Role::ListBox);
+                        if !label.is_empty() {
+                            node.set_label(label);
+                        }
+                        if let Some(item) = selected {
+                            node.set_value(item);
+                        }
+                    });
                     egui::ScrollArea::vertical().id_salt(("script-window-listbox", i)).max_height(rect.height() - 6.0).show(ui, |ui| {
                         for (k, item) in n.items.iter().enumerate() {
                             if ui.selectable_label(n.selection == Some(k), item).clicked() && n.selection != Some(k) {
@@ -231,16 +264,14 @@ fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, i: usize, n: &
             UiKind::Slider => {
                 let mut v = n.value;
                 let r = ui.put(rect, egui::Slider::new(&mut v, n.min..=n.max).show_value(false));
-                name_for_screen_readers(ui, &r, n);
+                name_for_screen_readers(ui, &r, n, prompt);
                 if (r.drag_stopped() || (r.changed() && !r.dragged())) && v != n.value {
                     event = Some(UiEvent::Change(i, UiValue::Number(v)));
                 }
             }
             UiKind::ProgressBar => {
-                let span = n.max - n.min;
-                let part = if span > 0.0 { ((n.value - n.min) / span) as f32 } else { 0.0 };
-                let r = ui.put(rect, egui::ProgressBar::new(part));
-                name_for_screen_readers(ui, &r, n);
+                let r = ui.put(rect, egui::ProgressBar::new(n.fraction()));
+                name_for_screen_readers(ui, &r, n, prompt);
             }
         });
     });
@@ -248,28 +279,40 @@ fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, i: usize, n: &
 }
 
 /// Screen readers call a control with no visible label of its own (an edit field, a slider or a
-/// progress bar) by the name the script gave it, or else a slider or progress bar by its text.
-fn name_for_screen_readers(ui: &egui::Ui, r: &egui::Response, n: &UiNode) {
-    let label = if !n.name.is_empty() {
-        n.name.clone()
-    } else if n.kind != UiKind::EditText {
-        n.text.clone()
-    } else {
-        String::new()
-    };
+/// progress bar) by the name the script gave it, or else a slider or progress bar by its text, and
+/// an edit field by the visible static text just before it in its container.
+fn name_for_screen_readers(ui: &egui::Ui, r: &egui::Response, n: &UiNode, prompt: &str) {
+    let label = screen_reader_name(n, prompt);
     if !label.is_empty() {
         ui.ctx().accesskit_node_builder(r.id, |node| node.set_label(label));
     }
 }
 
+/// The name screen readers call a list box or a drop-down list `n` by: the name the script gave it,
+/// or else the visible static text just before it. Empty for none.
+fn list_name(n: &UiNode, prompt: &str) -> String {
+    if n.name.is_empty() { prompt.to_string() } else { n.name.clone() }
+}
+
+/// The name [`name_for_screen_readers`] gives control `n`; empty for none.
+pub(crate) fn screen_reader_name(n: &UiNode, prompt: &str) -> String {
+    if !n.name.is_empty() {
+        n.name.clone()
+    } else if n.kind != UiKind::EditText {
+        n.text.clone()
+    } else {
+        prompt.to_string()
+    }
+}
+
 /// An edit field: its text is kept in the dialog while it is typed and given to the script when
 /// the field loses the focus, or at Enter in a one-line field.
-fn edit(ui: &mut egui::Ui, d: &mut Dialog, rect: egui::Rect, i: usize, n: &UiNode) -> Option<UiEvent> {
+fn edit(ui: &mut egui::Ui, d: &mut Dialog, rect: egui::Rect, (i, n, prompt): (usize, &UiNode, &str)) -> Option<UiEvent> {
     let key = draft_key(i);
     let mut text = d.fields.get(&key).and_then(Value::as_str).map_or_else(|| n.text.clone(), str::to_string);
     let field = if n.multiline { egui::TextEdit::multiline(&mut text) } else { egui::TextEdit::singleline(&mut text) };
     let r = ui.put(rect, field.interactive(!n.readonly).desired_width(rect.width()));
-    name_for_screen_readers(ui, &r, n);
+    name_for_screen_readers(ui, &r, n, prompt);
     if r.changed() {
         d.fields.insert(key.clone(), json!(text));
     }
@@ -310,8 +353,8 @@ fn event_of(w: &ScriptUiDialog, d: &Dialog) -> Result<UiEvent, String> {
         ("close", _) => Ok(UiEvent::Close),
         ("click", _) => Ok(UiEvent::Click(control)),
         ("change", Some(Value::String(t))) => Ok(UiEvent::Change(control, UiValue::Text(t.clone()))),
-        ("change", Some(Value::Number(v))) if list => match v.as_u64() {
-            Some(k) => Ok(UiEvent::Change(control, UiValue::Index(Some(usize::try_from(k).unwrap_or(usize::MAX))))),
+        ("change", Some(Value::Number(v))) if list => match vectorcraft_engine::script::scriptui::list_index(v) {
+            Some(k) => Ok(UiEvent::Change(control, UiValue::Index(Some(k)))),
             None => Err("a list's `value` must be an item index or null".into()),
         },
         ("change", Some(Value::Number(v))) => Ok(UiEvent::Change(control, UiValue::Number(v.as_f64().unwrap_or(f64::NAN)))),
@@ -322,14 +365,36 @@ fn event_of(w: &ScriptUiDialog, d: &Dialog) -> Result<UiEvent, String> {
 }
 
 /// Gives the running script the event in the dialog's fields. The dialog stays open for the
-/// script's next wait; an event it cannot take is an error.
+/// script's next wait; an event it cannot take is an error. Before a click or a close, the script
+/// is given the text still typed in the dialog's fields first, and the click or close waits for
+/// its next wait.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let Some(w) = app.session.script_window() else { return Err("no script dialog waits".into()) };
     let event = event_of(&w, d)?;
-    app.session.script_window_answer(event)?;
+    vectorcraft_engine::script::scriptui::check_event(&w, event.clone())?;
+    let mut events = vec![event];
+    let open = app.ui.dialog.as_mut().filter(|open| open.kind == KIND);
+    if let Some(open) = open
+        && matches!(events[0], UiEvent::Click(_) | UiEvent::Close)
+    {
+        commit_drafts(&w, open, &mut events);
+    }
+    let mut events = events.into_iter();
+    if let Some(first) = events.next() {
+        app.session.script_window_answer(first)?;
+    }
     if let Some(open) = app.ui.dialog.as_mut().filter(|open| open.kind == KIND) {
         for k in ["event", "control", "value"] {
             open.fields.remove(k);
+        }
+        let later: Vec<Value> = events.map(|e| event_fields(&e)).collect();
+        if !later.is_empty() {
+            let mut queue = match open.fields.remove(QUEUE_KEY) {
+                Some(Value::Array(queue)) => queue,
+                _ => Vec::new(),
+            };
+            queue.splice(0..0, later);
+            open.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
         }
     }
     Ok(Value::Null)

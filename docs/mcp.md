@@ -2935,24 +2935,30 @@ function. A shown dialog can be shown again after it closes.
 
 `show()` checks the dialog: at most 512 controls, nested at most 16 deep, 1,024 list items in all and 16 KiB of
 text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
-too, and a slider's minimum above its maximum. It lays the controls out from each container's `orientation`,
+too, and a slider's minimum above its maximum. When a getter changes a list's items after the list was read, it
+reads the dialog again, and throws an `Error` when a list changes again. It lays the controls out from each container's `orientation`,
 `alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` and `bounds`, which places
 it in its container. Sizes and places are kept within 8,192 pixels. These limits are VectorCraft's own.
 
 In the app, the dialog (kind `scriptWindow`) draws the controls where they were laid out and has a Stop button,
-which ends the run as `script.stop` does. Enter outside a field clicks the default button. Escape clicks the
-cancel button, or closes the dialog when it has none. Quitting while it waits asks whether to stop the script, and
-Cancel shows it again. `ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in
-the dialog, its name or its text) and `value`, then `ui.dialog.confirm`, gives the script that event; a disabled or
-hidden control, a value out of a list's range and a click on a control that takes none are errors, and the dialog
-stays open.
+which ends the run as `script.stop` does. It stays open while one of its handlers runs and closes when `show()`
+returns. Enter outside a field clicks the default button, also with the keyboard focus on a slider or another
+control that Enter does not click. Escape clicks the
+cancel button, or closes the dialog when it has none. Quitting while it waits, or while one of its handlers runs,
+asks whether to stop the script, and Cancel shows it again with the events it has not given the script yet.
+`ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name or
+its text) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
+script the text still typed in the dialog's fields. A disabled or hidden control, a value out of a list's range, a
+list index that is not a whole number and a click on a control that takes none are errors, and the dialog stays
+open.
 
 A run with nobody to ask takes `{kind: "window", value: [step, ...]}` from `answers` for each `show()`. A step is
 `{control, event: "click"}`, `{control, event: "change", value}` or `{event: "close"}`, where `control` is a
 control's `name`, else its text, and `value` is an edit field's text, a slider's number (kept in its range), or a
-list's item index or `null`. The dialog takes the next step each time it waits. The run ends with an error that
-the script cannot catch, and every document goes back, when no step is left, when a step names a control the
-dialog does not have or that cannot take it, or when the dialog closes with steps it did not use.
+list's item index (a whole number, such as `2` or `2.0`) or `null`. The dialog takes the next step each time it
+waits. The run ends with an error that the script cannot catch, and every document goes back, when no step is
+left, when a step names a control the dialog does not have or that cannot take it, or when the dialog closes, or
+an error in a handler ends `show()`, with steps it did not use.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "var w = new Window(\"dialog\", \"Frame\"); var name = w.add(\"edittext\", undefined, \"Frame\", {name: \"name\"}); w.add(\"button\", undefined, \"OK\"); w.add(\"button\", undefined, \"Cancel\"); if (w.show() == 1) vc.log(name.text);", "answers": [{"kind": "window", "value": [{"control": "name", "event": "change", "value": "Border"}, {"control": "OK", "event": "click"}]}]}'

@@ -127,6 +127,7 @@ fn window_answers_that_do_not_parse_are_refused_before_the_run() {
 #[test]
 fn a_framed_run_waits_at_show_and_runs_each_handler_with_the_persons_events() {
     let mut s = one_doc();
+    let undo_before = art(&s).1;
     framed(
         &mut s,
         &format!("{EDIT} {FORM} bold.onClick = function () {{ size.enabled = !bold.value; }}; var r = w.show(); vc.log([r, name.text, size.value]);"),
@@ -153,7 +154,47 @@ fn a_framed_run_waits_at_show_and_runs_each_handler_with_the_persons_events() {
     let r = pump(&mut s).unwrap().unwrap();
     assert_eq!(r["log"], json!([[1, "Ann", 5]]));
     assert_eq!(r["dialogs"][0]["events"], 3);
-    assert_eq!(s.documents()[0].history.undo.last().unwrap().label, "Run Script", "a finished run is one undo step");
+    assert_eq!(art(&s).1, undo_before + 1, "a finished run is one undo step");
+    assert_eq!(s.documents()[0].history.undo.last().unwrap().label, "Run Script");
+}
+
+#[test]
+fn an_unused_step_after_a_handler_threw_ends_the_run_and_rolls_it_back() {
+    let mut s = one_doc();
+    let before = art(&s);
+    let source = format!(
+        "{EDIT} var w = new Window('dialog'); var f = w.add('button', undefined, 'Fail'); f.onClick = function () {{ throw new Error('boom'); }}; \
+         try {{ w.show(); }} catch (e) {{ vc.log('caught'); }}"
+    );
+    let steps = window(json!([{"control": "Fail", "event": "click"}, {"event": "close"}]));
+    let e = headless(&mut s, &source, steps).unwrap_err().to_string();
+    assert!(e.contains("has 1 step the dialog did not use"), "{e}");
+    assert_eq!(art(&s), before, "the run is rolled back");
+}
+
+#[test]
+fn a_list_index_written_as_a_whole_float_is_an_index_and_a_fraction_is_refused() {
+    let mut s = one_doc();
+    let source = format!("{FORM} vc.log([w.show(), pick.selection.text]);");
+    let r = headless(&mut s, &source, window(json!([{"control": "pick", "event": "change", "value": 1.0}, {"control": "OK", "event": "click"}])))
+        .unwrap();
+    assert_eq!(r["log"], json!([[1, "b"]]));
+    let e = headless(&mut s, &source, window(json!([{"control": "pick", "event": "change", "value": 1.5}]))).unwrap_err().to_string();
+    assert!(e.contains("a list's `value` must be an item index or null"), "{e}");
+}
+
+#[test]
+fn a_progress_bar_s_fraction_stays_finite_over_the_widest_range() {
+    let bar = |min: f64, max: f64, value: f64| {
+        let n =
+            with(with(with(node("progressbar", 0.0), "minvalue", Data::Number(min)), "maxvalue", Data::Number(max)), "value", Data::Number(value));
+        scriptui::parse(&description(vec![node("dialog", -1.0), n])).unwrap().nodes[1].fraction()
+    };
+    assert_eq!(bar(-1e308, 1e308, 1e308), 1.0);
+    assert_eq!(bar(-1e308, 1e308, -1e308), 0.0);
+    assert_eq!(bar(-1e308, 1e308, 0.0), 0.5);
+    assert_eq!(bar(0.0, 10.0, 3.0), 0.3);
+    assert_eq!(bar(5.0, 5.0, 5.0), 0.0, "an empty range shows nothing done");
 }
 
 #[test]

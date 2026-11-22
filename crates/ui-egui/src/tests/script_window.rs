@@ -256,6 +256,150 @@ fn quitting_while_the_dialog_waits_asks_and_cancel_shows_it_again() {
 }
 
 #[test]
+fn quitting_while_a_handler_runs_keeps_the_events_still_queued() {
+    let mut app = app();
+    start(&mut app, &format!("{DRAW} {FORM} name.onChange = function () {{ name.text = name.text + '!'; }}; vc.log([w.show(), name.text]);"));
+    assert!(until_window(&mut app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("queued".into(), json!([{"event": "click", "control": 3, "value": null}]));
+    give(&mut app, json!({"event": "change", "control": "name", "value": "Ann"})).unwrap();
+    dialogs::script_run::ask_to_close(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(CLOSE_KIND));
+    script_runs::poll(&mut app);
+    dialogs::cancel(&mut app);
+    assert!(until_window(&mut app), "the dialog opens again");
+    assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key("queued"), "with the click still queued");
+    frame(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([[1, "Ann!"]]));
+}
+
+#[test]
+fn a_click_from_ui_dialog_confirm_gives_the_typed_text_first() {
+    let mut app = app();
+    start(&mut app, &format!("{FORM} vc.log([w.show(), name.text]);"));
+    assert!(until_window(&mut app));
+    start_typing(&mut app);
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(until_window(&mut app), "the script takes the text and waits again");
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("text1"), "the text is given once");
+    frame(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([[1, "typed"]]));
+}
+
+#[test]
+fn ui_dialog_confirm_takes_a_whole_float_as_a_list_index_and_refuses_a_fraction() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var l = w.add('dropdownlist', undefined, ['a', 'b'], {name: 'pick'}); w.add('button', undefined, 'OK'); \
+         vc.log([w.show(), l.selection.text]);",
+    );
+    assert!(until_window(&mut app));
+    assert!(give(&mut app, json!({"event": "change", "control": "pick", "value": 1.5})).is_err());
+    give(&mut app, json!({"event": "change", "control": "pick", "value": 1.0})).unwrap();
+    assert!(until_window(&mut app));
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[1, "b"]]));
+}
+
+#[test]
+fn an_unnamed_edit_field_is_called_by_the_static_text_before_it() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var g = w.add('group'); g.add('statictext', undefined, 'Width:'); g.add('edittext', undefined, '5'); \
+         w.add('edittext', undefined, 'x', {name: 'height'}); w.add('edittext', undefined, 'y'); \
+         var h = w.add('statictext', undefined, 'Secret'); h.visible = false; w.add('edittext', undefined, 'z'); \
+         w.add('statictext', undefined, 'Account'); w.add('edittext', undefined, 'a', {name: 'user'}); w.add('button', undefined, 'OK'); w.show();",
+    );
+    assert!(until_window(&mut app));
+    let w = app.session.script_window().unwrap();
+    let name = |i: usize| script_window::screen_reader_name(&w.nodes[i], script_window::prompt_of(&w, i));
+    assert_eq!(name(3), "Width:", "the static text before it in its group");
+    assert_eq!(name(4), "height", "the name the script gave it");
+    assert_eq!(name(5), "", "the control before it is no static text");
+    assert_eq!(name(7), "", "a hidden static text is no prompt");
+    assert_eq!(name(9), "user", "a name the script gave goes before the text before it");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
+fn a_title_a_handler_changes_and_a_list_box_reach_the_dialog() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog', 'First'); w.add('statictext', undefined, 'Fruit:'); var l = w.add('listbox', undefined, ['apple', 'pear']); \
+         l.selection = 1; w.add('statictext', undefined, 'Size:'); w.add('dropdownlist', undefined, ['small', 'large']); \
+         var b = w.add('button', undefined, 'Rename'); b.onClick = function () { w.text = 'Renamed'; }; \
+         w.add('button', undefined, 'OK'); w.show();",
+    );
+    assert!(until_window(&mut app));
+    give(&mut app, json!({"event": "click", "control": "Rename"})).unwrap();
+    assert!(until_window(&mut app));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("title"), "Renamed", "the heading follows the handler's title");
+    let ctx = CTX.with(Clone::clone);
+    ctx.enable_accesskit();
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let mut nodes = Vec::new();
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    }
+    let list = nodes.iter().any(|(_, n)| n.role() == egui::accesskit::Role::ListBox && n.label() == Some("Fruit:") && n.value() == Some("pear"));
+    assert!(list, "screen readers read the list box by its prompt, with its selected item");
+    let drop = nodes.iter().any(|(_, n)| n.role() == egui::accesskit::Role::ComboBox && n.label() == Some("Size:"));
+    assert!(drop, "screen readers read the drop-down list by its prompt");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
+fn enter_with_the_focus_on_a_slider_clicks_the_default_button() {
+    let mut app = app();
+    start(&mut app, "var w = new Window('dialog'); w.add('slider', undefined, 2, 0, 5); w.add('button', undefined, 'OK'); vc.log(w.show());");
+    assert!(until_window(&mut app));
+    let ctx = CTX.with(Clone::clone);
+    ctx.enable_accesskit();
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let mut on_slider = false;
+    for _ in 0..8 {
+        frame(&mut app, vec![key(egui::Key::Tab)]);
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        on_slider = out
+            .platform_output
+            .accesskit_update
+            .is_some_and(|u| u.nodes.iter().any(|(id, n)| *id == u.focus && n.role() == egui::accesskit::Role::Slider));
+        if on_slider {
+            break;
+        }
+    }
+    assert!(on_slider, "Tab puts the focus on the slider");
+    frame(&mut app, vec![key(egui::Key::Enter)]);
+    assert!(!until_window(&mut app), "Enter clicks OK, which closes the dialog");
+    assert_eq!(log(&app), json!([1]));
+}
+
+#[test]
+fn the_dialog_closes_when_its_show_ends_and_the_script_runs_on() {
+    let mut app = app();
+    start(&mut app, "var w = new Window('dialog'); w.add('button', undefined, 'OK'); w.show(); while (true) {}");
+    assert!(until_window(&mut app));
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    for _ in 0..3 {
+        script_runs::poll(&mut app);
+    }
+    assert!(app.session.script_running(), "the script still runs");
+    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != KIND), "the dialog its show() ended is closed");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
 fn a_large_dialog_draws_in_a_small_window() {
     let mut app = app();
     let source = "var w = new Window('dialog', 'Big'); var p = w.add('panel', undefined, 'Lots'); \

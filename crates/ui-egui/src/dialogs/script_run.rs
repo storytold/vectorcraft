@@ -209,8 +209,8 @@ pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
 }
 
 /// Closes the question quitting asks once the run it asks about has ended, and forgets the
-/// script's dialog it was asked over once the run no longer waits at that dialog, so Cancel does
-/// not show it again.
+/// script's dialog it was asked over once the run no longer waits at that dialog (or, for a
+/// ScriptUI dialog, once its `show()` has ended), so Cancel does not show it again.
 pub(crate) fn settle_close(app: &mut VectorcraftApp) {
     if !app.ui.dialog.as_ref().is_some_and(|d| d.kind == CLOSE_KIND) {
         return;
@@ -220,10 +220,18 @@ pub(crate) fn settle_close(app: &mut VectorcraftApp) {
     } else if app.session.script_dialog().is_none()
         && app.session.script_picker().is_none()
         && app.session.script_window().is_none()
+        && !over_running_show(app)
         && let Some(d) = app.ui.dialog.as_mut()
     {
         d.fields.remove(super::PARENT);
     }
+}
+
+/// Was the question asked over the ScriptUI dialog of the `show()` the run is still in (one of its
+/// handlers runs)? Cancel then shows that dialog again, with the events it has not given yet.
+fn over_running_show(app: &VectorcraftApp) -> bool {
+    let Some(w) = app.session.script_window_showing() else { return false };
+    app.ui.dialog.as_ref().and_then(super::parent).is_some_and(|p| super::script_window::is_open_for(&p, &w))
 }
 
 /// Shows the dialog the running script waits at.

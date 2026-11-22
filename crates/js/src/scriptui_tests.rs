@@ -266,6 +266,84 @@ fn too_many_controls_too_deep_a_nesting_and_too_long_a_text_are_refused() {
 }
 
 #[test]
+fn an_add_that_a_getter_or_a_conversion_reenters_keeps_to_the_limits() {
+    let (mut r, _, _) = realm(Vec::new());
+    let controls = r
+        .run(
+            "var w = new Window('dialog'); for (var i = 0; i < 511; i++) w.add('button'); \
+             var props = {}; Object.defineProperty(props, 'name', {get: function () { w.add('button'); return 'n'; }}); \
+             var e = ''; try { w.add('button', undefined, 'x', props); } catch (x) { e = x.name; } [e, w.children.length].join()",
+        )
+        .unwrap();
+    assert_eq!(controls, JsValue::String(format!("RangeError,{}", scriptui::MAX_CONTROLS)), "the getter took the last place");
+    let items = r
+        .run(
+            "var w = new Window('dialog'); var l = w.add('listbox'); for (var n = 0; n < 1023; n++) l.add('item', 'i'); \
+             var t = {toString: function () { l.add('item', 'inner'); return 'outer'; }}; \
+             var e = ''; try { l.add('item', t); } catch (x) { e = x.name; } [e, l.items.length].join()",
+        )
+        .unwrap();
+    assert_eq!(items, JsValue::String(format!("RangeError,{}", scriptui::MAX_ITEMS)), "the conversion took the last place");
+}
+
+#[test]
+fn a_new_list_s_items_count_only_once_it_is_added_and_too_many_are_refused_unread() {
+    let (mut r, _, _) = realm(Vec::new());
+    let failed = r
+        .run(
+            "var w = new Window('dialog'); var l = w.add('listbox'); for (var n = 0; n < 1022; n++) l.add('item', 'i'); \
+             var bad = {toString: function () { throw new Error('no text'); }}; \
+             var e = ''; try { w.add('dropdownlist', undefined, ['a', bad]); } catch (x) { e = x.message; } \
+             l.add('item', 'y'); l.add('item', 'z'); [e, l.items.length, w.children.length].join()",
+        )
+        .unwrap();
+    assert_eq!(failed, JsValue::String(format!("no text,{},1", scriptui::MAX_ITEMS)), "the list that was not added took no places");
+    let long = r
+        .run(
+            "var w = new Window('dialog'); var read = false; var a = new Array(5000); a[0] = {toString: function () { read = true; return 'x'; }}; \
+             var e = ''; try { w.add('listbox', undefined, a); } catch (x) { e = x.name; } [e, read, w.children.length].join()",
+        )
+        .unwrap();
+    assert_eq!(long, JsValue::String("RangeError,false,0".into()), "an array longer than the limit is refused before its items are read");
+}
+
+#[test]
+fn a_collection_while_a_bounds_or_margins_value_is_read_keeps_that_value() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let source = "function heavy(n) { return {valueOf: function () { var junk = []; for (var k = 0; k < 50000; k++) junk.push({}); return n; }}; } \
+        var w = new Window('dialog'); var b = w.add('button', undefined, 'Go'); \
+        Object.defineProperty(b, 'bounds', {get: function () { return {left: heavy(1), top: 2, right: 30, bottom: 40}; }}); \
+        Object.defineProperty(w, 'margins', {get: function () { return [heavy(3), 4, 5, 6]; }}); \
+        w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
+    let seen = seen.borrow();
+    let first = nodes(&seen.descriptions[0]);
+    let numbers = |v: &[f64]| Data::Array(v.iter().map(|n| Data::Number(*n)).collect());
+    assert_eq!(field(&first[1], "bounds"), &numbers(&[1.0, 2.0, 30.0, 40.0]));
+    assert_eq!(field(&first[0], "margins"), &numbers(&[3.0, 4.0, 5.0, 6.0]));
+}
+
+#[test]
+fn a_list_a_later_getter_changes_is_described_as_the_person_picks_from_it() {
+    let (mut r, seen, _) = realm(vec![change(1, Data::Number(0.0)), click(2)]);
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A']); var b = w.add('button', undefined, 'OK'); \
+        var swapped = false; Object.defineProperty(b, 'text', {get: function () { if (!swapped) { swapped = true; l.removeAll(); l.add('item', 'B'); } return 'OK'; }}); \
+        var picked = ''; l.onChange = function () { picked = l.selection.text; }; w.show(); picked";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("B".into()));
+    let seen = seen.borrow();
+    assert_eq!(
+        field(&nodes(&seen.descriptions[0])[1], "items"),
+        &Data::Array(vec![Data::String("B".into())]),
+        "the description shows the list as it is"
+    );
+    let (mut r, _, _) = realm(Vec::new());
+    let source = "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['A']); var b = w.add('button', undefined, 'OK'); \
+        Object.defineProperty(b, 'text', {get: function () { l.removeAll(); l.add('item', 'B'); return 'OK'; }}); \
+        try { w.show(); } catch (e) { e.message }";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("show: a list's items changed while the dialog was read".into()));
+}
+
+#[test]
 fn a_bounds_value_that_is_not_finite_is_refused_when_shown() {
     let (mut r, _, _) = realm(Vec::new());
     let v = r.run("var w = new Window('dialog'); w.add('button', [0, 0, Infinity, 20]); try { w.show(); } catch (e) { e.name }").unwrap();
