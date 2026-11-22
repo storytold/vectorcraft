@@ -914,6 +914,23 @@ fn add_document_applies_the_profile_file_and_throws_when_it_cannot_be_read() {
 }
 
 #[test]
+fn document_preset_values_count_toward_the_data_a_run_passes() {
+    // A 64 KiB title, set once, then read or handed to addDocument 32 times: 2 MiB, over a 1 MiB limit.
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 20)));
+    let mut s = Session::new();
+    let set = "var p = new DocumentPreset(); p.title = new Array(65537).join('t');";
+    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) p.title;"));
+    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
+    let within = run(&mut s, &format!("{set} for (var i = 0; i < 8; i++) p.title;"));
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
+    for e in [read, added] {
+        assert!(e.contains("passed more data"), "{e}");
+    }
+    within.unwrap();
+    assert!(s.documents().is_empty());
+}
+
+#[test]
 fn wrappers_go_stale_after_delete_and_undo() {
     let (mut s, _, _) = doc();
     let e = failure(&mut s, "var i = app.activeDocument.pageItems[0]; i.remove(); i.name;");
@@ -985,12 +1002,19 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
         .unwrap();
     };
     lock(&mut s, true);
+    // An object on a second, unlocked artboard is not deleted either.
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 300})).unwrap();
+    let c = rect(&mut s, 1100.0, 100.0, 50.0, 50.0);
     let steps = undo_steps(&s);
     let e = failure(&mut s, "app.activeDocument.pageItems[1].remove();");
     assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", b.0)), "{e}");
     let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
     assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&a.0.to_string()), "{e}");
-    assert!(s.active().unwrap().doc.node(a).is_some() && s.active().unwrap().doc.node(b).is_some());
+    let out =
+        log(&mut s, "try { app.activeDocument.pageItems.removeAll(); } catch (e) { vc.log(e.name); } vc.log(app.activeDocument.pageItems.length);");
+    assert_eq!(out, vec![json!("Error"), json!(3)]);
+    let doc = &s.active().unwrap().doc;
+    assert!(doc.node(a).is_some() && doc.node(b).is_some() && doc.node(c).is_some());
     assert_eq!(undo_steps(&s), steps);
     lock(&mut s, false);
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
