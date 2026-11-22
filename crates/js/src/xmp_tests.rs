@@ -315,6 +315,40 @@ fn error_messages_hold_a_bounded_part_of_the_script_text() {
     }
 }
 
+/// With no item in the specific language, `setLocalizedText` changes the one item in the generic
+/// language, and adds the specific language when there are several.
+#[test]
+fn localized_text_updates_a_single_generic_language_item() {
+    let src = "var ns = 'http://example.com/lt/'; XMPMeta.registerNamespace(ns, 'lt'); var m = new XMPMeta();
+        m.setLocalizedText(ns, 'label', null, 'en-GB', 'Colour');
+        m.setLocalizedText(ns, 'label', 'en', 'en-US', 'Color');
+        var one = [m.countArrayItems(ns, 'label'), m.getLocalizedText(ns, 'label', null, 'en-GB'), m.getLocalizedText(ns, 'label', null, 'x-default')];
+        m.setLocalizedText(ns, 'label', null, 'en-AU', 'Colour');
+        m.setLocalizedText(ns, 'label', 'en', 'en-CA', 'Couleur');
+        one.concat([m.countArrayItems(ns, 'label'), m.getLocalizedText(ns, 'label', null, 'en-CA'), m.getLocalizedText(ns, 'label', null, 'en-GB')]).join('|')";
+    assert_eq!(string(src), "2|Color|Color|4|Couleur|Color");
+}
+
+/// A packet read from `rdf:RDF` alone reads back from what it serializes to, which adds the
+/// `x:xmpmeta` element around it, also with values nested near the depth limit.
+#[test]
+fn deeply_nested_values_read_back_after_serializing() {
+    let mut read = 0;
+    for height in 55..=66 {
+        let nest = format!("{}x{}", "<a:q>".repeat(height - 1), "</a:q>".repeat(height - 1));
+        let packet = format!(
+            "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:a='http://a/'><a:p>{nest}</a:p></rdf:Description></rdf:RDF>"
+        );
+        let mut registry = Registry::default();
+        let Ok(meta) = xmp::parse(&packet, &mut registry) else { continue };
+        read += 1;
+        let out = xmp::serialize(&meta, &registry, true);
+        let again = out.as_ref().ok().map(|out| xmp::parse(out, &mut registry));
+        assert_eq!(again, Some(Ok(meta)), "a value {height} elements high");
+    }
+    assert!(read > 0, "some of the packets are read");
+}
+
 #[test]
 fn array_forms_follow_their_options() {
     assert_eq!(Form::from_options(0x200), Form::Bag);

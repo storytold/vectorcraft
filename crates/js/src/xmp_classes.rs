@@ -696,22 +696,25 @@ fn same_lang(lang: Option<&str>, want: &str) -> bool {
     lang.is_some_and(|l| l.eq_ignore_ascii_case(want))
 }
 
+/// Is language tag `lang` the language `generic`, or one of its variants (`generic-…`), ignoring
+/// case? Never for an empty `generic`.
+fn generic_lang(lang: Option<&str>, generic: &str) -> bool {
+    !generic.is_empty()
+        && lang.is_some_and(|l| {
+            l.eq_ignore_ascii_case(generic)
+                || l.len() > generic.len()
+                    && l.get(..generic.len()).is_some_and(|p| p.eq_ignore_ascii_case(generic))
+                    && l.as_bytes().get(generic.len()) == Some(&b'-')
+        })
+}
+
 /// The item of `items` for `specific`, else one whose language starts with `generic`, else the
 /// `x-default` item, else the first.
 fn pick_lang<'a>(items: &'a [Item], generic: &str, specific: &str) -> Option<&'a Item> {
-    let generic_match = |i: &&Item| {
-        !generic.is_empty()
-            && i.lang.as_deref().is_some_and(|l| {
-                l.eq_ignore_ascii_case(generic)
-                    || l.len() > generic.len()
-                        && l.get(..generic.len()).is_some_and(|p| p.eq_ignore_ascii_case(generic))
-                        && l.as_bytes().get(generic.len()) == Some(&b'-')
-            })
-    };
     items
         .iter()
         .find(|i| same_lang(i.lang.as_deref(), specific))
-        .or_else(|| items.iter().find(generic_match))
+        .or_else(|| items.iter().find(|i| generic_lang(i.lang.as_deref(), generic)))
         .or_else(|| items.iter().find(|i| same_lang(i.lang.as_deref(), "x-default")))
         .or_else(|| items.first())
 }
@@ -745,6 +748,7 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let what = "XMPMeta.setLocalizedText";
     let o = this_meta(i, &this, what)?;
     let (ns, name) = array_target(i, args, what)?;
+    let generic = lang(i, &arg(args, 2), what)?;
     let specific = lang(i, &arg(args, 3), what)?;
     if specific.is_empty() || specific.contains(char::is_whitespace) {
         return Err(not_handled(i, what, &specific));
@@ -763,15 +767,16 @@ fn set_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let grow = 2 * (64 + value.len() + specific.len());
     change(i, o, grow, |m, _| {
         let Some(xmp::Value::Array { items, .. }) = m.props.get_mut(at).map(|p| &mut p.value) else { return };
-        set_lang(items, &specific, value);
+        set_lang(items, &generic, &specific, value);
     })?;
     Ok(Value::Undefined)
 }
 
-/// Sets the item of `items` in `specific` to `value`. VectorCraft's own rule: the `x-default` item
-/// is first; it is added with the value when there is none, and follows a change to an item that
-/// had the same text.
-fn set_lang(items: &mut Vec<Item>, specific: &str, value: String) {
+/// Sets the item of `items` in `specific` to `value`, or, when there is none, the one item in the
+/// language `generic` or a variant of it. VectorCraft's own rule: the `x-default` item is first; it
+/// is added with the value when there is none, and follows a change to an item that had the same
+/// text.
+fn set_lang(items: &mut Vec<Item>, generic: &str, specific: &str, value: String) {
     let default = items.iter().position(|i| same_lang(i.lang.as_deref(), "x-default"));
     if specific.eq_ignore_ascii_case("x-default") {
         match default {
@@ -784,7 +789,14 @@ fn set_lang(items: &mut Vec<Item>, specific: &str, value: String) {
         }
         return;
     }
-    let old = items.iter().position(|i| same_lang(i.lang.as_deref(), specific));
+    let old = items.iter().position(|i| same_lang(i.lang.as_deref(), specific)).or_else(|| {
+        let mut generic_items =
+            items.iter().enumerate().filter(|(_, i)| !same_lang(i.lang.as_deref(), "x-default") && generic_lang(i.lang.as_deref(), generic));
+        match (generic_items.next(), generic_items.next()) {
+            (Some((at, _)), None) => Some(at),
+            _ => None,
+        }
+    });
     let follows = match (old, default) {
         (Some(o), Some(d)) => items.get(o).map(|i| &i.text) == items.get(d).map(|i| &i.text),
         (None, Some(_)) => false,

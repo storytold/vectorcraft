@@ -529,10 +529,23 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry) -> Result<P
     } else if let (Some(array), true) = (array_of(&children, scope), own.is_empty()) {
         array
     } else {
+        // A written packet puts a property 3 elements deep (`x:xmpmeta`, `rdf:RDF`,
+        // `rdf:Description`), which may be deeper than the packet read put it.
+        if PROPERTY_DEPTH + height(p) > MAX_DEPTH {
+            return Err(XmpError::TooLarge);
+        }
         other(p, &own, &children, scope, mark)
     };
     scope.truncate(mark);
     Ok(Prop { ns, name: local.to_string(), value })
+}
+
+/// The elements a written packet holds around a property.
+const PROPERTY_DEPTH: usize = 3;
+
+/// The elements `el` nests, itself included.
+fn height(el: &El) -> usize {
+    1 + el.elements().map(height).max().unwrap_or(0)
 }
 
 /// The array of simple items the only child of a property element holds, when it is one.

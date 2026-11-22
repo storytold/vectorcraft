@@ -3081,7 +3081,8 @@ rules for these objects:
   `Script file could not be written` and the `File` keeps its changes. `getXMP`, `getPacketInfo`, `getFileInfo` and `canPutXMP` are available. An `XMPFile` is open only in the
   run that opened it.
 - A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
-  and one nested more than 64 elements deep throws. Members of the help page that are not built yet (iterators,
+  and one nested more than 64 elements deep throws; a value is counted as deep as `serialize()` would write it,
+  under `x:xmpmeta`, `rdf:RDF` and `rdf:Description`. Members of the help page that are not built yet (iterators,
   structure fields, qualifiers, aliases, sorting, byte-array packets and `XMPFile.getFormatInfo`) throw
   `… is not available yet`, and so does a flag, format or path form that is not handled yet.
 
