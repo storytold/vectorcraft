@@ -420,7 +420,7 @@ impl FolderStore {
     /// Does `path` still name `file`? On Unix the two must be the same file (device and inode); on
     /// Windows they must be the same file (volume serial number and file index); elsewhere `path`
     /// must exist. When either file can't be read, it does not.
-    fn still_named(file: &std::fs::File, path: &std::path::Path) -> bool {
+    pub(crate) fn still_named(file: &std::fs::File, path: &std::path::Path) -> bool {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt as _;

@@ -119,6 +119,18 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
 }
 
 #[test]
+fn control_bounds_take_in_the_direction_points() {
+    let (mut s, _, _) = doc();
+    // An arch whose top is at y 40 and whose direction points are at y 20.
+    let id = s.execute("path.create", &json!({"d": "M100 100C100 20 200 20 200 100"})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let out = log(&mut s, "var i = app.activeDocument.selection[0]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
+    let top = |v: &Value| v[1].as_f64().unwrap_or(f64::NAN);
+    assert!(top(&out[0]) < 265.0, "{out:?}");
+    assert_eq!(top(&out[1]), 280.0, "{out:?}");
+}
+
+#[test]
 fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
     let (mut s, a, b) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
@@ -227,6 +239,24 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     let e = failure(&mut s, "app.activeDocument.selection = app.documents[0].pageItems[0];");
     assert!(e.contains("Cannot select"), "{e}");
+}
+
+#[test]
+fn a_failed_selection_assignment_leaves_the_selection_within_the_run() {
+    let (mut s, _, b) = doc();
+    s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
+    // The run goes on after the failed assignment, so nothing it ends with puts the selection back.
+    let c = rect(&mut s, 200.0, 20.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems, open, shut;\
+         for (var i = 0; i < p.length; i++) { if (p[i].locked) shut = p[i]; else if (!p[i].selected) open = p[i]; }\
+         try { d.selection = [open, shut]; vc.log('assigned'); } catch (e) { vc.log(String(e.message).indexOf('Cannot select') >= 0); }\
+         vc.log([d.selection.length, open.selected, d.selection[0].locked]);",
+    );
+    assert_eq!(out, vec![json!(true), json!([1, false, false])]);
+    assert_eq!(s.active().unwrap().selection.objects, vec![c]);
 }
 
 #[test]

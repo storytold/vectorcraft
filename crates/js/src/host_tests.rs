@@ -677,6 +677,27 @@ fn a_host_class_constructor_called_with_new_cannot_wait() {
 }
 
 #[test]
+fn array_methods_visit_every_element_of_a_long_host_list() {
+    let mut r = realm(10_000_000);
+    // `list[i]` is `i` below 5,000, past the span the array methods visit without listing.
+    let index: HostFunction = Rc::new(|a| {
+        let i = a.get(1).and_then(|i| if let Data::Number(n) = i { Some(*n) } else { None });
+        Ok(i.filter(|n| *n < 5_000.0).map_or(Data::Undefined, Data::Number))
+    });
+    let length: HostFunction = Rc::new(|_| Ok(Data::Number(5_000.0)));
+    let members = vec![("length".to_string(), HostMember::Get(length))];
+    let class = HostClass { name: "List".into(), parent: None, members, index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("list".into(), host_ref("List", &[1.0]))]).unwrap();
+    let out = r
+        .run(
+            "var n = 0; Array.prototype.forEach.call(list, function () { n++; });\
+             [Array.prototype.indexOf.call(list, 4999), Array.prototype.lastIndexOf.call(list, 0), n].join()",
+        )
+        .unwrap();
+    assert_eq!(out, JsValue::String("4999,0,5000".into()));
+}
+
+#[test]
 fn a_converted_function_reads_each_argument_as_its_list_says() {
     let mut r = realm(1_000_000);
     let seen: Rc<RefCell<Vec<Vec<Data>>>> = Rc::default();

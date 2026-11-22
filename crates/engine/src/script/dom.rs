@@ -1155,6 +1155,8 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+    // The ids taken so far, so a long list is not searched once for each item.
+    let mut taken: std::collections::HashSet<NodeId> = std::collections::HashSet::with_capacity(list.len());
     for d in list {
         let item = item_of(h, d)?;
         let ok = item.doc.uid == doc.uid
@@ -1163,7 +1165,7 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
         }
-        if !ids.contains(&item.id) {
+        if taken.insert(item.id) {
             ids.push(item.id);
         }
     }
@@ -1427,6 +1429,37 @@ fn item_geometric(h: &Host, a: &[Data]) -> Answer {
 
 fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
+}
+
+/// The visible bounds with the control points of the item's paths, or of the paths in it.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = with_doc(h, item.doc, |_, st| {
+        let controls = st.doc.node(item.id).and_then(control_points_box);
+        let r = vectorcraft_geom::union_opt(st.doc.bounds_of(&[item.id], true), controls)
+            .ok_or_else(|| HostError::Error("the object has no bounds".into()))?;
+        Ok((r, frame(st)?))
+    })?;
+    Ok(f.bounds(h.dom.coords.get(), r))
+}
+
+/// The box of the anchors and direction points of every path in `n`, taking the members its
+/// geometric bounds take: a clipping group or layer counts its clipping path only, a group or
+/// compound path its editing children (not a Shaper group's source shapes), and a layer its
+/// visible ones.
+fn control_points_box(n: &vectorcraft_doc::Node) -> Option<Rect> {
+    let union = |nodes: &mut dyn Iterator<Item = &Arc<vectorcraft_doc::Node>>| {
+        nodes.fold(None, |acc, c| vectorcraft_geom::union_opt(acc, control_points_box(c)))
+    };
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => union(&mut children.iter().take(1)),
+        NodeKind::Layer { .. } => union(&mut n.editing_children().iter().filter(|c| c.visible)),
+        NodeKind::Group { .. } | NodeKind::Compound { .. } => union(&mut n.editing_children().iter()),
+        // A live object (a blend, envelope, repeat and the like) draws other paths than the ones it
+        // holds, so it adds its visible bounds only.
+        _ => None,
+    }
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -1908,7 +1941,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),
