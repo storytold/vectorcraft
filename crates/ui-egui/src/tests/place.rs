@@ -70,8 +70,9 @@ fn app() -> VectorcraftApp {
 
 /// File → Place… with `paths` chosen in the file picker.
 fn place_picked_all(app: &mut VectorcraftApp, ctx: &egui::Context, paths: &[&str]) {
-    scripted(app).answer(paths);
+    let picker = scripted(app);
     app.run("file.place", json!({})).unwrap();
+    picker.answer(paths);
     poll(app, ctx);
 }
 
@@ -598,9 +599,10 @@ fn the_control_bars_file_name_relinks_the_image() {
     }
     let dir = Folder::new("ui-place-relink");
     let other = dir.file("blue.png", &png(60, 30, 72.0));
-    scripted(&mut app).answer(&[&other]);
+    let picker = scripted(&mut app);
     let p = item(&mut app, &ctx, "Replace…");
     click_control(&mut app, &ctx, p);
+    picker.answer(&[&other]);
     poll(&mut app, &ctx);
     let image = selected_image(&app);
     let NodeKind::Image(im) = &image.kind else { panic!("an image") };

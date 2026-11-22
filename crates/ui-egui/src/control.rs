@@ -155,6 +155,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "tool": app.session.tool_id(),
         "toolOptions": app.session.tool_options(),
         "ui": ui,
+        // The window's open dialogs, the top one last, with their fields.
+        "dialogs": app.dialogs().map_or_else(|| json!([]), |dialogs| dialogs.with(|host| craft::automation::dialogs::inspect(host))),
         // Not saved with the UI state, so not in `ui`: 0 normal … 3 Presentation Mode.
         "screenMode": app.ui.screen_mode,
         // The Contextual Task Bar: pinned (not saved either); `ui.locate` finds where it shows.

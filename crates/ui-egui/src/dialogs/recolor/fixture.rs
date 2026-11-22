@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use craft::behavior::PartRef;
 use craft::ui::dialog::{DialogHost, DialogId, HeldOk, dialog_id};
+use craft::ui::runtime::access::Role;
 use craft::ui::testing::{Fixture, Room, Target};
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, Vec2};
 use serde_json::{Value, json};
@@ -136,6 +137,12 @@ impl Recolor {
     /// The control named `label`.
     pub(crate) fn by_label(&self, label: &str) -> Option<Target> {
         self.fixture.by_label(label)
+    }
+
+    /// The slider named `label`: a channel's rail, not the number field that shares its name.
+    pub(crate) fn slider(&self, label: &str) -> Option<Target> {
+        let tree = self.fixture.tree();
+        self.fixture.by_role(Role::SLIDER).into_iter().find(|t| tree.name_of(t.node) == Some(label))
     }
 
     /// The control named `label`; a trial without it fails.

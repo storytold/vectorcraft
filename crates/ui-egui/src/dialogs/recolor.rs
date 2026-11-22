@@ -201,6 +201,9 @@ const COMPS: &str = "__comps";
 /// The `__` controls `ui.dialog.set` can set: the selected rows, Randomize's seed and the New Color Group menu's
 /// request.
 const SETTABLE: [&str; 3] = ["__sel", "__seed", SAVE_GROUP];
+/// The fields `ui.dialog.set` can set while they are unset: Preview, the Color Groups buttons, the Edit tab's slider
+/// mode, display, wheel tool and wheel axes.
+const UNSET_FIELDS: [&str; 6] = ["preview", GROUP_ACTION, "sliderMode", "display", WHEEL_TOOL, WHEEL_AXES];
 
 /// The columns of the Assign tab's rows: the current colors, the arrow that excludes the row, the
 /// new color and its hex.
@@ -1763,7 +1766,7 @@ impl RecolorDialog {
         let known = if field.starts_with("__") {
             SETTABLE.contains(&field)
         } else {
-            self.fields.fields.contains_key(field) || field == "preview" || field == GROUP_ACTION
+            self.fields.fields.contains_key(field) || UNSET_FIELDS.contains(&field)
         };
         if !known {
             return Err(FieldRefusal::Unknown.message(field));

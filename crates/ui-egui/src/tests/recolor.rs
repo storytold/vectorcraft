@@ -14,7 +14,7 @@ use crate::dialogs::recolor::fixture::Recolor;
 use crate::{VectorcraftApp, dialogs};
 
 // PLAN: assumed control names: the wheel's accessible name is "Color wheel" / "Segmented color wheel", its markers are
-// named by their `#RRGGBB` hex, menu items carry no leading padding, and the Assign row's hex field is "Color N".
+// named by their `#rrggbb` hex, menu items carry no leading padding, and the Assign row's hex field is "Color N".
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -117,7 +117,7 @@ fn has(r: &Recolor, label: &str) -> bool {
 
 /// Clicks the channel rail named `name` at `at` (0 to 1) of its width.
 fn rail(r: &mut Recolor, name: &str, at: f32) {
-    let rail = rect(r, name);
+    let rail = r.slider(name).unwrap_or_else(|| panic!("no slider named {name}")).rect;
     click(r, pos2(rail.left() + at * rail.width(), rail.center().y));
 }
 
@@ -133,11 +133,11 @@ fn wheel_at(r: &Recolor, hue: f32, s: f32) -> Pos2 {
     polar(c, hue, radius * s)
 }
 
-/// The marker's name: the hex of the colour `to`.
+/// The marker's name: the lowercase hex of the colour `to`, as the wheel names it.
 fn hex_of(to: &Value) -> String {
     let [r, g, b] = vectorcraft_engine::cmd::color_value(to).unwrap().to_rgb();
     let byte = |v: f32| (v * 255.0).round() as u8;
-    format!("#{:02X}{:02X}{:02X}", byte(r), byte(g), byte(b))
+    format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b))
 }
 
 /// Where the wheel draws row `i`'s marker.

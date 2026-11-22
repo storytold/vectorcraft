@@ -1262,7 +1262,7 @@ fn hide_panel(app: &mut VectorcraftApp, panel: String) {
 
 /// The closed panels of a `ui.inspect` result's UI state, in order.
 fn hidden_panels(ui: &Value) -> Vec<String> {
-    let hidden = ui["dock_workspace"]["hidden"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let hidden = ui["dock"]["hidden"].as_array().map(Vec::as_slice).unwrap_or_default();
     hidden.iter().filter_map(|entry| entry[0].as_str().map(str::to_owned)).collect()
 }
 

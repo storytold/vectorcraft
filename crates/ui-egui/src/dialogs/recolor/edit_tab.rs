@@ -98,8 +98,8 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
         let colors: Vec<Srgba> = active.iter().map(|&i| srgba(&rows.get(i).and_then(to_color).unwrap_or_default())).collect();
         let at = |row: Option<usize>| row.and_then(|r| active.iter().position(|&i| i == r));
         let look = if segmented { DiscLook::Segmented } else { DiscLook::Smooth };
-        let words = Env::of(ui).words::<HarmonyWords>();
-        let out = HarmonyWheel::new(words.harmony.clone(), &colors).selected_marker(at(sel)).base(at(base)).look(look).radius(axes).show(ui);
+        let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
+        let out = HarmonyWheel::new(name, &colors).selected_marker(at(sel)).base(at(base)).look(look).radius(axes).show(ui);
         // A right-click on the disc: a marker's menu, or Add New Color at the point, tied to the spoke it is on.
         if let Some(hit) = out.context {
             let row = |k: Option<usize>| k.and_then(|k| active.get(k)).copied();
