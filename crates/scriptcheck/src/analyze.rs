@@ -271,13 +271,58 @@ struct ObjectValue {
     name: String,
     /// The bracket depth inside its `{`.
     depth: usize,
-    /// The document methods writing a file that it defines with a function expression, a bit each
-    /// ([`Analyzer::writers`]).
+    /// The document methods writing a file that it defines with a single function expression as the
+    /// key's whole value, a bit each ([`Analyzer::writers`]).
     bits: u8,
     /// It is the value of the first name a `var` statement declares, and the statement is directly
     /// in a function body or the global code, not in a block and not after `if (…)`, `else`, `do` or
     /// a loop's parentheses: only then does the variable hold `bits` after it.
     whole: bool,
+    /// The bit of the method whose value is being read, and how far that value has been read.
+    value: Option<(u8, Value)>,
+}
+
+/// How far the value of an object literal's key that names a document method writing a file has been
+/// read, by the tokens directly inside the literal's braces.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Value {
+    /// `function`.
+    Function,
+    /// The function expression's name.
+    Name,
+    /// The `(` of its parameters.
+    Params,
+    /// The `{` of its body: the value is the function expression when `,` or the literal's `}` comes
+    /// next.
+    Body,
+    /// Anything else, or anything after the body.
+    Other,
+}
+
+impl ObjectValue {
+    /// `t`, a token directly inside the literal's braces: a `,` or the closing `}` ends the value
+    /// being read, and gives the literal the method only when the value is a single function
+    /// expression (`function () {} && d.saveAs`, `function () {}(f)` and `function () {}.call` give
+    /// it nothing).
+    fn step(&mut self, t: &Sig) {
+        let Some((bit, value)) = self.value else { return };
+        if t.is(",") || t.is("}") {
+            if value == Value::Body {
+                self.bits |= bit;
+            } else {
+                self.bits &= !bit;
+            }
+            self.value = None;
+            return;
+        }
+        let next = match value {
+            Value::Function if t.kind == T::Ident => Value::Name,
+            Value::Function | Value::Name if t.is("(") => Value::Params,
+            Value::Params if t.is("{") => Value::Body,
+            _ => Value::Other,
+        };
+        self.value = Some((bit, next));
+    }
 }
 
 /// What a value the check follows holds: a member chain, or a File or Folder object (`folder` when it
@@ -753,6 +798,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         // `t` ends, holds the value, or nothing the check follows, before `t` starts a member chain or
         // closes a function body.
         self.settle_groups(&t);
+        self.settle_literal(&t);
         // A line break ends a `var` statement when it is outside the statement's brackets, and the
         // tokens on either side of it don't go on with the expression.
         if t.nl && self.var_depth == Some(self.depth()) && !goes_on_after(self.h[0]) && !goes_on_with(&t) {
@@ -775,7 +821,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.group_step(&t, started, before);
         self.paren_step(&t, before);
         self.assignment(&t, started);
-        self.object_key(&t);
+        self.object_key(&t, before);
         self.features(&t);
         self.newer(&t);
         self.module_check(&t);
@@ -1330,7 +1376,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !word(before, "else") && !word(before, "do"));
                 let whole = word(declaration, "var") && starts && depth.checked_sub(1) == Some(body);
                 if self.objects.len() < self.acc.limits.nesting {
-                    self.objects.push(ObjectValue { name: a.name, depth, bits: 0, whole });
+                    self.objects.push(ObjectValue { name: a.name, depth, bits: 0, whole, value: None });
                 }
             } else {
                 self.unbind(&a.name);
@@ -1370,20 +1416,29 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// `t` in an object literal assigned to a variable: a function expression directly inside its
-    /// braces as the value of a key that names a document method writing a file
-    /// (`{saveAs: function …}`, `{'exportFile': function …}`) counts the method for the literal, and
-    /// any other value of that key (`{saveAs: d.saveAs}`) takes it out again. A closing brace ends
-    /// the literals it closes. The variable of a [`ObjectValue::whole`] literal joins
-    /// [`Analyzer::writers`] only when the token after its `}` ends the value (`;`, `,` or a line
-    /// break), so a call inside the literal, and a value that goes on (`{…} && d`), see the variable
-    /// as it was.
-    fn object_key(&mut self, t: &Sig<'s>) {
+    /// The variable of the [`ObjectValue::whole`] literal whose `}` the token before `t` was joins
+    /// [`Analyzer::writers`] when `t` ends the value (`;`, `,` or a line break). It is read before `t`
+    /// closes a function body, so a literal given to the body's own variable stays inside the body.
+    fn settle_literal(&mut self, t: &Sig<'s>) {
         if let Some((name, bits)) = self.closed.take()
             && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
             && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
         {
             self.writers.insert(name, bits);
+        }
+    }
+
+    /// `t` in an object literal assigned to a variable, `before` the bracket depth before `t`: a single
+    /// function expression directly inside its braces as the whole value of a key that names a
+    /// document method writing a file (`{saveAs: function … {…}, …}`, `{'exportFile': function … {…}}`)
+    /// counts the method for the literal, and any other value of that key (`{saveAs: d.saveAs}`,
+    /// `{saveAs: function () {} && d.saveAs}`) takes it out again ([`ObjectValue::step`]). A closing
+    /// brace ends the literals it closes. The variable joins [`Analyzer::writers`] only after the
+    /// literal ([`Analyzer::settle_literal`]), so a call inside the literal, and a value that goes on
+    /// (`{…} && d`), see the variable as it was.
+    fn object_key(&mut self, t: &Sig<'s>, before: usize) {
+        if let Some(o) = self.objects.last_mut().filter(|o| o.depth == before) {
+            o.step(t);
         }
         let depth = self.depth();
         while let Some(o) = self.objects.pop_if(|o| o.depth > depth) {
@@ -1401,14 +1456,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             _ => return,
         };
         let Some(i) = catalog::DOM_FILE_WRITES.iter().position(|m| *m == key.as_ref()) else { return };
-        // A value that starts with a bracket has opened it already: the key is at the depth outside it.
-        let at = if t.is("(") || t.is("[") || t.is("{") { depth.saturating_sub(1) } else { depth };
-        let Some(o) = self.objects.last_mut().filter(|o| o.depth == at) else { return };
-        if t.word("function") {
-            o.bits |= 1 << i;
-        } else {
-            o.bits &= !(1 << i);
-        }
+        // A value that starts with a bracket has opened it already: the key is at the depth before it.
+        let Some(o) = self.objects.last_mut().filter(|o| o.depth == before) else { return };
+        o.value = Some((1 << i, if t.word("function") { Value::Function } else { Value::Other }));
     }
 
     /// The variable that `t` changes to a number or a string, nothing the check follows, and whether

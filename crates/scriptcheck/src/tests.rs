@@ -645,6 +645,33 @@ fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 9, 11, 13, 14, 17][..]));
 }
 
+/// A `saveAs` key's value is a method of the script's own only when the whole value is one function
+/// expression: a value that goes on after the function's body, and a literal inside another, leave
+/// `saveAs` writing the file. A literal given to a function body's own variable at the end of the body
+/// leaves the outer variable as it was.
+#[test]
+fn a_value_that_goes_on_after_the_function_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {} && app.activeDocument.saveAs};\n",
+        "var b = {saveAs: function () {}(f), n: 1};\n",
+        "var c = {saveAs: function () {} ? x : y};\n",
+        "var e = {saveAs: function () {}.call};\n",
+        "var k = {exportFile: function w(x) { return x; }, saveAs: function () {}};\n",
+        "var m = {o: {saveAs: function () {}}};\n",
+        "var q = app.activeDocument; function r() { var q = {saveAs: function () {}}\n",
+        "}\n",
+        "a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+        "e.saveAs(f);\n",
+        "k.saveAs(f); k.exportFile(f);\n",
+        "m.saveAs(f);\n",
+        "q.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[10, 11, 12, 13, 15, 16][..]));
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]
