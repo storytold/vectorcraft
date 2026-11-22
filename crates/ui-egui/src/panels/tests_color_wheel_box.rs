@@ -66,7 +66,10 @@ fn the_hue_box_picks_saturation_across_and_brightness_up() {
 #[test]
 fn a_drag_in_the_field_is_one_undo_step_and_the_strip_sets_the_channel() {
     let mut p = Panel::new(app(json!([0.6, 0.3, 0.3]), "hue"));
-    let (undo, before) = (undo_len(&p.app()), hsb(&fill(&p.app())));
+    let (undo, before) = {
+        let app = p.app();
+        (undo_len(&app), hsb(&fill(&app)))
+    };
     p.set("Hue", 180.0);
     let after = hsb(&fill(&p.app()));
     assert!((after[0] - 180.0).abs() < 2.0 && (after[1] - before[1]).abs() < 0.01 && (after[2] - before[2]).abs() < 0.01, "{after:?}");

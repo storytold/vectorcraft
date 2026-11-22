@@ -696,7 +696,14 @@ mod tests {
         let mut p = panel_with_setting(false);
         assert!(!p.app().ui.shape_modes_compound);
         p.click("Unite");
-        assert_eq!((objects(&p.app()).len(), compound_shapes(&p.app())), (1, 0), "a click is permanent");
+        assert_eq!(
+            {
+                let app = p.app();
+                (objects(&app).len(), compound_shapes(&app))
+            },
+            (1, 0),
+            "a click is permanent"
+        );
         let mut p = panel_with_setting(false);
         p.click_with("Unite", Modifiers::ALT);
         assert_eq!(compound_shapes(&p.app()), 1, "Alt makes a compound shape");
@@ -709,7 +716,14 @@ mod tests {
         assert_eq!(compound_shapes(&p.app()), 1, "a click makes a compound shape");
         let mut p = panel_with_setting(true);
         p.click_with("Unite", Modifiers::ALT);
-        assert_eq!((objects(&p.app()).len(), compound_shapes(&p.app())), (1, 0), "Alt is permanent");
+        assert_eq!(
+            {
+                let app = p.app();
+                (objects(&app).len(), compound_shapes(&app))
+            },
+            (1, 0),
+            "Alt is permanent"
+        );
 
         // Toggled off again, and the check mark follows.
         p.app().run("window.pathfinder.compoundShapes", json!({})).unwrap();

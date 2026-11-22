@@ -1262,7 +1262,14 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     assert!(!matches!(panel.value("Rotate").as_deref(), Some("30°" | "45°")), "Rotate is blank");
     let depth = undo_depth(&panel.app());
     panel.click("Bottom Right");
-    assert_eq!((pivot_rotate(&panel.app(), &group), pivot_rotate(&panel.app(), &other)), ((8, 30.0), (8, 45.0)), "both groups' Pivot");
+    assert_eq!(
+        {
+            let app = panel.app();
+            (pivot_rotate(&app, &group), pivot_rotate(&app, &other))
+        },
+        ((8, 30.0), (8, 45.0)),
+        "both groups' Pivot"
+    );
     assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step for both groups");
 }
 
@@ -1286,7 +1293,14 @@ fn detach_takes_the_chosen_object_off_the_path() {
     let depth = undo_depth(&panel.app());
     assert!(!panel.enabled("Detach"));
     panel.click("Detach");
-    assert_eq!((on_path(&panel.app(), &group), undo_depth(&panel.app())), (vec![first, second], depth), "no object chosen: dimmed");
+    assert_eq!(
+        {
+            let app = panel.app();
+            (on_path(&app, &group), undo_depth(&app))
+        },
+        (vec![first, second], depth),
+        "no object chosen: dimmed"
+    );
     let other = objects_on_path(&mut panel.app(), 250.0, 0.0);
     panel.app().run("object.objectsOnPath.selectMember", json!({"member": first})).unwrap();
     panel.app().run("select.add", json!({"ids": [other]})).unwrap();
@@ -1332,7 +1346,13 @@ fn vertical_alignment_buttons_align_the_selected_area_type() {
     assert!(panel.shows("Paragraph"));
     let undo = undo_depth(&panel.app());
     panel.click("Align Center");
-    assert_eq!((align(&panel.app(), a), align(&panel.app(), b)), (VerticalAlign::Center, VerticalAlign::Center));
+    assert_eq!(
+        {
+            let app = panel.app();
+            (align(&app, a), align(&app, b))
+        },
+        (VerticalAlign::Center, VerticalAlign::Center)
+    );
     assert_eq!(undo_depth(&panel.app()), undo + 1, "one undo step for both frames");
     // Differing alignments show none selected.
     panel.app().run("text.areaOptions", json!({"ids": [b], "verticalAlign": "bottom"})).unwrap();

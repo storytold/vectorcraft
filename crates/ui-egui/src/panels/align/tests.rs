@@ -584,7 +584,10 @@ fn a_key_anchor_is_chosen_named_and_aligned_to() {
     let mut panel = Panel::new(app, show);
     panel.frame();
     assert_eq!(
-        (align_to(&panel.app()), align_to_checks(&panel.app())),
+        {
+            let app = panel.app();
+            (align_to(&app), align_to_checks(&app))
+        },
         (AlignTo::Key, vec![Some(false), Some(true), Some(false)]),
         "chosen automatically"
     );
@@ -648,7 +651,13 @@ fn the_align_buttons_align_the_selected_artboards() {
     assert_eq!(panel.app().session.active().unwrap().history.undo.len(), steps + 1, "one undo step");
     panel.app().run("edit.undo", json!({})).unwrap();
     panel.click("Align to Key Object");
-    assert!(panel.app().ui.align_to == AlignTo::Selection && !has_key(&panel.app()), "Align to Key Object is off");
+    assert!(
+        {
+            let app = panel.app();
+            app.ui.align_to == AlignTo::Selection && !has_key(&app)
+        },
+        "Align to Key Object is off"
+    );
     panel.click("Align to Artboard");
     assert_eq!(panel.app().ui.align_to, AlignTo::Artboard);
     panel.click("Horizontal Align Left");

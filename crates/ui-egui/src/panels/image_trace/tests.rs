@@ -559,7 +559,13 @@ fn document_library_colors_lists_the_documents_color_groups() {
     // Another library clears the group, and the row goes.
     pick(&mut panel, "Colors:", "Brand");
     pick(&mut panel, "Library:", &lib_label);
-    assert_eq!((param(&panel.app(), "library"), param(&panel.app(), "colorGroup")), (Some(json!(lib)), Some(Value::Null)));
+    assert_eq!(
+        {
+            let app = panel.app();
+            (param(&app, "library"), param(&app, "colorGroup"))
+        },
+        (Some(json!(lib)), Some(Value::Null))
+    );
     assert!(!panel.shows("Colors:"));
     // Another palette clears the group too, and traces again (the object stores the settings of
     // a trace that was made).
@@ -567,13 +573,25 @@ fn document_library_colors_lists_the_documents_color_groups() {
     pick(&mut panel, "Colors:", "Brand");
     assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
     pick(&mut panel, "Palette:", "Limited");
-    assert_eq!((param(&panel.app(), "palette"), param(&panel.app(), "colorGroup")), (Some(json!("limited")), Some(Value::Null)));
+    assert_eq!(
+        {
+            let app = panel.app();
+            (param(&app, "palette"), param(&app, "colorGroup"))
+        },
+        (Some(json!("limited")), Some(Value::Null))
+    );
     // Another mode clears it too, and traces again.
     pick(&mut panel, "Palette:", "Document Library");
     pick(&mut panel, "Colors:", "Brand");
     assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
     pick(&mut panel, "Mode:", "Flat Logo");
-    assert_eq!((param(&panel.app(), "mode"), param(&panel.app(), "colorGroup")), (Some(json!("logo")), Some(Value::Null)));
+    assert_eq!(
+        {
+            let app = panel.app();
+            (param(&app, "mode"), param(&app, "colorGroup"))
+        },
+        (Some(json!("logo")), Some(Value::Null))
+    );
 }
 
 #[test]
@@ -619,7 +637,10 @@ fn a_color_group_the_active_document_lacks_is_all() {
 #[test]
 fn create_strokes_traces_again_and_keeps_one_kind_on() {
     let mut panel = panel_over(traced_app());
-    let create = |panel: &Panel| (param(&panel.app(), "fills"), param(&panel.app(), "strokes"));
+    let create = |panel: &Panel| {
+        let app = panel.app();
+        (param(&app, "fills"), param(&app, "strokes"))
+    };
     for s in ["Create:", "Fills", "Strokes", "Stroke"] {
         assert!(panel.shows(s), "{s}");
     }

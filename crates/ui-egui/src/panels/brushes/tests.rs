@@ -404,7 +404,11 @@ fn selecting_other_art_ends_the_brush_multi_selection() {
     t.answer(true);
     let left = names(&t.app());
     assert!(left.contains(&three[0]) && !left.contains(&three[1]) && left.contains(&three[2]), "{left:?}");
-    assert_eq!((brush_of(&t.app(), a).as_deref(), brush_of(&t.app(), c)), (Some(three[0].as_str()), None));
+    let brushes = {
+        let app = t.app();
+        (brush_of(&app, a), brush_of(&app, c))
+    };
+    assert_eq!((brushes.0.as_deref(), brushes.1), (Some(three[0].as_str()), None));
 }
 
 /// After other art is selected, a Shift-click selects the range from that art's brush, not from
@@ -454,13 +458,28 @@ fn delete_button_cancel_keeps_selected_brushes_strokes_and_history() {
     let mut t = Trial::new();
     let rect = rect(&t, 10.0);
     let three = select_three(&mut t, rect);
-    let before = (names(&t.app()), brush_of(&t.app(), rect), undo_count(&t.app()));
+    let before = {
+        let app = t.app();
+        (names(&app), brush_of(&app, rect), undo_count(&app))
+    };
     delete_button(&mut t, Modifiers::NONE);
     assert_delete_dialog(&t, IN_USE);
-    assert_eq!((names(&t.app()), brush_of(&t.app(), rect), undo_count(&t.app())), before);
+    assert_eq!(
+        {
+            let app = t.app();
+            (names(&app), brush_of(&app, rect), undo_count(&app))
+        },
+        before
+    );
     t.answer(false);
     assert_eq!(t.dialog(), None);
-    assert_eq!((names(&t.app()), brush_of(&t.app(), rect), undo_count(&t.app())), before);
+    assert_eq!(
+        {
+            let app = t.app();
+            (names(&app), brush_of(&app, rect), undo_count(&app))
+        },
+        before
+    );
     assert_eq!(before.1.as_deref(), Some(three[0].as_str()));
     t.run("brush.delete", json!({"name": three[0]}));
     assert_eq!(t.dialog(), None);

@@ -130,7 +130,14 @@ fn create_spine_sets_what_new_blends_get_whatever_is_selected() {
     p.click("Create Spine:");
     p.click("Never");
     assert_eq!(mode(&p), "never");
-    assert_eq!((spec(&p.app(), id), undo_depth(&p.app())), (before, depth), "the selected blend and the undo history stay as they were");
+    assert_eq!(
+        {
+            let app = p.app();
+            (spec(&app, id), undo_depth(&app))
+        },
+        (before, depth),
+        "the selected blend and the undo history stay as they were"
+    );
     // Nothing selected: the select still sets the setting.
     p.app().run("select.none", json!({})).unwrap();
     p.click("Create Spine:");
@@ -198,9 +205,15 @@ fn ramp_and_shift_edit_every_selected_blend_and_keep_their_other_options() {
     app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
     let mut p = Panel::new(app, show);
     for name in ["Ramp:", "Shift:"] {
-        let (before_a, before_b, depth) = (spec(&p.app(), a), spec(&p.app(), b), undo_depth(&p.app()));
+        let (before_a, before_b, depth) = {
+            let app = p.app();
+            (spec(&app, a), spec(&app, b), undo_depth(&app))
+        };
         p.type_into(name, "75");
-        let (after_a, after_b) = (spec(&p.app(), a), spec(&p.app(), b));
+        let (after_a, after_b) = {
+            let app = p.app();
+            (spec(&app, a), spec(&app, b))
+        };
         assert_eq!(undo_depth(&p.app()), depth + 1, "one undo step for both blends");
         // The value typed goes to both; each keeps its own spacing, type and the other value.
         if name == "Ramp:" {
