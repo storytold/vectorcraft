@@ -2020,6 +2020,10 @@ impl SelectionTool {
         self.state = State::Moving { start, press, hold, grip, began: true, deselect: None, key: None, exclude: None };
         self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
         let mut params = json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt });
+        // An Alt-drag copy follows Draw Behind.
+        if m.alt {
+            params["drawBehind"] = json!(true);
+        }
         if backquote {
             params["objects"] = json!(false);
             params["patterns"] = json!(true);
