@@ -726,6 +726,10 @@ impl DocState {
         }
         if request.is_none() && now.last_selected != before.last_selected {
             request = now.last_selected.map(LayersReveal::Selected);
+            // An emptied selection leaves no object to locate.
+            if request.is_none() && matches!(self.layers_reveal, Some(LayersReveal::Selected(_))) {
+                self.layers_reveal = None;
+            }
         }
         if request.is_some() {
             self.layers_reveal = request;

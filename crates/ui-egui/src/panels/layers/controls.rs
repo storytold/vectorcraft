@@ -7,7 +7,6 @@ use craft::ui::menu::{MenuRow, PanelRow};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::sections::{FooterAction, FooterBar};
-use vectorcraft_engine::LayersReveal;
 
 // PLAN: assumed document-panels-w7's `model` exports `DocLayers` (accessors used here: `doc() -> &Arc<Document>`,
 // `state() -> &DocState`, `root() -> Option<NodeId>`, `layers_only() -> bool`, `guides() -> &[usize]`,
@@ -202,19 +201,13 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
 
 /// Run this panel's own menu command: `ui.layers.recall {name}` recalls a saved selection and
 /// answers `None` for any other id. The panel's own command reveals nothing for the selection it
-/// makes (the request `select.recall` raised for the last selected object is dropped).
+/// makes ([`super::unrevealed`]).
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if id != RECALL {
         return None;
     }
     let Some(name) = params.get("name").and_then(Value::as_str) else { return Some(Err("`name` must be a name".into())) };
-    let r = app.run("select.recall", json!({ "name": name }));
-    if let Some(st) = app.session.active_mut()
-        && matches!(st.layers_reveal, Some(LayersReveal::Selected(_)))
-    {
-        st.layers_reveal = None;
-    }
-    Some(r)
+    Some(super::unrevealed(app, |app| app.run("select.recall", json!({ "name": name }))))
 }
 
 /// An entry of a row menu whose pick is the command `id` with `params`.
@@ -486,6 +479,11 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
 /// is deleted. In isolation mode a row outside the isolated art is an error, and nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
 /// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
 pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    super::unrevealed(app, |app| delete_rows(app, p))
+}
+
+/// [`delete`], which locates nothing.
+fn delete_rows(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
     let key = "doc";
     let doc = match p.get(key) {

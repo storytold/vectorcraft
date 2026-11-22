@@ -522,7 +522,8 @@ impl LayerTree for LayerRows {
     }
 
     /// Rows land in a layer or group that takes them ([`LayerRows::lands_in`]): ruler guides only on
-    /// a layer, never at the top level; nothing outside the isolated art; a spine never moves.
+    /// a layer (into a group, on the layer holding it), never at the top level; nothing outside the
+    /// isolated art; a spine never moves.
     fn accepts_drop(&self, mv: &ReorderMove<LayerRowKey<RowId>>, _: Mods) -> bool {
         let rows: Vec<RowId> = mv
             .keys
@@ -546,7 +547,13 @@ impl LayerTree for LayerRows {
         let objects = !guides && !moving.iter().any(|id| self.doc.node(*id).is_some_and(Node::is_layer));
         match &mv.parent {
             None => self.root.is_none() && !guides,
-            Some(LayerRowKey::Layer(RowId::Node(group))) => self.lands_in(*group, &moving, objects),
+            Some(LayerRowKey::Layer(RowId::Node(group))) => {
+                let into = match self.doc.node(*group) {
+                    Some(n) if guides && !n.is_layer() => self.doc.layer_containing(*group),
+                    _ => Some(*group),
+                };
+                into.is_some_and(|into| self.lands_in(into, &moving, objects))
+            }
             Some(_) => false,
         }
     }

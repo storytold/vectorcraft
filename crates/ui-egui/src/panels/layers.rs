@@ -215,6 +215,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut picks = Vec::new();
     let mut target_click = None;
     let thumbnails = thumbs::layer_thumbnails(ui.ctx(), uid);
+    // A drag's previews keep the shown pictures; the rows render once it ends.
+    thumbnails.hold(app.session.active().is_some_and(|st| st.interaction.is_some()) || app.session.tool_busy());
     let settings = app.ui.layers_panel.settings();
     refresh_rows(app);
     let (Some(st), Some((_, kept))) = (app.session.active(), &app.ui.layers_ui.rows) else { return };
@@ -260,6 +262,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         st.layers_reveal = None;
     }
+}
+
+/// Runs `f`, a change the Layers panel makes itself, which reveals nothing: the rows it changes are
+/// in view, and Locate Selected Objects follows selections made on the canvas or by a command. The
+/// request `f` raised is dropped; one pending before stands.
+fn unrevealed<T>(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp) -> T) -> T {
+    let before = app.session.active().map(|st| (st.uid, st.layers_reveal));
+    let r = f(app);
+    if let Some(st) = app.session.active_mut()
+        && let Some((_, request)) = before.filter(|(uid, _)| *uid == st.uid)
+    {
+        st.layers_reveal = request;
+    }
+    r
 }
 
 /// Lists the active document's rows again when what they are listed from changed.

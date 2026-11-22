@@ -2,6 +2,7 @@ use super::*;
 use crate::panels::first_selected;
 use crate::tests::panel_harness::Panel;
 use craft::behavior::Mixed;
+use crate::panels::swatches::DOCUMENT_SWATCHES as DOCUMENT_SWATCHES_NAME;
 use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
 /// The name of the eye button next to View.
@@ -521,7 +522,7 @@ fn the_palette_shows_in_color_mode_and_traces_again() {
     panel.click("Palette:");
     panel.click("Document Library");
     assert_eq!(param(&panel.app(), "palette"), Some(json!("documentLibrary")));
-    assert_eq!(panel.value("Library:").as_deref(), Some(DOCUMENT_SWATCHES));
+    assert_eq!(panel.value("Library:").as_deref(), Some(DOCUMENT_SWATCHES_NAME));
     // Full Tone's Colors is how many, Less (0%) … More (100%).
     panel.click("Palette:");
     panel.click("Full Tone");
@@ -569,7 +570,7 @@ fn document_library_colors_lists_the_documents_color_groups() {
     assert!(!panel.shows("Colors:"));
     // Another palette clears the group too, and traces again (the object stores the settings of
     // a trace that was made).
-    pick(&mut panel, "Library:", DOCUMENT_SWATCHES);
+    pick(&mut panel, "Library:", DOCUMENT_SWATCHES_NAME);
     pick(&mut panel, "Colors:", "Brand");
     assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
     pick(&mut panel, "Palette:", "Limited");

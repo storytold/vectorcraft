@@ -7,6 +7,7 @@ use craft::layers::ui::filter::FilterObject;
 use craft::layers::ui::panel::{LayerColumn, LayerDrop, LayerMove, LayerPosition, LayerSelect, LayersEvent};
 use craft::layers::ui::tree::{LayerRowKey, LayerTree};
 use craft::ui::contract::ReorderMove;
+use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use egui::vec2;
 use serde_json::json;
@@ -108,9 +109,9 @@ fn listed(app: &VectorcraftApp) -> Vec<NodeId> {
     out
 }
 
-/// Whether the command's state in the panel menu is enabled.
+/// Whether the panel menu's row of `command` is enabled.
 fn enabled(app: &VectorcraftApp, command: &str) -> bool {
-    menu_states(app).get(&CommandRef::new(command)).is_some_and(CommandState::is_enabled)
+    menu_states(app).get(&menu_command(app, command)).is_some_and(CommandState::is_enabled)
 }
 
 /// The panel menu's command states.
@@ -122,15 +123,31 @@ fn menu_states(app: &VectorcraftApp) -> CommandStates {
 
 /// Whether the panel menu titles Locate `title`.
 fn locate_titled(app: &VectorcraftApp, title: &str) -> bool {
-    menu_states(app).get(&CommandRef::new("layer.locate")).is_some_and(|s| *s == CommandState::new().enabled(s.is_enabled()).title(title))
+    let locate = menu_command(app, "layer.locate");
+    menu_states(app).get(&locate).is_some_and(|s| *s == CommandState::new().enabled(s.is_enabled()).title(title))
 }
 
-/// A menu command run as the panel menu runs it: the panel's own commands, else the app's.
+/// A menu command run as the panel menu runs it: nothing for a row that is off, else the panel's own commands, else
+/// the app's.
 fn menu_run(app: &mut VectorcraftApp, command: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
+    let row = CommandRef::with_params(command, params.clone());
+    if menu_states(app).get(&row).is_some_and(|s| !s.is_enabled()) {
+        return Err(format!("{command} is off"));
+    }
     match controls::run(app, command, &params) {
         Some(answer) => answer,
         None => app.run(command, params),
     }
+}
+
+/// The panel menu's row of `command`, with the parameters it runs it with: the menu gives the row the state set for
+/// it.
+fn menu_command(app: &VectorcraftApp, command: &str) -> CommandRef {
+    let row = controls::menu_rows(app).into_iter().find_map(|r| match r {
+        PanelRow::Command(c) if c.id == command => Some(c),
+        _ => None,
+    });
+    row.expect("the panel menu has the command")
 }
 
 /// Presses the footer's Locate: runs the command its pick gives.
@@ -161,6 +178,8 @@ fn closing_a_document_releases_only_its_layer_thumbnails() {
     let second = app.session.active().unwrap().uid;
     pass(&mut app, &ctx);
     assert!(stored(&ctx, second).0 > 0);
+    // The app's frames see both documents open.
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
 
     // The engine closes without the question the window asks; the whole frame drops the view of the closed document.
     app.session.execute("file.close", &json!({"index": 0})).unwrap();
@@ -409,7 +428,8 @@ fn isolation_keeps_the_panel_menu_to_the_rows_listed() {
     app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
     // A row left highlighted outside the sublayer before the panel shows again.
     app.session.active_mut().unwrap().layer_rows = vec![c, b];
-    menu_run(&mut app, "layer.duplicate", json!({})).unwrap();
+    let duplicate = menu_command(&app, "layer.duplicate").params;
+    menu_run(&mut app, "layer.duplicate", duplicate).unwrap();
     let count = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().children().unwrap().len();
     assert_eq!(count(&app, layer), 2, "rectangle c, outside the sublayer, is not copied");
     assert_eq!(count(&app, g), 2, "rectangle b is copied");
@@ -809,7 +829,8 @@ fn with_the_option_art_the_panel_does_not_list_opens_nothing() {
     options(&mut app).layers_only = false;
     pass(&mut app, &ctx);
     assert!(!open(&app, 0), "Show Layers Only: the group stays closed");
-    app.ui.layers_ui.filter = LayerFilter::default();
+    // The panel's filter, of the one type it offers (Objects).
+    app.ui.layers_ui.filter = LayersUi::default().filter;
     app.ui.layers_ui.filter.objects = vec![FilterObject::Text];
     locate(&mut app, 1);
     assert!(!open(&app, 1), "a filter that leaves the path out: the group stays closed");

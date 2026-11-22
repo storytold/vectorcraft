@@ -184,12 +184,10 @@ pub(crate) fn find(app: &VectorcraftApp, tool: &'static str, shown_first: bool) 
     if app.ui.screen_mode >= 3 {
         return Err("Presentation Mode hides the toolbars: change the screen mode to show them");
     }
-    let tools_shown = crate::toolbar::shown(&app.ui);
-    // Tab hides the toolbars made with New Toolbar until the next Tab, also once Window › Tools
-    // shows the Tools panel again.
-    if !crate::panel_docking::panels_shown(app) && !tools_shown {
+    if crate::panel_docking::tab_hidden(app) {
         return Err("Tab has hidden the toolbars: press Tab to show them");
     }
+    let tools_shown = crate::toolbar::shown(&app.ui);
     let main = crate::toolbar::slots(app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool)).map(|slot| {
         if slot.len() > 1 && crate::toolbar::is_floating(app, None, slot[0]) {
             let panel = crate::toolbar::strip_id(&Owner::Tools, slot[0]);

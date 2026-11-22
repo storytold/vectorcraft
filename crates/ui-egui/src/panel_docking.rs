@@ -222,6 +222,12 @@ pub(crate) fn panels_shown(app: &VectorcraftApp) -> bool {
     !chrome.hidden && !chrome.panels_hidden && app.ui.screen_mode < 3
 }
 
+/// Whether Tab hides the main window's panels, toolbars and Control bar (Shift+Tab leaves the
+/// toolbars).
+pub(crate) fn tab_hidden(app: &VectorcraftApp) -> bool {
+    app.ui_ctx.as_ref().is_some_and(|ctx| chrome_state(ctx, egui::ViewportId::ROOT).hidden)
+}
+
 /// Ends Tab and Shift+Tab hiding the panels in the main window; nothing while they show.
 pub(crate) fn show_panels(app: &VectorcraftApp) {
     let Some(ctx) = &app.ui_ctx else { return };
@@ -1212,9 +1218,13 @@ pub(crate) fn modal_open(app: &VectorcraftApp) -> bool {
     app.any_dialog_open() || app.ui.palette_open || app.file_dialog_open()
 }
 
-/// Is a modal window open in this pass: a dialog or a file dialog?
+/// Is a modal window open in this pass: a modal dialog or a file dialog? A popup (a menu, a
+/// dropdown, a slider strip) is no window, so it does not close itself.
 pub(crate) fn modal_window_up(app: &VectorcraftApp) -> bool {
-    app.any_dialog_open() || app.file_dialog_open()
+    use craft::ui::runtime::overlay::{OpenFilter, any_open};
+    app.ui_ctx.as_ref().is_some_and(|ctx| any_open(ctx, OpenFilter::Modal))
+        || app.dialogs().is_some_and(|d| d.with(|h| h.shows_modal()))
+        || app.file_dialog_open()
 }
 
 /// The key of whether a modal window was up in the last pass ([`close_overlays_for_modal`]).

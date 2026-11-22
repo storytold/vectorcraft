@@ -151,6 +151,8 @@ fn window_learn_shows_a_hidden_dock() {
     assert_eq!(app.run("window.learn", json!({"show": false})).unwrap(), json!(false));
     assert!(shown(&app) && !visible(&app), "hiding a panel that cannot be seen changes nothing");
     app.run(&cmd, params).unwrap();
+    // The window's shell shows the dock in its next pass, as it hid it.
+    shell_frame(&mut app, &ctx, vec![]);
     assert!(visible(&app), "Window › Learn shows the dock");
     // A full screen mode hides the panels: the panel stays the front one and shows when it ends.
     app.ui.screen_mode = 3;

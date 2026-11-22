@@ -1,8 +1,8 @@
 use craft::behavior::{EditEvent, SelectionChange};
 use craft::keymap::{CommandRef, Mods};
 use craft::layers::ui::panel::{ActivateOn, LayerColumn, LayerDrop, LayerMove, LayerPosition, LayerSelect, LayerToggle, LayersEvent};
-use craft::layers::ui::tree::LayerRowKey;
-use craft::ui::contract::{DropPayload, OpenChange};
+use craft::layers::ui::tree::{LayerRowKey, LayerTree};
+use craft::ui::contract::{DropPayload, OpenChange, ReorderMove};
 use vectorcraft_engine::DocState;
 use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
@@ -199,18 +199,23 @@ pub(super) fn apply(app: &mut VectorcraftApp, events: Vec<LayersEvent<RowId>>) {
         match event {
             LayersEvent::Toggle(toggle) => apply_toggle(app, &toggle),
             LayersEvent::Open(change) => set_open(app, &change),
-            event => {
-                let Some(st) = app.session.active() else { continue };
-                for (c, p) in commands(st, event) {
-                    app.run(&c, p).ok();
-                }
-            }
+            // A row clicked in view.
+            LayersEvent::Select(_) => super::unrevealed(app, |app| run_commands(app, event)),
+            event => run_commands(app, event),
         }
     }
 }
 
+/// Runs the commands of one event other than a toggle sweep or an open.
+fn run_commands(app: &mut VectorcraftApp, event: LayersEvent<RowId>) {
+    let Some(st) = app.session.active() else { return };
+    for (c, p) in commands(app, st, event) {
+        app.run(&c, p).ok();
+    }
+}
+
 /// The commands of one event other than a toggle sweep or an open.
-fn commands(st: &DocState, event: LayersEvent<RowId>) -> Vec<(String, Value)> {
+fn commands(app: &VectorcraftApp, st: &DocState, event: LayersEvent<RowId>) -> Vec<(String, Value)> {
     match event {
         LayersEvent::Select(select) => select_commands(st, &select),
         LayersEvent::ShowOnly(LayerRowKey::Layer(row)) => {
@@ -219,7 +224,7 @@ fn commands(st: &DocState, event: LayersEvent<RowId>) -> Vec<(String, Value)> {
         // The Show Only of the sweep that Escape took back was one undo step.
         LayersEvent::UndoShowOnly(_) if !isolated(st) => vec![("edit.undo".into(), json!({}))],
         LayersEvent::CellClick { row: LayerRowKey::Layer(row), column, mods, .. } => cell_click(st, &row, column, mods).into_iter().collect(),
-        LayersEvent::Drop(EditEvent::Set { after: LayerDrop::Layers(mv), .. }) => drop_command(st, &mv).into_iter().collect(),
+        LayersEvent::Drop(EditEvent::Set { after: LayerDrop::Layers(mv), .. }) => drop_command(&DocLayers::new(app, st), &mv).into_iter().collect(),
         LayersEvent::HostDrop { payload, target: RowId::Node(target), position, copy, .. } => {
             art_drop(st, &payload, target, position, copy).into_iter().collect()
         }
@@ -377,8 +382,19 @@ fn place(position: LayerPosition) -> &'static str {
 /// spine's row is below the blend's last key object. Rows dropped in the empty space under the last
 /// row arrive as a place after the bottom layer (`layer_drop` in craft-layers' `panel/drag.rs`); the
 /// engine's `layer.move` takes the bottom layer there only as a copy (#8237).
-fn drop_command(st: &DocState, mv: &LayerMove<RowId>) -> Option<(String, Value)> {
-    let doc = &st.doc;
+fn drop_command(tree: &DocLayers<'_>, mv: &LayerMove<RowId>) -> Option<(String, Value)> {
+    // Only where the list takes the rows (in isolation mode, inside the isolated art): the group they
+    // land in is the target, or the one holding it.
+    let parent = match mv.position {
+        LayerPosition::Into => Some(mv.target),
+        _ => tree.parent(&mv.target),
+    };
+    let keys: Vec<LayerRowKey<RowId>> = mv.layers.iter().map(|row| LayerRowKey::Layer(*row)).collect();
+    let landing = ReorderMove { key: keys.first()?.clone(), keys, to: 0, copy: mv.copy, parent: parent.map(LayerRowKey::Layer) };
+    if !tree.accepts_drop(&landing, Mods::NONE) {
+        return None;
+    }
+    let doc = tree.doc();
     let (target, position) = match mv.target {
         RowId::Node(id) => (id, mv.position),
         RowId::Guide(i) => (doc.ruler_guides().get(i).and_then(|g| g.layer)?, LayerPosition::Into),
