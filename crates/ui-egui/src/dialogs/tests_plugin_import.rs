@@ -32,7 +32,8 @@ const RECT: &str =
 
 /// An app that reads files from disk, refusing to read one past the importers' input limit.
 fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    // A window, where the dialogs open.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     app.services.read = Some(Box::new(|p: &str| match std::fs::metadata(p) {
         Ok(m) if m.len() > vectorcraft_plugins::import::MAX_INPUT_BYTES as u64 => Err("read past the limit".into()),
         _ => std::fs::read(p).map_err(|e| e.to_string()),
