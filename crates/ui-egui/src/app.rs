@@ -19,7 +19,7 @@ use super::services::{Services, browsable_url};
 use super::state::SYSTEM_CLIPBOARD_POLL;
 use super::{
     Arc, AutomationRoots, ControlRequest, Receiver, Session, UiState, VectorcraftApp, View, ViewInfo, background, canvas, chrome, credits, dialogs,
-    export_progress, file_access, file_asks, fileio, font_menu, i18n, io, menus, opening, palette, panel_docking, panels, place, placing,
+    edits, export_progress, file_access, file_asks, fileio, font_menu, i18n, io, menus, opening, palette, panel_docking, panels, place, placing,
     plugin_runs, prefs_dialog, recovery, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
 };
 
@@ -315,7 +315,7 @@ impl VectorcraftApp {
             menus::model::refresh(self, &ctx);
         }
         font_menu::end_previews(self, &out.ended_previews);
-        // PLAN: `out.removed_gestures` and `out.outer_edits` end the scopes in `edit_scopes`; widgets-w13's `edits` module owns that call (its contract row gives no signature).
+        edits::end_removed(self, &out.removed_gestures);
         let lang = self.ui_language();
         if self.host.lang() != lang {
             self.host = Arc::new(self.host.with_lang(lang));
