@@ -505,9 +505,10 @@ impl QuickPenTool {
     fn release_edit(&mut self, cx: &ToolContext, mut e: Edit, p: Point) -> Vec<Action> {
         if e.began || p.distance(e.start) >= cx.tol(DRAG_PX) {
             let mut out = e.drag(cx, p);
-            // A drag that could not begin (its path changed under the press) has no step to end.
+            // A drag that could not begin (its path changed under the press) has no step to end,
+            // and one that came back to where it started records none.
             if e.began {
-                out.push(Action::Commit);
+                out.push(if e.moved { Action::Commit } else { Action::Cancel });
             }
             return out;
         }

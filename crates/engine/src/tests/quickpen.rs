@@ -664,6 +664,20 @@ fn a_release_past_the_drag_distance_moves_the_anchor() {
     assert_eq!(paths(&s).len(), 1, "no new path");
 }
 
+/// A drag on an anchor or a segment that comes back to where it started moves nothing and records
+/// no undo step.
+#[test]
+fn a_drag_back_to_its_start_records_no_undo_step() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let undo = undo_steps(&s);
+    for at in [(200.0, 100.0), (250.0, 100.0)] {
+        press(&mut s, &[at, (at.0, at.1 + 50.0), at]);
+        assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)], "press at {at:?}");
+        assert_eq!(undo_steps(&s), undo, "press at {at:?}");
+    }
+}
+
 /// When another command edits the path while the press is down, neither a drag nor a release past
 /// the drag distance moves the anchor the press found.
 #[test]

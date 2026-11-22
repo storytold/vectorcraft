@@ -81,6 +81,8 @@ pub(super) struct Edit {
     pub(super) shift: bool,
     /// Whether the press has dragged far enough to move what it holds (an undo step began).
     pub(super) began: bool,
+    /// Whether the last drag left what the press holds away from where it started.
+    pub(super) moved: bool,
     /// The grabbed path as the document had it when the press went down.
     pressed: Option<Arc<Node>>,
     snap: Option<PointSnap>,
@@ -90,7 +92,7 @@ pub(super) struct Edit {
 impl Edit {
     pub(super) fn new(cx: &ToolContext, grab: Grab, start: Point, shift: bool) -> Self {
         let pressed = shared_node(cx.doc, grab.id()).cloned();
-        Self { grab, start, shift, began: false, pressed, snap: None, guides: vec![] }
+        Self { grab, start, shift, began: false, moved: false, pressed, snap: None, guides: vec![] }
     }
 
     /// Whether the grabbed path is as the document had it when the press went down.
@@ -154,6 +156,7 @@ impl Edit {
         if !d.x.is_finite() || !d.y.is_finite() {
             return out;
         }
+        self.moved = d.x != 0.0 || d.y != 0.0;
         out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y, "interpolate": true})));
         out
     }
