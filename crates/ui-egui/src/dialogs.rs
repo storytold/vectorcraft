@@ -113,6 +113,7 @@ mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
+pub mod recolor_preset;
 mod recovery;
 pub mod relink;
 pub mod rename_artboards;
@@ -337,6 +338,7 @@ registry! {
     ArtboardOptions: [artboard_options::KIND] => artboard_options::SPEC,
     ExportForScreens: ["exportForScreens"] => export_for_screens::SPEC,
     Recolor: [recolor::KIND] => recolor::SPEC,
+    RecolorPreset: [recolor_preset::KIND] => recolor_preset::SPEC,
     Command: ["command"] => command::SPEC,
     Variables: [variables::KIND] => variables::SPEC,
     Effect: ["effect"] => effect::SPEC,

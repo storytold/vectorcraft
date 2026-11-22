@@ -192,6 +192,11 @@ const COMPS: &str = "__comps";
 /// rows, which OK saves as a new colour group); `library` limits to a library or "document" (""
 /// picks the first library).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    match p.get("preset") {
+        None | Some(Value::Bool(false)) => {}
+        Some(Value::Bool(true)) => return super::recolor_preset::open(app, p),
+        Some(_) => return Err("`preset` must be true or false".into()),
+    }
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
     let group = p.get("group").and_then(Value::as_str);
@@ -217,11 +222,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         None if !assign.is_empty() => json!(assign.len()),
         None => Value::Null,
     };
-    let limit = match p.get("library").and_then(Value::as_str) {
-        Some("") => first_library(app).unwrap_or_default(),
-        Some(l) => limit_key(app, l)?,
-        None => String::new(),
-    };
+    let limit = library_param(app, p)?;
     // Without art the rows are the group's colours, as they are.
     let mut start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
     number_slots(&mut start);
@@ -241,6 +242,10 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     snap(app, &d, &mut rs);
     d.fields.insert("rows".into(), Value::Array(rs));
     // Undo Changes has nothing to undo on a new opening.
+    // A dialog this one replaces ends as Cancel ends it, its preview rolled back.
+    if app.ui.dialog.is_some() {
+        super::cancel(app);
+    }
     app.ui.recolor_history = History { opened: Some(snapshot(&d)), ..History::default() };
     app.ui.dialog = Some(d);
     Ok(Value::Null)
@@ -252,6 +257,27 @@ fn key(c: &Color) -> Value {
 
 /// The name a new colour group (opened on colours alone) starts with.
 const NEW_GROUP: &str = "Color Group";
+
+/// Limit to Library's choices, as keys of `limitTo` and the names shown: None, the document's
+/// swatches, then the colour libraries: the built-in ones (at the top level of the library menu)
+/// translated, those the user saved or loaded by their names.
+pub(super) fn library_choices(app: &VectorcraftApp) -> (Vec<String>, Vec<String>) {
+    let libs = colour_libraries(app);
+    let keys = ["", swatchlib::DOCUMENT_SWATCHES].into_iter().map(String::from).chain(libs.iter().map(|l| l.id.clone())).collect();
+    let names: Vec<&str> = ["None", DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.name.as_str())).collect();
+    let builtin = |k: usize| k.checked_sub(2).is_none_or(|i| libs.get(i).is_some_and(|l| l.submenu.is_none()));
+    let shown = super::shown_names(crate::i18n::current(), &names, builtin).into_iter().map(String::from).collect();
+    (keys, shown)
+}
+
+/// The `limitTo` key of `ui.recolorDialog`'s `library` (none without it, the first library for "").
+pub(super) fn library_param(app: &VectorcraftApp, p: &Value) -> Result<String, String> {
+    match p.get("library").and_then(Value::as_str) {
+        Some("") => Ok(first_library(app).unwrap_or_default()),
+        Some(l) => limit_key(app, l),
+        None => Ok(String::new()),
+    }
+}
 
 fn first_library(app: &VectorcraftApp) -> Option<String> {
     colour_libraries(app).into_iter().next().map(|l| l.id)
@@ -1956,13 +1982,8 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
         }
         ui.end_row();
         ui.label(egui::RichText::new(tl!("Limit to Library:")).color(t.text_dim));
-        // None, the document's swatches, then the colour libraries: the built-in ones (at the top
-        // level of the library menu) translated, those the user saved or loaded by their names.
-        let libs = colour_libraries(app);
-        let keys: Vec<&str> = ["", swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
-        let names: Vec<&str> = ["None", DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.name.as_str())).collect();
-        let builtin = |k: usize| k.checked_sub(2).is_none_or(|i| libs.get(i).is_some_and(|l| l.submenu.is_none()));
-        let shown = super::shown_names(crate::i18n::current(), &names, builtin);
+        let (keys, shown) = library_choices(app);
+        let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
         let cur = d.str("limitTo");
         let at = keys.iter().position(|k| *k == cur).unwrap_or(0);
         let current = shown.get(at).copied().unwrap_or_default();

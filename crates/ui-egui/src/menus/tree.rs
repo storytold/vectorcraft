@@ -109,10 +109,10 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         sub(
                             "Recolor with Preset",
                             vec![
-                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1})),
-                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2})),
-                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3})),
-                                cp("Color Library…", "ui.recolorDialog", json!({"library": ""})),
+                                cp("1 Color Job…", "ui.recolorDialog", json!({"colors": 1, "preset": true})),
+                                cp("2 Color Job…", "ui.recolorDialog", json!({"colors": 2, "preset": true})),
+                                cp("3 Color Job…", "ui.recolorDialog", json!({"colors": 3, "preset": true})),
+                                cp("Color Library…", "ui.recolorDialog", json!({"library": "", "preset": true})),
                             ],
                         ),
                         c("Adjust Color Balance…", "ui.colorBalanceDialog"),
