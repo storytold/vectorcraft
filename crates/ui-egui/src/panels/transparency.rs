@@ -178,9 +178,9 @@ fn mask_row(
         ThumbPaint::default().paper(craft::ui::style::DataColor::new(if bg == Some([0, 0, 0, 255]) { Color32::BLACK } else { Color32::WHITE }));
     let plain = ThumbPaint::default();
     let (has_mask, disabled) = (mask.is_some(), mask.is_some_and(|m| m.disabled));
-    let (store, object_state, mask_state) = (&store, &object_state, &mask_state);
+    let (store, object_state, mask_state, plain, paper) = (&store, &object_state, &mask_state, &plain, &paper);
     let paint_object = move |cx: &ContentPainterCx, rect: egui::Rect| {
-        if !object_state.as_ref().is_some_and(|s| store.paint(cx, rect, s, &plain))
+        if !object_state.as_ref().is_some_and(|s| store.paint(cx, rect, s, plain))
             && let Some(c) = fill
         {
             // PLAN: a colour from data should go through the content painter's data path, not the raw painter.
@@ -190,7 +190,7 @@ fn mask_row(
     let paint_mask = move |cx: &ContentPainterCx, rect: egui::Rect| {
         if has_mask {
             if let Some(s) = mask_state {
-                store.paint(cx, rect, s, &paper);
+                store.paint(cx, rect, s, paper);
             }
             if disabled {
                 let red = Stroke::new(2.0, Color32::from_rgb(220, 40, 40));
@@ -201,17 +201,21 @@ fn mask_row(
             cx.icon(rect, &IconSpec::svg(IconId::new("dc-mask-none")));
         }
     };
-    let mut row = ListRow::new(tl!("Opacity Mask")).thumbnails_only().thumb(ThumbSize::Large, paint_object).extra_thumb(paint_mask);
-    if let Some(m) = mask {
-        row = row.thumb_link(m.linked, if m.linked { tl!("Unlink the mask") } else { tl!("Link the mask") });
-    }
-    let mut row = Some(row.thumb_target(if editing { ThumbTarget::Extra(0) } else { ThumbTarget::First }));
+    // The list asks for its row in each of its runs.
+    let row = || {
+        let row = ListRow::new(tl!("Opacity Mask")).thumbnails_only().thumb(ThumbSize::Large, paint_object).extra_thumb(paint_mask);
+        let row = match mask {
+            Some(m) => row.thumb_link(m.linked, if m.linked { tl!("Unlink the mask") } else { tl!("Link the mask") }),
+            None => row,
+        };
+        row.thumb_target(if editing { ThumbTarget::Extra(0) } else { ThumbTarget::First })
+    };
     let keys = [()];
     List::<()>::new(tl!("Opacity mask thumbnails"))
         .select(SelectMode::None)
         .natural_height(true)
         .enabled(object)
-        .show_items(ui, &keyed(&keys, |_| ()), &mut |_, _| row.take().unwrap_or_else(|| ListRow::new("")))
+        .show_items(ui, &keyed(&keys, |_| ()), &mut |_, _| row())
         .events
 }
 
