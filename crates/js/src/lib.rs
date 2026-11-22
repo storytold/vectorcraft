@@ -56,6 +56,13 @@
 //! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays, strings (by code point) and objects
 //! with a `length`, by index; other values are a `TypeError`. Destructuring, `for … of`, classes,
 //! generators and modules stay syntax errors.
+//!
+//! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
+//! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,
+//! `catch`, `finally`, `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. The promise
+//! jobs a script queues run in order once its code has ended, before its run ends, on the run's
+//! limits; a promise still rejected with no handler at the end is reported by
+//! [`Realm::unhandled_rejections`].
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -93,7 +100,9 @@ pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
+pub use realm::{
+    Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
+};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -114,6 +123,8 @@ pub struct Options {
     /// template literals (tagged ones included), default and rest parameters, and spread in array
     /// literals, calls and `new`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
+    /// Give a realm the later editions' built-ins this engine has: `Promise` and its job queue.
+    /// Off, a realm has the ES5.1 built-ins only, as ExtendScript scripts expect.
     pub es2015: bool,
 }
 
@@ -225,6 +236,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod promise_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

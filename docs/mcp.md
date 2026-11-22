@@ -2624,8 +2624,10 @@ parameters, and spread in array literals, calls and `new`. Spread reads arrays, 
 with a `length` property, by index, and throws a `TypeError` for any other value; that rule is VectorCraft's own
 until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
-app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A script run from a
+`.js` file also has `Promise` (described below); a `.jsx` file and a script given as `source` do not, except that a
+named engine (`#targetengine`) has `Promise` from the first `.js` run that names it and keeps it for every later
+run, as it keeps its globals. The script reaches the app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
@@ -2651,6 +2653,27 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   open a dialog, described below. `vc.api.has("dialogs")` is true.
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
+
+In a `.js` script, `Promise` follows ECMA-262 11th edition section 25.6
+(https://262.ecma-international.org/11.0/#sec-promise-objects): the constructor, `then`, `catch`, `finally`,
+`Promise.resolve`, `reject`, `all`, `allSettled` and `race`. `Promise.any` is not provided. These are VectorCraft's
+own rules:
+
+- The callbacks `then`, `catch` and `finally` register run as jobs, one at a time, in the order they were queued, after
+  the script's own code ends and before the run ends; a job a callback queues runs after the jobs already waiting.
+  A promise still pending when no job is left stays pending, and the run ends.
+- The jobs run on the run's fuel and limits, and each job takes 1 unit of fuel. A chain of callbacks that never ends
+  stops at the fuel limit. More than 1,048,576 jobs waiting at once end the run with the limit error
+  `limit reached: Jobs (more than 1048576 promise jobs were waiting to run)`. A run that ends with an error, a limit or
+  `script.stop` drops the jobs still waiting, and the documents go back as for any failed run.
+- `all`, `allSettled` and `race` take an array, another object whose `length` is a whole number, or a string (one
+  item per character); any other value rejects the promise they return with a `TypeError`. The promises `then` and the
+  statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
+- A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
+  report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
+  rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts
+  all of them, and the Script Console shows an error line for each, as in
+  `tidy.js:12:5: unhandled promise rejection: Error: not found`. Both fields are left out when there are none.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
@@ -2833,7 +2856,8 @@ VectorCraft sets these limits itself:
 In the app, a script past the growth limit stops at a question to continue or to stop and undo. Stop, Escape and
 `ui.dialog.cancel` all stop the run. A run with nobody to ask, such as a call over MCP or the command line, ends
 with an error at that limit. The headless reply is `{ok: true, name, changed, written, log, fuelUsed, hostCalls,
-runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`. In
+runTimeMs, timingAvailable, hostCallCounts, slowestCommands, console, dialogs, dialogCount, dialogsTruncated}`, with
+`unhandledRejections` and `unhandledRejectionCount` as well when a `.js` script left rejected promises unhandled. In
 the app the reply is `{running: true, name}`, and the report appears later as `scriptReport` in `ui.inspect`. The
 report of a failed run has the same fields after `kind`, `message`, `messageOrigin`, `line`, `column`, `file` (when
 the error is in another file than the script) and `fuelLeft`. `messageOrigin` is `script` when `message` is text the
