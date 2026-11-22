@@ -275,12 +275,7 @@ fn average(rgba: &[u8]) -> Option<[u8; 4]> {
     }
     let a = sum[3];
     let alpha = (a / pixels.len().max(1) as u64) as u8;
-    (a > 0).then(|| [
-        ((sum[0] + a / 2) / a) as u8,
-        ((sum[1] + a / 2) / a) as u8,
-        ((sum[2] + a / 2) / a) as u8,
-        alpha.max(1),
-    ])
+    (a > 0).then(|| [((sum[0] + a / 2) / a) as u8, ((sum[1] + a / 2) / a) as u8, ((sum[2] + a / 2) / a) as u8, alpha.max(1)])
 }
 
 impl Mapper {
