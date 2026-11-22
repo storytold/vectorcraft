@@ -353,3 +353,30 @@ fn in_the_app_startup_scripts_that_cannot_start_are_in_the_reply() {
     assert_eq!(r["failed"], json!([{"name": "big.jsx", "error": vectorcraft_engine::cmd::scripts::TOO_LARGE}]));
     assert!(s.take_startup_failures().is_empty(), "the reply names them, so the status bar does not again");
 }
+
+#[test]
+fn in_the_app_every_queued_run_keeps_the_automation_roots_of_the_request_that_queued_it() {
+    let _f = fresh();
+    let dir = tmp_dir("app-roots");
+    // Writes a file in the run's temporary folder, which is outside the write roots below.
+    let source = "var ok; try { var t = new File(Folder.temp.fsName + '/t.txt'); ok = t.open('w'); t.close(); } catch (e) { ok = false; }\n\
+                  vc.log(ok ? 'wrote' : 'refused');";
+    write(&dir, "a.jsx", source);
+    write(&dir, "b.jsx", source);
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap().unwrap();
+    for confined in [false, true] {
+        let mut s = session(&dir);
+        s.script_frames = true;
+        let params = json!({"reason": "menu", "then": {"source": source, "name": "chosen"}});
+        let mut request = || s.execute("script.startup.run", &params).unwrap();
+        let r = if confined { vectorcraft_engine::file_access::confine(Some(&roots), request) } else { request() };
+        assert_eq!(r["queued"], json!(3));
+        // The frames that start the later runs are outside the request.
+        while s.script_running() {
+            s.script_pump();
+        }
+        assert_eq!(started(&s), ["a.jsx", "b.jsx", "chosen"]);
+        let want = if confined { "refused" } else { "wrote" };
+        assert_eq!(console(&s, "log"), [want, want, want], "confined {confined}");
+    }
+}

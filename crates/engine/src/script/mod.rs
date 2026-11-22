@@ -1884,6 +1884,7 @@ impl Session {
     pub fn script_abandon(&mut self) -> bool {
         // The runs queued after it are not started.
         self.script_queue.clear();
+        self.script_queue_scope = None;
         self.startup_ended();
         let Some(key) = self.script_key.take() else { return false };
         let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {

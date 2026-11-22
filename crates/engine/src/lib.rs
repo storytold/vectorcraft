@@ -314,6 +314,9 @@ pub struct Session {
     /// The runs `script.startup.run` queued in the app, each started when the run before it ends
     /// ([`Session::script_pump`]).
     pub(crate) script_queue: std::collections::VecDeque<script::startup::Queued>,
+    /// The file access scope of the request that queued [`Self::script_queue`], in which each queued
+    /// run starts and is read.
+    pub(crate) script_queue_scope: Option<file_access::ScopeHandle>,
     /// While a startup script runs: the launch marker's entry naming it
     /// ([`vectorcraft_plugins::safe_mode::loading`]).
     pub(crate) startup_loading: Option<vectorcraft_plugins::safe_mode::Loading>,

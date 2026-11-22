@@ -170,6 +170,7 @@ impl Session {
             script_runs: 0,
             script_frames: false,
             script_queue: Default::default(),
+            script_queue_scope: None,
             startup_loading: None,
             startup_failures: vec![],
             script_high_water: Default::default(),

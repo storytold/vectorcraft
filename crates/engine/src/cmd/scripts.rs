@@ -449,17 +449,20 @@ impl Session {
     pub(crate) fn start_queued(&mut self) -> Option<Value> {
         // Held aside while a run starts, so that the queue does not count as a running script then.
         let mut queue = std::mem::take(&mut self.script_queue);
+        // Each run starts in the file access scope of the request that queued it, which the run
+        // keeps, and not in the scope of the frame that starts it.
+        let scope = self.script_queue_scope.clone().unwrap_or_else(crate::file_access::ScopeHandle::capture);
         let mut reply = None;
         while self.script_key.is_none() {
             let Some(next) = queue.pop_front() else { break };
             match next {
                 script::startup::Queued::Startup { path, fuel } => {
-                    if let Err(e) = self.start_startup(&path, fuel) {
+                    if let Err(e) = scope.clone().run(|| self.start_startup(&path, fuel)) {
                         self.startup_failures.push((file_name_of(&path), e));
                     }
                 }
                 script::startup::Queued::Then(params) => {
-                    match run(self, &params) {
+                    match scope.clone().run(|| run(self, &params)) {
                         Ok(_) if self.script_key.is_some() => {}
                         Ok(v) => reply = Some(v),
                         Err(e) => self.startup_failures.push((then_name(&params), e.to_string())),
@@ -467,6 +470,9 @@ impl Session {
                     break;
                 }
             }
+        }
+        if queue.is_empty() {
+            self.script_queue_scope = None;
         }
         self.script_queue = queue;
         reply
@@ -553,6 +559,7 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
     if s.script_frames {
         s.script_queue =
             scripts.into_iter().map(|path| script::startup::Queued::Startup { path, fuel }).chain(then.map(script::startup::Queued::Then)).collect();
+        s.script_queue_scope = Some(crate::file_access::ScopeHandle::capture());
         let queued = s.script_queue.len();
         s.startup_failures.clear();
         let then = s.start_queued();
