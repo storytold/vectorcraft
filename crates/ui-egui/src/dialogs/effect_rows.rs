@@ -204,7 +204,7 @@ pub(super) fn textured(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
                 fields.set("texture", id);
             }
             if let Some((w, h)) = size {
-                ui.label(format!("{w} × {h} px"));
+                craft::ui::display::Text::new(format!("{w} × {h} px")).show(ui);
             }
             picked.response
         })

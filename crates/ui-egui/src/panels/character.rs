@@ -1046,8 +1046,10 @@ pub(crate) fn values(app: &mut VectorcraftApp) -> CharacterValues {
     let language =
         shared(app, |s| s.language.clone()).map(|l| char_language_name(l.as_deref()).map_or_else(|| l.unwrap_or_default(), str::to_string));
     let mut values = CharacterValues::default();
-    values.family = shared(app, |s| s.font_family.clone());
-    values.style = shared(app, |s| s.font_style.clone());
+    // The font shows as the type takes it: the insertion style while editing, else the first selected text's first run.
+    let font = text_style(app).map(|(s, _)| (s.font_family, s.font_style));
+    values.family = font.as_ref().map(|(family, _)| family.clone());
+    values.style = font.map(|(_, style)| style);
     values.size = single(shared_effective(app, |s| s.size));
     values.leading = leading;
     values.kerning = kerning;

@@ -67,11 +67,13 @@ pub struct TransformUi {
     pub popover: bool,
     /// The point a field's running gesture turns or shears about ([`gesture_origin`]).
     gesture_origin: Value,
+    /// The artboards' rectangles when a field's running gesture began ([`live_artboard`]).
+    gesture_boards: Vec<Rect>,
 }
 
 impl Default for TransformUi {
     fn default() -> Self {
-        TransformUi { reference_point: 4, popover: false, gesture_origin: Value::Null }
+        TransformUi { reference_point: 4, popover: false, gesture_origin: Value::Null, gesture_boards: Vec::new() }
     }
 }
 
@@ -261,18 +263,41 @@ fn pattern_mode(app: &VectorcraftApp) -> &'static str {
 /// `index` alone; a new W or H resizes every selected artboard about its own reference point
 /// ([`crate::panels::artboards::resized_with`]), in one undo step.
 pub fn set_artboard(app: &mut VectorcraftApp, index: usize, refi: usize, xywh: [Option<f64>; 4], link: bool) {
-    let [x, y, w, h] = xywh;
-    let scale_art = crate::panels::artboards::scale_art(app);
-    let move_art = crate::panels::artboards::move_art(app);
-    let indices = if x.is_none() && y.is_none() { crate::panels::artboards::resized_with(app, index) } else { vec![index] };
-    let common = json!({"scaleArt": scale_art, "moveArt": move_art});
-    let r = crate::panels::artboards::set_props(app, &indices, common, |i, r| {
-        let n = artboard_rect(r, refi, x, y, w, h, link);
-        Some(json!({"index": i, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height()}))
-    });
-    if let Err(e) = r {
+    let rects: Vec<Rect> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.rect).collect()).unwrap_or_default();
+    let Some(p) = artboard_props(app, index, refi, xywh, link, &rects) else { return };
+    if let Err(e) = app.run("artboard.setProps", p) {
         app.status(e);
     }
+}
+
+/// [`set_artboard`] for a value of a field's gesture in its phase `live`: each value previews from the artboards as the
+/// gesture began, and the release keeps the last as one undo step, so Cmd+Enter keeps the proportions the artboard had
+/// before the typed value previewed.
+fn live_artboard(app: &mut VectorcraftApp, index: usize, refi: usize, xywh: [Option<f64>; 4], link: bool, live: Live) {
+    if !app.session.in_interaction() {
+        app.ui.transform_panel.gesture_boards = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.rect).collect()).unwrap_or_default();
+    }
+    let rects = app.ui.transform_panel.gesture_boards.clone();
+    if let Some(p) = artboard_props(app, index, refi, xywh, link, &rects) {
+        const CMD: &str = "artboard.setProps";
+        let label = vectorcraft_engine::find_command(CMD).map_or(CMD, |spec| spec.label);
+        super::live_run(app, label, CMD, p, live);
+    }
+}
+
+/// The `artboard.setProps` params of [`set_artboard`] for the artboards at `rects`; `None` when none changes.
+fn artboard_props(app: &VectorcraftApp, index: usize, refi: usize, xywh: [Option<f64>; 4], link: bool, rects: &[Rect]) -> Option<Value> {
+    let [x, y, w, h] = xywh;
+    let indices = if x.is_none() && y.is_none() { crate::panels::artboards::resized_with(app, index) } else { vec![index] };
+    let common = json!({"scaleArt": crate::panels::artboards::scale_art(app), "moveArt": crate::panels::artboards::move_art(app)});
+    let entries = indices
+        .iter()
+        .filter_map(|&i| {
+            let n = artboard_rect(*rects.get(i)?, refi, x, y, w, h, link);
+            Some(json!({"index": i, "x": n.x0, "y": n.y0, "width": n.width(), "height": n.height()}))
+        })
+        .collect();
+    crate::panels::artboards::set_props_params(common, entries)
 }
 
 /// How an edit of the fields was made: the link or Cmd+Enter keeps the proportions, Alt+Enter copies.
@@ -469,7 +494,7 @@ fn artboard_form(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect, b
     let mut state = BoxState::from_rect(r);
     state.pivot = vectorcraft_geom::reference_point(r, refi);
     let out = fields(app, Some(state), r, panel_groups(), bar).show(ui);
-    apply_fields(app, &out, EditPath::Scope, |app, source, row, intent, _| {
+    apply_fields(app, &out, EditPath::Preview, |app, source, row, intent, live| {
         let (w, h) = sides(row);
         let p = row.state.pivot;
         let xywh = match source {
@@ -480,7 +505,7 @@ fn artboard_form(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect, b
             TransformSource::Field(TransformField::H) => [None, None, None, Some(h)],
             _ => return,
         };
-        set_artboard(app, index, refi, xywh, intent.proportional);
+        live_artboard(app, index, refi, xywh, intent.proportional, live);
     });
     out
 }

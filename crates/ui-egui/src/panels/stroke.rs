@@ -625,7 +625,8 @@ pub(crate) fn profile_select(app: &mut VectorcraftApp, ui: &mut Ui) {
                 paint_profile(cx, rect, points.as_deref());
             }
         })
-        .enabled(brushed.is_none())
+        // Brushed strokes with a profile still open the list, to its Uniform row.
+        .enabled(brushed != Some(false))
         .tooltip(tip)
         .show(ui);
     if let Some(id) = out.events.landed() {
