@@ -412,6 +412,20 @@ fn image_file_getter_hides_out_of_scope_link() {
 }
 
 #[test]
+fn image_file_getter_hides_a_link_to_an_open_document_out_of_scope() {
+    let base = folder("hidedoc");
+    let b = base.join("outside/secret.png");
+    std::fs::write(&b, gray_png(4, 4)).unwrap();
+    let mut s = session();
+    place(&mut s, &b, true);
+    // The linked file is also the file of an open document, which the script's commands may read.
+    s.doc_mut().unwrap().path = Some(b.to_string_lossy().into_owned());
+    let e = failure(&mut s, &base, "vc.log(app.activeDocument.placedItems[0].file.fsName);");
+    assert!(e.contains("Script file access denied") && !e.contains("secret"), "{e}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
 fn stale_and_foreign_placed_items_are_refused() {
     let base = folder("stale");
     let a = base.join("main/a.png");

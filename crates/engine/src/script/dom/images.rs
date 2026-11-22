@@ -289,10 +289,10 @@ fn doc_raster(h: &Host, a: &[Data]) -> Answer {
 
 // ---- files ----
 
-/// Whether the script's commands may read `path` now ([`crate::file_access::ScriptGate`]).
+/// Whether the script may read `path` now by its own read scope and the read roots
+/// ([`crate::file_access::ScriptGate`]), without the open documents' files a command may also read.
 fn may_read(h: &Host, path: &str) -> bool {
-    let documents = h.session.borrow().documents().iter().filter_map(|d| d.path.clone()).collect();
-    let gate = h.disk.borrow().gate(documents);
+    let gate = h.disk.borrow().gate(Vec::new());
     crate::file_access::with_script_gate(gate, || crate::file_access::check_read(path)).is_ok()
 }
 
