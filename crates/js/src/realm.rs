@@ -215,6 +215,12 @@ impl Realm {
         self.interp.reset_gc_threshold();
     }
 
+    /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
+    /// `const` names earlier runs declared stay visible when it is turned off.
+    pub fn set_es2015(&mut self, es2015: bool) {
+        self.interp.set_es2015(es2015);
+    }
+
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.
     pub fn interrupt(&self) -> Interrupt {
         Interrupt(self.interp.interrupt.clone())

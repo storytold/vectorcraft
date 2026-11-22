@@ -297,6 +297,40 @@ fn files_are_checked_before_they_are_read() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2015");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    write("lib.jsxinc", "const k = 2;\nvar twice = n => n * k;\n");
+    write("more.jsx", "let m = `m${k}`;\nm;\n");
+    let modern = "#include \"lib.jsxinc\"\nlet x = [1, ...[2]];\nvc.log(`${twice(x[1])}`);\nvc.log(eval('let e = 5; e'));\nvc.log(new Function('a = 6', 'return a')());\nvc.log($.evalFile(File($.fileName).parent + '/more.jsx'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["4", 5, 6, "m2"]), "{r}");
+    let upper = s.execute("script.run", &path(&write("UPPER.JS", "let u = 1; vc.log(u);"))).unwrap();
+    assert_eq!(upper["log"], json!([1]), "{upper}");
+    for (name, text) in [("legacy.jsx", "let x = 1;"), ("arrow.jsx", "var f = () => 1;"), ("template.jsx", "vc.log(`t`);")] {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "const c = 1;").unwrap_err().to_string().contains("SyntaxError"));
+    // A named engine reads each run the way that run's script does.
+    s.execute("script.run", &path(&write("first.jsx", "#targetengine kept\nvar kept = 1;"))).unwrap();
+    let modern = s.execute("script.run", &path(&write("second.js", "#targetengine kept\nlet k2 = kept + 1;\nvc.log(k2);"))).unwrap();
+    assert_eq!(modern["log"], json!([2]), "{modern}");
+    let legacy = s.execute("script.run", &path(&write("third.jsx", "#targetengine kept\nvc.log(k2);\nconst c = 1;")));
+    assert!(legacy.unwrap_err().to_string().contains("SyntaxError"));
+    let legacy = s.execute("script.run", &path(&write("fourth.jsx", "#targetengine kept\nvc.log(k2 + kept);"))).unwrap();
+    assert_eq!(legacy["log"], json!([3]), "{legacy}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A new empty folder for test `name`.
 fn fresh_folder(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vc-script-run-{name}-{}", std::process::id()));
