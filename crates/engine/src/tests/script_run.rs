@@ -353,6 +353,12 @@ fn a_js_script_has_proxy_and_reflect_and_a_jsx_script_does_not() {
     let log = r["log"].as_array().unwrap();
     assert!(log[0].as_str().is_some_and(|m| m.starts_with("TypeError") && m.contains("is a proxy")), "{r}");
     assert_eq!(log[1], json!(false), "{r}");
+    // An engine that `#targetengine` keeps gets both at its first `.js` run, after a `.jsx` one.
+    let kept = format!("#targetengine proxykept\n{names}");
+    let first = s.execute("script.run", &write("kept.jsx", &kept)).unwrap();
+    assert_eq!(first["log"], json!(["undefined undefined"]), "{first}");
+    let second = s.execute("script.run", &write("kept.js", &kept)).unwrap();
+    assert_eq!(second["log"], json!(["function object"]), "{second}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

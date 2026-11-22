@@ -45,15 +45,26 @@ fn limit(src: &str, limits: Limits) -> LimitKind {
 // ---- the realm gate ----
 
 #[test]
-fn only_a_realm_made_with_es2015_has_proxy_and_reflect() {
+fn only_a_realm_that_ran_es2015_code_has_proxy_and_reflect() {
     let names = "typeof Proxy + ' ' + typeof Reflect";
     assert_eq!(es().run(names), Ok(JsValue::String("function object".into())));
     assert_eq!(Realm::new().run(names), Ok(JsValue::String("undefined undefined".into())));
     let e4x = Options { e4x: true, ..Options::default() };
     assert_eq!(Realm::with_options(e4x, Limits::default()).run(names), Ok(JsValue::String("undefined undefined".into())));
+    // A realm made without the option gets both at its first run with it, once, and keeps them.
     let mut later = Realm::new();
-    later.set_es2015(true);
     assert_eq!(later.run(names), Ok(JsValue::String("undefined undefined".into())));
+    later.set_es2015(true);
+    assert_eq!(later.run(&format!("var first = Proxy, firstReflect = Reflect; {names}")), Ok(JsValue::String("function object".into())));
+    later.set_es2015(false);
+    assert_eq!(later.run(names), Ok(JsValue::String("function object".into())));
+    later.set_es2015(true);
+    assert_eq!(later.run("Proxy === first && Reflect === firstReflect"), Ok(JsValue::Bool(true)));
+    // A global of either name that an earlier run defined stays as that run left it.
+    let mut taken = Realm::new();
+    assert_eq!(taken.run("var Proxy = 1; Object.defineProperty(this, 'Reflect', { value: 2 }); 0"), Ok(JsValue::Number(0.0)));
+    taken.set_es2015(true);
+    assert_eq!(taken.run("Proxy + Reflect"), Ok(JsValue::Number(3.0)));
 }
 
 // ---- Proxy ----

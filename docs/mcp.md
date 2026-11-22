@@ -2628,8 +2628,8 @@ an engine that `#targetengine` keeps reads each run the way that run's script do
 globals `Proxy`, with `Proxy.revocable`, and `Reflect` (https://262.ecma-international.org/11.0/, sections 9.5, 26.1
 and 26.2), with string property names. A trap is a script call: it takes fuel and counts against the limit on nested calls, and
 a trap result that breaks one of the proxy invariants, or any operation on a revoked proxy, throws a `TypeError`. A
-proxy in a command's params throws a `TypeError` without running its traps. An engine that `#targetengine` keeps has
-`Proxy` and `Reflect` when its first run was a `.js` script. A
+proxy in a command's params throws a `TypeError` without running its traps. An engine that `#targetengine` keeps gets
+`Proxy` and `Reflect` at its first `.js` run and keeps them for later `.jsx` runs. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 

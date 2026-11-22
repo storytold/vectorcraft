@@ -80,6 +80,13 @@ pub(crate) fn install(interp: &mut Interp) {
     }
 }
 
+/// Adds `Proxy` and `Reflect` to a realm that does not have them yet, for a run with
+/// [`crate::Options::es2015`] in a realm made without it. A `Proxy` or `Reflect` global that an
+/// earlier run defined stays as it is.
+pub(crate) fn install_es2015(interp: &mut Interp) -> JsResult<()> {
+    if interp.es2015_installed { Ok(()) } else { reflect::install(interp, true) }
+}
+
 fn try_install(interp: &mut Interp) -> JsResult<()> {
     let object_proto = alloc(interp, Class::Ordinary, None);
     interp.intrinsics.object_proto = object_proto;
@@ -149,7 +156,7 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
         crate::xml_builtins::install(interp)?;
     }
     if interp.options.es2015 {
-        reflect::install(interp)?;
+        reflect::install(interp, false)?;
     }
     Ok(())
 }

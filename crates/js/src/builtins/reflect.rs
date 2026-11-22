@@ -11,12 +11,25 @@ use crate::interp::{Desc, Interp, JsResult};
 use crate::proxy::desc_values;
 use crate::value::Value;
 
-pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
+/// Defines `Proxy` and `Reflect` on the global object. With `keep`, for a realm that gets them
+/// after earlier runs, a global of the same name that a script defined stays as it is.
+pub(super) fn install(interp: &mut Interp, keep: bool) -> JsResult<()> {
     let global = interp.global;
-    let proxy = native(interp, "Proxy", proxy_ctor, 2, NativeKind::Plain, true)?;
-    method(interp, proxy, "revocable", revocable, 2)?;
-    data(interp, global, "Proxy", Value::Object(proxy), HIDDEN)?;
+    if !(keep && interp.get_own_property(global, &key("Proxy"))?.is_some()) {
+        let proxy = native(interp, "Proxy", proxy_ctor, 2, NativeKind::Plain, true)?;
+        data(interp, global, "Proxy", Value::Object(proxy), HIDDEN)?;
+        method(interp, proxy, "revocable", revocable, 2)?;
+    }
+    if !(keep && interp.get_own_property(global, &key("Reflect"))?.is_some()) {
+        install_reflect(interp)?;
+    }
+    interp.es2015_installed = true;
+    Ok(())
+}
 
+/// The `Reflect` object and its functions (section 26.1).
+fn install_reflect(interp: &mut Interp) -> JsResult<()> {
+    let global = interp.global;
     let object_proto = interp.intrinsics.object_proto;
     let reflect = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
     data(interp, global, "Reflect", Value::Object(reflect), HIDDEN)?;
