@@ -201,7 +201,7 @@ fn carried_art_dropped_in_another_document_is_copied_and_the_source_stays() {
     app.run("file.new", json!({"width": 400, "height": 300, "name": "Source"})).unwrap();
     let id = NodeId(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
     let st = app.session.active().unwrap();
-    let art = CarriedArt { document: st.uid, ids: vec![id], grab: Point::new(100.0, 100.0), revision: st.revision };
+    let art = CarriedArt { document: st.uid, ids: vec![id], grab: Point::new(100.0, 100.0), revision: st.revision, before: std::sync::Weak::new() };
     let source = st.doc.clone();
     app.run("file.new", json!({"width": 400, "height": 300, "name": "Target"})).unwrap();
     let ctx = crate::testing::ui_context();
