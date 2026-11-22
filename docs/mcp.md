@@ -2736,8 +2736,8 @@ number in another unit and `convert(unit)` changes the object to it and returns 
 100% is one `baseUnit`; new objects take `UnitValue.baseUnit`, which is `1 pt` (1/72 inch) until a script sets it, `null` sets
 it back, and an object's own `baseUnit` replaces it for that object. `toString()` gives the number and the abbreviation,
 such as `12 pt`. With a `UnitValue` and a number, `+`, `-`, `*`, `/` and `%` calculate with the object's number and
-give a new `UnitValue` in its unit; with two, the right one is converted to the left one's unit and the result is in
-the left one's unit. `<`, `<=`, `==` and `!=` compare the numbers the same way, `>` is true when `<=` is false and
+give a new `UnitValue` in its unit; with two, the right one is converted to the left one's unit, with the left one's
+`baseUnit` for `px` and `%`, and the result is in the left one's unit. `<`, `<=`, `==` and `!=` compare the numbers the same way, `>` is true when `<=` is false and
 `>=` when `<` is false, and `===` compares objects as usual. Unary `+` and `-` give the number and its negation, `~`
 inverts its 32-bit integer, and `!` is true for a number that is not 0. Other operands, and the other operators,
 work as in standard JavaScript. VectorCraft's own rules: an unknown unit, text that is not a number and a unit (or

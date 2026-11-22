@@ -12,8 +12,8 @@
 //!
 //! In a realm with `UnitValue`, the operators take its objects as follows. `+`, `-`, `*`, `/` and
 //! `%` with a `UnitValue` and a number calculate with the magnitude and give a new `UnitValue` in
-//! its unit; with two, the right one is converted to the left one's unit first and the result is in
-//! the left one's unit. `<`, `<=`, `==` and `!=` compare magnitudes the same way, `>` is the
+//! its unit; with two, the right one is converted to the left one's unit first, with the left one's
+//! base for `px` and `%`, and the result is in the left one's unit. `<`, `<=`, `==` and `!=` compare magnitudes the same way, `>` is the
 //! negation of `<=` and `>=` the negation of `<`. Unary `+` and `-` give the magnitude and its
 //! negation, `~` inverts the magnitude's 32-bit integer, and `!` is true for a magnitude that is not
 //! 0. Any other operand, and every other operator, works as in standard JavaScript, as do all
@@ -141,16 +141,45 @@ fn greatest_common_divisor(mut a: u64, mut b: u64) -> u64 {
     a
 }
 
-/// `value` in unit `from`, given in unit `to`; both have a length.
-fn between(value: f64, from: (u64, u64), to: (u64, u64)) -> f64 {
+/// The ratio of a length in unit `from` to the same length in unit `to`, as a reduced fraction.
+fn ratio(from: Unit, to: Unit) -> (f64, f64) {
+    let (from, to) = (from.inches().unwrap_or((1, 1)), to.inches().unwrap_or((1, 1)));
     // The products stay below 2^53, so the ratio's terms are exact.
     let (n, d) = (from.0 * to.1, from.1 * to.0);
     let g = greatest_common_divisor(n, d).max(1);
     #[allow(clippy::cast_precision_loss)]
-    let (n, d) = ((n / g) as f64, (d / g) as f64);
-    let scaled = value * n;
-    // A large value is divided first, so a result that is finite does not overflow on the way.
-    if scaled.is_finite() { scaled / d } else { value / d * n }
+    (((n / g) as f64), ((d / g) as f64))
+}
+
+/// `x` as a significand in [0.5, 1) and a power of 2; zero, infinities and NaN as themselves.
+fn split(x: f64) -> (f64, i32) {
+    if x == 0.0 || !x.is_finite() {
+        return (x, 0);
+    }
+    let (x, shift) = if x.is_normal() { (x, 0) } else { (x * 2f64.powi(64), -64) };
+    let bits = x.to_bits();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let exponent = ((bits >> 52) & 0x7ff) as i32 - 1022;
+    (f64::from_bits((bits & !(0x7ff << 52)) | (1022 << 52)), exponent + shift)
+}
+
+/// The product of `factors` divided by each of `divisors`, in that order. Each step rounds as
+/// plain multiplication and division do, but no step overflows or reaches 0 on the way, so only
+/// a result outside the range of numbers is infinite or 0.
+fn product(factors: &[f64], divisors: &[f64]) -> f64 {
+    let (mut m, mut e) = (1.0, 0);
+    for (&x, divide) in factors.iter().map(|x| (x, false)).chain(divisors.iter().map(|x| (x, true))) {
+        let (xm, xe) = split(x);
+        let (rm, re) = split(if divide { m / xm } else { m * xm });
+        (m, e) = (rm, if divide { e - xe } else { e + xe } + re);
+    }
+    while e > 1000 {
+        (m, e) = (m * 2f64.powi(1000), e - 1000);
+    }
+    while e < -1000 {
+        (m, e) = (m * 2f64.powi(-1000), e + 1000);
+    }
+    m * 2f64.powi(e)
 }
 
 fn invalid(i: &mut Interp, what: &str) -> Abrupt {
@@ -171,26 +200,22 @@ fn convert(i: &mut Interp, m: &Measure, to: Unit, what: &str) -> JsResult<f64> {
         return Err(invalid(i, what));
     };
     let base = m.base;
-    let base_inches = base.unit.inches().unwrap_or((1, 1));
     let r = match (from, to) {
         (a, b) if a == b => m.value,
         (Unit::Px, Unit::Percent) => m.value * 100.0,
         (Unit::Percent, Unit::Px) => m.value / 100.0,
         (Unit::Px | Unit::Percent, _) => {
-            let to = to.inches().unwrap_or((1, 1));
-            let bases = if from == Unit::Px { m.value } else { m.value / 100.0 };
-            // A large base is applied after the unit ratio, so a result that is finite does not
-            // overflow on the way.
-            let scaled = bases * base.value;
-            if scaled.is_finite() { between(scaled, base_inches, to) } else { between(bases, base_inches, to) * base.value }
+            let (n, d) = ratio(base.unit, to);
+            if from == Unit::Px { product(&[m.value, base.value, n], &[d]) } else { product(&[m.value, base.value, n], &[100.0, d]) }
         }
         (_, Unit::Px | Unit::Percent) => {
-            let from = from.inches().unwrap_or((1, 1));
-            let lengths = between(m.value, from, base_inches);
-            let bases = if lengths.is_finite() { lengths / base.value } else { between(m.value / base.value, from, base_inches) };
-            if to == Unit::Px { bases } else { bases * 100.0 }
+            let (n, d) = ratio(from, base.unit);
+            if to == Unit::Px { product(&[m.value, n], &[d, base.value]) } else { product(&[m.value, n, 100.0], &[d, base.value]) }
         }
-        (_, _) => between(m.value, from.inches().unwrap_or((1, 1)), to.inches().unwrap_or((1, 1))),
+        (_, _) => {
+            let (n, d) = ratio(from, to);
+            product(&[m.value, n], &[d])
+        }
     };
     if r.is_finite() { Ok(r) } else { Err(not_finite(i, what)) }
 }
@@ -478,7 +503,29 @@ pub(crate) fn binary(i: &mut Interp, op: BinaryOp, a: &Value, b: &Value) -> JsRe
             let Some(unit) = l.unit else {
                 return Err(invalid(i, what));
             };
-            let y = convert(i, &r, unit, what)?;
+            // Pixels and percentages of the left object are measured with its own base.
+            let y = match unit {
+                Unit::Px | Unit::Percent if r.base != l.base || !matches!(r.unit, Some(Unit::Px | Unit::Percent)) => match r.unit {
+                    Some(from @ (Unit::Px | Unit::Percent)) => {
+                        let (n, d) = ratio(r.base.unit, l.base.unit);
+                        let mut factors = vec![r.value, r.base.value, n];
+                        let mut divisors = vec![d, l.base.value];
+                        if from == Unit::Percent {
+                            divisors.push(100.0);
+                        }
+                        if unit == Unit::Percent {
+                            factors.push(100.0);
+                        }
+                        let y = product(&factors, &divisors);
+                        if !y.is_finite() {
+                            return Err(not_finite(i, what));
+                        }
+                        y
+                    }
+                    _ => convert(i, &Measure { base: l.base, ..r }, unit, what)?,
+                },
+                _ => convert(i, &r, unit, what)?,
+            };
             (l.value, y, l)
         }
         (Some(l), None, _, Value::Number(n)) => (l.value, *n, l),

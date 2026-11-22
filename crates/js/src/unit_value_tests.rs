@@ -38,6 +38,11 @@ fn close(got: f64, want: f64, what: &str) {
     assert!((got - want).abs() <= 1e-12 * want.abs().max(1.0), "{what}: {got} is not {want}");
 }
 
+/// `got` is within a millionth of `want`, which is not 0, however small `want` is.
+fn relative(got: f64, want: f64, what: &str) {
+    assert!((got / want - 1.0).abs() <= 1e-6, "{what}: {got} is not {want}");
+}
+
 /// Each length unit with its length in inches.
 const LENGTHS: [(&str, f64); 13] = [
     ("in", 1.0),
@@ -232,6 +237,36 @@ fn arithmetic_gives_a_new_unit_value_in_the_left_unit() {
     assert_eq!(text(&mut r, "var u = UnitValue(1, 'in'); var v = u + 1; String(u)"), "1 in", "the operands do not change");
     assert_eq!(text(&mut r, "var u = UnitValue(2, 'px'); u.baseUnit = UnitValue(1, 'mm'); (u * 3).as('mm') + ''"), "6", "the result keeps the base");
     assert_eq!(text(&mut r, "UnitValue(1, 'pt') + 'x'"), "1 ptx", "a string concatenates as in standard JavaScript");
+}
+
+#[test]
+fn the_left_objects_base_measures_its_pixels_and_percentages() {
+    let mut r = realm();
+    let pair = "var l = UnitValue(1, 'px'); l.baseUnit = UnitValue(2, 'pt'); var m = UnitValue(1, 'px'); \
+                m.baseUnit = UnitValue(4, 'pt'); var p = UnitValue(50, '%'); p.baseUnit = UnitValue(1, 'in');";
+    assert_eq!(text(&mut r, &format!("{pair} String(l + UnitValue(1, 'in'))")), "37 px");
+    assert_eq!(text(&mut r, &format!("{pair} String(l + m)")), "3 px");
+    close(number(&mut r, &format!("{pair} (p + l).value")), 50.0 + 200.0 / 72.0, "2 pt as a percentage of 1 in");
+    assert!(boolean(&mut r, &format!("{pair} l < m && m > l && l == UnitValue(2, 'pt')")));
+    let large = "var b = UnitValue(0, 'px'); b.baseUnit = UnitValue(1e308, 'pt'); var c = UnitValue(1e300, 'px'); \
+                 c.baseUnit = UnitValue(1e10, 'pt'); [(b + UnitValue(1e304, 'km')).value, (b + c).value].join()";
+    let got: Vec<f64> = text(&mut r, large).split(',').map(|s| s.parse().unwrap()).collect();
+    close(got[0], 1e304 / 1e308 * 1000.0 * 5000.0 / 127.0 * 72.0, "a large length in pixels of a large base");
+    close(got[1], 1e300 / 1e308 * 1e10, "large pixels of one large base in pixels of another");
+    let small = "var s = UnitValue(0, 'px'); s.baseUnit = UnitValue(1e-300, 'pt'); var t = UnitValue(1e-200, 'px'); \
+                 t.baseUnit = UnitValue(1e-200, 'pt'); (s + t).value";
+    let units = "var u = UnitValue(0, 'px'); u.baseUnit = UnitValue(1e20, 'pt'); var v = UnitValue(1e308, 'px'); \
+                 v.baseUnit = UnitValue(1e10, 'km'); (u + v).value";
+    close(number(&mut r, units), 1e298 * 1000.0 * 5000.0 / 127.0 * 72.0, "large pixels of a base in a larger unit");
+    let apart = "var w = UnitValue(0, 'px'); w.baseUnit = UnitValue(7e-16, 'km'); var x = UnitValue(1e-20, 'px'); \
+                 x.baseUnit = UnitValue(1e308, 'pt'); (w + x).value";
+    close(number(&mut r, apart), 1e288 / (1000.0 * 5000.0 / 127.0 * 72.0) / 7e-16, "bases too far apart for their ratio");
+    relative(number(&mut r, small), 1e-100, "small pixels of one small base in pixels of another");
+    let tiny = "var y = UnitValue(0, 'px'); y.baseUnit = UnitValue(1e-200, 'km'); var z = UnitValue(1e-320, 'px'); (y + z).value";
+    relative(number(&mut r, tiny), 1e-320 * 1e200 / (1000.0 * 5000.0 / 127.0 * 72.0), "a tiny value in pixels of a tiny base");
+    let tinier = "var y = UnitValue(0, 'px'); y.baseUnit = UnitValue(1e-320, 'pt'); var z = UnitValue(1e-320, 'px'); \
+                  z.baseUnit = UnitValue(1e-10, 'pt'); (y + z).value";
+    relative(number(&mut r, tinier), 1e-10, "a tiny value of a small base in pixels of a tiny base");
 }
 
 #[test]
