@@ -931,6 +931,7 @@ impl OnePaint {
                     dash: f.dash.clone(),
                     profile: None,
                     align: StrokeAlign::Center,
+                    gradient: None,
                     brush: None,
                     arrows: None,
                 }),
