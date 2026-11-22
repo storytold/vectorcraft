@@ -226,7 +226,7 @@ pub fn pathfinder_with(op: PathfinderOp, shapes: &[Shape], precision: f64) -> Ve
             );
             subpaths.into_iter().zip(shapes).filter(|(sp, _)| !sp.is_empty()).flat_map(|(sp, s)| one(PathData::new(sp), s.key)).collect()
         }
-        PathfinderOp::Outline => outline_edges(&arr, shapes),
+        PathfinderOp::Outline => outline_edges(&arr, shapes, precision),
         PathfinderOp::HardMix | PathfinderOp::SoftMix => regions_of(&arr)
             .into_iter()
             .filter_map(|r| {
@@ -971,13 +971,16 @@ fn along(a: &[PathSeg], b: &[PathSeg], tol: f64) -> bool {
     covers(a, b) && covers(b, a)
 }
 
-/// Pathfinder Outline: split every shape's boundary at junctions of the arrangement.
-fn outline_edges(arr: &Arrangement, shapes: &[Shape]) -> Vec<Shape> {
+/// Pathfinder Outline: split every shape's boundary at junctions of the arrangement. Junctions
+/// closer together than `reach` are one, and coincident edges within ten times it are one edge.
+/// `reach` is its value at [`DEFAULT_PRECISION`] times `precision / DEFAULT_PRECISION`, a factor kept
+/// within 0.1 to 1000 (Pathfinder Options › Precision's range of 0.001 to 10 pt).
+fn outline_edges(arr: &Arrangement, shapes: &[Shape], precision: f64) -> Vec<Shape> {
     // Sorted by x (then y), so a segment needs only the junctions inside its control box.
     let junctions = arr.junctions();
     let scale = shapes.iter().filter_map(|s| s.path.control_bounds()).map(|r| r.width().max(r.height())).fold(1.0, f64::max);
     let tol = scale * 1e-7;
-    let reach = tol.max(1e-6);
+    let reach = tol.max(1e-6) * (precision / DEFAULT_PRECISION).clamp(0.1, 1000.0);
     // (chain, key, source index)
     let mut chains: Vec<(Vec<Seg>, u64)> = Vec::new();
     for s in shapes {

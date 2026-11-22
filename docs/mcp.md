@@ -6256,7 +6256,9 @@ Pathfinder Options: `object.pathfinder.options {precision?, removeRedundantPoint
 `prefs.get`/`prefs.set` with key `pathfinder`) reads and sets the options every later Shape Mode and Pathfinder
 operation uses: `precision` (0.001–10 pt, default 0.01; a string with a unit or a string that is all one number also reads, and
 any other string, such as `"1abc"`, is an error) is how closely results follow
-the paths (they are refit to within it and pieces thinner than it are dropped), `removeRedundantPoints` takes the
+the paths (they are refit to within it and pieces thinner than it are dropped; Outline treats crossings closer together
+than a small tolerance as one point and edges that lie within ten times it as one edge, and that tolerance is multiplied by
+`precision / 0.01`, so 0.01 keeps it as it was and 10 makes it 1,000 times larger), `removeRedundantPoints` takes the
 anchors that don't change a result's shape off it, and `removeUnpainted` makes Divide and Outline leave out the pieces
 of objects with no fill (or only hidden fills). Both default to false; `{}` reads the options. Each Shape Mode and
 Pathfinder command (`object.pathfinder.unite` … `minusBack`) also takes `precision`, `removeRedundantPoints` and
@@ -6276,8 +6278,10 @@ mean what they mean for the panel's operations; the other operations ignore `rem
 on, a compound shape's area counts as filled when the shape has a visible fill of its own, and Divide keeps every piece
 when the group or compound shape has one. Outline strokes a compound shape's area in the shape's own fill, and gives
 the edges no paint when the shape has no fill (the shape's own strokes still draw over the result). `effect.apply`
-fills the ones `params` leave out from the current Pathfinder Options, and the values join its journal entry. An effect
-saved without them evaluates with precision 0.01 and both switches off, as before effects kept them. `effect.setParams
+fills the ones `params` leave out from the current Pathfinder Options, and all three values join its journal entry,
+those `params` gave and those filled in, so a replay gives the same effect whatever the options are then. An effect
+saved without them evaluates with precision 0.01 and both switches off, as before effects kept them. A stored
+`precision` that is not a number (`true`, or a string such as `"1abc"`) evaluates and scales as 0.01. `effect.setParams
 {index, params: {precision?, removeRedundantPoints?, removeUnpainted?}}` edits them as one undo step; values the
 effect already evaluates with record no undo step and return `{ids: []}`. A precision out of range, or a switch that
 isn't true or false, is refused with an error and nothing changes. Scale Strokes & Effects scales `precision` with the

@@ -1955,6 +1955,31 @@ fn a_pathfinder_effect_keeps_the_options_in_force_when_applied() {
     assert_eq!(mix, &json!({"mixingRate": 50.0, "precision": 0.5, "removeRedundantPoints": true, "removeUnpainted": true}));
 }
 
+/// A Pathfinder effect given some of its options in `params` journals every option it used, so
+/// replaying the journal with other preferences gives the same effect and art.
+#[test]
+fn a_pathfinder_effect_given_some_options_journals_every_option_it_used() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 99.5, "width": 100, "height": 50})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.prefs.pathfinder = PathfinderOptions { precision: 1.0, remove_redundant_points: true, remove_unpainted: true };
+    s.execute("effect.apply", &json!({"effect": "pathfinder.divide", "params": {"precision": 0.25}})).unwrap();
+    let all = json!({"precision": 0.25, "removeRedundantPoints": true, "removeUnpainted": true});
+    assert_eq!(first_effect_params(&s), all);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["params"]), ("effect.apply", &all), "the journal entry gives every option the effect used");
+    let mut replay = Session::new();
+    for (id, p) in &s.journal {
+        replay.execute(id, p).unwrap();
+    }
+    assert_eq!(replay.prefs.pathfinder, PathfinderOptions::default());
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&replay), doc(&s));
+}
+
 /// A live Pathfinder effect evaluates with its own options as the panel's operations do with
 /// Pathfinder Options: a precision of 1 pt drops a 0.5 pt overlap, Divide leaves out an unfilled
 /// object's pieces, and Remove Redundant Points drops an anchor that shapes nothing.

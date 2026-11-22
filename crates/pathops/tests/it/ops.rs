@@ -237,6 +237,23 @@ fn pf_outline_dedups_shared_edges() {
     assert!(close(len, 70.0, 1e-9), "len {len}");
 }
 
+/// Outline follows Precision: two bars whose left edges cross a square's top edge 0.00005 pt apart
+/// leave a piece of that length between the crossings at the default precision, and none at 10 pt,
+/// where the two crossings are one junction.
+#[test]
+fn pf_outline_joins_junctions_closer_than_the_precision() {
+    let s = vec![shape(rect(0.0, 0.0, 100.0, 100.0), 1), shape(rect(50.0, 90.0, 10.0, 20.0), 2), shape(rect(50.00005, 95.0, 4.99995, 10.0), 3)];
+    let shortest = |r: &[Shape]| r.iter().map(|s| s.path.length()).fold(f64::INFINITY, f64::min);
+    let length = |r: &[Shape]| r.iter().map(|s| s.path.length()).sum::<f64>();
+    let at_default = pathfinder_with(PathfinderOp::Outline, &s, DEFAULT_PRECISION);
+    assert_eq!(at_default, pathfinder(PathfinderOp::Outline, &s));
+    assert!(shortest(&at_default) < 1e-4, "{at_default:?}");
+    let coarse = pathfinder_with(PathfinderOp::Outline, &s, 10.0);
+    assert!(shortest(&coarse) > 1e-3, "{coarse:?}");
+    assert!(coarse.len() < at_default.len(), "{} pieces at 10 pt, {} at the default", coarse.len(), at_default.len());
+    assert!(close(length(&coarse), length(&at_default), 1e-6), "{} against {}", length(&coarse), length(&at_default));
+}
+
 #[test]
 fn regions_and_region_at() {
     let s = stack();
