@@ -152,6 +152,11 @@ fn each_selected_path_gets_a_circle_in_one_step() {
     let id = id_of(&s.execute(COMMAND, &json!({})).unwrap());
     let r = circle(&s, id).1;
     assert!(r <= 20.0 + 1e-6 && r > least(20.0), "the member's own square: {r}");
+    // Inside the isolated compound path, the circle joins it.
+    s.execute("object.isolate", &json!({"id": compound.0})).unwrap();
+    select(&mut s, &[member]);
+    let id = id_of(&s.execute(COMMAND, &json!({})).unwrap());
+    assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(compound));
 }
 
 /// The drawn circle stays inside a large square turned so that it touches the square's sides
@@ -200,4 +205,17 @@ fn open_paths_other_objects_and_no_selection_are_refused() {
     let flat = id_of(&s.execute("path.create", &json!({"anchors": flat, "closed": true})).unwrap());
     select(&mut s, &[flat]);
     refused(&mut s, "fills no area");
+    // A selected layer is refused too, alone or with a path.
+    let mut layer = None;
+    s.doc().unwrap().doc.walk(|n| {
+        if n.is_layer() {
+            layer.get_or_insert(n.id);
+        }
+    });
+    let layer = layer.unwrap();
+    let path = id_of(&s.execute("shape.rectangle", &json!({"x": 200, "y": 100, "width": 50, "height": 50})).unwrap());
+    for ids in [vec![layer], vec![layer, path]] {
+        select(&mut s, &ids);
+        refused(&mut s, "is not a closed path or compound path");
+    }
 }

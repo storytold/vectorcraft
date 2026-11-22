@@ -41,6 +41,8 @@ pub const TANGENT_KINDS: &[(&str, &str)] = &[("All", "all"), ("External", "exter
 /// dialog (Offset, One per Object) with a Preview.
 pub const BOUNDING_RECTANGLE: &str = "addon.pathtools.boundingRectangle";
 pub const BOUNDING_CIRCLE: &str = "addon.pathtools.boundingCircle";
+/// Add Inscribed Circle's command, whose menu item runs it with no dialog.
+pub const INSCRIBED_CIRCLE: &str = "addon.pathtools.inscribedCircle";
 /// The close modes, as `addon.pathtools.close` names them, and their labels.
 const CLOSE_MODES: [(&str, &str); 3] = [("handles", "Keep Handles"), ("straight", "Straight"), ("smooth", "Smooth")];
 const LABEL_W: f32 = 64.0;
@@ -87,7 +89,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Common Tangents…", COMMON_TANGENTS, json!({ "tangents": "all", "centerline": false })),
         Item::Cmd("Add Bounding Rectangle…", BOUNDING_RECTANGLE, json!({ "offset": 0, "each": false })),
         Item::Cmd("Add Bounding Circle…", BOUNDING_CIRCLE, json!({ "offset": 0, "each": false })),
-        Item::Cmd("Add Inscribed Circle", "addon.pathtools.inscribedCircle", json!({})),
+        Item::Cmd("Add Inscribed Circle", INSCRIBED_CIRCLE, json!({})),
     ]
 }
 

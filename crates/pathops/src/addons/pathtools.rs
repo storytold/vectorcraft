@@ -35,7 +35,10 @@ pub use bridge::{
 pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};
-pub use inscribed::{INSCRIBED_PRECISION, Inscribed, InscribedError, MAX_INSCRIBED_EDGES, inscribed_circle};
+pub use inscribed::{
+    INSCRIBED_PRECISION, Inscribed, InscribedError, MAX_INSCRIBED_CELLS, MAX_INSCRIBED_EDGES, MAX_INSCRIBED_WORK, inscribed_circle,
+    inscribed_circle_within,
+};
 pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };
