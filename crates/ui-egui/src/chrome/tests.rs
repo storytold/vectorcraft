@@ -29,27 +29,29 @@ fn the_tabs_after_the_leading_one_are_drawn_whole() {
     assert_eq!(super::tab_room(None, false, 120.0, 119.99), 119.99, "no leading tab");
 }
 
-/// A shortened title shows at every width that holds "…", fractional ones included (#8584).
+/// A shortened title shows at every width that holds "…", fractional ones included (#8584), in the
+/// semibold face and in the tab titles' face (the condensed one in a build with craft-fonts, #8583).
 #[test]
 fn a_shortened_title_fits_at_fractional_widths() {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
-    let font = crate::theme::semibold(13.0);
     let title = "Untitled-12 @ 66.67 % (RGB/Preview)";
     let mut too_wide = vec![];
     let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-        let (ellipsis, _) = super::shortened_title(ui.ctx(), "…", font.clone(), egui::Color32::WHITE, 1000.0);
-        let mut width = ellipsis.size().x.ceil() + 1.0;
-        while width < 200.0 {
-            let (galley, fits) = super::shortened_title(ui.ctx(), title, font.clone(), egui::Color32::WHITE, width);
-            if !fits {
-                too_wide.push((width, galley.size().x));
+        for font in [crate::theme::semibold(13.0), crate::theme::tab_title_font(ui, 13.0)] {
+            let (ellipsis, _) = super::shortened_title(ui.ctx(), "…", font.clone(), egui::Color32::WHITE, 1000.0);
+            let mut width = ellipsis.size().x.ceil() + 1.0;
+            while width < 200.0 {
+                let (galley, fits) = super::shortened_title(ui.ctx(), title, font.clone(), egui::Color32::WHITE, width);
+                if !fits {
+                    too_wide.push((font.family.clone(), width, galley.size().x));
+                }
+                width += 0.25;
             }
-            width += 0.25;
         }
     });
     output.textures_delta.clear();
-    assert!(too_wide.is_empty(), "shortened titles wider than their room (room, width): {too_wide:?}");
+    assert!(too_wide.is_empty(), "shortened titles wider than their room (family, room, width): {too_wide:?}");
 }
 
 /// Tabs 100 wide at 0, 100, 200…, for documents `docs` (a document listed twice has two views).

@@ -145,12 +145,87 @@ fn tab_titles_in_the_condensed_face_fit_more_tabs() {
         let whole = texts.iter().filter(|(t, _)| t.starts_with("Poster draft") && !t.ends_with('…')).count();
         // The height of an x, in the tab font and in semibold text.
         let x = |font: egui::FontId| ctx.fonts_mut(|f| f.layout_no_wrap("x".into(), font, egui::Color32::WHITE)).rows[0].glyphs[0].uv_rect.size.y;
-        (whole, x(crate::theme::tab_font(40.0)), x(crate::theme::semibold(40.0)))
+        let tab = if face.is_some() { crate::theme::tab_font(200.0) } else { crate::theme::semibold(200.0) };
+        (whole, x(tab), x(crate::theme::semibold(200.0)))
     };
     let (semibold, _, _) = whole_tabs(None);
     let (narrow, x_tab, x_semibold) = whole_tabs(Some(condensed));
     assert!(narrow > semibold, "more tabs fit whole in the condensed face: {narrow} against {semibold}");
-    assert!((x_tab - x_semibold).abs() <= 1.0, "an x is {x_tab} pt tall in a tab title and {x_semibold} pt in semibold text");
+    // Two points at 200 pt: a pixel of rounding on each glyph. The faces' own x-heights differ by
+    // about 8 pt at this size.
+    assert!((x_tab - x_semibold).abs() <= 2.0, "at 200 pt an x is {x_tab} pt tall in a tab title and {x_semibold} pt in semibold text");
+}
+
+/// The tab strip lays its titles out in the tab family's own face when it has one: the monospace
+/// face stands in for craft-fonts' condensed face, which CI's craft-fonts checkout does not have
+/// (#8583).
+#[test]
+fn tab_titles_draw_in_the_tab_familys_face() {
+    let stand_in = vectorcraft_text::CraftFont {
+        family: "Stand-in",
+        style: "Regular",
+        scripts: &["Latn"],
+        bytes: include_bytes!("../../../../assets/fonts/JetBrainsMono-Regular.ttf"),
+    };
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100, "name": "Tab test"})).unwrap();
+    app.sync_views();
+    let ctx = egui::Context::default();
+    ctx.set_fonts(crate::theme::interface_fonts_with(Some(&stand_in)));
+    let titles = title_fonts(&mut app, &ctx);
+    assert_eq!(titles.len(), 1, "{titles:?}");
+    for (title, font) in titles {
+        assert_eq!(font.family, egui::FontFamily::Name(crate::theme::FONT_TAB.into()), "{title}");
+    }
+}
+
+/// The fonts the tab strip lays its "Tab test" titles out in.
+fn title_fonts(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::FontId)> {
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, SIZE)), ..Default::default() }, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| chrome::doc_tabs(app, ui));
+    });
+    out.textures_delta.clear();
+    fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::FontId)>) {
+        match s {
+            egui::Shape::Text(t) if t.galley.text().starts_with("Tab test") => {
+                v.extend(t.galley.job.sections.first().map(|s| (t.galley.text().to_owned(), s.format.font_id.clone())));
+            }
+            egui::Shape::Vec(list) => list.iter().for_each(|s| walk(s, v)),
+            _ => {}
+        }
+    }
+    let mut fonts = vec![];
+    for c in &out.shapes {
+        walk(&c.shape, &mut fonts);
+    }
+    fonts
+}
+
+/// Without the condensed face the tab family is not bound, and tab titles draw in the semibold
+/// family as it is, with a face added to it later (#8583).
+#[test]
+fn tab_titles_draw_in_semibold_where_the_tab_family_is_not_bound() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for i in 0..3 {
+        app.run("file.new", json!({"width": 100, "height": 100, "name": format!("Tab test {i}")})).unwrap();
+    }
+    app.session.set_active(0);
+    app.sync_views();
+    // A face put at the head of the semibold family after the interface's, as an embedder may.
+    let mut fonts = crate::theme::interface_fonts_with(None);
+    let added = "Added semibold".to_owned();
+    fonts.font_data.insert(
+        added.clone(),
+        std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../../../assets/fonts/JetBrainsMono-Regular.ttf"))),
+    );
+    fonts.families.entry(egui::FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into())).or_default().insert(0, added);
+    let ctx = egui::Context::default();
+    ctx.set_fonts(fonts);
+    let titles = title_fonts(&mut app, &ctx);
+    assert_eq!(titles.len(), 3, "{titles:?}");
+    for (title, font) in titles {
+        assert_eq!(font.family, egui::FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into()), "{title}");
+    }
 }
 
 /// With the last document active, the tabs from it to the end leave room before the » button, and

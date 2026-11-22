@@ -14,12 +14,16 @@
 //! out with a warning, never an error, and never costs the desktop its fonts.
 //!
 //! On native targets it writes `CONDENSED_UI_FONT`: the condensed face document tab titles draw in
-//! (`CONDENSED_UI_FACE`), the one row it reads from the opt-in `fonts/latin-manifest.txt`. A
-//! checkout without that row leaves it `None` with a warning, never an error.
+//! (`build/condensed_ui_face.rs`), the one row it reads from the opt-in `fonts/latin-manifest.txt`.
+//! A checkout without the catalog or that row leaves it `None` with a warning, never an error; an
+//! unreadable catalog, a malformed row or a file that can't be embedded is an error with
+//! `CRAFT_FONTS_REQUIRED=1`.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+#[path = "build/condensed_ui_face.rs"]
+mod condensed_ui_face;
 #[path = "build/web_fonts.rs"]
 mod web_fonts;
 
@@ -28,6 +32,7 @@ fn main() {
     println!("cargo::rerun-if-env-changed=CRAFT_FONTS_REQUIRED");
     println!("cargo::rerun-if-changed=web-fonts.txt");
     println!("cargo::rerun-if-changed=build/web_fonts.rs");
+    println!("cargo::rerun-if-changed=build/condensed_ui_face.rs");
     let required = std::env::var_os("CRAFT_FONTS_REQUIRED").is_some();
     let (mut fonts, mut web, mut condensed) = (String::new(), String::new(), String::from("None"));
     if let Some(dir) = std::env::var_os("CRAFT_FONTS_DIR").filter(|d| !d.is_empty()).map(PathBuf::from) {
@@ -55,7 +60,8 @@ fn main() {
         if std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a != "wasm32") {
             match condensed_ui_font(&dir) {
                 Ok(entry) => condensed = format!("Some({entry})"),
-                Err(e) => println!("cargo::warning=document tabs draw in the interface face: CRAFT_FONTS_DIR={}: {e}", dir.display()),
+                Err((e, true)) if required => println!("cargo::error=CRAFT_FONTS_DIR={}: {e}", dir.display()),
+                Err((e, _)) => println!("cargo::warning=document tabs draw in the interface face: CRAFT_FONTS_DIR={}: {e}", dir.display()),
             }
         }
     }
@@ -108,7 +114,7 @@ fn craft_fonts(dir: &Path) -> Result<String, String> {
     Ok(out)
 }
 
-/// The `CraftFont { .. }` initialiser of one manifest row of the checkout `dir` (canonical `root`).
+/// The `CraftFont { .. }` initializer of one manifest row of the checkout `dir` (canonical `root`).
 fn craft_font(dir: &Path, root: &Path, family: &str, style: &str, file: &str, scripts: &str) -> Result<String, String> {
     let path = dir.join(file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
     // The manifest is supplier data: embed only regular files inside the checkout.
@@ -124,29 +130,33 @@ fn craft_font(dir: &Path, root: &Path, family: &str, style: &str, file: &str, sc
     ))
 }
 
-/// The condensed craft-fonts face (family, style) document tab titles draw in, from the opt-in
-/// Latin catalog.
-const CONDENSED_UI_FACE: (&str, &str) = ("Noto Sans", "Condensed SemiBold");
-
-/// The `CraftFont { .. }` initialiser of [`CONDENSED_UI_FACE`]'s row in `fonts/latin-manifest.txt`.
-fn condensed_ui_font(dir: &Path) -> Result<String, String> {
+/// The `CraftFont { .. }` initializer of the condensed face's row in `fonts/latin-manifest.txt`
+/// (`build/condensed_ui_face.rs`). The error says whether the checkout is broken: one without the
+/// catalog or the row is an older craft-fonts, and an unreadable catalog, a malformed row or a row
+/// whose file can't be embedded is broken.
+fn condensed_ui_font(dir: &Path) -> Result<String, (String, bool)> {
+    let (family, style) = condensed_ui_face::FACE;
     let manifest = dir.join("fonts/latin-manifest.txt");
     // A checkout without the catalog is watched through its folder, so the build runs again once
     // the catalog appears.
     let watched = if manifest.is_file() { manifest.clone() } else { dir.join("fonts") };
     println!("cargo::rerun-if-changed={}", watched.display());
-    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("{}: {e} (an older craft-fonts?)", manifest.display()))?;
-    let root = dir.canonicalize().map_err(|e| format!("{}: {e}", dir.display()))?;
-    let row = text
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(|l| l.split(" | ").map(str::trim).collect::<Vec<_>>())
-        .find(|f| f.first() == Some(&CONDENSED_UI_FACE.0) && f.get(1) == Some(&CONDENSED_UI_FACE.1));
-    let Some([family, style, file, scripts, ..]) = row.as_deref() else {
-        return Err(format!("{} {} not in {} (an older craft-fonts?)", CONDENSED_UI_FACE.0, CONDENSED_UI_FACE.1, manifest.display()));
+    let text = std::fs::read_to_string(&manifest).map_err(|e| {
+        let older = e.kind() == std::io::ErrorKind::NotFound;
+        (format!("{}: {e}{}", manifest.display(), if older { " (an older craft-fonts?)" } else { "" }), !older)
+    })?;
+    let row = condensed_ui_face::row(&text).map_err(|e| (format!("{}: {e}", manifest.display()), true))?;
+    let Some((file, scripts)) = row else {
+        return Err((format!("{family} {style} not in {} (an older craft-fonts?)", manifest.display()), false));
     };
-    craft_font(dir, &root, family, style, file, scripts)
+    let root = dir.canonicalize().map_err(|e| (format!("{}: {e}", dir.display()), true))?;
+    // A row whose file is missing is watched through the file's folder inside the checkout (or the
+    // checkout's `fonts/`), so the build runs again once the file appears.
+    craft_font(dir, &root, family, style, file, scripts).map_err(|e| {
+        let inside = dir.join(file).parent().and_then(|p| p.canonicalize().ok()).filter(|p| p.starts_with(&root) && p.is_dir());
+        println!("cargo::rerun-if-changed={}", inside.unwrap_or_else(|| dir.join("fonts")).display());
+        (e, true)
+    })
 }
 
 /// One `WebFont { .. }` initialiser per `web-fonts.txt` line, from its craft-fonts manifest row, and

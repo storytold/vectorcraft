@@ -45,6 +45,8 @@ fonts listed in https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.m
 Shippori Mincho, BIZ UDMincho, Noto Sans CJK SC and Noto Sans Arabic in the current manifest;
 web builds BIZ UDPGothic Regular only) under the SIL
 Open Font License 1.1. Their license texts ship with the release packages as OFL-<family>.txt.
+Desktop builds with a craft-fonts checkout whose fonts/latin-manifest.txt lists Noto Sans Condensed
+SemiBold (Copyright 2022 The Noto Project Authors, SIL Open Font License 1.1) also embed that face.
 
 PDF import decodes CJK text with Adobe's CMap resources (https://github.com/adobe-type-tools/cmap-resources),
 compiled into the app through the hayro-cmap crate under the BSD 3-Clause License:

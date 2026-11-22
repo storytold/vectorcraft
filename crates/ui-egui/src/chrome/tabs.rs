@@ -56,7 +56,7 @@ pub(crate) fn window_tab(app: &VectorcraftApp, ui: &mut Ui, w: crate::doc_window
     ui.painter().rect_filled(strip, 0.0, t.tab_strip);
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     let title = document_window_title(app, w).unwrap_or_default();
-    let galley = ui.painter().layout_no_wrap(title, theme::tab_font(title_size), t.text_strong);
+    let galley = ui.painter().layout_no_wrap(title, theme::tab_title_font(ui, title_size), t.text_strong);
     let r = egui::Rect::from_min_size(strip.min, vec2((galley.size().x + 28.0).min(strip.width()), strip.height() - 1.0));
     ui.painter().rect_filled(r, 0.0, t.panel);
     ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.5, t.border));
@@ -213,6 +213,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     // On the Home screen no tab is the current one.
     let shown = crate::doc_windows::tab_window(app).filter(|_| app.ui.home.is_none());
+    let title_font = theme::tab_title_font(ui, title_size);
     // The windows under the tabs, with the text each tab shows, its whole title and the text laid
     // out; `active` is the position of the highlighted one. An inactive tab shows the name alone,
     // without the zoom and the mode in parentheses (color mode and view, or the opacity mask being
@@ -225,7 +226,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             let title = window_tab_title(app, w, d);
             let (text, color) =
                 if Some(w) == shown { (title.clone(), t.text_strong) } else { (view_tab_name(d, crate::doc_windows::label(app, w)), t.text_dim) };
-            let galley = ui.painter().layout_no_wrap(text.clone(), theme::tab_font(title_size), color);
+            let galley = ui.painter().layout_no_wrap(text.clone(), title_font.clone(), color);
             (w, text, title, galley)
         })
         .collect();
@@ -259,7 +260,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
                 break;
             }
             let color = if Some(*win) == shown { t.text_strong } else { t.text_dim };
-            let (galley, fits) = shortened_title(ui.ctx(), text, theme::tab_font(title_size), color, left - TAB_PADDING);
+            let (galley, fits) = shortened_title(ui.ctx(), text, title_font.clone(), color, left - TAB_PADDING);
             (galley, left.max(0.0), true, fits)
         } else {
             (galley.clone(), *w, false, true)

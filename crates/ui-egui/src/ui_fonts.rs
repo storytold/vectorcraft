@@ -239,7 +239,7 @@ pub(crate) fn baseline_copies(defs: &FontDefinitions, name: &str, data: &FontDat
     let mut copies: Vec<(String, FontData, Vec<FontFamily>)> = vec![];
     for (family, stack) in &defs.families {
         let head = stack.first().and_then(|head| Some((head.as_str(), defs.font_data.get(head)?)));
-        let shift = head.and_then(|(_, data)| row_metrics(data)).map_or(0.0, |row| baseline_shift(row, (*data.font).as_ref(), data.index));
+        let shift = head.and_then(|(_, data)| row_metrics(data)).map_or(0.0, |row| baseline_shift(row, data));
         if let Some((_, _, families)) = copies.iter_mut().find(|(_, copy, _)| copy.tweak.y_offset_factor.to_bits() == shift.to_bits()) {
             families.push(family.clone());
             continue;
@@ -266,15 +266,19 @@ fn em_metrics(data: &[u8], index: u32) -> Option<(f32, f32)> {
     Some((ascent / upem, (ascent - descent + gap) / upem))
 }
 
-/// The `y_offset_factor` that puts the glyphs of the face at `index` of `face` on the baseline of
-/// the row's first face, whose ascent, row height and offset in ems are `row`. egui draws a
-/// fallback glyph's baseline at its face's ascent plus half the difference between the two row
-/// heights, so a face with a taller ascent or descent sits off the baseline by the shift computed
-/// here, in ems of the font size, limited to half an em either way.
-fn baseline_shift(row: (f32, f32, f32), face: &[u8], index: u32) -> f32 {
+/// The `y_offset_factor` that puts the glyphs of the fallback face `data` on the baseline of the
+/// row's first face, whose ascent, row height and offset in ems are `row`. egui draws a fallback
+/// glyph's baseline at its face's ascent plus half the difference between the two row heights, so a
+/// face with a taller ascent or descent sits off the baseline by the shift computed here, in ems of
+/// the font size, limited to half an em either way. egui scales the face's metrics and its
+/// `y_offset_factor` by the face's own `FontTweak` scale, so both are measured at that scale.
+fn baseline_shift(row: (f32, f32, f32), data: &FontData) -> f32 {
     let (row_ascent, row_height, row_offset) = row;
-    let shift = em_metrics(face, index).map_or(0.0, |(ascent, height)| row_ascent + row_offset - (ascent + 0.5 * (row_height - height)));
-    if shift.is_finite() { shift.clamp(-0.5, 0.5) } else { 0.0 }
+    let scale = data.tweak.scale;
+    let shift = em_metrics((*data.font).as_ref(), data.index)
+        .map_or(0.0, |(ascent, height)| row_ascent + row_offset - scale * ascent - 0.5 * (row_height - scale * height));
+    let factor = if shift.is_finite() { shift.clamp(-0.5, 0.5) / scale } else { 0.0 };
+    if factor.is_finite() { factor } else { 0.0 }
 }
 
 /// Call `f` with the text of `shape` and the shapes it holds.
@@ -375,8 +379,10 @@ mod tests {
         fonts.finish(&ctx);
         frame(&ctx, &mut fonts, "日本語の文字 Layer 1");
         if vectorcraft_text::CRAFT_FONTS.is_empty() {
+            // The condensed tab face is read from its own catalog, so a checkout can give it alone.
+            let condensed = vectorcraft_text::CONDENSED_UI_FONT.as_ref().map(crate::theme::craft_font_name);
             let names: Vec<String> = ctx.fonts(|f| f.definitions().font_data.keys().cloned().collect());
-            assert!(names.iter().all(|n| !n.starts_with("craft-fonts")), "{names:?}");
+            assert!(names.iter().all(|n| !n.starts_with("craft-fonts") || Some(n) == condensed.as_ref()), "{names:?}");
         }
         assert!(has_glyph(&ctx, 'L'));
     }

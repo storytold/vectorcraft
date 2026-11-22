@@ -1501,6 +1501,9 @@ fn bundled_fonts_cover_the_catalogs() {
             egui::FontFamily::Name(crate::theme::FONT_TAB.into()),
             egui::FontFamily::Name(crate::theme::FONT_MONO.into()),
         ];
+        // The tab family is bound only in builds with craft-fonts' condensed face.
+        let tab = egui::FontFamily::Name(crate::theme::FONT_TAB.into());
+        let families: Vec<egui::FontFamily> = families.into_iter().filter(|f| *f != tab || fonts.definitions().families.contains_key(f)).collect();
         for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
             let (entries, _) = parse_entries(l.source);
             let cjk_checked = japanese_ui_font && l.code == "ja";

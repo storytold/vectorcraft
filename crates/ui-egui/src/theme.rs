@@ -497,15 +497,22 @@ pub const FONT_MONO: &str = "mono";
 /// The family document tab titles draw in. In a build with craft-fonts' condensed face
 /// ([`vectorcraft_text::CONDENSED_UI_FONT`]), that face heads it, at the x-height of the
 /// [`FONT_UI_SEMIBOLD`] face, followed by the faces of [`FONT_UI_SEMIBOLD`] on its baseline, so
-/// more tabs fit in the strip (#8583). Without it the family is [`FONT_UI_SEMIBOLD`]'s.
+/// more tabs fit in the strip (#8583). Without it the family is not bound, and tab titles draw in
+/// [`FONT_UI_SEMIBOLD`] ([`tab_title_font`]).
 pub const FONT_TAB: &str = "tab";
 
 pub fn semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(FONT_UI_SEMIBOLD.into()))
 }
-/// A document tab's title font ([`FONT_TAB`]).
-pub fn tab_font(size: f32) -> FontId {
+/// A font in [`FONT_TAB`], which is bound only with the condensed face: see [`tab_title_font`].
+pub(crate) fn tab_font(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(FONT_TAB.into()))
+}
+/// The font document tab titles draw in on `ui`: the [`FONT_TAB`] family when `ui`'s fonts bind
+/// it (with the condensed face), otherwise [`semibold`].
+pub fn tab_title_font(ui: &egui::Ui, size: f32) -> FontId {
+    let font = tab_font(size);
+    if ui.ctx().fonts(|f| f.definitions().families.contains_key(&font.family)) { font } else { semibold(size) }
 }
 /// Whether `family` draws semibold text and takes the bold fallback faces.
 pub(crate) fn is_semibold(family: &FontFamily) -> bool {
@@ -516,7 +523,7 @@ pub fn mono(size: f32) -> FontId {
 }
 
 /// Installs the interface's fonts and binds the families the panels and dialogs draw in
-/// ([`FONT_UI`], [`FONT_UI_SEMIBOLD`], [`FONT_TAB`], [`FONT_MONO`]). egui 0.37 only bundles its own faces when
+/// ([`FONT_UI`], [`FONT_UI_SEMIBOLD`], [`FONT_MONO`], and [`FONT_TAB`] with the condensed face). egui 0.37 only bundles its own faces when
 /// its `default_fonts` feature is on (this crate enables it); without any face a family lays out
 /// tofu, and the `egui_kittest` harness alone panics on a missing glyph. Every context that shows
 /// these families needs this once: [`crate::VectorcraftApp::ui`] calls it on its first pass, and
@@ -548,9 +555,10 @@ pub(crate) fn interface_fonts_with(condensed: Option<&vectorcraft_text::CraftFon
         |faces: Vec<&str>, fallback: &[String]| -> Vec<String> { faces.into_iter().map(str::to_owned).chain(fallback.iter().cloned()).collect() };
     fonts.families.insert(FontFamily::Proportional, family(ui.clone(), &fallback));
     let semi = family(semi, &fallback);
-    let tab = tab_faces(&mut fonts, &semi, condensed);
+    if let Some(tab) = tab_faces(&mut fonts, &semi, condensed) {
+        fonts.families.insert(FontFamily::Name(FONT_TAB.into()), tab);
+    }
     fonts.families.insert(FontFamily::Name(FONT_UI_SEMIBOLD.into()), semi);
-    fonts.families.insert(FontFamily::Name(FONT_TAB.into()), tab);
     fonts.families.insert(FontFamily::Name(FONT_UI.into()), family(ui, &fallback));
     fonts.families.insert(FontFamily::Name(FONT_MONO.into()), family(mono, &mono_fallback));
     add_craft_fonts(&mut fonts);
@@ -559,28 +567,38 @@ pub(crate) fn interface_fonts_with(condensed: Option<&vectorcraft_text::CraftFon
 
 /// The faces of [`FONT_TAB`], added to `fonts`: `condensed`, scaled to the x-height of the first
 /// face of `semi` (the [`FONT_UI_SEMIBOLD`] stack), then a copy of each face of `semi` on its
-/// baseline. `semi` itself without `condensed`, or when either face's x-height can't be read.
-fn tab_faces(fonts: &mut FontDefinitions, semi: &[String], condensed: Option<&vectorcraft_text::CraftFont>) -> Vec<String> {
+/// baseline. egui's own faces are listed under their own names, uncopied, as in the semibold
+/// family: egui skips some of their characters (the Ubuntu logo, for one) only under those names.
+/// `None` without `condensed`, or when either face's x-height can't be read.
+fn tab_faces(fonts: &mut FontDefinitions, semi: &[String], condensed: Option<&vectorcraft_text::CraftFont>) -> Option<Vec<String>> {
     let x_height = |data: &FontData| vectorcraft_text::x_height((*data.font).as_ref(), data.index).map(|h| h * data.tweak.scale);
-    let reference = semi.first().and_then(|head| fonts.font_data.get(head)).and_then(|data| x_height(data));
-    let Some((f, reference)) = condensed.zip(reference) else { return semi.to_vec() };
-    let Some(own) = vectorcraft_text::x_height(f.bytes, 0) else { return semi.to_vec() };
+    let reference = semi.first().and_then(|head| fonts.font_data.get(head)).and_then(|data| x_height(data))?;
+    let f = condensed?;
+    let own = vectorcraft_text::x_height(f.bytes, 0)?;
     let name = craft_font_name(f);
     let head = FontData::from_static(f.bytes).tweak(egui::epaint::text::FontTweak { scale: reference / own, ..Default::default() });
-    // `baseline_copies` reads the head of each family it is given: here only this one.
+    // `baseline_copies` reads the head of each family it is given. `row` also has egui's empty
+    // Proportional and Monospace families, whose copies are not this family's.
+    let tab = FontFamily::Name(FONT_TAB.into());
     let mut row = FontDefinitions::empty();
     row.font_data.insert(name.clone(), Arc::new(head.clone()));
-    row.families.insert(FontFamily::Name(FONT_TAB.into()), vec![name.clone()]);
+    row.families.insert(tab.clone(), vec![name.clone()]);
     let mut faces = vec![name.clone()];
     for face in semi {
+        if FontDefinitions::builtin_font_names().contains(&face.as_str()) {
+            faces.push(face.clone());
+            continue;
+        }
         let Some(data) = fonts.font_data.get(face).cloned() else { continue };
-        for (copy, data, _) in crate::ui_fonts::baseline_copies(&row, &format!("{face} / {name}"), &data) {
+        for (copy, data, _) in
+            crate::ui_fonts::baseline_copies(&row, &format!("{face} / {name}"), &data).into_iter().filter(|(_, _, f)| f.contains(&tab))
+        {
             fonts.font_data.insert(copy.clone(), Arc::new(data));
             faces.push(copy);
         }
     }
     fonts.font_data.insert(name, Arc::new(head));
-    faces
+    Some(faces)
 }
 
 /// The interface's own faces, added to `fonts`: the names of the regular, semibold and monospace
@@ -830,5 +848,58 @@ mod tests {
         apply(&ctx, Brightness::Light);
         assert_eq!(ctx.global_style().interaction.tooltip_delay, f32::INFINITY);
         assert_eq!(ctx.global_style().visuals.window_fill, Tokens::for_brightness(Brightness::Light).panel);
+    }
+
+    /// The face heading the tab family draws an x as tall as the semibold face does, and a
+    /// character it lacks falls back to the semibold face (drawn at its own 0.92 scale) on its
+    /// baseline (#8583). The monospace face stands in for craft-fonts' condensed face, which CI's
+    /// craft-fonts checkout does not have.
+    #[cfg(feature = "interface-fonts")]
+    #[test]
+    fn the_tab_family_keeps_the_semibold_x_height_and_baseline() {
+        let stand_in = vectorcraft_text::CraftFont {
+            family: "Stand-in",
+            style: "Regular",
+            scripts: &["Latn"],
+            bytes: include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"),
+        };
+        let mut defs = interface_fonts_with(Some(&stand_in));
+        assert_eq!(defs.families[&FontFamily::Name(FONT_TAB.into())][0], craft_font_name(&stand_in));
+        // The semibold face alone, as it draws a character in its own family.
+        defs.families.insert(FontFamily::Name("probe".into()), vec!["Inter-SemiBold".to_owned()]);
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(2.0);
+        ctx.set_fonts(defs);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+        output.textures_delta.clear();
+        let glyphs = |text: &str, font: FontId| ctx.fonts_mut(|f| f.layout_no_wrap(text.into(), font, Color32::WHITE)).rows[0].glyphs.clone();
+        let x = |font: FontId| glyphs("x", font)[0].uv_rect.size.y;
+        let (x_tab, x_semibold) = (x(tab_font(200.0)), x(semibold(200.0)));
+        // Two points at 200 pt: a pixel of rounding on each glyph. The faces' own x-heights differ
+        // by about 10 pt at this size.
+        assert!((x_tab - x_semibold).abs() <= 2.0, "at 200 pt an x is {x_tab} pt tall in a tab title and {x_semibold} pt in semibold text");
+        // egui skips some characters of its own faces (the Ubuntu logo, two symbols in its emoji
+        // face); a tab title draws them as semibold text does.
+        for c in ['\u{534D}', '\u{5350}', '\u{E0FF}', '\u{EFFD}', '\u{F0FF}', '\u{F200}'] {
+            let has = |font: FontId| ctx.fonts_mut(|f| f.has_glyph(&font, c));
+            let name = format!("U+{:04X}", u32::from(c));
+            assert_eq!(has(tab_font(13.0)), has(semibold(13.0)), "{name} has a glyph in a tab title as in semibold text");
+            if has(semibold(13.0)) {
+                // Both families take it from the same fallback face, which draws it at one size.
+                let size = |font: FontId| glyphs(&c.to_string(), font).first().map(|g| g.uv_rect.size);
+                assert_eq!(size(tab_font(13.0)), size(semibold(13.0)), "{name} draws at the same size in a tab title as in semibold text");
+            }
+        }
+        let bottom = |g: &egui::epaint::text::Glyph| g.pos.y + g.uv_rect.offset.y + g.uv_rect.size.y;
+        // U+0182, which Inter has and the monospace face lacks.
+        let c = 'Ƃ';
+        for size in [13.0_f32, 24.0, 40.0, 100.0] {
+            let own = glyphs(&c.to_string(), FontId::new(size, FontFamily::Name("probe".into())));
+            let row = glyphs(&format!("H{c}"), tab_font(size));
+            assert_eq!((own.len(), row.len()), (1, 2), "{c} lays out as one glyph");
+            // Half a point: one device pixel at 2 pixels per point, for each glyph's rounding.
+            let drift = (bottom(&row[1]) - row[0].pos.y) - (bottom(&own[0]) - own[0].pos.y);
+            assert!(drift.abs() <= 0.5, "at {size} pt, {c} ends {drift:.2} pt below the tab family's baseline");
+        }
     }
 }

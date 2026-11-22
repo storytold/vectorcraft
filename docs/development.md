@@ -178,8 +178,9 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   checkout's opt-in `fonts/latin-manifest.txt`, Noto Sans Condensed SemiBold, as
   `vectorcraft_text::CONDENSED_UI_FONT`. `theme::FONT_TAB` draws the titles in it at the
   x-height of the interface's semibold face, so more tabs fit in the strip. Without
-  `CRAFT_FONTS_DIR`, on the web, or with a checkout that lacks the row (a build warning), tab
-  titles draw in the semibold face.
+  `CRAFT_FONTS_DIR`, on the web, or with a checkout that lacks the row (a build warning),
+  `theme::FONT_TAB` is not bound and tab titles draw in the semibold family
+  (`theme::tab_title_font`).
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
@@ -205,7 +206,8 @@ font that has them to each of the families below (`ctx.add_font` with an `Insert
 family).
 
 The panels and dialogs draw in their own egui families (`theme::FONT_UI`, `FONT_UI_SEMIBOLD`,
-`FONT_MONO`), and egui panics drawing text in a family no font is bound to. `VectorcraftApp::logic`
+`FONT_MONO`, and `FONT_TAB` for document tab titles in builds with the condensed face), and egui
+panics drawing text in a family no font is bound to. `VectorcraftApp::logic`
 binds them on its first frame; an embedder that draws the panels or dialogs without it calls
 `theme::install_fonts` once on its context, with or without `interface-fonts`. It replaces the
 context's font definitions, so the embedder's own fonts are added after it.

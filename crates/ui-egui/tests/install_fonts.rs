@@ -33,7 +33,8 @@ fn frame(ctx: &egui::Context, draw: impl FnMut(&mut egui::Ui)) {
 fn every_family_the_panels_draw_in_is_bound() {
     let ctx = context();
     frame(&ctx, |ui| {
-        for font in [theme::semibold(12.0), theme::mono(12.0), FontId::new(12.0, FontFamily::Name(theme::FONT_UI.into()))] {
+        let tab = theme::tab_title_font(ui, 12.0);
+        for font in [theme::semibold(12.0), tab, theme::mono(12.0), FontId::new(12.0, FontFamily::Name(theme::FONT_UI.into()))] {
             ui.label(egui::RichText::new("Gaussian Blur").font(font));
         }
     });
@@ -45,6 +46,17 @@ fn every_family_the_panels_draw_in_is_bound() {
     let installed: Vec<&str> = INTERFACE_FACES.into_iter().filter(|face| definitions.font_data.contains_key(*face)).collect();
     let family = |family: FontFamily| definitions.families[&family].clone();
     let named = |name: &str| family(FontFamily::Name(name.into()));
+    // The tab family is bound, headed by craft-fonts' condensed face and followed by the semibold
+    // faces, when the build has that face and both faces give an x-height to match.
+    let x_height = |name: &String| definitions.font_data.get(name).and_then(|d| vectorcraft_text::x_height((*d.font).as_ref(), d.index));
+    let semibold_head = named(theme::FONT_UI_SEMIBOLD).first().and_then(x_height);
+    match vectorcraft_text::CONDENSED_UI_FONT.as_ref().filter(|f| vectorcraft_text::x_height(f.bytes, 0).is_some() && semibold_head.is_some()) {
+        None => assert!(!definitions.families.contains_key(&FontFamily::Name(theme::FONT_TAB.into()))),
+        Some(f) => {
+            assert_eq!(named(theme::FONT_TAB)[0], format!("craft-fonts {} {}", f.family, f.style));
+            assert!(named(theme::FONT_TAB).len() > named(theme::FONT_UI_SEMIBOLD).len(), "the semibold faces follow the condensed one");
+        }
+    }
     if cfg!(feature = "interface-fonts") {
         assert_eq!(installed, INTERFACE_FACES);
         assert_eq!(named(theme::FONT_UI)[0], "Inter");

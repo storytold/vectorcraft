@@ -1069,6 +1069,9 @@ pub fn x_height(data: &[u8], index: u32) -> Option<f32> {
 }
 
 #[cfg(test)]
+#[path = "../build/condensed_ui_face.rs"]
+mod condensed_ui_face_build;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 #[path = "../build/web_fonts.rs"]
