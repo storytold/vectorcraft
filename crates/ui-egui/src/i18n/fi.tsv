@@ -6012,6 +6012,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	the file holds no preferences	tiedostossa ei ole asetuksia
 @msg	`{key}` names a folder, which preferences files leave out	`{key}` nimeää kansion, eikä asetustiedostoissa ole kansioita
 @msg	the file is larger than 1 MB	tiedosto on suurempi kuin 1 Mt
+@msg	the file is larger than 64 MB	tiedosto on suurempi kuin 64 Mt
 @msg	give `path` or `data`	anna `path` tai `data`
 @msg	`{key}` must be an object	`{key}` on oltava objekti
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` ajetaan yksinään, ei erän vaiheena

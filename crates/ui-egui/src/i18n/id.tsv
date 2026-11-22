@@ -6090,6 +6090,7 @@ imageTrace	Outline	Kontur
 @msg	the file holds no preferences	file tidak berisi preferensi
 @msg	`{key}` names a folder, which preferences files leave out	`{key}` menunjuk folder, dan file preferensi tidak menyertakan folder
 @msg	the file is larger than 1 MB	file lebih besar dari 1 MB
+@msg	the file is larger than 64 MB	berkas lebih besar dari 64 MB
 @msg	give `path` or `data`	berikan `path` atau `data`
 @msg	`{key}` must be an object	`{key}` harus berupa objek
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` dijalankan sendiri, bukan sebagai langkah batch

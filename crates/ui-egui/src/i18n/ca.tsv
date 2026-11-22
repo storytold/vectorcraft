@@ -7549,6 +7549,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the file holds no preferences	el fitxer no conté cap preferència
 @msg	`{key}` names a folder, which preferences files leave out	`{key}` indica una carpeta, i els fitxers de preferències no inclouen carpetes
 @msg	the file is larger than 1 MB	el fitxer ocupa més d’1 MB
+@msg	the file is larger than 64 MB	el fitxer ocupa més de 64 MB
 @msg	give `path` or `data`	indiqueu `path` o `data`
 @msg	`{key}` must be an object	`{key}` ha de ser un objecte
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` s’executa sol, no com a pas d’un lot

@@ -3860,6 +3860,20 @@ fn warped_type_note_is_translated() {
     }
 }
 
+/// The error for a character or paragraph styles file over the 64 MB load limit is translated in
+/// every complete catalog, through an exact row or the `the file is larger than {_1} MB` template.
+#[test]
+fn styles_file_size_limit_is_translated() {
+    assert_eq!(vectorcraft_engine::cmd::textstyles::MAX_LOAD_BYTES, 64 << 20);
+    let error = "the file is larger than 64 MB";
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, error);
+        assert_ne!(shown, error, "{code}");
+        assert!(shown.contains("64"), "{code}: {shown}");
+    }
+}
+
 /// The notes a CDR import adds to its warnings are translated in every complete catalog.
 /// They are constants, which the scan of message literals doesn't see.
 #[test]

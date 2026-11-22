@@ -6461,6 +6461,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	the file holds no preferences	tệp không chứa tùy chọn nào
 @msg	`{key}` names a folder, which preferences files leave out	`{key}` chỉ định một thư mục, và tệp tùy chọn không chứa thư mục
 @msg	the file is larger than 1 MB	tệp lớn hơn 1 MB
+@msg	the file is larger than 64 MB	tệp lớn hơn 64 MB
 @msg	give `path` or `data`	hãy cung cấp `path` hoặc `data`
 @msg	`{key}` must be an object	`{key}` phải là một đối tượng
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` chạy riêng, không phải là một bước trong lô

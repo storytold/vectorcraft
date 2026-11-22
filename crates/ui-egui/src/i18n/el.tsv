@@ -5729,6 +5729,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the file holds no preferences	το αρχείο δεν περιέχει προτιμήσεις
 @msg	`{key}` names a folder, which preferences files leave out	το `{key}` ορίζει φάκελο, και τα αρχεία προτιμήσεων δεν περιέχουν φακέλους
 @msg	the file is larger than 1 MB	το αρχείο είναι μεγαλύτερο από 1 MB
+@msg	the file is larger than 64 MB	το αρχείο είναι μεγαλύτερο από 64 MB
 @msg	give `path` or `data`	δώστε `path` ή `data`
 @msg	`{key}` must be an object	το `{key}` πρέπει να είναι αντικείμενο
 @msg	`prefs.import` runs on its own, not as a batch step	το `prefs.import` εκτελείται μόνο του, όχι ως βήμα δέσμης
