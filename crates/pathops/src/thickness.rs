@@ -7,7 +7,7 @@ use std::collections::BinaryHeap;
 use kurbo::{Affine, BezPath, PathEl, Point, Rect, Shape as _};
 use vectorcraft_geom::{FillRule, PathData};
 
-use crate::boolean::{fill_bezpath, normalize_bez};
+use crate::boolean::{eps_for, fill_bezpath, normalize_bez};
 
 /// Most line pieces the outline of one shape is measured with.
 pub const MAX_THICKNESS_PIECES: usize = 100_000;
@@ -28,7 +28,8 @@ const ROUGH_PARTS: f64 = 8.0;
 /// A shape within a small fraction of `width` of the limit is taken as thick enough.
 ///
 /// `None` when it can't be told: `width` isn't a finite positive number, a coordinate isn't
-/// finite, the fill can't be resolved into outlines, or measuring it would take more than
+/// finite, the fill can't be resolved into outlines (or only so coarsely, for a shape that large,
+/// that edges closer than `width` would merge), or measuring it would take more than
 /// [`MAX_THICKNESS_PIECES`] pieces of outline or a search too long.
 pub fn thinner_than(path: &PathData, rule: FillRule, width: f64) -> Option<bool> {
     thinner_than_within(path, rule, width, &mut ThicknessBudget::new(MAX_WORK))
@@ -118,6 +119,11 @@ pub fn thinner_than_within(path: &PathData, rule: FillRule, width: f64, budget: 
     }
     // The fill's own outlines: where subpaths overlap or a path crosses itself, the edges inside the
     // fill are no outline of it. A spot within the fine pieces' error of the radius counts as one.
+    // The sweep snaps points within its tolerance together, which grows with the shape's size: one
+    // as coarse as the fine pieces could close up a fill that holds the circle, so it isn't measured.
+    if eps_for([&bp]).ok()? >= fine {
+        return None;
+    }
     let contours = normalize_bez(&bp, rule).ok()?;
     edges.clear();
     for c in contours.contours() {
@@ -543,6 +549,16 @@ mod tests {
         let mut spent = ThicknessBudget::new(0);
         assert_eq!(thinner_than_within(&bent, FillRule::NonZero, 0.085, &mut spent), None);
         assert_eq!(thinner_than_within(&square, FillRule::NonZero, 0.085, &mut spent), Some(false));
+    }
+
+    /// A shape so long that resolving its outline snaps edges closer than the width together is not
+    /// measured, while the same height at an ordinary length is.
+    #[test]
+    fn a_shape_too_long_to_resolve_at_the_width_cannot_be_measured() {
+        let rect = |w: f64| one(&[(0.0, 0.0), (w, 0.0), (w, 0.0011), (0.0, 0.0011)]);
+        assert_eq!(thinner_than(&rect(1e12), FillRule::NonZero, 0.001), None);
+        assert_eq!(thinner_than(&rect(1.0), FillRule::NonZero, 0.001), Some(false));
+        assert_eq!(thinner_than(&rect(1.0), FillRule::NonZero, 0.0012), Some(true));
     }
 
     #[test]
