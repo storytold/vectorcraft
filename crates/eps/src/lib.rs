@@ -54,7 +54,7 @@ pub use import::{
     family_style, import, import_ai, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
 };
 pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
-pub use print::{PrintJob, PrintPage, print};
+pub use print::{PrintFonts, PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::{Point, Rect};
