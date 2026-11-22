@@ -246,6 +246,8 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
+    UnitValue(Box<crate::unit_value::Measure>),
 }
 
 /// What an XML value is.
@@ -322,6 +324,7 @@ impl Class {
             Class::String(_) => "String",
             Class::RegExp(_) => "RegExp",
             Class::Date(_) => "Date",
+            Class::UnitValue(_) => "UnitValue",
         }
     }
 }
@@ -395,6 +398,8 @@ pub(crate) const XML_LIST_BYTES: usize = 96;
 pub(crate) const XML_REF_BYTES: usize = 8;
 /// The estimated bytes of a namespace an XML node holds.
 pub(crate) const XML_NS_BYTES: usize = 48;
+/// The estimated bytes of the measurement a `UnitValue` object holds.
+pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -680,6 +685,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
         }
+        Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * o.props.len() + extra

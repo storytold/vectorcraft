@@ -69,6 +69,7 @@ mod regexp_builtins;
 mod regexp_vm;
 mod string_builtins;
 mod token;
+mod unit_value;
 mod value;
 mod xml;
 mod xml_builtins;
@@ -212,5 +213,7 @@ mod interp_tests;
 mod tests;
 #[cfg(test)]
 mod text_tests;
+#[cfg(test)]
+mod unit_value_tests;
 #[cfg(test)]
 mod xml_tests;
