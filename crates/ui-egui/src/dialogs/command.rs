@@ -319,8 +319,11 @@ fn call(command: &str, fixed: &Map<String, Value>, linked: Option<f64>, mut para
 
 /// Does `command` take parameter `key` (its params description names it)?
 fn takes(command: &str, key: &str) -> bool {
-    vectorcraft_engine::find_command(command)
-        .is_some_and(|c| vectorcraft_engine::check_keys(command, c.params, &serde_json::json!({ key: null })).is_ok())
+    // An app command (Rotate View) is checked against its own params doc.
+    let params = vectorcraft_engine::find_command(command)
+        .map(|c| c.params)
+        .or_else(|| crate::menus::UI_COMMANDS.iter().find(|c| c.0 == command).map(|c| c.3));
+    params.is_some_and(|params| vectorcraft_engine::check_keys(command, params, &serde_json::json!({ key: null })).is_ok())
 }
 
 /// The parameters of the commands this dialog edits that are distances.
