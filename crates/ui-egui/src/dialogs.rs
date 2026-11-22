@@ -770,14 +770,24 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 }
 
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
-/// opened over (`ui.dialog.cancel`).
+/// opened over (Escape and the dialog's Cancel button). An error from [`try_cancel`] goes to the
+/// status bar.
 pub fn cancel(app: &mut VectorcraftApp) {
+    if let Err(e) = try_cancel(app) {
+        app.status(e);
+    }
+}
+
+/// [`cancel`], returning the error of a ScriptUI dialog whose typed text the script would refuse
+/// (`ui.dialog.cancel`). That dialog stays open with its fields as they were.
+pub fn try_cancel(app: &mut VectorcraftApp) -> Result<(), String> {
     cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     // More Settings' pop-up and Save Preset end on their own; New Document stays.
     if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
-        return;
+        return Ok(());
     }
+    let mut result = Ok(());
     if let Some(mut d) = app.ui.dialog.take() {
         if d.kind == "preferences" {
             crate::original_editor::cancel(app);
@@ -813,10 +823,8 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == script_run::PICKER_KIND {
             script_run::picker_cancel(app, &d);
         }
-        if d.kind == script_window::KIND
-            && let Err(e) = script_window::cancel(app, &mut d)
-        {
-            app.status(e);
+        if d.kind == script_window::KIND {
+            result = script_window::cancel(app, &mut d);
         }
         missing_links::cancelled(app, &d);
         // Cancel discards Recolor Artwork's own history of color edits with them.
@@ -844,6 +852,7 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
     }
     settle(app);
+    result
 }
 
 /// Whether the open dialog has a Reset ([`DialogSpec::reset`]).

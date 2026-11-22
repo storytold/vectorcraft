@@ -313,6 +313,13 @@ fn a_typed_text_the_script_refuses_keeps_every_field_and_queues_nothing() {
     assert!(script_window::cancel(&mut app, &mut d).is_err(), "Cancel is an error");
     dialogs::cancel(&mut app);
     kept(&app);
+    let ctx = egui::Context::default();
+    for (method, params) in [("ui.dialog.cancel", json!({})), ("ui.dialog.set", json!({"fields": [], "action": "cancel"}))] {
+        let (req, _) = crate::control::ControlRequest::new(method, params);
+        let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("{method}: not done") };
+        assert_eq!(r["ok"], false, "{method} answers with the error: {r}");
+        kept(&app);
+    }
     assert!(app.session.script_window().is_some(), "the script still waits");
     app.ui.dialog.as_mut().unwrap().fields.remove("text1");
     give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();

@@ -1647,19 +1647,16 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                         Ok(result) => ok(json!({"dialog": dialog, "result": result})),
                         Err(e) => err(e),
                     },
-                    Some(DialogAnswer::Cancel) => {
-                        crate::dialogs::cancel(app);
-                        ok(json!({"dialog": dialog, "result": null}))
-                    }
+                    Some(DialogAnswer::Cancel) => match crate::dialogs::try_cancel(app) {
+                        Ok(()) => ok(json!({"dialog": dialog, "result": null})),
+                        Err(e) => err(e),
+                    },
                 }
             }
             None => err("no dialog open"),
         },
         "ui.dialog.confirm" => wrap(crate::dialogs::confirm(app)),
-        "ui.dialog.cancel" => {
-            crate::dialogs::cancel(app);
-            ok(Value::Null)
-        }
+        "ui.dialog.cancel" => wrap(crate::dialogs::try_cancel(app).map(|()| Value::Null)),
         "ui.resize" => {
             let (w, h) = match coord(p, "width", 1440.0).and_then(|w| Ok((w, coord(p, "height", 900.0)?))) {
                 Ok(size) => size,
