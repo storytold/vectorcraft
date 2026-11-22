@@ -122,10 +122,16 @@ fn close_screens(p: &Panel, ok: bool) -> bool {
     let ctx = p.ctx().clone();
     let host = p.app().dialogs().expect("a window");
     let closed = host.with(|h| if ok { h.confirm::<ExportForScreensDialog>(&ctx) } else { h.cancel::<ExportForScreensDialog>(&ctx) });
-    if ok {
-        crate::dialogs::host::pump(&mut p.app(), &ctx);
+    if !ok {
+        return closed;
     }
-    closed
+    crate::dialogs::host::pump(&mut p.app(), &ctx);
+    // The dialog holds its OK: the pump accepts the filed answer, and OK then closes it with it.
+    if closed || !host.with(|h| h.confirm::<ExportForScreensDialog>(&ctx)) {
+        return closed;
+    }
+    crate::dialogs::host::pump(&mut p.app(), &ctx);
+    true
 }
 
 /// Delivers the scripted pick's answer to the panel's pending export.
@@ -177,7 +183,8 @@ fn the_rows_are_the_shared_export_settings() {
     // A preset set by an agent shows as its rows.
     run(&p, "assets.settings.set", json!({"preset": "mobile"}));
     p.frame();
-    assert!(p.shows("iOS") && p.shows("@3x"));
+    // "@3x" is the third row's Suffix: a field's text, not a name.
+    assert!(p.shows("iOS") && p.shows_value("@3x"));
     // Export (nothing selected: every asset) downloads one zip on the web.
     p.click("Export");
     let log = log.borrow();

@@ -33,6 +33,10 @@ impl Panel {
         let shown = Rc::clone(&app);
         let mut fixture = Fixture::new(move |ui| draw(&mut shown.borrow_mut(), ui));
         fixture.room(ROOM);
+        // A host the test installed on the app's window (a scripted file service) goes with it to the fixture's.
+        if let Some(host) = app.borrow().ui_ctx.as_ref().and_then(craft::host::Host::try_of_ctx) {
+            craft::host::Host::clone(&host).install(fixture.ctx());
+        }
         // The fixture's context is the app's window, as a host's is.
         app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
         let mut panel = Panel { fixture, app };
@@ -102,6 +106,15 @@ impl Panel {
         self.after();
     }
 
+    /// Clicks the item named `name` of the open menu, where a control of the panel may have the same name.
+    pub(crate) fn click_menu_item(&mut self, name: &str) {
+        let tree = self.fixture.tree();
+        let item = self.fixture.by_role(craft::ui::contract::Role::MENU_ITEM).into_iter().find(|t| tree.name_of(t.node) == Some(name));
+        let item = item.unwrap_or_else(|| panic!("no menu item {name:?} in {:?}", self.names()));
+        self.fixture.click(&item);
+        self.after();
+    }
+
     /// Clicks the control named `name` with `mods` held.
     pub(crate) fn click_with(&mut self, name: &str, mods: Modifiers) {
         let target = self.find(name);
@@ -119,6 +132,13 @@ impl Panel {
     pub(crate) fn press(&mut self, name: &str) {
         let target = self.find(name);
         self.fixture.press(&target);
+        self.after();
+    }
+
+    /// Presses on the control named `name`, moves the pointer by `by` and keeps the button down until [`Panel::release`].
+    pub(crate) fn drag_hold(&mut self, name: &str, by: Vec2) {
+        let target = self.find(name);
+        self.fixture.drag_hold_at(target.center(), by);
         self.after();
     }
 
@@ -225,6 +245,17 @@ impl Panel {
     /// The value text of the control named `name`.
     pub(crate) fn value(&self, name: &str) -> Option<String> {
         self.fixture.tree().value_of(self.look(name).node).map(str::to_owned)
+    }
+
+    /// The description of the control named `name` (a list row's trailing texts).
+    pub(crate) fn description(&self, name: &str) -> Option<String> {
+        self.fixture.tree().description_of(self.look(name).node).map(str::to_owned)
+    }
+
+    /// Whether a control in the latest frame holds the value text `value`.
+    pub(crate) fn shows_value(&self, value: &str) -> bool {
+        let tree = self.fixture.tree();
+        tree.keys().into_iter().any(|key| tree.value_of(key) == Some(value))
     }
 
     /// The toggle state of the control named `name`.
