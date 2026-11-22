@@ -200,8 +200,14 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
     let group = p.get("group").and_then(Value::as_str);
+    // The group is looked for in the document without the preview of the dialog this one replaces
+    // (which can rename the group), as that dialog's Cancel below leaves it.
+    let unpreviewed = match &st.interaction {
+        Some(it) if app.ui.dialog.is_some() => &it.doc,
+        _ => &st.doc,
+    };
     if let Some(g) = group
-        && !st.doc.swatch_groups.iter().any(|x| x.name == g)
+        && !unpreviewed.swatch_groups.iter().any(|x| x.name == g)
     {
         return Err(format!("no colour group `{g}`"));
     }

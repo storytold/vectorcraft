@@ -2075,6 +2075,28 @@ fn reopening_a_group_over_its_preview_starts_on_the_groups_colours() {
     dialogs::cancel(&mut app);
 }
 
+/// Recolor Artwork opened on a colour group over a preview that renames it finds the group by its
+/// name without the preview; an unknown group leaves the open dialog as it is.
+#[test]
+fn reopening_a_group_over_a_preview_that_renames_it_finds_the_group() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let before = group_keys(&app, "Brights");
+    app.run("ui.recolorDialog", json!({"group": "Brights"})).unwrap();
+    dialog_frame(&mut app, &ctx);
+    set(&mut app, "groupName", json!("Renamed"));
+    dialog_frame(&mut app, &ctx);
+    let named = |app: &VectorcraftApp, n: &str| app.session.doc().unwrap().doc.swatch_groups.iter().any(|g| g.name == n);
+    assert!(named(&app, "Renamed") && !named(&app, "Brights"), "the preview renames the group");
+    assert!(app.run("ui.recolorDialog", json!({"group": "Nope"})).is_err());
+    assert_eq!(field(&app, "groupName"), json!("Renamed"), "an unknown group leaves the dialog open");
+    app.run("ui.recolorDialog", json!({"group": "Brights"})).unwrap();
+    assert!(named(&app, "Brights") && !named(&app, "Renamed"), "the preview is rolled back");
+    assert_eq!(field(&app, "__assign"), json!(before), "the new dialog starts on the group's colours");
+    dialogs::cancel(&mut app);
+}
+
 /// Every paint under `v`, in order: its color, the swatch it is linked to and its tint.
 fn paints_in(v: &Value, out: &mut Vec<(Color, Option<String>, f64)>) {
     match v {
