@@ -40,7 +40,7 @@ use craft::ui::contract::{
 use craft::ui::dialog::StackDialog as _;
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::notices::{Notice, NoticeIcon, NoticeLayout};
@@ -516,23 +516,61 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut events = Vec::new();
     let mut opener = None;
     let alt = craft::ui::runtime::pointer::frame(&ctx).mods.alt;
-    let zone = DropAction::<PanelDrag>::new(|p| matches!(p, PanelDrag::Art { .. })).sizing(Sizing::Fill).show(ui, |ui, _| {
-        if st.doc.assets.is_empty() {
-            Notice::new(Tone::Neutral, tl!("Drag art here, or select it and click +. Hold Alt for one asset of several objects."))
-                .title(tl!("No assets"))
-                .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("share-2"))))
-                .layout(NoticeLayout::Centred)
+    // The footer is measured before the grid: it reads the selection the grid starts the pass with.
+    let shown_sel = model.selection.items.clone();
+    let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
+    let has_art = !st.selection.is_empty();
+    let (selection, saving) = (&mut model.selection, &mut model.saving);
+    let (mut export_clicked, mut footer, mut screens) = (false, None, false);
+    // The grid takes the room the settings, Export and the footer bar leave.
+    let footed = Stack::new().fill().footer(|ui, _| {
+        Section::fixed(tl!("Export Settings")).show(ui, |ui, _| {
+            let (change, files_each) = settings(ui, st);
+            (seen.change, seen.files_each) = (change, files_each);
+            seen.format_3d = format_3d(ui, st, &sel_or_all(&shown_sel, &all));
+            seen.save = save_row(ui, saving);
+        });
+        Row::new().fill_width().align(RowAlign::End).show(ui, |ui, _| {
+            let label = if shown_sel.is_empty() || shown_sel.len() == all.len() {
+                tl!("Export").to_string()
+            } else {
+                crate::i18n::fmt(tl!("Export {count} Selected"), &[("count", &shown_sel.len().to_string())])
+            };
+            let button = Button::new(label)
+                .variant(Variant::PRIMARY)
+                .enabled(!all.is_empty())
+                .tooltip(TooltipSpec::new(tl!("Export the selected assets (else all of them)")))
                 .show(ui);
-        } else {
-            let items = Assets::of(st);
-            let grid =
-                TileGrid::<u64>::new(tl!("Assets")).id(grid_id).select(SelectMode::Multi).selection(Bind::bound(&mut model.selection)).rename(true);
-            let out = grid.show_items(ui, &items, &mut |id, _| tile(st, *id));
-            opener = Some(out.response.response.clone());
-            events = out.response.events;
-        }
+            export_clicked = clicked(&button);
+        });
+        // The first action sits at the end edge, so Remove comes first and Add stands before it.
+        let remove = FooterAction::new(IconSpec::svg(IconId::new("trash-2")), tl!("Remove Selected Assets")).enabled(!shown_sel.is_empty());
+        let add = FooterAction::new(IconSpec::svg(IconId::new("plus")), tl!("Add Selected Artwork (Alt: as one asset)")).enabled(has_art);
+        let (bar, leading) = FooterBar::actions([remove, add]).show_footer_leading(ui, |ui, _| {
+            IconButton::new(IconSpec::svg(IconId::new("monitor"))).label(tl!("Export for Screens…")).show(ui).response
+        });
+        screens = leading.is_some_and(|r| clicked(&r));
+        footer = Some(bar);
     });
-    if let Some(PanelDrag::Art { ids, .. }) = zone.output.dropped {
+    let zone = footed.show(ui, |ui, _| {
+        DropAction::<PanelDrag>::new(|p| matches!(p, PanelDrag::Art { .. })).sizing(Sizing::Fill).show(ui, |ui, _| {
+            if st.doc.assets.is_empty() {
+                Notice::new(Tone::Neutral, tl!("Drag art here, or select it and click +. Hold Alt for one asset of several objects."))
+                    .title(tl!("No assets"))
+                    .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("share-2"))))
+                    .layout(NoticeLayout::Centred)
+                    .show(ui);
+            } else {
+                let items = Assets::of(st);
+                let grid =
+                    TileGrid::<u64>::new(tl!("Assets")).id(grid_id).select(SelectMode::Multi).selection(Bind::bound(&mut *selection)).rename(true);
+                let out = grid.show_items(ui, &items, &mut |id, _| tile(st, *id));
+                opener = Some(out.response.response.clone());
+                events = out.response.events;
+            }
+        })
+    });
+    if let Some(PanelDrag::Art { ids, .. }) = zone.inner.and_then(|zone| zone.output.dropped) {
         seen.dropped = Some((ids.into_iter().map(|id| id.0).collect(), alt));
     }
     for event in events {
@@ -552,39 +590,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let sel = model.selection.items.clone();
-    let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
-    let has_art = !st.selection.is_empty();
     if let (Some(id), Some(opener)) = (model.menu, &opener)
         && let Some(a) = st.doc.asset(id)
     {
         seen.tile = tile_menu(ui, opener, a, &sel, has_art);
     }
-    let mut export_clicked = false;
-    Section::fixed(tl!("Export Settings")).show(ui, |ui, _| {
-        let (change, files_each) = settings(ui, st);
-        (seen.change, seen.files_each) = (change, files_each);
-        seen.format_3d = format_3d(ui, st, &sel_or_all(&sel, &all));
-        seen.save = save_row(ui, &mut model.saving);
-    });
-    Row::new().fill_width().align(RowAlign::End).show(ui, |ui, _| {
-        let label = if sel.is_empty() || sel.len() == all.len() {
-            tl!("Export").to_string()
-        } else {
-            crate::i18n::fmt(tl!("Export {count} Selected"), &[("count", &sel.len().to_string())])
-        };
-        let button = Button::new(label)
-            .variant(Variant::PRIMARY)
-            .enabled(!all.is_empty())
-            .tooltip(TooltipSpec::new(tl!("Export the selected assets (else all of them)")))
-            .show(ui);
-        export_clicked = clicked(&button);
-    });
-    // The first action sits at the end edge, so Remove comes first and Add stands before it.
-    let remove = FooterAction::new(IconSpec::svg(IconId::new("trash-2")), tl!("Remove Selected Assets")).enabled(!sel.is_empty());
-    let add = FooterAction::new(IconSpec::svg(IconId::new("plus")), tl!("Add Selected Artwork (Alt: as one asset)")).enabled(has_art);
-    let (footer, screens) = FooterBar::actions([remove, add])
-        .show_footer_leading(ui, |ui, _| IconButton::new(IconSpec::svg(IconId::new("monitor"))).label(tl!("Export for Screens…")).show(ui).response);
-    let screens = screens.is_some_and(|r| clicked(&r));
     let files_each = seen.files_each;
     // Act on what the panel saw (the document is no longer borrowed).
     for (id, name) in seen.renames {
@@ -606,9 +616,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some((assets, format)) = seen.format_3d {
         run_command(app, "assets.set3DFormat", json!({ "assets": assets, "format": format }));
     }
-    match footer.picked {
-        Some(0) => remove_selected(app, &sel),
-        Some(_) => collect(app, None, footer.mods.alt),
+    match footer.as_ref().and_then(|f| f.picked.map(|i| (i, f.mods.alt))) {
+        Some((0, _)) => remove_selected(app, &sel),
+        Some((_, alt)) => collect(app, None, alt),
         None => {}
     }
     if screens {

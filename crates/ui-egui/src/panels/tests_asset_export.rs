@@ -645,7 +645,7 @@ fn tiff_cmyk_defaults_match_screens_and_preserve_explicit_rgb() {
             }
             if screens {
                 // The row's Settings edit opens Format Settings on the Assets tab.
-                p.click("Settings");
+                p.click("Format Settings");
                 let d = super::tests_asset_export::screens(&p.app()).expect("the panel gear opens Format Settings");
                 assert_eq!((&d["tab"], &d["__settings"]), (&json!("assets"), &json!("tiff")));
                 assert_eq!(d["settings"]["tiff"]["colorModel"], if rgb_override { "rgb" } else { "cmyk" });
