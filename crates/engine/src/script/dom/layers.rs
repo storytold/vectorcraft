@@ -37,9 +37,9 @@ use serde_json::{Value, json};
 use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_parts};
 
 use super::{
-    Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg, boolean, command, doc_of,
-    doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later, method, named, num, number, on_doc,
-    page_items, placement_of, property, text, typename, whole, with_doc,
+    Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
+    boolean, command, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later, method, named,
+    num, number, on_doc, page_items, placement_of, property, text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -654,11 +654,12 @@ fn art_index(h: &Host, a: &[Data], kind: Kind) -> Answer {
 }
 
 /// `removeAll()`: deletes every object the collection lists (those inside another listed one go
-/// with it) in one command. A hidden or locked one, or one in a hidden or locked layer or group,
-/// stops it before anything is deleted.
+/// with it) in one command. A hidden or locked one, one in a hidden or locked layer or group, or
+/// one on a locked artboard stops it before anything is deleted, as the document's
+/// `pageItems.removeAll()` is stopped.
 fn art_remove_all(h: &Host, a: &[Data], kind: Kind) -> Answer {
     let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let all = art_list(h, st, kind, c)?;
         let d = &st.doc;
         let listed: std::collections::HashSet<NodeId> = all.iter().copied().collect();
@@ -666,11 +667,17 @@ fn art_remove_all(h: &Host, a: &[Data], kind: Kind) -> Answer {
             all.iter().copied().filter(|i| !d.ancestry(*i).is_some_and(|a| a.iter().any(|x| *x != *i && listed.contains(x)))).collect();
         let whole = |id: &NodeId| editable(d, *id) && d.node(*id).is_some_and(super::all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !whole(i)).map(|i| i.0).take(20).collect();
-        Ok::<_, HostError>((ids, refused))
+        let locks = d.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        Ok::<_, HostError>((ids, refused, on_locked))
     })?;
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;

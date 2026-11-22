@@ -1581,7 +1581,7 @@ fn item_remove(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// The error of `remove()` and `removeAll()` for an object on a locked artboard.
-const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
+pub(super) const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
 
 /// The error of `move` and `duplicate` given an object of another document.
 pub const CROSS_DOCUMENT: &str = "Cross-document placement is not available";

@@ -997,6 +997,46 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
     assert_eq!(out, vec![json!(0)]);
 }
 
+/// The `removeAll()` of a layer's or group's collections, and of `groupItems` and
+/// `compoundPathItems`, refuses art on a locked artboard as the document's `pageItems.removeAll()`
+/// does, and deletes nothing.
+#[test]
+fn scoped_remove_all_refuses_art_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let c = rect(&mut s, 200.0, 100.0, 20.0, 20.0);
+    let e = rect(&mut s, 250.0, 100.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [c.0, e.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let steps = undo_steps(&s);
+    for scope in [
+        "app.activeDocument.layers[0].pageItems",
+        "app.activeDocument.layers[0].groupItems",
+        "app.activeDocument.groupItems",
+        "app.activeDocument.groupItems[0].pageItems",
+        "app.activeDocument.layers[0].compoundPathItems",
+        "app.activeDocument.compoundPathItems",
+    ] {
+        let err = failure(&mut s, &format!("{scope}.removeAll();"));
+        assert!(err.contains("cannot delete objects on a locked artboard"), "{scope}: {err}");
+        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before, "{scope}");
+        assert_eq!(undo_steps(&s), steps, "{scope}");
+    }
+    lock(&mut s, false);
+    let out = log(&mut s, "var d = app.activeDocument; d.layers[0].pageItems.removeAll(); vc.log(d.pageItems.length);");
+    assert_eq!(out, vec![json!(0)]);
+}
+
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
