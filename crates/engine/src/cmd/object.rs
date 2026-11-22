@@ -12,7 +12,7 @@ use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, Vec2};
 use vectorcraft_render::effects;
 
-use super::edit::{duplicate_in, outermost, selected_roots, selected_roots_to_transform};
+use super::edit::{duplicate_beside, outermost, selected_roots, selected_roots_to_transform};
 use super::opacitymask::percent;
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, f64_or, f64_req, has_doc, has_multi, has_selection,

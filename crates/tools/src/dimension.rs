@@ -576,7 +576,10 @@ fn dimension_lines(doc: &vectorcraft_doc::Document, preview: (u64, [Point; 2])) 
 /// Where the line of the linear dimension `d`, placed through `p`, lands on the level of one of
 /// the `levels` that runs parallel to it, within `reach` of `p` across the line: the point to
 /// place `d` through, and the ends of that other line. The nearest level wins, then the line
-/// nearest `p` along it (none nearer than a line that `p` lies across).
+/// nearest `p` along it (none nearer than a line that `p` lies across). A line runs parallel when
+/// it moves off its level by no more than 1e-6 pt across the span that both lines cover, so a line
+/// at a slight angle to `d` is not a level however near its first end lies. A level that would put
+/// the line past the limits a dimension allows is passed over.
 fn line_level(levels: &[DimensionLine], d: &Dimension, p: Point, reach: f64) -> Option<(Point, (Point, Point))> {
     if d.mode != DimensionMode::Linear {
         return None;
@@ -584,14 +587,21 @@ fn line_level(levels: &[DimensionLine], d: &Dimension, p: Point, reach: f64) -> 
     let (u, normal) = (d.direction(), d.normal());
     let mut best: Option<(f64, f64, f64, (Point, Point))> = None;
     for &(ends, direction) in levels {
-        if u.cross(direction).abs() > 1e-6 {
+        let along_u = [ends.0, ends.1, d.a, d.b].map(|q| (q - ends.0).dot(u));
+        let span = along_u.iter().fold(f64::NEG_INFINITY, |m, s| m.max(*s)) - along_u.iter().fold(f64::INFINITY, |m, s| m.min(*s));
+        let drift = u.cross(direction).abs() * span;
+        if !drift.is_finite() || drift > 1e-6 {
             continue;
         }
         let shift = (ends.0 - p).dot(normal);
         let (s0, s1) = ((ends.0 - p).dot(u), (ends.1 - p).dot(u));
         let along = if s0 * s1 <= 0.0 { 0.0 } else { s0.abs().min(s1.abs()) };
         if shift.is_finite() && along.is_finite() && shift.abs() <= reach && best.is_none_or(|(s, a, _, _)| (shift.abs(), along) < (s, a)) {
-            best = Some((shift.abs(), along, shift, ends));
+            let mut placed = d.clone();
+            placed.place(p + normal * shift);
+            if placed.validate().is_ok() {
+                best = Some((shift.abs(), along, shift, ends));
+            }
         }
     }
     best.map(|(_, _, shift, ends)| (p + normal * shift, ends))
@@ -1169,8 +1179,9 @@ impl Tool for DimensionTool {
             out.extend(self.snap.guides().iter().cloned());
         }
         // A dimension line placed on the level of another: one alignment guide across both lines,
-        // unless Alignment Guides are off.
-        if cx.alignment_guides
+        // unless Smart Guides or Alignment Guides are off.
+        if cx.smart_guides
+            && cx.alignment_guides
             && let (Some(d), Some((c, e))) = (&self.pending, self.level_guide)
         {
             let (a, b) = d.line_ends();
@@ -1232,6 +1243,79 @@ mod tests {
             let (at, ends) = line_level(&levels, &d, pt(250.0, 172.0), 4.0).expect("on the level");
             assert!(at.distance(pt(250.0, 170.0)) < 1e-9, "{at:?}");
             assert_eq!(ends, across.0);
+        }
+    }
+
+    /// A line at a slight angle is not a level, even where its first end lies within reach across
+    /// the line: it moves off the level by 9 pt across the span. A line exactly parallel is.
+    #[test]
+    fn a_line_at_a_slight_angle_is_not_a_level() {
+        let pt = Point::new;
+        let d =
+            DimensionTool::default().recipe(DimensionMode::Linear, pt(10_000_050.0, 200.0), pt(10_000_150.0, 200.0), pt(10_000_100.0, 200.0), None);
+        let (from, to) = (pt(100.0, 170.0), pt(10_000_100.0, 179.0));
+        let slanted = ((from, to), (to - from) / (to - from).hypot());
+        assert!(line_level(&[slanted], &d, pt(10_000_100.0, 168.0), 4.0).is_none());
+        let parallel = ((from, pt(10_000_100.0, 170.0)), Vec2::new(1.0, 0.0));
+        let (at, _) = line_level(&[parallel], &d, pt(10_000_100.0, 168.0), 4.0).expect("on the level");
+        assert!(at.distance(pt(10_000_100.0, 170.0)) < 1e-9, "{at:?}");
+    }
+
+    /// The span a level is checked across runs from the lowest to the highest point of both lines
+    /// along the dimension, whichever end of the other line comes first, and has no lower bound.
+    #[test]
+    fn a_level_is_checked_across_the_whole_span_of_both_lines() {
+        let pt = Point::new;
+        let level = |from: Point, to: Point| ((from, to), (to - from) / (to - from).hypot());
+        // 0.00000075 pt off across 100 pt drifts 0.0000015 pt across the 200 pt both lines cover.
+        let d = DimensionTool::default().recipe(DimensionMode::Linear, pt(-100.0, 200.0), pt(100.0, 200.0), pt(0.0, 200.0), None);
+        let (a, b) = (pt(0.0, 170.0), pt(100.0, 170.000_000_75));
+        for slanted in [level(a, b), level(b, a)] {
+            assert!(line_level(&[slanted], &d, pt(0.0, 168.0), 4.0).is_none(), "{slanted:?}");
+        }
+        // 0.0000005 pt off across the 0.1 pt both lines cover is within the tolerance.
+        let d = DimensionTool::default().recipe(DimensionMode::Linear, pt(0.0, 200.0), pt(0.1, 200.0), pt(0.05, 200.0), None);
+        let (a, b) = (pt(0.0, 170.0), pt(0.1, 170.000_000_5));
+        for short in [level(a, b), level(b, a)] {
+            let (at, _) = line_level(&[short], &d, pt(0.05, 168.0), 4.0).expect("on the level");
+            assert!((at.y - 170.0).abs() < 1e-6, "{at:?}");
+        }
+    }
+
+    /// A level that would put the line past the largest distance a dimension allows is passed
+    /// over: the preview goes where the pointer is, with no level guide, or onto a level further
+    /// off within reach that keeps the line within the limit.
+    #[test]
+    fn a_level_past_the_distance_limit_is_passed_over() {
+        use vectorcraft_doc::{Node, NodeKind};
+        let pt = Point::new;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let add_level = |d: &mut vectorcraft_doc::Document, y: f64| {
+            let id = d.alloc_id();
+            let mut drawn = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+            drawn.extras_mut().dimension =
+                Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, y), pt(380.0, y), pt(340.0, y), None)));
+            d.insert(Some(l), usize::MAX, drawn).unwrap();
+        };
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        // The points are at y = 400, so a line at y = 1,000,401 is 1,000,001 pt from them.
+        add_level(&mut d, 1_000_401.0);
+        for (also, offset) in [(None, 999_999.0), (Some(1_000_396.0), 999_996.0)] {
+            if let Some(y) = also {
+                add_level(&mut d, y);
+            }
+            let c = cx(&d, &s, &p);
+            let mut t = DimensionTool::default();
+            for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+                t.pointer(&c, &ev(PointerKind::Down, x, y));
+                t.pointer(&c, &ev(PointerKind::Up, x, y));
+            }
+            let acts = t.pointer(&c, &ev(PointerKind::Move, 420.0, 1_000_399.0));
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+            assert_eq!(params["offset"], json!(offset));
+            assert_eq!(t.level_guide.is_some(), also.is_some());
         }
     }
 
