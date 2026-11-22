@@ -55,6 +55,8 @@ pub(crate) struct PreviewCopies {
     pub(crate) from: Arc<Document>,
     /// The transform or perspective edit copied these objects.
     pub(crate) roots: Vec<NodeId>,
+    /// Each copy is directly below its original, not above it.
+    pub(crate) below: bool,
     /// This is `from` with the copies added, untransformed.
     pub(crate) doc: Arc<Document>,
     /// This is the selection after copying, with the copies selected.
