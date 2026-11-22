@@ -442,13 +442,12 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailO
     let located = locate::wanted(&app.ui, &Home::Drawer);
     let reveal = locate::take_reveal(&mut app.ui, &Home::Drawer, listed_tool);
 
-    let mut drawer = ToolbarDrawer::new(rail_out.response.rect, &listed, &toolbar, rail_out.dropped)
-        .opened_by(opener)
-        .opens(opens)
-        .menu(rows)
-        .mark(located.as_ref());
-    if reveal.is_some() {
-        drawer = drawer.reveal(reveal.as_ref());
+    let mut drawer = ToolbarDrawer::new(rail_out.response.rect, &listed, &toolbar, rail_out.dropped).opened_by(opener).opens(opens).menu(rows);
+    if let Some(tool) = &located {
+        drawer = drawer.mark(tool);
+    }
+    if let Some(tool) = &reveal {
+        drawer = drawer.reveal(tool);
     }
     // Show: the controls under the Tools panel's tools; a toolbar made with New Toolbar has none.
     let mut toggled = None;

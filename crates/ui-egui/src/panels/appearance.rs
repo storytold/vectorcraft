@@ -17,7 +17,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::Hash;
 use std::sync::{Arc, OnceLock};
 
 use craft::behavior::overlay::{Align, Side};
@@ -40,7 +40,7 @@ use craft::ui::patterns::presets::{
     PresetBrowser, PresetEvent, PresetFns, PresetRow, PresetRowMenu, PresetSource, PresetState, PresetTiles, PresetView,
 };
 use craft::ui::popover::Popover;
-use craft::ui::primitives::{FacePaint, IconSpec};
+use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::Label;
 use craft::ui::sections::{FooterAction, FooterBar};
@@ -849,12 +849,9 @@ fn paint_swatch(fill: bool, paint: &Paint) -> Swatch {
         let [r, g, b] = c.to_rgb();
         Srgba::rgb(r, g, b)
     });
-    let mut hasher = DefaultHasher::new();
-    serde_json::to_string(paint).unwrap_or_default().hash(&mut hasher);
-    let shown = paint.clone();
     let row = if fill { tl!("Fill") } else { tl!("Stroke") };
     Swatch::new(crate::i18n::fmt(tl!("{row} swatch"), &[("row", row)]), color)
-        .face(FacePaint::new(hasher.finish(), move |painter, rect| paint_preview::paint_rect(painter, rect, &shown)))
+        .face(paint_preview::rect_face(paint))
         .tooltip(tl!("Click to choose a swatch, Shift-click to mix a colour"))
 }
 
@@ -1381,9 +1378,7 @@ fn swatch_picker(app: &mut VectorcraftApp, ui: &mut Ui, target: Painted) -> bool
         let fns = PresetFns::<DocSwatches<'_>, String>::new(|s, _| {
             doc_swatches(s.doc)
                 .map(|(name, paint)| {
-                    let paint = paint.clone();
-                    PresetRow::item(name.clone(), name.clone(), 0)
-                        .preview(ThumbAspect::SQUARE, move |painter, rect| paint_preview::paint_rect(painter, rect, &paint))
+                    PresetRow::item(name.clone(), name.clone(), 0).preview_face(ThumbAspect::SQUARE, paint_preview::rect_face(paint))
                 })
                 .collect()
         });

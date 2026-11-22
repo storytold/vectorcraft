@@ -11,7 +11,7 @@
 use std::borrow::Cow;
 
 use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection, SelectionChange};
-use craft::color_ui::ui::{ChannelRow, ChannelRule, ColorPanelMode, HarmonyWheel};
+use craft::color_ui::ui::{ChannelRow, ColorPanelMode, HarmonyWheel};
 use craft::theme::variant::Tone;
 use craft::theme::{ModelValues, Rgba};
 use craft::ui::buttons::IconButton;
@@ -309,7 +309,7 @@ fn sliders(ui: &mut Ui, d: &mut Draft, mode_pick: &mut Option<ColorPanelMode>, h
                 srgba(&color_of_values(&probe))
             })
             .collect();
-        let rule = ChannelRule { range: lo..=hi, step: 1.0, decimals: 0 };
+        let rule = super::whole_steps(lo..=hi);
         let Some(row) = ChannelRow::new(letter, Bind::given(value), rule).short(letter).track(track).show(ui) else { continue };
         for event in row.events {
             if let Some(&nv) = event.value().filter(|v| v.is_finite()) {

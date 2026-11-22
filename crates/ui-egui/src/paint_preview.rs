@@ -67,6 +67,14 @@ pub fn well_paint(paint: &Paint, tile: &dyn Fn(&str) -> Option<CachedTexture>) -
     }
 }
 
+/// A face painting `paint` with [`paint_rect`], keyed by every field of the paint.
+pub fn rect_face(paint: &Paint) -> FacePaint {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    serde_json::to_string(paint).unwrap_or_default().hash(&mut hasher);
+    let paint = paint.clone();
+    FacePaint::new(hasher.finish(), move |cx, rect| paint_rect(cx, rect, &paint))
+}
+
 /// Paints `paint` into `rect` of a content painter (a `Picture::painter` body). Nothing is drawn
 /// for no paint: the picture's own surface shows.
 pub fn paint_rect(cx: &ContentPainterCx<'_>, rect: Rect, paint: &Paint) {

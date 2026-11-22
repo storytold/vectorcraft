@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_engine::cmd::webexport;
 use vectorcraft_render::encode::web::ColorSort;
 
-use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, TableMarks, TableOrder};
+use craft::ui::patterns::form_dialogs::{ColorTableEdit, TableMarks, TableOrder};
 
 /// `c` as lowercase `#rrggbb`.
 fn hex(c: [u8; 3]) -> String {
@@ -86,8 +86,8 @@ fn unshift(table: &mut Value, source: &str) {
 /// locked until it is unshifted), and Web Shift takes the hand shift of the colours it adds away.
 /// Unshift All and Sort act on the whole table. Delete is refused with [`webexport::KEEP_ONE`],
 /// and nothing changes, when no colour would be left that is neither deleted nor transparent.
-pub(crate) fn apply(table: &mut Value, event: &ColorTableEvent, shown: &[[u8; 3]]) -> Result<(), String> {
-    match &event.edit {
+pub(crate) fn apply(table: &mut Value, edit: &ColorTableEdit, colors: &[[u8; 3]], shown: &[[u8; 3]]) -> Result<(), String> {
+    match edit {
         ColorTableEdit::UnshiftAll => {
             set_table(table, "shifted", json!({}));
             set_table(table, "webShift", json!([]));
@@ -110,7 +110,7 @@ pub(crate) fn apply(table: &mut Value, event: &ColorTableEvent, shown: &[[u8; 3]
         // PLAN: assumed `ColorTableEdit::Shift([u8; 3])` (ex.A11 pending change): the colour the
         // first selected colour is shifted to.
         ColorTableEdit::Shift(to) => {
-            if let Some(&from) = event.colors.first().filter(|c| shown.contains(c)) {
+            if let Some(&from) = colors.first().filter(|c| shown.contains(c)) {
                 shift(table, from, *to);
             }
             return Ok(());
@@ -118,7 +118,7 @@ pub(crate) fn apply(table: &mut Value, event: &ColorTableEvent, shown: &[[u8; 3]
         _ => {}
     }
     let mut picked: Vec<String> = Vec::new();
-    for c in event.colors.iter().filter(|c| shown.contains(c)) {
+    for c in colors.iter().filter(|c| shown.contains(c)) {
         let c = hex(*c);
         if !picked.contains(&c) {
             picked.push(c);
@@ -127,7 +127,7 @@ pub(crate) fn apply(table: &mut Value, event: &ColorTableEvent, shown: &[[u8; 3]
     if picked.is_empty() {
         return Ok(());
     }
-    match &event.edit {
+    match edit {
         ColorTableEdit::Lock => {
             let by_hand = shifts(table);
             let free: Vec<String> = picked.into_iter().filter(|c| !by_hand.keys().any(|k| k.eq_ignore_ascii_case(c))).collect();
@@ -202,5 +202,9 @@ pub(crate) fn marks(table: &Value) -> TableMarks {
     let colors = |key: &str| list(table, key).iter().filter_map(|c| parse(c)).collect();
     let shifted = shifts(table).iter().filter_map(|(k, v)| Some((parse(k)?, parse(v.as_str()?)?))).collect();
     // PLAN: TableMarks lacks `web_shifted` (ex.W9 request); the Web Shift/Unshift label needs it.
-    TableMarks { locked: colors("locked"), transparent: colors("transparent"), shifted }
+    let mut marks = TableMarks::default();
+    marks.locked = colors("locked");
+    marks.transparent = colors("transparent");
+    marks.shifted = shifted;
+    marks
 }

@@ -196,7 +196,7 @@ impl<'a> TypeEditor<'a> {
                 let key = if forward { ToolKey::Delete } else { ToolKey::Backspace };
                 text_key(app, key, Mods { cmd: !matches!(by, Granularity::Unit), ..Mods::default() });
             }
-            EditorInput::Newline => text_key(app, ToolKey::Enter, Mods::default()),
+            EditorInput::Newline { shift, .. } => text_key(app, ToolKey::Enter, Mods { shift, ..Mods::default() }),
             EditorInput::Tab => text_key(app, ToolKey::Tab, Mods::default()),
             EditorInput::Edit(command) => match command {
                 EditCommand::Copy => {

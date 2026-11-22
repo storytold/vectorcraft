@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::webexport;
 
-use craft::ui::patterns::form_dialogs::{ColorTableEdit, ColorTableEvent, PALETTE_COLOR_KEY, TableOrder};
+use craft::ui::patterns::form_dialogs::{ColorTableEdit, PALETTE_COLOR_KEY, TableOrder};
 
 use super::color_table::{apply, marks, restore, shift};
 use super::tests::{app, frame, host, save, set};
@@ -13,12 +13,8 @@ const B: [u8; 3] = [0x11, 0x11, 0x11];
 const C: [u8; 3] = [0x22, 0x22, 0x22];
 const D: [u8; 3] = [0x33, 0x33, 0x33];
 
-fn event(edit: ColorTableEdit, colors: &[[u8; 3]]) -> ColorTableEvent {
-    ColorTableEvent { edit, colors: colors.to_vec() }
-}
-
 fn run(table: &mut Value, edit: ColorTableEdit, colors: &[[u8; 3]], shown: &[[u8; 3]]) -> Result<(), String> {
-    apply(table, &event(edit, colors), shown)
+    apply(table, &edit, colors, shown)
 }
 
 #[test]
@@ -167,7 +163,7 @@ fn delete_color_reaches_the_saved_file_and_is_remembered() {
     }
     frame(&mut app);
     let red = [0xcc, 0x33, 0x00];
-    apply(&mut app.web_export.table, &event(ColorTableEdit::Delete, &[red]), &[red, [0, 0, 255]]).unwrap();
+    apply(&mut app.web_export.table, &ColorTableEdit::Delete, &[red], &[red, [0, 0, 255]]).unwrap();
     frame(&mut app);
     save(&mut app);
     let path =

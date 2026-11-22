@@ -122,7 +122,7 @@ use std::sync::Arc;
 
 use craft::behavior::edit_history::{EditHistory, Step};
 use craft::behavior::{ColumnKey, ColumnWidth, EditEvent, IconId, Mixed, Selection, SelectionChange, keyed};
-use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit, ColorPanelMode, DiscRadius, patch_at};
+use craft::color_ui::ui::{ChannelRow, ChannelUnit, ColorPanelMode, DiscRadius, patch_at};
 use craft::host::PickRequest;
 use craft::theme::variant::Tone;
 use craft::theme::{ModelValues, Rgba, Srgba};
@@ -162,7 +162,7 @@ use crate::VectorcraftApp;
 use crate::panels::color::{color_of_values, working_rgb};
 use crate::panels::library_panel;
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries, limit_key};
-use crate::panels::{c32, srgba};
+use crate::panels::{c32, srgba, whole_steps};
 
 /// The dialog kind of Recolor Artwork.
 pub const KIND: &str = "recolor";
@@ -1762,11 +1762,8 @@ impl RecolorDialog {
     /// Color Groups button that can't run ([`check_group_action`]) and a `groupStorage` that is not a
     /// bool are refused, and the dialog stays as it was.
     fn set_field(&mut self, field: &str, value: Value) -> Result<(), String> {
-        let known = if field.starts_with("__") {
-            SETTABLE.contains(&field)
-        } else {
-            self.fields.fields.contains_key(field) || UNSET_FIELDS.contains(&field)
-        };
+        let known =
+            if field.starts_with("__") { SETTABLE.contains(&field) } else { self.fields.fields.contains_key(field) || UNSET_FIELDS.contains(&field) };
         if !known {
             return Err(FieldRefusal::Unknown.message(field));
         }
@@ -2396,11 +2393,6 @@ fn channels(mode: ColorPanelMode) -> &'static [(&'static str, f64, f64, ChannelU
     }
 }
 
-/// A slider's rule: whole steps from `lo` to `hi`.
-fn rule(lo: f64, hi: f64) -> ChannelRule {
-    ChannelRule { range: lo..=hi, step: 1.0, decimals: 0 }
-}
-
 /// `c`'s values in `mode` (HSB °/%/% and RGB 0 to 255 of the working RGB, CMYK %, Lab L*a*b*).
 fn values_in(mode: ColorPanelMode, c: &Color) -> Vec<f32> {
     match mode {
@@ -2557,7 +2549,8 @@ fn global_sliders(ui: &mut Ui, d: &mut Fields, sample: Color) {
                     })
                     .collect();
                 let value = values.get(n).copied().unwrap_or(0.0);
-                let Some(out) = ChannelRow::new(*label, Bind::given(value), rule(-100.0, 100.0)).unit(ChannelUnit::Percent).track(stops).show(ui)
+                let Some(out) =
+                    ChannelRow::new(*label, Bind::given(value), whole_steps(-100.0..=100.0)).unit(ChannelUnit::Percent).track(stops).show(ui)
                 else {
                     continue;
                 };
@@ -2590,7 +2583,7 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
                 Row::new().show(ui, |ui, _| {
                     for &(name, lo, hi, unit) in pair {
                         // A disabled row edits nothing: its output has no edit to read.
-                        let _ = ChannelRow::new(name, Bind::given(lo), rule(lo, hi)).short(name).unit(unit).show(ui);
+                        let _ = ChannelRow::new(name, Bind::given(lo), whole_steps(lo..=hi)).short(name).unit(unit).show(ui);
                     }
                 });
             }
@@ -2601,7 +2594,7 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
             let tint = f64::from(row_tint(&rows[i])) * 100.0;
             let stops: Vec<Srgba> = (0..TRACK_STOPS).map(|k| srgba(&target.linked.tinted(k as f32 / (TRACK_STOPS - 1) as f32))).collect();
             Row::new().show(ui, |ui, _| {
-                if let Some(out) = ChannelRow::new(tl!("Tint"), Bind::given(tint), rule(0.0, 100.0))
+                if let Some(out) = ChannelRow::new(tl!("Tint"), Bind::given(tint), whole_steps(0.0..=100.0))
                     .short("T")
                     .unit(ChannelUnit::Percent)
                     .track(stops.clone())
@@ -2622,8 +2615,11 @@ fn sliders(ui: &mut Ui, feed: &Feed, d: &mut Fields, rows: &mut [Value], row: Op
                 for (k, &(name, lo, hi, unit)) in pair.iter().enumerate() {
                     let n = line * 2 + k;
                     let value = f64::from(comps.get(n).copied().unwrap_or(0.0));
-                    let Some(out) =
-                        ChannelRow::new(name, Bind::given(value), rule(lo, hi)).short(name).unit(unit).track(track(mode, &comps, n, lo, hi)).show(ui)
+                    let Some(out) = ChannelRow::new(name, Bind::given(value), whole_steps(lo..=hi))
+                        .short(name)
+                        .unit(unit)
+                        .track(track(mode, &comps, n, lo, hi))
+                        .show(ui)
                     else {
                         continue;
                     };

@@ -197,7 +197,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         }
     };
     let mut dialog = HostedSaveForWeb::new(name, size, original)
-        .document(WebDocument::Vector { artboards })
+        .document(WebDocument::vector(artboards))
         .formats(vec![WebFormat::Gif, WebFormat::Jpeg, WebFormat::Png8, WebFormat::Png24])
         .color_tables(vec![
             ColorTable::Perceptual,
@@ -522,7 +522,7 @@ fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::s
     };
     let mut deleted = false;
     for event in &asked.tables {
-        match color_table::apply(&mut app.web_export.table, event, &shown) {
+        match color_table::apply(&mut app.web_export.table, &event.edit, &event.colors, &shown) {
             Ok(()) => deleted |= matches!(event.edit, ColorTableEdit::Delete),
             Err(e) => app.status(e),
         }

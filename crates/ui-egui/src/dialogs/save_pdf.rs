@@ -117,15 +117,18 @@ pub(crate) fn open_for_save(app: &mut VectorcraftApp, params: &Value, mode: Save
 /// (default: the app default).
 pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
     let s = |k: &str| params.get(k).and_then(Value::as_str);
-    let (base, name, description, editing) = match s("name") {
+    let mut draft = PresetDraft::default();
+    let (base, editing) = match s("name") {
         Some(name) => {
             let p = app.session.prefs.pdf_presets.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim()));
             let p = p.ok_or_else(|| format!("no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)"))?;
-            (p.name.clone(), p.name.clone(), p.description.clone(), p.name.clone())
+            (draft.name, draft.description) = (p.name.clone(), p.description.clone());
+            (p.name.clone(), p.name.clone())
         }
         None => {
             let base = s("preset").map_or_else(|| default_preset_name(APP).to_string(), str::to_string);
-            (base, app.session.new_pdf_preset_name(), String::new(), String::new())
+            draft.name = app.session.new_pdf_preset_name();
+            (base, String::new())
         }
     };
     let settings = pdf::resolve("ui.savePdfDialog", &json!({ "preset": base }), &app.session.prefs.pdf_presets).map_err(|e| e.to_string())?;
@@ -136,17 +139,16 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
         .chain(app.session.prefs.pdf_presets.iter().map(|p| p.name.clone()))
         .filter(|n| editing.is_empty() || !n.eq_ignore_ascii_case(editing.trim()))
         .collect();
-    let dialog =
-        base_dialog(app, settings).preset(base).mode(PdfExportMode::PresetEditor).draft(PresetDraft { name, description }).check_name(move |n| {
-            let n = n.trim();
-            if n.is_empty() {
-                Some(PresetError::EmptyName)
-            } else if taken.iter().any(|t| t.eq_ignore_ascii_case(n)) {
-                Some(PresetError::NameTaken)
-            } else {
-                None
-            }
-        });
+    let dialog = base_dialog(app, settings).preset(base).mode(PdfExportMode::PresetEditor).draft(draft).check_name(move |n| {
+        let n = n.trim();
+        if n.is_empty() {
+            Some(PresetError::EmptyName)
+        } else if taken.iter().any(|t| t.eq_ignore_ascii_case(n)) {
+            Some(PresetError::NameTaken)
+        } else {
+            None
+        }
+    });
     open_dialog(app, dialog, None, editing)
 }
 

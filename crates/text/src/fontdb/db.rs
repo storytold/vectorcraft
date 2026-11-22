@@ -233,7 +233,6 @@ impl FontDb {
         }
         // An installed family's, from its names in other languages, as a loaded face's is chosen
         // (every face of a family has the same names: one is enough).
-        // PLAN: the catalog lists a family's localized names from its typographic records whenever it has one (font-catalog scan.rs:281), so a font whose typographic family is English only loses its localized legacy name here (#2208, `family_display_name_falls_back_to_localized_legacy_names`); the fallback to legacy records belongs in that scan rule (type-w2).
         let native = self.catalog.resolve(&family, "").and_then(|(f, _)| {
             let names: Vec<(Option<String>, String)> = f.localized_families.into_iter().map(|n| (n.language, n.name)).collect();
             pick_native_label(&f.family, &names)

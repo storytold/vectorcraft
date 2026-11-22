@@ -389,7 +389,7 @@ impl CanvasTool for SessionTool<'_> {
         let space = cx.held(Key::Space);
         let held = tool_mods(cx.mods, space);
         match key {
-            ToolKey::Nudge { direction, mods, .. } => {
+            ToolKey::Nudge { direction, mods, held: with, .. } => {
                 let (k, arrow) = match (direction.x.abs() > direction.y.abs(), direction.x < 0.0, direction.y < 0.0) {
                     (true, true, _) => (EngineKey::Left, Key::Left),
                     (true, false, _) => (EngineKey::Right, Key::Right),
@@ -410,7 +410,7 @@ impl CanvasTool for SessionTool<'_> {
                     !matches!(keymap.lookup_where(&chord, false, &craft::keymap::Active::NONE, &[], &global), craft::keymap::Lookup::None)
                 });
                 if !bound {
-                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, cx.held(Key::Backtick));
+                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, with.contains(&Key::Backtick));
                 }
                 !bound
             }

@@ -1175,7 +1175,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             .hide(hide)
             .flyout(Bind::bound(&mut flyout));
         if let Some((panel, grab)) = hand_over {
-            area = area.continue_move(panel, grab);
+            area = area.continue_move((panel, grab));
         }
         if auto_collapse { area.auto_collapse().show(ui) } else { area.show(ui) }
     };

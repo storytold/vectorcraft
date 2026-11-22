@@ -388,7 +388,7 @@ fn built_in_card(preset: &DocSettings, values: &VcNewDocument, orientation: Opti
     }
     let line = s.size_label();
     let value = VcNewDocument { title: values.title.clone(), settings: s, turn: None };
-    DocumentCard::new(text(preset_name(&preset.name)), line, value, CardSource::Preset { artboard: None })
+    DocumentCard::new(text(preset_name(&preset.name)), line, value, CardSource::preset(None))
 }
 
 /// A label with the text `s`, already translated.

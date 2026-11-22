@@ -193,6 +193,7 @@ fn gid_of_cell(face: &FontFace, cell: GlyphCell) -> Option<u32> {
     match cell {
         GlyphCell::Char(c) => gid_of(face, c),
         GlyphCell::Glyph(g) => Some(g),
+        _ => None,
     }
 }
 
@@ -435,6 +436,7 @@ impl GlyphSource for VcGlyphs<'_> {
                     (None, None) => Some(unencoded_tip(face, g)),
                 };
             }
+            _ => {}
         }
         info
     }
@@ -446,6 +448,7 @@ impl GlyphSource for VcGlyphs<'_> {
         match cell {
             GlyphCell::Char(c) => list.extend(face.alternates(c).into_iter().map(|a| a.gid)),
             GlyphCell::Glyph(g) => list.extend(face.substitutions(g).into_iter().flat_map(|s| s.glyphs)),
+            _ => {}
         }
         let mut seen = HashSet::new();
         list.retain(|g| seen.insert(*g));
@@ -516,6 +519,7 @@ pub(crate) fn activate(app: &mut VectorcraftApp, cell: GlyphCell) {
             }
         }
         GlyphCell::Glyph(gid) => put_on_selection(app, &face, gid),
+        _ => {}
     }
 }
 
@@ -527,7 +531,7 @@ pub(crate) fn pick_alternate(app: &mut VectorcraftApp, cell: GlyphCell, glyph: G
         GlyphCell::Char(c) => insert_alternate(app, &face, c, gid, picked),
         // A glyph no character maps goes on the selected character as a double-click on its cell
         // in Entire Font puts it.
-        GlyphCell::Glyph(_) => put_on_selection(app, &face, picked),
+        _ => put_on_selection(app, &face, picked),
     }
 }
 

@@ -60,7 +60,7 @@ use crate::VectorcraftApp;
 use crate::dialogs::gradient_stop::{self, Anchor};
 use crate::edits::{EditPath, apply_edits};
 // PLAN: assumed widgets-w13's `paint_preview::{paint_face(&GradientPaint) -> FacePaint, paint_rect(&ContentPainterCx, Rect, &Paint)}` (wg.S6).
-use crate::paint_preview::{paint_face, paint_rect};
+use crate::paint_preview::{paint_face, rect_face};
 // PLAN: assumed widgets-w13's `panel_drag::PanelDrag` with `Paint { params, .. }` and `color(&self) -> Option<Color>` (wg.S7).
 use crate::panel_drag::PanelDrag;
 
@@ -518,9 +518,7 @@ fn preset_rows(app: &VectorcraftApp) -> Vec<PresetRow<PresetKey>> {
             rows.push(PresetRow::group(PresetKey::Library(e.library), e.library.map_or(tl!("Saved"), |l| tl!(l)), 0));
         }
         let paint = Paint::Gradient(Box::new(GradientPaint::new(e.gradient)));
-        rows.push(
-            PresetRow::item(PresetKey::Preset(e.name.clone()), e.name, 1).preview(ThumbAspect::SQUARE, move |cx, rect| paint_rect(cx, rect, &paint)),
-        );
+        rows.push(PresetRow::item(PresetKey::Preset(e.name.clone()), e.name, 1).preview_face(ThumbAspect::SQUARE, rect_face(&paint)));
     }
     rows
 }

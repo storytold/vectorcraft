@@ -10,7 +10,7 @@
 //! Fields: `mode` (`gray`, `rgb`, `cmyk` or `global`), the channels `r`, `g`, `b`, `c`, `m`, `y`,
 //! `k`, `gray`, `tint`, then `convert`, `fill` and `stroke`. The preview check box is the host's.
 
-use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit};
+use craft::color_ui::ui::{ChannelRow, ChannelUnit};
 use craft::theme::Srgba;
 use craft::ui::contract::Bind;
 use craft::ui::dialog::DialogId;
@@ -128,7 +128,7 @@ impl Adjust {
 pub(super) fn percent_row(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str, label: &'static str, track: impl Fn(f32) -> Srgba) {
     const RAIL_STOPS: usize = 5;
     let rail = (0..RAIL_STOPS).map(|i| track(i as f32 / (RAIL_STOPS - 1) as f32)).collect();
-    let rule = ChannelRule { range: -100.0..=100.0, step: 1.0, decimals: 0 };
+    let rule = crate::panels::whole_steps(-100.0..=100.0);
     let value = fields.number(key).unwrap_or(0.0);
     let edit = ChannelRow::new(label, Bind::given(value), rule).unit(ChannelUnit::Percent).track(rail).show(ui);
     if let Some(value) = edit.as_ref().and_then(|edit| edit.value()) {

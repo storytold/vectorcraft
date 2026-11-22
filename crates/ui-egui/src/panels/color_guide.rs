@@ -568,19 +568,29 @@ fn spot_paints(app: &VectorcraftApp, rule: Harmony) -> Vec<(usize, Paint)> {
         .collect()
 }
 
-/// What a cell applies, carries and saves: the spot tint of the base row ([`spot_paints`]) or the
-/// color it shows.
-fn tint_or_solid(tints: &[(usize, Paint)], cell: &GuideCell) -> Paint {
-    match cell.at {
-        GuideCellAt::Grid { row: 0, column } => tints.iter().find(|(col, _)| *col == column).map(|(_, p)| p.clone()),
+/// The grid row and column of a cell at `at`; none for a cell of the harmony strip.
+fn grid_spot(at: GuideCellAt) -> Option<(usize, usize)> {
+    match at {
+        GuideCellAt::Grid { row, column, .. } => Some((row, column)),
         _ => None,
     }
-    .unwrap_or_else(|| Paint::solid(color_of(cell.color)))
+}
+
+/// The spot tint of base-row column `column` ([`spot_paints`]), if it has one.
+fn tint_at(tints: &[(usize, Paint)], spot: Option<(usize, usize)>) -> Option<&Paint> {
+    let (0, column) = spot? else { return None };
+    tints.iter().find(|(col, _)| *col == column).map(|(_, p)| p)
+}
+
+/// What a cell at grid spot `spot` showing `color` applies, carries and saves: the spot tint of the
+/// base row or the color it shows.
+fn tint_or_solid(tints: &[(usize, Paint)], spot: Option<(usize, usize)>, color: Srgba) -> Paint {
+    tint_at(tints, spot).cloned().unwrap_or_else(|| Paint::solid(color_of(color)))
 }
 
 /// What a cell carries when dragged.
-fn drag_payload(tints: &[(usize, Paint)], cell: &GuideCell) -> PanelDrag {
-    PanelDrag::paint(tint_or_solid(tints, cell))
+fn drag_payload(tints: &[(usize, Paint)], spot: Option<(usize, usize)>, color: Srgba) -> PanelDrag {
+    PanelDrag::paint(tint_or_solid(tints, spot, color))
 }
 
 /// `ui.colorGuideLimit {library}`: limit the panel's colours to a swatch library (an id or name),
@@ -606,26 +616,20 @@ fn edit_or_apply(app: &mut VectorcraftApp) {
     app.run("ui.recolorDialog", p).ok();
 }
 
-/// The `swatch.new` / `swatch.newGroup` entries of `cells` (grid cells, in the order given: the
-/// framework keeps picked cells in grid order, each once).
-fn cell_entries(app: &VectorcraftApp, g: &Guide, cells: &[GuideCell]) -> Vec<Value> {
-    cells
-        .iter()
-        .filter_map(|cell| match cell.at {
-            GuideCellAt::Grid { row, column } => cell_entry(app, g, row, column),
-            GuideCellAt::Strip(_) => None,
-        })
-        .collect()
+/// The `swatch.new` / `swatch.newGroup` entries of the grid cells at `cells` (row, column), in the
+/// order given: the framework keeps picked cells in grid order, each once.
+fn cell_entries(app: &VectorcraftApp, g: &Guide, cells: &[(usize, usize)]) -> Vec<Value> {
+    cells.iter().filter_map(|&(row, column)| cell_entry(app, g, row, column)).collect()
 }
 
-/// The cells picked for Save Colors as Swatches.
-fn picked(app: &VectorcraftApp) -> Vec<GuideCell> {
-    app.ui.color_guide_panel.picked.cells().to_vec()
+/// The grid cells picked for Save Colors as Swatches.
+fn picked(app: &VectorcraftApp) -> Vec<(usize, usize)> {
+    app.ui.color_guide_panel.picked.cells().iter().filter_map(|cell| grid_spot(cell.at)).collect()
 }
 
 /// Save `cells`' colors as swatches (one undo step), each in its own model; a tint of a spot color
 /// base becomes a tint swatch of it.
-fn save_selected(app: &mut VectorcraftApp, cells: &[GuideCell]) {
+fn save_selected(app: &mut VectorcraftApp, cells: &[(usize, usize)]) {
     let g = guide(app);
     let colors = cell_entries(app, &g, cells);
     if !colors.is_empty() {
@@ -636,7 +640,7 @@ fn save_selected(app: &mut VectorcraftApp, cells: &[GuideCell]) {
 /// Save Color Group to Swatches: `cells` as one swatch group in the order given; with none, the
 /// harmony colors. The group is named after the harmony rule, saved in one undo step, and each
 /// color keeps its own model; a tint of a spot color base becomes a tint swatch of it.
-fn save_group(app: &mut VectorcraftApp, cells: &[GuideCell]) {
+fn save_group(app: &mut VectorcraftApp, cells: &[(usize, usize)]) {
     let g = guide(app);
     let mut colors = cell_entries(app, &g, cells);
     if colors.is_empty() {
@@ -647,8 +651,8 @@ fn save_group(app: &mut VectorcraftApp, cells: &[GuideCell]) {
 
 /// A cell of the guide was clicked: apply its paint to the active proxy (the inactive one with Alt
 /// held), leaving the base as it is.
-fn chosen(app: &mut VectorcraftApp, ui: &Ui, cell: GuideCell) {
-    let paint = tint_or_solid(&spot_paints(app, app.ui.color_guide_panel.rule), &cell);
+fn chosen(app: &mut VectorcraftApp, ui: &Ui, spot: Option<(usize, usize)>, color: Srgba) {
+    let paint = tint_or_solid(&spot_paints(app, app.ui.color_guide_panel.rule), spot, color);
     apply_click(app, ui, paint_params(&paint));
 }
 
@@ -733,11 +737,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The body can run more than once in a pass: each run starts from nothing chosen.
             let payload_tints = tints.clone();
             let mut panel = HarmonyPanel::new(Bind::bound(&mut state), Bind::bound(&mut model.picked), base)
-                .cell_color(|c: &GuideCell| match c.at {
-                    GuideCellAt::Grid { row: 0, column } => tint_colors.iter().find(|(col, _)| *col == column).map_or(c.color, |(_, s)| *s),
+                .cell_color(|c: &GuideCell| match grid_spot(c.at) {
+                    Some((0, column)) => tint_colors.iter().find(|(col, _)| *col == column).map_or(c.color, |(_, s)| *s),
                     _ => c.color,
                 })
-                .drag_payload(move |c: &GuideCell| Some(drag_payload(&payload_tints, c)));
+                .drag_payload(move |c: &GuideCell| Some(drag_payload(&payload_tints, grid_spot(c.at), c.color)));
             if let Some(palette) = limit {
                 panel = panel.limit(palette);
             }
@@ -753,7 +757,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_base(app);
     }
     if let Some(cell) = cell {
-        chosen(app, ui, cell);
+        chosen(app, ui, grid_spot(cell.at), cell.color);
     }
     if let Some(key) = limit_picked {
         set_limit(app, &json!({ "library": key })).ok();
@@ -817,25 +821,31 @@ mod tests {
         Guide::new(base_color(app), app.ui.color_guide_panel.rule, &app.ui.color_guide)
     }
 
-    /// The cell at `at` of `g`, as the panel reports a click on it.
-    fn cell_at(g: &Guide, at: GuideCellAt) -> GuideCell {
-        let color = match at {
-            GuideCellAt::Strip(i) => g.colors[i],
-            GuideCellAt::Grid { row, column } => g.grid[row][column],
-        };
-        GuideCell { at, color: srgba(&color) }
+    /// Where a cell lies: the harmony strip's cell at an index, or the grid's at a row and column.
+    #[derive(Clone, Copy, Debug)]
+    enum At {
+        Strip(usize),
+        Grid(usize, usize),
+    }
+
+    /// The grid spot and colour of the cell at `at` of `g`, as the panel reports a click on it.
+    fn cell_at(g: &Guide, at: At) -> (Option<(usize, usize)>, Srgba) {
+        match at {
+            At::Strip(i) => (None, srgba(&g.colors[i])),
+            At::Grid(row, column) => (Some((row, column)), srgba(&g.grid[row][column])),
+        }
     }
 
     /// A click on the cell at `at` of the guide shown now, through the panel's click glue.
-    fn click(app: &mut VectorcraftApp, at: GuideCellAt) {
-        let cell = cell_at(&guide_of(app), at);
-        let mut out = crate::testing::ui_context().run_ui(egui::RawInput::default(), |ui| chosen(app, ui, cell));
+    fn click(app: &mut VectorcraftApp, at: At) {
+        let (spot, color) = cell_at(&guide_of(app), at);
+        let mut out = crate::testing::ui_context().run_ui(egui::RawInput::default(), |ui| chosen(app, ui, spot, color));
         out.textures_delta.clear();
     }
 
     /// A cell of grid row `row` and column `column`.
-    fn grid(row: usize, column: usize) -> GuideCellAt {
-        GuideCellAt::Grid { row, column }
+    fn grid(row: usize, column: usize) -> At {
+        At::Grid(row, column)
     }
 
     /// The first show takes the current color; a color chosen in the Color panel, Swatches or the
@@ -876,7 +886,7 @@ mod tests {
         frame(&mut app, &ctx);
         let g = guide_of(&app);
         let fill = |app: &VectorcraftApp| crate::panels::current_paints(app).0.color().map(|c| c.to_hex());
-        click(&mut app, GuideCellAt::Strip(1));
+        click(&mut app, At::Strip(1));
         assert_eq!(fill(&app), Some(g.colors[1].to_hex()), "the harmony color paints the art");
         assert_eq!(base_color(&app).to_hex(), "#3366cc", "and leaves the base");
         click(&mut app, grid(0, 2));
@@ -889,19 +899,13 @@ mod tests {
         assert_eq!(base_color(&app).to_hex(), variation, "the base chip adopts the current color");
     }
 
-    /// The cells at `at` of the guide shown now, as the panel reports them picked.
-    fn picked_cells(app: &VectorcraftApp, at: &[(usize, usize)]) -> Vec<GuideCell> {
-        let g = guide_of(app);
-        at.iter().map(|&(row, column)| cell_at(&g, grid(row, column))).collect()
-    }
-
     #[test]
     fn save_colors_as_swatches_saves_each_selected_cell() {
         let mut app = app();
         let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let before = app.session.doc().unwrap().doc.swatches.len();
-        let cells = picked_cells(&app, &[(0, 0), (1, 4), (0, 8)]);
+        let cells = &[(0, 0), (1, 4), (0, 8)].to_vec();
         let undo = app.session.doc().unwrap().history.undo.len();
         save_selected(&mut app, &cells);
         let st = app.session.doc().unwrap();
@@ -919,7 +923,7 @@ mod tests {
         app.run("paint.setFill", json!({"color": "#3366cc", "keepModel": true})).unwrap();
         let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
-        let cells = picked_cells(&app, &[(0, 0), (0, 6)]);
+        let cells = &[(0, 0), (0, 6)].to_vec();
         save_selected(&mut app, &cells);
         let g = guide_of(&app);
         assert!(matches!(g.grid[0][6], Color::Rgb { .. }), "{:?}", g.grid[0][6]);
@@ -943,7 +947,7 @@ mod tests {
         frame(&mut app, &ctx);
         let st = app.session.doc().unwrap();
         let (groups, swatches, undo) = (st.doc.swatch_groups.len(), st.doc.swatches.len(), st.history.undo.len());
-        let cells = picked_cells(&app, &[(0, 0), (0, 8), (1, 4)]);
+        let cells = &[(0, 0), (0, 8), (1, 4)].to_vec();
         save_group(&mut app, &cells);
         let g = guide_of(&app);
         let st = app.session.doc().unwrap();
@@ -979,7 +983,7 @@ mod tests {
         let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let g = guide(&mut app);
-        let cells: Vec<GuideCell> = [(0, 1), (0, 7)].iter().map(|&(row, column)| cell_at(&g, grid(row, column))).collect();
+        let cells = [(0, 1), (0, 7)];
         save_group(&mut app, &cells);
         let made = last_group(&app).1;
         assert_eq!(made, [g.grid[0][1], g.grid[0][7]]);
@@ -1038,7 +1042,7 @@ mod tests {
         assert_eq!(base_color(&app), red, "the base follows the spot color");
         frame(&mut app, &ctx);
         // Shades, another harmony row and the harmony strip are process colors.
-        for at in [grid(0, c - 1), grid(1, c + 1), GuideCellAt::Strip(0)] {
+        for at in [grid(0, c - 1), grid(1, c + 1), At::Strip(0)] {
             click(&mut app, at);
             assert_eq!(fill_link(&app).0, None, "{at:?}");
         }
@@ -1470,7 +1474,7 @@ mod tests {
         let g = guide_of(&app);
         let c = g.centre();
         let undo = app.session.doc().unwrap().history.undo.len();
-        let cells = picked_cells(&app, &[(0, c + 1), (0, c - 1), (0, c + 3)]);
+        let cells = &[(0, c + 1), (0, c - 1), (0, c + 3)].to_vec();
         save_selected(&mut app, &cells);
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
@@ -1482,7 +1486,7 @@ mod tests {
         assert_eq!(tint(&made[2]).map(|(b, _)| b).as_deref(), Some("Ink"));
         assert!(made[0].name.starts_with("Ink ") && made[0].name.ends_with('%'), "{}", made[0].name);
         // A group of the selected cells, in grid order.
-        let cells = picked_cells(&app, &[(0, c + 2), (1, c + 1)]);
+        let cells = &[(0, c + 2), (1, c + 1)].to_vec();
         save_group(&mut app, &cells);
         let group = app.session.doc().unwrap().doc.swatch_groups.last().cloned().unwrap();
         assert_eq!(group.swatches.len(), 2);
@@ -1503,14 +1507,14 @@ mod tests {
         let mut app = spot_app(1.0);
         let c = guide_of(&app).centre();
         let tints = spot_paints(&app, app.ui.color_guide_panel.rule);
-        let cell = cell_at(&guide_of(&app), grid(0, c + 1));
-        let PanelDrag::Paint { paint, .. } = drag_payload(&tints, &cell) else { panic!("a paint drag") };
+        let (spot, color) = cell_at(&guide_of(&app), grid(0, c + 1));
+        let PanelDrag::Paint { paint, .. } = drag_payload(&tints, spot, color) else { panic!("a paint drag") };
         let Paint::Solid { swatch, tint, .. } = &paint else { panic!("a solid paint: {paint:?}") };
         assert_eq!(swatch.as_deref(), Some("Ink"));
         assert!((tint - expected_tint(&app, 1.0, 1)).abs() < 1e-4);
         // A cell outside the tint row carries its color alone.
-        let shade = cell_at(&guide_of(&app), grid(0, c - 1));
-        assert!(matches!(drag_payload(&tints, &shade), PanelDrag::Paint { paint: Paint::Solid { swatch: None, .. }, .. }));
+        let (spot, color) = cell_at(&guide_of(&app), grid(0, c - 1));
+        assert!(matches!(drag_payload(&tints, spot, color), PanelDrag::Paint { paint: Paint::Solid { swatch: None, .. }, .. }));
         app.run("swatch.new", paint_params(&paint)).unwrap();
         let newest = app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
         let (base, made) = newest.tint_of().unwrap_or_else(|| panic!("a tint swatch: {newest:?} {}", app.ui.status));

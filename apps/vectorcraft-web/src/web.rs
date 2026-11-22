@@ -581,10 +581,6 @@ impl Files for WebFiles {
         picks.answered.retain(|a| a.id != id);
     }
 
-    fn pick_pending(&self) -> bool {
-        !self.lock().waiting.is_empty()
-    }
-
     fn pending_pick(&self) -> Option<PendingPick> {
         self.lock().waiting.first().map(|(_, request)| PendingPick { request: request.clone(), sheet: false })
     }

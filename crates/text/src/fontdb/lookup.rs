@@ -292,12 +292,13 @@ impl FontDb {
         self.catalog.by_postscript_name(name).map(|f| (f.family, f.style))
     }
 
-    /// Load the files of the installed `family`, adding all their faces at once
-    /// ([`Self::add_fonts`]). Returns whether the family is loaded now: by this call, or by another
+    /// Load the files of the installed `family`, every cataloged version of its faces included,
+    /// adding all their faces at once ([`Self::add_fonts`]). Returns whether the family is loaded now: by this call, or by another
     /// thread meanwhile.
     #[cfg(not(target_arch = "wasm32"))]
     fn load_cataloged(&self, family: &str) -> bool {
-        let mut paths: Vec<PathBuf> = self.catalog.styles(family).into_iter().filter_map(|f| f.path).collect();
+        let faces = self.catalog.styles(family);
+        let mut paths: Vec<PathBuf> = faces.iter().flat_map(|f| self.catalog.versions(f)).filter_map(|f| f.path).collect();
         paths.sort();
         paths.dedup();
         let files = paths.into_iter().flat_map(|p| font_files(&p).into_iter().map(move |data| (data, Some(p.clone()))));
@@ -345,7 +346,7 @@ impl FontDb {
         if let Some(f) = self.read_faces().iter().find(same) {
             return Some(f.clone());
         }
-        // Not loaded: the family's installed files may hold it (the catalog doesn't list versions).
+        // Not loaded: another installed file of the family may hold it.
         self.load_family_files(&face.family);
         let found = self.read_faces().iter().find(same).cloned();
         Some(found.unwrap_or(face))

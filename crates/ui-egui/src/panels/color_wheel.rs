@@ -51,7 +51,7 @@ use std::sync::Arc;
 use craft::behavior::Mixed;
 use craft::behavior::Selection;
 use craft::color_ui::AreaMode;
-use craft::color_ui::ui::{ChannelRow, ChannelRule, ChannelUnit, ColorArea, ColorStrip, ColorWheel, WheelInner};
+use craft::color_ui::ui::{ChannelRow, ChannelUnit, ColorArea, ColorStrip, ColorWheel, WheelInner};
 use craft::keymap::CommandRef;
 use craft::theme::{ColorModel, HsbModel, ModelValues, RgbModel, Srgba};
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
@@ -1004,7 +1004,7 @@ fn oklch_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &P
     // The rows read dim and take no edit without a colour to edit.
     Stack::new().enabled(enabled).show(ui, |ui, _| {
         for (i, &(letter, ref name, max, unit)) in rows.iter().enumerate() {
-            let rule = ChannelRule { range: 0.0..=max, step: 1.0, decimals: 0 };
+            let rule = super::whole_steps(0.0..=max);
             let mut row = ChannelRow::new(name.clone(), Bind::given(shown[i].clamp(0.0, max)), rule).short(letter).unit(unit);
             if enabled {
                 row = row.track(oklch_stops(panel, lch, i, max, max_c));
@@ -1045,7 +1045,7 @@ fn hsl_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pic
     // The rows read dim and take no edit without a colour to edit.
     Stack::new().enabled(enabled).show(ui, |ui, _| {
         for (i, &(letter, ref name, max, unit)) in rows.iter().enumerate() {
-            let rule = ChannelRule { range: 0.0..=max, step: 1.0, decimals: 0 };
+            let rule = super::whole_steps(0.0..=max);
             let mut row = ChannelRow::new(name.clone(), Bind::given(shown[i].clamp(0.0, max)), rule).short(letter).unit(unit);
             if enabled {
                 let last = (HSL_STOPS - 1) as f64;

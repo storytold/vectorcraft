@@ -971,7 +971,7 @@ pub(crate) struct ShortcutsDialogState {
 pub(crate) fn open(app: &mut VectorcraftApp) {
     let (min, max) = vectorcraft_engine::KEY_HOLD_DELAY_RANGE;
     let prefs = &app.session.prefs;
-    let hold = HoldSetting { on: prefs.hold_shortcuts, delay: prefs.key_hold_delay(), range: min..=max };
+    let hold = HoldSetting::new(prefs.hold_shortcuts, prefs.key_hold_delay(), min..=max);
     app.shortcuts_dialog = Some(ShortcutsDialogState {
         state: DialogState::new().with_tab("tools"),
         keymap: None,

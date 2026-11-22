@@ -57,7 +57,7 @@ pub mod variables;
 use std::sync::Arc;
 
 use craft::behavior::{ColumnWidth, IconId, Mixed};
-use craft::color_ui::ui::HarmonyCommand;
+use craft::color_ui::ui::{ChannelRule, HarmonyCommand};
 use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, SwatchPalette, Well};
 use craft::keymap::CommandRef;
 use craft::theme::Srgba;
@@ -874,6 +874,13 @@ pub(crate) fn c32(c: &Color) -> egui::Color32 {
 pub(crate) fn srgba(c: &Color) -> Srgba {
     let [r, g, b, _] = c.to_rgba8(1.0);
     Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0)
+}
+
+/// A colour channel row's rule over `range` in whole steps, as the alpha row steps.
+pub(crate) fn whole_steps(range: std::ops::RangeInclusive<f64>) -> ChannelRule {
+    let mut rule = ChannelRule::ALPHA;
+    rule.range = range;
+    rule
 }
 
 /// The empty state of a panel with nothing to show: `icon` over the title and the message,
