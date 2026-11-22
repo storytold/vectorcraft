@@ -986,12 +986,13 @@ fn clear_dropped(ix: &mut Indexed, rgba: &[u8], o: &PaletteOptions, kept: &[[u8;
         return vec![];
     }
     let all: Vec<[u8; 3]> = kept.iter().chain(&dropped).copied().collect();
-    let Indexed { palette, transparent, indices, width, .. } = ix;
+    let width = ix.width;
+    let Indexed { palette, transparent, indices, .. } = ix;
     // The entry such pixels take, looked up at the first of them.
     let mut entry: Option<Option<u8>> = None;
     let mut taken = vec![false; dropped.len()];
     let mut pixel = 0;
-    quantize::nearest_entries(rgba, *width, o, &all, |n| {
+    quantize::nearest_entries(rgba, width, o, &all, |n| {
         if let Some(d) = n.and_then(|n| n.checked_sub(kept.len())) {
             let e = *entry.get_or_insert_with(|| {
                 transparent.or_else(|| palette.iter().position(|c| to_clear.contains(c)).and_then(|i| u8::try_from(i).ok())).or_else(|| {
