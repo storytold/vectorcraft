@@ -7303,6 +7303,9 @@ axis	Y Axis	osa Y
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` musí mít 1-64 tisknutelných znaků
 @msg	`{key}` must be 1-64 printable characters	`{key}` musí mít 1-64 tisknutelných znaků
+@msg	`{key}` must be a list	`{key}` musí být seznam
+@msg	`{key}` names "{name}" twice	`{key}` uvádí "{name}" dvakrát
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: zásuvný modul může do každé místní nabídky přidat nejvýše {MAX_CONTEXT_COMMANDS} příkazů
 @msg	`version`, `description` or `author` is too long	`version`, `description` nebo `author` je příliš dlouhé
 @msg	`warnings` must be a list of strings	`warnings` musí být seznam řetězců
 @msg	`{k}` must be one of {_1}	`{k}` musí být jedno z {_1}

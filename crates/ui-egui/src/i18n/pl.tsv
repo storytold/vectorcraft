@@ -7158,6 +7158,9 @@ axis	Y Axis	Oś Y
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` musi mieć 1-64 drukowalnych znaków
 @msg	`{key}` must be 1-64 printable characters	`{key}` musi mieć 1-64 drukowalnych znaków
+@msg	`{key}` must be a list	`{key}` musi być listą
+@msg	`{key}` names "{name}" twice	`{key}` wymienia "{name}" dwa razy
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: wtyczka może umieścić w każdym menu kontekstowym najwyżej {MAX_CONTEXT_COMMANDS} poleceń
 @msg	`version`, `description` or `author` is too long	`version`, `description` lub `author` jest za długie
 @msg	`warnings` must be a list of strings	`warnings` musi być listą ciągów znaków
 @msg	`{k}` must be one of {_1}	`{k}` musi mieć jedną z wartości: {_1}

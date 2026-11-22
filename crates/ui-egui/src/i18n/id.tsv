@@ -416,6 +416,9 @@
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” meminta anggaran berat (setiap proses hingga {minutes} menit dan {times} kali instruksi biasa): seseorang harus menyetujuinya di aplikasi desktop, atau berikan `allowHeavy: true` dalam sesi yang dimulai dengan --allow-plugin-grants
 @msg	`name` must be 1-64 printable characters	`name` harus berupa 1-64 karakter yang dapat dicetak
 @msg	`{key}` must be 1-64 printable characters	`{key}` harus berupa 1-64 karakter yang dapat dicetak
+@msg	`{key}` must be a list	`{key}` harus berupa daftar
+@msg	`{key}` names "{name}" twice	`{key}` menyebut "{name}" dua kali
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: plug-in dapat menaruh paling banyak {MAX_CONTEXT_COMMANDS} perintah di setiap menu konteks
 @msg	`version`, `description` or `author` is too long	`version`, `description` atau `author` terlalu panjang
 @msg	`warnings` must be a list of strings	`warnings` harus berupa daftar string
 @msg	`{k}` must be one of {_1}	`{k}` harus salah satu dari {_1}

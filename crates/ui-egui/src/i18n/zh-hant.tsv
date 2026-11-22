@@ -6956,6 +6956,9 @@ axis	Y Axis	Y 軸
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` 必須是 1-64 個可列印字元
 @msg	`{key}` must be 1-64 printable characters	`{key}` 必須是 1-64 個可列印字元
+@msg	`{key}` must be a list	`{key}` 必須是清單
+@msg	`{key}` names "{name}" twice	`{key}` 列出了兩次 "{name}"
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`：每個增效模組在每個內容選單中最多可放入 {MAX_CONTEXT_COMMANDS} 個指令
 @msg	`version`, `description` or `author` is too long	`version`、`description` 或 `author` 太長
 @msg	`warnings` must be a list of strings	`warnings` 必須是字串清單
 @msg	`{k}` must be one of {_1}	`{k}` 必須是 {_1} 其中之一

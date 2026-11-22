@@ -5427,7 +5427,7 @@ fn script_interpreter_core_errors_are_translated() {
 
 /// A manifest whose `commands` value, or a command's `menu`, has the wrong shape is refused with an error that every
 /// language of [`COMPLETE_MESSAGES`] translates whole, the command's name and the place in the
-/// manifest included.
+/// manifest included, and so is one that puts too many commands in a context menu.
 #[test]
 fn wrongly_shaped_plugin_commands_errors_are_translated() {
     let many: Vec<String> = (0..=32).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
@@ -5458,18 +5458,34 @@ fn wrongly_shaped_plugin_commands_errors_are_translated() {
         "unknown",
         "printable",
         "characters",
+        "names",
+        "twice",
+        "most",
     ];
-    // A `menu` of the wrong shape (read at API level 2).
+    // A `menu` of the wrong shape (read at API level 2), its `context` included.
     let menus = [
         r#"{"path":["File"]}"#,
         r#"{"path":["Select"],"before":"Inverse"}"#,
         r#"{"path":["Select"],"after":3}"#,
         r#"{"path":["Select"],"after":" "}"#,
         r#"{"path":["Select"]},"menu":{"path":["Edit"]}"#,
+        r#"{"context":"canvas"}"#,
+        r#"{"context":[{"menu":"canvas","when":"layerRow"}]}"#,
+        r#"{"context":[{"menu":"canvas"},{"menu":"canvas"}]}"#,
     ];
-    let manifests = commands.iter().map(|value| format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#)).chain(
-        menus.iter().map(|menu| format!(r#"{{"id":"a","name":"x","api":2,"kind":"filter","commands":[{{"id":"x","label":"A","menu":{menu}}}]}}"#)),
-    );
+    // More commands in one context menu than a plug-in may put there.
+    let crowded: Vec<String> = (0..=vectorcraft_plugins::manifest::MAX_CONTEXT_COMMANDS)
+        .map(|i| format!(r#"{{"id":"c{i}","label":"C{i}","menu":{{"context":[{{"menu":"layers"}}]}}}}"#))
+        .collect();
+    let manifests = commands
+        .iter()
+        .map(|value| format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#))
+        .chain(
+            menus
+                .iter()
+                .map(|menu| format!(r#"{{"id":"a","name":"x","api":2,"kind":"filter","commands":[{{"id":"x","label":"A","menu":{menu}}}]}}"#)),
+        )
+        .chain([format!(r#"{{"id":"a","name":"x","api":2,"kind":"filter","commands":[{}]}}"#, crowded.join(","))]);
     for manifest in manifests {
         let e = vectorcraft_plugins::manifest::Manifest::parse(manifest.as_bytes()).unwrap_err().to_string();
         let numbers: Vec<&str> = e.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();

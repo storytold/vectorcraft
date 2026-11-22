@@ -533,6 +533,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	»{_1}« beder om et tungt budget (hver kørsel op til {minutes} minutter og {times} gange de sædvanlige instruktioner): en person skal godkende det i skrivebordsappen, eller send `allowHeavy: true` i en session startet med --allow-plugin-grants
 @msg	`name` must be 1-64 printable characters	`name` skal være 1-64 tegn, der kan udskrives
 @msg	`{key}` must be 1-64 printable characters	`{key}` skal være 1-64 tegn, der kan udskrives
+@msg	`{key}` must be a list	`{key}` skal være en liste
+@msg	`{key}` names "{name}" twice	`{key}` nævner "{name}" to gange
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: et plug-in må højst sætte {MAX_CONTEXT_COMMANDS} kommandoer i hver genvejsmenu
 @msg	`version`, `description` or `author` is too long	`version`, `description` eller `author` er for lang
 @msg	`warnings` must be a list of strings	`warnings` skal være en liste med strenge
 @msg	`{k}` must be one of {_1}	`{k}` skal være en af {_1}

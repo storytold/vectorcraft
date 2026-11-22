@@ -7692,6 +7692,9 @@ variable-list-end	{0}, {1}	{0} i {1}
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` ha de tenir 1-64 caràcters imprimibles
 @msg	`{key}` must be 1-64 printable characters	`{key}` ha de tenir 1-64 caràcters imprimibles
+@msg	`{key}` must be a list	`{key}` ha de ser una llista
+@msg	`{key}` names "{name}" twice	`{key}` esmenta "{name}" dues vegades
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: un complement pot posar com a màxim {MAX_CONTEXT_COMMANDS} ordres a cada menú contextual
 @msg	`version`, `description` or `author` is too long	`version`, `description` o `author` és massa llarg
 @msg	`warnings` must be a list of strings	`warnings` ha de ser una llista de cadenes
 @msg	`{k}` must be one of {_1}	`{k}` ha de ser un de {_1}

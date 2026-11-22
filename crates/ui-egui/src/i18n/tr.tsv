@@ -7375,6 +7375,9 @@ axis	Y Axis	Y ekseni
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` 1-64 yazdırılabilir karakter olmalıdır
 @msg	`{key}` must be 1-64 printable characters	`{key}` 1-64 yazdırılabilir karakter olmalıdır
+@msg	`{key}` must be a list	`{key}` bir liste olmalıdır
+@msg	`{key}` names "{name}" twice	`{key}`, "{name}" değerini iki kez belirtiyor
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: bir eklenti her bağlam menüsüne en fazla {MAX_CONTEXT_COMMANDS} komut koyabilir
 @msg	`version`, `description` or `author` is too long	`version`, `description` veya `author` çok uzun
 @msg	`warnings` must be a list of strings	`warnings` bir dize listesi olmalıdır
 @msg	`{k}` must be one of {_1}	`{k}` şunlardan biri olmalıdır: {_1}

@@ -7288,6 +7288,9 @@ axis	Y Axis	Y tengely
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	a `name` 1-64 nyomtatható karakter legyen
 @msg	`{key}` must be 1-64 printable characters	a `{key}` 1-64 nyomtatható karakter legyen
+@msg	`{key}` must be a list	a `{key}` lista legyen
+@msg	`{key}` names "{name}" twice	a `{key}` kétszer nevezi meg ezt: "{name}"
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: egy bővítmény legfeljebb {MAX_CONTEXT_COMMANDS} parancsot tehet az egyes helyi menükbe
 @msg	`version`, `description` or `author` is too long	a `version`, a `description` vagy az `author` túl hosszú
 @msg	`warnings` must be a list of strings	a `warnings` karakterláncok listája legyen
 @msg	`{k}` must be one of {_1}	`{k}`: ezek egyike kell: {_1}

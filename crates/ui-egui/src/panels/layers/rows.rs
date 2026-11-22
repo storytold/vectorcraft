@@ -696,9 +696,28 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
     ui.separator();
     // Collect for Export
     let ids: Vec<u64> = collect_ids.to_vec();
+    let actions = &mut out.actions;
     collect_for_export_menu(ui, true, move |multiple| {
-        out.actions.push(("assets.add".into(), json!({ "ids": ids.clone(), "multiple": multiple })));
+        actions.push(("assets.add".into(), json!({ "ids": ids.clone(), "multiple": multiple })));
     });
+    // The commands plug-in manifests list in this menu (`menu.context`): a submenu per plug-in,
+    // each item running its command on these rows' objects.
+    let plugins = crate::dialogs::plugin::context_commands(vectorcraft_plugins::ContextMenu::Layers, view.doc, collect_ids);
+    if !plugins.is_empty() {
+        ui.separator();
+        ui.menu_button(tl!("Plug-ins"), |ui| {
+            for (name, commands) in &plugins {
+                ui.menu_button(*name, |ui| {
+                    for c in commands {
+                        if widgets::menu_item_name(ui, c.label, c.enabled, false) {
+                            out.actions.push((c.command.into(), json!({ "ids": collect_ids })));
+                            ui.close();
+                        }
+                    }
+                });
+            }
+        });
+    }
 }
 
 /// Context menu Others action for `ids`: Lock Others / Unlock All Layers or Hide Others / Show All Layers.

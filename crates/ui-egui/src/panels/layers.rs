@@ -471,7 +471,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     bottom_bar(app, ui, &view, &doc, &mut out.actions);
     for (c, p) in out.actions {
-        app.run(&c, p).ok();
+        // A plug-in command from a row's menu asks for its parameters first, as its menu item does.
+        if vectorcraft_engine::cmd::plugin::is_command_id(&c) {
+            crate::menus::invoke(app, &c, p);
+        } else {
+            app.run(&c, p).ok();
+        }
     }
     // A deletion that took the last highlighted row leaves the panel nothing to delete. Release the
     // keys now, not at the next draw, so the very next frame's Delete reaches Edit › Clear.

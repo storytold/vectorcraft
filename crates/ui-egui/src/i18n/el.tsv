@@ -7292,6 +7292,9 @@ axis	Y Axis	Άξονας Y
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	το `name` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
 @msg	`{key}` must be 1-64 printable characters	το `{key}` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
+@msg	`{key}` must be a list	το `{key}` πρέπει να είναι λίστα
+@msg	`{key}` names "{name}" twice	το `{key}` αναφέρει το "{name}" δύο φορές
+@msg	`{key}`: a plug-in may put at most {MAX_CONTEXT_COMMANDS} commands in each context menu	`{key}`: ένα πρόσθετο μπορεί να βάλει το πολύ {MAX_CONTEXT_COMMANDS} εντολές σε κάθε μενού περιβάλλοντος
 @msg	`version`, `description` or `author` is too long	το `version`, το `description` ή το `author` είναι πολύ μεγάλο
 @msg	`warnings` must be a list of strings	το `warnings` πρέπει να είναι λίστα συμβολοσειρών
 @msg	`{k}` must be one of {_1}	το `{k}` πρέπει να είναι ένα από τα {_1}
