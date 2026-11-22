@@ -356,6 +356,31 @@ fn a_link_to_another_kind_of_file_is_not_written() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A sidecar replaced through a temporary file keeps its permission bits.
+#[cfg(unix)]
+#[test]
+fn a_replaced_sidecar_keeps_its_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = folder("mode");
+    let mut s = with_data(&base);
+    let log = logged(
+        &mut s,
+        &base,
+        &format!("var p = Folder.userData.fsName + '/a.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close(); vc.log(p);"),
+    );
+    let path = PathBuf::from(log[0].as_str().unwrap());
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    logged(
+        &mut s,
+        &base,
+        "var x = new XMPFile(Folder.userData.fsName + '/a.xmp', XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+         var m = x.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); x.putXMP(m); x.closeFile();",
+    );
+    assert!(std::fs::read_to_string(&path).unwrap().contains("changed"));
+    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A sidecar in UTF-16 is read by its byte order mark, and one that is not text is refused.
 #[test]
 fn a_utf16_sidecar_reads_by_its_byte_order_mark() {

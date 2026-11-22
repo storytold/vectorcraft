@@ -1981,9 +1981,16 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
         };
         let r = write_temp();
         drop(out);
-        let r = r.and_then(|()| std::fs::rename(&temp, &target)).inspect_err(|_| {
-            let _ = std::fs::remove_file(&temp);
-        });
+        // The replacement keeps the sidecar's permission bits. On Windows the only permission is the
+        // read-only attribute, and a read-only temporary file could not be removed after a failed
+        // rename.
+        let permissions = if cfg!(unix) { std::fs::metadata(&target).map(|m| m.permissions()).ok() } else { None };
+        let r = r
+            .and_then(|()| permissions.map_or(Ok(()), |p| std::fs::set_permissions(&temp, p)))
+            .and_then(|()| std::fs::rename(&temp, &target))
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&temp);
+            });
         let changed = r.is_ok();
         (r, changed)
     } else {
