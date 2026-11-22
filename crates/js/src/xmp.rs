@@ -10,9 +10,10 @@
 //! a simple value (text, or a URI in `rdf:resource`), an array of simple items (`rdf:Bag`,
 //! `rdf:Seq` or `rdf:Alt`, each item with an optional `xml:lang`), or any other value (a structure,
 //! a value with qualifiers, an array of structures), which is kept as the XML it was written in and
-//! written back with the namespace declarations it uses. Namespaces a packet declares are added to
-//! the realm's [`Registry`] with the prefix the packet gives them, or a new prefix when that one is
-//! taken.
+//! written back with the namespace declarations it uses. The namespaces of the property, element and
+//! attribute names under `rdf:Description` are added to the realm's [`Registry`] with the prefix the
+//! packet gives them, or a new prefix when that one is taken; a namespace the packet declares and no
+//! such name uses is not added.
 //!
 //! VectorCraft's own rules: a packet or a written packet holds at most [`MAX_BYTES`] bytes,
 //! elements nest at most 64 deep, a child of `rdf:RDF` other than `rdf:Description` makes the

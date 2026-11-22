@@ -203,11 +203,13 @@ fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
     })
 }
 
+/// Sets the slot `name` of `o` as a property that is not writable, enumerable or configurable, so
+/// a script cannot assign, redefine or delete it.
 fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
     if let Value::String(s) = &value {
         i.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(PROP_BYTES + string_bytes(s.len())))?;
     }
-    i.define(o, key(name), Prop::Data { value, flags: HIDDEN })
+    i.define(o, key(name), Prop::Data { value, flags: 0 })
 }
 
 /// A string value, charged to the heap.
@@ -983,6 +985,7 @@ fn file_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
                 (WRITEABLE, Value::Bool(field(i, "writeable")?.truthy())),
                 (SIDECAR, Value::Bool(sidecar)),
                 (CHAR_FORM, field(i, "charForm")?),
+                (PENDING, Value::Undefined),
             ];
             for (name, value) in fields {
                 set_slot(i, o, name, value)?;

@@ -161,6 +161,31 @@ fn a_scanned_sidecar_is_read_only() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The state an `XMPFile` keeps cannot be changed by the script: a sidecar opened for reading is
+/// not written by `closeFile` after the script assigns, defines or deletes the properties that
+/// hold the packet, the path and the open flags.
+#[test]
+fn a_script_cannot_change_the_state_of_an_xmp_file() {
+    let base = folder("state");
+    let mut s = with_data(&base);
+    let log = logged(
+        &mut s,
+        &base,
+        &format!(
+            "var p = Folder.userData.fsName + '/r.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close();\n\
+             var x = new XMPFile(p, XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_READ); var out = [];\n\
+             x.__vcXmpPending = 'not a packet'; x.__vcXmpFlags = XMPConst.OPEN_FOR_UPDATE;\n\
+             try {{ Object.defineProperty(x, '__vcXmpPending', {{ value: 'not a packet' }}); out.push('defined'); }} catch (e) {{ out.push(e.name); }}\n\
+             out.push(typeof x.__vcXmpPending, x.getFileInfo().openFlags == XMPConst.OPEN_FOR_READ);\n\
+             x.closeFile(); out.push(delete x.__vcXmpPath); vc.log(out); vc.log(p);"
+        ),
+    );
+    assert_eq!(log[0], json!(["TypeError", "undefined", true, false]));
+    let text = std::fs::read_to_string(log[1].as_str().unwrap()).unwrap();
+    assert_eq!(text, PACKET);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A path outside the script's places, a missing file and a file opened for update where the run
 /// may not write are refused with the file access errors, and a malformed or huge packet with an
 /// error, never a fault.

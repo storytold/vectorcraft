@@ -3063,10 +3063,11 @@ rules for these objects:
   functions `XMPMeta.registerNamespace`, `getNamespacePrefix` and `getNamespaceURI`. A path is a property name,
   `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. Arrays hold simple items; a structure
   or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options.
-  Namespaces a packet declares are registered with the prefix it gives them, or `prefix_1_` when that prefix names
-  another namespace. At most 4,096 namespaces, holding at most 1 MiB together, are registered. A namespace URI over
-  1,024 bytes, a prefix over 128 bytes, and a namespace past either limit throw `… the XMP data is too large`, both
-  from `registerNamespace` and from a packet that declares the namespace.
+  The namespaces that a packet's property, element and attribute names use are registered with the prefix the packet
+  gives them, or `prefix_1_` when that prefix names another namespace; a namespace the packet declares but no name
+  uses is not registered. At most 4,096 namespaces, holding at most 1 MiB together, are registered. A namespace URI
+  over 1,024 bytes, a prefix over 128 bytes, and a namespace past either limit throw `… the XMP data is too large`,
+  both from `registerNamespace` and from a packet that uses the namespace.
 - `XMPFile(path, format, openFlags)` reads a file through the same places as `File`, so a path outside them, a
   missing file and a file over 8 MiB throw the `File` messages (`Script file access denied`, `Script file does not
   exist`, `Script file exceeds 8 MiB`). A `.xmp` file is read whole as its packet (a link counts by the file it leads to,
