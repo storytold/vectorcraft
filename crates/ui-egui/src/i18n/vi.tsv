@@ -5620,6 +5620,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` cho hộp thoại tệp của tập lệnh phải là một trong: once, always, deny, stop
 @msg	choose a file or folder first, or deny	hãy chọn một tệp hoặc thư mục trước, hoặc từ chối
 @msg	the script file permissions could not be saved: {e}	không thể lưu quyền truy cập tệp của các tập lệnh: {e}
+@msg	the script file permissions could not be read: {e}	không thể đọc quyền truy cập tệp của các tập lệnh: {e}
 @msg	this script's file access can be allowed only once	quyền truy cập tệp của tập lệnh này chỉ có thể được cho phép một lần
 @msg	Only the person at the keyboard can allow a script's file access	Chỉ người ngồi tại bàn phím mới có thể cho phép tập lệnh truy cập tệp
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Một tập lệnh nhận tối đa 2.048 tệp: các tệp được chọn sau đó đã bị bỏ qua

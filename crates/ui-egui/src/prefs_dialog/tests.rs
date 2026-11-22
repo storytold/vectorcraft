@@ -3211,6 +3211,32 @@ fn script_file_access_revoke_refuses_a_malformed_or_oversized_grants_file() {
     }
 }
 
+/// Preferences opened over a grants file that cannot be read or changed (not well formed, not
+/// JSON, or over 4 MiB) shows why under Script File Access instead of saying that no script has
+/// kept file access, lists the grants that can still be read, and leaves the file as it was.
+#[test]
+fn script_file_access_shows_why_the_grants_file_cannot_be_read() {
+    let dir = std::env::temp_dir().join("vc-ui-prefs-grants-nowhere");
+    let kept = grant(&dir.join("a.jsx"), &dir.join("out.txt"), "1", false, false);
+    let malformed = serde_json::to_vec(&json!({"version": 1, "grants": [kept, {"script": "x"}]})).unwrap();
+    let mut oversized = br#"{"version": 1, "grants": []}"#.to_vec();
+    oversized.resize((4 << 20) + 1, b' ');
+    for (name, held, rows) in [("malformed", malformed, 1), ("broken", b"{ not json".to_vec(), 0), ("oversized", oversized, 0)] {
+        let (mut a, store) = app_with_grants(&format!("grants-unread-{name}"), json!([]));
+        std::fs::write(&store, &held).unwrap();
+        open(&mut a, Some("General"));
+        assert_eq!(access_rows(&a).len(), rows, "{name}");
+        let fields = &a.ui.dialog.as_ref().unwrap().fields;
+        let error = fields.get(script_access::ERROR).and_then(Value::as_str).unwrap_or_default().to_string();
+        assert!(error.starts_with("the script file permissions could not be read: "), "{name}: {error:?}");
+        script_access_in_view(&mut a, &fonts_context(), &error);
+        let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+        assert!(!text.contains("No script has kept file access."), "{name}: {text}");
+        assert_eq!(std::fs::read(&store).unwrap(), held, "{name}: the grants file is left as it was");
+        let _ = std::fs::remove_dir_all(store.parent().unwrap());
+    }
+}
+
 /// A script or path with control or bidirectional formatting characters shows them as escapes, so
 /// it cannot break its row or draw as another name.
 #[test]

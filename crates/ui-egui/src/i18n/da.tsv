@@ -99,6 +99,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
 @msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
 @msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	the script file permissions could not be read: {e}	scriptets filtilladelser kunne ikke læses: {e}
 @msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
 @msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt

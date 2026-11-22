@@ -637,8 +637,8 @@ fn a_grants_change_without_its_lock_changes_nothing() {
 }
 
 /// Reading and changing the grants file wait for a lock another handle holds only for a bounded
-/// number of tries: then a read gives no grants and a change fails with the file unchanged. A lock
-/// released while it waits is taken.
+/// number of tries: then a read gives no grants and the lock's error, and a change fails with the
+/// file unchanged. A lock released while it waits is taken.
 #[test]
 fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
     use crate::script::files::{LOCK_TRIES, WHILE_GRANTS_LOCKED, revoke_grants, stored_grants};
@@ -652,7 +652,9 @@ fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
     let waits = std::rc::Rc::new(std::cell::Cell::new(0));
     let counted = waits.clone();
     WHILE_GRANTS_LOCKED.set(Some(Box::new(move || counted.set(counted.get() + 1))));
-    assert_eq!(stored_grants(&data), Vec::<Value>::new(), "grants are not read without the lock");
+    let (read, error) = stored_grants(&data);
+    assert_eq!(read, Vec::<Value>::new(), "grants are not read without the lock");
+    assert_eq!(error.map(|e| e.kind()), Some(std::io::ErrorKind::TimedOut));
     assert_eq!(waits.get(), LOCK_TRIES - 1);
     waits.set(0);
     let refused = revoke_grants(&data, None, None);

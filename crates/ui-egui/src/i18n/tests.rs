@@ -2998,6 +2998,7 @@ fn script_file_messages_translate_in_every_complete_message_language() {
         "`answer` for a script's file dialog must be one of: once, always, deny, stop",
         "choose a file or folder first, or deny",
         "the script file permissions could not be saved: {e}",
+        "the script file permissions could not be read: {e}",
         "this script's file access can be allowed only once",
         "Only the person at the keyboard can allow a script's file access",
     ];

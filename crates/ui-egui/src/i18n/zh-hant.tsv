@@ -2972,6 +2972,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	指令碼檔案對話框的 `answer` 必須是下列之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	請先選擇檔案或資料夾，或拒絕
 @msg	the script file permissions could not be saved: {e}	無法儲存指令碼的檔案權限：{e}
+@msg	the script file permissions could not be read: {e}	無法讀取指令碼的檔案權限：{e}
 @msg	this script's file access can be allowed only once	此指令碼的檔案存取只能允許一次
 @msg	Only the person at the keyboard can allow a script's file access	只有鍵盤前的人才能允許指令碼存取檔案
 @msg	A script is given at most 2,048 files: the files picked after them were left out	指令碼最多取得 2,048 個檔案：之後選擇的檔案已略去

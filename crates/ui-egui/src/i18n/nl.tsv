@@ -101,6 +101,7 @@
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` voor het bestandsdialoogvenster van een script moet een van deze waarden zijn: once, always, deny, stop
 @msg	choose a file or folder first, or deny	kies eerst een bestand of map, of weiger
 @msg	the script file permissions could not be saved: {e}	de toestemmingen voor scriptbestanden konden niet worden opgeslagen: {e}
+@msg	the script file permissions could not be read: {e}	de toestemmingen voor scriptbestanden konden niet worden gelezen: {e}
 @msg	this script's file access can be allowed only once	de bestandstoegang van dit script kan maar één keer worden toegestaan
 @msg	Only the person at the keyboard can allow a script's file access	Alleen de persoon aan het toetsenbord kan de bestandstoegang van een script toestaan
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Een script krijgt maximaal 2.048 bestanden: de bestanden die daarna zijn gekozen, zijn weggelaten

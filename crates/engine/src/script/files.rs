@@ -1062,9 +1062,20 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 }
 
 /// The grants the grants file beside the data folder `data_dir` keeps: each script, the SHA-256 of
-/// its text, the path and whether it may be written (`script.grants`).
-pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
-    read_store(&data_dir.with_file_name(GRANTS_FILE))
+/// its text, the path and whether it may be written (`script.grants`), as [`read_store`] reads
+/// them, and the error when the file is there and [`try_read_store`] refuses it (it cannot be read,
+/// is too large, is not a grants file of this version, or holds a grant that is not well formed or
+/// more grants than may be kept) or its lock cannot be taken, which also refuses a change.
+pub(crate) fn stored_grants(data_dir: &Path) -> (Vec<serde_json::Value>, Option<std::io::Error>) {
+    let store = data_dir.with_file_name(GRANTS_FILE);
+    let _lock = match lock_store(&store) {
+        Ok(lock) => lock,
+        Err(e) => return (Vec::new(), Some(e)),
+    };
+    match try_read_store(&store) {
+        Ok(grants) => (grants, None),
+        Err(e) => (load_store(&store, false).unwrap_or_default(), Some(e)),
+    }
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path

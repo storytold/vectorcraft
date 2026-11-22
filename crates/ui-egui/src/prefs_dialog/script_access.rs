@@ -18,6 +18,10 @@ pub(super) const ROWS: &str = "__scriptAccess";
 /// The dialog field that holds the row whose Revoke button takes the keyboard focus next.
 const FOCUS: &str = "__scriptAccessFocus";
 
+/// The dialog field that holds, in English, why the grants file cannot be read or changed
+/// (`script.grants`' `error`), absent when it can.
+pub(super) const ERROR: &str = "__scriptAccessError";
+
 /// The most characters of a path a row shows.
 const MAX_SHOWN_PATH: usize = 1024;
 
@@ -35,10 +39,16 @@ const WHOLE: [(&str, &str); 2] = [("script", "wholeScript"), ("path", "wholePath
 /// `fields`. Where the session keeps no grants, the field is removed. The grants file is the app's
 /// own, so it is read with no automation roots in force: each row keeps its script and path whole
 /// (`wholeScript` and `wholePath`) for `script.grants.revoke`, and shows them (`script` and `path`)
-/// as `script.grants` names them to the request that opened the dialog ([`as_listed`]).
+/// as `script.grants` names them to the request that opened the dialog ([`as_listed`]). When the
+/// grants file cannot be read or changed, its error goes in the field [`ERROR`], with the rows of the
+/// grants that could still be read.
 pub(super) fn load(app: &mut VectorcraftApp, fields: &mut Map<String, Value>) {
+    fields.remove(ERROR);
     match vectorcraft_engine::file_access::unconfined(|| app.session.execute("script.grants", &json!({}))) {
         Ok(v) if !v["file"].is_null() => {
+            if let Some(error) = v["error"].as_str() {
+                fields.insert(ERROR.into(), json!(error));
+            }
             let mut rows = rows(&v["grants"]);
             for row in rows.iter_mut().filter_map(Value::as_object_mut) {
                 for (shown, whole) in WHOLE {
@@ -131,15 +141,23 @@ enum Line {
 }
 
 /// The section, after General › Show External Script Warning, when the dialog `d` has rows: each
-/// script, its paths with their access and a Revoke button, or a line saying there are none.
+/// script, its paths with their access and a Revoke button, or a line saying there are none. When
+/// the grants file cannot be read or changed, its error shows first, and the line saying there are
+/// none does not.
 pub(super) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) {
     let Some(rows) = d.fields.get(ROWS).and_then(Value::as_array).cloned() else { return };
     let t = Tokens::get(ui.ctx());
     ui.add_space(8.0);
     ui.label(egui::RichText::new(tl!("Script File Access")).font(theme::semibold(12.5)).color(t.text_strong));
     ui.add_space(2.0);
+    let error = d.fields.get(ERROR).and_then(Value::as_str);
+    if let Some(error) = error {
+        ui.label(egui::RichText::new(crate::i18n::msg(error)).color(t.error).size(11.5));
+    }
     if rows.is_empty() {
-        ui.label(egui::RichText::new(tl!("No script has kept file access.")).color(t.text_dim).size(11.5));
+        if error.is_none() {
+            ui.label(egui::RichText::new(tl!("No script has kept file access.")).color(t.text_dim).size(11.5));
+        }
         return;
     }
     let mut lines = Vec::with_capacity(rows.len() * 2);

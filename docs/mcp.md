@@ -3047,7 +3047,7 @@ VectorCraft writes files by these rules of its own:
   `Script file dialogs need a person to answer them`, and takes no kept grant. In the app, a file dialog inside a
   built-in's callback, a getter, a conversion or a file `$.evalFile` runs throws an error.
 
-`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file}`, with `code`
+`script.grants {}` lists the kept grants: `{grants: [{script, sha256, code, path, write, folder}], file, error?}`, with `code`
 the SHA-256 of each evaluated source (of its UTF-16 code units in little-endian order), `folder` true for a folder's
 grant, which covers everything in the folder (a file's grant covers its own path only, also when a folder later
 takes its place), and `file` the grants
@@ -3056,8 +3056,10 @@ is given as its file name alone. `script.grants.revoke {script?, path?, all?}` r
 a script file, of a path, of both together, or with `all: true` every grant, and returns `{removed}`. A path is
 matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
-cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. A script
-cannot run either command.
+cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. For such a
+file, and one that is over 4 MiB, is not a version 1 grants file, holds a grant that is not well formed or more than
+4096 grants, or whose lock cannot be taken, `script.grants` gives the reason in `error` and lists the well-formed grants
+it can still read. Preferences › General › Script File Access shows that error. A script cannot run either command.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.grants.revoke","params":{"all":true}}}
