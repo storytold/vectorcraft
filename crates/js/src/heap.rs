@@ -246,6 +246,10 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// A promise (ECMA-262 11th edition, section 25.6) and its state.
+    Promise(Box<crate::builtins::promise::PromiseData>),
+    /// The state that the functions a promise operation makes share; scripts never see it.
+    PromiseRecord(Box<crate::builtins::promise::Record>),
 }
 
 /// What an XML value is.
@@ -309,7 +313,8 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) => "Object",
+            Class::XmlFilter(_) | Class::PromiseRecord(_) => "Object",
+            Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
             Class::Ordinary | Class::ForIn(_) => "Object",
@@ -679,6 +684,21 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         Class::XmlFilter(state) => {
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
+        }
+        Class::Promise(p) => {
+            for v in p.values() {
+                mark_value(&v, work, strings);
+            }
+            if let Some((code, _)) = &p.site {
+                mark_code(code, strings);
+            }
+            extra = p.bytes();
+        }
+        Class::PromiseRecord(r) => {
+            for v in r.values() {
+                mark_value(&v, work, strings);
+            }
+            extra = crate::builtins::promise::RECORD_BYTES;
         }
         _ => {}
     }

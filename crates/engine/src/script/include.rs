@@ -219,6 +219,13 @@ pub(crate) struct Files {
     frames: Vec<Frame>,
 }
 
+/// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
+/// `.js` (in any letter case); a `.jsx` script, any other file and a script given as text run as
+/// ECMAScript 5.1 with the ExtendScript extensions.
+pub(crate) fn es2015_script(path: Option<&str>) -> bool {
+    path.and_then(|p| Path::new(p).extension()).is_some_and(|e| e.eq_ignore_ascii_case("js"))
+}
+
 /// The output being built: its UTF-16 text, the line it is on, the units since that line began,
 /// whether its last unit is a carriage return, and what the last `#strict` line so far set.
 struct Out {

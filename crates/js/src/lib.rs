@@ -46,6 +46,13 @@
 //! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
 //! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
 //! node.
+//!
+//! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
+//! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,
+//! `catch`, `finally`, `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. The promise
+//! jobs a script queues run in order once its code has ended, before its run ends, on the run's
+//! limits; a promise still rejected with no handler at the end is reported by
+//! [`Realm::unhandled_rejections`].
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -83,7 +90,9 @@ pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
+pub use realm::{
+    Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
+};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -100,11 +109,14 @@ pub struct Options {
     pub max_source_units: usize,
     /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
     pub e4x: bool,
+    /// Give a realm the later editions' built-ins this engine has: `Promise` and its job queue.
+    /// Off, a realm has the ES5.1 built-ins only, as ExtendScript scripts expect.
+    pub es2015: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false }
+        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false, es2015: false }
     }
 }
 
@@ -208,6 +220,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod promise_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
