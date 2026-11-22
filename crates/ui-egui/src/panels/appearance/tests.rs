@@ -1,4 +1,132 @@
+use super::super::tests_long_popups::{
+    PopupWindow, assert_last_row_scrolls_into_view, assert_popup_stays_put, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
+    fx_menu_ends,
+};
 use super::*;
+
+/// A selected rectangle, for the fill row's swatch picker and the Add Effect button.
+fn app_with_a_selected_rectangle() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app
+}
+
+/// The swatch of a fill row at the top of the window, with the size of its click target.
+fn swatch_button_at_the_top() -> (impl FnMut(&mut VectorcraftApp, &mut Ui), egui::Vec2) {
+    let row = Rect::from_min_size(pos2(0.0, 8.0), vec2(400.0, 22.0));
+    (move |app: &mut VectorcraftApp, ui: &mut Ui| swatch_button(app, ui, row, &Paint::None, Painted::Item(0)), vec2(22.0, 22.0))
+}
+
+/// One tile of the swatch picker.
+const TILE: egui::Vec2 = vec2(15.5, 15.5);
+
+/// The picker has one tile per swatch: with enough of them it stops inside a short window and
+/// scrolls, its rows stay 12 tiles wide, and a click on the last tile paints with the last swatch.
+#[test]
+fn a_long_swatch_picker_scrolls_inside_a_short_window() {
+    const HEIGHT: f32 = 200.0;
+    let mut app = app_with_a_selected_rectangle();
+    for n in 0..150 {
+        app.run("swatch.new", json!({"name": format!("Long {n}"), "color": format!("#{:06x}", n + 1)})).unwrap();
+    }
+    let doc = &app.session.active().unwrap().doc;
+    let last_swatch = doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|group| &group.swatches)).last().unwrap().paint.clone();
+    let (draw, chip) = swatch_button_at_the_top();
+    let mut window = PopupWindow::new(&mut app, HEIGHT, draw);
+    window.click(&mut app, window.clickable(chip)[0].center());
+    let tiles = window.clickable(TILE);
+    assert!(tiles.len() > 150, "one tile per swatch: {}", tiles.len());
+    assert_eq!(tiles[11].top(), tiles[0].top(), "12 tiles in a row");
+    assert!(tiles[12].top() > tiles[0].top(), "the 13th tile starts the next row");
+    assert!(tiles[tiles.len() - 1].bottom() > HEIGHT, "the picker opens at the top of its list");
+    window.wheel_down(&mut app, tiles[0].center());
+    let tiles = window.clickable(TILE);
+    let last = tiles[tiles.len() - 1];
+    assert!(last.bottom() <= HEIGHT, "the last tile at {last:?} is inside the window");
+    window.click(&mut app, last.center());
+    let node = first_subject(&app).expect("the rectangle");
+    let (Paint::Solid { color, .. }, Paint::Solid { color: last_color, .. }) = (node.appearance.items[0].paint(), &last_swatch) else {
+        panic!("solid paints")
+    };
+    assert_eq!(color, last_color);
+}
+
+/// A picker with few swatches fits its tiles and the wheel does not move them.
+#[test]
+fn a_short_swatch_picker_does_not_scroll() {
+    let mut app = app_with_a_selected_rectangle();
+    let (draw, chip) = swatch_button_at_the_top();
+    let mut window = PopupWindow::new(&mut app, 900.0, draw);
+    window.click(&mut app, window.clickable(chip)[0].center());
+    let tiles = window.clickable(TILE);
+    assert!(tiles[tiles.len() - 1].bottom() <= 900.0, "every tile is inside the window");
+    window.wheel_down(&mut app, tiles[0].center());
+    assert_eq!(window.clickable(TILE), tiles, "a list that fits does not scroll");
+}
+
+/// The Add New Effect popup keeps each group's name on one line when its list scrolls: the scroll
+/// bar's column widens the popup instead of narrowing the rows.
+#[test]
+fn the_add_effect_popup_keeps_its_rows_on_one_line_when_it_scrolls() {
+    let mut groups: Vec<String> = vec![];
+    for effect in vectorcraft_effects::effect_catalog() {
+        let group = effect.menu.get(1).copied().unwrap_or("Other").to_string();
+        if !groups.contains(&group) {
+            groups.push(group);
+        }
+    }
+    assert_rows_stay_on_one_line(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &groups, "Distort & Transform", 120.0);
+}
+
+/// The Add New Effect button: the third of the bottom bar's 24 pt buttons.
+fn fx_button(window: &PopupWindow) -> egui::Pos2 {
+    window.clickable(vec2(24.0, 24.0))[2].center()
+}
+
+fn draw_bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let node = first_subject(app);
+    bottom(app, ui, node.as_deref(), Sel::None);
+}
+
+/// The Add New Effect popup has one row per effect group, plug-in groups included.
+#[test]
+fn the_add_effect_popup_scrolls_inside_a_short_window() {
+    let (first, last) = fx_menu_ends();
+    assert_last_row_scrolls_into_view(&mut app_with_a_selected_rectangle(), 150.0, draw_bottom_bar, fx_button, &first, &last);
+    assert_short_list_does_not_scroll(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &first, &last);
+}
+
+/// The Add New Effect popup opened from a button `below` pt above the bottom of a window `height`
+/// pt tall stays at one place on every frame, inside the window.
+fn assert_add_effect_popup_stays_put(height: f32, below: f32) -> Rect {
+    let (first, _) = fx_menu_ends();
+    let draw = move |app: &mut VectorcraftApp, ui: &mut Ui| {
+        ui.add_space((height - below - 24.0).max(0.0));
+        draw_bottom_bar(app, ui);
+    };
+    assert_popup_stays_put(&mut app_with_a_selected_rectangle(), height, draw, fx_button, &first)
+}
+
+/// Opened from a button near the bottom of a short window, the Add New Effect popup stays at one
+/// place instead of being drawn above and below the button on alternate frames.
+#[test]
+fn the_add_effect_popup_stays_put_near_the_bottom_of_a_short_window() {
+    for height in [200.0, 300.0, 400.0, 600.0] {
+        let row = assert_add_effect_popup_stays_put(height, 8.0);
+        assert!(row.bottom() < height - 32.0, "in a {height} pt window the popup opens above the button: {row:?}");
+    }
+}
+
+/// Opened from a button near the top of a window, the popup opens below it and stays there.
+#[test]
+fn the_add_effect_popup_stays_put_below_a_button_near_the_top() {
+    for height in [200.0, 400.0, 900.0] {
+        let row = assert_add_effect_popup_stays_put(height, height - 32.0);
+        assert!(row.top() > 24.0, "in a {height} pt window the popup opens below the button: {row:?}");
+    }
+}
 
 /// Duplicating rows highlights the copies, each right above its original, as the Layers panel
 /// does: the active row's copy becomes active, the anchor's copy the anchor.
@@ -16,8 +144,8 @@ fn a_duplicate_highlights_the_copies_above_the_originals() {
     let duplicate = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let node = first_subject(app);
-            let sel = current_sel(app, ui.ctx(), node.as_ref());
-            duplicate_selected(app, ui, node.as_ref(), sel);
+            let sel = current_sel(app, ui.ctx(), node.as_deref());
+            duplicate_selected(app, ui, node.as_deref(), sel);
         });
         out.textures_delta.clear();
     };
@@ -45,7 +173,7 @@ fn a_duplicate_highlights_the_copies_above_the_originals() {
     set_pstate(&ctx, "ap-multi", Highlight { owner, rows: Rows::Effects(None), order: vec![0], anchor: Some(0), active: Some(0) });
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
         let n = first_subject(&app).unwrap();
-        let sel = current_sel(&app, ui.ctx(), Some(&n));
+        let sel = current_sel(&app, ui.ctx(), Some(&*n));
         app.run("effect.duplicate", json!({"item": null, "indices": [4]})).unwrap();
         highlight_copies(&mut app, ui.ctx(), &n, sel, Rows::Effects(None), &[4]);
     });
@@ -69,7 +197,7 @@ fn removing_items_keeps_a_surviving_item_opacity_row_selected() {
     let remove = |app: &mut VectorcraftApp, k: usize| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let n = first_subject(app).unwrap();
-            let sel = current_sel(app, ui.ctx(), Some(&n));
+            let sel = current_sel(app, ui.ctx(), Some(&*n));
             app.run("appearance.removeItem", json!({ "indices": [k] })).unwrap();
             highlight_after_removal(app, ui.ctx(), &n, sel, Rows::Items, &[k]);
         });
@@ -100,9 +228,9 @@ fn deleting_an_opacity_row_sets_it_back_to_default() {
     let delete = |app: &mut VectorcraftApp| {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let node = first_subject(app);
-            let sel = current_sel(app, ui.ctx(), node.as_ref());
+            let sel = current_sel(app, ui.ctx(), node.as_deref());
             assert!(sel.deletable() && !sel.editable(), "{sel:?}");
-            delete_selected(app, ui, node.as_ref(), sel);
+            delete_selected(app, ui, node.as_deref(), sel);
         });
         out.textures_delta.clear();
     };
@@ -337,9 +465,41 @@ fn a_plug_in_effect_s_editor_follows_its_manifest() {
 #[test]
 fn the_effect_editor_lists_a_loaded_glass_texture() {
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([90, 120, 150, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([90, 120, 150, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let stored = vectorcraft_engine::cmd::fileio::texture_image(&png).unwrap();
     let (mut app, ctx, id) = editing("distort.glass");
     app.run("effect.setParams", json!({"item": null, "index": 0, "params": {"texture": "loaded", "textureImage": stored}})).unwrap();
@@ -660,7 +820,41 @@ fn images_show_a_contents_row_with_new_fills_and_strokes_below_it() {
     run(&mut app, "file.new", json!({"width": 100, "height": 100}));
     let rows = |t: Vec<String>| t.into_iter().filter(|t| ["Fill:", "Stroke:", "Contents"].contains(&t.as_str())).collect::<Vec<_>>();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     run(&mut app, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     assert_eq!(rows(frame(&mut app)), ["Contents"]);
     run(&mut app, "appearance.addStroke", json!({}));
@@ -721,6 +915,13 @@ fn with_nothing_selected_it_lists_what_new_art_gets() {
     for want in ["No Selection: Fancy".to_string(), effect_label("stylize.dropShadow"), "Opacity: 50%".into(), "Dashed".into()] {
         assert!(shown.contains(&want), "{want} in {shown:?}");
     }
+    // The style name follows the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let shown = frame(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let want = format!("{}\u{a0}: Fancy", crate::i18n::tr(fr, "No Selection"));
+    assert!(shown.contains(&want), "{want} in {shown:?}");
 }
 
 /// Both stroke rows expose named Weight inputs, and the drop-shadow effect names its Blur input and
@@ -821,4 +1022,206 @@ fn a_mixed_selection_lists_what_its_objects_share() {
     let t = run(&mut app, "text.create", json!({"x": 0, "y": 180, "text": "Hi"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [ids[0].clone(), t]}));
     assert_eq!(frame(&mut app).iter().find(|t| *t != "?").map(String::as_str), Some("Mixed Objects"));
+}
+
+/// The [`summary`] `ctx` holds for the active document, checked field by field against what
+/// [`object_label`] and [`mixed`] work out from scratch.
+fn fresh_summary(app: &VectorcraftApp, ctx: &egui::Context) -> Arc<Summary> {
+    let s = summary(app, ctx).unwrap();
+    assert_eq!(s.label, object_label(app), "the kind label");
+    let parts = |m: &Mixed| (m.shared.clone(), m.transparency, m.fills_differ);
+    assert_eq!(s.mixed(app).map(parts), mixed(app).as_ref().map(parts), "the mixed summary");
+    s
+}
+
+/// The object row's kind and the Mixed Appearances summary are worked out once per document
+/// revision and list of subjects: a repaint with nothing changed reuses them, and they follow an
+/// edit, Undo and Redo, a selection that changes only in the middle, a target circle and another
+/// document at the same revision.
+#[test]
+fn the_selection_summary_is_reused_until_the_document_or_its_subjects_change() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+    let art = |app: &mut VectorcraftApp| -> (Vec<NodeId>, NodeId) {
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let r = (0..3).map(|i| id(app.run("shape.rectangle", json!({"x": i * 30, "y": 0, "width": 20, "height": 20})).unwrap())).collect();
+        (r, id(app.run("text.create", json!({"x": 0, "y": 100, "text": "Hi"})).unwrap()))
+    };
+    let (r, t) = art(&mut app);
+    app.run("select.set", json!({"ids": r})).unwrap();
+    let s = fresh_summary(&app, &ctx);
+    assert!(s.mixed(&app).is_none(), "alike rectangles");
+    assert!(Arc::ptr_eq(&s, &fresh_summary(&app, &ctx)), "a repaint with nothing changed reuses the summary");
+    // An edit of the middle object, then Undo and Redo.
+    app.run("transparency.set", json!({"ids": [r[1]], "opacity": 50})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| m.transparency), "the middle one's opacity differs");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_none(), "undone");
+    app.run("edit.redo", json!({})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some(), "redone");
+    // The middle id changes at the same revision, length, first and last id.
+    app.session.active_mut().unwrap().selection.objects[1] = t;
+    assert_eq!(fresh_summary(&app, &ctx).label, "Mixed Objects");
+    // A target circle with the selected objects unchanged, and back.
+    let layer = app.session.active().unwrap().doc.default_layer().unwrap();
+    app.session.active_mut().unwrap().selection.target = Some(layer);
+    assert_eq!(fresh_summary(&app, &ctx).label, "Layer");
+    app.session.active_mut().unwrap().selection.target = None;
+    assert_eq!(fresh_summary(&app, &ctx).label, "Mixed Objects");
+    // Another document with the same ids selected at the same revision, where the first object's
+    // opacity differs instead.
+    let revision = app.session.active().unwrap().revision;
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| !m.transparency));
+    let (r2, t2) = art(&mut app);
+    assert_eq!((&r2, t2), (&r, t), "the second document numbers its objects alike");
+    app.run("transparency.set", json!({"ids": [r[0]], "opacity": 50})).unwrap();
+    let st = app.session.active_mut().unwrap();
+    st.selection.objects = vec![r[0], t, r[2]];
+    st.selection.target = None;
+    st.revision = revision;
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| m.transparency), "the second document's own summary");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(fresh_summary(&app, &ctx).mixed(&app).is_some_and(|m| !m.transparency), "the first document's again");
+}
+
+/// The CPU time this thread has used, from Linux's scheduler statistics; `None` elsewhere.
+fn thread_cpu() -> Option<std::time::Duration> {
+    let stat = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    stat.split_whitespace().next()?.parse().ok().map(std::time::Duration::from_nanos)
+}
+
+/// The milliseconds `f` takes: this thread's CPU time where Linux reports it, otherwise the wall clock.
+fn time_ms(f: impl FnOnce()) -> f64 {
+    let d = match thread_cpu() {
+        Some(before) => {
+            f();
+            thread_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before))
+        }
+        None => {
+            let start = std::time::Instant::now();
+            f();
+            start.elapsed()
+        }
+    };
+    d.as_secs_f64() * 1000.0
+}
+
+/// A document of `n` small rectangles, all selected; with `mixed`, every second one at 50% opacity.
+fn many_rectangles(n: usize, mixed: bool) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    let r = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 4, "height": 4})).unwrap()["id"].as_u64().unwrap();
+    let mut d = vectorcraft_doc::Document::clone(&app.session.active().unwrap().doc);
+    let template = d.node(NodeId(r)).unwrap().clone();
+    let layer = d.layers[0].id;
+    d.children_mut(Some(layer)).unwrap().clear();
+    let mut ids = Vec::with_capacity(n);
+    for i in 0..n {
+        let mut node = template.clone();
+        node.id = d.alloc_id();
+        if mixed && i % 2 == 1 {
+            node.opacity = 0.5;
+        }
+        ids.push(d.insert(Some(layer), usize::MAX, node).unwrap());
+    }
+    app.session.add_document(d, None);
+    app.session.active_mut().unwrap().selection.objects = ids;
+    app
+}
+
+/// Timings of the selection summary the Control bar and the Appearance panel show on each repaint,
+/// on 5,000, 20,000 and 200,000 selected rectangles, alike and with every second one's opacity
+/// different, in milliseconds per repaint: worked out from scratch (`object_label` for the Control
+/// bar, then `mixed` and `object_label` for the panel); through [`summary`], whose first repaint
+/// works it out and the rest reuse it; and through [`summary`] with its stored entry removed before
+/// every repaint, as when the document or the selection changes each time. They run in turn on the same document,
+/// 7 runs each, and the results are checked equal. Ignored by default; it prints the median, fastest and slowest run
+/// and sets no bound on them:
+/// `cargo test --release -p vectorcraft-ui-egui --lib selection_summary_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn selection_summary_perf() {
+    const RUNS: usize = 7;
+    const REPAINTS: usize = 20;
+    let stats = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        format!("{:.3} ({:.3}-{:.3})", v[v.len() / 2], v[0], v[v.len() - 1])
+    };
+    eprintln!("selection_summary_perf: {}", if thread_cpu().is_some() { "thread CPU time" } else { "wall clock" });
+    eprintln!(
+        "selection_summary_perf: {:>8} {:<6} {:>28} {:>28} {:>28}",
+        "selected", "kind", "from scratch ms (min-max)", "summary ms (min-max)", "summary, changed ms (min-max)"
+    );
+    for n in [5_000, 20_000, 200_000] {
+        for mixed_case in [false, true] {
+            let app = many_rectangles(n, mixed_case);
+            let (mut old, mut new, mut changed) = (vec![], vec![], vec![]);
+            for _ in 0..RUNS {
+                let mut seen = None;
+                old.push(
+                    time_ms(|| {
+                        for _ in 0..REPAINTS {
+                            let bar = object_label(&app);
+                            let mix = mixed(&app);
+                            let row = object_label(&app);
+                            seen = Some((bar, row, mix.map(|m| (m.shared, m.transparency, m.fills_differ))));
+                        }
+                    }) / REPAINTS as f64,
+                );
+                let ctx = egui::Context::default();
+                let mut cached = None;
+                new.push(
+                    time_ms(|| {
+                        for _ in 0..REPAINTS {
+                            let bar = summary(&app, &ctx).map_or("No Selection", |s| s.label);
+                            let s = summary(&app, &ctx).unwrap();
+                            let mix = s.mixed(&app).map(|m| (m.shared.clone(), m.transparency, m.fills_differ));
+                            cached = Some((bar, s.label, mix));
+                        }
+                    }) / REPAINTS as f64,
+                );
+                assert_eq!(cached, seen, "{n} {mixed_case}");
+                let mut fresh = None;
+                changed.push(
+                    time_ms(|| {
+                        for _ in 0..REPAINTS {
+                            ctx.data_mut(|d| d.remove::<Arc<Summary>>(egui::Id::unique("ap-summary")));
+                            let bar = summary(&app, &ctx).map_or("No Selection", |s| s.label);
+                            let s = summary(&app, &ctx).unwrap();
+                            let mix = s.mixed(&app).map(|m| (m.shared.clone(), m.transparency, m.fills_differ));
+                            fresh = Some((bar, s.label, mix));
+                        }
+                    }) / REPAINTS as f64,
+                );
+                assert_eq!(fresh, seen, "{n} {mixed_case}");
+            }
+            let kind = if mixed_case { "mixed" } else { "alike" };
+            eprintln!("selection_summary_perf: {:>8} {:<6} {:>28} {:>28} {:>28}", n, kind, stats(old), stats(new), stats(changed));
+        }
+    }
+}
+
+/// The panel's subject is the `Arc` the document holds for the selected object, a targeted group
+/// or a targeted layer, not a copy of it; nothing with nothing selected.
+#[test]
+fn first_subject_is_the_node_the_document_holds() {
+    let mut app = app_with_a_selected_rectangle();
+    let held = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        super::super::layers::node_arc(&st.doc, st.selection.subjects()[0]).unwrap()
+    };
+    assert!(std::sync::Arc::ptr_eq(&first_subject(&app).expect("the rectangle"), &held(&app)), "the selected object");
+    let group = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("layer.target", json!({ "id": group })).unwrap();
+    let n = first_subject(&app).expect("the group");
+    assert_eq!(n.id.0, group.as_u64().unwrap());
+    assert!(std::sync::Arc::ptr_eq(&n, &held(&app)), "the targeted group");
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    app.run("layer.target", json!({ "id": layer.0 })).unwrap();
+    let n = first_subject(&app).expect("the layer");
+    assert_eq!(n.id, layer);
+    assert!(std::sync::Arc::ptr_eq(&n, &held(&app)), "the targeted layer");
+    app.run("select.none", json!({})).unwrap();
+    assert!(first_subject(&app).is_none(), "nothing selected");
 }

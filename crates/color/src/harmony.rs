@@ -176,16 +176,31 @@ impl Harmony {
 
     /// The rule's colours in the base colour's model, the base colour itself first.
     pub fn apply(self, base: Color) -> Vec<Color> {
-        let [h, s, v] = base.to_hsb();
-        std::iter::once(base)
-            .chain(self.tones()[1..].iter().map(|tone| {
+        let rest = self.apply_hsb(base.to_hsb()).into_iter().skip(1);
+        std::iter::once(base).chain(rest.map(|[h, s, v]| keep_model(base, Color::from_hsb(h, s, v)))).collect()
+    }
+
+    /// The rule's colours as HSB from base HSB `hsb`, the base first: hue in degrees from 0 to 360,
+    /// saturation and brightness from 0 to 1. A gray base keeps its hue, so the colours keep their
+    /// places around a hue wheel.
+    pub fn apply_hsb(self, [h, s, v]: [f32; 3]) -> Vec<[f32; 3]> {
+        self.tones()
+            .iter()
+            .map(|tone| {
                 let b = match tone.bright {
                     Bright::Times(f) => v * f,
                     Bright::Contrast => contrast(v),
                 };
-                keep_model(base, Color::from_hsb(h + tone.turn, (s * tone.sat).clamp(0.0, 1.0), b.clamp(0.0, 1.0)))
-            }))
+                [(h + tone.turn).rem_euclid(360.0), (s * tone.sat).clamp(0.0, 1.0), b.clamp(0.0, 1.0)]
+            })
             .collect()
+    }
+
+    /// Whether every colour of the rule has a hue of its own (Triad, but not Triad 2 or
+    /// Monochromatic), so that each can sit on a hue ring apart from the others.
+    pub fn hues_differ(self) -> bool {
+        let turns: Vec<f32> = self.tones().iter().map(|t| t.turn.rem_euclid(360.0)).collect();
+        turns.iter().enumerate().all(|(i, a)| turns[..i].iter().all(|b| a != b))
     }
 
     /// A [`THEME_SIZE`]-colour theme from `base`: the rule's colours, each followed by the lighter or
@@ -294,13 +309,19 @@ impl GuideOptions {
     }
 }
 
+/// The share of the way to its target (black or white, cool or warm, gray or full color) that the
+/// variation at `step` goes: 0 at the center, the options' reach at the outermost steps.
+pub fn step_fraction(opts: &GuideOptions, step: i32) -> f32 {
+    (step.unsigned_abs() as f32 / opts.steps.max(1) as f32).min(1.0) * opts.reach()
+}
+
 /// Variation of `c` at `step` (−steps..=steps: negative towards shades/cool/muted, positive towards
 /// tints/warm/vivid; 0 is `c` itself), in `c`'s model.
 pub fn variation(c: Color, opts: &GuideOptions, step: i32) -> Color {
     if step == 0 {
         return c;
     }
-    let f = (step.unsigned_abs() as f32 / opts.steps.max(1) as f32).min(1.0) * opts.reach();
+    let f = step_fraction(opts, step);
     let v = match opts.variation {
         Variation::TintsShades => c.lerp(if step < 0 { &Color::BLACK } else { &Color::WHITE }, f),
         Variation::WarmCool => {
@@ -401,6 +422,34 @@ mod tests {
         assert_eq!(Harmony::SplitComplementary.id(), "splitComplementary");
         assert_eq!(Harmony::HighContrast3.id(), "highContrast3");
         assert_eq!(Harmony::parse("square"), None);
+    }
+
+    /// A rule's HSB colours match the colours `apply` gives, and a gray base keeps its hue, so its
+    /// colours turn around the hue ring from it.
+    #[test]
+    fn hsb_colours_match_and_keep_a_grays_hue() {
+        for h in Harmony::ALL {
+            let base = Color::rgb8(230, 120, 40);
+            let hsb = h.apply_hsb(base.to_hsb());
+            let colors = h.apply(base);
+            assert_eq!(hsb.len(), colors.len(), "{}", h.label());
+            for (a, c) in hsb.iter().zip(&colors).skip(1) {
+                assert_eq!(Color::from_hsb(a[0], a[1], a[2]).to_hex(), c.to_hex(), "{}", h.label());
+            }
+        }
+        let gray = Harmony::Triad.apply_hsb([40.0, 0.0, 0.5]);
+        assert_eq!(gray.iter().map(|c| c[0]).collect::<Vec<_>>(), [40.0, 160.0, 280.0]);
+        assert_eq!(Harmony::Analogous.apply_hsb([10.0, 1.0, 1.0])[2][0], 340.0, "hues wrap to 0..360");
+    }
+
+    /// Fifteen rules give every colour its own hue; the six that repeat a hue are left out.
+    #[test]
+    fn rules_whose_colours_all_have_their_own_hue() {
+        let differ: Vec<Harmony> = Harmony::ALL.into_iter().filter(|h| h.hues_differ()).collect();
+        assert_eq!(differ.len(), 15);
+        for h in [Harmony::Complementary2, Harmony::Monochromatic, Harmony::Shades, Harmony::Triad2, Harmony::Triad3, Harmony::HighContrast2] {
+            assert!(!h.hues_differ(), "{}", h.label());
+        }
     }
 
     #[test]

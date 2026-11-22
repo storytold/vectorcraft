@@ -93,14 +93,14 @@ fn caps_share_surface_limits_and_malformed_inputs_stay_bounded() {
     assert!(faces.len() <= 384);
     let mut excessive = BezPath::new();
     excessive.move_to((40.0, 0.0));
-    for i in 1..=1024 {
+    for i in 1..=MAX_PROFILE_POINTS {
         excessive.line_to((40.0, i as f64));
     }
-    assert!(revolve(&PathData::from_bezpath(&excessive), Rect::new(0.0, 0.0, 40.0, 1024.0), options()).is_err());
+    assert!(revolve(&PathData::from_bezpath(&excessive), Rect::new(0.0, 0.0, 40.0, MAX_PROFILE_POINTS as f64), options()).is_err());
     assert!(revolve(&PathData::default(), bounds, options()).unwrap().is_empty());
     // Viewed along the axis, the side walls disappear but the caps still consume
     // the same face budget. Repeated rings cannot bypass it through degenerate walls.
-    let repeated = PathData::new(vec![path.subpaths[0].clone(); 129]);
+    let repeated = PathData::new(vec![path.subpaths[0].clone(); 1025]);
     let o = Revolve { segments: 128, ..options() };
     assert!(revolve(&repeated, bounds, Revolve { cap_ends: false, ..o }).unwrap().is_empty());
     assert!(revolve(&repeated, bounds, o).unwrap_err().contains("surface is too complex"));

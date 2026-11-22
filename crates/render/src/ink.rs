@@ -12,6 +12,9 @@
 //! colours; RGB colours and placed images are separated into the working CMYK space first.
 //!
 //! RGB documents, and CMYK documents without transparency, draw screen colours ([`Ink::Display`]).
+//! A proof that preserves the colors' numbers draws each screen colour as the proof shows it
+//! ([`Ink::Proofed`]); a CMYK document that blends in CMYK keeps its ink planes, and [`compose`]
+//! shows their inks through the proof.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -20,7 +23,7 @@ use std::sync::{Arc, Mutex};
 
 use vectorcraft_color::blend::{cmyk_planes, planes_cmyk};
 use vectorcraft_color::cms::{self, Cms, CmykLut, ProofLut, lab};
-use vectorcraft_color::{Color, Gradient};
+use vectorcraft_color::{Color, Freeform, Gradient};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{ColorMode, Document, ImageBlob};
 use vello_cpu::Pixmap;
@@ -44,6 +47,10 @@ pub(crate) enum Ink {
     RichBlack,
     /// Source-color adjustment before the display/ink conversion. Float bits keep cache keys exact.
     Darkened(InkSpace, u32, bool),
+    /// Screen colours as a proof that preserves the colors' numbers shows them
+    /// ([`crate::proof::preserves`], [`Cms::proof_color`]): the proof [`proofed_ink`] registered
+    /// under this number, so the caches keep what each proof draws apart.
+    Proofed(u32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -52,6 +59,68 @@ pub(crate) enum InkSpace {
     Cmy,
     K,
     RichBlack,
+    Proofed(u32),
+}
+
+/// What [`Ink::Proofed`] paints with: its number, the color settings and the proof setup.
+type Proof = (u32, Arc<Cms>, vectorcraft_color::cms::ProofSetup, u64);
+
+/// The proofs [`proofed_ink`] registered last, the newest last: a few, for renderers drawing with
+/// different ones.
+static PROOFS: Mutex<Vec<Arc<Proof>>> = Mutex::new(Vec::new());
+/// The last number [`proofed_ink`] gave out.
+static PROOF_NUMBER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+thread_local! {
+    /// The proof [`Ink::rgb`] used last on this thread, so a frame does not look it up for each
+    /// color it paints.
+    static LAST_PROOF: RefCell<Option<Arc<Proof>>> = const { RefCell::new(None) };
+}
+
+/// Keeps the proof [`proofed_ink`] registered for a frame while the frame is drawn: a proof that
+/// something holds stays registered.
+pub(crate) struct ProofHold(#[allow(dead_code)] Arc<Proof>);
+
+/// The ink a frame drawn with a proof that preserves the colors' numbers paints screen colours
+/// with: the same [`Ink::Proofed`] number for the same proof setup, active color settings and
+/// loaded profiles ([`cms::profiles_generation`]), and a new one when any of them changes. The
+/// proof stays registered while the hold returned with it is kept.
+pub(crate) fn proofed_ink(proof: &vectorcraft_color::cms::ProofSetup) -> (Ink, ProofHold) {
+    let (c, profiles) = (cms::active(), cms::profiles_generation());
+    let mut proofs = PROOFS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(p) = proofs.iter().find(|p| Arc::ptr_eq(&p.1, &c) && p.2 == *proof && p.3 == profiles) {
+        return (Ink::Proofed(p.0), ProofHold(p.clone()));
+    }
+    let number = PROOF_NUMBER.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+    // Past a few, the oldest proof nothing holds (no frame, no thread's last proof) goes.
+    if proofs.len() >= 8
+        && let Some(i) = proofs.iter().position(|p| Arc::strong_count(p) == 1)
+    {
+        proofs.remove(i);
+    }
+    let p = Arc::new((number, c, proof.clone(), profiles));
+    proofs.push(p.clone());
+    (Ink::Proofed(number), ProofHold(p))
+}
+
+/// The proof setup `ink` proofs with ([`Ink::Proofed`], darkened or not), while it is registered.
+pub(crate) fn proof_of(ink: Ink) -> Option<vectorcraft_color::cms::ProofSetup> {
+    let Ink::Proofed(number) = ink.base() else { return None };
+    PROOFS.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|p| p.0 == number).map(|p| p.2.clone())
+}
+
+/// Display sRGB of `c` as the proof [`proofed_ink`] registered under `number` shows it; a proof
+/// no longer registered shows the colour as it is.
+fn proofed_rgb(number: u32, c: &Color) -> [f32; 3] {
+    let proof = LAST_PROOF.with(|l| l.borrow().clone().filter(|p| p.0 == number)).or_else(|| {
+        let p = PROOFS.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|p| p.0 == number).cloned();
+        LAST_PROOF.with(|l| l.borrow_mut().clone_from(&p));
+        p
+    });
+    match proof {
+        Some(p) => p.1.proof_color(c, &p.2),
+        None => c.to_rgb(),
+    }
 }
 
 impl Ink {
@@ -61,6 +130,7 @@ impl Ink {
             Self::Darkened(InkSpace::Cmy, _, _) => Self::Cmy,
             Self::Darkened(InkSpace::K, _, _) => Self::K,
             Self::Darkened(InkSpace::RichBlack, _, _) => Self::RichBlack,
+            Self::Darkened(InkSpace::Proofed(n), _, _) => Self::Proofed(n),
             other => other,
         }
     }
@@ -72,6 +142,11 @@ impl Ink {
             Self::RichBlack => 3,
             _ => 0,
         }
+    }
+
+    /// Whether this ink adjusts the source colors first ([`Ink::Darkened`]).
+    pub(crate) fn is_darkened(self) -> bool {
+        matches!(self, Self::Darkened(..))
     }
 
     fn darkness(self) -> Option<f32> {
@@ -96,6 +171,7 @@ impl Ink {
             Self::Cmy => InkSpace::Cmy,
             Self::K => InkSpace::K,
             Self::RichBlack => InkSpace::RichBlack,
+            Self::Proofed(n) => InkSpace::Proofed(n),
             _ => InkSpace::Display,
         };
         Self::Darkened(space, amount.to_bits(), black)
@@ -126,6 +202,23 @@ impl Ink {
         Some(g)
     }
 
+    /// Transform original freeform points before their colors mix, as [`Self::gradient`] does for
+    /// stops.
+    pub(crate) fn freeform(self, f: &Freeform) -> Option<Freeform> {
+        let amount = self.darkness()?;
+        let mut f = f.clone();
+        for point in &mut f.points {
+            point.color = Self::darkened_color(&point.color, amount, self.black_endpoint());
+        }
+        Some(f)
+    }
+
+    /// Whether this ink paints a point of `f` as RGB black: Appearance of Black's Rich setting and
+    /// a point of pure CMYK black.
+    pub(crate) fn blacks_a_point(self, f: &Freeform) -> bool {
+        self.base() == Ink::RichBlack && f.points.iter().any(|p| matches!(p.color, Color::Cmyk { c, m, y, k } if is_pure_black([c, m, y, k])))
+    }
+
     /// The three values painted for colour `c`.
     pub(crate) fn rgb(self, c: &Color) -> [f32; 3] {
         if let Some(amount) = self.darkness() {
@@ -134,7 +227,17 @@ impl Ink {
         match (self, *c) {
             (Ink::RichBlack, Color::Cmyk { c, m, y, k }) if is_pure_black([c, m, y, k]) => [0.0; 3],
             (Ink::Display | Ink::RichBlack, _) => c.to_rgb(),
+            (Ink::Proofed(n), _) => proofed_rgb(n, c),
             _ => self.plane(inks(c)),
+        }
+    }
+
+    /// [`Self::rgb`] for colors sampled densely (a freeform gradient's grid): on an ink plane, RGB
+    /// colors go through the separation tables placed images use.
+    pub(crate) fn rgb_sampled(self, c: &Color) -> [f32; 3] {
+        match (self, c) {
+            (Ink::Cmy | Ink::K, Color::Rgb { .. }) => separation().0[(self == Ink::K) as usize].apply(c.to_rgb()),
+            _ => self.rgb(c),
         }
     }
 
@@ -150,9 +253,9 @@ impl Ink {
         peniko::Color::from_rgba8(r, g, b, a)
     }
 
-    fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
+    pub(crate) fn fixed8(self, [r, g, b, a]: [u8; 4]) -> [u8; 4] {
         match self.base() {
-            Ink::Display | Ink::RichBlack => [r, g, b, a],
+            Ink::Display | Ink::RichBlack | Ink::Proofed(_) => [r, g, b, a],
             _ => {
                 let lab = lab::srgb_to_lab([r, g, b].map(|v| v as f32 / 255.0));
                 let [r, g, b] = self.plane(inks(&Color::Lab { l: lab.l, a: lab.a, b: lab.b })).map(q);
@@ -213,19 +316,29 @@ fn inks(c: &Color) -> [f32; 4] {
     let key = c.key();
     let cms = cms::active();
     SEPARATED.with(|s| {
-        let (owner, seen) = &mut *s.borrow_mut();
+        let kept = &mut *s.borrow_mut();
+        let i = match kept.iter().position(|(owner, _)| Arc::ptr_eq(owner, &cms)) {
+            Some(i) => i,
+            None => {
+                if kept.len() >= KEPT_TABLES {
+                    kept.remove(0);
+                }
+                kept.push((cms.clone(), HashMap::new()));
+                kept.len() - 1
+            }
+        };
+        let seen = &mut kept[i].1;
         // Large enough for the many colours of gradient meshes and blends, which otherwise cleared
         // it over and over and separated every colour through the profile again.
-        if !owner.as_ref().is_some_and(|o| Arc::ptr_eq(o, &cms)) || seen.len() >= 1 << 16 {
+        if seen.len() >= 1 << 16 {
             seen.clear();
-            *owner = Some(cms.clone());
         }
         *seen.entry(key).or_insert_with(|| cms.to_cmyk(c, cms.settings().intent))
     })
 }
 
-/// Separated colours, for the colour settings they were separated with.
-type Separated = (Option<Arc<Cms>>, HashMap<[u32; 5], [f32; 4]>);
+/// Separated colours, for each of the colour settings they were separated with, the newest last.
+type Separated = Vec<(Arc<Cms>, HashMap<[u32; 5], [f32; 4]>)>;
 
 thread_local! {
     static SEPARATED: RefCell<Separated> = RefCell::default();
@@ -250,31 +363,63 @@ impl InkLut {
     }
 }
 
-/// A table built for the colour settings it was built with, and its generation (see [`cached`]).
-type Cached<T> = Mutex<Option<(Arc<Cms>, Arc<T>, u64)>>;
+/// Tables built for the colour settings they were built with, and their generations, the newest
+/// last (see [`cached`]).
+type Cached<T> = Mutex<Vec<(Arc<Cms>, Arc<T>, u64)>>;
+
+/// How many tables each [`Cached`] keeps: documents drawn side by side through their own profiles
+/// don't make them again and again.
+const KEPT_TABLES: usize = 4;
 
 /// The last table generation handed out: images made with a table are cached under its
 /// generation (see [`crate::images`]), and none is ever reused.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
-static DISPLAY: Cached<InkLut> = Mutex::new(None);
+static DISPLAY: Cached<InkLut> = Mutex::new(Vec::new());
 /// Screen colours → [`Ink::Cmy`] and [`Ink::K`] values (placed images).
-static SEPARATE: Cached<[ProofLut; 2]> = Mutex::new(None);
+static SEPARATE: Cached<[ProofLut; 2]> = Mutex::new(Vec::new());
 
-/// The table in `slot` for the active colour settings, built by `build` when they changed, and
-/// its generation.
+/// The table in `slot` for the active colour settings, built by `build` when none is kept for
+/// them, and its generation.
 fn cached<T>(slot: &Cached<T>, build: impl FnOnce(&Cms) -> T) -> (Arc<T>, u64) {
     let cms = cms::active();
     let mut s = slot.lock().unwrap_or_else(|e| e.into_inner());
-    match &*s {
-        Some((owner, t, g)) if Arc::ptr_eq(owner, &cms) => (t.clone(), *g),
-        _ => {
-            let t = Arc::new(build(&cms));
-            let g = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
-            *s = Some((cms, t.clone(), g));
-            (t, g)
-        }
+    if let Some((_, t, g)) = s.iter().find(|(owner, _, _)| Arc::ptr_eq(owner, &cms)) {
+        return (t.clone(), *g);
     }
+    let t = Arc::new(build(&cms));
+    let g = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    if s.len() >= KEPT_TABLES {
+        s.remove(0);
+    }
+    s.push((cms, t.clone(), g));
+    (t, g)
+}
+
+/// A table [`proofed_lut`] made, with the color settings, proof setup and profiles generation it
+/// was made for.
+type ProofedLut = (Arc<Cms>, vectorcraft_color::cms::ProofSetup, u64, Arc<InkLut>);
+
+/// The tables [`proofed_lut`] made last, the newest last.
+static PROOFED: Mutex<Vec<ProofedLut>> = Mutex::new(Vec::new());
+
+/// Ink amounts → their display sRGB as `proof` shows a CMYK color of those inks
+/// ([`Cms::proof_color`]), for the active color settings and loaded profiles. Cached.
+fn proofed_lut(proof: &vectorcraft_color::cms::ProofSetup) -> Arc<InkLut> {
+    let (c, profiles) = (cms::active(), cms::profiles_generation());
+    let mut kept = PROOFED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((.., t)) = kept.iter().find(|(o, p, g, _)| Arc::ptr_eq(o, &c) && p == proof && *g == profiles) {
+        return t.clone();
+    }
+    let t = Arc::new(InkLut(CmykLut::build(|[cy, m, y, k]| {
+        let [px, py, pz] = lab::srgb_to_xyz(c.proof_color(&Color::Cmyk { c: cy, m, y, k }, proof));
+        [px, py, pz, 0.0]
+    })));
+    if kept.len() >= KEPT_TABLES {
+        kept.remove(0);
+    }
+    kept.push((c, proof.clone(), profiles, t.clone()));
+    t
 }
 
 /// [`compose`] puts at least this many pixels in each band but the last.
@@ -289,12 +434,19 @@ const BAND_PIXELS: usize = 1 << 16;
 /// each other band (this thread does when that one can't start). Returns the picture and the number
 /// of threads that composed it.
 pub(crate) fn compose(cmy: &[u8], k: &[u8], opts: &RenderOptions, threads: u16) -> (Vec<u8>, usize) {
-    let (lut, _) = cached(&DISPLAY, InkLut::build);
-    let bg = opts.background.map(|b| (Ink::Cmy.fixed8(b), Ink::K.fixed8(b), b));
+    // With a proof that preserves the numbers, the inks show as the proof's device shows them,
+    // and the background as it shows white paper.
+    let lut = match crate::proof::preserving(opts) {
+        Some(p) => proofed_lut(p),
+        None => cached(&DISPLAY, InkLut::build).0,
+    };
+    let bg = opts.background.map(|b| (Ink::Cmy.fixed8(b), Ink::K.fixed8(b), crate::proof::under_art(opts, b)));
     let mut out = vec![0; cmy.len().min(k.len()) / 4 * 4];
     let pixels = out.len() / 4;
     let bands = (pixels / BAND_PIXELS).clamp(1, usize::from(threads).max(1));
-    let band = |o: &mut [u8], p: &[u8], q: &[u8]| compose_band(o, p, q, &lut, bg, opts.rich_black);
+    // A proof shows its device's black, not Appearance of Black's rich black.
+    let rich_black = opts.rich_black && crate::proof::preserving(opts).is_none();
+    let band = |o: &mut [u8], p: &[u8], q: &[u8]| compose_band(o, p, q, &lut, bg, rich_black);
     if bands == 1 {
         band(&mut out, cmy, k);
         return (out, 1);
@@ -427,9 +579,9 @@ fn plane_key(key: &ImageKey, plane: Ink, generation: u64) -> ImageKey {
 /// The key [`ink_image`] gives image pixels `key` painted with `ink`.
 pub(crate) fn ink_key(key: &ImageKey, ink: Ink) -> ImageKey {
     if ink.darkness().is_some() {
-        let generation = if matches!(ink.base(), Ink::Display | Ink::RichBlack) { 0 } else { separation().1 };
+        let generation = if matches!(ink.base(), Ink::Display | Ink::RichBlack | Ink::Proofed(_)) { 0 } else { separation().1 };
         plane_key(key, ink, generation)
-    } else if matches!(ink, Ink::Display | Ink::RichBlack) {
+    } else if matches!(ink, Ink::Display | Ink::RichBlack | Ink::Proofed(_)) {
         key.clone()
     } else {
         plane_key(key, ink, separation().1)
@@ -447,7 +599,7 @@ fn darkened_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, amount: f32, blob:
         return (want, p);
     }
     let base = ink.base();
-    let display = matches!(base, Ink::Display | Ink::RichBlack);
+    let display = matches!(base, Ink::Display | Ink::RichBlack | Ink::Proofed(_));
     let raw_cmyk = key_inks(key, blob).filter(|i| (i.width, i.height) == (u32::from(pm.width()), u32::from(pm.height())));
     let sep = (!display).then(separation);
     let shown = (display && raw_cmyk.is_some()).then(display_lut);
@@ -457,7 +609,8 @@ fn darkened_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, amount: f32, blob:
             continue;
         }
         let rgb = if ink.black_endpoint() {
-            base.rgb(&Color::gray(1.0))
+            // Like the other pixels, a proofed black stays in display space; the plates proof it.
+            if display { Ink::Display } else { base }.rgb(&Color::gray(1.0))
         } else if let Some(raw) = raw_cmyk.as_ref().and_then(|v| v.data.as_chunks::<4>().0.get(i)) {
             let mut inks = raw.map(|v| f32::from(v) / 255.0);
             inks[3] = (inks[3] + amount).min(1.0);
@@ -485,7 +638,7 @@ pub(crate) fn ink_image(key: &ImageKey, pm: &Arc<Pixmap>, ink: Ink, blob: Option
     if let Some(amount) = ink.darkness() {
         return darkened_image(key, pm, ink, amount, blob, touch);
     }
-    if matches!(ink, Ink::Display | Ink::RichBlack) {
+    if matches!(ink, Ink::Display | Ink::RichBlack | Ink::Proofed(_)) {
         return (key.clone(), pm.clone());
     }
     let (luts, generation) = separation();
@@ -559,21 +712,73 @@ mod tests {
         assert_eq!(pm.data()[0].r, 204, "source pixels remain unchanged");
     }
 
+    /// A fully darkened image drawn with a proof that preserves the colors' numbers shows black as
+    /// that proof shows it: proofed once, as its other darkened pixels are.
+    #[test]
+    fn a_proofed_black_endpoint_image_is_proofed_once() {
+        // Simulate Black Ink shows black as a gray, so a second proof would lighten it again.
+        let proof = cms::ProofSetup { target: cms::ProofTarget::WorkingCmyk, preserve_numbers: true, simulate_black: true, ..Default::default() };
+        let (ink, _hold) = proofed_ink(&proof);
+        let dark = ink.darkened(1.0);
+        assert!(dark.black_endpoint());
+        let key = ImageKey {
+            content: Arc::from("proofed-black-endpoint-regression"),
+            adjust: None,
+            grey: false,
+            tint: None,
+            ink: Ink::Display,
+            luts: (0, 0),
+            plates: 0,
+            mip: 0,
+            tile: None,
+        };
+        let pm = Arc::new(Pixmap::from_parts(vec![PremulRgba8 { r: 204, g: 102, b: 51, a: 255 }], 1, 1));
+        let (k, p) = ink_image(&key, &pm, dark, None, false);
+        let doc = Document::new(10.0, 10.0);
+        let Some(lut) = crate::proof::ink_plate_lut(dark, &doc) else { panic!("a preserving proof has plate tables") };
+        let (_, shown) = crate::proof::plate_image(&lut, &k, &p, None, false);
+        // A pixel darkened to black in display space, proofed once.
+        let want = cms::active().proof_srgb([0.0; 3], &proof).map(|v| (v * 255.0).round() as i32);
+        let px = shown.data()[0];
+        let got = [px.r, px.g, px.b].map(i32::from);
+        assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() <= 2), "{got:?} vs {want:?}");
+    }
+
+    #[test]
+    fn tables_of_two_color_settings_are_kept_side_by_side() {
+        // Two documents drawn in turn through their own settings each keep their tables.
+        let settings = || Arc::new(Cms::new(&cms::ColorSettings::default()).unwrap());
+        let (a, b) = (settings(), settings());
+        let tables = |c: &Arc<Cms>| cms::with_active(c.clone(), || (display_lut().1, separation().1));
+        let (first_a, first_b) = (tables(&a), tables(&b));
+        assert_ne!(first_a, first_b, "each settings get their own tables");
+        assert_eq!(tables(&a), first_a, "the first settings' tables are not made again");
+        assert_eq!(tables(&b), first_b, "the second settings' tables are not made again");
+    }
+
     #[test]
     fn the_ink_table_matches_the_profile() {
         let cms = cms::active();
         let lut = InkLut::build(&cms);
-        let mut worst = 0.0f32;
+        let (mut worst, mut worst_dark) = (0.0f32, 0.0f32);
         // Between the grid points (where interpolation errs most) and on them.
         for i in 0..=20 {
             for j in 0..=20 {
                 let inks = [i as f32 / 20.0, j as f32 / 20.0, ((i * 7 + j * 3) % 21) as f32 / 20.0, ((i + j * 5) % 21) as f32 / 20.0];
                 let (a, b) = (lut.apply(inks), cms.cmyk_to_srgb(inks, false));
-                worst = worst.max((0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max));
+                let err = (0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max);
+                // Builds darker than the press's black point clip at 0 in one or more XYZ channels,
+                // so the grid interpolates across that clip in the darkest levels.
+                if b.iter().all(|v| *v < 0.05) {
+                    worst_dark = worst_dark.max(err);
+                } else {
+                    worst = worst.max(err);
+                }
             }
         }
         // Within two 8-bit levels: far below a visible difference.
         assert!(worst * 255.0 < 2.5, "worst error {} levels", worst * 255.0);
+        assert!(worst_dark * 255.0 < 5.0, "worst error near black {} levels", worst_dark * 255.0);
     }
 
     #[test]

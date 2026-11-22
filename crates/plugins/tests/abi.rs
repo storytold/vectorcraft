@@ -6,7 +6,8 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
-use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, heavy_terms, registry, wat as tpl};
+use vectorcraft_plugins::storage::{Meter, Storage, StorageError};
+use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, LARGE_FUEL, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
 const DESATURATE: &[u8] = include_bytes!("fixtures/desaturate.wasm");
@@ -148,11 +149,98 @@ fn malformed_and_oversized_modules_are_refused() {
     assert!(matches!(e, Error::Abi(_)), "{e}");
 }
 
+/// The WebAssembly proposals `docs/plugins.md` lets a plug-in use, each with module fields that
+/// use it.
+const ACCEPTED_PROPOSALS: &[(&str, &str)] = &[
+    ("mutable globals", r#"(global (export "counter") (mut i32) (i32.const 0))"#),
+    ("sign extension", "(func (param i32) (result i32) (i32.extend8_s (local.get 0)))"),
+    ("saturating conversions", "(func (param f32) (result i32) (i32.trunc_sat_f32_s (local.get 0)))"),
+    ("multi-value", "(func (result i32 i32) (i32.const 1) (i32.const 2))"),
+    ("bulk memory", "(func (memory.fill (i32.const 0) (i32.const 0) (i32.const 0)))"),
+    ("reference types", "(func (result externref) (ref.null extern))"),
+    ("tail calls", "(func $again (param i32) (return_call $again (local.get 0)))"),
+    ("extended constant expressions", "(global i32 (i32.add (i32.const 1) (i32.const 2)))"),
+];
+
+/// Modules that use a WebAssembly proposal plug-ins may not use, each with the words its error
+/// names it by.
+const REFUSED_PROPOSALS: &[(&str, &str)] = &[
+    ("(module (func (result v128) (v128.const i32x4 0 0 0 0)))", "SIMD"),
+    ("(module (func (result v128) (i32x4.relaxed_trunc_f32x4_s (v128.const i32x4 0 0 0 0))))", "SIMD"),
+    ("(module (memory i64 1))", "memory64"),
+    ("(module (memory 1) (memory 1))", "multiple memories"),
+    ("(module (memory 1 (pagesize 1)))", "custom page sizes"),
+    (
+        "(module (func (param i64 i64 i64 i64) (result i64 i64) (i64.add128 (local.get 0) (local.get 1) (local.get 2) (local.get 3))))",
+        "wide arithmetic",
+    ),
+    ("(module (memory 1 1 shared))", "threads"),
+    ("(module (tag))", "exceptions"),
+    ("(module (func try catch_all end))", "legacy exceptions"),
+    ("(module (type $t (func)) (func (param (ref $t))))", "function references"),
+    ("(module (type (struct)))", "gc feature"),
+];
+
+#[test]
+fn a_plugin_may_use_the_listed_webassembly_proposals_and_no_others() {
+    for (name, fields) in ACCEPTED_PROPOSALS {
+        let bytes = module(MANIFEST, tpl::ECHO, fields);
+        let out = Plugin::load(&bytes, Limits::default()).and_then(|p| p.run(INPUT.as_bytes(), b"{}"));
+        assert!(out.is_ok(), "{name}: {out:?}");
+    }
+    for (src, name) in REFUSED_PROPOSALS {
+        match Plugin::load(&build(src), Limits::default()) {
+            Err(Error::Module(m)) => assert!(m.to_lowercase().contains(&name.to_lowercase()), "{name}: the error doesn't name it: {m}"),
+            Err(e) => panic!("{name}: refused with another kind of error: {e}"),
+            Ok(_) => panic!("{name}: a module that uses it must be refused"),
+        }
+    }
+}
+
 #[test]
 fn budgets_stop_runaway_plugins() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
     let (e, _) = run_err(&spin, Limits { fuel_base: 1_000_000, fuel_per_byte: 10, ..Limits::default() });
     assert_eq!(e, Error::Limit("instruction budget".into()));
+}
+
+/// A filter that runs `op`, an 8 MiB bulk memory instruction costing about 131,000 instructions,
+/// 160 times (about 21 million instructions in all), or forever when `endless`.
+fn bulk_module(op: &str, endless: bool) -> Vec<u8> {
+    let bulk = match op {
+        "fill" => "(memory.fill (i32.const 1024) (i32.const 7) (i32.const 8388608))",
+        "copy" => "(memory.copy (i32.const 1024) (i32.const 2048) (i32.const 8387584))",
+        _ => panic!("no bulk operation `{op}`"),
+    };
+    let run = if endless {
+        format!("(loop $work {bulk} (br $work)) {}", tpl::ECHO)
+    } else {
+        format!(
+            "(local $n i32) (local.set $n (i32.const 160)) \
+             (loop $work {bulk} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n))) {}",
+            tpl::ECHO
+        )
+    };
+    build(&tpl::module(MANIFEST, &run, "", 130))
+}
+
+fn bulk_run(op: &str, endless: bool, fuel_base: u64) -> vectorcraft_plugins::Result<Vec<u8>> {
+    let p = Plugin::load(&bulk_module(op, endless), Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() })?;
+    p.run(INPUT.as_bytes(), b"{}")
+}
+
+/// A bulk memory instruction that the fuel left in a slice of the budget can't pay for pauses the
+/// run without using that fuel, and the run keeps it: 160 fills or copies that cross the first
+/// slice finish within 21 million instructions, though the pause left about 75,000 of them in the
+/// slice. With fewer instructions than the work takes, or with a loop that never ends, the run
+/// still ends with the instruction budget.
+#[test]
+fn a_bulk_memory_instruction_at_the_end_of_a_slice_keeps_the_run_s_fuel() {
+    for op in ["fill", "copy"] {
+        assert_eq!(bulk_run(op, false, 21_000_000), Ok(INPUT.as_bytes().to_vec()), "{op} within its budget");
+        assert_eq!(bulk_run(op, false, 15_000_000), Err(Error::Limit("instruction budget".into())), "{op} over its budget");
+        assert_eq!(bulk_run(op, true, 21_000_000), Err(Error::Limit("instruction budget".into())), "endless {op}");
+    }
 }
 
 #[test]
@@ -219,6 +307,23 @@ fn a_heavy_filter_finishes_what_a_light_one_cannot() {
     assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
 }
 
+/// The Large instruction budget gives a light filter 5 times the instructions besides those for
+/// each byte of input, so it finishes 20 million steps of a loop that its own budget can't, in the
+/// same time budget. A heavy filter keeps its larger budget, and every other limit stays.
+#[test]
+fn the_large_budget_finishes_what_a_light_one_cannot_and_keeps_a_heavy_one() {
+    let light = Plugin::load(&build(&tpl::spinning(MANIFEST, 20_000_000, INPUT)), Limits::default()).unwrap();
+    assert_eq!(light.run(INPUT.as_bytes(), b"{}"), Err(Error::Limit("instruction budget".into())));
+    let large = light.large_limits();
+    assert_eq!(large, Limits { fuel_base: LARGE_FUEL, ..Limits::default() });
+    assert_eq!(LARGE_FUEL, 5 * Limits::default().fuel_base);
+    assert_eq!(light.run_limited(INPUT.as_bytes(), b"{}", &large).unwrap(), INPUT.as_bytes());
+    let heavy = r#"{"id":"test.heavy","name":"Heavy","version":"1","kind":"filter","budget":"heavy"}"#;
+    let heavy = Plugin::load(&build(&tpl::spinning(heavy, 1, INPUT)), Limits::default()).unwrap();
+    assert_eq!(heavy.large_limits(), *heavy.limits());
+    assert_eq!((heavy.large_limits().fuel_base, heavy.large_limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
+}
+
 #[test]
 fn an_exporter_returns_its_file_with_an_export_s_budget() {
     use vectorcraft_plugins::export::{self, Target};
@@ -233,7 +338,46 @@ fn an_exporter_returns_its_file_with_an_export_s_budget() {
     // Its parameters are checked, and a filter is not an exporter.
     assert!(matches!(export::run(&p, b"{}", &json!({"level": "high"}), target), Err(Error::Params(_))));
     let filter = Plugin::load(&ok_module("(i64.const 0)"), Limits::default()).unwrap();
-    assert!(matches!(export::run(&filter, b"{}", &Value::Null, target), Err(Error::Params(_))));
+    let e = export::run(&filter, b"{}", &Value::Null, target).unwrap_err();
+    assert!(matches!(e, Error::Params(_)) && e.to_string().contains("is a plug-in of kind `filter`, not an exporter"), "{e}");
+    let importer = Plugin::load(&build(&tpl::returning(&tpl::importer("test.reads", r#"["tst"]"#, "{}"), "{}")), Limits::default()).unwrap();
+    let e = export::run(&importer, b"{}", &Value::Null, target).unwrap_err();
+    assert!(e.to_string().contains("is a plug-in of kind `importer`, not an exporter"), "{e}");
+}
+
+/// An importer runs on an import's budget, which replaces its own instruction and time budgets and
+/// keeps its other limits: a run that needs more than `fuel_base` finishes within `export_fuel`,
+/// and a run that needs more than `export_fuel` ends there, however large `fuel_base` is.
+#[test]
+fn an_importer_runs_on_an_import_s_budget() {
+    use vectorcraft_plugins::export;
+    use vectorcraft_plugins::import::{self, Source};
+    let run = format!(
+        "(local $n i32) (local.set $n (i32.const 100000)) \
+         (loop $work (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n))) {}",
+        tpl::ECHO
+    );
+    let wasm = build(&tpl::module(&tpl::importer("test.import.budget", r#"["tst"]"#, "{}"), &run, "", 1));
+    let file = br#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[0,0]},{"p":[1,0]}]}]}}]}"#;
+    let source = Source { extension: "tst", name: "a" };
+
+    let limits = import::limits(&Plugin::load(&wasm, Limits::default()).unwrap());
+    assert_eq!((limits.fuel_base, limits.wall_time_ms), (export::FUEL, export::WALL_TIME_MS));
+    let own = Limits {
+        fuel_base: 9_000,
+        fuel_per_byte: 0,
+        wall_time_ms: 8_000,
+        export_fuel: 10_000_000,
+        export_wall_time_ms: 7_000,
+        max_output_bytes: 6_000,
+        ..Limits::default()
+    };
+    let p = Plugin::load(&wasm, own.clone()).unwrap();
+    assert_eq!(import::limits(&p), Limits { fuel_base: 10_000_000, wall_time_ms: 7_000, ..own });
+    assert_eq!(import::run(&p, file, &Value::Null, source).map(|i| i.objects.len()), Ok(1));
+
+    let p = Plugin::load(&wasm, Limits { fuel_base: 10_000_000, fuel_per_byte: 0, export_fuel: 9_000, ..Limits::default() }).unwrap();
+    assert_eq!(import::run(&p, file, &Value::Null, source), Err(Error::Limit("instruction budget".into())));
 }
 
 /// The echo exporter the engine and UI tests read back what they hand a plug-in with: its file is
@@ -306,6 +450,579 @@ fn folder_loading_skips_bad_files() {
     assert!(registry::load_folder(&dir.join("missing")).is_err());
     assert!(registry::load_file(&dir, Limits::default()).is_err(), "a directory is not a module");
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A filter of plug-in API level 2 that may use the host imports.
+const LEVEL2: &str =
+    r#"{"id":"test.level2","name":"Level 2","version":"1","kind":"filter","api":2,"permissions":["doc.read","doc.write","progress"]}"#;
+
+/// The error of loading `bytes`, as text.
+fn load_err(bytes: &[u8]) -> String {
+    Plugin::load(bytes, Limits::default()).expect_err("the module must be refused").to_string()
+}
+
+/// A module may import only the host's functions, with the host's types, and the progress ones only
+/// when its manifest gives `api` 2 and lists `progress`; the error names the import it refuses.
+#[test]
+fn host_imports_are_checked_when_a_module_is_loaded() {
+    let with = |manifest: &str, import: &str| build(&tpl::with_imports(manifest, import, "", INPUT));
+    let unknown = with(LEVEL2, r#"(import "env" "vc_clock" (func (result i64)))"#);
+    assert!(load_err(&unknown).contains("imports `env.vc_clock`, which the host doesn't offer"), "{}", load_err(&unknown));
+    let elsewhere = with(LEVEL2, r#"(import "vc" "vc_log" (func (param i32 i32 i32) (result i32)))"#);
+    assert!(load_err(&elsewhere).contains("imports `vc.vc_log`, which the host doesn't offer"), "{}", load_err(&elsewhere));
+    let wrong_type = with(LEVEL2, r#"(import "env" "vc_progress" (func (param i32 i32)))"#);
+    assert!(load_err(&wrong_type).contains("imports `env.vc_progress` with another type than the host's: it is (param i64 i64)"));
+    let memory = with(LEVEL2, r#"(import "env" "vc_cancelled" (global i32))"#);
+    assert!(load_err(&memory).contains("imports `env.vc_cancelled` with another type"), "{}", load_err(&memory));
+    let progress = r#"(import "env" "vc_progress" (func (param i64 i64)))"#;
+    let ungranted = r#"{"id":"test.ungranted","name":"U","kind":"filter","api":2,"permissions":["doc.read","doc.write"]}"#;
+    let says = "imports `env.vc_progress`, which a plug-in may use only at plug-in API level 2 (`api` 2) and with the permission `progress`";
+    for manifest in [ungranted, r#"{"id":"test.implied","name":"U","kind":"filter","api":2}"#, MANIFEST] {
+        let e = load_err(&with(manifest, progress));
+        assert!(e.contains(says), "{manifest}: {e}");
+    }
+    let p = Plugin::load(&with(LEVEL2, progress), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    // A level-2 plug-in that imports nothing runs as a level-1 one does.
+    let plain = Plugin::load(&build(&tpl::returning(LEVEL2, INPUT)), Limits::default()).unwrap();
+    assert_eq!(plain.run_reporting(INPUT.as_bytes(), b"{}", plain.limits()), (Ok(INPUT.as_bytes().to_vec()), Report::default()));
+}
+
+/// Progress is clamped and passed on to the caller's sink as a share; the run's last report is kept.
+#[test]
+fn progress_reports_are_clamped_and_reach_the_caller() {
+    use std::{cell::RefCell, rc::Rc};
+    let first = "(call $vc_progress (i64.const 50) (i64.const 10)) (call $vc_progress (i64.const -3) (i64.const 8)) (call $vc_progress (i64.const 3) (i64.const 8))";
+    let p = Plugin::load(&build(&tpl::reporting(LEVEL2, first, INPUT)), Limits::default()).unwrap();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let sink: vectorcraft_doc::cancel::ProgressSink = {
+        let seen = seen.clone();
+        Rc::new(move |d, t, w| seen.borrow_mut().push((d, t, w.to_string())))
+    };
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    let (out, report) = vectorcraft_doc::cancel::scope(&token, Some(sink), || p.run_reporting(INPUT.as_bytes(), b"{}", p.limits()));
+    assert_eq!(out.unwrap(), INPUT.as_bytes());
+    assert_eq!(report.progress, Some((3, 8)));
+    let step = vectorcraft_plugins::host::PROGRESS_STEP.to_string();
+    assert_eq!(*seen.borrow(), [(10, 10, step.clone()), (0, 8, step.clone()), (3, 8, step)]);
+    // A live effect's progress stays its own: it is drawn as part of something else.
+    let effect = r#"{"id":"test.level2.effect","name":"E","kind":"effect","api":2,"permissions":["doc.read","effect.render","progress"]}"#;
+    let e = Plugin::load(&build(&tpl::reporting(effect, first, INPUT)), Limits::default()).unwrap();
+    let quiet = Rc::new(RefCell::new(0));
+    let sink: vectorcraft_doc::cancel::ProgressSink = {
+        let quiet = quiet.clone();
+        Rc::new(move |_, _, _| *quiet.borrow_mut() += 1)
+    };
+    let (_, report) = vectorcraft_doc::cancel::scope(&token, Some(sink), || e.run_reporting(INPUT.as_bytes(), b"{}", e.limits()));
+    assert_eq!((report.progress, *quiet.borrow()), (Some((3, 8)), 0));
+}
+
+/// Cancel makes `vc_cancelled` return 1, and a plug-in that checks it stops at once; what it returns
+/// then is discarded, so the run is `Cancelled`; past the time budget the same holds. One that
+/// ignores it still ends at its instruction budget. Outside a cancelled scope it returns 0.
+#[test]
+fn cancel_reaches_a_cooperating_plugin_and_a_budget_ends_one_that_ignores_it() {
+    let p =
+        Plugin::load(&build(&tpl::cooperating(LEVEL2, 1 << 40, r#"{"stopped":1}"#, INPUT)), Limits { fuel_base: u64::MAX / 4, ..Limits::default() })
+            .unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let (out, report) = vectorcraft_doc::cancel::scope(&token, None, || p.run_reporting(INPUT.as_bytes(), b"{}", p.limits()));
+    assert_eq!(out, Err(Error::Cancelled), "what it returned after the Cancel is discarded");
+    assert_eq!(report.progress, Some((0, 1 << 40)), "it saw the Cancel on its first step");
+    // Not cancelled: it runs all its steps.
+    let short = Plugin::load(&build(&tpl::cooperating(LEVEL2, 1000, r#"{"stopped":1}"#, INPUT)), Limits::default()).unwrap();
+    let (out, report) = short.run_reporting(INPUT.as_bytes(), b"{}", short.limits());
+    assert_eq!((out.unwrap(), report.progress), (INPUT.as_bytes().to_vec(), Some((999, 1000))));
+    // Past its time budget `vc_cancelled` returns 1 too, and what it returns then is discarded.
+    let late =
+        Plugin::load(&build(&tpl::cooperating(LEVEL2, 1000, r#"{"stopped":1}"#, INPUT)), Limits { wall_time_ms: 0, ..Limits::default() }).unwrap();
+    let (out, report) = late.run_reporting(INPUT.as_bytes(), b"{}", late.limits());
+    assert_eq!((out, report.progress), (Err(Error::Limit("time budget".into())), Some((0, 1000))));
+    // One that never checks ends at its budget, cancelled or not.
+    let ignoring = build(&tpl::reporting(LEVEL2, "(loop $l (br $l))", INPUT));
+    let p = Plugin::load(&ignoring, Limits { fuel_base: 1_000_000, ..Limits::default() }).unwrap();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}"));
+    assert_eq!(r, Err(Error::Limit("instruction budget".into())));
+}
+
+/// A log line longer than the cap is cut; lines past the run's budget are dropped, with one line
+/// that says so; text outside memory, text that isn't UTF-8 and an unknown level are errors the
+/// plug-in sees, never a panic.
+#[test]
+fn log_lines_are_capped_and_bad_text_is_an_error_the_plugin_sees() {
+    use vectorcraft_plugins::host::{self, LOG_BAD_LEVEL, LOG_NOT_UTF8, LOG_OUTSIDE_MEMORY, MAX_LOG_LINE, MAX_LOG_LINES};
+    // `$text` at 0x2000 holds "hi", then 0xff, then 2000 bytes of "x".
+    let expect = |level: i32, ptr: &str, len: &str, want: i32| {
+        format!("(if (i32.ne (call $vc_log (i32.const {level}) {ptr} {len}) (i32.const {want})) (then unreachable))")
+    };
+    let first = [
+        expect(2, "(i32.const 0x2000)", "(i32.const 2)", 0),
+        expect(1, "(i32.const 0x2003)", "(i32.const 2000)", 0),
+        expect(2, "(i32.const -1)", "(i32.const 5)", LOG_OUTSIDE_MEMORY),
+        expect(2, "(i32.const 0x2000)", "(i32.const -1)", LOG_OUTSIDE_MEMORY),
+        expect(2, "(i32.mul (memory.size) (i32.const 65536))", "(i32.const 1)", LOG_OUTSIDE_MEMORY),
+        expect(2, "(i32.const 0x2000)", "(i32.const 3)", LOG_NOT_UTF8),
+        expect(9, "(i32.const 0x2000)", "(i32.const 2)", LOG_BAD_LEVEL),
+    ]
+    .concat();
+    let data = format!(r#"(data (i32.const 0x2000) "hi\ff{}")"#, "x".repeat(2000));
+    let imports = format!("{} {data}", tpl::HOST_IMPORTS);
+    let p = Plugin::load(&build(&tpl::with_imports(LEVEL2, &imports, &first, INPUT)), Limits::default()).unwrap();
+    let (out, report) = p.run_reporting(INPUT.as_bytes(), b"{}", p.limits());
+    assert_eq!(out.unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    assert_eq!(report.lines.len(), 2);
+    assert_eq!(report.lines[0], vectorcraft_plugins::LogLine { level: vectorcraft_plugins::LogLevel::Info, text: "hi".into() });
+    assert_eq!(report.lines[1].text, format!("{}…", "x".repeat(MAX_LOG_LINE - 2)), "cut at the cap, ellipsis included");
+    // Past the budget: dropped, with one line that says so.
+    let flood = format!(
+        "(local $i i32) (loop $l (drop (call $vc_log (i32.const 2) (i32.const 0x2000) (i32.const 2))) (local.set $i (i32.add (local.get $i) (i32.const 1))) (br_if $l (i32.lt_u (local.get $i) (i32.const {}))))",
+        MAX_LOG_LINES * 3
+    );
+    let p = Plugin::load(&build(&tpl::with_imports(LEVEL2, &imports, &flood, INPUT)), Limits::default()).unwrap();
+    let (out, report) = p.run_reporting(INPUT.as_bytes(), b"{}", p.limits());
+    assert!(out.is_ok() && report.truncated);
+    assert_eq!(report.lines.len(), MAX_LOG_LINES + 1);
+    assert_eq!(report.lines.iter().filter(|l| l.text == host::LOG_TRUNCATED).count(), 1);
+}
+
+/// What a module's start function reports through the host imports before it fails is kept in the
+/// run's report. This start function logs, reports progress and traps only when the run was
+/// cancelled, so the module loads.
+#[test]
+fn what_a_start_function_reports_before_it_fails_is_kept() {
+    let start = r#"(data (i32.const 0x2000) "hi")
+  (func $start (if (call $vc_cancelled) (then
+    (drop (call $vc_log (i32.const 2) (i32.const 0x2000) (i32.const 2)))
+    (call $vc_progress (i64.const 1) (i64.const 4))
+    unreachable)))
+  (start $start)"#;
+    let imports = format!("{} {start}", tpl::HOST_IMPORTS);
+    let p = Plugin::load(&build(&tpl::with_imports(LEVEL2, &imports, "", INPUT)), Limits::default()).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let (out, report) = vectorcraft_doc::cancel::scope(&token, None, || p.run_reporting(INPUT.as_bytes(), b"{}", p.limits()));
+    assert!(out.is_err(), "{out:?}");
+    assert_eq!(report.lines, [vectorcraft_plugins::LogLine { level: vectorcraft_plugins::LogLevel::Info, text: "hi".into() }]);
+    assert_eq!(report.progress, Some((1, 4)));
+}
+
+/// Settings and a cache kept in memory, for the storage imports. Each call charges its meter the
+/// bytes of the value it reads or writes.
+#[derive(Default)]
+struct Kept {
+    settings: std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+    cache: std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+}
+
+/// The value `key` has in `kept`, once `meter` is charged its bytes.
+fn charged(
+    kept: &std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>>,
+    key: &str,
+    meter: &mut Meter,
+) -> Result<Option<Vec<u8>>, StorageError> {
+    let kept = kept.lock().unwrap();
+    meter.take(kept.get(key).map_or(0, |v| v.len() as u64))?;
+    Ok(kept.get(key).cloned())
+}
+
+impl Storage for Kept {
+    fn setting(&self, key: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        charged(&self.settings, key, meter)
+    }
+    fn set_setting(&self, key: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
+        meter.take(value.len() as u64)?;
+        self.settings.lock().unwrap().insert(key.into(), value.to_vec());
+        Ok(())
+    }
+    fn delete_setting(&self, key: &str, _: &mut Meter) -> Result<bool, StorageError> {
+        Ok(self.settings.lock().unwrap().remove(key).is_some())
+    }
+    fn cache_entry(&self, name: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        charged(&self.cache, name, meter)
+    }
+    fn set_cache_entry(&self, name: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
+        meter.take(value.len() as u64)?;
+        self.cache.lock().unwrap().insert(name.into(), value.to_vec());
+        Ok(())
+    }
+    fn remove_cache_entry(&self, name: &str) -> Result<bool, StorageError> {
+        Ok(self.cache.lock().unwrap().remove(name).is_some())
+    }
+    fn clear_cache(&self) -> Result<u64, StorageError> {
+        let mut cache = self.cache.lock().unwrap();
+        let freed = cache.values().map(|v| v.len() as u64).sum();
+        cache.clear();
+        Ok(freed)
+    }
+    fn cache_bytes(&self) -> u64 {
+        self.cache.lock().unwrap().values().map(|v| v.len() as u64).sum()
+    }
+}
+
+/// A filter `id` of API level 2 that lists `settings` and `cache`.
+fn storing(id: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Storing","version":"1","kind":"filter","api":2,"permissions":["settings","cache"]}}"#)
+}
+
+/// Instructions that trap unless `call` returns `want`.
+fn expect(call: &str, want: i32) -> String {
+    format!("(if (i32.ne {call} (i32.const {want})) (then unreachable))")
+}
+
+/// The module fields of a storage test: the storage imports, keys at 0x2000 ("zoom", "..", "a/b",
+/// "CON", a tab, 65 "x"), the value "hello" at 0x2100; 0x3000 is free for an output buffer.
+fn storage_data() -> String {
+    format!(r#"{} (data (i32.const 0x2000) "zoom..a/bCON\09{}") (data (i32.const 0x2100) "hello")"#, tpl::STORAGE_IMPORTS, "x".repeat(65))
+}
+
+/// Each storage import needs its own permission: a module that imports one its manifest doesn't
+/// list is refused, and the error names the import and the permission.
+#[test]
+fn storage_imports_need_their_own_permission() {
+    let with = |manifest: &str, import: &str| build(&tpl::with_imports(manifest, import, "", INPUT));
+    let get = r#"(import "env" "vc_settings_get" (func (param i32 i32 i32 i32) (result i32)))"#;
+    let clear = r#"(import "env" "vc_cache_clear" (func (param i32 i32) (result i32)))"#;
+    let e = load_err(&with(LEVEL2, get));
+    assert!(
+        e.contains("imports `env.vc_settings_get`, which a plug-in may use only at plug-in API level 2 (`api` 2) and with the permission `settings`"),
+        "{e}"
+    );
+    let settings_only = r#"{"id":"test.settings","name":"S","kind":"filter","api":2,"permissions":["settings"]}"#;
+    assert!(Plugin::load(&with(settings_only, get), Limits::default()).is_ok());
+    let e = load_err(&with(settings_only, clear));
+    assert!(
+        e.contains("imports `env.vc_cache_clear`, which a plug-in may use only at plug-in API level 2 (`api` 2) and with the permission `cache`"),
+        "{e}"
+    );
+    let wrong = load_err(&with(&storing("test.wrong"), r#"(import "env" "vc_cache_clear" (func (param i32) (result i32)))"#));
+    assert!(wrong.contains("imports `env.vc_cache_clear` with another type than the host's: it is (param i32 i32) (result i32)"), "{wrong}");
+    assert!(Plugin::load(&build(&tpl::with_imports(&storing("test.all"), tpl::STORAGE_IMPORTS, "", INPUT)), Limits::default()).is_ok());
+}
+
+/// A plug-in sets, reads and removes its settings and cache entries through the storage imports,
+/// by key; a value too large for its buffer returns its length and copies nothing; a key or buffer
+/// outside its memory, a key that isn't a plain name and a value over its cap are errors it sees.
+#[test]
+fn storage_imports_read_and_write_the_plugins_own_storage() {
+    use vectorcraft_plugins::host::{STORAGE_BAD_NAME, STORAGE_DONE, STORAGE_FULL, STORAGE_NOT_FOUND, STORAGE_OUTSIDE_MEMORY};
+    let id = "test.storage.own";
+    let kept = std::sync::Arc::new(Kept::default());
+    registry::set_storage(id, Some(kept.clone()));
+    let zoom = "(i32.const 0x2000) (i32.const 4)";
+    let first = [
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), STORAGE_NOT_FOUND),
+        expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const 5))"), STORAGE_DONE),
+        // Too small a buffer: the length, and nothing copied.
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 4))"), 5),
+        expect("(i32.load8_u (i32.const 0x3000))", 0),
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), 5),
+        expect("(i32.load (i32.const 0x3000))", i32::from_le_bytes(*b"hell")),
+        expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x2100) (i32.const 0))"), STORAGE_DONE),
+        expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 0))"), 0),
+        expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x2100) (i32.const 3))"), STORAGE_DONE),
+        // Hostile keys: `..`, `a/b`, `CON`, a tab, 65 bytes, no bytes.
+        expect("(call $vc_settings_set (i32.const 0x2004) (i32.const 2) (i32.const 0x2100) (i32.const 5))", STORAGE_BAD_NAME),
+        expect("(call $vc_settings_set (i32.const 0x2006) (i32.const 3) (i32.const 0x2100) (i32.const 5))", STORAGE_BAD_NAME),
+        expect("(call $vc_cache_write (i32.const 0x2009) (i32.const 3) (i32.const 0x2100) (i32.const 5))", STORAGE_BAD_NAME),
+        expect("(call $vc_cache_read (i32.const 0x200c) (i32.const 1) (i32.const 0x3000) (i32.const 16))", STORAGE_BAD_NAME),
+        expect("(call $vc_settings_get (i32.const 0x200d) (i32.const 65) (i32.const 0x3000) (i32.const 16))", STORAGE_BAD_NAME),
+        expect("(call $vc_settings_delete (i32.const 0x2000) (i32.const 0))", STORAGE_BAD_NAME),
+        // Outside memory: the key, the value, the buffer.
+        expect("(call $vc_settings_get (i32.const -1) (i32.const 4) (i32.const 0x3000) (i32.const 16))", STORAGE_OUTSIDE_MEMORY),
+        expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const -1))"), STORAGE_OUTSIDE_MEMORY),
+        expect(&format!("(call $vc_cache_read {zoom} (i32.mul (memory.size) (i32.const 65536)) (i32.const 1))"), STORAGE_OUTSIDE_MEMORY),
+        // A setting over its cap changes nothing.
+        expect(
+            &format!("(call $vc_settings_set {zoom} (i32.const 0) (i32.const {}))", vectorcraft_plugins::storage::MAX_SETTING_BYTES + 1),
+            STORAGE_FULL,
+        ),
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), 5),
+    ]
+    .concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    assert_eq!(kept.settings.lock().unwrap().get("zoom"), Some(&b"hello".to_vec()));
+    assert_eq!(kept.cache.lock().unwrap().get("zoom"), Some(&b"hel".to_vec()));
+    // Removing: one setting, then a missing one, then the whole cache, then a missing entry.
+    let removing = [
+        expect("(call $vc_settings_delete (i32.const 0x2000) (i32.const 4))", STORAGE_DONE),
+        expect("(call $vc_settings_delete (i32.const 0x2000) (i32.const 4))", STORAGE_NOT_FOUND),
+        expect("(call $vc_cache_clear (i32.const 0) (i32.const 0))", STORAGE_DONE),
+        expect("(call $vc_cache_clear (i32.const 0x2000) (i32.const 4))", STORAGE_NOT_FOUND),
+    ]
+    .concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &removing, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    assert!(kept.settings.lock().unwrap().is_empty() && kept.cache.lock().unwrap().is_empty());
+    registry::set_storage(id, None);
+}
+
+/// A read counts the value's bytes toward the run's storage bytes even when its buffer is too small
+/// and nothing is copied, so reading a large entry into no buffer again and again ends in
+/// `STORAGE_BUDGET`.
+#[test]
+fn a_read_into_too_small_a_buffer_still_counts_its_bytes() {
+    use vectorcraft_plugins::host::{MAX_STORAGE_BYTES, STORAGE_BUDGET};
+    use vectorcraft_plugins::storage::MAX_CACHE_ENTRY;
+    let id = "test.storage.budget";
+    let kept = std::sync::Arc::new(Kept::default());
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    registry::set_storage(id, Some(kept.clone()));
+    let read = "(call $vc_cache_read (i32.const 0x2000) (i32.const 4) (i32.const 0x3000) (i32.const 0))";
+    let fits = MAX_STORAGE_BYTES / MAX_CACHE_ENTRY;
+    let reading = [vec![expect(read, MAX_CACHE_ENTRY as i32); fits], vec![expect(read, STORAGE_BUDGET)]].concat().concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &reading, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    registry::set_storage(id, None);
+}
+
+/// Storage calls cost the run one instruction for every 64 bytes they read or write: reading a
+/// 64 MiB cache entry, or writing 1 MiB to the cache 64 times, ends a run of 1 M instructions with
+/// its instruction budget and finishes within 2 M. A call the run can't pay for reads and writes
+/// nothing, a call pays from the budget not yet in the store, a call past the 1 GiB still returns
+/// `STORAGE_BUDGET`, and a small read finishes on a small budget.
+#[test]
+fn storage_calls_pay_instructions_for_the_bytes_they_move() {
+    use vectorcraft_plugins::host::{MAX_STORAGE_BYTES, STORAGE_BUDGET, STORAGE_DONE};
+    use vectorcraft_plugins::storage::MAX_CACHE_ENTRY;
+    let id = "test.storage.fuel";
+    let kept = std::sync::Arc::new(Kept::default());
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    kept.settings.lock().unwrap().insert("zoom".into(), b"hello".to_vec());
+    registry::set_storage(id, Some(kept.clone()));
+    let run = |first: &str, fuel_base: u64| {
+        let limits = Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() };
+        Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), first, INPUT)), limits).unwrap().run(INPUT.as_bytes(), b"{}")
+    };
+    let zoom = "(i32.const 0x2000) (i32.const 4)";
+    let reading = expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 0))"), MAX_CACHE_ENTRY as i32);
+    // 17 more pages of memory, then 1 MiB of them written to the cache 64 times.
+    let write = expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x20000) (i32.const 1048576))"), STORAGE_DONE);
+    let writing = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 17))) (local.set $n (i32.const 64)) \
+         (loop $work {write} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n)))"
+    );
+    let budget = Err(Error::Limit("instruction budget".into()));
+    let done = Ok(INPUT.as_bytes().to_vec());
+    let small = expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), 5);
+    assert_eq!(run(&small, 10_000), done, "a small read on 10,000 instructions");
+    // Growing the memory by 17 pages costs about 17,400 instructions and writing 1 MiB 16,384: a
+    // write the run can't pay for writes nothing.
+    let once = format!("(drop (memory.grow (i32.const 17))) {write}");
+    assert_eq!(run(&once, 30_000), budget, "1 MiB written on 30,000 instructions");
+    assert_eq!(kept.cache_bytes(), MAX_CACHE_ENTRY as u64, "the entry is unchanged");
+    assert_eq!(run(&once, 60_000), done, "1 MiB written on 60,000 instructions");
+    assert_eq!(kept.cache_bytes(), 1 << 20, "the entry is written");
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    assert_eq!(run(&reading, 1_000_000), budget, "a 64 MiB read on 1 M instructions");
+    assert_eq!(run(&reading, 2_000_000), done, "a 64 MiB read on 2 M instructions");
+    assert_eq!(run(&writing, 1_000_000), budget, "64 MiB written on 1 M instructions");
+    assert_eq!(run(&writing, 2_000_000), done, "64 MiB written on 2 M instructions");
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    // About 19.7 M instructions of fills leave less of the first 20 M slice than a 64 MiB read
+    // costs; the read pays from the rest of the budget.
+    let burning = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 130))) (local.set $n (i32.const 149)) \
+         (loop $burn (memory.fill (i32.const 0x20000) (i32.const 7) (i32.const 8388608)) \
+         (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $burn (local.get $n))) {reading}"
+    );
+    assert_eq!(run(&burning, 21_000_000), done, "a read across two slices within the budget");
+    assert_eq!(run(&burning, 20_500_000), budget, "a read across two slices over the budget");
+    // What the read took from the rest of the budget is gone: six more 8 MiB fills (about 786,000
+    // instructions) don't fit the 21 M.
+    let more = format!(
+        "{burning} (local.set $n (i32.const 6)) (loop $more (memory.fill (i32.const 0x20000) (i32.const 7) (i32.const 8388608)) \
+         (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $more (local.get $n)))"
+    );
+    assert_eq!(run(&more, 21_000_000), budget, "fills after the read over the budget");
+    // With 8 MiB of the run's 1 GiB of storage bytes left and instructions for less, a 64 MiB read
+    // returns `STORAGE_BUDGET`, since the bytes alone refuse it, and the run goes on.
+    let rest = MAX_STORAGE_BYTES - 15 * MAX_CACHE_ENTRY - (8 << 20);
+    kept.cache.lock().unwrap().insert("x".into(), vec![0; rest]);
+    let x = expect("(call $vc_cache_read (i32.const 0x200d) (i32.const 1) (i32.const 0x3000) (i32.const 0))", rest as i32);
+    let over = expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 0))"), STORAGE_BUDGET);
+    let near = [vec![reading.clone(); 15], vec![x, over]].concat().concat();
+    assert_eq!(run(&near, 16_700_000), done, "a read past the 1 GiB");
+    // Bytes are counted over the run: 9,000 writes of 63 bytes, each under 64, cost about 8,860
+    // instructions more than 9,000 writes of none, not 0 or 9,000 as rounding each write down or up
+    // would. Each run's fewest instructions are found by bisection.
+    let looped = |len: u32| {
+        let write = expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x2000) (i32.const {len}))"), STORAGE_DONE);
+        format!(
+            "(local $n i32) (local.set $n (i32.const 9000)) \
+             (loop $work {write} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n)))"
+        )
+    };
+    let fewest = |first: &str| {
+        let (mut lo, mut hi) = (10_000, 50_000_000);
+        assert_eq!(run(first, hi), done, "the writes finish");
+        while lo + 1 < hi {
+            let mid = (lo + hi) / 2;
+            match run(first, mid) {
+                Ok(_) => hi = mid,
+                Err(Error::Limit(why)) if why == "instruction budget" => lo = mid,
+                Err(e) => panic!("the writes failed on {mid} instructions: {e:?}"),
+            }
+        }
+        hi
+    };
+    let (none, small) = (fewest(&looped(0)), fewest(&looped(63)));
+    assert!((none + 8_800..=none + 8_900).contains(&small), "63-byte writes take {small} instructions, empty ones {none}");
+    registry::set_storage(id, None);
+}
+
+/// A storage call that needs more of the budget than the store holds takes it only before Cancel
+/// and the deadline: after either, a 32 MiB write near the end of the first 20 M slice writes
+/// nothing and the run ends as canceled or with its time budget.
+#[test]
+fn after_cancel_or_the_deadline_a_storage_call_takes_no_more_of_the_budget() {
+    use vectorcraft_plugins::host::STORAGE_DONE;
+    use vectorcraft_plugins::storage::MAX_CACHE_ENTRY;
+    let id = "test.storage.cancel";
+    let kept = std::sync::Arc::new(Kept::default());
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    registry::set_storage(id, Some(kept.clone()));
+    // Growing by 512 pages and 148 fills of 8 MiB take about 19.9 M instructions; the write costs
+    // 524,288.
+    let write = expect("(call $vc_cache_write (i32.const 0x2000) (i32.const 4) (i32.const 0x20000) (i32.const 33554432))", STORAGE_DONE);
+    let first = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 512))) (local.set $n (i32.const 148)) \
+         (loop $burn (memory.fill (i32.const 0x20000) (i32.const 7) (i32.const 8388608)) \
+         (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $burn (local.get $n))) {write}"
+    );
+    let limits = Limits { fuel_base: 21_000_000, fuel_per_byte: 0, ..Limits::default() };
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), limits.clone()).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}"));
+    assert_eq!(r, Err(Error::Cancelled));
+    assert_eq!(kept.cache_bytes(), MAX_CACHE_ENTRY as u64, "the entry is unchanged");
+    let timed = Limits { wall_time_ms: 0, ..limits };
+    assert_eq!(p.run_limited(INPUT.as_bytes(), b"{}", &timed), Err(Error::Limit("time budget".into())));
+    assert_eq!(kept.cache_bytes(), MAX_CACHE_ENTRY as u64, "the entry is unchanged after the deadline");
+    // With both, the time budget, as between two slices.
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run_limited(INPUT.as_bytes(), b"{}", &timed));
+    assert_eq!(r, Err(Error::Limit("time budget".into())));
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}"), Ok(INPUT.as_bytes().to_vec()), "the same run without Cancel");
+    assert_eq!(kept.cache_bytes(), 32 << 20, "the entry is written");
+    registry::set_storage(id, None);
+}
+
+/// The host checks the deadline and Cancel after every storage call, also one the store's
+/// instructions pay for: after either, a 1 MiB cache write is the run's last storage call, and the
+/// write after it doesn't happen.
+#[test]
+fn a_run_past_its_deadline_or_canceled_stops_after_a_storage_call() {
+    use vectorcraft_plugins::host::STORAGE_DONE;
+    let id = "test.storage.after";
+    let kept = std::sync::Arc::new(Kept::default());
+    registry::set_storage(id, Some(kept.clone()));
+    let first = format!(
+        "(drop (memory.grow (i32.const 17))) {} {}",
+        expect("(call $vc_cache_write (i32.const 0x2000) (i32.const 4) (i32.const 0x20000) (i32.const 1048576))", STORAGE_DONE),
+        expect("(call $vc_cache_write (i32.const 0x200d) (i32.const 1) (i32.const 0x20000) (i32.const 1048576))", STORAGE_DONE),
+    );
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), Limits::default()).unwrap();
+    let written = || {
+        let cache = kept.cache.lock().unwrap();
+        let names = (cache.contains_key("zoom"), cache.contains_key("x"));
+        drop(cache);
+        kept.cache.lock().unwrap().clear();
+        names
+    };
+    let timed = Limits { wall_time_ms: 0, ..p.limits().clone() };
+    assert_eq!(p.run_limited(INPUT.as_bytes(), b"{}", &timed), Err(Error::Limit("time budget".into())));
+    assert_eq!(written(), (true, false), "after the deadline");
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    assert_eq!(vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}")), Err(Error::Cancelled));
+    assert_eq!(written(), (true, false), "after Cancel");
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}"), Ok(INPUT.as_bytes().to_vec()), "the same run before both");
+    assert_eq!(written(), (true, true), "before both");
+    registry::set_storage(id, None);
+}
+
+/// A store that answers every setting with the same value without counting its bytes, as the app's
+/// store answers a get from the settings it keeps in memory.
+struct Remembered(Vec<u8>);
+
+impl Storage for Remembered {
+    fn setting(&self, _: &str, _: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        Ok(Some(self.0.clone()))
+    }
+    fn set_setting(&self, _: &str, _: &[u8], _: &mut Meter) -> Result<(), StorageError> {
+        Ok(())
+    }
+    fn delete_setting(&self, _: &str, _: &mut Meter) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+    fn cache_entry(&self, _: &str, _: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        Ok(None)
+    }
+    fn set_cache_entry(&self, _: &str, _: &[u8], _: &mut Meter) -> Result<(), StorageError> {
+        Ok(())
+    }
+    fn remove_cache_entry(&self, _: &str) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+    fn clear_cache(&self) -> Result<u64, StorageError> {
+        Ok(0)
+    }
+    fn cache_bytes(&self) -> u64 {
+        0
+    }
+}
+
+/// A settings get the store answers without counting bytes still costs the bytes it copies into
+/// the module's memory: 2,000 gets of a 64 KiB value (128,000 KiB copied) end a run of 1 M
+/// instructions with its instruction budget and finish within 4 M.
+#[test]
+fn settings_gets_answered_from_memory_pay_for_the_bytes_they_copy() {
+    let id = "test.storage.copied";
+    registry::set_storage(id, Some(std::sync::Arc::new(Remembered(vec![7; 65536]))));
+    let get = expect("(call $vc_settings_get (i32.const 0x2000) (i32.const 4) (i32.const 0x20000) (i32.const 65536))", 65536);
+    let first = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 2))) (local.set $n (i32.const 2000)) \
+         (loop $work {get} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n)))"
+    );
+    let run = |fuel_base: u64| {
+        let limits = Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() };
+        Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), limits).unwrap().run(INPUT.as_bytes(), b"{}")
+    };
+    assert_eq!(run(1_000_000), Err(Error::Limit("instruction budget".into())), "on 1 M instructions");
+    assert_eq!(run(4_000_000), Ok(INPUT.as_bytes().to_vec()), "on 4 M instructions");
+    registry::set_storage(id, None);
+}
+
+/// A plug-in reaches only the storage of its own id, and a plug-in with none (not installed with a
+/// plug-in store, as on the web) gets `STORAGE_UNAVAILABLE`.
+#[test]
+fn a_plugin_reaches_only_its_own_storage() {
+    use vectorcraft_plugins::host::{STORAGE_DONE, STORAGE_NOT_FOUND, STORAGE_UNAVAILABLE};
+    let (mine, theirs) = (std::sync::Arc::new(Kept::default()), std::sync::Arc::new(Kept::default()));
+    registry::set_storage("test.storage.mine", Some(mine.clone()));
+    registry::set_storage("test.storage.theirs", Some(theirs.clone()));
+    theirs.settings.lock().unwrap().insert("zoom".into(), b"theirs".to_vec());
+    theirs.cache.lock().unwrap().insert("zoom".into(), b"theirs".to_vec());
+    let zoom = "(i32.const 0x2000) (i32.const 4)";
+    let looking = [
+        expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), STORAGE_NOT_FOUND),
+        expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 16))"), STORAGE_NOT_FOUND),
+        expect("(call $vc_cache_clear (i32.const 0) (i32.const 0))", STORAGE_DONE),
+        expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const 5))"), STORAGE_DONE),
+    ]
+    .concat();
+    let p = Plugin::load(&build(&tpl::with_imports(&storing("test.storage.mine"), &storage_data(), &looking, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    assert_eq!(theirs.settings.lock().unwrap().get("zoom"), Some(&b"theirs".to_vec()));
+    assert_eq!(theirs.cache_bytes(), 6);
+    assert_eq!(mine.settings.lock().unwrap().get("zoom"), Some(&b"hello".to_vec()));
+    let nowhere = expect(&format!("(call $vc_settings_set {zoom} (i32.const 0x2100) (i32.const 5))"), STORAGE_UNAVAILABLE);
+    let p = Plugin::load(&build(&tpl::with_imports(&storing("test.storage.nowhere"), &storage_data(), &nowhere, INPUT)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    registry::set_storage("test.storage.mine", None);
+    registry::set_storage("test.storage.theirs", None);
 }
 
 /// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped

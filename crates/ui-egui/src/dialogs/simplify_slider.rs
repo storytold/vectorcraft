@@ -87,7 +87,7 @@ impl Strip {
     /// The open strip `d` moves to the level `cmd {auto: true}` picks for the selection, and the
     /// canvas previews it → {level}.
     pub fn auto(&self, app: &mut VectorcraftApp, mut d: Dialog) -> Result<Value, String> {
-        let _ = app.session.begin_interaction(self.label);
+        app.begin_interaction(self.label)?;
         let r = app.session.preview(self.cmd, &json!({ "auto": true })).map_err(|e| e.to_string())?;
         let level = r["level"].as_f64().unwrap_or(self.default_level);
         d.fields.insert("level".into(), json!(level));
@@ -202,8 +202,7 @@ fn bounds(app: &mut VectorcraftApp, d: &mut Dialog) -> Option<Rect> {
 fn place(app: &mut VectorcraftApp, ctx: &egui::Context, id: egui::Id, bounds: Option<Rect>) -> Pos2 {
     let size = egui::AreaState::load(ctx, id).and_then(|s| s.size).unwrap_or(vec2(270.0, 42.0));
     let screen = ctx.content_rect();
-    let Some((rect, view)) = app.canvas_rect.zip(app.view().copied()) else { return screen.center() - size / 2.0 };
-    let xf = crate::canvas::Xf::new(rect, &view);
+    let Some((rect, xf)) = app.canvas_rect.zip(app.canvas_xf()) else { return screen.center() - size / 2.0 };
     let under = match bounds {
         Some(b) => {
             let lowest = xf.quad(b).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);

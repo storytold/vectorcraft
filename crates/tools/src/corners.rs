@@ -55,14 +55,18 @@ struct PathWidgets {
 
 impl PathWidgets {
     /// The widgets of path `id` at `zoom` (screen px per document point), if it has any: any path
-    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection. `id` is
-    /// editable ([`Document::is_editable`]).
-    fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool) -> Option<Self> {
+    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection, when
+    /// `editable` ([`Document::editable`]) answers true for `id`.
+    fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool, editable: &impl Fn(NodeId) -> bool) -> Option<Self> {
         if selection.segments.contains_key(&id) {
             return None;
         }
         let NodeKind::Path { path, live, .. } = &doc.node(id)?.kind else { return None };
         if !any_path && !matches!(live.as_deref(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. })) {
+            return None;
+        }
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !editable(id) {
             return None;
         }
         let lc = LiveCorners::new(path, live.as_deref())?;
@@ -105,9 +109,10 @@ impl CornerWidgets {
     /// The widgets at `zoom` (screen px per document point), if the selection has them: on any
     /// path with Direct Selection (`any_path`), on live rectangles and polygons with Selection.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64, any_path: bool) -> Option<Self> {
-        let editable = doc.editable();
-        let paths: Vec<_> =
-            selection.objects.iter().filter(|id| editable(**id)).filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
+        // Made for the first path, then shared: the art on the locked artboards is measured once.
+        let locks = std::cell::OnceCell::new();
+        let editable = |id| locks.get_or_init(|| doc.editable())(id);
+        let paths: Vec<_> = selection.objects.iter().filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path, &editable)).collect();
         (!paths.is_empty()).then_some(Self { paths })
     }
 
@@ -132,9 +137,11 @@ impl CornerWidgets {
         Self::of(doc, selection, zoom, any_path)?.within_angle(max_angle)
     }
 
-    /// The widgets the active tool can drag (Direct Selection: `any_path`).
+    /// The widgets the active tool can drag (Direct Selection: `any_path`). The live shapes' widgets
+    /// of the other tools also need Show Shape Widgets.
     pub fn for_tool(cx: &ToolContext, any_path: bool) -> Option<Self> {
-        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, cx.corner_widgets, cx.corner_widget_max_angle)
+        let on = cx.corner_widgets && (any_path || cx.shape_widgets);
+        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, on, cx.corner_widget_max_angle)
     }
 
     /// The centres of the widgets that show.
@@ -257,7 +264,7 @@ pub struct CornerDrag {
 }
 
 /// Direct Selection: the drawn anchors of a widget's corner, which a click on the widget selects
-/// (Shift: toggles), as a click on the corner's anchor does.
+/// (Shift: toggles, unless every corner is selected), as a click on the corner's anchor does.
 #[derive(Clone, Debug)]
 struct CornerClick {
     id: NodeId,
@@ -282,7 +289,13 @@ impl CornerDrag {
                 let path = widgets.paths.get(widget.0)?;
                 let corner = path.widgets.get(widget.1)?.corner.index;
                 let lc = cx.doc.node(path.id).and_then(LiveCorners::of)?;
-                Some(CornerClick { id: path.id, anchors: lc.anchors_of(&[corner].into()).into_iter().collect(), shift: ev.mods.shift })
+                // While every corner is selected (the path selected whole), a Shift-click picks
+                // this corner alone, as the first click of "click one widget, then Shift-click the
+                // others" does: toggling it would deselect it and leave the rest (#5188). Selected
+                // anchors that are no corner show every widget too, but select no corner: there a
+                // Shift-click adds the corner.
+                let every = cx.selection.partial(path.id).is_none_or(|anchors| lc.all().is_subset(&lc.corners_of(anchors)));
+                Some(CornerClick { id: path.id, anchors: lc.anchors_of(&[corner].into()).into_iter().collect(), shift: ev.mods.shift && !every })
             })
             .flatten();
         let outlines = widgets
