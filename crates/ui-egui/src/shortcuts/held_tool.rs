@@ -2,7 +2,7 @@
 //! Temporarily, `holdToolKeys`): the tool it chose stays until the key is let go, and then the tool
 //! active before comes back. A quick press chooses the tool for good.
 
-use craft::ui::runtime::commands::{FirePhase, Fired};
+use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
 
 use super::VectorcraftApp;
 
@@ -36,7 +36,8 @@ pub(crate) struct HeldTool {
 /// With it off, each repeat chooses the tool again.
 pub(super) fn choose(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fired) {
     let Some(tool) = fired.command.id.strip_prefix("tool:") else { return };
-    let hold = app.session.prefs.hold_tool_keys;
+    // Only a key is held: a click on a Tools button, a menu row or the palette chooses the tool and no more.
+    let hold = app.session.prefs.hold_tool_keys && fired.source == FireSource::Key;
     if fired.phase == FirePhase::Repeat && hold {
         return;
     }

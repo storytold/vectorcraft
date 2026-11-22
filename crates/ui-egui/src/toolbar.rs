@@ -155,9 +155,10 @@ pub(crate) fn slot_id(first: &str) -> SlotId {
     vectorcraft_tools::catalog::all_tools().position(|t| t.id == first).and_then(|i| SlotId::try_from(i).ok()).unwrap_or(SlotId::MAX)
 }
 
-/// A rail tool that selects `id`.
+/// A rail tool that selects `id`: the tool's command in the catalog, which gives the button its name, its icon and
+/// its shortcut.
 pub(crate) fn rail_tool(id: &str) -> RailTool<String> {
-    RailTool::new(id.to_string(), CommandRef::with_params("tool.select", json!({ "tool": id })))
+    RailTool::new(id.to_string(), crate::keymap::command_of(&format!("tool:{id}")))
 }
 
 /// The rail's slots for `slots`: a category's first slot carries its caption, and its last ends the
