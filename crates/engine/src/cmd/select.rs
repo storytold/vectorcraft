@@ -9,6 +9,7 @@ use vectorcraft_tools::builder::is_live_paint;
 
 use super::object::can_align;
 use super::panelcmds::artboard_at;
+use super::pathops::{hairline_slivers, sliver_width, unmeasured_warning};
 use super::wand::{fill_of, stroke_of};
 use super::{
     CommandSpec, Result, Session, bad, bool_or, checked_id, checked_ids_param, cmd, color_value, has_doc, has_selection, index_opt, ok, str_param,
@@ -196,6 +197,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("select.object.strayPoints", "Stray Points", ["Select", "Object"], None, "{}", has_doc, |s, _| by_kind(s, |n| n
             .path_data()
             .is_some_and(|p| p.anchor_count() == 1))),
+        cmd!(
+            "select.object.hairlineSlivers",
+            "Hairline Slivers…",
+            ["Select", "Object"],
+            None,
+            "{width?: pt 0.001..3 (0.03 mm, VectorCraft's own default)} select, in the document or inside the isolated group, the closed paths and compound paths that object.path.cleanUp's hairlineSlivers removes with this sliverWidth: a visible fill, no visible stroke, no effect, and no circle `width` across fits inside the fill; a compound path counts as one object, and hidden and locked objects, template layers, clipping paths, guides and the members of live and generated art are left out → {count, warning?: how many shapes could not be measured (too complex, or past the run's limit of work) and were left out}",
+            has_doc,
+            select_hairline_slivers
+        ),
         cmd!("select.object.openPaths", "Open Paths", ["Select", "Object"], None, "{}", has_doc, |s, _| by_kind(s, |n| n
             .path_data()
             .is_some_and(|p| !p.is_closed()))),
@@ -1421,6 +1431,24 @@ fn by_kind(s: &mut Session, f: fn(&Node) -> bool) -> Result<Value> {
     s.select(|_, sel| sel.set(ids))?;
     // The objects selected, after Lock Guides has left out guide paths.
     Ok(json!({ "count": s.doc()?.selection.objects.len() }))
+}
+
+/// Select › Object › Hairline Slivers: the objects Clean Up's Hairline Slivers removes
+/// ([`hairline_slivers`]), inside the isolated group while one is isolated.
+fn select_hairline_slivers(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "select.object.hairlineSlivers";
+    let width = sliver_width(p, "width", C)?;
+    let st = s.doc()?;
+    let (d, iso) = (&st.doc, st.isolation);
+    let locks = d.locked_artboards();
+    let found = hairline_slivers(d, width, &|id| is_selectable(d, iso, &locks, id));
+    let warning = unmeasured_warning(found.unmeasured.len());
+    s.select(|_, sel| sel.set(found.ids))?;
+    let count = s.doc()?.selection.objects.len();
+    Ok(match warning {
+        Some(w) => json!({ "count": count, "warning": w }),
+        None => json!({ "count": count }),
+    })
 }
 
 /// Select › Object › Not Aligned to Pixel Grid: the objects that can take the pixel-aligned

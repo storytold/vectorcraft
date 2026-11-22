@@ -260,7 +260,17 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Divide Objects Below", "object.path.divideObjectsBelow"),
                         c("Split Into Grid…", "object.path.splitIntoGrid"),
                         Sep,
-                        cp("Clean Up…", "object.path.cleanUp", json!({"strayPoints": true, "unpaintedObjects": true, "emptyTextPaths": true})),
+                        cp(
+                            "Clean Up…",
+                            "object.path.cleanUp",
+                            json!({
+                                "strayPoints": true,
+                                "unpaintedObjects": true,
+                                "emptyTextPaths": true,
+                                "hairlineSlivers": false,
+                                "sliverWidth": vectorcraft_engine::HAIRLINE_SLIVER_WIDTH
+                            }),
+                        ),
                     ],
                 ),
                 sub("Shape", vec![c("Convert to Shape", "object.shape.convertToShape"), c("Expand Shape", "object.expandShape")]),
@@ -538,6 +548,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Clipping Masks", "select.object.clippingMasks"),
                         c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
+                        cp("Hairline Slivers…", "select.object.hairlineSlivers", json!({"width": vectorcraft_engine::HAIRLINE_SLIVER_WIDTH})),
                         c("Open Paths", "select.object.openPaths"),
                         c("Not Aligned to Pixel Grid", "select.object.notAlignedToPixelGrid"),
                         Sep,

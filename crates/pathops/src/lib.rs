@@ -15,6 +15,7 @@ mod offset;
 mod pathfinder;
 mod planar;
 mod sweep_axis;
+mod thickness;
 mod trap;
 
 pub use boolean::{
@@ -35,6 +36,7 @@ pub use planar::{
     Adjacency, BuilderArrangement, MapEdge, MapFace, MapOutline, SHAPE_BUILDER_MAX_GAP, SHAPE_BUILDER_MAX_SEGMENTS, adjacency, cut_out,
     encloses_area, find_gaps, has_open_path, interior_point, live_paint, live_paint_with_gaps, run_around, shape_builder, shape_builder_with_gap,
 };
+pub use thickness::{MAX_DOCUMENT_THICKNESS_WORK, MAX_THICKNESS_PIECES, ThicknessBudget, thinner_than, thinner_than_within};
 pub use trap::{TRAP_HEIGHT_WIDTH_RANGE, TRAP_MAX_WIDTH, TRAP_MIN_WIDTH, trap_band};
 
 /// Errors from fallible operations.
