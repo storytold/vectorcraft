@@ -670,6 +670,10 @@ const REFITS: usize = 3;
 /// length lies in.
 const END_SOLVE_STEPS: usize = 48;
 
+/// How many evenly spaced lengths a pattern brush whose scale varies tries for a start or end
+/// tile before it halves the range the tile's length lies in.
+const END_SCAN_STEPS: usize = 64;
+
 /// The side tiles of a pattern brush on a run `avail` long from `a` when the scale varies along
 /// it: each tile's length and the gap after it, as `natural` gives them at the tile's start, and
 /// how many tiles fit whole and what fraction of the next one fits after them. The tiles include
@@ -713,19 +717,25 @@ fn pattern_scale(pb: &PatternBrush, weight: f64, stroke: &StrokeLayer) -> (f64, 
 }
 
 /// The length of a start or end tile `width` wide at its art's size, at the scale `k_mid(w)` at
-/// the middle of the tile when it is `w` long: the length that is as long as the scale at its own
-/// middle, found by halving the range from 0 to `room`. A tile that needs more than `room` gets
-/// the length it needs at `room`, longer than `room`.
-fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64) -> f64 {
+/// the middle of the tile when it is `w` long: the shortest length that is as long as the scale at
+/// its own middle. The scale can rise and fall along the stroke, so the lengths up to `room` are
+/// tried in order (evenly spaced ones, and `breaks`, the lengths whose middle falls on a recorded
+/// pen sample), and the range between the last one the tile is too long for and the first one it
+/// fits is halved. A tile that fits at no length up to `room` gets the length it needs at `room`,
+/// longer than `room`.
+fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64, breaks: &[f64]) -> f64 {
     let length = |w: f64| width * k_mid(w);
     let first = length(0.0);
     if length(first) == first || room.is_nan() || room <= 0.0 {
         return first;
     }
-    if length(room) > room {
+    let mut tries: Vec<f64> = (1..=END_SCAN_STEPS).map(|i| room * i as f64 / END_SCAN_STEPS as f64).collect();
+    tries.extend(breaks.iter().copied().filter(|&w| w > 0.0 && w < room));
+    tries.sort_by(f64::total_cmp);
+    let Some(i) = tries.iter().position(|&w| length(w) <= w) else {
         return length(room);
-    }
-    let (mut short, mut long) = (0.0, room);
+    };
+    let (mut short, mut long) = (if i == 0 { 0.0 } else { tries[i - 1] }, tries[i]);
     for _ in 0..END_SOLVE_STEPS {
         let mid = (short + long) / 2.0;
         if length(mid) > mid {
@@ -738,7 +748,8 @@ fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64) -> f64 {
 }
 
 /// Where along a track `l` long `stroke` recorded the pen input `mode` follows: each sample at its
-/// arc length, and again a track's length on, for runs of a closed track that wrap round.
+/// arc length, and again a track's length before and after it, for tiles of a closed track that
+/// wrap round.
 fn pen_marks(stroke: &StrokeLayer, mode: Variation, l: f64) -> Vec<f64> {
     let points = match mode {
         Variation::Fixed | Variation::Random => None,
@@ -748,7 +759,7 @@ fn pen_marks(stroke: &StrokeLayer, mode: Variation, l: f64) -> Vec<f64> {
         Variation::Rotation => stroke.rotation.as_ref().map(|p| &p.points),
         Variation::StylusWheel => stroke.wheel.as_ref().map(|p| &p.points),
     };
-    points.into_iter().flatten().flat_map(|&(f, _)| [f * l, f * l + l]).collect()
+    points.into_iter().flatten().flat_map(|&(f, _)| [f * l - l, f * l, f * l + l]).collect()
 }
 
 /// Whether `stroke` recorded the pen input `mode` follows.
@@ -1048,13 +1059,14 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &Str
         if l <= 1e-9 {
             continue;
         }
-        // The scale at arc length `s` of the track; a run past the start of a closed track wraps
-        // round to it, and on an open track a point past either end takes the scale at that end.
+        // The scale at arc length `s` of the track; on a closed track a point before its start or
+        // past its end wraps round as `Track::frame` places it (its end itself keeps the scale at
+        // the end), and on an open track a point past either end takes the scale at that end.
         let ks = |s: f64| {
             if !varies {
                 return k;
             }
-            let at = (if t.closed && s > l { s - l } else { s }).clamp(0.0, l);
+            let at = if t.closed && !(0.0..=l).contains(&s) { s.rem_euclid(l) } else { s.clamp(0.0, l) };
             scale_at(pb.scale_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5))
         };
         let marks = pb.scale_mode.filter(|_| varies).map(|m| pen_marks(stroke, m, l));
@@ -1151,7 +1163,8 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &Str
                 && let Some(st) = &start
             {
                 // As long as the scale at its middle.
-                let w = end_tile_length(st.1.width(), b - a, &|w| ks(a + w / 2.0));
+                let breaks: Vec<f64> = marks.iter().flatten().map(|&m| 2.0 * (m - a)).collect();
+                let w = end_tile_length(st.1.width(), b - a, &|w| ks(a + w / 2.0), &breaks);
                 if b - a > w {
                     out.take(tile_scaled(&t, st, a, a + w, &ks, marks.as_deref()));
                     a += w;
@@ -1161,7 +1174,8 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &Str
                 && ri + 1 == nruns
                 && let Some(en) = &end
             {
-                let w = end_tile_length(en.1.width(), b - a, &|w| ks(b - w / 2.0));
+                let breaks: Vec<f64> = marks.iter().flatten().map(|&m| 2.0 * (b - m)).collect();
+                let w = end_tile_length(en.1.width(), b - a, &|w| ks(b - w / 2.0), &breaks);
                 if b - a > w {
                     out.take(tile_scaled(&t, en, b - w, b, &ks, marks.as_deref()));
                     b -= w;

@@ -2195,6 +2195,60 @@ fn pattern_brush_scale_from_the_pen_places_start_end_and_corner_tiles() {
     assert!(first_side.is_some_and(|r| near(r.x0, 1.5, 1e-3)), "{first_side:?}");
 }
 
+/// A start or end tile whose scale follows the pen is placed where it is as long as the scale at
+/// its middle, even when the scale rises again further along and the tile would not fit at the
+/// whole run's length.
+#[test]
+fn pattern_brush_scale_from_the_pen_fits_start_and_end_tiles_where_the_scale_falls_back() {
+    let doc = Document::new(1.0, 1.0);
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    // From 100 % to 10000 %: 300 % from 5 to 20 pt, 10000 % from 50 pt on; mirrored for the end.
+    let q = 2.0 / 99.0;
+    for (start, points, span) in [
+        (true, vec![(0.0, 0.0), (0.05, q), (0.2, q), (0.5, 1.0), (1.0, 1.0)], (0.0, 18.0)),
+        (false, vec![(0.0, 1.0), (0.5, 1.0), (0.8, q), (0.95, q), (1.0, 0.0)], (82.0, 100.0)),
+    ] {
+        let mut b = scaled_pattern(PatternFit::Stretch, false, 100.0, Some(Variation::Pressure), Some(10000.0));
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            let tile = Some(rect_art(6.0, 4.0));
+            (p.start, p.end) = if start { (tile, None) } else { (None, tile) };
+        }
+        // The 6 pt tile at 300 %: 18 pt long, its middle where the scale is 300 %.
+        let out = stroke_pieces(&doc, &b, &bp, &pressed(points));
+        let r = out.first().and_then(Node::geometric_bounds);
+        assert!(r.is_some_and(|r| near(r.x0, span.0, 1e-6) && near(r.x1, span.1, 1e-6)), "start {start}: {r:?}");
+    }
+}
+
+/// On a closed path, a tile that Approximate Path starts before the path's start takes the scale
+/// recorded at the end of the stroke there, where the tile is drawn.
+#[test]
+fn pattern_brush_scale_from_the_pen_wraps_before_a_closed_paths_start() {
+    let doc = Document::new(1.0, 1.0);
+    let b = scaled_pattern(PatternFit::Approximate, false, 50.0, Some(Variation::Pressure), Some(300.0));
+    // Light over the first 90 % of the stroke, heavy at its end.
+    let st = pressed(vec![(0.0, 0.0), (0.9, 0.0), (1.0, 1.0)]);
+    let mut before = 0;
+    for r in (100..=120).map(f64::from) {
+        // A circle of radius `r` as 720 sides, from (r, 0) on towards +y.
+        let mut bp = BezPath::new();
+        bp.move_to((r, 0.0));
+        for i in 1..720 {
+            let a = std::f64::consts::TAU * f64::from(i) / 720.0;
+            bp.line_to((r * a.cos(), r * a.sin()));
+        }
+        bp.close_path();
+        let out = stroke_pieces(&doc, &b, &bp, &st);
+        let Some(first) = out.first().and_then(Node::geometric_bounds) else { panic!("{r}: no tiles") };
+        if first.y0 < -0.5 {
+            // The 4 pt tall tile is 2 pt tall at the light 50 % and nearly 12 pt at the heavy end.
+            before += 1;
+            assert!(first.x1 > r + 3.0, "{r}: {first:?}");
+        }
+    }
+    assert!(before > 0, "no first tile starts before the path's start");
+}
+
 /// Definitions from files and commands are kept within their ranges.
 #[test]
 fn sanitize_keeps_values_within_their_ranges() {
