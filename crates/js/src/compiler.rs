@@ -97,8 +97,8 @@ struct FnCompiler<'a> {
     top_funcs: HashSet<StmtId>,
     /// The function declarations a block scope instantiates.
     block_funcs: HashSet<StmtId>,
-    /// The names of functions declared in blocks that are also var-scoped (Annex B.3.3).
-    annex: HashSet<Key>,
+    /// The function declarations in blocks whose names are also var-scoped (Annex B.3.3).
+    annex: HashSet<StmtId>,
 }
 
 /// The `var` names and function declarations a body hoists.
@@ -256,7 +256,7 @@ impl<'a> FnCompiler<'a> {
                 out.vars.push(k);
             }
         };
-        let mut annex: Vec<(Key, usize)> = Vec::new();
+        let mut annex: Vec<(Key, usize, StmtId)> = Vec::new();
         while let Some((id, nested, scope)) = work.pop() {
             let Some(stmt) = self.ast.stmt(id) else { return internal("statement out of range") };
             let inner = self.es2015;
@@ -274,7 +274,7 @@ impl<'a> FnCompiler<'a> {
                     let k = key_of(&name.name);
                     if self.es2015 && nested {
                         if !self.strict {
-                            annex.push((k, scope));
+                            annex.push((k, scope, id));
                         }
                     } else {
                         let i = self.function(*fid)?;
@@ -343,7 +343,7 @@ impl<'a> FnCompiler<'a> {
                 | Stmt::DefaultXmlNamespace(_) => {}
             }
         }
-        for (k, scope) in annex {
+        for (k, scope, id) in annex {
             let mut cur = Some(scope);
             let mut clash = params.contains(&k) || *k == *key_of("arguments");
             while let Some((outer, names)) = cur.and_then(|i| scopes.get(i)).filter(|_| !clash) {
@@ -351,7 +351,7 @@ impl<'a> FnCompiler<'a> {
                 cur = *outer;
             }
             if !clash {
-                self.annex.insert(k.clone());
+                self.annex.insert(id);
                 add_var(&mut out, k);
             }
         }
@@ -518,11 +518,10 @@ impl<'a> FnCompiler<'a> {
             return Ok(());
         }
         let Some(name) = self.ast.function(fid).and_then(|f| f.name.as_ref()) else { return internal("function declaration without a name") };
-        let k = key_of(&name.name);
-        if !self.annex.contains(&k) {
+        if !self.annex.contains(&id) {
             return Ok(());
         }
-        let n = self.name_key(k);
+        let n = self.name_key(key_of(&name.name));
         if self.block_funcs.contains(&id) {
             self.emit(Op::GetVar(n));
         } else {

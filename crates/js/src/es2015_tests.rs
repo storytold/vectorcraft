@@ -127,6 +127,9 @@ fn functions_declared_in_blocks_are_scoped_to_the_block() {
     truth("function f() { { let g = 1; { function g() {} } } return typeof g; } f() === 'undefined'");
     truth("function f() { for (let g = 0; g < 1; g++) { function g() {} } return typeof g; } f() === 'undefined'");
     truth("function f(g) { { function g() {} } return g; } f(5) === 5");
+    // Each declaration is judged on its own: one inside a `let` of the same name leaves the variable alone.
+    truth("function f() { { function g() { return 1; } } { let g; { function g() { return 2; } } } return g(); } f() === 1");
+    truth("{ function t() { return 1; } } { let t; { function t() { return 2; } } } t() === 1");
 }
 
 #[test]
