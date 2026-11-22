@@ -96,6 +96,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         home(app, ui, full);
         return;
     }
+    // A document opened straight through the session has no view yet.
+    app.sync_views();
     let Some(win) = doc_windows::current(app).filter(|_| app.session.active().is_some()) else {
         // No document and Show The Home Screen When No Documents Are Open off: an empty window.
         let env = Env::of(ui);
