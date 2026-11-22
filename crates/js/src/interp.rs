@@ -2404,8 +2404,9 @@ impl Interp {
     /// index (holes read as `undefined`), with its length read again before each one as its
     /// iterator reads it, a string's or a `String` object's characters by code point, and an
     /// object with a `length` by index. Any other value is a `TypeError`. Each element takes a
-    /// unit of fuel, and a concatenated string's flattened copy is counted against the heap before
-    /// it is made.
+    /// unit of fuel, a concatenated string's flattened copy is counted against the heap before
+    /// it is made, and so is each string a string's spread makes for its characters, while the
+    /// spread runs and after the array holds it.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
@@ -2417,6 +2418,8 @@ impl Interp {
             },
             _ => None,
         };
+        // The bytes of the strings a string's spread makes, which the array keeps once it holds them.
+        let mut made = 0usize;
         let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
@@ -2425,9 +2428,11 @@ impl Interp {
                 let mut i = 0;
                 while let Some(&u) = units.get(i) {
                     self.use_fuel()?;
-                    held.add(self, PROP_BYTES)?;
                     let pair = (0xD800..0xDC00).contains(&u) && units.get(i + 1).is_some_and(|n| (0xDC00..0xE000).contains(n));
                     let len = if pair { 2 } else { 1 };
+                    // Each element is a new string of its own as well as a property.
+                    held.add(self, PROP_BYTES + string_bytes(len))?;
+                    made = made.saturating_add(string_bytes(len));
                     out.push(Value::String(Str::from_units(units.get(i..i + len).unwrap_or_default().to_vec())));
                     i += len;
                 }
@@ -2490,6 +2495,7 @@ impl Interp {
         for (i, item) in (start..end).zip(items) {
             self.define(a, index_key(i), Prop::Data { value: item, flags: OPEN })?;
         }
+        self.heap.bytes = self.heap.bytes.saturating_add(made);
         self.pop().map(drop)
     }
 

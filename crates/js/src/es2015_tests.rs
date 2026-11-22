@@ -514,6 +514,46 @@ fn spreading_a_rope_counts_its_flattened_length_first() {
 }
 
 #[test]
+fn spreading_a_string_counts_the_string_it_makes_for_each_character() {
+    // Each of the 16,384 elements is a property and a one-character string of its own. The
+    // smaller heap has room for the properties alone but not for the strings as well, so the
+    // spread stops with the heap limit after about 83% of the characters, before the fuel for
+    // 90% of them runs out. The larger heap holds the array, its keys and the strings.
+    const N: usize = 16_384;
+    let property = crate::heap::PROP_BYTES;
+    let string = crate::heap::string_bytes(1);
+    let setup = "var s = 'x'; for (var i = 0; i < 14; i++) s = s + s; s[0]; 0";
+    let cases = [(property + string / 2, N * 9 / 10, Err(LimitKind::Heap)), (2 * (property + string) + 8, N * 2, Ok(N as f64))];
+    for (per_element, fuel, expected) in cases {
+        let mut r = es();
+        assert_eq!(r.run(setup), Ok(JsValue::Number(0.0)));
+        r.interp().collect_garbage();
+        let heap_bytes = r.interp().heap.bytes + N * per_element;
+        r.set_limits(Limits { heap_bytes, fuel: fuel as u64, ..Limits::default() });
+        match (r.run("var a = [...s]; a.length"), expected) {
+            (Ok(JsValue::Number(n)), Ok(m)) if n == m => {}
+            (Err(e), Err(kind)) if e.kind == RunErrorKind::Limit(kind) => {}
+            (result, expected) => panic!("{per_element} bytes for each element: {result:?}, expected {expected:?}"),
+        }
+    }
+}
+
+#[test]
+fn the_strings_a_string_spread_makes_stay_counted_while_the_array_holds_them() {
+    const N: u32 = 4096;
+    let mut r = es();
+    assert_eq!(r.run("var s = 'x'; for (var i = 0; i < 12; i++) s = s + s; s[0]; 0"), Ok(JsValue::Number(0.0)));
+    r.interp().collect_garbage();
+    let before = r.interp().heap.bytes;
+    assert_eq!(r.run("var a = [...s]; a.length"), Ok(JsValue::Number(f64::from(N))));
+    // Takes the bytes the spread held while it ran off the estimate.
+    r.interp().reserve_heap(0).unwrap();
+    let element = |i: u32| crate::heap::PROP_BYTES + crate::heap::string_bytes(i.to_string().len()) + crate::heap::string_bytes(1);
+    let least = before + (0..N).map(element).sum::<usize>();
+    assert!(r.interp().heap.bytes >= least, "{} < {least}", r.interp().heap.bytes);
+}
+
+#[test]
 fn a_rest_parameter_checks_the_heap_before_its_array_is_made() {
     // The 20,000 arguments fit in the room left over, and the rest array of them does not, so
     // the call ends with the heap limit before the heap estimate passes it.
