@@ -353,6 +353,28 @@ fn white_overprint_is_discarded_as_the_document_setup_says() {
 }
 
 #[test]
+fn a_white_spot_ink_keeps_overprinting_under_discard_white_overprint() {
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let mut d = overprinting(white);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+    let paint = |d: &mut Document, p: &Paint| {
+        for n in std::sync::Arc::make_mut(&mut d.layers[0]).children_mut().into_iter().flatten() {
+            let n = std::sync::Arc::make_mut(n);
+            if let Some(f) = n.appearance.fill_mut().filter(|f| f.overprint) {
+                f.paint = p.clone();
+            }
+            if let NodeKind::Text(t) = &mut n.kind {
+                t.runs.iter_mut().for_each(|r| r.style.fill = p.clone());
+            }
+        }
+    };
+    paint(&mut d, &Paint::solid(white));
+    assert_eq!(overprints(&d, json!({})).1, 1, "paper white fills and characters knock out");
+    paint(&mut d, &Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+    assert_eq!(overprints(&d, json!({})).1, 3, "a white spot ink overprints, characters too");
+}
+
+#[test]
 fn pdf_a_overprint_mode_is_0() {
     let r = export(&overprinting(RED), json!({"standard": "pdfA2b", "compression": {"compressText": false}}));
     let text = String::from_utf8_lossy(&r.bytes);

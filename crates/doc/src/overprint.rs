@@ -2,6 +2,7 @@
 //! over the inks below instead of knocking them out ([`crate::FillLayer::overprint`]).
 //! Edit → Edit Colors → Overprint Black sets it on black fills and strokes ([`OverprintBlack`]).
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
@@ -151,14 +152,14 @@ impl Node {
 /// mode of their own keep it), copying only the nodes on the way to them: on screen and on a
 /// printed plate this approximates their inks printing over the inks below. Darken keeps the
 /// stronger ink of each plate (and each additive channel), so a colour overprinting itself stays
-/// that colour, where Multiply would darken it. With `discard_white`
-/// (Document Setup → Discard White Overprint) white fills and strokes knock out instead.
-pub fn darken_overprints(a: &mut Arc<Node>, discard_white: bool) {
+/// that colour, where Multiply would darken it. Fills and strokes that `discard_white` knocks out
+/// (Document Setup → Discard White Overprint) are left as they are.
+pub fn darken_overprints(a: &mut Arc<Node>, discard_white: &DiscardWhite) {
     if !a.has_overprint() {
         return;
     }
     let n = Arc::make_mut(a);
-    let darkens = |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint));
+    let darkens = |overprint: bool, blend: BlendMode, paint: &Paint| overprint && blend == BlendMode::Normal && !discard_white.knocks_out(paint);
     for it in &mut n.appearance.items {
         match it {
             crate::AppearanceItem::Fill(l) if darkens(l.overprint, l.blend, &l.paint) => l.blend = BlendMode::Darken,
@@ -182,7 +183,45 @@ pub fn is_white(p: &Paint) -> bool {
     }
 }
 
+/// Whether `p` is paper white: white ([`is_white`]) and not a tint above 0% of one of the spot
+/// swatches `spots` ([`Document::spot_ink_names`]). The white of a spot swatch (an opaque white
+/// ink, for example) is an ink of its own; a 0% tint puts no ink down.
+pub fn is_paper_white(p: &Paint, spots: &HashSet<String>) -> bool {
+    is_white(p) && !matches!(p, Paint::Solid { swatch: Some(name), tint, .. } if *tint > 0.0 && spots.contains(name))
+}
+
+/// Document Setup → Discard White Overprint as it applies to paints: off, or on with the names of
+/// the document's spot swatches. Paper white ([`is_paper_white`]) knocks out where it overprints;
+/// a white spot ink keeps overprinting. Clones share the names.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DiscardWhite(Option<Arc<HashSet<String>>>);
+
+impl DiscardWhite {
+    /// The setting of document `doc`.
+    pub fn of(doc: &Document) -> Self {
+        Self::printing(doc, |_| true)
+    }
+
+    /// The setting of document `doc` when only the spot inks for which `spot` is true print as
+    /// spot inks: a white of another one (converted to process inks) is paper white.
+    pub fn printing(doc: &Document, spot: impl Fn(&str) -> bool) -> Self {
+        Self(doc.setup.discard_white_overprint.then(|| Arc::new(doc.spot_ink_names().into_iter().filter(|n| spot(n)).collect())))
+    }
+
+    /// Whether `p` knocks out instead of overprinting.
+    pub fn knocks_out(&self, p: &Paint) -> bool {
+        self.0.as_ref().is_some_and(|spots| is_paper_white(p, spots))
+    }
+}
+
 impl Document {
+    /// The names of the spot swatches that a color linked by name prints as: a name whose first
+    /// swatch ([`Document::swatch`]) is not a solid spot color is left out.
+    pub fn spot_ink_names(&self) -> HashSet<String> {
+        let mut seen = HashSet::new();
+        self.swatches_iter().filter(|s| seen.insert(s.name.as_str()) && s.spot && s.paint.color().is_some()).map(|s| s.name.clone()).collect()
+    }
+
     /// The names of the spot swatches.
     pub fn spot_names(&self) -> Vec<String> {
         self.swatches_iter().filter(|s| s.spot).map(|s| s.name.clone()).collect()
@@ -329,6 +368,56 @@ mod tests {
         let spots = ["Ink".to_string()];
         assert!(!OverprintBlack::default().apply(&mut n, &spots), "a stop linked to a spot swatch is not process black");
         assert!(OverprintBlack { spot: true, ..Default::default() }.apply(&mut n, &spots), "Include Spot Blacks takes it");
+    }
+
+    #[test]
+    fn a_white_spot_ink_overprints_under_discard_white() {
+        let mut d = Document::new(100.0, 100.0);
+        let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+        d.swatches.push(vectorcraft_color::Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+        d.swatches.push(vectorcraft_color::Swatch { name: "Process White".into(), paint: Paint::solid(white), global: true, spot: false });
+        let spot = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 };
+        let process = Paint::Solid { color: white, swatch: Some("Process White".into()), tint: 1.0 };
+        let paper = Paint::solid(white);
+        assert!(d.setup.discard_white_overprint, "on by default");
+        d.swatches.push(vectorcraft_color::Swatch {
+            name: "Red Ink".into(),
+            paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)),
+            global: true,
+            spot: true,
+        });
+        // A 0% tint of a spot ink resolves to white and puts no ink down.
+        let no_red = Paint::Solid { color: white, swatch: Some("Red Ink".into()), tint: 0.0 };
+        let no_white = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 0.0 };
+        let half_white = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 0.5 };
+        let discard = DiscardWhite::of(&d);
+        assert!(discard.knocks_out(&paper), "paper white knocks out");
+        assert!(discard.knocks_out(&process), "so does a global process white");
+        assert!(!discard.knocks_out(&spot) && !discard.knocks_out(&half_white), "a white spot ink is an ink");
+        assert!(discard.knocks_out(&no_red) && discard.knocks_out(&no_white), "a 0% tint of a spot ink is paper white");
+        assert!(!is_paper_white(&spot, &d.spot_ink_names()) && is_paper_white(&paper, &d.spot_ink_names()));
+        // A spot swatch after a process one of the same name: a link finds the process one.
+        d.swatches.push(vectorcraft_color::Swatch { name: "Process White".into(), paint: Paint::solid(white), global: true, spot: true });
+        assert!(DiscardWhite::of(&d).knocks_out(&process), "the first swatch of the name decides");
+        // A spot swatch without a solid color prints a linked solid as its own process color.
+        d.swatches.push(vectorcraft_color::Swatch { name: "Empty".into(), paint: Paint::None, global: true, spot: true });
+        let empty = Paint::Solid { color: white, swatch: Some("Empty".into()), tint: 1.0 };
+        assert!(DiscardWhite::of(&d).knocks_out(&empty), "so it is paper white");
+        d.setup.discard_white_overprint = false;
+        assert!(!DiscardWhite::of(&d).knocks_out(&paper), "off: white overprints too");
+
+        // The previews and plates darken the spot ink and leave paper white knocking out.
+        let blend = |fill: Paint| {
+            let mut n = Node::path(NodeId(1), Default::default(), Appearance::basic(fill, Paint::None, 0.0));
+            if let Some(f) = n.appearance.fill_mut() {
+                f.overprint = true;
+            }
+            let mut a = Arc::new(n);
+            darken_overprints(&mut a, &discard);
+            a.appearance.fill().map(|f| f.blend)
+        };
+        assert_eq!(blend(spot), Some(BlendMode::Darken));
+        assert_eq!(blend(paper), Some(BlendMode::Normal));
     }
 
     #[test]

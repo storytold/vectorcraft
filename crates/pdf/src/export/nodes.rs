@@ -620,11 +620,10 @@ impl Exporter<'_> {
     }
 
     /// Draw a fill or stroke of `paint` with `draw`: as a form marked to overprint when it
-    /// `overprints`, paints and overprints are kept (but not a white one with Discard White
-    /// Overprint).
+    /// `overprints`, paints and overprints are kept (but not a paper white one with Discard White
+    /// Overprint, [`Self::discards_white`]).
     pub(super) fn overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = || self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint);
-        if overprints && self.overprint && !paint.is_none() && !white() {
+        if overprints && self.overprint && !paint.is_none() && !self.discards_white(paint) {
             self.overprinted = true;
             crate::forms::form(s, Mark::Overprint, |s| draw(self, s));
         } else {
@@ -633,17 +632,30 @@ impl Exporter<'_> {
     }
 
     /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
-    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a white one
-    /// with Discard White Overprint).
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a paper
+    /// white one with Discard White Overprint).
     pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
-        let white = vectorcraft_doc::overprint::is_white(paint) && self.doc.setup.discard_white_overprint;
-        if overprints && self.darken_overprints && !paint.is_none() && !white {
+        if overprints && self.darken_overprints && !paint.is_none() && !self.discards_white(paint) {
             s.push_blend_mode(krilla::blend::BlendMode::Darken);
             self.overprinting(s, overprints, paint, draw);
             s.pop();
         } else {
             self.overprinting(s, overprints, paint, draw);
         }
+    }
+
+    /// Whether paint `p` knocks out where it overprints under Document Setup → Discard White
+    /// Overprint ([`vectorcraft_doc::overprint::DiscardWhite::knocks_out`]). The document's spot
+    /// ink names are read only for a white linked to a swatch.
+    fn discards_white(&mut self, p: &Paint) -> bool {
+        let doc = self.doc;
+        if !doc.setup.discard_white_overprint || !vectorcraft_doc::overprint::is_white(p) {
+            return false;
+        }
+        if !matches!(p, Paint::Solid { swatch: Some(_), .. }) {
+            return true;
+        }
+        self.discard_white.get_or_insert_with(|| vectorcraft_doc::overprint::DiscardWhite::of(doc)).knocks_out(p)
     }
 
     /// Is `p` a paint PDF has no paint for when it paints a fill (`fill`) or a stroke, which
