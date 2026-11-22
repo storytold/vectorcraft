@@ -814,7 +814,9 @@ mod portable {
     #[derive(Clone)]
     enum Ours {
         Text(String),
-        Image(usize, usize),
+        /// Width, height, and an [`image_fingerprint`] of the pixels: dimensions alone would
+        /// mistake another app's same-size image for ours.
+        Image(usize, usize, u64),
         /// A Copy through the Wayland core protocol, whose data source tells whether the
         /// clipboard still holds it.
         #[cfg(target_os = "linux")]
@@ -1027,7 +1029,9 @@ mod portable {
             let answer = fresh(self.request);
             let held = match (&answer, ours) {
                 (Answer::Text(Ok(now)), Some(Ours::Text(t))) => now == t,
-                (Answer::Image(Ok(now)), Some(Ours::Image(w, h))) => (now.width, now.height) == (*w, *h),
+                (Answer::Image(Ok(now)), Some(Ours::Image(w, h, fp))) => {
+                    (now.width, now.height) == (*w, *h) && image_fingerprint(&now.bytes) == *fp
+                }
                 _ => false,
             };
             if held {
@@ -1479,6 +1483,17 @@ mod portable {
     /// The third element is the SVG-as-text markup to fall back to if writing the chosen image
     /// fails: only set alongside an image, and only when that image was preferred over matching
     /// text (never alongside a genuine text copy, which is the primary choice already).
+    /// A cheap, order-sensitive fingerprint of pixel bytes for [`Ours::Image`]: two images of the
+    /// same dimensions but different content almost never collide, so `holds_ours` and
+    /// [`Unanswered::paste`] don't mistake one for the other.
+    fn image_fingerprint(bytes: &[u8]) -> u64 {
+        let mut fp: u64 = 0;
+        for b in bytes.iter().step_by(997) {
+            fp = fp.rotate_left(5) ^ u64::from(*b);
+        }
+        fp
+    }
+
     fn pick_one(flavours: &[Flavour]) -> (Option<String>, Option<image::RgbaImage>, Option<String>) {
         let text = text_of(flavours);
         let svg_as_text = text.as_deref().is_some_and(|t| flavours.iter().any(|f| f.mime == SVG && f.data == t.as_bytes()));
@@ -1518,8 +1533,9 @@ mod portable {
                 }
                 (None, Some(img)) => {
                     let (width, height) = (img.width() as usize, img.height() as usize);
+                    let fingerprint = image_fingerprint(img.as_raw());
                     match cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) }) {
-                        Ok(()) => Some(Ours::Image(width, height)),
+                        Ok(()) => Some(Ours::Image(width, height, fingerprint)),
                         // The clipboard may still hold its previous content: fall back to the
                         // matching SVG markup rather than returning an error with nothing written.
                         Err(e) => match fallback_text {
@@ -1551,7 +1567,9 @@ mod portable {
             let Some(cb) = self.cb.opened() else { return false };
             match &self.ours {
                 Some(Ours::Text(t)) => cb.get_text().is_ok_and(|now| now == *t),
-                Some(Ours::Image(w, h)) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
+                Some(Ours::Image(w, h, fp)) => {
+                    cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h) && image_fingerprint(&now.bytes) == *fp)
+                }
                 #[cfg(target_os = "linux")]
                 Some(Ours::Source) => cb.holds_source(),
                 #[cfg(target_os = "macos")]
@@ -1882,7 +1900,8 @@ mod portable {
                 assert!(cb.image_later().is_err());
                 // The paste waits for the check's answer off the UI thread instead.
                 let unanswered = cb.unanswered(&vectorcraft_engine::cmd::clipboard::PASTE_ORDER).expect("the check's read is kept for the paste");
-                let paste = std::thread::spawn(move || unanswered.paste(Some(&Ours::Image(2, 1)), &[BITMAP]));
+                let ours = Ours::Image(2, 1, image_fingerprint(&vec![0u8; 2 * 4]));
+                let paste = std::thread::spawn(move || unanswered.paste(Some(&ours), &[BITMAP]));
                 drop(release);
                 paste.join().ok().flatten()
             };
@@ -2104,6 +2123,16 @@ mod portable {
             assert!(text.is_none());
             assert!(image.is_some());
             assert!(fallback.is_none(), "no SVG-as-text match to fall back to");
+        }
+
+        #[test]
+        fn same_size_images_with_different_pixels_fingerprint_differently() {
+            // Width/height alone would mistake another app's same-size image for ours (#6455
+            // follow-up): the fingerprint must tell a red 1×1 pixel apart from a blue one.
+            let red = image_fingerprint(&[0xff, 0, 0, 0xff]);
+            let blue = image_fingerprint(&[0, 0, 0xff, 0xff]);
+            assert_ne!(red, blue);
+            assert_eq!(red, image_fingerprint(&[0xff, 0, 0, 0xff]));
         }
     }
 }
