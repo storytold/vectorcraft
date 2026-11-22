@@ -295,7 +295,12 @@ mod tests {
         assert!(panel.shows(&outside), "the person's list");
         assert_eq!(json_selected(&panel), json!(outside), "the person's");
         let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
-        vectorcraft_engine::file_access::confine(roots.as_ref(), || panel.frame());
+        // The pump pushes the list after the shell pass (wg.A18): the second frame under the roots draws what the first
+        // one pushed.
+        vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+            panel.frame();
+            panel.frame();
+        });
         assert!(panel.shows("menu.js") && !panel.shows(&outside), "the list names the file alone");
         assert_eq!(json_selected(&panel), json!("menu.js"), "`selected` as the request may name it");
         // A row keeps the file as linked, so a click selects it by its whole path, which stays

@@ -303,6 +303,8 @@ fn command(open: &Open, fields: &DialogFields) -> (&'static str, Value) {
     let style = (fields.bool("styleChosen") == Some(true)).then(|| fields.text("warpStyle").map(str::to_string)).flatten();
     params.remove("warpStyle");
     params.remove("styleChosen");
+    // Load Texture's path is the dialog's: the image it loaded is in `textureImage`.
+    params.remove("texturePath");
     command_for(&open.cx.id, open.item.as_ref(), open.index, &open.edit_target, open.aligned, params, style)
 }
 
@@ -691,6 +693,8 @@ mod tests {
             fx.params["centerY"] = json!(-0.25);
         }
         app.run("effect.dialog", json!({"effect": RADIAL_BLUR, "index": 0})).unwrap();
+        // The frames after the open start the preview, which OK keeps.
+        crate::dialogs::tests::settle(&mut app);
         assert_eq!((number(&mut app, "centerX"), number(&mut app, "centerY")), (Some(1.0), Some(0.0)), "the rows hold the center the box shows");
         let before = steps(&app);
         ok(&mut app);

@@ -383,10 +383,16 @@ mod tests {
     }
 
     /// Whether the selected object is a clip group holding a gradient mesh (Expand Gradient To ›
-    /// Gradient Mesh) rather than solid objects.
+    /// Gradient Mesh) rather than solid objects; a stroke left as it was is grouped beside that clip group.
     fn expanded_to_a_mesh(app: &VectorcraftApp) -> bool {
         let st = app.session.doc().unwrap();
-        let g = st.doc.node(st.selection.objects[0]).unwrap();
+        let mut g = st.doc.node(st.selection.objects[0]).unwrap();
+        if let NodeKind::Group { children, clip: false } = &g.kind
+            && let [fill, stroke] = children.as_slice()
+            && matches!(stroke.kind, NodeKind::Path { .. })
+        {
+            g = fill;
+        }
         let NodeKind::Group { children, clip: true } = &g.kind else { panic!("a clip group: {:?}", g.kind) };
         children.iter().any(|c| matches!(c.kind, NodeKind::Mesh(_)))
     }
@@ -395,9 +401,11 @@ mod tests {
     fn the_dialog_opens_on_the_choices_ok_last_expanded_with() {
         let mut app = app();
         gradient_rectangle(&mut app);
+        // A stroke enables Stroke, and Objects takes a count while Expand Gradient To is Specify.
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
         choose_expand(&mut app, false);
-        set(&app, "gradient", json!("mesh")).unwrap();
         set(&app, "steps", json!(12)).unwrap();
+        set(&app, "gradient", json!("mesh")).unwrap();
         set(&app, "stroke", json!(false)).unwrap();
         ok_and_close(&mut app);
         assert!(expanded_to_a_mesh(&app));
@@ -462,7 +470,8 @@ mod tests {
     fn alt_opens_the_dialog_when_the_kept_choices_expand_nothing_in_the_selection() {
         let mut app = app();
         gradient_rectangle(&mut app);
-        // Fill alone is kept by a real OK.
+        // Fill alone is kept by a real OK; a stroke enables Stroke, to be turned off.
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
         choose_expand(&mut app, false);
         set(&app, "object", json!(false)).unwrap();
         set(&app, "stroke", json!(false)).unwrap();
@@ -470,6 +479,8 @@ mod tests {
         // A plain rectangle has no gradient or pattern fill.
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60})).unwrap();
+        // A new object takes the gradient fill set last; this one gets a plain colour.
+        app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
         let before = app.session.doc().unwrap().doc.clone();
         let undo = app.session.doc().unwrap().history.undo.len();
         choose_expand(&mut app, true);

@@ -916,6 +916,8 @@ mod tests {
             Ok(f.get(path).ok_or("no such file")?.iter().copied().take(max).collect())
         }));
         let scripted = Arc::new(ScriptedFiles::new());
+        // The window's host asks for the file, as the hosts install the app's on its context.
+        app.host.with_files(scripted.clone()).install(app.ui_ctx.as_ref().expect("a window"));
         app.host = Arc::new(app.host.with_files(scripted.clone()));
         let mut h = harness(app);
         h.run_steps(4);

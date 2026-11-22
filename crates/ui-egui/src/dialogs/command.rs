@@ -532,13 +532,20 @@ mod tests {
 
     /// The top-left pixel of the selected raster.
     fn corner(app: &VectorcraftApp) -> [u8; 4] {
+        pixel(app, false)
+    }
+
+    /// The top-left or the middle pixel of the selected raster.
+    fn pixel(app: &VectorcraftApp, middle: bool) -> [u8; 4] {
         let st = app.session.active().unwrap();
         let key = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
             Some(NodeKind::Image(i)) => Some(i.key.clone()),
             _ => None,
         });
         let decoded = craft_image_codecs::decode(&st.doc.images[&key.expect("the object became an image")].bytes).unwrap();
-        image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap().get_pixel(0, 0).0
+        let img = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
+        let (x, y) = if middle { (img.width() / 2, img.height() / 2) } else { (0, 0) };
+        img.get_pixel(x, y).0
     }
 
     fn cols(app: &VectorcraftApp) -> u64 {
@@ -652,8 +659,9 @@ mod tests {
         crate::menus::invoke(&mut app, "object.rasterize", json!({}));
         set(&mut app, "colorModel", json!("grayscale"));
         answer_ok(&mut app);
-        let p = corner(&app);
-        assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 255, "red in grayscale: {p:?}");
+        // The ellipse's middle: its corner is the transparent background.
+        let p = pixel(&app, true);
+        assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }
 
     /// #2651: with Preview on, the repeat on the canvas follows the fields while the dialog is open; Cancel puts it
