@@ -1257,14 +1257,18 @@ fn headless_file_tools_send_paths_as_given() {
 
 #[test]
 fn remote_rejects_uncorrelated_replies_without_replaying() {
-    for reply in [
-        json!({"ok": true, "result": {}}).to_string(),
-        json!({"id": null, "ok": true, "result": {}}).to_string(),
-        json!({"id": "1", "ok": true, "result": {}}).to_string(),
-        json!({"id": 2, "ok": true, "result": {}}).to_string(),
-        json!({"id": 2, "ok": false, "error": "unrelated error"}).to_string(),
-        "not json".into(),
-    ] {
+    // The line the app sends instead of the edit's answer, made from the edit's request, and
+    // whether it answers the edit: a reply with no id or a null one answers the call in flight,
+    // one with another id (or the id as a string) is skipped while the call waits for its own.
+    let replies: [(fn(&Value) -> String, bool); 6] = [
+        (|_| json!({"ok": true, "result": {}}).to_string(), true),
+        (|_| json!({"id": null, "ok": true, "result": {}}).to_string(), true),
+        (|msg| json!({"id": msg["id"].to_string(), "ok": true, "result": {}}).to_string(), false),
+        (|msg| json!({"id": msg["id"].as_u64().unwrap() + 1, "ok": true, "result": {}}).to_string(), false),
+        (|msg| json!({"id": msg["id"].as_u64().unwrap() + 1, "ok": false, "error": "unrelated error"}).to_string(), false),
+        (|_| "not json".into(), false),
+    ];
+    for (reply, answers) in replies {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let addr = listener.local_addr().unwrap().to_string();
@@ -1291,9 +1295,11 @@ fn remote_rejects_uncorrelated_replies_without_replaying() {
                 let msg: Value = serde_json::from_str(&line).unwrap();
                 seen.push(msg.clone());
                 if connection == 0 {
-                    writeln!(out, "{reply}").unwrap();
+                    // The app then closes the connection without the edit's own answer.
+                    writeln!(out, "{}", reply(&msg)).unwrap();
+                    out.shutdown(std::net::Shutdown::Write).unwrap();
                     line.clear();
-                    assert_eq!(reader.read_line(&mut line).unwrap(), 0, "invalid reply must close the connection without another request");
+                    assert_eq!(reader.read_line(&mut line).unwrap(), 0, "the connection must end without another request");
                 } else {
                     writeln!(out, "{}", json!({"id": msg["id"], "ok": true, "result": {"objects": 1}})).unwrap();
                 }
@@ -1302,24 +1308,29 @@ fn remote_rejects_uncorrelated_replies_without_replaying() {
         });
         let mut remote = Remote::connect(&addr, TOKEN).unwrap();
         let first = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {"width": 20, "height": 20}}));
+        wait_until_unusable(&remote);
         let next = remote.call("document.inspect", json!({}));
         drop(remote);
         let seen = h.join().unwrap();
-        let error = first.expect_err("an uncorrelated reply cannot confirm the edit");
-        assert!(error.contains("operation may have completed"), "{error}");
+        if answers {
+            assert_eq!(first, Ok(json!({})));
+        } else {
+            let error = first.expect_err("an uncorrelated reply cannot confirm the edit");
+            assert!(error.contains("operation may have completed"), "{error}");
+        }
         assert_eq!(next.unwrap(), json!({"objects": 1}));
         assert_eq!(seen.len(), 2);
         assert_eq!(seen[0]["method"], "engine.execute");
         assert_eq!(seen[1]["method"], "document.inspect", "the edit must not be replayed");
-        assert_eq!(seen[0]["id"], 1);
-        assert_eq!(seen[1]["id"], 2);
+        assert!(seen.iter().all(|msg| msg["id"].is_u64()), "each request carries the id its reply must echo: {seen:?}");
     }
 }
 
 #[test]
 fn remote_rejects_a_reply_with_a_mismatched_id_and_reconnects() {
-    // A fake control server that answers the first request with another call's id, then serves
-    // correctly: the client must reject the stray reply, drop the connection, and reconnect.
+    // A fake control server that answers the first request with another call's id and closes the
+    // connection, then serves correctly: the stray reply must not answer the call, which reports
+    // that the edit may have completed, and the next call reconnects and gets its own answer.
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let h = std::thread::spawn(move || {
@@ -1344,17 +1355,19 @@ fn remote_rejects_a_reply_with_a_mismatched_id_and_reconnects() {
     });
     let mut remote = Remote::connect(&addr, TOKEN).unwrap();
     let err = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {}})).expect_err("a stray reply must not be trusted");
-    assert!(err.contains("mismatch"), "{err}");
-    let good = remote.call("engine.execute", json!({"command": "shape.rectangle", "params": {}}));
-    assert!(good.is_ok(), "the next call reconnects: {good:?}");
+    assert!(err.contains("operation may have completed"), "{err}");
+    let params = json!({"command": "shape.rectangle", "params": {"width": 2}});
+    let good = remote.call("engine.execute", params.clone());
+    assert_eq!(good, Ok(json!({"echo": params})), "the next call reconnects and gets its own answer");
     drop(remote);
     let seen = h.join().unwrap();
     assert_eq!(seen.len(), 2, "one request per connection: {seen:?}");
-    assert_ne!(seen[0]["id"], seen[1]["id"]);
 }
 
-/// The app's refusals carry no id (a 17th connection gets one and is closed). The call reports the
-/// app's reason, not a mismatch, says nothing ran, and the next call starts a fresh connection.
+/// The app's refusals carry a null id: of a request it can't take (then it closes the connection),
+/// and of a connection over its limit (before reading anything, then it closes it). The call reports
+/// the app's reason, not a mismatch or a possibly completed edit; a refused connection says nothing
+/// was sent; and the next call starts a fresh connection.
 #[test]
 fn remote_reports_the_reason_of_a_refusal_without_an_id() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1366,8 +1379,14 @@ fn remote_reports_the_reason_of_a_refusal_without_an_id() {
         let mut reader = BufReader::new(refused.try_clone().unwrap());
         accept_sign_in(&mut reader, &refused);
         let _ = reader.read_line(&mut String::new());
-        writeln!(refused, "{}", json!({"ok": false, "error": "too many control connections"})).unwrap();
-        drop(refused);
+        writeln!(refused, "{}", json!({"id": null, "ok": false, "error": "request exceeds 16 bytes"})).unwrap();
+        drop((reader, refused));
+        let (mut over, _) = listener.accept().unwrap();
+        over.set_read_timeout(Some(WAIT)).unwrap();
+        writeln!(over, "{}", json!({"id": null, "ok": false, "error": "connection limit reached"})).unwrap();
+        // The sign-in is read before the close, so the refusal is not lost to a reset.
+        let _ = BufReader::new(&over).read_line(&mut String::new());
+        drop(over);
         let (stream, _) = listener.accept().unwrap();
         stream.set_read_timeout(Some(WAIT)).unwrap();
         let mut out = stream.try_clone().unwrap();
@@ -1380,7 +1399,11 @@ fn remote_reports_the_reason_of_a_refusal_without_an_id() {
     });
     let mut remote = Remote::connect(&addr, TOKEN).unwrap();
     let err = remote.call("document.inspect", json!({})).expect_err("a refusal is an error");
-    assert!(err.contains("too many control connections") && err.contains("nothing was run"), "{err}");
+    assert!(err.contains("request exceeds 16 bytes"), "{err}");
+    assert!(!err.contains("mismatch") && !err.contains("may have completed"), "{err}");
+    wait_until_unusable(&remote);
+    let err = remote.call("document.inspect", json!({})).expect_err("a refused connection is an error");
+    assert!(err.contains("connection limit reached") && err.contains("nothing was sent"), "{err}");
     assert!(!err.contains("mismatch") && !err.contains("may have completed"), "{err}");
     assert_eq!(remote.call("document.inspect", json!({})), Ok(json!(7)), "the next call reconnects");
     h.join().unwrap();
