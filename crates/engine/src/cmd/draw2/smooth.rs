@@ -755,8 +755,10 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
         // How much of the segments leading out of the run is in reach. A segment that is in reach
         // only at the run's anchor stays out of the piece, so the piece ends at that anchor rather
         // than in a sliver of a segment, which would leave the refit no direction to end along.
-        let after = if hi > b { split_at_reach(CubicBez::new(out[hi].p, out[hi].h_in, out[b].h_out, out[b].p), near, radius) } else { Reach::Whole };
-        let before = if lo < a { split_at_reach(CubicBez::new(out[lo].p, out[lo].h_out, out[a].h_in, out[a].p), near, radius) } else { Reach::Whole };
+        let Some(span) = out.get(lo, hi) else { continue };
+        let (first, start, end, last) = (span[0], span[a - lo], span[b - lo], span[hi - lo]);
+        let after = if hi > b { split_at_reach(CubicBez::new(last.p, last.h_in, end.h_out, end.p), near, radius) } else { Reach::Whole };
+        let before = if lo < a { split_at_reach(CubicBez::new(first.p, first.h_out, start.h_in, start.p), near, radius) } else { Reach::Whole };
         if matches!(after, Reach::End) {
             hi = b;
         }
