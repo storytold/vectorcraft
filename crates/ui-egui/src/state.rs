@@ -1335,7 +1335,7 @@ impl Default for UiState {
         Self {
             legacy_language: None,
             brightness: Brightness::MediumDark,
-            dock_workspace: Default::default(),
+            dock_workspace: std::sync::Arc::new(crate::panel_docking::default_workspace(&[])),
             tools_last_used: Default::default(),
             workspaces: Default::default(),
             legacy: LegacyDock::default(),
