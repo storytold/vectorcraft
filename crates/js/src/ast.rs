@@ -93,18 +93,42 @@ impl PropertyKey {
     }
 }
 
+/// An object literal property's name: written out, or computed (`[expression]`, ECMA-262 2015
+/// section 12.2.6).
+#[derive(Clone, Debug, PartialEq)]
+pub enum PropertyName {
+    Fixed(PropertyKey),
+    Computed(ExprId),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PropertyValue {
     Init(ExprId),
     Get(FunctionId),
     Set(FunctionId),
+    /// A method (`m() {…}`, ECMA-262 2015 section 14.3).
+    Method(FunctionId),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Property {
-    pub key: PropertyKey,
+    pub key: PropertyName,
     pub value: PropertyValue,
+    /// The property is an identifier written alone (`{a}`), its value the binding of that name.
+    pub shorthand: bool,
     pub span: Span,
+}
+
+impl Property {
+    /// The property is `__proto__: value`, which sets the new object's prototype (ECMA-262 2015
+    /// section B.3.1): a data property with a name written out, not computed or shorthand.
+    pub fn is_proto_setter(&self) -> bool {
+        let PropertyName::Fixed(key) = &self.key else { return false };
+        !self.shorthand
+            && matches!(self.value, PropertyValue::Init(_))
+            && matches!(key, PropertyKey::Ident(_) | PropertyKey::String(_))
+            && key.to_utf16().into_iter().eq("__proto__".encode_utf16())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -377,6 +401,8 @@ pub enum FunctionKind {
     Setter,
     /// An arrow function; one with an expression body has a body of one `return` statement.
     Arrow,
+    /// A method in an object literal.
+    Method,
 }
 
 #[derive(Clone, Debug, PartialEq)]

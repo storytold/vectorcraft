@@ -85,6 +85,16 @@ impl<T> PropMap<T> {
         }
     }
 
+    /// Sets the value under `k` like [`Self::insert`], but puts a new `k` right after `after`
+    /// when that is there.
+    pub(crate) fn insert_after(&mut self, after: &[u16], k: Key, v: T) {
+        let Some(at) = self.position(after).filter(|_| !self.contains(&k)) else { return self.insert(k, v) };
+        self.entries.insert(at + 1, Some((k, v)));
+        self.live += 1;
+        self.index = None;
+        self.rebuild_index();
+    }
+
     pub(crate) fn remove(&mut self, k: &[u16]) -> Option<T> {
         let i = self.position(k)?;
         let (_, v) = self.entries.get_mut(i)?.take()?;
@@ -178,11 +188,12 @@ pub(crate) enum NativeKind {
 /// `Data` is a host function given [`crate::Data`], its arguments read as `read` says. `Eval` is a
 /// host function that gives source to run as global code ([`crate::HostItem::Evaluator`]); `end`
 /// is called when that code ends. `Pausable` is a built-in that may ask the host for a value the
-/// run to wait for ([`crate::interp::Pause`]).
+/// run to wait for ([`crate::interp::Pause`]). A `Native`'s `prefix` is `get ` or `set ` for a
+/// built-in accessor's function and empty otherwise; its ECMAScript 2015 `name` starts with it.
 #[derive(Clone)]
 pub(crate) enum Func {
     Closure { code: Rc<Code>, env: EnvId },
-    Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str },
+    Native { f: NativeFn, kind: NativeKind, constructor: bool, name: &'static str, prefix: &'static str },
     Pausable { f: crate::interp::PausableFn, name: &'static str },
     Host { f: Rc<HostFn>, name: Rc<str> },
     Data { f: DataFn, name: Rc<str>, read: crate::host::ArgRead },
@@ -486,6 +497,12 @@ impl Heap {
             Some(Cell::Env(e)) => Some(e),
             _ => None,
         }
+    }
+
+    /// The objects in the heap, in the order of their cells.
+    pub(crate) fn object_ids(&self) -> Vec<ObjId> {
+        let ids = self.cells.iter().enumerate().filter(|(_, c)| matches!(c, Cell::Object(_)));
+        ids.filter_map(|(i, _)| u32::try_from(i).ok().map(ObjId)).collect()
     }
 
     /// Live cells, for tests.

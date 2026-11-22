@@ -2623,7 +2623,14 @@ declarations scoped to their block, arrow functions, template literals and tagge
 parameters, and spread in array literals, calls and `new`. Spread reads arrays by index, reading the length again
 before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
 throws a `TypeError` for any other value; that rule is VectorCraft's own
-until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+until iterators are added. Object literals there also take computed names (`{[key]: value}`, with `get` and `set`
+too), shorthand properties (`{a}`) and methods (`{m() {}}`), and `__proto__: value` sets the new object's prototype.
+Functions get a `name` property (section 9.2.11): a declaration's or expression's own name, or else the name of the
+binding, parameter, assignment target or property they are first given to, with `get ` or `set ` before an
+accessor's; `bound ` before the target's name for `bind`; `anonymous` for `Function`; and an own empty `name`
+otherwise, as the 11th edition gives it (https://262.ecma-international.org/11.0/). A function's `length` can be
+redefined. The built-in functions get their names the first time a run reads ECMAScript 2015, and keep them in later
+`.jsx` runs of an engine that `#targetengine` keeps. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:

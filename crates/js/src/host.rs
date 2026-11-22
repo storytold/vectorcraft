@@ -595,7 +595,7 @@ impl Interp {
             HostItem::Script(item) => match crate::builtins::extensions::getter(item) {
                 None => Prop::Data { value: Value::Object(self.global), flags: ENUMERABLE },
                 Some((name, f)) => {
-                    let get = crate::builtins::native(self, name, f, 0, crate::heap::NativeKind::Plain, false)?;
+                    let get = crate::builtins::accessor_native(self, "get ", name, f, 0)?;
                     Prop::Accessor { get: Some(get), set: None, flags: ENUMERABLE }
                 }
             },

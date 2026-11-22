@@ -17,10 +17,10 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::{
-    AssignOp, Ast, BinaryOp, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, PropertyValue, Stmt, StmtId,
-    TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, Expr, ExprId, ForInTarget, ForInit, FunctionId, FunctionKind, LexKind, LogicalOp, Property, PropertyName, PropertyValue,
+    Stmt, StmtId, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
-use crate::bytecode::{BlockScope, Code, CodeKind, Handler, Op, Source, Template, fallthrough_effect, verify};
+use crate::bytecode::{BlockScope, Code, CodeKind, Handler, NamePrefix, Op, Source, Template, fallthrough_effect, verify};
 use crate::error::{SyntaxError, TOO_DEEP};
 use crate::heap::Key;
 use crate::value::Str;
@@ -451,7 +451,7 @@ impl<'a> FnCompiler<'a> {
     fn lexical_decls(&mut self, decls: &[VarDecl]) -> CResult<()> {
         for d in decls {
             match d.init {
-                Some(init) => self.expr(init)?,
+                Some(init) => self.named_expr(init, &d.name.name)?,
                 None => self.emit(Op::Undefined),
             }
             self.at(d.name.span.start);
@@ -568,7 +568,7 @@ impl<'a> FnCompiler<'a> {
     fn var_decls(&mut self, decls: &[VarDecl]) -> CResult<()> {
         for d in decls {
             if let Some(init) = d.init {
-                self.expr(init)?;
+                self.named_expr(init, &d.name.name)?;
                 self.at(d.name.span.start);
                 let n = self.var_name(&d.name.name);
                 self.emit(Op::SetVar(n));
@@ -1378,26 +1378,117 @@ impl<'a> FnCompiler<'a> {
         len_u32(self.templates.len() - 1)
     }
 
-    fn object_literal(&mut self, props: &[crate::ast::Property]) -> CResult<()> {
+    fn object_literal(&mut self, props: &[Property]) -> CResult<()> {
         self.emit(Op::NewObject);
         for p in props {
-            let n = self.name_key(p.key.to_utf16().into());
+            let key = match &p.key {
+                PropertyName::Fixed(key) => key,
+                PropertyName::Computed(e) => {
+                    self.computed_property(p, *e)?;
+                    continue;
+                }
+            };
+            if self.es2015 && p.is_proto_setter() {
+                if let PropertyValue::Init(e) = &p.value {
+                    self.expr(*e)?;
+                    self.emit(Op::InitProto);
+                }
+                continue;
+            }
+            let units = key.to_utf16();
+            let n = self.name_key(units.clone().into());
             match &p.value {
                 PropertyValue::Init(e) => {
                     self.expr(*e)?;
+                    if self.es2015 && self.is_anonymous_function(*e) {
+                        self.emit(Op::SetFunctionName(n));
+                    }
                     self.emit(Op::InitProp(n));
                 }
                 PropertyValue::Get(f) => {
                     let i = self.function(*f)?;
                     self.emit(Op::Closure(i));
+                    if self.es2015 {
+                        let named = self.name_key([NamePrefix::Get.units(), &units].concat().into());
+                        self.emit(Op::SetFunctionName(named));
+                    }
                     self.emit(Op::InitGetter(n));
                 }
                 PropertyValue::Set(f) => {
                     let i = self.function(*f)?;
                     self.emit(Op::Closure(i));
+                    if self.es2015 {
+                        let named = self.name_key([NamePrefix::Set.units(), &units].concat().into());
+                        self.emit(Op::SetFunctionName(named));
+                    }
                     self.emit(Op::InitSetter(n));
                 }
+                PropertyValue::Method(f) => {
+                    let i = self.function(*f)?;
+                    self.emit(Op::Closure(i));
+                    self.emit(Op::SetFunctionName(n));
+                    self.emit(Op::InitProp(n));
+                }
             }
+        }
+        Ok(())
+    }
+
+    /// A property with a computed name (ECMA-262 2015 section 12.2.6.8): the name is evaluated
+    /// and converted to a property name before the value is evaluated, and a function defined
+    /// there is named after it.
+    fn computed_property(&mut self, p: &Property, key: ExprId) -> CResult<()> {
+        self.at(p.span.start);
+        self.expr(key)?;
+        self.emit(Op::ToPropertyKey);
+        match &p.value {
+            PropertyValue::Init(e) => {
+                self.expr(*e)?;
+                if self.is_anonymous_function(*e) {
+                    self.emit(Op::SetFunctionNameKey(NamePrefix::None));
+                }
+                self.emit(Op::InitPropKey);
+            }
+            PropertyValue::Get(f) => {
+                let i = self.function(*f)?;
+                self.emit(Op::Closure(i));
+                self.emit(Op::SetFunctionNameKey(NamePrefix::Get));
+                self.emit(Op::InitGetterKey);
+            }
+            PropertyValue::Set(f) => {
+                let i = self.function(*f)?;
+                self.emit(Op::Closure(i));
+                self.emit(Op::SetFunctionNameKey(NamePrefix::Set));
+                self.emit(Op::InitSetterKey);
+            }
+            PropertyValue::Method(f) => {
+                let i = self.function(*f)?;
+                self.emit(Op::Closure(i));
+                self.emit(Op::SetFunctionNameKey(NamePrefix::None));
+                self.emit(Op::InitPropKey);
+            }
+        }
+        Ok(())
+    }
+
+    /// The expression is an anonymous function definition (ECMA-262 2015 section 14.1.9): a
+    /// function expression without a name or an arrow function, parenthesized or not.
+    fn is_anonymous_function(&self, e: ExprId) -> bool {
+        match self.ast.expr(self.ast.unparenthesized(e)) {
+            Some(Expr::Arrow(_)) => true,
+            Some(Expr::Function(fid)) => self.ast.function(*fid).is_some_and(|f| f.name.is_none()),
+            _ => false,
+        }
+    }
+
+    /// Compiles `e`; with [`crate::Options::es2015`], an anonymous function definition gets the
+    /// `name` `name`, as a binding, parameter or assignment gives it (ECMA-262 2015 sections
+    /// 12.14.4, 13.3.1.4, 13.3.2.4 and 14.1.18).
+    fn named_expr(&mut self, e: ExprId, name: &str) -> CResult<()> {
+        self.expr(e)?;
+        if self.es2015 && self.is_anonymous_function(e) {
+            let n = self.name_key(key_of(name));
+            self.emit(Op::SetFunctionName(n));
         }
         Ok(())
     }
@@ -1640,7 +1731,19 @@ impl<'a> FnCompiler<'a> {
             self.at(self.ast.expr_span(node).start);
             self.assign_target(op, target)?;
         }
-        self.expr(cur)?;
+        // `name = function () {}` names the function after an identifier written without
+        // parentheses (ECMA-262 2015 section 12.14.4).
+        let named = chain.last().and_then(|&(op, _, node)| match self.ast.expr(node) {
+            Some(Expr::Assign { target, .. }) if op.is_none() => match self.ast.expr(*target) {
+                Some(Expr::Ident(name)) => Some(name.clone()),
+                _ => None,
+            },
+            _ => None,
+        });
+        match named {
+            Some(name) => self.named_expr(cur, &name)?,
+            None => self.expr(cur)?,
+        }
         for &(op, target, node) in chain.iter().rev() {
             self.at(self.ast.expr_span(node).start);
             if let Some(b) = op {
@@ -1804,6 +1907,9 @@ impl<'a> FnCompiler<'a> {
             arrow: meta.arrow,
             uses_this: self.uses_this,
             param_init: meta.param_init,
+            es2015: self.es2015,
+            own_name: meta.own_name,
+            method: meta.method,
         };
         code.max_stack = verify(&code).map_err(CompileFail::Internal)?;
         Ok(Rc::new(code))
@@ -1822,6 +1928,8 @@ struct Meta {
     length: u32,
     arrow: bool,
     param_init: bool,
+    own_name: Option<Key>,
+    method: bool,
 }
 
 fn len_u32(n: usize) -> u32 {
@@ -1856,7 +1964,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
                 c.emit(Op::Binary(BinaryOp::StrictEq));
                 c.jump(Op::JumpIfFalse, skip);
                 c.emit(Op::Pop);
-                c.expr(*default)?;
+                c.named_expr(*default, &p.name)?;
                 c.bind(skip);
             }
             c.at(p.span.start);
@@ -1886,6 +1994,8 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         length: len_u32(length),
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
+        own_name: es2015.then(|| key_of(f.name.as_ref().map_or("", |n| n.name.as_str()))),
+        method: es2015 && matches!(f.kind, FunctionKind::Method | FunctionKind::Getter | FunctionKind::Setter),
     };
     c.finish(hoisted, meta)
 }

@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::ast::BinaryOp;
-use crate::bytecode::{Code, CodeKind, Op, Source};
+use crate::bytecode::{Code, CodeKind, NamePrefix, Op, Source};
 use crate::compiler::{CompileFail, compile_program};
 use crate::heap::{
     ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
@@ -239,6 +239,10 @@ pub(crate) struct Interp {
     global_vars: std::collections::HashSet<Key>,
     /// The [`Options::es2015`] a host set while a run was going, for the runs after it.
     pub(crate) next_es2015: Option<bool>,
+    /// The built-in functions have the `name` and the `length` that can be redefined that
+    /// ECMAScript 2015 gives them ([`crate::builtins::es2015_names`]): set once the realm first
+    /// reads code with [`Options::es2015`], and kept after that.
+    pub(crate) builtin_names: bool,
     /// The template objects tagged templates have made, by code and template index, each with
     /// its code (ECMA-262 2015 section 12.2.9.3 keeps one object for each site).
     pub(crate) template_objects: std::collections::HashMap<(usize, u32), (Rc<Code>, ObjId)>,
@@ -440,7 +444,7 @@ fn binding_bytes(len: usize) -> usize {
 /// its prototype object, their properties and the environment holding a function expression's
 /// own name.
 fn closure_bytes(code: &Code) -> usize {
-    let props = if code.strict { 5 } else { 3 };
+    let props = (if code.strict { 5 } else { 3 }) + usize::from(code.own_name.is_some());
     let named = code.self_name.as_ref().map_or(0, |n| ENV_BYTES + binding_bytes(n.len()));
     2 * OBJECT_BYTES + props * binding_bytes("constructor".len()) + named
 }
@@ -527,6 +531,7 @@ impl Interp {
             global_lex,
             global_vars: std::collections::HashSet::new(),
             next_es2015: None,
+            builtin_names: false,
             template_objects: std::collections::HashMap::new(),
             intrinsics: Intrinsics::placeholder(),
             fuel: u64::MAX,
@@ -572,6 +577,17 @@ impl Interp {
             strict_writes: false,
         };
         crate::builtins::install(&mut interp);
+        if interp.options.es2015
+            && interp.install_error.is_none()
+            && let Err(e) = crate::builtins::es2015_names(&mut interp)
+        {
+            let reason = match e {
+                Abrupt::Throw(v) => interp.describe(&v),
+                Abrupt::Limit(kind) => format!("limit reached: {kind:?}"),
+                Abrupt::Internal(message) => message,
+            };
+            interp.install_error = Some(format!("the built-in function names could not be set: {reason}"));
+        }
         interp.fuel = limits.fuel;
         interp.limits = limits;
         interp.gc_threshold = interp.next_threshold();
@@ -1043,6 +1059,7 @@ impl Interp {
             Op::DeleteMember(n) => self.op_delete_member(n),
             Op::IncMember { name, prefix, dec } => self.op_inc_member(name, prefix, dec),
             Op::ToKey => self.op_to_key(),
+            Op::ToPropertyKey => self.op_to_property_key(),
             Op::CheckObject => self.op_check_object(),
             Op::GetIndex => self.op_get_index(false),
             Op::GetIndexThis => self.op_get_index(true),
@@ -1074,6 +1091,12 @@ impl Interp {
             Op::InitProp(n) => self.op_init_prop(n),
             Op::InitGetter(n) => self.op_init_accessor(n, true),
             Op::InitSetter(n) => self.op_init_accessor(n, false),
+            Op::InitPropKey => self.op_init_prop_key(),
+            Op::InitGetterKey => self.op_init_accessor_key(true),
+            Op::InitSetterKey => self.op_init_accessor_key(false),
+            Op::InitProto => self.op_init_proto(),
+            Op::SetFunctionName(n) => self.op_set_function_name(n),
+            Op::SetFunctionNameKey(prefix) => self.op_set_function_name_key(prefix),
             Op::Closure(i) => self.op_closure(i),
             Op::RegExp(i) => self.op_regexp(i),
             Op::PushWith => self.op_push_with(),
@@ -1946,6 +1969,12 @@ impl Interp {
         self.replace(1, Value::String(Str::from_rc(name)))
     }
 
+    fn op_to_property_key(&mut self) -> JsResult<()> {
+        let k = self.peek(0)?;
+        let name = self.to_key(&k)?;
+        self.replace(1, Value::String(Str::from_rc(name)))
+    }
+
     fn op_get_index(&mut self, with_this: bool) -> JsResult<()> {
         let k = self.peek(0)?;
         let base = self.peek(1)?;
@@ -2093,6 +2122,92 @@ impl Interp {
         self.define(o, name, Prop::Accessor { get, set, flags: ENUMERABLE | CONFIGURABLE })
     }
 
+    /// The property name a computed name's operation finds on the stack, `depth` values down,
+    /// with the bytes of the property it adds reserved while everything is still on the stack.
+    fn computed_name(&mut self, depth: usize) -> JsResult<Key> {
+        let Value::String(s) = self.peek(depth)? else { return internal("computed property name is not a string") };
+        let name = s.flat();
+        let Value::Object(o) = self.peek(depth + 1)? else { return internal("object literal is not an object") };
+        // A name the literal already has is replaced in place and adds no bytes.
+        if !self.object(o)?.props.contains(&name) {
+            self.reserve_heap(PROP_BYTES + string_bytes(name.len()))?;
+        }
+        Ok(name)
+    }
+
+    fn op_init_prop_key(&mut self) -> JsResult<()> {
+        let name = self.computed_name(1)?;
+        let v = self.pop()?;
+        self.pop()?;
+        let Value::Object(o) = self.peek(0)? else { return internal("object literal is not an object") };
+        self.define(o, name, Prop::Data { value: v, flags: OPEN })
+    }
+
+    fn op_init_accessor_key(&mut self, getter: bool) -> JsResult<()> {
+        let name = self.computed_name(1)?;
+        let Value::Object(f) = self.pop()? else { return internal("accessor is not a function") };
+        self.pop()?;
+        let Value::Object(o) = self.peek(0)? else { return internal("object literal is not an object") };
+        let (mut get, mut set) = match self.object(o)?.props.get(&name) {
+            Some(Prop::Accessor { get, set, .. }) => (*get, *set),
+            _ => (None, None),
+        };
+        if getter {
+            get = Some(f);
+        } else {
+            set = Some(f);
+        }
+        self.define(o, name, Prop::Accessor { get, set, flags: ENUMERABLE | CONFIGURABLE })
+    }
+
+    /// `__proto__: value` in an object literal: an object or `null` becomes the new object's
+    /// prototype, and any other value is ignored (ECMA-262 2015 section B.3.1).
+    fn op_init_proto(&mut self) -> JsResult<()> {
+        let v = self.pop()?;
+        let Value::Object(o) = self.peek(0)? else { return internal("object literal is not an object") };
+        let proto = match v {
+            Value::Object(p) => Some(p),
+            Value::Null => None,
+            _ => return Ok(()),
+        };
+        self.object_mut(o)?.proto = proto;
+        Ok(())
+    }
+
+    fn op_set_function_name(&mut self, n: u32) -> JsResult<()> {
+        let name = self.name(n)?;
+        let Value::Object(f) = self.peek(0)? else { return internal("a function to name is not an object") };
+        self.set_function_name(f, Value::String(Str::from_rc(name)))
+    }
+
+    fn op_set_function_name_key(&mut self, prefix: NamePrefix) -> JsResult<()> {
+        let Value::Object(f) = self.peek(0)? else { return internal("a function to name is not an object") };
+        let Value::String(s) = self.peek(1)? else { return internal("computed property name is not a string") };
+        let units = prefix.units();
+        let name = if units.is_empty() {
+            Value::String(s)
+        } else {
+            let len = units.len().saturating_add(s.len());
+            self.reserve_heap(string_bytes(len))?;
+            let mut all = Vec::with_capacity(len);
+            all.extend_from_slice(units);
+            all.extend_from_slice(&s.flat());
+            self.heap.bytes = self.heap.bytes.saturating_add(string_bytes(len));
+            Value::String(Str::from_units(all))
+        };
+        self.set_function_name(f, name)
+    }
+
+    /// Gives `f` its `name` (ECMA-262 2015 section 9.2.11): not writable, not enumerable,
+    /// configurable.
+    pub(crate) fn set_function_name(&mut self, f: ObjId, name: Value) -> JsResult<()> {
+        // The empty `name` an ECMAScript 2015 function is made with is replaced in place.
+        if !self.object(f)?.props.contains(&key("name")) {
+            self.rooted(&[name.clone(), Value::Object(f)], |i| i.reserve_heap(PROP_BYTES + string_bytes("name".len())))?;
+        }
+        self.define(f, key("name"), Prop::Data { value: name, flags: CONFIGURABLE })
+    }
+
     fn op_closure(&mut self, i: u32) -> JsResult<()> {
         let frame = self.frame()?;
         let (env, this) = (frame.env, frame.this.clone());
@@ -2122,11 +2237,19 @@ impl Interp {
         let length = code.length;
         let strict = code.strict;
         let arrow = code.arrow;
+        let method = code.method;
         let self_name = code.self_name.clone();
+        let own_name = code.own_name.clone();
+        // With ECMAScript 2015, `length` can be redefined (section 19.2.4.1).
+        let length_flags = if code.es2015 { CONFIGURABLE } else { 0 };
         let f = self.heap.alloc_object(Object::new(Class::Function(Func::Closure { code, env }), Some(proto)));
-        self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
-        // An arrow function has no `prototype` and cannot be constructed (section 14.2.16).
-        if arrow {
+        self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: length_flags })?;
+        if let Some(name) = own_name {
+            self.define(f, key("name"), Prop::Data { value: Value::String(Str::from_rc(name)), flags: CONFIGURABLE })?;
+        }
+        // An arrow function, a method and an accessor of ECMAScript 2015 code have no
+        // `prototype` and cannot be constructed (sections 14.2.16 and 14.3.8).
+        if arrow || method {
             return Ok(f);
         }
         let p = self.new_object();
@@ -2745,6 +2868,7 @@ impl Interp {
         }
         match self.func_of(&f) {
             Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
+            Some(Func::Closure { code, .. }) if code.method => Err(self.type_error("a method is not a constructor")),
             Some(Func::Closure { code, env }) => {
                 let Some(callee) = f.as_object() else { return internal("callee is not an object") };
                 let proto = match self.get_from(callee, &key("prototype"), &f)? {
@@ -3184,7 +3308,8 @@ impl Interp {
         self.global_lex
     }
 
-    /// Sets [`Options::es2015`] for the next runs.
+    /// Sets [`Options::es2015`] for the next runs. The first run with it on gives the built-in
+    /// functions their ECMAScript 2015 `name` and `length` ([`crate::builtins::es2015_names`]).
     pub(crate) fn set_es2015(&mut self, es2015: bool) {
         self.options.es2015 = es2015;
     }

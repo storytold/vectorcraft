@@ -331,6 +331,32 @@ fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn a_js_script_reads_object_literal_extensions_and_function_names_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2015-objects");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "var k = 'b';\nvar a = 1;\nvar o = { a, [k + 1]: 2, m() { return 3; }, f: () => 4 };\n\
+                  vc.log(o.a + o.b1 + o.m() + o.f());\nvc.log(o.m.name + ',' + o.f.name + ',' + o.f.bind().name + ',' + Math.max.name);\n";
+    let r = s.execute("script.run", &path(&write("objects.js", modern))).unwrap();
+    assert_eq!(r["log"], json!([10, "m,f,bound f,max"]), "{r}");
+    for (name, text) in [("short.jsx", "var a = 1; var o = { a };"), ("computed.jsx", "var o = { ['b']: 1 };"), ("method.jsx", "var o = { m() {} };")]
+    {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    let legacy = s.execute("script.run", &path(&write("names.jsx", "var f = function () {};\nvc.log(f.hasOwnProperty('name'));"))).unwrap();
+    assert_eq!(legacy["log"], json!([false]), "{legacy}");
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "var a = 1; var o = { a };").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A new empty folder for test `name`.
 fn fresh_folder(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vc-script-run-{name}-{}", std::process::id()));

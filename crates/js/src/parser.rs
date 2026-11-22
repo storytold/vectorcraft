@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use crate::LineTable;
 use crate::ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind, LexKind, LogicalOp, Name, Program, Property,
-    PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl,
+    PropertyKey, PropertyName, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl,
 };
 use crate::error::{SyntaxError, TOO_DEEP};
 use crate::lexer::{Goal, Lexer};
@@ -1120,13 +1120,13 @@ impl<'s> Parser<'s> {
     }
 
     /// The rules for a function's name and parameters. Strict mode code (Annex C): neither `eval`,
-    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function
-    /// or a function with a default or rest parameter has no parameter name twice either (ECMA-262
-    /// 2015 sections 14.1.2 and 14.2.1), and its body cannot start with `"use strict"`
-    /// (`body_strict`; ECMA-262 2016 section 14.1.2).
+    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function,
+    /// a method or a function with a default or rest parameter has no parameter name twice either
+    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and its body cannot start with
+    /// `"use strict"` (`body_strict`; ECMA-262 2016 section 14.1.2).
     fn check_params(&self, function: &Function, body_strict: bool) -> Result<()> {
         let params = || function.params.iter().chain(&function.rest);
-        let simple = function.simple_params() && function.kind != FunctionKind::Arrow;
+        let simple = function.simple_params() && !matches!(function.kind, FunctionKind::Arrow | FunctionKind::Method);
         if body_strict && !function.simple_params() {
             let at = function.body.first().map_or(function.span.start, |&s| self.ast.stmt_span(s).start);
             return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default or rest parameters"));
@@ -1553,16 +1553,22 @@ impl<'s> Parser<'s> {
     }
 
     /// `{a: 1, "b": 2, 3: c, get d() {…}, set d(v) {…}}`. A name may repeat, a later definition
-    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1).
+    /// replacing an earlier one (ECMA-262 2015 section 12.2.6.1). With [`crate::Options::es2015`],
+    /// also computed names, shorthand properties and methods ([`Self::parse_object_es2015`]).
     fn parse_object(&mut self) -> Result<ExprId> {
         let start = self.expect(Punct::LBrace)?.span;
         let mut properties = Vec::new();
         while !self.eat(Punct::RBrace)? {
-            let property = self.parse_property()?;
+            let property = if self.es2015 { self.parse_object_es2015()? } else { self.parse_property()? };
             properties.push(property);
             if !self.at(Punct::RBrace) {
                 self.expect(Punct::Comma)?;
             }
+        }
+        if self.es2015
+            && let Some(second) = properties.iter().filter(|p| p.is_proto_setter()).nth(1)
+        {
+            return Err(self.error_at_offset(second.span.start, "an object literal must not set '__proto__' twice"));
         }
         Ok(self.ast.push_expr(Expr::Object(properties), self.span_from(start)))
     }
@@ -1581,7 +1587,7 @@ impl<'s> Parser<'s> {
                 let (key, _) = self.parse_property_key()?;
                 let function = self.parse_function_rest(kind, None, start)?;
                 let value = if kind == FunctionKind::Getter { PropertyValue::Get(function) } else { PropertyValue::Set(function) };
-                return Ok(Property { key, value, span: self.span_from(start) });
+                return Ok(Property { key: PropertyName::Fixed(key), value, shorthand: false, span: self.span_from(start) });
             }
             let key = PropertyKey::Ident(word.ident().unwrap_or_default().to_string());
             return self.property_value(key, start);
@@ -1594,7 +1600,65 @@ impl<'s> Parser<'s> {
     fn property_value(&mut self, key: PropertyKey, start: Span) -> Result<Property> {
         self.expect(Punct::Colon)?;
         let value = self.parse_assignment(false)?;
-        Ok(Property { key, value: PropertyValue::Init(value), span: self.span_from(start) })
+        Ok(Property { key: PropertyName::Fixed(key), value: PropertyValue::Init(value), shorthand: false, span: self.span_from(start) })
+    }
+
+    /// A property definition of ECMA-262 2015 section 12.2.6: `name: value`, a shorthand `name`,
+    /// a method `name(…) {…}` or an accessor `get name() {…}` / `set name(v) {…}`, where each
+    /// name may also be computed (`[expression]`).
+    fn parse_object_es2015(&mut self) -> Result<Property> {
+        let start = self.tok.span;
+        // `get` and `set` start an accessor only when written without escapes and followed by a
+        // name; otherwise they are a property's own name (`{get: 1}`, `{get() {}}`, `{get}`).
+        let accessor = match self.tok.ident().filter(|_| !self.tok.escaped) {
+            Some("get") => Some(FunctionKind::Getter),
+            Some("set") => Some(FunctionKind::Setter),
+            _ => None,
+        };
+        let (key, token) = match accessor {
+            Some(kind) => {
+                let word = self.bump()?;
+                if property_key(&self.tok).is_some() || self.at(Punct::LBracket) {
+                    let (key, _) = self.parse_property_name()?;
+                    let function = self.parse_function_rest(kind, None, start)?;
+                    let value = if kind == FunctionKind::Getter { PropertyValue::Get(function) } else { PropertyValue::Set(function) };
+                    return Ok(Property { key, value, shorthand: false, span: self.span_from(start) });
+                }
+                (PropertyName::Fixed(PropertyKey::Ident(word.ident().unwrap_or_default().to_string())), Some(word))
+            }
+            None => self.parse_property_name()?,
+        };
+        if self.at(Punct::LParen) {
+            let function = self.parse_function_rest(FunctionKind::Method, None, start)?;
+            return Ok(Property { key, value: PropertyValue::Method(function), shorthand: false, span: self.span_from(start) });
+        }
+        if let Some(token) = token.filter(|_| !self.at(Punct::Colon))
+            && let TokenKind::Ident(name) = &token.kind
+        {
+            if self.at(Punct::Eq) {
+                return Err(self.error_at_token(&self.tok, "'=' may follow a shorthand property only in a destructuring pattern"));
+            }
+            if self.at(Punct::Comma) || self.at(Punct::RBrace) {
+                self.check_identifier(&token, name)?;
+                let value = self.ast.push_expr(Expr::Ident(name.clone()), token.span);
+                return Ok(Property { key, value: PropertyValue::Init(value), shorthand: true, span: self.span_from(start) });
+            }
+        }
+        self.expect(Punct::Colon)?;
+        let value = self.parse_assignment(false)?;
+        Ok(Property { key, value: PropertyValue::Init(value), shorthand: false, span: self.span_from(start) })
+    }
+
+    /// A property's name in an ECMAScript 2015 object literal: written out, with the token it was
+    /// read from, or computed (`[expression]`).
+    fn parse_property_name(&mut self) -> Result<(PropertyName, Option<Token>)> {
+        if self.eat(Punct::LBracket)? {
+            let expr = self.parse_assignment(false)?;
+            self.expect(Punct::RBracket)?;
+            return Ok((PropertyName::Computed(expr), None));
+        }
+        let (key, token) = self.parse_property_key()?;
+        Ok((PropertyName::Fixed(key), Some(token)))
     }
 
     fn parse_property_key(&mut self) -> Result<(PropertyKey, Token)> {

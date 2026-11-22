@@ -87,7 +87,8 @@ mod xpath;
 
 pub use ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LexKind, LogicalOp, Name, Program,
-    Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    Property, PropertyKey, PropertyName, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart,
+    XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
@@ -218,6 +219,8 @@ impl LineTable {
 
 #[cfg(test)]
 mod builtins_tests;
+#[cfg(test)]
+mod es2015_object_tests;
 #[cfg(test)]
 mod es2015_tests;
 #[cfg(test)]

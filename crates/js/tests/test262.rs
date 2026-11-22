@@ -659,10 +659,25 @@ const ES2015_FOLDERS: &[&str] = &[
     "expressions/template-literal",
     "expressions/tagged-template",
     "rest-parameters",
+    "expressions/object",
+    "computed-property-names",
 ];
 
+/// The folders under `test/built-ins/` that [`run_es2015`] also reads: the `Function` tests hold
+/// those of the `name` and `length` properties of functions.
+const ES2015_BUILT_INS: &[&str] = &["Function"];
+
+/// The test files under `test/language/` that [`run_es2015`] also reads wherever they are: those
+/// of the `name` a function gets from its declaration or from the binding or property it is first
+/// assigned to.
+fn es2015_name_test(rel: &str) -> bool {
+    let file = rel.rsplit('/').next().unwrap_or(rel);
+    file.starts_with("fn-name-") || (file == "name.js" && (rel.contains("/function/") || rel.contains("/arrow-function/")))
+}
+
 /// The feature tags of the forms [`Options::es2015`] reads.
-const ES2015_FEATURES: &[&str] = &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters"];
+const ES2015_FEATURES: &[&str] =
+    &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters", "computed-property-names", "__proto__"];
 
 #[test]
 fn es2015_subset_runs() {
@@ -685,7 +700,8 @@ struct Es2015Counts {
     failures: String,
 }
 
-/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
+/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`], under
+/// `test/built-ins/` in [`ES2015_BUILT_INS`] and those [`es2015_name_test`] picks, whose feature
 /// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
 /// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
 /// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
@@ -703,9 +719,15 @@ fn run_es2015(dir: &Path) {
     let editions = [Options::default(), modern.clone()];
     let mut counts = [Es2015Counts::default(), Es2015Counts::default()];
     let (mut selected, mut skipped, mut other_features) = (0usize, 0usize, 0usize);
-    for path in or_fail(test_files(&language)) {
+    let mut paths = or_fail(test_files(&language));
+    for folder in ES2015_BUILT_INS {
+        paths.extend(or_fail(inside(dir, &format!("test/built-ins/{folder}")).and_then(|d| test_files(&d))));
+    }
+    for path in paths {
         let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
-        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")));
+        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")))
+            || ES2015_BUILT_INS.iter().any(|f| rel.starts_with(&format!("test/built-ins/{f}/")))
+            || es2015_name_test(&rel);
         let source = or_fail(read_source(&path));
         let meta = meta(&source);
         let tags_in_set = meta.features.iter().all(|f| ES2015_FEATURES.contains(&f.as_str()));
