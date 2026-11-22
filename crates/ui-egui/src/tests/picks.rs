@@ -260,8 +260,8 @@ fn frame(
         }
     }
     let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(SCREEN.0, SCREEN.1))), events, ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
-    out.textures_delta.clear();
+    // With the app's frame input, as the window's frames have it: its host carries the file service a dialog picks with.
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| draw(app, ui));
     let mut v = vec![];
     out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
     v
@@ -285,7 +285,10 @@ fn click(app: &mut VectorcraftApp, label: &str, draw: impl Fn(&mut VectorcraftAp
     frame(&ctx, app, vec![], &draw);
     let pos = at(&frame(&ctx, app, vec![], &draw), label);
     let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&ctx, app, vec![egui::Event::PointerMoved(pos), button(true), button(false)], &draw);
+    // Hover, press and release in frames of their own, as a person's click comes.
+    for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+        frame(&ctx, app, vec![event], &draw);
+    }
 }
 
 /// The open dialogs, drawn as the shell draws them, then the app's pump over their answers.
@@ -327,7 +330,7 @@ fn a_command_asks_for_a_file_and_goes_on_with_the_answer() {
         ),
         (
             "file.place",
-            PickKind::Open,
+            PickKind::OpenMany,
             |p| p.answer(&["/art/p.svg"]),
             |app, _| {
                 assert!(!open_dialogs(app).is_empty(), "the place dialog opens: {}", app.ui.status);
@@ -715,14 +718,18 @@ fn save_changes_answered_by_a_save_dialog_keeps_the_front_document() {
     assert_eq!(app.session.active().map(|d| d.uid), Some(uids[0]), "A is in front again");
 }
 
-/// One whole frame of the app (its logic and its window); `close` presses the window's close
-/// button.
+/// One whole frame of the app (its logic and its window, then the close path the desktop host runs); `close` presses
+/// the window's close button.
 fn app_frame(ctx: &egui::Context, app: &mut VectorcraftApp, close: bool) -> Vec<egui::ViewportCommand> {
     let mut raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))), ..Default::default() };
     if close {
         raw.viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
     }
-    let out = crate::testing::app_frame(app, &ctx, raw);
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| {
+        app.tick(ui.ctx());
+        app.ui(ui);
+        craft::ui::shell::embed::logic(ui.ctx(), || app.close_decision());
+    });
     out.viewport_output.get(&egui::ViewportId::ROOT).map(|v| v.commands.clone()).unwrap_or_default()
 }
 

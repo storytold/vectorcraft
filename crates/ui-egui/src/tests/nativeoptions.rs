@@ -35,11 +35,16 @@ fn open_dialogs(app: &VectorcraftApp) -> Vec<OpenDialog> {
 pub(super) fn answer(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: bool) {
     pass(app);
     let ctx = app.ui_ctx.clone().unwrap();
+    for (field, value) in fields {
+        app.dialogs().unwrap().with(|host| {
+            let id = host.open_dialogs().last().unwrap().id;
+            host.set_json_field(&ctx, id, field, value.clone()).unwrap_or_else(|e| panic!("{field}: {e}"));
+        });
+        // A row this one enables (All after Save each artboard) takes input once the dialog showed it.
+        pass(app);
+    }
     app.dialogs().unwrap().with(|host| {
         let id = host.open_dialogs().last().unwrap().id;
-        for (field, value) in fields {
-            host.set_json_field(&ctx, id, field, value.clone()).unwrap();
-        }
         if ok {
             host.confirm_by_id(&ctx, id);
         } else {
@@ -78,7 +83,7 @@ fn save_as_native_asks_for_its_options_and_writes_every_artboard() {
         (&json!("vectorcraft"), &json!(false), &json!(true), &json!(true))
     );
     assert!(written.borrow().is_empty(), "nothing is written before OK");
-    answer(&mut app, &[("separateArtboards", json!(true)), ("all", json!(false)), ("range", json!("9"))], true);
+    answer(&mut app, &[("separateArtboards", json!(true)), ("all", json!("false")), ("range", json!("9"))], true);
     assert_eq!(open_dialogs(&app).len(), 1, "a bad range keeps the dialog open");
     assert!(written.borrow().is_empty());
     answer(&mut app, &[("range", json!("2-3"))], true);
@@ -93,7 +98,7 @@ fn save_as_native_asks_for_its_options_and_writes_every_artboard() {
     // All: every artboard.
     app.run("file.saveAs", Value::Null).unwrap();
     assert_eq!(open_dialogs(&app)[0].fields.as_ref().unwrap()["separateArtboards"], json!(true), "the options as last saved");
-    answer(&mut app, &[("all", json!(true))], true);
+    answer(&mut app, &[("all", json!("true"))], true);
     assert_eq!(written.borrow().len(), 10);
 }
 
@@ -114,7 +119,7 @@ fn save_as_asks_before_replacing_an_artboard_file_that_is_there() {
     app.services.exists = Some(std::sync::Arc::new(move |p: &str| there.contains(&p)));
     let pick = |app: &mut VectorcraftApp| {
         app.run("file.saveAs", Value::Null).unwrap();
-        answer(app, &[("separateArtboards", json!(true)), ("all", json!(true))], true);
+        answer(app, &[("separateArtboards", json!(true)), ("all", json!("true"))], true);
     };
     pick(&mut app);
     assert_eq!(replace_files(&app), Some(vec!["/tmp/doc-B.vectorcraft".to_string()]));

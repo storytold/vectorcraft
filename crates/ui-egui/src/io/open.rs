@@ -258,7 +258,7 @@ pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         return install_module(app, p.clone());
     }
     let request = open_request("plugin", None, [("Plug-ins", vectorcraft_engine::cmd::plugin::EXTS)]);
-    ask_open(app, request, Owner::Document, |app, path| install_module(app, json!({ "path": path })))
+    ask_open(app, request, Owner::Free, |app, path| install_module(app, json!({ "path": path })))
 }
 
 /// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
@@ -391,7 +391,7 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 /// File → Open…: `{pending: "fileDialog"}` while its picker is open.
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
     let request = open_request("document", open_dialog_folder(app), fileio::open_filters());
-    ask_open(app, request, Owner::Document, |app, path| open_reporting(app, &path))
+    ask_open(app, request, Owner::Free, |app, path| open_reporting(app, &path))
 }
 
 /// File › Open With: opens the file `p` names (`path`), else one picked among the files with the
@@ -424,7 +424,7 @@ pub(crate) fn open_with_on(app: &mut VectorcraftApp, p: &Value, background: bool
     let format = fileio::format(&vectorcraft_plugins::export::format_id(plugin.id())).filter(|f| f.read);
     let request = open_request("importer", open_dialog_folder(app), format.map(|f| (f.label, f.extensions)));
     let p = p.clone();
-    ask_open(app, request, Owner::Document, move |app, path| import_from(app, &p, &path, background))
+    ask_open(app, request, Owner::Free, move |app, path| import_from(app, &p, &path, background))
 }
 
 /// [`open_with_on`] for the file at `path`.

@@ -39,10 +39,10 @@ pub(super) fn set_field(app: &VectorcraftApp, ctx: &egui::Context, key: &str, va
     app.dialogs().expect("a window").with(|h| h.set_json_field(ctx, id, key, value)).unwrap();
 }
 
-/// OK on the top dialog, then the frame that answers it.
+/// OK on the top dialog, whose held OK the pump answers, then the frame after it.
 pub(super) fn confirm(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let (id, _) = top(app);
-    assert!(app.dialogs().expect("a window").with(|h| h.confirm_by_id(ctx, id)), "OK is refused");
+    super::picks::answer_dialog(app, id, &[], true);
     frame(app, ctx);
 }
 
