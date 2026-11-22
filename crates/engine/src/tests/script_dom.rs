@@ -206,6 +206,42 @@ fn page_item_properties_join_one_undo_step() {
     }
 }
 
+/// An opacity a graph mark already has still replaces the opacity another mark of its series left on
+/// the graph, as `object.setProps` does.
+#[test]
+fn an_opacity_a_graph_mark_already_has_replaces_the_one_its_series_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let r = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let kept =
+        |s: &Session| s.active().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().series_paints.first().and_then(|p| p.opacity);
+    let series = |s: &Session| {
+        let n = s.active().unwrap().doc.node(id).unwrap().clone();
+        let group = n.children().unwrap().iter().find(|c| c.extras().series_index == Some(0)).unwrap().clone();
+        group.children().unwrap().iter().map(|m| m.id).collect::<Vec<_>>()
+    };
+    let marks = series(&s);
+    s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 50})).unwrap();
+    assert_eq!(kept(&s), Some(0.5));
+    s.execute("object.setProps", &json!({"id": series(&s)[1].0, "name": "mark"})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems.getByName('mark').opacity = 100;");
+    assert_eq!(kept(&s), None);
+}
+
+/// Assigning an item the opacity it reports, rounded to four decimals, changes nothing.
+#[test]
+fn assigning_the_reported_opacity_changes_nothing() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 100.0 / 3.0})).unwrap();
+    let (before, steps) = (s.active().unwrap().doc.node(a).unwrap().opacity, undo_steps(&s));
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; vc.log(i.opacity); i.opacity = i.opacity;");
+    assert_eq!(out, vec![json!(33.3333)]);
+    assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
 #[test]
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
@@ -914,6 +950,23 @@ fn add_document_applies_the_profile_file_and_throws_when_it_cannot_be_read() {
 }
 
 #[test]
+fn document_preset_values_count_toward_the_data_a_run_passes() {
+    // A 64 KiB title, set once, then read or handed to addDocument 32 times: 2 MiB, over a 1 MiB limit.
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 20)));
+    let mut s = Session::new();
+    let set = "var p = new DocumentPreset(); p.title = new Array(65537).join('t');";
+    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) p.title;"));
+    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
+    let within = run(&mut s, &format!("{set} for (var i = 0; i < 8; i++) p.title;"));
+    crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
+    for e in [read, added] {
+        assert!(e.contains("passed more data"), "{e}");
+    }
+    within.unwrap();
+    assert!(s.documents().is_empty());
+}
+
+#[test]
 fn wrappers_go_stale_after_delete_and_undo() {
     let (mut s, _, _) = doc();
     let e = failure(&mut s, "var i = app.activeDocument.pageItems[0]; i.remove(); i.name;");
@@ -985,16 +1038,46 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
         .unwrap();
     };
     lock(&mut s, true);
+    // An object on a second, unlocked artboard is not deleted either.
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 300})).unwrap();
+    let c = rect(&mut s, 1100.0, 100.0, 50.0, 50.0);
     let steps = undo_steps(&s);
     let e = failure(&mut s, "app.activeDocument.pageItems[1].remove();");
     assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", b.0)), "{e}");
     let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
     assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&a.0.to_string()), "{e}");
-    assert!(s.active().unwrap().doc.node(a).is_some() && s.active().unwrap().doc.node(b).is_some());
+    let out =
+        log(&mut s, "try { app.activeDocument.pageItems.removeAll(); } catch (e) { vc.log(e.name); } vc.log(app.activeDocument.pageItems.length);");
+    assert_eq!(out, vec![json!("Error"), json!(3)]);
+    let doc = &s.active().unwrap().doc;
+    assert!(doc.node(a).is_some() && doc.node(b).is_some() && doc.node(c).is_some());
     assert_eq!(undo_steps(&s), steps);
+    // `editable` is false for art on the locked artboard and true for art on the unlocked one.
+    let editable = "var p = app.activeDocument.pageItems; vc.log([p[0].editable, p[1].editable, p[2].editable]);";
+    assert_eq!(log(&mut s, editable), vec![json!([false, false, true])]);
     lock(&mut s, false);
+    assert_eq!(log(&mut s, editable), vec![json!([true, true, true])]);
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
     assert_eq!(out, vec![json!(0)]);
+}
+
+/// Reading `editable` on every member of a group on a locked artboard measures the group once.
+#[test]
+fn editable_measures_a_group_on_a_locked_artboard_once() {
+    let (mut s, a, b) = doc();
+    let mut ids = vec![a.0, b.0];
+    ids.extend((0..20).map(|i| rect(&mut s, 10.0 + f64::from(i), 200.0, 5.0, 5.0).0));
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let before = vectorcraft_doc::locked_artboard_measures();
+    let out = log(&mut s, "var p = app.activeDocument.pageItems, n = 0; for (var i = 0; i < p.length; i++) if (!p[i].editable) n++; vc.log(n);");
+    assert_eq!(out, vec![json!(23)], "the group and its 22 members are on the locked artboard");
+    assert_eq!(vectorcraft_doc::locked_artboard_measures() - before, 1);
 }
 
 #[test]
