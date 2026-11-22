@@ -95,9 +95,9 @@ pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
-    /// The last list of art one of [`layers`]' collections gave, kept while its document is
-    /// unchanged.
-    art: RefCell<Option<layers::ArtList>>,
+    /// The last [`layers::ART_LISTS`] lists of art [`layers`]' collections gave, least recently
+    /// used first, each kept while its document is unchanged.
+    art: RefCell<Vec<layers::ArtList>>,
     /// The uids of the documents whose active artboard `setActiveArtboardIndex` changed.
     pub(super) active_artboards: RefCell<Vec<u64>>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,

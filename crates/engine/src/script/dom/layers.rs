@@ -572,17 +572,23 @@ fn art_scope(h: &Host, d: &Data, class: &str) -> Result<(Doc, Option<NodeId>)> {
 /// and the ids it listed then.
 pub(super) type ArtList = (u64, Arc<Document>, u8, Option<NodeId>, Rc<Vec<NodeId>>);
 
+/// How many lists of art [`super::State`] keeps at once.
+pub(super) const ART_LISTS: usize = 4;
+
 /// The objects of `kind` in `container` (directly), or in the whole document at any depth, in
-/// paint order. The last list is kept while the document is unchanged, and each new one is charged
-/// by the objects it looks at.
+/// paint order. The last [`ART_LISTS`] lists are kept while their documents are unchanged, so a
+/// loop over groups that reads each group's `pageItems` builds each list once. Each new list is
+/// charged by the objects it looks at.
 fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
-    if let Some((uid, doc, k, c, ids)) = &*h.dom.art.borrow()
-        && *uid == st.uid
-        && Arc::ptr_eq(doc, &st.doc)
-        && *k == kind as u8
-        && *c == container
     {
-        return Ok(ids.clone());
+        let mut lists = h.dom.art.borrow_mut();
+        let at = lists.iter().position(|(uid, doc, k, c, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc) && *k == kind as u8 && *c == container);
+        if let Some(at) = at {
+            let list = lists.remove(at);
+            let ids = list.4.clone();
+            lists.push(list);
+            return Ok(ids);
+        }
     }
     let ids: Vec<NodeId> = match container {
         None => {
@@ -597,7 +603,12 @@ fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> R
         }
     };
     let ids = Rc::new(ids);
-    *h.dom.art.borrow_mut() = Some((st.uid, st.doc.clone(), kind as u8, container, ids.clone()));
+    let mut lists = h.dom.art.borrow_mut();
+    lists.retain(|(uid, doc, ..)| *uid != st.uid || Arc::ptr_eq(doc, &st.doc));
+    if lists.len() >= ART_LISTS {
+        lists.remove(0);
+    }
+    lists.push((st.uid, st.doc.clone(), kind as u8, container, ids.clone()));
     Ok(ids)
 }
 

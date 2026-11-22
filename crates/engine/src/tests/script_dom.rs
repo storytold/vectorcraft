@@ -1291,6 +1291,30 @@ fn art_collections_follow_edits_between_reads() {
 }
 
 #[test]
+fn a_loop_over_groups_and_their_items_lists_each_collection_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for i in 0..5 {
+        let x = f64::from(i) * 20.0;
+        let (a, b) = (rect(&mut s, x, 0.0, 10.0, 10.0), rect(&mut s, x, 20.0, 10.0, 10.0));
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("object.group", &json!({})).unwrap();
+    }
+    // Both scripts make the same calls. The first reads the groups and each group's items in
+    // turn; the second reads every group before any group's items, so it builds each list once.
+    let nested = "var gs = app.activeDocument.groupItems, n = 0;\
+                  for (var i = 0; i < gs.length; i++) { var p = gs[i].pageItems; for (var j = 0; j < p.length; j++) { p[j]; n++; } }\
+                  vc.log(n);";
+    let in_order = "var gs = app.activeDocument.groupItems, all = [], n = 0;\
+                    for (var i = 0; i < gs.length; i++) { all.push(gs[i]); }\
+                    for (var k = 0; k < all.length; k++) { var p = all[k].pageItems; for (var j = 0; j < p.length; j++) { p[j]; n++; } }\
+                    vc.log(n);";
+    let (a, b) = (run(&mut s, nested).unwrap(), run(&mut s, in_order).unwrap());
+    assert_eq!((a["log"].clone(), b["log"].clone()), (json!([10]), json!([10])));
+    assert_eq!(a["hostCalls"], b["hostCalls"], "{a}\n{b}");
+}
+
+#[test]
 fn group_items_remove_all_refuses_locked_groups() {
     let (mut s, a, b) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
