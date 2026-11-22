@@ -643,6 +643,50 @@ fn a_last_startup_script_that_cannot_start_shows_in_the_status_bar_when_the_runs
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `dir`'s `Startup Scripts` folder, attached to `app`, holding only `0.jsx`, too large to run.
+fn oversized_startup_folder(app: &mut VectorcraftApp, dir: &std::path::Path) {
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    let mut big = "//".to_string();
+    big.push_str(&"x".repeat(vectorcraft_engine::script::MAX_SOURCE_BYTES));
+    std::fs::write(startup.join("0.jsx"), big).unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+}
+
+#[test]
+fn a_launch_whose_only_startup_script_cannot_start_shows_it_in_the_status_bar() {
+    let dir = folder("startup-launch-too-large");
+    let mut app = app(&dir);
+    oversized_startup_folder(&mut app, &dir);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    app.status("before");
+    script_runs::run_at_launch(&mut app);
+    let shown = format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE);
+    assert_eq!(app.ui.status, shown);
+    assert!(!app.session.script_running());
+    script_runs::poll(&mut app);
+    assert_eq!(app.ui.status, shown);
+    assert_eq!(objects(&app), 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_menu_run_after_a_first_startup_script_that_cannot_start_shows_it_and_runs_the_chosen_script() {
+    let dir = folder("startup-menu-too-large");
+    let mut app = app(&dir);
+    oversized_startup_folder(&mut app, &dir);
+    app.session.prefs.show_external_script_warning = false;
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    app.status("before");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    assert_eq!(app.ui.status, format!("0.jsx: {}", vectorcraft_engine::cmd::scripts::TOO_LARGE));
+    finish(&mut app);
+    assert_eq!(started(&app), ["0.jsx", "chosen"]);
+    assert_eq!(objects(&app), 2);
+    assert_eq!(app.ui.status, "Ran chosen");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn with_run_startup_scripts_on_other_script_with_a_missing_file_fails_before_the_startup_scripts() {
     let dir = folder("startup-missing");

@@ -89,12 +89,24 @@ fn ask(app: &mut VectorcraftApp) -> bool {
 }
 
 /// Runs the script of `params` (`script.run`'s) that the person chose from File › Scripts, after
-/// the startup scripts when General › Run Startup Scripts is on (`script.startup.run`).
+/// the startup scripts when General › Run Startup Scripts is on (`script.startup.run`). A startup
+/// script that cannot start shows in the status bar.
 pub(crate) fn run_chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     if app.session.startup_skip().is_some() {
         return app.run("script.run", params);
     }
-    app.run("script.startup.run", json!({"reason": "menu", "then": params}))
+    let reply = app.run("script.startup.run", json!({"reason": "menu", "then": params}))?;
+    reply_failures(app, &reply);
+    Ok(reply)
+}
+
+/// Shows each startup script that a `script.startup.run` reply names under `failed`: the queued
+/// runs that could not start before the first one did.
+fn reply_failures(app: &mut VectorcraftApp, reply: &Value) {
+    for failed in reply["failed"].as_array().into_iter().flatten() {
+        let (name, error) = (failed["name"].as_str().unwrap_or_default(), failed["error"].as_str().unwrap_or_default());
+        app.status(format!("{name}: {error}"));
+    }
 }
 
 /// When the app has started, out of Safe Mode: the startup scripts run when General › Run Startup
@@ -105,8 +117,12 @@ pub fn run_at_launch(app: &mut VectorcraftApp) {
         return;
     }
     match app.run("script.startup.run", json!({"reason": "launch"})) {
-        Ok(reply) if reply["unreadable"] == true => app.status("The Startup Scripts folder cannot be read"),
-        Ok(_) => {}
+        Ok(reply) => {
+            reply_failures(app, &reply);
+            if reply["unreadable"] == true {
+                app.status("The Startup Scripts folder cannot be read");
+            }
+        }
         Err(e) => app.status(e),
     }
 }
