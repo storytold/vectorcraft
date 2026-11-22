@@ -91,11 +91,12 @@ impl App {
         self.nodes.iter().find(|(n, _)| *n == id).map(|(_, node)| node)
     }
 
-    /// The text field showing `text` (a number field shows its number, its unit apart): its node and rect.
+    /// The text field showing `text`: its node and rect. A number field's value is its text and the unit painted after it.
     fn field(&self, text: &str) -> (NodeId, Rect) {
+        let shows = |value: &str| value.strip_prefix(text).is_some_and(|unit| unit.is_empty() || unit.starts_with(' '));
         self.nodes
             .iter()
-            .find(|(_, n)| !n.is_hidden() && n.supports_action(egui::accesskit::Action::SetValue) && n.value() == Some(text))
+            .find(|(_, n)| !n.is_hidden() && n.supports_action(egui::accesskit::Action::SetValue) && n.value().is_some_and(shows))
             .and_then(|(id, n)| n.bounds().map(|b| (*id, Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))))
             .unwrap_or_else(|| {
                 let shown: Vec<_> =
@@ -134,7 +135,7 @@ fn click(at: Pos2, pressed: bool) -> Event {
 fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let mut a = App::new();
     assert_eq!(a.selected(), 1);
-    // The W field shows its number; its unit is drawn apart.
+    // The W field shows its number, with its unit painted after it.
     let (id, rect) = a.field("37");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);

@@ -13,14 +13,14 @@ fn bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     object_bar_fields(app, ui);
 }
 
-/// A length in points as a length field reads it: its number, with the unit painted after it.
+/// A length in points as a length field reads it: its number and the unit painted after it.
 fn pt(v: f64) -> String {
-    Unit::Points.number(v)
+    Unit::Points.format(v)
 }
 
 /// A shown angle, in degrees.
 fn degrees(p: &Panel, name: &str) -> Option<f64> {
-    p.value(name)?.trim_end_matches('°').parse().ok()
+    p.value(name)?.trim_end_matches('°').trim_end().parse().ok()
 }
 
 /// The state of panel-menu row `id`, as the panel menus' states give it.

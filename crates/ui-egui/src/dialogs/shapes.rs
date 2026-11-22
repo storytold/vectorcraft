@@ -980,9 +980,9 @@ mod tests {
         set(&app, &fx, "ellipse", "width", json!(64.0)).unwrap();
         set(&app, &fx, "ellipse", "height", json!(30.0)).unwrap();
         settle(&mut app, &mut fx);
-        // The caption, not the Height field its name also labels.
+        // The caption, a link, not the Height field its name also labels.
         let height = fx
-            .by_role(craft::ui::contract::Role::LABEL)
+            .by_role(craft::ui::contract::Role::LINK)
             .into_iter()
             .find(|t| fx.tree().name_of(t.node) == Some("Height:"))
             .expect("the Height caption");
