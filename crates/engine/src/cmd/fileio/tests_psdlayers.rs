@@ -18,6 +18,8 @@ struct L {
     rect: [i32; 4],
     /// Red, green, blue and alpha, the same for every pixel.
     rgba: [u8; 4],
+    /// The alpha of each pixel, in place of `rgba`'s, stored raw.
+    alpha: Option<Vec<u8>>,
     blend: &'static [u8; 4],
     opacity: u8,
     clipped: bool,
@@ -40,6 +42,7 @@ fn layer(name: &'static str, rect: [i32; 4], rgba: [u8; 4]) -> L {
         name,
         rect,
         rgba,
+        alpha: None,
         blend: b"norm",
         opacity: 255,
         clipped: false,
@@ -96,10 +99,15 @@ fn predict(row: &[u8], depth: u16) -> Vec<u8> {
     }
 }
 
-/// A channel of `n` samples of `v` (in 32 bits, `v` / 255 as a float) at `depth`, raw, zipped
-/// (with prediction when `zip` is `Some(true)`) or PackBits rows of `width` when `rle`.
+/// One sample of `v` at `depth` (in 32 bits, `v` / 255 as a float).
+fn sample_of(v: u8, depth: u16) -> Vec<u8> {
+    if depth == 32 { (f32::from(v) / 255.0).to_be_bytes().to_vec() } else { vec![v; usize::from(depth / 8)] }
+}
+
+/// A channel of `n` samples of `v` (see [`sample_of`]) at `depth`, raw, zipped (with prediction
+/// when `zip` is `Some(true)`) or PackBits rows of `width` when `rle`.
 fn channel(v: u8, n: usize, width: usize, depth: u16, rle: bool, psb: bool, zip: Option<bool>) -> Vec<u8> {
-    let sample = if depth == 32 { (f32::from(v) / 255.0).to_be_bytes().to_vec() } else { vec![v; usize::from(depth / 8)] };
+    let sample = sample_of(v, depth);
     let row: Vec<u8> = std::iter::repeat_n(sample.as_slice(), width).flatten().copied().collect();
     if let Some(predicted) = zip {
         let rows = n.checked_div(width).unwrap_or(0);
@@ -151,11 +159,17 @@ fn layer_info(layers: &[L], depth: u16, rle: bool, psb: bool) -> Vec<u8> {
             .filter(|_| !l.bare)
             .map(|&(id, v)| (id, channel(v, w * h, w, depth, rle, psb, l.zip)))
             .collect();
+        if let (Some(pixels), Some((_, d))) = (&l.alpha, channels.first_mut()) {
+            *d = vec![0, 0];
+            for &p in pixels {
+                d.extend(sample_of(p, depth));
+            }
+        }
         let mut mask = vec![];
         if let Some(([mt, ml, mb, mr], default, flags, pixels)) = &l.mask {
             let mut d = vec![0, 0];
             for &p in pixels {
-                d.extend(std::iter::repeat_n(p, usize::from(depth / 8)));
+                d.extend(sample_of(p, depth));
             }
             channels.push((-2, d));
             for v in [mt, ml, mb, mr] {
@@ -391,9 +405,9 @@ fn zipped_and_32_bit_layers_read() {
 /// A layer without a Unicode name takes the name its Pascal string holds, read as Mac Roman.
 #[test]
 fn names_without_a_unicode_name_read_as_mac_roman() {
-    let l = L { legacy: Some(b"Caf\x8E \xD2Old\xD3"), ..layer("", [0, 0, 1, 1], [0, 0, 0, 255]) };
+    let l = L { legacy: Some(b"Caf\x8E\xCA\xD2Old\xD3\xDB"), ..layer("", [0, 0, 1, 1], [0, 0, 0, 255]) };
     let (s, r) = open(&file(1, 1, &[l], 8, false, false), json!({}));
-    assert_eq!(name(&s.doc().unwrap().doc.layers[0]), "Café “Old”", "{r}");
+    assert_eq!(name(&s.doc().unwrap().doc.layers[0]), "Café\u{a0}“Old”€", "{r}");
 }
 
 #[test]
@@ -1201,6 +1215,790 @@ fn layers_clipped_to_an_adjustment_layer_show_over_the_canvas() {
     assert!(r["warnings"].to_string().contains("1 adjustment layer was not applied"), "{r}");
 }
 
+/// An adjustment layer of key `key` with `data`, storing no pixels.
+fn adjustment(name: &'static str, key: &[u8; 4], data: &[u8]) -> L {
+    L { blocks: vec![(*key, data.to_vec())], ..layer(name, [0, 0, 0, 0], [0; 4]) }
+}
+
+/// The colors of a 1-pixel-high layer's image, left to right.
+fn row_of(s: &Session, l: &Node) -> Vec<[u8; 4]> {
+    let px = image_of(s, l).1;
+    (0..px.width()).map(|x| px.get_pixel(x, 0).0).collect()
+}
+
+/// Invert, Threshold and Posterize adjustment layers merge with the visible layers below them, which
+/// they change; the layers above stay apart. Invert turns each value `v` into `255 − v`; Threshold
+/// at 128 makes a pixel white when its luminance is above 128 and black at or below it; Posterize at
+/// 4 levels maps each channel to the nearest of 0, 85, 170 and 255.
+#[test]
+fn invert_threshold_and_posterize_merge_with_the_layers_below() {
+    let top = layer("Top", [0, 0, 1, 1], [1, 2, 3, 255]);
+    for (depth, psb) in [(8, false), (16, false), (8, true), (16, true)] {
+        let layers = [
+            layer("Dark", [0, 0, 1, 1], [10, 20, 30, 255]),
+            layer("Light", [0, 1, 1, 2], [200, 150, 100, 128]),
+            adjustment("Invert", b"nvrt", &[]),
+            top.clone(),
+        ];
+        let (s, r) = open(&file(2, 1, &layers, depth, false, psb), json!({}));
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Dark + Light + Invert", "Top"], "{depth} {psb}: {r}");
+        assert_eq!(r["warnings"], json!([]), "{depth} {psb}");
+        assert_eq!(row_of(&s, &d.layers[0]), [[245, 235, 225, 255], [55, 105, 155, 128]], "{depth} {psb}: transparency stays");
+        assert_eq!(row_of(&s, &d.layers[1]), [[1, 2, 3, 255]], "{depth} {psb}: the layer above isn't changed");
+    }
+    let grays = [
+        layer("128", [0, 0, 1, 1], [128, 128, 128, 255]),
+        layer("129", [0, 1, 1, 2], [129, 129, 129, 255]),
+        layer("Light", [0, 2, 1, 3], [200, 150, 100, 255]),
+        layer("Dark", [0, 3, 1, 4], [10, 20, 30, 255]),
+    ];
+    let layers = [&grays[..], &[adjustment("Threshold", b"thrs", &[0, 128, 0, 0])][..]].concat();
+    let (s, r) = open(&file(4, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["128 + 129 + Light + Dark + Threshold"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[0, 0, 0, 255], [255, 255, 255, 255], [255, 255, 255, 255], [0, 0, 0, 255]]);
+    let layers =
+        [layer("A", [0, 0, 1, 1], [42, 43, 128, 255]), layer("B", [0, 1, 1, 2], [212, 213, 0, 255]), adjustment("Posterize", b"post", &[0, 4, 0, 0])];
+    let (s, r) = open(&file(2, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["A + B + Posterize"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[0, 85, 170, 255], [170, 255, 0, 255]]);
+}
+
+/// An adjustment layer's opacity, layer mask and blend mode decide how much of the adjusted color
+/// replaces the color below.
+#[test]
+fn an_adjustment_layer_takes_its_opacity_mask_and_blend_mode() {
+    let black = || layer("Black", [0, 0, 1, 2], [0, 0, 0, 255]);
+    let half = L { opacity: 128, ..adjustment("Invert", b"nvrt", &[]) };
+    let (s, r) = open(&file(2, 1, &[black(), half], 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[128, 128, 128, 255]; 2], "{r}");
+    // Black in the mask leaves the first pixel as it was; outside, the mask's default (white) applies it.
+    let masked = L { mask: Some(([0, 0, 1, 1], 255, 0, vec![0])), ..adjustment("Invert", b"nvrt", &[]) };
+    let (s, r) = open(&file(2, 1, &[black(), masked], 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(row_of(&s, &d.layers[0]), [[0, 0, 0, 255], [255, 255, 255, 255]], "{r}");
+    assert!(d.layers[0].extras().mask.is_none(), "the mask is spent on the merge");
+    // A disabled mask applies it everywhere.
+    let off = L { mask: Some(([0, 0, 1, 1], 255, 2, vec![0])), ..adjustment("Invert", b"nvrt", &[]) };
+    let (s, _) = open(&file(2, 1, &[black(), off], 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[255, 255, 255, 255]; 2]);
+    // Multiply: the inverted color (55, 155, 205) multiplies the color below.
+    let multiply = L { blend: b"mul ", ..adjustment("Invert", b"nvrt", &[]) };
+    let (s, _) = open(&file(1, 1, &[layer("Under", [0, 0, 1, 1], [200, 100, 50, 255]), multiply], 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[43, 61, 40, 255]]);
+    // In a mode VectorCraft lacks, the warnings name the mode, as for other layers merged for it.
+    let dodge = L { blend: b"lddg", ..adjustment("Invert", b"nvrt", &[]) };
+    let (s, r) = open(&file(1, 1, &[layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), dodge], 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[255, 255, 255, 255]], "{r}");
+    let merged = "layers in blend modes VectorCraft doesn't have (Linear Dodge) were merged with the layers below them";
+    assert_eq!(r["warnings"], json!([merged]));
+}
+
+/// Clipped to a layer, an adjustment layer changes only that layer and the layers clipped to it.
+#[test]
+fn a_clipped_adjustment_layer_changes_only_its_base() {
+    let layers = [
+        layer("Other", [0, 1, 1, 2], [10, 10, 10, 255]),
+        layer("Base", [0, 0, 1, 1], [200, 0, 0, 255]),
+        L { clipped: true, ..adjustment("Invert", b"nvrt", &[]) },
+    ];
+    let (s, r) = open(&file(2, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Other", "Base + Invert"], "{r}");
+    assert_eq!(r["warnings"], json!([]));
+    assert_eq!((row_of(&s, &d.layers[0]), row_of(&s, &d.layers[1])), (vec![[10, 10, 10, 255]], vec![[55, 255, 255, 255]]));
+    // Over a layer clipped to the same base, and only inside the base's shape.
+    let layers = [
+        layer("Base", [0, 0, 1, 1], [200, 0, 0, 255]),
+        L { clipped: true, ..layer("Photo", [0, 0, 1, 2], [0, 0, 255, 255]) },
+        L { clipped: true, ..adjustment("Invert", b"nvrt", &[]) },
+    ];
+    let (s, r) = open(&file(2, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Base + Photo + Invert"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[255, 255, 0, 255]]);
+    // Clipped to another adjustment layer, it isn't applied: the layers keep their colors.
+    let layers = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        adjustment("Curves", b"curv", &[0; 4]),
+        L { clipped: true, ..layer("Photo", [0, 0, 1, 1], [0, 0, 255, 255]) },
+        L { clipped: true, ..adjustment("Invert", b"nvrt", &[]) },
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under", "Curves + Photo"], "{r}");
+    assert_eq!((row_of(&s, &d.layers[0]), row_of(&s, &d.layers[1])), (vec![[10, 20, 30, 255]], vec![[0, 0, 255, 255]]));
+    assert_eq!(r["warnings"], json!(["2 adjustment layers were not applied"]));
+    // Its layer mask isn't read then: one too large to read doesn't stop the file opening.
+    let mut masked = layers;
+    masked[3].mask = Some(([0, 0, 1, 40_000], 0, 0, vec![200]));
+    let (s, r) = open(&file(1, 1, &masked, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under", "Curves + Photo"], "{r}");
+    assert_eq!(r["warnings"], json!(["2 adjustment layers were not applied"]));
+    // An Invert layer that a layer drawing nothing is clipped to isn't applied either.
+    let layers = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        adjustment("Invert", b"nvrt", &[]),
+        L { clipped: true, ..layer("Empty", [0, 0, 0, 0], [0; 4]) },
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[10, 20, 30, 255]]);
+    assert_eq!(r["warnings"], json!(["1 adjustment layer was not applied"]));
+}
+
+/// A hidden adjustment layer changes nothing and is left out, with or without the hidden layers; one
+/// with nothing below it, or in an isolated group with nothing below it there, changes nothing.
+#[test]
+fn hidden_and_lone_adjustment_layers_change_nothing() {
+    for hidden in [false, true] {
+        let layers = [layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), L { hidden: true, ..adjustment("Invert", b"nvrt", &[]) }];
+        let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({"hiddenLayers": hidden}));
+        let d = &s.doc().unwrap().doc;
+        assert_eq!((d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), &r["warnings"]), (vec!["Under"], &json!([HIDDEN_1])), "{hidden}");
+        assert_eq!(row_of(&s, &d.layers[0]), [[10, 20, 30, 255]]);
+    }
+    let (s, r) = open(&file(1, 1, &[adjustment("Invert", b"nvrt", &[]), layer("Top", [0, 0, 1, 1], [10, 20, 30, 255])], 8, false, false), json!({}));
+    assert_eq!((s.doc().unwrap().doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), &r["warnings"]), (vec!["Top"], &json!([])));
+    let layers = [layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), group_end(), adjustment("Invert", b"nvrt", &[]), group("Isolated", b"norm")];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!((d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), &r["warnings"]), (vec!["Under", "Isolated"], &json!([])));
+    assert_eq!(row_of(&s, &d.layers[0]), [[10, 20, 30, 255]]);
+}
+
+/// In a pass-through group with nothing below it in the group, an adjustment layer changes what is
+/// below the group when the group is merged; when the group comes in as layers, it isn't applied.
+#[test]
+fn an_adjustment_layer_in_a_pass_through_group_changes_what_is_below_the_group() {
+    let layers = |dodge: bool| {
+        let mut l = vec![layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), group_end(), adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass")];
+        if dodge {
+            l.push(L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) });
+        }
+        l
+    };
+    let (s, r) = open(&file(1, 1, &layers(true), 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[245, 235, 225, 255]]);
+    let (s, r) = open(&file(1, 1, &layers(false), 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under", "Folder"], "{r}");
+    assert_eq!(r["warnings"], json!(["1 adjustment layer was not applied"]));
+    // Two at the bottom of the group both change what is below it, in order: inverted, then
+    // posterized to 4 levels (without the Invert the color would posterize to black).
+    let stacked = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+    ];
+    let (s, r) = open(&file(1, 1, &stacked, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!((row_of(&s, &d.layers[0]), r["warnings"].to_string().contains("adjustment")), (vec![[255, 255, 255, 255]], false), "{r}");
+    // One above a layer of the group, with one kept below that layer, is kept too: the group draws
+    // them in order over what is below it.
+    let between = [
+        layer("Under", [0, 0, 1, 2], [10, 20, 30, 255]),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        layer("Top", [0, 1, 1, 2], [100, 100, 100, 255]),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+    ];
+    let (s, r) = open(&file(2, 1, &between, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[255, 255, 255, 255], [85, 85, 85, 255]], "{r}");
+    // Another adjustment layer below it in the group draws nothing, so it still changes what is
+    // below the group.
+    let over_curves = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        adjustment("Curves", b"curv", &[0; 4]),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+    ];
+    let (s, r) = open(&file(1, 1, &over_curves, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[245, 235, 225, 255]], "{r}");
+    // One kept in a pass-through group inside the group keeps the ones above it too: inverted, then
+    // posterized to 4 levels.
+    let nested = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+    ];
+    let (s, r) = open(&file(1, 1, &nested, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!((row_of(&s, &d.layers[0]), r["warnings"].to_string().contains("adjustment")), (vec![[255, 255, 255, 255]], false), "{r}");
+    // Without the merge, the group comes in as layers and both are counted as not applied.
+    let (s, r) = open(&file(1, 1, &nested[..7], 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under", "Folder"], "{r}");
+    assert_eq!(r["warnings"], json!(["2 adjustment layers were not applied"]));
+    // Merged in the group with a layer in a mode VectorCraft lacks, it has nothing to change.
+    let inside = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+        group("Folder", b"pass"),
+    ];
+    let (s, r) = open(&file(1, 1, &inside, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    let names: Vec<&str> = d.layers.iter().map(|l| name(l)).collect();
+    let merged = "layers in blend modes VectorCraft doesn't have (Linear Dodge) were merged with the layers below them";
+    assert_eq!((names, &r["warnings"]), (vec!["Under", "Folder"], &json!(["1 adjustment layer was not applied", merged])), "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[10, 20, 30, 255]]);
+}
+
+/// The layer of a pass-through group's sublayers whose name ends with `end`.
+fn sublayer<'d>(folder: &'d Node, end: &str) -> &'d Node {
+    let children = folder.children().map(Vec::as_slice).unwrap_or_default();
+    let names: Vec<&str> = children.iter().map(|c| name(c)).collect();
+    children.iter().find(|c| name(c).ends_with(end)).unwrap_or_else(|| panic!("no sublayer ending with {end} in {names:?}"))
+}
+
+/// An adjustment layer that changes nothing, in a hidden pass-through group or at 0 opacity or 0
+/// fill, keeps no adjustment layer above it in the group from merging with the layers below it:
+/// the gray 100 posterizes to 85.
+#[test]
+fn adjustment_layers_that_change_nothing_hold_none_back() {
+    let invert = |opacity: u8, fill: u8| {
+        let mut l = L { opacity, ..adjustment("Invert", b"nvrt", &[]) };
+        l.blocks.push((*b"iOpa", vec![fill]));
+        l
+    };
+    let cases = [("hidden group", true, invert(255, 255)), ("0 opacity", false, invert(0, 255)), ("0 fill", false, invert(255, 0))];
+    for (what, hidden, invert) in cases {
+        let layers = [
+            group_end(),
+            group_end(),
+            invert,
+            L { hidden, ..group("Inner", b"pass") },
+            layer("Photo", [0, 0, 1, 1], [100, 100, 100, 255]),
+            adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+            group("Folder", b"pass"),
+        ];
+        let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({"hiddenLayers": hidden}));
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Folder"], "{what}: {r}");
+        assert_eq!(row_of(&s, sublayer(&d.layers[0], "Photo + Posterize")), [[85, 85, 85, 255]], "{what}: {r}");
+    }
+}
+
+/// A layer that stores no pixels draws nothing: an adjustment layer above it in a pass-through group,
+/// directly or in a pass-through group inside it, still changes what is below the group.
+#[test]
+fn an_adjustment_layer_over_layers_that_draw_nothing_changes_what_is_below_the_group() {
+    let empty = || layer("Empty", [0, 0, 0, 0], [0; 4]);
+    let direct = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        empty(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+    ];
+    let (s, r) = open(&file(1, 1, &direct, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[245, 235, 225, 255]], "{r}");
+    assert!(!r["warnings"].to_string().contains("adjustment"), "{r}");
+    // Inverted in the inner group, then posterized to 4 levels.
+    let nested = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        group_end(),
+        empty(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+    ];
+    let (s, r) = open(&file(1, 1, &nested, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{r}");
+    assert_eq!(row_of(&s, &d.layers[0]), [[255, 255, 255, 255]], "{r}");
+    assert!(!r["warnings"].to_string().contains("adjustment"), "{r}");
+    // Nor does a group of such layers, in any mode, or a layer at 0 opacity: below them, directly
+    // or in the inner group, Invert and Posterize still change what is below the outer group.
+    let mut no_fill = layer("Clear", [0, 0, 1, 1], [0, 0, 0, 255]);
+    no_fill.blocks.push((*b"iOpa", vec![0]));
+    let photo = || layer("Photo", [0, 0, 1, 1], [0, 0, 255, 255]);
+    let below: [(&str, Vec<L>); 5] = [
+        ("empty group", vec![group_end(), empty(), group("Empty", b"norm")]),
+        ("empty pass-through group", vec![group_end(), empty(), group("Empty", b"pass")]),
+        ("0 opacity", vec![L { opacity: 0, ..layer("Clear", [0, 0, 1, 1], [0, 0, 0, 255]) }]),
+        ("0 fill in a group", vec![group_end(), no_fill, group("Empty", b"norm")]),
+        ("group clipped to an empty layer", vec![empty(), group_end(), photo(), L { clipped: true, ..group("Clipped", b"norm") }]),
+    ];
+    for (what, nothing) in below {
+        let direct = [
+            &[layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), group_end()][..],
+            &nothing,
+            &[adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) }],
+        ]
+        .concat();
+        let (s, r) = open(&file(1, 1, &direct, 8, false, false), json!({}));
+        assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[245, 235, 225, 255]], "{what}: {r}");
+        let nested = [
+            &[layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), group_end(), group_end()][..],
+            &nothing,
+            &[
+                adjustment("Invert", b"nvrt", &[]),
+                group("Inner", b"pass"),
+                adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+                group("Folder", b"pass"),
+                L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+            ],
+        ]
+        .concat();
+        let (s, r) = open(&file(1, 1, &nested, 8, false, false), json!({}));
+        assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[255, 255, 255, 255]], "{what}: {r}");
+    }
+}
+
+/// Layers clipped to a layer at 0 fill, or to an adjustment layer, draw: an adjustment layer above
+/// them in a pass-through group merges with them and is applied.
+#[test]
+fn an_adjustment_layer_over_clipped_layers_merges_with_them() {
+    let mut clear = layer("Base", [0, 0, 1, 1], [0, 0, 0, 255]);
+    clear.blocks.push((*b"iOpa", vec![0]));
+    let photo = || L { clipped: true, ..layer("Photo", [0, 0, 1, 1], [0, 0, 255, 255]) };
+    let layers = [
+        group_end(),
+        group_end(),
+        clear,
+        photo(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+        group("Outer", b"pass"),
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    let merged = "layers in blend modes VectorCraft doesn't have (Linear Dodge) were merged with the layers below them";
+    assert_eq!(r["warnings"], json!([merged]), "{r}");
+    assert_eq!(row_of(&s, sublayer(&d.layers[0], "Dodge")), [[255, 255, 0, 255]], "{r}");
+    // The same with a group at 0 fill as the base.
+    let mut clear_group = group("Base", b"norm");
+    clear_group.blocks.push((*b"iOpa", vec![0]));
+    let layers = [
+        group_end(),
+        group_end(),
+        group_end(),
+        layer("Black", [0, 0, 1, 1], [0, 0, 0, 255]),
+        clear_group,
+        photo(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) },
+        group("Outer", b"pass"),
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(r["warnings"], json!([merged]), "{r}");
+    assert_eq!(row_of(&s, sublayer(&d.layers[0], "Dodge")), [[255, 255, 0, 255]], "{r}");
+    // Clipped to an Invert layer, which isn't applied then, the photo shows over the canvas, and
+    // Posterize merges with it: the gray 100 posterizes to 85.
+    let layers = [
+        group_end(),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        L { clipped: true, ..layer("Photo", [0, 0, 1, 1], [100, 100, 100, 255]) },
+        group("Folder", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Outer", b"pass"),
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(row_of(&s, sublayer(&d.layers[0], "Posterize")), [[85, 85, 85, 255]], "{r}");
+}
+
+/// Invert, Threshold and Posterize data that can't be read is not applied, with a warning: a level
+/// out of range, data too short, or a second adjustment block on the layer.
+#[test]
+fn adjustment_data_that_cant_be_read_isnt_applied() {
+    let mut twice = adjustment("Twice", b"nvrt", &[]);
+    twice.blocks.push((*b"post", vec![0, 4, 0, 0]));
+    let mut apart = adjustment("Apart", b"nvrt", &[]);
+    apart.blocks.extend([(*b"SoCo", vec![]), (*b"post", vec![0, 4, 0, 0])]);
+    let cases = [
+        adjustment("Level 0", b"thrs", &[0, 0, 0, 0]),
+        adjustment("Level 256", b"thrs", &[1, 0, 0, 0]),
+        adjustment("No level", b"thrs", &[]),
+        adjustment("No padding", b"thrs", &[0, 128]),
+        adjustment("No padding", b"post", &[0, 4]),
+        adjustment("1 level", b"post", &[0, 1, 0, 0]),
+        adjustment("256 levels", b"post", &[1, 0, 0, 0]),
+        twice,
+        apart,
+    ];
+    for bad in cases {
+        let what = bad.name;
+        let (s, r) = open(&file(1, 1, &[layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), bad], 8, false, false), json!({}));
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under"], "{what}: {r}");
+        assert_eq!(row_of(&s, &d.layers[0]), [[10, 20, 30, 255]], "{what}");
+        assert_eq!(r["warnings"], json!(["1 adjustment layer was not applied"]), "{what}");
+    }
+    // The highest level and count are read.
+    let under = |c: u8| layer("Under", [0, 0, 1, 1], [c, c, c, 255]);
+    let (s, r) = open(&file(1, 1, &[under(254), adjustment("Max", b"thrs", &[0, 255, 0, 0])], 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[0, 0, 0, 255]], "{r}");
+    let (s, r) = open(&file(1, 1, &[under(7), adjustment("Max", b"post", &[0, 255, 0, 0])], 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[7, 7, 7, 255]], "{r}");
+}
+
+/// An adjustment layer whose merge needs more memory than allowed isn't applied: the layers below
+/// it stay as they are, with a warning.
+#[test]
+fn an_adjustment_merge_past_the_memory_allowed_isnt_applied() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let layers = [layer("Under", [0, 0, 2, 2], [10, 20, 30, 255]), layer("Beside", [2, 2, 4, 4], [1, 2, 3, 255]), adjustment("Invert", b"nvrt", &[])];
+    let f = file(4, 4, &layers, 8, false, false);
+    // Each 2 × 2 layer fits 128 bytes; the 4 × 4 canvas of both doesn't.
+    let (doc, warnings) = psdlayers::import(&f, false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under", "Beside"]);
+    assert_eq!(warnings, ["1 adjustment layer was not applied"]);
+    let (doc, warnings) = psdlayers::import(&f, false, 1 << 20, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Beside + Invert"]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    // Clipped: the base's canvas with its shape doesn't fit 300 bytes, so the adjustment is left
+    // out rather than applied to everything below.
+    let layers = [layer("Base", [0, 0, 4, 4], [10, 20, 30, 255]), L { clipped: true, ..adjustment("Invert", b"nvrt", &[]) }];
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 300, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Base"]);
+    assert_eq!(warnings, ["1 adjustment layer was not applied"]);
+    // A layer clipped to an Invert layer whose merge doesn't fit comes in unclipped, and the Invert
+    // layer isn't applied to the layers below it.
+    let layers = [
+        layer("Under", [0, 0, 2, 2], [10, 20, 30, 255]),
+        adjustment("Invert", b"nvrt", &[]),
+        L { clipped: true, ..layer("Photo", [0, 0, 4, 4], [1, 2, 3, 255]) },
+    ];
+    let (doc, warnings) = psdlayers::import(&file(4, 4, &layers, 8, false, false), false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under", "Photo"], "{warnings:?}");
+    assert!(warnings.iter().any(|w| w == "1 adjustment layer was not applied"), "{warnings:?}");
+}
+
+/// An adjustment layer whose layer mask is too large for the memory allowed isn't applied, merged
+/// with the layers below it or clipped to one, and the file still opens with its layers.
+#[test]
+fn an_adjustment_mask_past_the_memory_allowed_isnt_applied() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    // The 100 × 100 mask takes more than 128 bytes; the 1-pixel layer below it doesn't.
+    let masked = |clipped: bool| L { clipped, mask: Some(([0, 0, 100, 100], 255, 0, vec![0; 10_000])), ..adjustment("Invert", b"nvrt", &[]) };
+    for clipped in [false, true] {
+        let f = file(1, 1, &[layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]), masked(clipped)], 8, false, false);
+        let (doc, warnings) = psdlayers::import(&f, false, 128, cms).unwrap_or_else(|e| panic!("{clipped}: {e}")).unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under"], "{clipped}: {warnings:?}");
+        assert_eq!(warnings, ["1 adjustment layer was not applied"], "{clipped}");
+        // With the memory for it, the mask's black leaves the layer as it was.
+        let (doc, warnings) = psdlayers::import(&f, false, 1 << 20, cms).unwrap().unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Invert"], "{clipped}: {warnings:?}");
+        assert!(warnings.is_empty(), "{clipped}: {warnings:?}");
+    }
+}
+
+/// An adjustment layer's mask is read beside the canvases it changes: a 100 × 1 mask fits 256 bytes
+/// alone, but not beside a 6 × 1 canvas, so the layer isn't applied. With the memory for both, it is.
+#[test]
+fn an_adjustment_mask_counts_the_canvas_it_changes() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let masked = |clipped: bool| L { clipped, mask: Some(([0, 0, 1, 100], 255, 0, vec![255; 100])), ..adjustment("Invert", b"nvrt", &[]) };
+    for clipped in [false, true] {
+        let f = file(6, 1, &[layer("Under", [0, 0, 1, 6], [10, 20, 30, 255]), masked(clipped)], 8, false, false);
+        let (doc, warnings) = psdlayers::import(&f, false, 256, cms).unwrap_or_else(|e| panic!("{clipped}: {e}")).unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under"], "{clipped}: {warnings:?}");
+        assert_eq!(warnings, ["1 adjustment layer was not applied"], "{clipped}");
+        let (doc, warnings) = psdlayers::import(&f, false, 1 << 20, cms).unwrap().unwrap();
+        assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Invert"], "{clipped}: {warnings:?}");
+        assert!(warnings.is_empty(), "{clipped}: {warnings:?}");
+    }
+}
+
+/// An adjustment layer whose mask is too large to read is left out without stopping the clip or the
+/// merge around it: a layer clipped above it still clips to the base, and a layer in a mode
+/// VectorCraft lacks above a pass-through group holding it still merges in its mode.
+#[test]
+fn an_adjustment_mask_too_large_leaves_the_clip_and_merge_around_it() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let masked = |clipped: bool| L { clipped, mask: Some(([0, 0, 100, 100], 255, 0, vec![255; 10_000])), ..adjustment("Invert", b"nvrt", &[]) };
+    let layers = [layer("Base", [0, 0, 1, 1], [200, 0, 0, 255]), masked(true), L { clipped: true, ..layer("Photo", [0, 0, 1, 2], [0, 0, 255, 255]) }];
+    let (doc, warnings) = psdlayers::import(&file(2, 1, &layers, 8, false, false), false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Base + Photo"], "{warnings:?}");
+    assert_eq!(warnings, ["1 adjustment layer was not applied"]);
+    // Gray 100 under Linear Dodge's gray 20 gives gray 120.
+    let layers = [
+        layer("Under", [0, 0, 1, 1], [100, 100, 100, 255]),
+        group_end(),
+        masked(false),
+        group("Folder", b"pass"),
+        L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [20, 20, 20, 255]) },
+    ];
+    let (doc, warnings) = psdlayers::import(&file(1, 1, &layers, 8, false, false), false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers.iter().map(|l| name(l)).collect::<Vec<_>>(), ["Under + Folder + Dodge"], "{warnings:?}");
+    let merged = "layers in blend modes VectorCraft doesn't have (Linear Dodge) were merged with the layers below them";
+    assert_eq!(warnings, ["1 adjustment layer was not applied", merged]);
+    let Some([c]) = doc.layers[0].children().map(Vec::as_slice) else { panic!("the merged layer holds one image") };
+    let NodeKind::Image(img) = &c.kind else { panic!("the merged layer holds an image") };
+    let px = craft_image_codecs::decode(&doc.images[&img.key].bytes).unwrap().to_rgba8();
+    assert_eq!(px, [120, 120, 120, 255]);
+}
+
+/// A layer merged in a pass-through group for its mode or its knockout takes the adjustment layers
+/// kept below it with it: an adjustment layer above that group in an outer pass-through group then
+/// merges with it, and the gray 100 posterizes to 85.
+#[test]
+fn an_adjustment_layer_above_a_group_whose_kept_ones_merged_is_applied() {
+    let tops = [
+        ("Linear Dodge", vec![L { blend: b"lddg", ..layer("Top", [0, 0, 1, 1], [100, 100, 100, 255]) }]),
+        ("knockout", vec![layer("Photo", [0, 0, 1, 1], [50, 50, 50, 255]), knockout(layer("Top", [0, 0, 1, 1], [100, 100, 100, 255]), 1, 255)]),
+    ];
+    for (what, top) in tops {
+        let layers = [
+            &[group_end(), group_end(), adjustment("Invert", b"nvrt", &[])][..],
+            &top,
+            &[group("Inner", b"pass"), adjustment("Posterize", b"post", &[0, 4, 0, 0]), group("Folder", b"pass")],
+        ]
+        .concat();
+        let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(row_of(&s, sublayer(&d.layers[0], "Posterize")), [[85, 85, 85, 255]], "{what}: {r}");
+        assert!(r["warnings"].to_string().contains("1 adjustment layer was not applied"), "{what}: {r}");
+    }
+}
+
+/// An adjustment layer in a pass-through group, over a layer drawn below that group in an outer
+/// pass-through group, isn't kept to change what is below the outer group: a layer merged above
+/// them for its mode merges it applied, and the import doesn't count it as not applied. The gray
+/// 100 inverts to 155.
+#[test]
+fn an_adjustment_layer_in_a_group_over_a_drawn_layer_merges_applied() {
+    let layers = [
+        group_end(),
+        layer("Photo", [0, 0, 1, 1], [100, 100, 100, 255]),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        L { blend: b"lddg", ..layer("Top", [0, 0, 1, 1], [0, 0, 0, 255]) },
+        group("Folder", b"pass"),
+    ];
+    let (s, r) = open(&file(1, 1, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(row_of(&s, sublayer(&d.layers[0], "Top")), [[155, 155, 155, 255]], "{r}");
+    assert!(!r["warnings"].to_string().contains("adjustment"), "{r}");
+}
+
+/// A layer whose pixels are all transparent draws nothing: an adjustment layer above it in a
+/// pass-through group, directly or in a pass-through group inside it, still changes what is below
+/// the group.
+#[test]
+fn an_adjustment_layer_over_transparent_pixels_changes_what_is_below_the_group() {
+    let clear = || layer("Clear", [0, 0, 1, 1], [50, 50, 50, 0]);
+    let dodge = || L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 1], [0, 0, 0, 255]) };
+    let direct = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        clear(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let (s, r) = open(&file(1, 1, &direct, 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[245, 235, 225, 255]], "{r}");
+    let nested = [
+        layer("Under", [0, 0, 1, 1], [10, 20, 30, 255]),
+        group_end(),
+        group_end(),
+        clear(),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let (s, r) = open(&file(1, 1, &nested, 8, false, false), json!({}));
+    assert_eq!(row_of(&s, &s.doc().unwrap().doc.layers[0]), [[255, 255, 255, 255]], "{r}");
+}
+
+/// A layer or group whose layer mask hides all of it draws nothing: an adjustment layer above it in
+/// a pass-through group still changes what is below the group, and a shallow knockout hidden that
+/// way merges nothing, so the adjustment layers below it stay kept. A layer's mask hides all of it
+/// when it hides each of its pixels that isn't fully transparent, and a group's when it hides each
+/// such pixel of the group's layers, whatever the mask's value elsewhere; a layer hidden that way
+/// hides the layers clipped to it too. The layers in a pass-through group hidden that way don't
+/// count as drawing below an adjustment layer above the group.
+#[test]
+fn an_adjustment_layer_over_layers_their_masks_hide_changes_what_is_below_the_group() {
+    let black = |l: L| L { mask: Some(([0, 0, 1, 2], 0, 0, vec![0, 0])), ..l };
+    let under = || layer("Under", [0, 0, 1, 2], [10, 20, 30, 255]);
+    let dodge = || L { blend: b"lddg", ..layer("Dodge", [0, 0, 1, 2], [0, 0, 0, 255]) };
+    let photo = || layer("Photo", [0, 0, 1, 2], [100, 100, 100, 255]);
+    let inverted = [[245, 235, 225, 255], [245, 235, 225, 255]];
+    let masked_layer = [under(), group_end(), black(photo()), adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), dodge()];
+    // A mask over all of the layer's pixels hides it whatever its value outside them.
+    let white_outside = L { mask: Some(([0, 0, 1, 2], 255, 0, vec![0, 0])), ..photo() };
+    let covered_layer = [under(), group_end(), white_outside, adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), dodge()];
+    let masked_group = [
+        under(),
+        group_end(),
+        group_end(),
+        photo(),
+        black(group("Inner", b"norm")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let knockout_cut = knockout(black(layer("Cut", [0, 0, 1, 1], [0, 0, 255, 255])), 1, 255);
+    let masked_knockout = [
+        under(),
+        group_end(),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        layer("Photo", [0, 0, 1, 1], [100, 100, 100, 255]),
+        knockout_cut,
+        group("Inner", b"pass"),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // A knockout whose mask hides each pixel it doesn't leave transparent.
+    let half = L { alpha: Some(vec![255, 0]), mask: Some(([0, 0, 1, 2], 0, 0, vec![0, 255])), ..layer("Cut", [0, 0, 1, 2], [0, 0, 255, 255]) };
+    let mut transparent_knockout = masked_knockout.clone();
+    transparent_knockout[5] = knockout(half, 1, 255);
+    // A pass-through group its mask hides, below Invert in a pass-through group, with a layer drawn
+    // above that group, under Posterize.
+    let masked_pass = [
+        under(),
+        group_end(),
+        group_end(),
+        group_end(),
+        photo(),
+        black(group("Hidden", b"pass")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Inner", b"pass"),
+        layer("Blue", [0, 0, 1, 1], [0, 0, 100, 255]),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // Invert in a pass-through group its mask hides keeps nothing above that group: Posterize
+    // merges with the layer below it, as with no such group.
+    let masked_invert = [
+        under(),
+        group_end(),
+        group_end(),
+        adjustment("Invert", b"nvrt", &[]),
+        black(group("Hidden", b"pass")),
+        layer("Blue", [0, 0, 1, 1], [0, 0, 100, 255]),
+        adjustment("Posterize", b"post", &[0, 4, 0, 0]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // A mask over only the pixels that aren't fully transparent, white outside it.
+    let corner = |l: L| L { mask: Some(([0, 0, 1, 1], 255, 0, vec![0])), ..l };
+    let half_photo = || L { alpha: Some(vec![255, 0]), ..photo() };
+    let corner_layer = [under(), group_end(), corner(half_photo()), adjustment("Invert", b"nvrt", &[]), group("Folder", b"pass"), dodge()];
+    let corner_group = [
+        under(),
+        group_end(),
+        group_end(),
+        half_photo(),
+        corner(group("Inner", b"norm")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // The same mask over a group with a pixel drawn outside it: the group draws there.
+    let drawn_group = [
+        under(),
+        group_end(),
+        group_end(),
+        photo(),
+        corner(group("Inner", b"norm")),
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    // A layer its mask hides, with a layer clipped to it.
+    let clipped_base = [
+        under(),
+        group_end(),
+        black(photo()),
+        L { clipped: true, ..layer("Red", [0, 0, 1, 2], [200, 0, 0, 255]) },
+        adjustment("Invert", b"nvrt", &[]),
+        group("Folder", b"pass"),
+        dodge(),
+    ];
+    let cases = [
+        ("layer", &masked_layer[..], inverted),
+        ("covered layer", &covered_layer[..], inverted),
+        ("group", &masked_group[..], inverted),
+        ("knockout", &masked_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
+        ("transparent knockout", &transparent_knockout[..], [[85, 85, 85, 255], [255, 255, 255, 255]]),
+        ("pass-through group", &masked_pass[..], [[0, 0, 85, 255], [255, 255, 255, 255]]),
+        ("adjustment in a pass-through group", &masked_invert[..], [[0, 0, 85, 255], [10, 20, 30, 255]]),
+        ("layer covered where it draws", &corner_layer[..], inverted),
+        ("group covered where it draws", &corner_group[..], inverted),
+        ("group drawn outside its mask", &drawn_group[..], [[10, 20, 30, 255], [155, 155, 155, 255]]),
+        ("clipped base", &clipped_base[..], inverted),
+    ];
+    let rows = |layers: &[L]| {
+        let (s, _) = open(&file(2, 1, layers, 8, false, false), json!({}));
+        row_of(&s, &s.doc().unwrap().doc.layers[0])
+    };
+    let got: Vec<_> = cases.iter().map(|(what, layers, _)| (*what, rows(layers))).collect();
+    let want: Vec<_> = cases.iter().map(|(what, _, want)| (*what, want.to_vec())).collect();
+    assert_eq!(got, want);
+}
+
+/// Damaged Invert, Threshold and Posterize layers, masked and clipped, open without a panic.
+#[test]
+fn damaged_adjustment_layers_never_panic() {
+    let layers = [
+        layer("A", [0, 0, 2, 2], [255, 0, 0, 255]),
+        L { mask: Some(([0, 0, 1, 1], 0, 0, vec![200])), ..adjustment("Invert", b"nvrt", &[]) },
+        L { clipped: true, ..adjustment("Threshold", b"thrs", &[0, 128, 0, 0]) },
+        adjustment("Posterize", b"post", &[0, 3, 0, 0]),
+    ];
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let good = file(2, 2, &layers, 8, false, false);
+    assert!(psdlayers::import(&good, true, 1 << 30, cms).unwrap().is_some());
+    for i in 0..good.len() {
+        for v in [0, 1, 0x7f, 0x80, 0xff] {
+            let mut f = good.clone();
+            f[i] = v;
+            let _ = psdlayers::import(&f, true, 1 << 30, cms);
+            let _ = psdlayers::import(&f, false, 64, cms);
+        }
+    }
+    for n in 0..good.len() {
+        let _ = psdlayers::import(&good[..n], true, 1 << 30, cms);
+    }
+}
+
 /// Each blend mode VectorCraft lacks merges with the layer below by its formula, from the public
 /// descriptions: <https://helpx.adobe.com/photoshop/desktop/repair-retouch/adjust-light-tone/blending-mode-descriptions.html>
 /// (Vivid Light, Pin Light, Hard Mix, Darker and Lighter Color) and
@@ -1449,6 +2247,12 @@ fn damaged_layers_never_panic() {
     assert!(psdlayers::import(&file(8, 8, &many[..16], 8, false, false), false, 512, cms).unwrap().is_some());
     let e = psdlayers::import(&file(8, 8, &many, 8, false, false), false, 512, cms).err();
     assert!(e.as_deref().is_some_and(|e| e.contains("take more memory to read than allowed")), "{e:?}");
+    // Looking through those layers' transparency for pixels that draw, below an adjustment layer,
+    // takes nothing from the allowance.
+    let mut clear: Vec<L> = (0..16).map(|_| layer("x", [0, 0, 8, 8], [1, 2, 3, 0])).collect();
+    clear.push(adjustment("Invert", b"nvrt", &[]));
+    let opened = psdlayers::import(&file(8, 8, &clear, 8, false, false), false, 512, cms);
+    assert!(opened.as_ref().is_ok_and(Option::is_some), "{:?}", opened.err());
 }
 
 /// A layer in a mode VectorCraft lacks above a pass-through group merges with the group's layers

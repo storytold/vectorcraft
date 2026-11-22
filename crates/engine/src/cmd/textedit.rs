@@ -11,8 +11,8 @@ use super::menucmds::whole_or;
 use super::stroke::StrokeChange;
 use super::typecmd::refresh_bounds;
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, has_selection, index,
-    number_or, object_param, point_param, str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, finite_numbers, has_doc, has_selection,
+    index, number_or, object_param, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?: pt 0.1..1296 (outside it: an error), font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point; anything but two numbers: an error), size?: pt 0.1..1296 (outside it: an error), font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
             has_doc,
             create_in_path
         ),
@@ -255,9 +255,15 @@ fn byte_param(p: &Value, k: &str) -> Option<usize> {
 /// The byte offset that `p` gives for `k`, or `default` when `p` leaves it out or gives null. Any
 /// other value that is not a whole number of at least 0, such as `"2"`, `-1` or `1.5`, is an error.
 fn offset_or(p: &Value, k: &str, default: usize, cmd: &str) -> Result<usize> {
+    Ok(offset_given(p, k, cmd)?.unwrap_or(default))
+}
+
+/// The byte offset that `p` gives for `k`, or `None` when `p` leaves it out or gives null. Any
+/// other value that is not a whole number of at least 0, such as `"2"`, `-1` or `1.5`, is an error.
+fn offset_given(p: &Value, k: &str, cmd: &str) -> Result<Option<usize>> {
     match p.get(k) {
-        None | Some(Value::Null) => Ok(default),
-        Some(_) => Ok(index(whole_or(p, k, 0, cmd)?)),
+        None | Some(Value::Null) => Ok(None),
+        Some(_) => Ok(Some(index(whole_or(p, k, 0, cmd)?))),
     }
 }
 
@@ -280,7 +286,7 @@ pub(crate) fn edit_range(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| bad(C, format!("bad `runs`: {e}")))?),
     };
-    let insert = str_param(p, "insert").unwrap_or("").to_string();
+    let insert = text_param(p, "insert", C)?.unwrap_or("").to_string();
     let clear = clear_param(s, p, id, C)?;
     let caret = s.edit("Typing", |d, _| {
         for other in &clear {
@@ -1313,8 +1319,7 @@ pub fn effective_kerning(db: &vectorcraft_text::FontDb, t: &TextObject, lay: &ve
 /// The character at byte `start` of `p` in text object `t`, its bytes and its font's face. An error
 /// when there is no character there, it is an inline graphic, or its font is not available.
 fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::Range<usize>, std::sync::Arc<vectorcraft_text::FontFace>)> {
-    check_numbers(p, &["start"], c)?;
-    let start = byte_param(p, "start").ok_or_else(|| bad(c, "missing `start` (the byte offset of a character)"))?;
+    let start = offset_given(p, "start", c)?.ok_or_else(|| bad(c, "missing `start` (the byte offset of a character)"))?;
     let mut at = 0;
     for run in &t.runs {
         let end = at + run.text.len();
@@ -1558,8 +1563,7 @@ fn glyph_alternates(s: &mut Session, p: &Value) -> Result<Value> {
 fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.touchType";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing `id`"))?;
-    check_numbers(p, &["start"], C)?;
-    let start = byte_param(p, "start").ok_or_else(|| bad(C, "missing `start` (the byte offset of a character)"))?;
+    let start = offset_given(p, "start", C)?.ok_or_else(|| bad(C, "missing `start` (the byte offset of a character)"))?;
     if !["dx", "dy", "hScale", "vScale", "rotation"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
         return Err(bad(C, "nothing to change: give dx, dy, hScale, vScale or rotation"));
     }
@@ -1797,7 +1801,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
 fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.createInPath";
     let pid = object_param(p, "path", C)?.ok_or_else(|| bad(C, "missing `path` (a path object id)"))?;
-    let on_path = match str_param(p, "mode").unwrap_or("area") {
+    let on_path = match text_param(p, "mode", C)?.unwrap_or("area") {
         "area" => false,
         "onPath" | "path" => true,
         o => return Err(bad(C, format!("mode must be area|onPath, got {o}"))),
@@ -1815,8 +1819,12 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &["vertical", "placeholder"], C)?;
     super::color_param(p, "color", C)?;
     let style = super::create::new_type_style(s, p, C)?;
-    let text = str_param(p, "text").unwrap_or("").to_string();
-    let start = match point_param(p, "at") {
+    let text = text_param(p, "text", C)?.unwrap_or("").to_string();
+    let at = match p.get("at").filter(|v| !v.is_null()) {
+        None => None,
+        Some(v) => Some(finite_numbers::<2>(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, "`at` must be a point: [x, y]"))?),
+    };
+    let start = match at {
         Some(at) if on_path => vectorcraft_geom::ArcPath::new(path).fraction_at(at).unwrap_or(0.0),
         _ => 0.0,
     };

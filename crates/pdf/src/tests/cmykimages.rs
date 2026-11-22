@@ -1210,6 +1210,45 @@ fn a_distorted_cmyk_image_and_its_grid_mask_with_the_same_corners_write_it_as_it
     }
 }
 
+/// A color-masked CMYK image with a gray mask of its grid keeps its inks and its hidden colors
+/// hidden: the image's `/SMask` is the mask's alpha times the alpha of the pixels the color mask
+/// shows, so a hidden pixel stays clear where the mask's alpha is not zero, for a distorted image
+/// too.
+#[test]
+fn a_color_masked_cmyk_image_with_a_grid_mask_keeps_its_hidden_colors_hidden() {
+    for distorted in [false, true] {
+        let mut d = masked_doc(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, false);
+        // The first pixel hidden, where the mask is fully opaque, and the last half shown.
+        let alpha = [0, 255, 255, 128];
+        let shown = image::RgbaImage::from_fn(2, 2, |x, y| image::Rgba([0, 90, 200, alpha[(y * 2 + x) as usize]]));
+        d.images.insert("shown".into(), ImageBlob::new("image/png", png(shown)));
+        let id = d.layers[0].children().unwrap()[0].id;
+        let q = [(16.0, 0.0), (24.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y));
+        let mut mask = d.node(id).unwrap().extras().mask.clone().unwrap();
+        if distorted {
+            Arc::make_mut(&mut mask.art).set_image_corners(q).unwrap();
+        }
+        let n = d.node_mut(id).unwrap();
+        n.extras_mut().mask = Some(mask);
+        n.extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+            key: "shown".into(),
+            from: "img".into(),
+            background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+            colors: vec![[255, 255, 255]],
+            contiguous: false,
+            measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+            tolerance: 0.0,
+            softness: 0.0,
+        }));
+        if distorted {
+            n.set_image_corners(q).unwrap();
+        }
+        let (bytes, smasks) = export_smasks(&d);
+        assert!(!smasks.is_empty() && smasks.iter().all(|m| m.as_deref() == Some(&[0, 128, 0, 32][..])), "{distorted}: {smasks:?}");
+        assert!(distorted || !String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "no luminosity soft mask");
+    }
+}
+
 /// A grey mask image with a color mask masks the CMYK image with the pixels it shows: its hidden
 /// pixels are clear in the image's `/SMask`.
 #[test]

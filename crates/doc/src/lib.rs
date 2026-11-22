@@ -161,6 +161,9 @@ mod records;
 mod stored_art;
 mod units;
 
+#[cfg(any(test, feature = "locked-artboard-count"))]
+#[doc(hidden)]
+pub use artboard::locked_artboard_measures;
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]

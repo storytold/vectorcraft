@@ -288,17 +288,19 @@ pub enum DirectiveName {
 }
 
 impl DirectiveName {
+    /// Every directive a preprocessor line can name.
+    pub const ALL: [DirectiveName; 6] = [
+        DirectiveName::Include,
+        DirectiveName::IncludePath,
+        DirectiveName::Script,
+        DirectiveName::Strict,
+        DirectiveName::Target,
+        DirectiveName::TargetEngine,
+    ];
+
     /// The directive named `name`, compared without case.
     pub fn from_name(name: &str) -> Option<DirectiveName> {
-        const NAMES: [(&str, DirectiveName); 6] = [
-            ("include", DirectiveName::Include),
-            ("includepath", DirectiveName::IncludePath),
-            ("script", DirectiveName::Script),
-            ("strict", DirectiveName::Strict),
-            ("target", DirectiveName::Target),
-            ("targetengine", DirectiveName::TargetEngine),
-        ];
-        NAMES.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, d)| *d)
+        DirectiveName::ALL.into_iter().find(|d| d.as_str().eq_ignore_ascii_case(name))
     }
 
     pub fn as_str(self) -> &'static str {

@@ -91,6 +91,8 @@ impl FontDb {
     /// guard's thread uses the fonts it lends and not this one.
     pub fn set_composite_font(&self, font: &CompositeFont) -> bool {
         let key = font.name.to_lowercase();
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = crate::test_fonts::font_change();
         {
             let mut map = self.composites.write().unwrap_or_else(|e| e.into_inner());
             if map.get(&key).is_some_and(|f| **f == *font) {
@@ -104,6 +106,8 @@ impl FontDb {
 
     /// Forget the composite font named `name` (any case). Whether there was one.
     pub fn remove_composite_font(&self, name: &str) -> bool {
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = crate::test_fonts::font_change();
         let removed = self.composites.write().unwrap_or_else(|e| e.into_inner()).remove(&name.to_lowercase()).is_some();
         if removed {
             self.changed();
