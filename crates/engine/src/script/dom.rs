@@ -28,6 +28,7 @@
 //! - Members the help pages list that are not here yet throw an error that says so.
 
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -87,18 +88,21 @@ pub(super) enum Coords {
 const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
-/// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, and whether a call's own savepoint
-/// ([`atomically`]) is open.
+/// What the object model keeps for one run: its coordinate system, the lists of page items and the
+/// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
+/// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
+/// open, and the settings of each `DocumentPreset` the run made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
-    items: RefCell<Option<ItemList>>,
+    items: RefCell<Vec<ItemList>>,
+    locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     /// `app.userInteractionLevel` ([`save_open`]).
     save_options: save_open::State,
     /// The print option objects ([`print`]).
     printing: print::State,
+    presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
 impl State {
@@ -130,6 +134,57 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
 
 /// A document's uid, the document as it was, and the ids of its page items then.
 type ItemList = (u64, Arc<Document>, Rc<Vec<NodeId>>);
+
+/// A document's uid, the document and its new art ([`Document::new_art`]) as they were, and for
+/// each object of a layer or sublayer asked about then, whether it was on a locked artboard.
+type LockedList = (u64, Arc<Document>, Arc<HashSet<NodeId>>, HashMap<NodeId, bool>);
+
+/// How many documents' lists [`State`] keeps at once, of each kind.
+const ITEM_LISTS: usize = 4;
+
+/// The kept list of the document `uid` as `doc` is, if there is one.
+fn kept_items(lists: &[ItemList], uid: u64, doc: &Arc<Document>) -> Option<Rc<Vec<NodeId>>> {
+    lists.iter().find(|(u, d, _)| *u == uid && Arc::ptr_eq(d, doc)).map(|(_, _, ids)| ids.clone())
+}
+
+/// Keeps `list` in place of any earlier list of the same document, dropping the least recently
+/// kept list beyond [`ITEM_LISTS`].
+fn keep_items(lists: &mut Vec<ItemList>, list: ItemList) {
+    lists.retain(|(u, _, _)| *u != list.0);
+    if lists.len() >= ITEM_LISTS {
+        lists.remove(0);
+    }
+    lists.push(list);
+}
+
+/// Whether node `id` of `st` is on a locked artboard ([`Document::on_locked_artboard`]). Each
+/// object of a layer or sublayer is measured once while the document and its new art stay as they
+/// are, so the members of a group are answered with one measurement of the group.
+fn on_locked_artboard(h: &Host, st: &DocState, id: NodeId) -> bool {
+    if !st.doc.artboards.iter().any(|a| a.locked) {
+        return false;
+    }
+    let Some(object) = st.doc.layer_object(id).map(|n| n.id) else {
+        return false;
+    };
+    let new_art = st.doc.new_art.get();
+    let mut lists = h.dom.locked.borrow_mut();
+    let at = match lists.iter().position(|(u, d, n, _)| *u == st.uid && Arc::ptr_eq(d, &st.doc) && Arc::ptr_eq(n, &new_art)) {
+        Some(at) => at,
+        None => {
+            lists.retain(|(u, ..)| *u != st.uid);
+            if lists.len() >= ITEM_LISTS {
+                lists.remove(0);
+            }
+            lists.push((st.uid, st.doc.clone(), new_art, HashMap::new()));
+            lists.len() - 1
+        }
+    };
+    match lists.get_mut(at) {
+        Some((.., held)) => *held.entry(object).or_insert_with(|| st.doc.on_locked_artboard(object)),
+        None => st.doc.on_locked_artboard(object),
+    }
+}
 
 type Answer = std::result::Result<Data, HostError>;
 
@@ -338,13 +393,11 @@ fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     }
 }
 
-/// The ids of a document's page items in paint order ([`State`] keeps the last list).
+/// The ids of a document's page items in paint order ([`State`] keeps the lists of the last
+/// documents read).
 fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.items.borrow()
-        && *uid == st.uid
-        && Arc::ptr_eq(doc, &st.doc)
-    {
-        return ids.clone();
+    if let Some(ids) = kept_items(&h.dom.items.borrow(), st.uid, &st.doc) {
+        return ids;
     }
     fn walk(nodes: &[Arc<crate::doc::Node>], out: &mut Vec<NodeId>) {
         for n in nodes {
@@ -362,7 +415,7 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     let mut ids = Vec::new();
     walk(&st.doc.layers, &mut ids);
     let ids = Rc::new(ids);
-    *h.dom.items.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
+    keep_items(&mut h.dom.items.borrow_mut(), (st.uid, st.doc.clone(), ids.clone()));
     ids
 }
 
@@ -880,10 +933,16 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
         return Err(HostError::Range("the startup preset's name is too long".into()));
     }
     let (profile, mode) = startup_preset(name).ok_or_else(|| HostError::Error(format!("no startup preset called {name}")))?;
+    // Only an object `new DocumentPreset()` made: a plain object such as `{width: 500}` is refused.
     let settings = match given(arg(a, 2)) {
         None | Some(Data::Null) => Vec::new(),
-        Some(Data::Object(o)) => o.clone(),
-        Some(_) => return Err(HostError::Type("presetSettings must be a DocumentPreset".into())),
+        Some(d) => {
+            let i = preset_of(h, d).ok_or_else(|| HostError::Type("presetSettings must be a DocumentPreset".into()))?;
+            // The settings are charged as data passed to the call before they are copied.
+            let bytes = h.dom.presets.borrow()[i].iter().map(|(k, v)| k.len() as u64 + 2 + data_size(v)).sum::<u64>();
+            h.charge_call(bytes)?;
+            h.dom.presets.borrow()[i].clone()
+        }
     };
     let field = |k: &str| settings.iter().find(|(n, _)| n == k).map(|(_, v)| v).and_then(given);
     for k in ["documentBleedLink", "documentBleedOffsetRect", "transparencyGrid"] {
@@ -920,23 +979,104 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
     if let Some(m) = mode {
         p.entry("colorMode").or_insert_with(|| json!(m));
     }
-    new_document(h, p)
+    // A profile whose file could not be read throws, and the document `file.new` made with the
+    // defaults is put back, with the Recent sizes as they were.
+    atomically(h, |h| {
+        let (_, value) = command_value(h, "file.new", &Value::Object(p))?;
+        if let Some(e) = value.get("profileError") {
+            let profile = e["profile"].as_str().unwrap_or_default();
+            let reason = e["reason"].as_str().unwrap_or_default();
+            return Err(HostError::Error(format!("the New Document profile {profile} could not be read: {reason}")));
+        }
+        let s = h.session.borrow();
+        let st = s.active().ok_or_else(|| HostError::Error(NO_ACTIVE_DOCUMENT.into()))?;
+        Ok(doc_ref(h, st.uid))
+    })
 }
 
 /// `new DocumentPreset()`: a record of new-document settings with the defaults the help page
 /// <https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/> gives; the other settings are
-/// left out.
-fn new_preset(_: &[Data]) -> Answer {
+/// left out. The settings stay with the run, which hands the script an object of the
+/// `DocumentPreset` class.
+fn new_preset(h: &Host) -> Answer {
+    let mut presets = h.dom.presets.borrow_mut();
+    if presets.len() >= MAX_PRESETS {
+        return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
+    }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    Ok(Data::Object(vec![
-        item("typename", text("DocumentPreset")),
+    presets.push(vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]))
+    ]);
+    Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
+}
+
+/// The most `DocumentPreset` objects one run can make.
+const MAX_PRESETS: usize = 10_000;
+
+/// The settings a `DocumentPreset` has, each a property a script reads and assigns.
+const PRESET_FIELDS: &[&str] = &[
+    "artboardLayout",
+    "artboardRowsOrCols",
+    "artboardSpacing",
+    "colorMode",
+    "documentBleedLink",
+    "documentBleedOffsetRect",
+    "height",
+    "numArtboards",
+    "previewMode",
+    "rasterResolution",
+    "title",
+    "transparencyGrid",
+    "units",
+    "width",
+];
+
+/// The index in the run's presets of the `DocumentPreset` `d` is, when it is one this run made.
+fn preset_of(h: &Host, d: &Data) -> Option<usize> {
+    let handle = handle_of(d, "DocumentPreset")?;
+    let [run, i] = handle.as_slice() else { return None };
+    if whole(*run) != Some(h.run) {
+        return None;
+    }
+    let i = usize::try_from(whole(*i)?).ok()?;
+    (i < h.dom.presets.borrow().len()).then_some(i)
+}
+
+/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`, and
+/// a value is checked when `addDocument` uses it.
+fn preset_field(link: &Link, key: &'static str) -> HostMember {
+    let not_preset = || HostError::Type("this is not a DocumentPreset".into());
+    let l = link.clone();
+    let get: HostFunction = Rc::new(move |a: Vec<Data>| {
+        let h = current(&l)?;
+        // The value handed back is charged as the setter charges it, before it is copied.
+        let i = preset_of(&h, arg(&a, 0));
+        let bytes = i.map_or(0, |i| h.dom.presets.borrow()[i].iter().find(|(k, _)| k == key).map_or(0, |(_, v)| data_size(v)));
+        h.charge_call(16 + bytes)?;
+        let i = i.ok_or_else(not_preset)?;
+        let presets = h.dom.presets.borrow();
+        Ok(presets[i].iter().find(|(k, _)| k == key).map_or(Data::Undefined, |(_, v)| v.clone()))
+    });
+    let l = link.clone();
+    let set: HostFunction = Rc::new(move |a: Vec<Data>| {
+        let h = current(&l)?;
+        let value = arg(&a, 1).clone();
+        h.charge_call(16 + data_size(&value))?;
+        let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        let mut presets = h.dom.presets.borrow_mut();
+        let fields = &mut presets[i];
+        match fields.iter_mut().find(|(k, _)| k == key) {
+            Some((_, v)) => *v = value,
+            None => fields.push((key.to_string(), value)),
+        }
+        Ok(Data::Undefined)
+    });
+    HostMember::Property { get, set }
 }
 
 // ---- Document ----
@@ -1174,18 +1314,25 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `pageItems.removeAll()`: deletes every object of the document in one command. A hidden or
-/// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted,
+/// and so does an object on a locked artboard.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
         let whole = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !whole(i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        (ids, refused, on_locked)
     });
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
@@ -1303,17 +1450,15 @@ fn item_selected(h: &Host, a: &[Data]) -> Answer {
 fn item_set_selected(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let on = boolean(arg(a, 1), "selected")?;
-    let mut ids = with_doc(h, item.doc, |_, st| st.selection.objects.clone());
-    if ids.contains(&item.id) == on {
+    if with_doc(h, item.doc, |_, st| st.selection.objects.contains(&item.id)) == on {
         return Ok(Data::Undefined);
     }
-    if on {
-        let mut given = selection_ids(h, item.doc, arg(a, 0))?;
-        ids.append(&mut given);
-    } else {
-        ids.retain(|i| *i != item.id);
-    }
-    set_selection(h, item.doc, ids)
+    // Adding or removing the one object keeps how the others are selected (their direct-selected
+    // anchors and segments, and the key object).
+    let ids = if on { selection_ids(h, item.doc, arg(a, 0))? } else { vec![item.id] };
+    let id = if on { "select.add" } else { "select.toggle" };
+    on_doc(h, item.doc.uid, false, |h| command(h, id, &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
+    Ok(Data::Undefined)
 }
 
 /// The item's geometric bounds (`visual`: its visible bounds) in document coordinates and the
@@ -1432,9 +1577,11 @@ fn item_set_height(h: &Host, a: &[Data]) -> Answer {
     resize(h, a, false)
 }
 
+/// `editable`: false for an object that is hidden or locked, in a hidden or locked layer or group,
+/// or on a locked artboard.
 fn item_editable(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    Ok(Data::Bool(with_doc(h, item.doc, |_, st| editable(&st.doc, item.id))))
+    Ok(Data::Bool(with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && !on_locked_artboard(h, st, item.id))))
 }
 
 /// The item's place in its parent's stacking order, from 1 at the bottom.
@@ -1445,16 +1592,25 @@ fn item_z_order_position(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `remove()`: deletes the object. A hidden or locked object, one in a hidden or locked layer or
-/// group, or a group holding one is refused, as [`items_remove_all`] refuses it.
+/// group, a group holding one, or an object on a locked artboard is refused, as [`items_remove_all`]
+/// refuses it.
 fn item_remove(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    let whole = with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable));
+    let (whole, on_locked) = with_doc(h, item.doc, |_, st| {
+        (editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable), st.doc.on_locked_artboard(item.id))
+    });
     if !whole {
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {}", item.id.0)));
+    }
+    if on_locked {
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {}", item.id.0)));
     }
     edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0]}))?;
     Ok(Data::Undefined)
 }
+
+/// The error of `remove()` and `removeAll()` for an object on a locked artboard.
+const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
 
 /// The error of `move` and `duplicate` given an object of another document.
 pub const CROSS_DOCUMENT: &str = "Cross-document placement is not available";
@@ -1732,11 +1888,14 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     application.extend(print::application_members(l));
     let preset = {
         let l = link.clone();
-        let f: HostFunction = Rc::new(move |a: Vec<Data>| {
-            current(&l)?.charge_call(64)?;
-            new_preset(&a)
+        let f: HostFunction = Rc::new(move |_: Vec<Data>| {
+            let h = current(&l)?;
+            h.charge_call(64)?;
+            new_preset(&h)
         });
-        HostClass { name: "DocumentPreset".into(), parent: None, members: Vec::new(), index: None, construct: Some(f) }
+        let mut members = vec![("typename".to_string(), typename_of("DocumentPreset"))];
+        members.extend(PRESET_FIELDS.iter().map(|k| (k.to_string(), preset_field(link, k))));
+        HostClass { name: "DocumentPreset".into(), parent: None, members, index: None, construct: Some(f) }
     };
     let mut classes = vec![
         class("Application", None, application, None),
@@ -1857,5 +2016,30 @@ mod tests {
         // An internal failure or a stop ends the run instead of being taken for a refusal.
         assert_eq!(done_unless_refused(Err(HostError::Abort("canceled".into()))), Err(HostError::Abort("canceled".into())));
         assert_eq!(done_unless_refused(Err(HostError::Range("too large".into()))), Err(HostError::Range("too large".into())));
+    }
+
+    #[test]
+    fn page_item_lists_are_kept_for_several_documents() {
+        let docs: Vec<Arc<Document>> = (0..=ITEM_LISTS).map(|_| Arc::new(Document::new(100.0, 100.0))).collect();
+        let ids = |n: u64| Rc::new(vec![NodeId(n)]);
+        let mut lists = Vec::new();
+        keep_items(&mut lists, (1, docs[0].clone(), ids(1)));
+        keep_items(&mut lists, (2, docs[1].clone(), ids(2)));
+        // Reading two documents in turn keeps both lists.
+        assert_eq!(kept_items(&lists, 1, &docs[0]), Some(ids(1)));
+        assert_eq!(kept_items(&lists, 2, &docs[1]), Some(ids(2)));
+        // A changed document has no kept list, and its new list replaces the old one.
+        let changed = Arc::new(Document::new(100.0, 100.0));
+        assert_eq!(kept_items(&lists, 1, &changed), None);
+        keep_items(&mut lists, (1, changed.clone(), ids(3)));
+        assert_eq!(lists.len(), 2);
+        assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
+        // Past the limit, the list kept longest ago goes.
+        for (uid, d) in (10..).zip(&docs[2..]) {
+            keep_items(&mut lists, (uid, d.clone(), ids(uid)));
+        }
+        assert_eq!(lists.len(), ITEM_LISTS);
+        assert_eq!(kept_items(&lists, 2, &docs[1]), None);
+        assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
     }
 }

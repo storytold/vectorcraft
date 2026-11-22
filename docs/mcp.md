@@ -2566,7 +2566,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
   File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object; only
   `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out; a
-  document's `saveAs` or `exportFile` counts too), `filesOpened` (files opened in other apps), `network`,
+  document's `saveAs` or `exportFile` counts too, and so does `print` called on `app.activeDocument`,
+  `app.documents[i]`, `documents.add()`, `documents.getByName()` or `app.open()`, or on a variable that holds one of
+  them), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2641,16 +2643,23 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
   starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
-  the preset it is given holds one of them with a value other than `null`, and makes no document.
+  the preset it is given holds one of them with a value other than `null`, and makes no document. A
+  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
+  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
+  profile and the reason, and makes no document.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
   destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
   entry `[i]` gives. Each page item
   (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
-  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected`, `opacity` (0 to
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
+  or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
+  were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
@@ -2675,7 +2684,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
   kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
   hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
-  `cannot delete hidden or locked objects` and delete nothing. Setting `width` or `height` scales the object along
+  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
+  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
@@ -2727,7 +2737,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
 - `Document.print(options?)` runs `file.print` on the document, with the options a script assigned over the
-  document's print settings, which stay as they are, and adds no undo step
+  document's print settings, or over the preset's when `printPreset` is assigned. The document's print settings
+  stay as they are, and `print` adds no undo step
   (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/PrintOptions/).
   `options` is a `new PrintOptions()`, whose `jobOptions`, `colorManagementOptions`, `colorSeparationOptions`,
   `coordinateOptions`, `flattenerOptions`, `fontOptions`, `pageMarksOptions`, `paperOptions` and `postScriptOptions`
@@ -2751,17 +2762,20 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `FontSubstitutionPolicy`, `PageMarksTypes`, `PostScriptImageCompressionType` and `PrinterPostScriptLevelEnum` hold
   strings such as `"PrintTiling.TILEFULLPAGES"`. VectorCraft's own rules: `print` writes the file `jobOptions.file`
   names, checked as `saveAs` checks its file: PostScript when the name ends with `.ps` or `postScriptLevel` is
-  assigned, a print-ready PDF otherwise. Without a file it throws `Printing to a printer is not available to scripts
-  yet`, and `app.printerList` throws an error that says it is not available yet. `fitToPage` set to true wins over
-  the scale factors and the tiling mode. With `printAllArtboards` false, `artboardRange` picks the artboards, and
-  without a range every artboard prints. With one of `horizontalScale` and `verticalScale` assigned, the other keeps
-  the document's saved value. `print` throws before anything is written when an assigned `artboardRange` names an
+  assigned, a print-ready PDF otherwise, also when that name is a link to a file with another extension. Without a
+  file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
+  that says it is not available yet. `fitToPage` set to true wins over the scale factors and the tiling mode. With
+  `printAllArtboards` false, `artboardRange` picks the artboards, and without a range every artboard prints. With
+  `printAllArtboards` not assigned, an assigned `artboardRange` replaces the range of the settings `print` starts
+  from, which prints when those settings print a range. `print` starts from the preset's settings when `printPreset`
+  is assigned, otherwise from the document's saved settings. When those settings ignore the artboards, an assigned
+  `printArea` prints the artboards an assigned `artboardRange` names, or each artboard without a range. With one of
+  `horizontalScale` and `verticalScale` assigned, the other keeps its value in the settings `print` starts from. `print` throws before anything is written when an assigned `artboardRange` names an
   artboard the document does not have, also with `printAllArtboards` true, when `printPreset` or `flattenerPreset`
   is not a preset's name (any case), when `colorManagementOptions.name` is not an RGB or CMYK profile's name (any
   case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`
-  and `width` or `height` is assigned above 0. An assigned name that is empty or only
-  spaces, or holds `/`, `\` or a control character, throws too, and each checked name is sent without the spaces
-  around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
+  and `width` or `height` is assigned above 0. An assigned name that is empty or only spaces, or holds `/`, `\` or
+  a control character (also at either end), throws too, and each checked name is sent without the spaces around it. `printerName` and `PPDName` take only `""`. A listed option that is not mapped, or a value that is not mapped such as
   `PrintingBounds.ARTWORKBOUNDS`, `INRIPSEPARATION`, `PSLEVEL1` or a scale above 1000, throws an error that says it
   is not available yet. Each value is checked when it is assigned: a wrong type, a number that is not finite or is
   out of range, a string longer than 4,096 bytes, an option object of the wrong class or from an earlier run, and a
@@ -9204,9 +9218,11 @@ with the defaults.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
-When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
-folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+When the file is a link or a folder, cannot be read, is too large or is not a native document, or the request's read
+roots leave out the folder (whether or not the file exists), the document starts with the defaults and
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
+a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
+file. The
 reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
 file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
 adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
