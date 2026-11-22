@@ -443,6 +443,11 @@ pub fn print_regions(doc: &Document, set: &PrintSettings) -> Result<Vec<(Option<
     layout::regions(&printed_document(doc, set), set)
 }
 
+/// Is there art that prints in `r` of `printed`, a document as [`printed_document`] gives it?
+pub fn prints_art_in(printed: &Document, r: kurbo::Rect) -> bool {
+    layout::has_art(printed, r)
+}
+
 impl<'a> Job<'a> {
     fn new(doc: &'a Document, set: &PrintSettings, postscript: bool) -> Result<Self, PdfError> {
         set.check()?;

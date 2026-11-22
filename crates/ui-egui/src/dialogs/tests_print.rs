@@ -532,3 +532,36 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     screen.run(&mut app, vec![click(keep)]);
     assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
 }
+
+/// Advanced › Resolution sets the resolution Print as Bitmap prints at: a field screen readers name
+/// Resolution, dimmed until Print as Bitmap is on, printed and kept with the document by Print.
+#[test]
+fn the_advanced_section_sets_the_print_as_bitmap_resolution() {
+    let (mut app, jobs) = app();
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "__section", json!("Advanced"));
+    let mut screen = Screen::new();
+    let mut field = |app: &mut VectorcraftApp| {
+        screen.run(app, vec![]);
+        let out = screen.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let found = nodes.iter().find(|(_, n)| n.label() == Some("Resolution") && n.role() == egui::accesskit::Role::TextInput);
+        found.map(|(_, n)| n.is_disabled())
+    };
+    assert_eq!(field(&mut app), Some(true), "dimmed with Print as Bitmap off");
+    set(&mut app, "advanced", json!({"printAsBitmap": true}));
+    assert_eq!(field(&mut app), Some(false));
+    set(&mut app, "advanced", json!({"printAsBitmap": true, "bitmapResolution": 144}));
+    frame(&mut app);
+    super::confirm(&mut app).unwrap();
+    let back = vectorcraft_pdf::import(&jobs.borrow()[0].2).unwrap();
+    let mut sizes = vec![];
+    back.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            sizes.push((im.width, im.height));
+        }
+    });
+    assert_eq!(sizes, [(240, 180)], "the artboard with art, 120 × 90 pt at 144 ppi");
+    let saved = app.session.active().unwrap().doc.print_setup.as_ref().unwrap();
+    assert_eq!(saved["advanced"]["bitmapResolution"], json!(144.0));
+}

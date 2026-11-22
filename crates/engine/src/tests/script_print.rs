@@ -272,6 +272,68 @@ fn one_assigned_scale_factor_keeps_the_saved_other() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The pixel sizes of the images in the PDF at `path`.
+fn image_sizes(path: &Path) -> Vec<(u32, u32)> {
+    let back = vectorcraft_pdf::import(&std::fs::read(path).unwrap()).unwrap();
+    let mut sizes = vec![];
+    back.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            sizes.push((im.width, im.height));
+        }
+    });
+    sizes
+}
+
+/// `PrintJobOptions.bitmapResolution` sets the resolution Print as Bitmap prints at, as
+/// `advanced.bitmapResolution` does; 0 keeps the document's raster effects resolution.
+#[test]
+fn bitmap_resolution_sets_the_printed_image_size() {
+    let base = folder("bitmap");
+    let mut s = session(&base);
+    s.execute("document.rasterEffectsSettings", &json!({"resolution": 72})).unwrap();
+    let saved = s.execute("print.setup", &json!({})).unwrap()["settings"].clone();
+    let dir = data_folder(&mut s, &base);
+    let out = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var o = new PrintOptions(), j = o.jobOptions;\n\
+             vc.log(j.bitmapResolution);\n\
+             j.printAsBitmap = true; j.printAllArtboards = false; j.artboardRange = '1';\n\
+             j.bitmapResolution = 144; j.file = new File({}); app.activeDocument.print(o);\n\
+             j.bitmapResolution = 0; j.file = new File({}); app.activeDocument.print(o);\n\
+             vc.log(j.bitmapResolution);",
+            quoted(&dir.join("a.pdf")),
+            quoted(&dir.join("b.pdf"))
+        ),
+    );
+    assert_eq!(out, json!([0, 0]));
+    assert_eq!(image_sizes(&dir.join("a.pdf")), [(600, 400)], "a 300 by 200 pt artboard at 144 ppi");
+    assert_eq!(image_sizes(&dir.join("b.pdf")), [(300, 200)], "at the raster effects resolution, 72 ppi");
+    let settings = json!({"artboards": "range", "range": "1", "advanced": {"printAsBitmap": true, "bitmapResolution": 144}});
+    s.execute("file.print", &json!({"settings": settings, "path": dir.join("want.pdf").to_string_lossy()})).unwrap();
+    assert_eq!(image_sizes(&dir.join("want.pdf")), image_sizes(&dir.join("a.pdf")), "the same image as the command prints");
+    assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"], saved, "the saved settings stay as they are");
+    let file = format!("j.file = new File({});", quoted(&dir.join("x.pdf")));
+    for (case, kind, part) in [
+        ("j.bitmapResolution = 9601;", "RangeError", "bitmapResolution must be from 0 to 9600"),
+        ("j.bitmapResolution = -1;", "RangeError", "bitmapResolution must be from 0 to 9600"),
+        ("j.bitmapResolution = NaN;", "TypeError", "bitmapResolution"),
+        ("j.bitmapResolution = Infinity;", "TypeError", "bitmapResolution"),
+        ("j.bitmapResolution = '300';", "TypeError", "bitmapResolution must be a finite number"),
+        (
+            &format!("{file} j.printAsBitmap = true; j.bitmapResolution = 0.5; app.activeDocument.print(o);"),
+            "",
+            "advanced.bitmapResolution must be 1–9600 ppi",
+        ),
+    ] {
+        let e = failure(&mut s, &base, &format!("Folder.userData; var o = new PrintOptions(), j = o.jobOptions; {case}"));
+        assert!(e.contains(kind) && e.contains(part), "{case}: {e}");
+    }
+    assert!(!dir.join("x.pdf").exists(), "nothing printed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Artboard ranges the document does not hold and preset names that are not presets, such as
 /// paths, throw before anything is written.
 #[test]

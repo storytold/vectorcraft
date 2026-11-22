@@ -31,6 +31,9 @@
 //! - With `printAllArtboards` set to false, `artboardRange` picks the artboards; without a range
 //!   every artboard prints.
 //! - With one of `horizontalScale` and `verticalScale` assigned, the other keeps the saved value.
+//! - `bitmapResolution` is `file.print`'s `advanced.bitmapResolution`: 0 prints at the document's
+//!   raster effects resolution, and 1 to 9600 ppi at that resolution; `print` throws, before
+//!   anything is written, for a value between 0 and 1.
 //! - `print` throws, before anything is written, when an assigned `artboardRange` names an artboard
 //!   the document does not have, also with `printAllArtboards` true; when `printPreset` or
 //!   `flattenerPreset` is not the name of a preset (any case); when `colorManagementOptions.name` is
@@ -218,7 +221,7 @@ const JOB: Class = Class {
     name: "PrintJobOptions",
     fields: &[
         f("artboardRange", Kind::Text, Start::Text("1-")),
-        kept("bitmapResolution", Kind::Number(0.0, f64::MAX), Start::Num(0.0)),
+        f("bitmapResolution", Kind::Number(0.0, vectorcraft_pdf::MAX_BITMAP_RESOLUTION), Start::Num(0.0)),
         f("collate", Kind::Bool, Start::Bool(false)),
         f("copies", Kind::Whole(1, 999), Start::Num(1.0)),
         f(
@@ -621,6 +624,9 @@ fn map_job(h: &Host, slot: usize, job: &mut Job) {
             },
             "printAsBitmap" => {
                 job.group("advanced").insert("printAsBitmap".into(), json!(flag(v)));
+            }
+            "bitmapResolution" => {
+                job.group("advanced").insert("bitmapResolution".into(), json!(number_of(v)));
             }
             "file" => job.file = Some(v.clone()),
             "artboardRange" => job.range = Some(string_of(v)).filter(|r| !r.trim().is_empty()),

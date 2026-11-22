@@ -560,9 +560,13 @@ choice! {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PrintAdvanced {
-    /// Composite pages print as one image each of the art, at the document's raster effects
-    /// resolution (the app renders them before printing).
+    /// Composite pages print as one image each of the art, at [`Self::bitmap_resolution`] (the
+    /// app renders them before printing).
     pub print_as_bitmap: bool,
+    /// The resolution Print as Bitmap renders at (ppi, 1–[`MAX_BITMAP_RESOLUTION`]); 0: the
+    /// document's raster effects resolution. Other output leaves it unused.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub bitmap_resolution: f64,
     pub overprints: PrintOverprints,
     /// The transparency flattener preset transparency is flattened with (a built-in or saved
     /// one, by name; the app flattens before printing). Empty: transparency prints live.
@@ -583,8 +587,16 @@ pub struct TileOrigin {
     pub y: f64,
 }
 
+/// Whether `v` is 0 (a field left at its default is not written).
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
 /// Most copies of a job.
 pub const MAX_COPIES: u32 = 999;
+
+/// The highest [`PrintAdvanced::bitmap_resolution`] (ppi).
+pub const MAX_BITMAP_RESOLUTION: f64 = 9600.0;
 
 impl PrintSettings {
     /// Refuse values out of range (ranges and tile overlap are checked against the document when
@@ -613,6 +625,9 @@ impl PrintSettings {
         self.marks.check()?;
         self.bleed.check()?;
         within("graphics.flatness", self.graphics.flatness, 0.2, 100.0, "")?;
+        if self.advanced.bitmap_resolution != 0.0 {
+            within("advanced.bitmapResolution", self.advanced.bitmap_resolution, 1.0, MAX_BITMAP_RESOLUTION, " ppi")?;
+        }
         let profile = self.color.profile.trim();
         if !profile.is_empty() && cms::profile(profile).is_none_or(|p| p.kind == ProfileKind::Gray) {
             return Err(PdfError::BadSetting(format!("color.profile: no RGB or CMYK profile is called “{profile}”")));

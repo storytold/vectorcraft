@@ -937,7 +937,19 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     note(ui, tl!("The edge of the paper the printer can't reach: the art goes inside it, and the preview shows it dashed."));
     let composite = choice::<OutputMode>(d, "output.mode") != Some(OutputMode::Separations);
     flag(ui, d, "advanced.printAsBitmap", tl!("Print as Bitmap"), composite);
-    note(ui, tl!("Each page prints as one image, at the document's raster effects resolution."));
+    let bitmap = composite && get(d, "advanced.printAsBitmap").as_bool() == Some(true);
+    row(ui, tl!("Resolution:"), |ui| {
+        let v = get(d, "advanced.bitmapResolution").as_f64().unwrap_or(0.0);
+        let name = tl!("Resolution");
+        let typed = ui.add_enabled_ui(bitmap, |ui| widgets::plain_field_named(ui, "advanced.bitmapResolution", Some(name), v, " ppi", 3, 64.0));
+        if let Some(x) = typed.inner {
+            set(d, "advanced.bitmapResolution", json!(x));
+        }
+    });
+    // 0, the default, leaves the resolution to the document.
+    if get(d, "advanced.bitmapResolution").as_f64().unwrap_or(0.0) == 0.0 {
+        note(ui, tl!("Each page prints as one image, at the document's raster effects resolution."));
+    }
     heading(ui, tl!("Overprint and Transparency Flattener Options"));
     row(ui, tl!("Overprints:"), |ui| {
         ui.add_enabled_ui(composite, |ui| pick::<PrintOverprints>(ui, d, "advanced.overprints", 160.0, |_| true));

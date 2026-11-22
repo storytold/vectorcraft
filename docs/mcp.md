@@ -2738,9 +2738,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   its help page's default until it is assigned, and a `PrintOptions` holds its option objects by reference, so a change
   made after the assignment is printed. `print` maps `printPreset` (a print preset's name) and `flattenerPreset`;
   `copies` (1 to 999), `collate`, `reversePages`, `designation`, `printAllArtboards`, `artboardRange`,
-  `printAsBitmap` and `file` of the job; `colorProfileMode` (`SOURCEPROFILE` and `CUSTOMPROFILE`), `intent` and
-  `name` (an RGB or CMYK profile) of color management; `colorSeparationMode` (`COMPOSITE` and
-  `HOSTBASEDSEPARATION`), `convertSpotColors` and `overPrintBlack`; `emulsion`, `fitToPage`, `horizontalScale` and
+  `printAsBitmap`, `bitmapResolution` (`advanced.bitmapResolution`: 0 for the document's raster effects resolution,
+  or 1 to 9600 ppi; `print` throws for a value between 0 and 1) and `file` of the job; `colorProfileMode`
+  (`SOURCEPROFILE` and `CUSTOMPROFILE`), `intent` and `name` (an RGB or CMYK profile) of color management;
+  `colorSeparationMode` (`COMPOSITE` and `HOSTBASEDSEPARATION`), `convertSpotColors` and `overPrintBlack`; `emulsion`, `fitToPage`, `horizontalScale` and
   `verticalScale` (1 to 1000), `orientation`, `position` and `tiling`; `overprint` of the flattener; `colorBars`,
   `pageInfoMarks`, `registrationMarks`, `trimMarks`, `pageMarksType` and `trimMarksWeight`; `name`, `width`,
   `height` and `transverse` of the paper; and `negativePrinting` and `postScriptLevel` (`PSLEVEL2` and `PSLEVEL3`).
@@ -11364,16 +11365,22 @@ the placement then shows as placed by the tool, with a Reset button; dragging th
 ## Print advanced options
 
 The Print dialog's Advanced section and the printer profile are print settings too (`print.setup`, `print.preview`,
-`file.print`): `advanced: {printAsBitmap, overprints: preserve|discard|simulate, flattenerPreset}` and `color:
-{profile}`. In composite output, `preserve` writes overprinting fills and strokes with an overprinting graphics state
-(`/OP`, as PDF export does), `discard` makes overprinting fills and strokes knock out and `simulate` prints them
+`file.print`): `advanced: {printAsBitmap, bitmapResolution, overprints: preserve|discard|simulate, flattenerPreset}`
+and `color: {profile}`. In composite output, `preserve` writes overprinting fills and strokes with an overprinting
+graphics state (`/OP`, as PDF export does), `discard` makes overprinting fills and strokes knock out and `simulate` prints them
 as Overprint Preview shows them (darkened); either way the file has no overprint left. Separations always keep
 overprints. `flattenerPreset` (High Resolution, Medium Resolution, Low Resolution or a saved preset,
 `flattener.presets.list`) flattens transparency before printing, as Object → Flatten Transparency does; empty, a
 PDF keeps it live (PostScript, which has none, uses `file.print`'s `flattenerPreset`, else this one, else medium).
-`printAsBitmap` prints each composite page as one image of the art at the document's raster effects resolution,
-or at the highest resolution that fits when the image would be larger than 64 million pixels or longer than 32,768
-pixels a side.
+`printAsBitmap` prints each composite page as one image of the art at `bitmapResolution`, or at the highest
+resolution that fits when the image would be larger than 64 million pixels or longer than 32,768 pixels a side.
+`bitmapResolution` is VectorCraft's own range, 1 to 9600 ppi, and 0 (the default) prints at the document's raster
+effects resolution; any other value is an error. When a page prints below a `bitmapResolution` that was given, the
+reply's `warnings` (and `print.preview`'s) say at what resolution; a page with no art that draws prints no image
+and gets no warning (`print.preview` goes by the bounds of the art, without drawing it). Separations and pages that
+do not print as a bitmap leave it unused. Given in `file.print`'s `settings`, it applies to that job only;
+`print.setup` saves it with the document. (https://ai-scripting.docsforadobe.dev/jsobjref/PrintJobOptions/ lists a
+job's bitmap resolution with a minimum of 0 and does not say what 0 does.)
 `color.profile` names an RGB or CMYK profile: composite PDF colours are converted to it with `color.intent` (CMYK
 colours keep their numbers with `preserveNumbers`), so a CMYK profile writes device CMYK; separations separate with a
 CMYK one. Settings saved before these options load with their defaults.
