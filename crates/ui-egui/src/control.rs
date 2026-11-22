@@ -149,6 +149,8 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         }
         leave_out_unreadable_paths(fields);
     }
+    let mut dialogs = app.dialogs().map_or_else(|| json!([]), |dialogs| dialogs.with(|host| craft::automation::dialogs::inspect(host)));
+    crate::dialogs::javascript_files::show_selected(app, &mut dialogs);
     json!({
         "scriptRunning": app.session.script_running(),
         "scriptReport": app.session.shown_script_report(),
@@ -156,7 +158,7 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         "toolOptions": app.session.tool_options(),
         "ui": ui,
         // The window's open dialogs, the top one last, with their fields.
-        "dialogs": app.dialogs().map_or_else(|| json!([]), |dialogs| dialogs.with(|host| craft::automation::dialogs::inspect(host))),
+        "dialogs": dialogs,
         // Not saved with the UI state, so not in `ui`: 0 normal … 3 Presentation Mode.
         "screenMode": app.ui.screen_mode,
         // The Contextual Task Bar: pinned (not saved either); `ui.locate` finds where it shows.
@@ -214,10 +216,11 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
 }
 
 /// The fields of the UI state, by their keys in `ui.inspect`'s `ui`, that hold panel ids: the panel
-/// popped out of the collapsed column, the docking layout, closed panels' places and groups, the panels
-/// shown as icons or collapsed, and the older floating panels' record.
-const PANEL_FIELDS: [&str; 7] =
-    ["open_panel", "docking", "docking_hidden", "docking_hidden_groups", "docking_icons", "docking_collapsed", "floating_panels"];
+/// popped out of the collapsed column, the dock's workspace (its layout, closed and floated panels), the older
+/// docking layout, closed panels' places and groups, the panels shown as icons or collapsed, and the older floating
+/// panels' record.
+const PANEL_FIELDS: [&str; 8] =
+    ["open_panel", "dock", "docking", "docking_hidden", "docking_hidden_groups", "docking_icons", "docking_collapsed", "floating_panels"];
 
 /// The ids of the loaded libraries (`loaded/<path>`) that the UI state refers to and whose file the
 /// request may not read, each with the id a reply shows instead: `loaded/<file name>`, as a library
@@ -673,7 +676,8 @@ impl<'a> Found<'a> {
 
 /// Where a `file:` URL that holds `from`, an absolute path found at `at` in `text`, begins: `at` less
 /// the `file:` before it, with `//` and a host (`localhost`, another host or none) between them, in any
-/// case of its letters; before a drive, the host is followed by a `/` too. `at` when no such URL holds it.
+/// case of its letters; before a drive, the host is followed by a `/` too, or the drive follows `file:` at once
+/// (`file:C:/x`). `at` when no such URL holds it.
 fn url_start(text: &str, at: usize, from: &str) -> usize {
     let drive = matches!(from.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic());
     if !from.starts_with('/') && !drive {
@@ -684,7 +688,7 @@ fn url_start(text: &str, at: usize, from: &str) -> usize {
     let rest = &before[scheme + "file:".len()..];
     let host = |h: &str| h.chars().all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']' | '%'));
     let holds = if drive {
-        rest.strip_prefix("//").and_then(|r| r.strip_suffix('/')).is_some_and(host)
+        rest.is_empty() || rest.strip_prefix("//").and_then(|r| r.strip_suffix('/')).is_some_and(host)
     } else {
         rest.is_empty() || rest.strip_prefix("//").is_some_and(host)
     };

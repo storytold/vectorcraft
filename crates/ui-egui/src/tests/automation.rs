@@ -1494,7 +1494,11 @@ fn ui_inspect_hides_a_library_panels_path_in_shortcut_overrides() {
     app.ui.shortcut_sets.save_as("Mine", overrides, &crate::shortcut_editor::BUILTINS).unwrap();
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let shown = "panel:library:swatches:loaded/b.svg";
-    assert_eq!(r["result"]["ui"]["shortcut_sets"]["sets"]["Mine"][shown], "Cmd+Alt+Shift+F7", "{r}");
+    // The sets are saved in the keymap's own form: a list of named sets, each a list of overrides.
+    let sets = r["result"]["ui"]["shortcut_sets"]["sets"].as_array().cloned().unwrap_or_default();
+    let mine = sets.iter().find(|set| set["name"] == "Mine").map_or(Value::Null, |set| set["overrides"].clone());
+    let keys = mine.as_array().and_then(|o| o.iter().find(|entry| entry["command"] == shown)).map(|entry| entry["keys"].clone());
+    assert_eq!(keys, Some(json!(["Cmd+Alt+Shift+F7"])), "{r}");
     let hidden = json!(s(base.join("outside"))).to_string();
     assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
@@ -1647,8 +1651,15 @@ fn dialog_set_cannot_redirect_parameter_dialog() {
             json!({"fields": [{"field": "width", "value": 30}, {"field": "__command", "value": "file.close"}], "action": "confirm"}),
         ],
     );
+    let id = open_dialogs(&app).pop().expect("the parameter dialog").id;
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "width", "value": 30, "action": "confirm"}));
     assert_eq!(r["ok"], true, "{r}");
+    // The dialog holds its OK for the pump; the OK the pump accepted closes it in the dialog's next pass, which
+    // `request`'s bare frames don't draw.
+    let (ctx, host) = (app.ui_ctx.clone().expect("a window context"), app.dialogs().expect("the window's dialog host"));
+    if host.with(|h| h.held_state(id) == Some(craft::ui::dialog::HeldOk::Accepted) && h.confirm_by_id(&ctx, id)) {
+        crate::dialogs::host::pump(&mut app, &ctx);
+    }
     assert!(open_dialogs(&app).is_empty() && objects(&app) == 1, "OK ran the dialog's command");
     assert_eq!(first_object(&app), (10.0, 30.0), "with its fixed x and the width set");
 }
@@ -1722,6 +1733,9 @@ fn dialog_set_cannot_open_save_preset() {
     let saved = |app: &VectorcraftApp| (app.session.prefs.pdf_presets.len(), app.session.prefs.print_presets.len());
     for open in ["ui.savePdfDialog", "file.print"] {
         app.run(open, json!({})).unwrap();
+        // The pump gives the dialog the fields it derives (Print's inks and summary) before they are compared.
+        let ctx = app.ui_ctx.clone().unwrap_or_default();
+        crate::dialogs::host::pump(&mut app, &ctx);
         let presets = saved(&app);
         refused_sets(
             &mut app,

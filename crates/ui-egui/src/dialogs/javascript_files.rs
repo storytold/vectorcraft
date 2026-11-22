@@ -34,6 +34,18 @@ use crate::panels::svg_interactivity::caption;
 /// documents.
 const KEY: &str = "javascriptFiles";
 
+/// Names the file selected in an open JavaScript Files dialog, in `ui.inspect`'s list of open `dialogs`, as
+/// `svgInteractivity.info` names the active document's linked files: outside the read roots, by its file name alone.
+pub(crate) fn show_selected(app: &VectorcraftApp, dialogs: &mut Value) {
+    let (Some(st), Some(open)) = (app.session.active(), dialogs.as_array_mut()) else { return };
+    let id = dialog_id(KEY).value().to_string();
+    for dialog in open.iter_mut().filter(|d| d["id"] == id.as_str()) {
+        if let Some(Value::String(selected)) = dialog.pointer_mut("/fields/selected") {
+            *selected = shown_script(st, selected).into_owned();
+        }
+    }
+}
+
 /// What the body asks [`pump`] to do with the app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Pending {
