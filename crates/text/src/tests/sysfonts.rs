@@ -163,7 +163,7 @@ fn a_version_looked_up_during_a_rescan_is_found_after_it() {
         assert_eq!(waits, Some(true), "the rescan waits for the guard before it publishes");
         assert_eq!(versions(&db), [TWIN_VERSIONS[0]], "before the rescan publishes, only the older file is cataloged");
         drop(steady);
-        assert_eq!(rescanning.join().unwrap(), 2);
+        assert_eq!(rescanning.join().unwrap(), 1, "the newer file is cataloged as a version of the face, not as a face of its own");
     });
     assert_eq!(versions(&db), TWIN_VERSIONS, "the version the rescan found is loaded");
     std::fs::remove_dir_all(dir).unwrap();

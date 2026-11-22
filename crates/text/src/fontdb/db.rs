@@ -368,8 +368,9 @@ impl FontDb {
         // Files may have been installed since: other versions are looked for again, in the catalog
         // the rescan published. A version lookup made during the scan read the previous one.
         self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
-        let installed: std::collections::HashSet<PathBuf> = self.catalog.faces().iter().filter_map(|f| f.path.clone()).collect();
-        // Faces loaded from a file this scan did not catalog (the font was removed, or its folder
+        let installed: std::collections::HashSet<PathBuf> =
+            self.catalog.faces().iter().flat_map(|f| self.catalog.versions(f)).filter_map(|f| f.path).collect();
+        // Faces loaded from a file this scan did not catalog, as a face or a version of one (the font was removed, or its folder
         // is no longer read) are dropped with their outlines. A family with no face left and no
         // cataloged file leaves the lists, and type set in it resolves to the fallback font. A face
         // without a file (bundled, or added as bytes) stays.
