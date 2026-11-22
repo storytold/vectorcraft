@@ -1,7 +1,8 @@
 //! The panel harness: one panel drawn in the framework `Fixture`, its controls found by accessible name.
 //!
-//! A command a control fires goes through the same `shortcuts::run_fired` the window runs, so a click here reaches the
-//! app as it does in production.
+//! Each frame takes the app's frame input as the hosts give it ([`VectorcraftApp::frame_input`]): the commands the
+//! frames before fired run first, and the runtime gets the app's command catalog, states and host, so a control bound
+//! to a command shows the command's label and a click here reaches the app as it does in production.
 
 use std::{
     cell::{RefCell, RefMut},
@@ -14,7 +15,7 @@ use craft::ui::testing::pointer::part_rect_of_node;
 use craft::ui::testing::{Fixture, Target};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, Rect, Ui, Vec2, vec2};
 
-use crate::{VectorcraftApp, shortcuts};
+use crate::VectorcraftApp;
 
 /// The room every panel is drawn in: narrow like a docked panel, tall enough for its last section.
 pub(crate) const ROOM: Vec2 = vec2(300.0, 1600.0);
@@ -32,6 +33,8 @@ impl Panel {
         let shown = Rc::clone(&app);
         let mut fixture = Fixture::new(move |ui| draw(&mut shown.borrow_mut(), ui));
         fixture.room(ROOM);
+        // The fixture's context is the app's window, as a host's is.
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
         let mut panel = Panel { fixture, app };
         panel.frame();
         panel.frame();
@@ -50,26 +53,29 @@ impl Panel {
 
     /// One frame with no input.
     pub(crate) fn frame(&mut self) {
-        self.fixture.frame(Vec::new());
-        self.run_fired();
+        self.frame_with(Vec::new());
     }
 
-    /// Runs the commands the frames since the last call fired.
-    fn run_fired(&mut self) {
-        let ctx = self.fixture.ctx().clone();
-        let fired = take_output(&ctx).fired;
-        let mut app = self.app.borrow_mut();
-        for one in &fired {
-            // PLAN: assumed `run_fired(app, ctx, &Fired)` takes one fired command (kb.C21).
-            shortcuts::run_fired(&mut app, &ctx, one);
+    /// One frame with `events`, its input taken from the app first.
+    fn frame_with(&mut self, events: Vec<Event>) {
+        self.take_input();
+        self.fixture.frame(events);
+        self.take_input();
+    }
+
+    /// The app's frame input for the next frame, given as the hosts give it: the commands the frames since the last
+    /// call fired run first.
+    fn take_input(&mut self) {
+        let input = self.app.borrow_mut().frame_input(take_output(self.fixture.ctx()));
+        self.fixture.root(input.root).commands(input.commands);
+        if let Some(host) = input.host {
+            self.fixture.host(host);
         }
     }
 
     /// What a driver call ends with: the fired commands run, and a frame shows their effect.
     fn after(&mut self) {
-        self.run_fired();
-        self.fixture.frame(Vec::new());
-        self.run_fired();
+        self.frame();
     }
 
     /// The names the latest frame shows.
@@ -85,7 +91,7 @@ impl Panel {
 
     /// A fresh frame, then the control named `name`.
     fn find(&mut self, name: &str) -> Target {
-        self.fixture.frame(Vec::new());
+        self.frame();
         self.look(name)
     }
 
@@ -185,9 +191,9 @@ impl Panel {
     pub(crate) fn secondary_click(&mut self, name: &str) {
         let at = self.find(name).center();
         let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Modifiers::NONE };
-        self.fixture.frame(vec![Event::PointerMoved(at)]);
-        self.fixture.frame(vec![button(true)]);
-        self.fixture.frame(vec![button(false)]);
+        self.frame_with(vec![Event::PointerMoved(at)]);
+        self.frame_with(vec![button(true)]);
+        self.frame_with(vec![button(false)]);
         self.after();
     }
 
