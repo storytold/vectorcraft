@@ -1067,10 +1067,10 @@ fn colorized_images_keep_their_color() {
     assert_eq!(out.warnings, [IMAGE_ALPHA]);
 }
 
-/// A colorized image mask overprints when an `O` written for it says so, and not because the
-/// path before it overprints.
+/// A colorized image mask takes the fill overprint in force: its own `O`, or without one the
+/// last `O` before it, as it takes the fill color.
 #[test]
-fn a_colorized_image_mask_takes_only_its_own_fill_overprint() {
+fn a_colorized_image_mask_takes_the_fill_overprint_in_force() {
     let opened = |square_overprints: bool, image_overprints: bool, drop_own: bool| {
         let mut doc = Document::new(200.0, 100.0);
         doc.layers.clear();
@@ -1087,9 +1087,9 @@ fn a_colorized_image_mask_takes_only_its_own_fill_overprint() {
         doc.insert(Some(layer), usize::MAX, bitmap).unwrap();
         let mut text = String::from_utf8(write(&doc).bytes).unwrap();
         if drop_own {
-            let own = "0 0.5 1 0 k\n0 O\n";
-            assert!(text.contains(own), "{text}");
-            text = text.replace(own, "0 0.5 1 0 k\n");
+            let own = format!("0 0.5 1 0 k\n{} O\n", u8::from(image_overprints));
+            assert!(text.contains(&own), "{text}");
+            text = text.replace(&own, "0 0.5 1 0 k\n");
         }
         let read = crate::import(text.as_bytes()).unwrap().document;
         let mut found = vec![];
@@ -1102,7 +1102,8 @@ fn a_colorized_image_mask_takes_only_its_own_fill_overprint() {
     };
     assert_eq!(opened(false, true, false), [true]);
     assert_eq!(opened(true, false, false), [false]);
-    assert_eq!(opened(true, false, true), [false], "the square's overprint is left over");
+    assert_eq!(opened(true, false, true), [true], "the square's overprint stays in force");
+    assert_eq!(opened(false, true, true), [false], "and so does the square's knockout");
 }
 
 /// The pieces of a colorized warped image work out the image's coverage once, and an image with

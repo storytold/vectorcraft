@@ -531,9 +531,6 @@ struct Reader<'a> {
     /// The last object read is an image, and only the operators that end its raster (`XH`, `Xr`,
     /// `N`) came since: its name and opacity mask still follow.
     image_tail: bool,
-    /// An `O` came since the last object: an image mask read now takes its fill overprint. One
-    /// set for a path before it does not reach the image.
-    image_overprint: bool,
     nodes: usize,
     /// What layers that show have that this reader doesn't read (errors).
     unsupported: BTreeSet<String>,
@@ -843,7 +840,6 @@ impl<'a> Reader<'a> {
             foreign_data: None,
             after_object: false,
             image_tail: false,
-            image_overprint: false,
             nodes: 0,
             unsupported: BTreeSet::new(),
             unknown: BTreeSet::new(),

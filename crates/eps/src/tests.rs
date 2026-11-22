@@ -1209,6 +1209,13 @@ fn an_overprinting_colorized_image_writes_only_its_process_inks() {
     assert_eq!(pixels, vec![102, 51, 0], "the cyan pass first");
     assert_eq!(ps.matches("/ImageType 1").count(), 2, "one image per ink: {ps}");
 
+    // A gray color is black ink alone.
+    let gray = doc(vec![0, 128, 255], Color::Gray { k: 0.6 }, true);
+    for level in Level::ALL {
+        let (ps, ..) = colorized_samples(&gray, level);
+        assert!(ps.contains("/Black") && !ps.contains("/DeviceGray setcolorspace") && !ps.contains("/Cyan"), "{ps}");
+    }
+
     // A stencil sets the pass's inks as its color.
     let (ps, ..) = colorized_samples(&doc(vec![0, 255, 0], ink, true), Level::Three);
     assert!(ps.contains("VCdn0 setcolorspace 0.4 1 setcolor") && ps.contains("imagemask"), "{ps}");
@@ -1241,17 +1248,22 @@ fn an_overprinting_colorized_image_writes_only_its_process_inks() {
 }
 
 /// On a separation plate, an overprinting colorized image whose color puts none of the plate's ink
-/// down is drawn as nothing, so the ink below stays; one that knocks out is drawn as paper.
+/// down is drawn as nothing, so the ink below stays; one that knocks out, or whose overprint is
+/// discarded, is drawn as paper. (The plate's colors come from the separator, which has already
+/// applied Discard White Overprint.)
 #[test]
 fn a_plate_leaves_out_an_overprinting_image_without_its_ink() {
-    let body = |overprint: bool| {
+    let body = |overprint: bool, preserve: bool| {
         let mut d = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::WHITE)));
+        d.setup.discard_white_overprint = false;
         let id = d.layers[0].children().unwrap()[0].id;
         d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
-        crate::scene::Scene::new(&d, &opts(&d)).on_plate(true).run().body
+        let o = EpsOptions { overprint: if preserve { Overprint::Preserve } else { Overprint::Discard }, ..opts(&d) };
+        crate::scene::Scene::new(&d, &o).on_plate(true).run().body
     };
-    assert!(!body(true).contains("image"), "{}", body(true));
-    assert!(body(false).contains("image"), "{}", body(false));
+    assert!(!body(true, true).contains("image"), "{}", body(true, true));
+    assert!(body(false, true).contains("image"), "{}", body(false, true));
+    assert!(body(true, false).contains("image"), "{}", body(true, false));
 }
 
 #[test]

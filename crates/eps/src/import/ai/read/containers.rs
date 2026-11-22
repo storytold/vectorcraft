@@ -62,7 +62,6 @@ impl<'a> Reader<'a> {
             None => return Err("it has art outside its layers".into()),
         }
         self.after_object = true;
-        self.image_overprint = false;
         Ok(())
     }
 

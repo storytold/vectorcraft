@@ -577,7 +577,11 @@ impl<'a> Scene<'a> {
                 match n.extras().colorize.as_deref() {
                     // On a plate, an overprinting image whose color puts none of the plate's ink
                     // down is drawn as nothing, as such a solid color is ([`Self::on_plate`]).
-                    Some(p) if self.plate && n.colorize_overprints() && vectorcraft_doc::overprint::is_white(p) => {}
+                    Some(p)
+                        if self.plate
+                            && self.o.overprint == Overprint::Preserve
+                            && n.colorize_overprints()
+                            && vectorcraft_doc::overprint::is_white(p) => {}
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
                         let on = self.overprint_on(n.colorize_overprints());
                         self.colorized_image(im, blob, p, on);
@@ -1789,7 +1793,7 @@ impl<'a> Scene<'a> {
 
     /// Image `im` (its pixels `blob`) as gray coverage in the selected process or Separation ink.
     /// Binary coverage is a stencil; continuous coverage leaves zero pixels untouched at Level 3
-    /// and writes them as paper at Level 2. With `overprint` a CMYK color is written in only the
+    /// and writes them as paper at Level 2. With `overprint` a CMYK or gray color is written in only the
     /// process inks it puts down ([`Self::overprint_passes`]), since a zero sample in an image
     /// replaces the ink below it.
     fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, blob: Option<&ImageBlob>, paint: &Paint, overprint: bool) {
@@ -1818,12 +1822,19 @@ impl<'a> Scene<'a> {
     }
 
     /// The color spaces an overprinting colorized image of `paint` is drawn in, each with the
-    /// amounts of its inks, when `paint` is a CMYK process color: at Level 3 one DeviceN space of
-    /// the process inks it puts down, at Level 2 a Separation space for each of them. No pass when
-    /// it puts no ink down. `None` for another paint, which is drawn as it is without overprinting.
+    /// amounts of its inks, when `paint` is a CMYK or gray process color (gray is black ink): at
+    /// Level 3 one DeviceN space of the process inks it puts down, at Level 2 a Separation space
+    /// for each of them. No pass when it puts no ink down. `None` for another paint, which is drawn
+    /// as it is without overprinting.
     fn overprint_passes(&mut self, paint: &Paint) -> Option<Vec<InkPass>> {
         let Paint::Solid { color, swatch, tint } = paint else { return None };
-        let Ink::Process(Space::Cmyk, c) = self.solid(color, swatch.as_deref(), *tint) else { return None };
+        let c = match self.solid(color, swatch.as_deref(), *tint) {
+            Ink::Process(Space::Cmyk, c) => c,
+            // PostScript's gray is lightness.
+            // PostScript's gray is lightness.
+            Ink::Process(Space::Gray, [lightness, ..]) => [0.0, 0.0, 0.0, unit(1.0 - lightness)],
+            _ => return None,
+        };
         let process: Vec<usize> = (0..4).filter(|&i| c[i] > 0.0).collect();
         if process.is_empty() {
             return Some(vec![]);

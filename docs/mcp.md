@@ -5088,9 +5088,11 @@ PDF export writes them with `advanced.overprint: "preserve"` (the default): each
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
 default) white ones knock out instead; `"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
 overprinting on for a colorized image's color as it does for fills and strokes. PDF export writes an overprinting
-colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does so for a
-CMYK color (one DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed
-separations show a colorized image with a visible drop shadow, outer glow or Gaussian blur of its own knocking out.
+colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does too (one
+DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed separations show a
+colorized image knocking out when it has a visible effect of its own other than a warp or a geometry effect (a drop
+shadow, a glow, a raster effect or a color adjustment). PDF and EPS export leave raster effects out and still
+overprint such an image.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setOverprint","params":{"ids":[12],"stroke":true}}}

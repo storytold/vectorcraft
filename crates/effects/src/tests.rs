@@ -148,6 +148,14 @@ fn nine_slice_painted_effects_are_raster_effects() {
     }
 }
 
+/// The effects that leave a colorized image overprinting as a whole are the geometry effects.
+#[test]
+fn image_overprint_reshaping_effects_are_the_geometry_effects() {
+    for id in crate::catalog::catalog_index().keys() {
+        assert_eq!(vectorcraft_doc::overprint::reshapes_only(id), is_geometry(id), "{id}");
+    }
+}
+
 #[test]
 fn open_paths_stay_open() {
     let line = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(50.0, 20.0), Point::new(100.0, 0.0)], false));

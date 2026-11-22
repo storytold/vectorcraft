@@ -185,18 +185,41 @@ fn darkens(overprint: bool, blend: BlendMode, paint: &Paint, discard_white: bool
     overprint && blend == BlendMode::Normal && !(discard_white && is_white(paint))
 }
 
+/// The effects that only move or reshape what an object draws, keeping its own colors, besides
+/// those whose ids start with `warp.`, `convertToShape.` or `addon.path.` ([`reshapes_only`]).
+const RESHAPING_EFFECTS: [&str; 12] = [
+    "distort.freeDistort",
+    "distort.puckerBloat",
+    "distort.roughen",
+    "distort.transform",
+    "distort.tweak",
+    "distort.twist",
+    "distort.zigZag",
+    "path.offsetPath",
+    "path.outlineObject",
+    "path.outlineStroke",
+    "stylize.roundCorners",
+    "stylize.scribble",
+];
+
+/// Whether effect `id` only moves or reshapes what an object draws ([`RESHAPING_EFFECTS`]).
+/// Any other effect (a shadow, a glow, a raster effect, a color adjustment, a plug-in effect)
+/// paints colors of its own.
+pub fn reshapes_only(id: &str) -> bool {
+    ["warp.", "convertToShape.", "addon.path."].iter().any(|p| id.starts_with(p)) || RESHAPING_EFFECTS.contains(&id)
+}
+
 /// Whether colorized image `n` is drawn overprinting as a whole: its color overprints
 /// ([`Node::colorize_overprints`]) with the Normal blend and is not white with `discard_white`,
-/// none of its own visible effects paints past the image (a drop shadow, an outer glow or a blur,
-/// [`crate::symbol_nine_slice::PAINTED_EFFECTS`]), and each row that draws ([`image_row_draws`])
-/// overprints that way too. A colorized image's color is not a fill row, so the whole node
-/// overprints or none of it does.
+/// each of its own visible effects only reshapes it ([`reshapes_only`]), and each row that draws
+/// ([`image_row_draws`]) overprints that way too. A colorized image's color is not a fill row, so
+/// the whole node overprints or none of it does.
 pub fn image_overprints_whole(n: &Node, discard_white: bool) -> bool {
     let row = |i: &crate::AppearanceItem| match i {
         crate::AppearanceItem::Fill(l) => darkens(l.overprint, l.blend, &l.paint, discard_white),
         crate::AppearanceItem::Stroke(l) => darkens(l.overprint, l.blend, &l.paint, discard_white),
     };
-    let paints_past = n.appearance.effects.iter().any(|e| e.visible && crate::symbol_nine_slice::PAINTED_EFFECTS.contains(&e.id.as_str()));
+    let paints_past = n.appearance.effects.iter().any(|e| e.visible && !reshapes_only(&e.id));
     n.colorize_overprints()
         && n.extras().colorize.as_deref().is_some_and(|p| darkens(true, n.blend, p, discard_white))
         && !paints_past
@@ -478,8 +501,11 @@ mod tests {
         };
         assert_eq!(blend("stylize.dropShadow", true), BlendMode::Normal, "a drop shadow is not darkened with the image");
         assert_eq!(blend("stylize.outerGlow", true), BlendMode::Normal, "nor an outer glow");
+        assert_eq!(blend("stylize.innerGlow", true), BlendMode::Normal, "nor an inner glow");
+        assert_eq!(blend("artistic.neonGlow", true), BlendMode::Normal, "nor a raster effect");
         assert_eq!(blend("stylize.dropShadow", false), BlendMode::Darken, "a hidden effect draws nothing");
         assert_eq!(blend("distort.roughen", true), BlendMode::Darken, "a geometry effect reshapes the image itself");
+        assert_eq!(blend("warp.arc", true), BlendMode::Darken, "so does a warp");
     }
 
     #[test]
