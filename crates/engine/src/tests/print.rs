@@ -48,6 +48,81 @@ fn setup_is_saved_with_the_document_as_one_undo_step() {
 }
 
 #[test]
+fn overprint_black_is_saved_with_the_setup_and_in_presets() {
+    let (mut s, _) = session();
+    assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"]["output"]["overprintBlack"], false, "off by default");
+    let v = s.execute("print.setup", &json!({"settings": {"output": {"mode": "separations", "overprintBlack": true}}})).unwrap();
+    assert_eq!(v["settings"]["output"]["overprintBlack"], true);
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert!(back.print_setup.as_ref().is_some_and(|p| p["output"]["overprintBlack"] == true), "kept in the native file");
+    // Settings saved before the option load with it off; a value that is not true or false is refused.
+    let old: vectorcraft_pdf::PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations"}})).unwrap();
+    assert!(!old.output.overprint_black);
+    assert!(matches!(s.execute("print.setup", &json!({"settings": {"output": {"overprintBlack": "yes"}}})), Err(EngineError::BadParams { .. })));
+    // Print presets keep it and list it as a change from [Default].
+    let mut s = Session::new();
+    s.execute("print.presets.save", &json!({"name": "Seps", "settings": {"output": {"overprintBlack": true}}})).unwrap();
+    assert!(s.prefs.print_presets[0].settings.output.overprint_black);
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    let changed: Vec<&str> = v["presets"][1]["changed"].as_array().unwrap().iter().map(|c| c["option"].as_str().unwrap()).collect();
+    assert_eq!(changed, ["output.overprintBlack"]);
+}
+
+#[test]
+fn the_scale_link_keeps_width_and_height_equal() {
+    let (mut s, _) = session();
+    let scale = |s: &mut Session, p: Value| s.execute("print.setup", &json!({ "settings": p })).unwrap()["settings"]["scale"].clone();
+    assert_eq!(scale(&mut s, json!({})), json!({"width": 100.0, "height": 100.0, "linked": true}), "on for a new job");
+    // Linked, one percentage sets the other, whichever it is.
+    assert_eq!(scale(&mut s, json!({"scaling": "custom", "scale": {"width": 40}})), json!({"width": 40.0, "height": 40.0, "linked": true}));
+    assert_eq!(scale(&mut s, json!({"scale": {"height": 250}})), json!({"width": 250.0, "height": 250.0, "linked": true}));
+    assert_eq!(scale(&mut s, json!({"scale": {"width": 60, "height": 60.0}})), json!({"width": 60.0, "height": 60.0, "linked": true}));
+    // Two different percentages with linked: true are refused and keep what was saved.
+    let apart = s.execute("print.setup", &json!({"settings": {"scale": {"width": 50, "height": 200, "linked": true}}}));
+    assert!(matches!(apart, Err(EngineError::BadParams { .. })), "{apart:?}");
+    assert!(s.execute("print.preview", &json!({"settings": {"scale": {"width": 50, "height": 200, "linked": true}}})).is_err());
+    // `linked: null` keeps the saved link, as null keeps any saved setting.
+    let kept = s.execute("print.setup", &json!({"settings": {"scale": {"width": 50, "height": 200, "linked": null}}}));
+    assert!(matches!(kept, Err(EngineError::BadParams { .. })), "{kept:?}");
+    assert_eq!(scale(&mut s, json!({}))["width"], 60.0);
+    // Without linked, two different percentages turn the link off and print as given.
+    assert_eq!(scale(&mut s, json!({"scale": {"width": 50, "height": 200}})), json!({"width": 50.0, "height": 200.0, "linked": false}));
+    assert_eq!(s.execute("print.preview", &json!({})).unwrap()["sheets"][0]["scale"], json!([50.0, 200.0]));
+    // Unlinked, each changes alone; turning the link on sets the height to the width.
+    assert_eq!(scale(&mut s, json!({"scale": {"height": 120}})), json!({"width": 50.0, "height": 120.0, "linked": false}));
+    assert_eq!(scale(&mut s, json!({"scale": {"linked": true}})), json!({"width": 50.0, "height": 50.0, "linked": true}));
+    assert_eq!(s.execute("print.preview", &json!({})).unwrap()["sheets"][0]["scale"], json!([50.0, 50.0]));
+    // Kept in the native file and in print presets.
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(back.print_setup.as_ref().map(|p| p["scale"].clone()), Some(json!({"width": 50.0, "height": 50.0, "linked": true})));
+    s.execute("print.presets.save", &json!({"name": "Apart", "settings": {"scaling": "custom", "scale": {"width": 30, "height": 90}}})).unwrap();
+    let preset = s.prefs.print_presets.iter().find(|p| p.name == "Apart").map(|p| p.settings.scale.clone());
+    assert_eq!(preset.map(|p| (p.width, p.height, p.linked)), Some((30.0, 90.0, false)));
+    assert_eq!(scale(&mut s, json!({}))["linked"], true, "saving a preset leaves the document's settings");
+    let v = s.execute("print.setup", &json!({"preset": "Apart"})).unwrap();
+    assert_eq!(v["settings"]["scale"], json!({"width": 30.0, "height": 90.0, "linked": false}));
+}
+
+#[test]
+fn a_scale_saved_without_the_link_keeps_its_width_and_height() {
+    let (mut s, _) = session();
+    // Settings saved before the link had no `linked`: they print as they did, unlinked.
+    let mut old = serde_json::to_value(vectorcraft_pdf::PrintSettings::default()).unwrap();
+    old["scaling"] = json!("custom");
+    old["scale"] = json!({"width": 50, "height": 200});
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    doc.print_setup = Some(old);
+    s.doc_mut().unwrap().doc = std::sync::Arc::new(doc);
+    let pv = s.execute("print.preview", &json!({})).unwrap();
+    assert_eq!(pv["sheets"][0]["scale"], json!([50.0, 200.0]));
+    assert_eq!(pv["settings"]["scale"]["linked"], false);
+    // One percentage changes alone until the link is turned on.
+    assert_eq!(s.execute("print.preview", &json!({"settings": {"scale": {"width": 80}}})).unwrap()["sheets"][0]["scale"], json!([80.0, 200.0]));
+}
+
+#[test]
 fn print_writes_the_saved_setup_with_overrides() {
     let (mut s, _) = session();
     s.execute("print.setup", &json!({"settings": {"media": "a4", "scaling": "fit"}})).unwrap();
@@ -145,6 +220,68 @@ fn preview_lists_pages_tiles_inks_and_warnings() {
 }
 
 #[test]
+fn copies_per_sheet_print_a_grid_of_the_artboard() {
+    // A 2 × 3.5 in card filled by a rectangle.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 144, "height": 252})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 144, "height": 252})).unwrap();
+    let v = s.execute("print.setup", &json!({})).unwrap();
+    assert_eq!((v["settings"]["copiesPerSheet"].clone(), v["settings"]["gutter"].clone()), (json!(false), json!(0.0)));
+    // With an 18 pt gutter, Letter holds 3 × 3 copies; the first, at the top left, spans x 72 to 216.
+    let set = json!({"settings": {"copiesPerSheet": true, "gutter": 18}});
+    let v = s.execute("print.preview", &set).unwrap();
+    let copies = v["sheets"][0]["copies"].as_array().unwrap();
+    assert_eq!((v["pages"].clone(), copies.len(), copies[0].clone()), (json!(1), 9, json!([72.0, 0.0, 216.0, 252.0])));
+    // The PDF draws the card's paths nine times.
+    let cards = |bytes: &[u8]| {
+        let mut n = 0;
+        vectorcraft_pdf::import(bytes).unwrap().walk(|node| {
+            n += usize::from(node.path_data().and_then(|p| p.bounds()).is_some_and(|b| (b.width().round(), b.height().round()) == (144.0, 252.0)))
+        });
+        n
+    };
+    let (bytes, v) = print(&mut s, set);
+    assert_eq!(v["pages"], 1);
+    let one = cards(&print(&mut s, json!({})).0);
+    assert!(one > 0 && cards(&bytes) == 9 * one, "{one}");
+    // PostScript places the art once per copy.
+    let mut ps = |p: Value| {
+        let v = s.execute("file.print", &p).unwrap();
+        String::from_utf8(vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()).unwrap()
+    };
+    let one = ps(json!({"format": "postscript"})).matches(" cm\n").count();
+    let grid = ps(json!({"format": "postscript", "settings": {"copiesPerSheet": true, "gutter": 18}})).matches(" cm\n").count();
+    assert_eq!(grid, one + 8);
+}
+
+#[test]
+fn print_presets_keep_copies_per_sheet_and_older_presets_leave_it_off() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 144, "height": 252})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 144, "height": 252})).unwrap();
+    // [Default] prints one copy per sheet.
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    assert_eq!((v["presets"][0]["settings"]["copiesPerSheet"].clone(), v["presets"][0]["settings"]["gutter"].clone()), (json!(false), json!(0.0)));
+    // A saved preset keeps the option and the gutter, lists them as changed, and prints with them.
+    s.execute("print.presets.save", &json!({"name": "Cards", "settings": {"copiesPerSheet": true, "gutter": 18}})).unwrap();
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    let changed: Vec<&str> = v["presets"][1]["changed"].as_array().unwrap().iter().filter_map(|c| c["option"].as_str()).collect();
+    assert_eq!(changed, ["copiesPerSheet", "gutter"]);
+    let v = s.execute("print.preview", &json!({"preset": "Cards"})).unwrap();
+    assert_eq!(v["sheets"][0]["copies"].as_array().map(Vec::len), Some(9));
+    // The option survives export and import.
+    let text = s.execute("print.presets.export", &json!({"names": ["Cards"]})).unwrap()["data"].as_str().unwrap().to_string();
+    let mut t = Session::new();
+    t.execute("print.presets.import", &json!({"data": text})).unwrap();
+    assert_eq!((t.prefs.print_presets[0].settings.copies_per_sheet, t.prefs.print_presets[0].settings.gutter), (true, 18.0));
+    // A presets file written without the option imports with it off and no gutter.
+    let old = r#"{"format": "vcprintpresets", "presets": [{"name": "Old", "settings": {"copies": 2}}]}"#;
+    t.execute("print.presets.import", &json!({"data": old})).unwrap();
+    let q = &t.prefs.print_presets[1].settings;
+    assert_eq!((q.copies, q.copies_per_sheet, q.gutter), (2, false, 0.0));
+}
+
+#[test]
 fn bad_settings_are_bad_params() {
     let (mut s, _) = session();
     for p in [
@@ -154,6 +291,7 @@ fn bad_settings_are_bad_params() {
         json!({"settings": {"media": "quarto"}}),
         json!({"settings": {"artboards": "range", "range": "2"}}),
         json!({"settings": {"scaling": "tileFull", "overlap": 500}}),
+        json!({"settings": {"gutter": 800}}),
     ] {
         for c in ["file.print", "print.preview"] {
             assert!(matches!(s.execute(c, &p), Err(EngineError::BadParams { .. })), "{c} {p}");
@@ -191,6 +329,35 @@ fn type_in_a_missing_family_warns_as_pdf_export_does() {
     }
 }
 
+/// The warnings of `file.print` (PDF and PostScript) and `print.preview` list what the job
+/// leaves out of the document or prints differently first, then the notes on the options.
+#[test]
+fn what_a_print_loses_comes_before_the_notes_on_the_options() {
+    let (mut s, _) = session();
+    s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let notes = |v: &Value| -> Vec<String> { v["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_string).collect() };
+    // A fixed flatness isn't written to a PDF: a note on the options, made before the type's.
+    let fixed = json!({"settings": {"graphics": {"autoFlatness": false}}});
+    for v in [print(&mut s, fixed.clone()).1, s.execute("print.preview", &fixed).unwrap()] {
+        let n = notes(&v);
+        assert!(n.iter().any(|w| w.contains("Nonexistent Sans Probe")), "{n:?}");
+        assert!(n.last().is_some_and(|w| w.starts_with("a fixed flatness")), "{n:?}");
+    }
+    // PostScript doesn't apply the printer profile.
+    let profile = json!({"format": "postscript", "settings": {"color": {"profile": vectorcraft_color::cms::SRGB}}});
+    let n = notes(&s.execute("file.print", &profile).unwrap());
+    assert!(n.iter().any(|w| w.contains("Nonexistent Sans Probe")), "{n:?}");
+    assert!(n.last().is_some_and(|w| w.starts_with("the printer profile")), "{n:?}");
+    // An artboard larger than Letter: copies per sheet that don't fit come after the art that
+    // doesn't print.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 700, "height": 900})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 700, "height": 900})).unwrap();
+    let n = notes(&print(&mut s, json!({"settings": {"copiesPerSheet": true}})).1);
+    assert!(n.iter().any(|w| w.contains("part of it doesn't print")), "{n:?}");
+    assert!(n.last().is_some_and(|w| w.ends_with("it prints one copy per sheet")), "{n:?}");
+}
+
 #[test]
 fn type_that_does_not_fit_its_frame_is_named() {
     let (mut s, _) = session();
@@ -223,4 +390,22 @@ fn for_a_printer_a_landscape_page_is_written_upright() {
     let (spooled, v) = print(&mut s, json!({"settings": settings, "forPrinter": true}));
     assert_eq!(size(&spooled), [(612.0, 792.0)]);
     assert_eq!(v["pages"], 1);
+}
+
+#[test]
+fn a_spot_ink_converted_to_process_is_saved_and_listed_without_a_plate() {
+    let (mut s, _) = session();
+    s.execute("swatch.new", &json!({"name": "Gold", "color": {"model": "cmyk", "c": 0, "m": 0.2, "y": 0.8, "k": 0.1}, "spot": true})).unwrap();
+    let ink = json!({"name": "Gold", "convertToProcess": true});
+    let v = s.execute("print.setup", &json!({"settings": {"output": {"mode": "separations", "inks": [ink]}}})).unwrap();
+    assert_eq!(v["settings"]["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": true}]));
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(back.print_setup.as_ref().map(|p| p["output"]["inks"][0]["convertToProcess"].clone()), Some(json!(true)), "kept in the file");
+    let pv = s.execute("print.preview", &json!({})).unwrap();
+    let names = |list: &Value| list.as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert_eq!(names(&pv["inks"]), ["Cyan", "Magenta", "Yellow", "Black"], "no Gold plate");
+    assert_eq!(names(&pv["documentInks"]), ["Cyan", "Magenta", "Yellow", "Black", "Gold"]);
+    assert_eq!(pv["documentInks"][4]["convertToProcess"], json!(true));
+    assert_eq!(pv["documentInks"][0].get("convertToProcess"), None, "written only when on");
 }

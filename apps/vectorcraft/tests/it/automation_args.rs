@@ -1,8 +1,6 @@
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const BIN: &str = env!("CARGO_BIN_EXE_vectorcraft");
-
 /// Invalid roots must exit before desktop initialization on every platform, including a CI
 /// machine with no display. A regression must fail rather than hang with a window open.
 fn rejects(args: &[&str], message: &str) {
@@ -10,7 +8,7 @@ fn rejects(args: &[&str], message: &str) {
 }
 
 fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
-    let mut child = Command::new(BIN)
+    let mut child = Command::new(crate::bin())
         .args(args)
         .env_remove("VECTORCRAFT_CONTROL_PORT")
         .env_remove("VECTORCRAFT_AUTOMATION_READ_ROOT")
@@ -62,7 +60,7 @@ fn missing_empty_or_option_operands_fail_before_startup() {
 #[test]
 fn repeated_roots_are_accepted_for_both_spellings() {
     for flag in ["--automation-read-root", "--automation-write-root"] {
-        let out = Command::new(BIN).args([flag, ".", format!("{flag}=.").as_str(), flag, "./", "--version"]).output().unwrap();
+        let out = Command::new(crate::bin()).args([flag, ".", format!("{flag}=.").as_str(), flag, "./", "--version"]).output().unwrap();
         assert!(out.status.success(), "{flag}: {}", String::from_utf8_lossy(&out.stderr));
         assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
         assert!(out.stderr.is_empty());
@@ -73,7 +71,8 @@ fn repeated_roots_are_accepted_for_both_spellings() {
 
 #[test]
 fn explicit_dash_folder_does_not_consume_version() {
-    let out = Command::new(BIN).args(["--automation-read-root=-folder", "--automation-write-root", "./-folder", "--version"]).output().unwrap();
+    let out =
+        Command::new(crate::bin()).args(["--automation-read-root=-folder", "--automation-write-root", "./-folder", "--version"]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
     assert!(out.stderr.is_empty());
@@ -95,7 +94,7 @@ fn control_without_a_valid_port_fails_before_startup() {
 
 #[test]
 fn version_wins_over_a_bad_control_port_variable() {
-    let out = Command::new(BIN).arg("--version").env("VECTORCRAFT_CONTROL_PORT", "abc").output().unwrap();
+    let out = Command::new(crate::bin()).arg("--version").env("VECTORCRAFT_CONTROL_PORT", "abc").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("vectorcraft {}\n", env!("CARGO_PKG_VERSION")));
 }

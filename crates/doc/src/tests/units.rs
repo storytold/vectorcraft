@@ -79,11 +79,74 @@ fn odd_text_reads_as_nothing_without_panicking() {
     }
 }
 
+/// Text from a command or a file can be any length: a sum of thousands of terms reads as nothing
+/// instead of exhausting the stack. Up to 128 `+ - * /` signs read; 129 read as nothing.
+#[test]
+fn a_very_long_expression_reads_as_nothing() {
+    let sum = |terms: usize| format!("1{}", "+1".repeat(terms - 1));
+    assert_eq!(Unit::Points.parse(&sum(129)), Some(129.0));
+    assert_eq!(Unit::Points.parse(&format!("10{} mm", "*1".repeat(128))), Some(Unit::Millimeters.to_pt(10.0)));
+    // Long text with no signs still reads.
+    assert_eq!(Unit::Points.parse(&format!("{}5", " ".repeat(2_000))), Some(5.0));
+    for text in [sum(200_000), format!("1{}", "*1".repeat(200_000)), sum(130), format!("10{} mm", "*1".repeat(129))] {
+        assert_eq!(Unit::Points.parse(&text), None, "{} bytes", text.len());
+        assert_eq!(crate::parse_number(&text), None, "{} bytes", text.len());
+    }
+}
+
+/// `x`, `X` and `×` multiply as `*` does (#8435), units and percentages included; a lowercase `x`
+/// right after a `p` stays the `px` unit.
+#[test]
+fn x_is_a_multiplication_sign() {
+    let (mm, cm) = (72.0 / 25.4, 72.0 / 2.54);
+    for (u, s, want) in [
+        (Unit::Points, "10x2", 20.0),
+        (Unit::Points, "10 x 2", 20.0),
+        (Unit::Points, "10X2", 20.0),
+        (Unit::Points, "10×2", 20.0),
+        (Unit::Points, "10x-2", -20.0),
+        (Unit::Points, "10/2x5", 25.0),
+        (Unit::Points, "1+2x3", 7.0),
+        (Unit::Millimeters, "2x3 mm", 6.0 * mm),
+        (Unit::Points, "2x3mm", 6.0 * mm),
+        (Unit::Points, "3mm x 2", 6.0 * mm),
+        (Unit::Centimeters, "3cmx50%", 1.5 * cm),
+        (Unit::Points, "2p x 2", 48.0),
+        (Unit::Points, "10px", 10.0),
+        (Unit::Points, "2px x 3", 6.0),
+        (Unit::Points, "2pxx3", 6.0),
+        (Unit::Millimeters, "4x3 px", 12.0),
+        // Only a lowercase x after a p is the px suffix.
+        (Unit::Points, "2pX3", 72.0),
+        (Unit::Points, "2p×3", 72.0),
+        // Text that used to be refused now reads as a product.
+        (Unit::Points, "8.5x11 in", 93.5 * 72.0),
+        (Unit::Points, "0x10", 0.0),
+    ] {
+        let got = u.parse(s).unwrap_or_else(|| panic!("{u:?} can't read `{s}`"));
+        assert!((got - want).abs() < 1e-9, "{u:?}: `{s}` → {got}, want {want}");
+    }
+    for s in ["x", "x2", "5x", "5 x x 2", "xx", "2px3"] {
+        assert_eq!(Unit::Points.parse(s), None, "{s}");
+    }
+    assert_eq!(crate::parse_number("45x2"), Some(90.0));
+    assert_eq!(crate::parse_number(" 45 X 2 "), Some(90.0));
+    assert_eq!(crate::parse_number("45×2"), Some(90.0));
+    assert_eq!(crate::parse_number("90x-1"), Some(-90.0));
+    assert_eq!(crate::parse_number("x"), None);
+    // Each sign counts toward the 128-sign limit as a `*` would.
+    assert_eq!(Unit::Points.parse(&format!("1{}", "x1".repeat(128))), Some(1.0));
+    assert_eq!(Unit::Points.parse(&format!("1{}", "x1".repeat(129))), None);
+    assert_eq!(crate::parse_number(&format!("1{}", "×1".repeat(129))), None);
+    assert_eq!(crate::arithmetic_signs("1+2x3X4×5*6/7-8"), 7);
+    assert_eq!(crate::arithmetic_signs("2px x 3"), 1);
+}
+
 proptest! {
     /// Field text made of digits, operators, `%`, spaces and unit letters reads as a finite value
     /// or as nothing and does not panic.
     #[test]
-    fn arithmetic_text_reads_as_a_finite_value_or_nothing(s in "[0-9.+*/% ptxinmcfyd-]{0,24}") {
+    fn arithmetic_text_reads_as_a_finite_value_or_nothing(s in "[0-9.+*/% ptxXinmcfyd×-]{0,24}") {
         for u in Unit::ALL {
             if let Some(v) = u.parse(&s) {
                 prop_assert!(v.is_finite(), "{u:?}: `{s}` → {v}");

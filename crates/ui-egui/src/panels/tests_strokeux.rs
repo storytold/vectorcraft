@@ -121,6 +121,27 @@ fn align_stroke_styles_the_characters_the_type_tool_selects() {
     assert_eq!(aligns, [vectorcraft_doc::StrokeAlign::Outside, vectorcraft_doc::StrokeAlign::Center], "only the selected characters");
 }
 
+/// While the Live Paint Bucket is active, the Stroke panel shows the one stroke the bucket paints
+/// with, even when the selected objects' strokes differ, as it does with nothing selected.
+#[test]
+fn the_stroke_panel_shows_the_live_paint_bucket_stroke_as_one_stroke() {
+    let mut app = app_with_rect();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 200, "width": 40, "height": 40}))["id"].as_u64().unwrap();
+    run(&mut app, "stroke.set", json!({"weight": 1, "ids": [a]}));
+    run(&mut app, "stroke.set", json!({"weight": 7, "ids": [b]}));
+    run(&mut app, "select.set", json!({ "ids": [] }));
+    let none_selected = stroke_mixed(&app, &egui::Context::default());
+    assert!(none_selected.can_align, "Align Stroke applies with nothing selected");
+    run(&mut app, "select.set", json!({ "ids": [a, b] }));
+    let mixed = stroke_mixed(&app, &egui::Context::default());
+    assert!(mixed.weight, "the selection's weights differ");
+    app.session.select_tool("livePaintBucket", Default::default()).unwrap();
+    let mixed = stroke_mixed(&app, &egui::Context::default());
+    assert_eq!(mixed, none_selected, "one stroke that Align Stroke applies to, as with nothing selected");
+    assert_eq!(stroke::shown_weight(&app, current_stroke(&app).as_ref(), &mixed), Some(app.session.paint.stroke_width));
+}
+
 #[test]
 fn the_weight_presets_run_from_a_quarter_point_to_a_hundred() {
     let pt = stroke::weight_presets(vectorcraft_doc::Unit::Points);
@@ -242,4 +263,73 @@ fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
         frame_raw(&ctx, &mut app, egui::RawInput { events: vec![event], ..Default::default() }, stroke::show);
     }
     assert_eq!(app.session.shown_stroke().unwrap().width, 1.0);
+}
+
+/// The screen rect of the Weight spinner in the Stroke panel, found by its accessibility label, so
+/// the tests do not depend on where the panel puts the field.
+fn weight_spinner_rect(ctx: &egui::Context, app: &mut VectorcraftApp) -> egui::Rect {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| stroke::show(app, ui));
+    out.textures_delta.clear();
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility is on").nodes;
+    let b = nodes.iter().find(|(_, n)| n.label() == Some("Step up or down")).expect("the weight spinner").1.bounds().expect("its bounds");
+    egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))
+}
+
+/// With objects of different weights selected the Weight field is blank, and its spinner steps
+/// from 0.25 pt (#5349): up gives 0.5 pt and down gives 0 pt, for all of them, whatever the
+/// Units > Stroke.
+#[test]
+fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
+    use super::tests_appearance::frame_raw;
+
+    for (unit, up, after) in [("points", true, 0.5), ("points", false, 0.0), ("millimeters", true, 0.5), ("millimeters", false, 0.0)] {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut app = app_with_rect();
+        app.session.prefs.units_stroke = unit.into();
+        let a = app.session.active().unwrap().selection.objects[0];
+        let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
+        run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
+        texts(&ctx, &mut app, stroke::show);
+        let sr = weight_spinner_rect(&ctx, &mut app);
+        // The up arrow is the upper half of the spinner, the down arrow the lower half.
+        let pos = egui::pos2(sr.center().x, sr.center().y + if up { -sr.height() / 4.0 } else { sr.height() / 4.0 });
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+            frame_raw(&ctx, &mut app, egui::RawInput { events: vec![event], ..Default::default() }, stroke::show);
+        }
+        for id in [a.0, b] {
+            run(&mut app, "select.set", json!({ "ids": [id] }));
+            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, up: {up}, {unit}");
+        }
+    }
+}
+
+/// ↑/↓ in the focused blank Weight field step from 0.25 pt too, for every selected object.
+#[test]
+fn the_arrow_keys_in_a_blank_weight_step_from_a_quarter_point() {
+    for (key, after) in [(egui::Key::ArrowUp, 0.5), (egui::Key::ArrowDown, 0.0)] {
+        // A new context each time: the field keeps its text in the context, and the 0.5 pt left by ArrowUp
+        // would make the blank field of the next run start from 0.5 pt.
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut app = app_with_rect();
+        let a = app.session.active().unwrap().selection.objects[0];
+        let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
+        run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
+        run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
+        texts(&ctx, &mut app, stroke::show);
+        // The blank field, right of the spinner.
+        let sr = weight_spinner_rect(&ctx, &mut app);
+        click(&ctx, &mut app, egui::pos2(sr.right() + 30.0, sr.center().y), stroke::show);
+        let press = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        frame_events(&ctx, &mut app, vec![press], stroke::show);
+        for id in [a.0, b] {
+            run(&mut app, "select.set", json!({ "ids": [id] }));
+            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, {key:?}");
+        }
+    }
 }

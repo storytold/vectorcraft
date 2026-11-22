@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use kurbo::BezPath;
 use skrifa::instance::{Location, LocationRef, Size};
-use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::outline::OutlinePen;
 use skrifa::raw::FileRef;
 use skrifa::string::StringId;
 use skrifa::{GlyphId, MetadataProvider, Tag};
@@ -17,13 +17,16 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod added;
 mod alternates;
 mod build;
 mod cache;
+mod composite;
 mod db;
 mod dirs;
 mod face;
 mod glyph_pen;
+mod gsub;
 mod lookup;
 mod names;
 mod scan;
@@ -31,11 +34,16 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+#[cfg(test)]
+pub(crate) use added::recently_added_of;
+pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
+pub(crate) use alternates::listed;
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
 use cache::{CanonicalNames, Catalog, GlyphColours, GlyphImages, PostScriptNames};
+pub use composite::{CompositeCoverage, LentCompositeFonts};
 #[cfg(all(not(target_arch = "wasm32"), test))]
 pub(crate) use dirs::fonts_outside;
 #[cfg(test)]
@@ -47,8 +55,10 @@ pub use dirs::{
 use face::Instances;
 #[cfg(test)]
 pub(crate) use face::MAX_LIVE_INSTANCES;
-pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
+pub(crate) use face::PathAlignHeights;
+pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
 pub(crate) use glyph_pen::FlipPen;
+pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
@@ -64,7 +74,7 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
@@ -99,6 +109,8 @@ pub struct FontDb {
     family_cache: Mutex<Option<Arc<[String]>>>,
     menu_cache: Mutex<Option<MenuFamilies>>,
     generation: AtomicU64,
+    /// This database's [`FontDb::id`].
+    id: u64,
     /// System fallback state: characters no system font covers.
     #[cfg(not(target_arch = "wasm32"))]
     sys: Mutex<SysFallback>,
@@ -107,6 +119,13 @@ pub struct FontDb {
     stamp: Mutex<Option<ScanStamp>>,
     /// Faces instanced at the axis settings of type's Variable Font sliders ([`FontDb::instance`]).
     instances: Mutex<Instances>,
+    /// Composite fonts (Type › Composite Fonts…) by lowercased name ([`FontDb::set_composite_font`]):
+    /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
+    /// in their place ([`FontDb::lend_composite_fonts`]).
+    composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
+    /// The lookups of the custom character sets of the composite fonts held or lent, each built
+    /// when first used.
+    custom_classes: Mutex<composite::CustomClasses>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.
@@ -182,6 +201,19 @@ mod alias_tests {
         }
         font.extend(head);
         font
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_file_search_for_uncovered_characters_stops_at_its_budget() {
+        let db = FontDb::with_font_dirs(vec![]);
+        // The first search scans the font folders, which starts the count again.
+        db.system_fallback('\u{E001}');
+        db.sys.lock().unwrap().file_searches = names::MAX_FILE_SEARCHES;
+        assert!(!db.system_fallback('\u{E000}'));
+        let sys = db.sys.lock().unwrap();
+        assert_eq!(sys.file_searches, names::MAX_FILE_SEARCHES);
+        assert!(!sys.misses.contains(&'\u{E000}'), "an unsearched character is not a remembered miss");
     }
 
     #[test]

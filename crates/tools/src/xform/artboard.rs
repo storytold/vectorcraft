@@ -9,7 +9,8 @@
 //! all of them (#1139). Shift-drag inside an artboard draws a new artboard there, and Shift-drag on
 //! the pasteboard is a marquee: the artboards it touches leave the selection or join it. Drag inside
 //! moves it (with its artwork when the `moveArt` option is on; Alt moves a copy and
-//! leaves the artboard where it was), drag a handle resizes it
+//! leaves the artboard where it was; Shift held once the drag is under way keeps the move or copy
+//! to the level, upright or 45° line, counted from General › Constrain Angle), drag a handle resizes it
 //! (Shift proportional, Alt from centre; with the `scaleArt` option on, Scale Artwork with Artboard,
 //! always proportional, and the art fully inside scales with it), drag on the pasteboard draws a new artboard, Delete removes
 //! the active one (Copy, Cut and Paste take it with its art: `artboard.copy`), the arrow keys move the
@@ -21,14 +22,24 @@
 //! snap too. A new artboard's corners snap as drawn points do ([`DrawSnap`]). A locked artboard (the
 //! Artboards panel's lock column) is selected by a click, but a drag or an arrow key doesn't move it
 //! or copy it, it shows no handles, and Delete leaves it.
+//!
+//! While one artboard is selected and nothing is being dragged, a button with a plus sits just
+//! outside the middle of each of its edges where an artboard of the same size fits on that side
+//! ([`vectorcraft_doc::Document::room_beside_artboard`]: within the canvas, 20 pt away, overlapping
+//! no other artboard). Clicking one adds an empty artboard there (`artboard.new {beside, side}`);
+//! Alt-clicking duplicates the artboard with its art there (`artboard.duplicate {index, side}`),
+//! except on a locked artboard, where an Alt-click does nothing. Each is one undo step, and the new
+//! artboard becomes the active one. Resting the pointer on a button shows a tooltip that says what a
+//! click does there and, on an unlocked artboard, what an Alt-click does.
 
 use serde_json::{Value, json};
+use vectorcraft_doc::ArtboardSide;
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use super::{BLUE, polygon, rect_corners};
-use crate::bbox::{Handle, hit_handle, scale_for_drag};
+use crate::bbox::{Handle, hit_handle, move_delta, scale_for_drag, slide_along};
 use crate::guides::{DrawSnap, Leave, Targets};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug)]
 enum Drag {
@@ -196,11 +207,12 @@ impl ArtboardTool {
         self.copy_targets = cx.smart_guides.then(|| Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx));
     }
 
-    /// Snap a dragged handle: to whole pixels, the grid, or Smart Guides (in that order, as when
-    /// drawing). With Smart Guides the bleed edge `bleed` beyond the handle may snap instead.
+    /// Snap a dragged handle: to whole pixels (Snap to Pixel's While Scaling option), the grid, or
+    /// Smart Guides (in that order, as when drawing). With Smart Guides the bleed edge `bleed`
+    /// beyond the handle may snap instead.
     fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2) -> Point {
         self.guides.clear();
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(PixelOp::Scaling) {
             return Point::new(p.x.round(), p.y.round());
         }
         if cx.snap_to_grid {
@@ -213,12 +225,13 @@ impl ArtboardTool {
         q
     }
 
-    /// Snap a move (or an Alt-drag `copy`) of `rect` by `d`: its top-left to whole pixels or the
-    /// grid, or any of its edges and centre to Smart Guides. Returns the snapped delta.
+    /// Snap a move (or an Alt-drag `copy`) of `rect` by `d`: its top-left to whole pixels (Snap to
+    /// Pixel's While Moving option) or the grid, or any of its edges and centre to Smart Guides.
+    /// Returns the snapped delta.
     fn snap_move(&mut self, cx: &ToolContext, rect: Rect, d: Vec2, copy: bool) -> Vec2 {
         self.guides.clear();
         let tl = Point::new(rect.x0, rect.y0);
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(PixelOp::Moving) {
             return Vec2::new((tl.x + d.x).round() - tl.x, (tl.y + d.y).round() - tl.y);
         }
         if cx.snap_to_grid {
@@ -230,6 +243,36 @@ impl ArtboardTool {
             t.snap_rects(&[moved, cx.doc.setup.bleed_rect(moved)], cx.snap_tol())
         } else {
             t.snap_rect(moved, cx.snap_tol())
+        };
+        self.guides = ov;
+        d + adj
+    }
+
+    /// [`Self::snap_move`] for a move Shift keeps to its line (through the press, along `d`):
+    /// every snap slides the move along that line. Whole pixels and the grid slide it by the
+    /// shorter of the ways that put its top-left on a whole pixel or a gridline on either axis
+    /// ([`slide_along`]); Smart Guides slide it until an edge or the centre lines up
+    /// ([`Targets::snap_rects_along`]). A move of zero length does not snap.
+    fn snap_move_along(&mut self, cx: &ToolContext, rect: Rect, d: Vec2, copy: bool) -> Vec2 {
+        self.guides.clear();
+        let len = d.hypot();
+        if !len.is_finite() || len <= 1e-9 {
+            return d;
+        }
+        let u = d / len;
+        let tl = Point::new(rect.x0, rect.y0) + d;
+        if cx.snaps_to_pixel(PixelOp::Moving) {
+            return d + u * slide_along(Vec2::new(tl.x.round() - tl.x, tl.y.round() - tl.y), u);
+        }
+        if cx.snap_to_grid {
+            return d + u * slide_along(vectorcraft_geom::snap::snap_point_to_grid(tl, cx.grid_step()) - tl, u);
+        }
+        let Some(t) = (if copy { &self.copy_targets } else { &self.targets }) else { return d };
+        let moved = rect + d;
+        let (adj, ov) = if cx.doc.setup.has_bleed() {
+            t.snap_rects_along(&[moved, cx.doc.setup.bleed_rect(moved)], u, cx.snap_tol())
+        } else {
+            t.snap_rects_along(&[moved], u, cx.snap_tol())
         };
         self.guides = ov;
         d + adj
@@ -282,6 +325,48 @@ fn bleed_offset(cx: &ToolContext, rect: Rect, handle: Handle) -> Vec2 {
     Vec2::new(if ax { d.x } else { 0.0 }, if ay { d.y } else { 0.0 })
 }
 
+/// How far outside the middle of an edge its add button sits, in screen pixels: past the handle
+/// on that edge.
+const EDGE_BUTTON_OFFSET: f64 = 18.0;
+/// The add button's radius in screen pixels: a press this near its center takes it.
+const EDGE_BUTTON_RADIUS: f64 = 7.0;
+/// The add button's tooltip ([`Overlay::HoverText`]), an English UI string the UI translates.
+pub const EDGE_BUTTON_TIP: &str = "Click to add an artboard on this side; Alt-click to duplicate this artboard with its art";
+/// The add button's tooltip on a locked artboard, where an Alt-click does nothing.
+pub const EDGE_BUTTON_TIP_LOCKED: &str = "Click to add an artboard on this side";
+
+impl ArtboardTool {
+    /// The add buttons on the active artboard's edges, each with its side and center: shown while
+    /// it is the only one selected and nothing is being dragged, and only on the sides with room
+    /// for an artboard of the same size ([`vectorcraft_doc::Document::room_beside_artboard`]).
+    fn edge_buttons(&self, cx: &ToolContext) -> Vec<(ArtboardSide, Point)> {
+        let Some(r) = self.active_rect(cx) else { return vec![] };
+        if self.drag.is_some() || self.selected(cx).len() != 1 {
+            return vec![];
+        }
+        let off = cx.tol(EDGE_BUTTON_OFFSET);
+        let c = r.center();
+        ArtboardSide::ALL
+            .into_iter()
+            .filter(|side| cx.doc.room_beside_artboard(self.active, *side).is_some())
+            .map(|side| {
+                let at = match side {
+                    ArtboardSide::Left => Point::new(r.x0 - off, c.y),
+                    ArtboardSide::Right => Point::new(r.x1 + off, c.y),
+                    ArtboardSide::Top => Point::new(c.x, r.y0 - off),
+                    ArtboardSide::Bottom => Point::new(c.x, r.y1 + off),
+                };
+                (side, at)
+            })
+            .collect()
+    }
+
+    /// The add button under `p`, if any.
+    fn edge_button_at(&self, cx: &ToolContext, p: Point) -> Option<ArtboardSide> {
+        self.edge_buttons(cx).into_iter().find(|(_, at)| at.distance(p) <= cx.tol(EDGE_BUTTON_RADIUS)).map(|(side, _)| side)
+    }
+}
+
 /// The grid's snapping step (gridline spacing over subdivisions), as `guides::snap_draw` uses.
 impl Tool for ArtboardTool {
     fn id(&self) -> &'static str {
@@ -305,6 +390,21 @@ impl Tool for ArtboardTool {
         match (ev.kind, self.drag) {
             (PointerKind::Down, _) => {
                 self.click_art = None;
+                // An add button: an empty artboard of the same size on that side, or with Alt a
+                // copy of the artboard and its art there; the new one becomes active. An Alt-click
+                // on a locked artboard's button does nothing: the tool doesn't copy a locked artboard.
+                if let Some(side) = self.edge_button_at(cx, p) {
+                    let index = self.active;
+                    if m.alt && cx.doc.artboards.get(index).is_some_and(|a| a.locked) {
+                        return vec![];
+                    }
+                    let (id, v) = if m.alt {
+                        ("artboard.duplicate", json!({ "index": index, "side": side.name(), "art": true }))
+                    } else {
+                        ("artboard.new", json!({ "beside": index, "side": side.name() }))
+                    };
+                    return vec![Action::Exec(id.into(), v), Action::Notify("created".into())];
+                }
                 if let Some(r) = self.resizable_rect(cx)
                     && let Some(handle) = hit_handle(r, p, cx.tol(5.0))
                 {
@@ -364,7 +464,11 @@ impl Tool for ArtboardTool {
                     out.push(Action::Begin(label(m.alt).into()));
                 }
                 self.drag = Some(Drag::Move { index, many, start, rect, began: true, copy: m.alt });
-                let d = self.snap_move(cx, rect, p - start, m.alt);
+                // Shift held once the drag is under way keeps the move (or copy) to the level,
+                // upright or 45° line, as a Selection tool move does (#8580); a Shift-press draws
+                // or selects instead.
+                let d = move_delta(start, p, m.shift, cx.constrain_angle);
+                let d = if m.shift { self.snap_move_along(cx, rect, d, m.alt) } else { self.snap_move(cx, rect, d, m.alt) };
                 self.preview = Some(rect + d);
                 let mut v = json!({ "index": index, "dx": d.x, "dy": d.y, "moveArt": self.move_art, "copy": m.alt });
                 if many {
@@ -593,10 +697,31 @@ impl Tool for ArtboardTool {
         if self.drag.is_some() {
             o.extend(self.guides.iter().cloned());
         }
+        // The add buttons: a ring with a plus in it, and a tooltip over the area a press takes.
+        let (radius, arm) = (cx.tol(EDGE_BUTTON_RADIUS), cx.tol(3.5));
+        let tip = if ab.locked { EDGE_BUTTON_TIP_LOCKED } else { EDGE_BUTTON_TIP };
+        for (_, at) in self.edge_buttons(cx) {
+            o.push(Overlay::HoverText { center: at, radius, text: tip });
+            let ring: Vec<Point> = (0..24).map(|k| at + Vec2::from_angle(f64::from(k) * std::f64::consts::TAU / 24.0) * radius).collect();
+            let mut path = polygon(&ring, true);
+            for arm in [Vec2::new(arm, 0.0), Vec2::new(0.0, arm)] {
+                path.move_to(at - arm);
+                path.line_to(at + arm);
+            }
+            o.push(Overlay::Path { path, color: BLUE, width: 1.0, dashed: false });
+        }
         o
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
+        // A move under way keeps the move cursor wherever the pointer is: Shift may keep the
+        // artboard to a line the pointer leaves, and the document shows the moved artboard.
+        if matches!(self.drag, Some(Drag::Move { began: true, .. })) {
+            return Cursor::Move;
+        }
+        if self.edge_button_at(cx, p).is_some() {
+            return Cursor::Arrow;
+        }
         if let Some(r) = self.resizable_rect(cx)
             && let Some(h) = hit_handle(r, p, cx.tol(5.0))
         {
@@ -645,6 +770,18 @@ impl Tool for ArtboardTool {
             // Not one of the saved options: the canvas sets it for the release of a double-click.
             "suppressFitClick" => self.suppress_fit = value.as_bool().unwrap_or(false),
             _ => {}
+        }
+    }
+
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "active" if value.as_u64().is_some() => Ok(()),
+            "active" => Err("`active` must be an artboard index: a whole number from 0".into()),
+            "selected" if value.as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|i| i.as_u64().is_some())) => Ok(()),
+            "selected" => Err("`selected` must be a list of artboard indexes, the active one first".into()),
+            "moveArt" | "scaleArt" | "suppressFitClick" => c::boolean(key, value),
+            _ => Err(c::unknown(key)),
         }
     }
 

@@ -204,6 +204,12 @@ pub enum Punct {
     CaretEq,
     Slash,
     SlashEq,
+    /// `..`, read only with [`crate::Options::e4x`].
+    DotDot,
+    /// `::`, read only with [`crate::Options::e4x`].
+    ColonColon,
+    /// `@`, read only with [`crate::Options::e4x`].
+    At,
 }
 
 impl Punct {
@@ -233,6 +239,9 @@ impl Punct {
         ("|=", Punct::PipeEq),
         ("^=", Punct::CaretEq),
         ("/=", Punct::SlashEq),
+        ("..", Punct::DotDot),
+        ("::", Punct::ColonColon),
+        ("@", Punct::At),
         ("{", Punct::LBrace),
         ("}", Punct::RBrace),
         ("(", Punct::LParen),
@@ -279,17 +288,19 @@ pub enum DirectiveName {
 }
 
 impl DirectiveName {
+    /// Every directive a preprocessor line can name.
+    pub const ALL: [DirectiveName; 6] = [
+        DirectiveName::Include,
+        DirectiveName::IncludePath,
+        DirectiveName::Script,
+        DirectiveName::Strict,
+        DirectiveName::Target,
+        DirectiveName::TargetEngine,
+    ];
+
     /// The directive named `name`, compared without case.
     pub fn from_name(name: &str) -> Option<DirectiveName> {
-        const NAMES: [(&str, DirectiveName); 6] = [
-            ("include", DirectiveName::Include),
-            ("includepath", DirectiveName::IncludePath),
-            ("script", DirectiveName::Script),
-            ("strict", DirectiveName::Strict),
-            ("target", DirectiveName::Target),
-            ("targetengine", DirectiveName::TargetEngine),
-        ];
-        NAMES.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, d)| *d)
+        DirectiveName::ALL.into_iter().find(|d| d.as_str().eq_ignore_ascii_case(name))
     }
 
     pub fn as_str(self) -> &'static str {
@@ -341,6 +352,8 @@ pub enum TokenKind {
     },
     /// A preprocessor line.
     Directive(Directive),
+    /// An XML or XMLList literal; the tokens of its embedded expressions follow it.
+    XmlLiteral,
 }
 
 /// A token, with where it is and the facts the grammar's rules need about it.

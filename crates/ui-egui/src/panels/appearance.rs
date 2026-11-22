@@ -16,7 +16,7 @@
 //! fills/strokes for Duplicate and Delete. Delete on a selected Opacity row sets it back to
 //! Default (100%, Normal).
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -251,6 +251,21 @@ pub(crate) fn shown_effect_label(id: &str) -> String {
     }
 }
 
+/// An effect row's name: [`shown_effect_label`], followed by "(Safe Mode)" for a plug-in effect
+/// Safe Mode skips (the object keeps it and draws without it).
+pub fn effect_row_label(id: &str) -> String {
+    let label = shown_effect_label(id);
+    if vectorcraft_plugins::effect::skipped(id) { format!("{label} ({})", tl!("Safe Mode")) } else { label }
+}
+
+/// The tooltip of an effect row Safe Mode skips: why it draws nothing, and its plug-in's id;
+/// `None` for an effect that draws.
+pub fn skipped_effect_tip(id: &str) -> Option<String> {
+    let plugin = vectorcraft_plugins::effect::plugin_id(id).filter(|_| vectorcraft_plugins::effect::skipped(id))?;
+    let why = crate::i18n::msg(&vectorcraft_plugins::Error::SafeMode.to_string());
+    Some(format!("{why}\n{}", vectorcraft_plugins::safe_mode::display_name(plugin)))
+}
+
 /// "Opacity: Default" or "Opacity: 50% Multiply".
 pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     if (opacity - 1.0).abs() < 1e-4 && blend == BlendMode::Normal {
@@ -370,10 +385,22 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
     let area_id = egui::Id::unique("ap-row-popup");
     let shown = ctx.memory(|m| m.area_rect(area_id));
     // A press outside it (not one that closes a dropdown the popup opened) or Escape puts it away.
+    // With a field in it that has the keyboard, a press draws it once more first, so the field lets
+    // go of the keyboard to that press and commits what was typed, as in a panel (#6429). Escape
+    // drops what was typed.
     let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| shown.is_some_and(|r| !r.contains(p))));
-    if pressed_outside && !egui::Popup::is_any_open(ctx) || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+    let mut last = false;
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
         return close(app);
+    } else if pressed_outside && !egui::Popup::is_any_open(ctx) {
+        if !widgets::field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, area_id)) {
+            return close(app);
+        }
+        last = true;
     }
+    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
+    // goes back however this function ends, a panic in the panel included.
+    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
     let screen = ctx.content_rect();
     let left = panel.left() - POPUP_GAP - POPUP_W;
     let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
@@ -400,6 +427,28 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
             }
         });
     });
+    if last {
+        close(app);
+    }
+}
+
+/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
+/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
+struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
+
+impl SurrenderOnPress {
+    fn set(ctx: &egui::Context) -> Self {
+        let before = ctx.options(|o| o.input_options.surrender_focus_on);
+        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
+        Self(ctx.clone(), before)
+    }
+}
+
+impl Drop for SurrenderOnPress {
+    fn drop(&mut self) {
+        let before = self.1;
+        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
+    }
 }
 
 /// A row's name that edits the row when clicked ([`link`]), with the tooltip "Click to edit".
@@ -413,11 +462,25 @@ fn edit_tip(resp: egui::Response, name: &egui::Response) -> egui::Response {
     if name.hovered() { resp } else { resp.on_hover_text(tl!("Double-click to edit")) }
 }
 
+/// Does any selected subject have a non-basic appearance that can be reduced?
+fn any_subject_needs_reduction(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    st.selection.subjects().iter().any(|id| {
+        let target_node = st
+            .doc
+            .parent_of(*id)
+            .and_then(|p| st.doc.node(p))
+            .filter(|p| matches!(p.kind, vectorcraft_doc::NodeKind::Compound { .. }))
+            .or_else(|| st.doc.node(*id));
+        target_node.is_some_and(|n| !n.appearance.is_basic())
+    })
+}
+
 /// The Appearance panel: the object row, the stack of the selected object (or of new art with nothing selected) and the bottom bar; Delete/Backspace after a row click remove the highlighted rows.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let node = first_subject(app);
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     let hide_thumb: bool = pstate(ui.ctx(), "ap-hide-thumb");
     widgets::list_box(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
@@ -426,10 +489,29 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if resp.clicked() && sel != Sel::None {
             select_row(app, ui.ctx(), Sel::None);
         }
+        if resp.secondary_clicked() {
+            super::set_row_keys(ui.ctx(), ROW_KEYS, true);
+            if sel != Sel::None {
+                select_row(app, ui.ctx(), Sel::None);
+            }
+        }
+        resp.context_menu(|ui| {
+            let has = node.is_some();
+            if menu_item(ui, tl!("Clear Appearance"), has, false) {
+                app.run("appearance.clear", json!({})).ok();
+                ui.close();
+            }
+            let can_reduce = any_subject_needs_reduction(app);
+            if menu_item(ui, tl!("Reduce to Basic Appearance"), can_reduce, false) {
+                app.run("appearance.reduceToBasic", json!({})).ok();
+                ui.close();
+            }
+        });
         ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
-        let mix = mixed(app);
+        let summary = summary(app, ui.ctx());
+        let mix = summary.as_ref().and_then(|s| s.mixed(app));
         let mixed = mix.is_some();
-        let label = tl!(object_label(app));
+        let label = tl!(summary.as_ref().map_or("No Selection", |s| s.label));
         // A linked object names its graphic style ("Rectangle: Sunshine"), and so does new art
         // with nothing selected.
         let style = match app.session.selection_graphic_style() {
@@ -438,7 +520,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => None,
         };
         let label = match style {
-            Some(name) => std::borrow::Cow::Owned(format!("{label}: {name}")),
+            Some(name) => std::borrow::Cow::Owned(format!("{} {name}", crate::i18n::colon(label))),
             None => std::borrow::Cow::Borrowed(label),
         };
         if !hide_thumb {
@@ -448,7 +530,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 Some(n) => n.appearance.fill_paint(),
                 None => app.session.paint.fill.clone(),
             };
-            chip(ui, th, &fill, mix.as_ref().is_some_and(|m| m.fills_differ));
+            chip(ui, th, &fill, mix.is_some_and(|m| m.fills_differ));
             if let Some(n) = node.as_ref().filter(|_| !mixed) {
                 thumbnail_drag(ui, th, n.id);
             }
@@ -456,7 +538,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         text(ui, r.left_center() + vec2(if hide_thumb { 8.0 } else { 46.0 }, 0.0), &label, true);
         match &node {
             // Objects that differ list what they share, under a note that they differ.
-            Some(n) if let Some(m) = &mix => {
+            Some(n) if let Some(m) = mix => {
                 let (mr, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW), Sense::hover());
                 let mut job = egui::text::LayoutJob::default();
                 let format = egui::TextFormat { font_id: egui::FontId::proportional(12.0), color: t.text_dim, italics: true, ..Default::default() };
@@ -470,10 +552,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(n) => stack(app, ui, n, sel, r, None),
             None => default_stack(app, ui),
         }
-        // Spacer row like Illustrator's empty tail.
+        // An empty spacer row at the end of the list.
         ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::hover());
     });
-    bottom(app, ui, node.as_ref(), sel);
+    bottom(app, ui, node.as_deref(), sel);
     delete_key(app, ui);
     // A row's popup, beside the panel (in the same window when the panel floats).
     let panel = ui.max_rect();
@@ -494,13 +576,13 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
     let keys = super::has_row_keys(&ctx, ROW_KEYS) && !pressed_outside;
     super::set_row_keys(&ctx, ROW_KEYS, keys);
     let node = first_subject(app);
-    let sel = current_sel(app, &ctx, node.as_ref());
+    let sel = current_sel(app, &ctx, node.as_deref());
     if keys
         && sel.deletable()
         && ctx.memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
 }
 
@@ -509,16 +591,16 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
     let resp = ui.interact(th, ui.scope_id().with("ap-thumb"), Sense::drag()).on_hover_text(tl!("Drag onto art to apply this appearance"));
     widgets::drag_source(ui, &resp, || PanelDrag::Appearance(id));
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
 }
 
 /// The object the panel lists: the targeted layer, group or object (`layer.target`), else the
-/// first selected one.
-fn first_subject(app: &VectorcraftApp) -> Option<Node> {
+/// first selected one, as the `Arc` the document holds.
+fn first_subject(app: &VectorcraftApp) -> Option<std::sync::Arc<Node>> {
     let st = app.session.active()?;
-    st.selection.subjects().first().and_then(|id| st.doc.node(*id)).cloned()
+    st.selection.subjects().first().and_then(|id| super::layers::node_arc(&st.doc, *id))
 }
 
 /// The selection as the Control bar and the object row name it: "No Selection", the kind ("Path",
@@ -557,6 +639,44 @@ struct Mixed {
     fills_differ: bool,
 }
 
+/// The selection's [`object_label`] and [`mixed`] summary for the active document as of one
+/// revision and one list of appearance subjects ([`vectorcraft_doc::Selection::subjects`]), shared by
+/// the Control bar and the Appearance panel ([`summary`]).
+pub(crate) struct Summary {
+    uid: u64,
+    revision: u64,
+    subjects: Vec<NodeId>,
+    /// [`object_label`] of these subjects.
+    pub(crate) label: &'static str,
+    /// [`mixed`] of these subjects, worked out the first time the Appearance panel asks for it.
+    mixed: OnceLock<Option<Mixed>>,
+}
+
+impl Summary {
+    /// [`mixed`] of the subjects this summary was made for.
+    fn mixed<'a>(&'a self, app: &VectorcraftApp) -> Option<&'a Mixed> {
+        self.mixed.get_or_init(|| mixed(app)).as_ref()
+    }
+}
+
+/// The active document's [`Summary`], made again only when the document changes (its id or its
+/// revision) or the appearance subjects do, compared id by id. `None` with no document open.
+pub(crate) fn summary(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Arc<Summary>> {
+    let st = app.session.active()?;
+    let subjects = st.selection.subjects();
+    let id = egui::Id::unique("ap-summary");
+    if let Some(s) = ctx.data(|d| d.get_temp::<Arc<Summary>>(id))
+        && s.uid == st.uid
+        && s.revision == st.revision
+        && s.subjects == subjects
+    {
+        return Some(s);
+    }
+    let s = Arc::new(Summary { uid: st.uid, revision: st.revision, subjects: subjects.to_vec(), label: object_label(app), mixed: OnceLock::new() });
+    ctx.data_mut(|d| d.insert_temp(id, s.clone()));
+    Some(s)
+}
+
 /// `params` of an item or effect command the panel runs, with `aligned` when the selected objects'
 /// stacks differ: its indices are then rows of the first object's stack, which each other object
 /// edits where it has them (the panel lists only the rows they share).
@@ -582,7 +702,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
         let (r, _) = row(ui, false);
         eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &shown_effect_label(&e.id), false);
+        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &effect_row_label(&e.id), false);
         icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     };
     for (i, it) in ap.items.iter().enumerate().rev() {
@@ -643,6 +763,58 @@ enum Slot {
     Contents,
 }
 
+/// Context menu and right-click selection for a stroke or fill row.
+fn item_row_context(
+    app: &mut VectorcraftApp,
+    ui: &mut Ui,
+    n: &Node,
+    resps: (&egui::Response, &egui::Response),
+    i: usize,
+    it: &AppearanceItem,
+    items: &[usize],
+) {
+    let (resp, name) = resps;
+    if resp.secondary_clicked() || name.secondary_clicked() {
+        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if !items.contains(&i) {
+            select_row(app, ui.ctx(), Sel::Item(i));
+        }
+    }
+    let is_stroke = matches!(it, AppearanceItem::Stroke(_));
+    let visible = it.visible();
+    let vis_label = if is_stroke {
+        if visible { tl!("Hide Stroke") } else { tl!("Show Stroke") }
+    } else {
+        if visible { tl!("Hide Fill") } else { tl!("Show Fill") }
+    };
+    let mut menu = |ui: &mut Ui| {
+        let sel = current_sel(app, ui.ctx(), Some(n));
+        let sel_items = selected_items(ui.ctx(), Some(n), sel);
+        let multi = sel_items.len() > 1;
+        let (dup_label, del_label) = if multi {
+            (tl!("Duplicate Items"), tl!("Delete Items"))
+        } else if is_stroke {
+            (tl!("Duplicate Stroke"), tl!("Delete Stroke"))
+        } else {
+            (tl!("Duplicate Fill"), tl!("Delete Fill"))
+        };
+        if menu_item(ui, dup_label, true, false) {
+            duplicate_selected(app, ui, Some(n), sel);
+            ui.close();
+        }
+        if menu_item(ui, del_label, true, false) {
+            delete_selected(app, ui, Some(n), sel);
+            ui.close();
+        }
+        if menu_item(ui, vis_label, true, false) {
+            app.run("appearance.setItem", aligned(app, json!({"index": i, "visible": !visible}))).ok();
+            ui.close();
+        }
+    };
+    resp.context_menu(&mut menu);
+    name.context_menu(&mut menu);
+}
+
 /// The rows of object `n` (fills/strokes with their Opacity and effect rows, the Contents row, the object's effects and Opacity) with the click rules, row drags and drop markers; `sel` is the active row.
 /// `only`: a mixed selection (`n` its first object): only the rows its objects share are listed,
 /// and rows aren't dragged (where one would go in each of the different stacks isn't one place).
@@ -655,13 +827,13 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
     let lit = |item: Option<usize>, k: usize| effects.as_ref().is_some_and(|(list, ks)| *list == item && ks.contains(&k));
     let mut rows = vec![(Slot::Object { top: true }, object_row)];
     let mut stopped = false;
-    // Starts or ends a row drag.
+    // Starts (primary button only) or ends a row drag.
     let frozen = only.is_some();
     let mut track = |resp: &egui::Response, what: Dragged| {
         if frozen {
             return;
         }
-        if resp.drag_started() {
+        if resp.drag_started_by(egui::PointerButton::Primary) {
             set_pstate(&ctx, "ap-drag", Some(what));
             // Where the row was grabbed, for its dimmed copy under the pointer.
             // (From where the button went down: the drag starts once the pointer has moved on.)
@@ -698,7 +870,8 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         // The label edits the row (the Stroke or Color panel); the empty space only takes the click
         // rules.
         let label = if is_stroke { tl!("Stroke:") } else { tl!("Fill:") };
-        if name_link(ui, pos2(lx, r.center().y), ("ap-link", i), label).clicked() {
+        let name = name_link(ui, pos2(lx, r.center().y), ("ap-link", i), label);
+        if name.clicked() {
             select_row(app, ui.ctx(), Sel::Item(i));
             // The panel has the keyboard (Delete removes this row, not the art).
             super::set_row_keys(ui.ctx(), ROW_KEYS, true);
@@ -712,12 +885,13 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
             let m = ui.input(|inp| inp.modifiers);
             click_row(app, ui.ctx(), n, sel, Rows::Items, i, m);
         }
+        item_row_context(app, ui, n, (&resp, &name), i, it, &items);
         track(&resp, Dragged::Item(i));
         if open {
             let r = opacity_row(app, ui, Some(i), it.opacity(), it.blend(), sel, false);
             rows.push((Slot::Item { index: i, sub: true }, r));
             for (k, e) in it.effects().iter().enumerate() {
-                let (r, resp) = effect_row(app, ui, Some(i), k, e, lit(Some(i), k));
+                let (r, resp) = effect_row(app, ui, n, Some(i), k, e, lit(Some(i), k));
                 if resp.clicked() {
                     let m = ui.input(|inp| inp.modifiers);
                     click_row(app, ui.ctx(), n, sel, Rows::Effects(Some(i)), k, m);
@@ -737,7 +911,7 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
         if only.is_some_and(|m| !m.shared.has_effect(k)) {
             continue;
         }
-        let (r, resp) = effect_row(app, ui, None, k, e, lit(None, k));
+        let (r, resp) = effect_row(app, ui, n, None, k, e, lit(None, k));
         if resp.clicked() {
             let m = ui.input(|inp| inp.modifiers);
             click_row(app, ui.ctx(), n, sel, Rows::Effects(None), k, m);
@@ -856,7 +1030,7 @@ fn drag_ghost(app: &VectorcraftApp, ui: &Ui, n: &Node, what: Dragged, order: &[u
             Dragged::Effect(item, k) => {
                 let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
                 let indent = if item.is_some() { 12.0 } else { 0.0 };
-                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &shown_effect_label(&e.id), false);
+                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &effect_row_label(&e.id), false);
             }
             Dragged::Contents => {
                 if let Some(label) = n.contents_label() {
@@ -1109,7 +1283,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, opaci
 /// An effect row: of the object (`item: None`) or, indented under it, of fill/stroke `item`.
 /// Clicking the name opens the effect's dialog to edit it (the disclosure: an inline editor).
 /// Returns the row's rect and response (for dragging).
-fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usize, e: &Effect, selected: bool) -> (Rect, egui::Response) {
+fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, item: Option<usize>, k: usize, e: &Effect, selected: bool) -> (Rect, egui::Response) {
     let t = Tokens::get(ui.ctx());
     let open_key = format!("ap-fx-open-{item:?}-{k}");
     let open: bool = pstate(ui.ctx(), &open_key);
@@ -1128,7 +1302,11 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     // The name edits the effect on a click; the empty space takes the click rules (in `stack`)
     // and edits it on a double-click: its settings dialog, or the inline editor of an effect
     // without settings.
-    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &shown_effect_label(&e.id));
+    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_row_label(&e.id));
+    let name = match skipped_effect_tip(&e.id) {
+        Some(tip) => name.on_hover_text(tip),
+        None => name,
+    };
     let resp = edit_tip(resp, &name);
     let edit = name.clicked() || resp.double_clicked();
     if edit {
@@ -1140,6 +1318,44 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
             set_pstate(ui.ctx(), &open_key, !open);
         }
     }
+    if resp.secondary_clicked() || name.secondary_clicked() {
+        super::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if !selected {
+            select_row(app, ui.ctx(), this);
+        }
+    }
+    let mut menu = |ui: &mut Ui| {
+        if menu_item(ui, tl!("Edit Effect…"), true, false) {
+            select_row(app, ui.ctx(), this);
+            super::set_row_keys(ui.ctx(), ROW_KEYS, true);
+            if has_options(&e.id) {
+                app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
+            } else {
+                set_pstate(ui.ctx(), &open_key, !open);
+            }
+            ui.close();
+        }
+        let sel = current_sel(app, ui.ctx(), Some(n));
+        let sel_fx = selected_effects(ui.ctx(), Some(n), sel);
+        let multi = sel_fx.as_ref().is_some_and(|(list, ks)| *list == item && ks.len() > 1);
+        let dup_label = if multi { tl!("Duplicate Effects") } else { tl!("Duplicate Effect") };
+        let del_label = if multi { tl!("Delete Effects") } else { tl!("Delete Effect") };
+        if menu_item(ui, dup_label, true, false) {
+            duplicate_selected(app, ui, Some(n), sel);
+            ui.close();
+        }
+        if menu_item(ui, del_label, true, false) {
+            delete_selected(app, ui, Some(n), sel);
+            ui.close();
+        }
+        let vis_label = if e.visible { tl!("Hide Effect") } else { tl!("Show Effect") };
+        if menu_item(ui, vis_label, true, false) {
+            app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "visible": !e.visible}))).ok();
+            ui.close();
+        }
+    };
+    resp.context_menu(&mut menu);
+    name.context_menu(&mut menu);
     icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     if open {
         effect_editor(app, ui, item, k, e);
@@ -1147,9 +1363,10 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     (row_rect, resp)
 }
 
-/// Does the effect have a dialog (any parameters)?
+/// Does the effect have a dialog (any parameters, or a Pathfinder effect's Pathfinder Options)?
 fn has_options(id: &str) -> bool {
-    vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
+    vectorcraft_effects::takes_pathfinder_options(id)
+        || vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_some_and(|o| !o.is_empty()))
 }
 
 /// Inline editor for an applied effect's parameters, labeled as the effect dialogs' generic fields
@@ -1627,7 +1844,7 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let node = first_subject(app);
     let has = node.is_some();
-    let sel = current_sel(app, ui.ctx(), node.as_ref());
+    let sel = current_sel(app, ui.ctx(), node.as_deref());
     if menu_item(ui, tl!("Add New Fill"), has, false) {
         app.run("appearance.addFill", json!({})).ok();
     }
@@ -1636,15 +1853,16 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     if menu_item(ui, tl!("Duplicate Item"), has && sel.editable(), false) {
-        duplicate_selected(app, ui, node.as_ref(), sel);
+        duplicate_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Remove Item"), has && sel.deletable(), false) {
-        delete_selected(app, ui, node.as_ref(), sel);
+        delete_selected(app, ui, node.as_deref(), sel);
     }
     if menu_item(ui, tl!("Clear Appearance"), has, false) {
         app.run("appearance.clear", json!({})).ok();
     }
-    if menu_item(ui, tl!("Reduce to Basic Appearance"), has && !node.as_ref().is_some_and(|n| n.appearance.is_basic()), false) {
+    let can_reduce = any_subject_needs_reduction(app);
+    if menu_item(ui, tl!("Reduce to Basic Appearance"), can_reduce, false) {
         app.run("appearance.reduceToBasic", json!({})).ok();
     }
     ui.separator();

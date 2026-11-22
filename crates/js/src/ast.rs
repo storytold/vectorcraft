@@ -175,6 +175,64 @@ pub enum Expr {
     /// A parenthesized expression, kept so a rule about the bare form (a label, a directive) can
     /// tell them apart.
     Paren(ExprId),
+    /// An XML literal (`<a b="c">d</a>`), or with `list` an XMLList literal (`<>…</>`).
+    XmlLiteral {
+        parts: Vec<XmlPart>,
+        list: bool,
+    },
+    /// An E4X name (`@a`, `*`, `ns::a`), the key of an [`Expr::Index`] or the operand of
+    /// [`Expr::XmlScopeName`] and [`Expr::XmlDescendants`].
+    XmlName {
+        attribute: bool,
+        qualifier: Option<XmlQualifier>,
+        name: XmlNamePart,
+    },
+    /// An E4X name standing alone (`@a` in a filter): looked up on the nearest XML value in scope
+    /// that holds it, and also an assignment, update or `delete` target.
+    XmlScopeName(ExprId),
+    /// `object..name`.
+    XmlDescendants {
+        object: ExprId,
+        name: ExprId,
+    },
+    /// `object.(predicate)`.
+    XmlFilter {
+        object: ExprId,
+        predicate: ExprId,
+    },
+}
+
+/// A piece of an XML literal, in source order.
+#[derive(Clone, Debug, PartialEq)]
+pub enum XmlPart {
+    /// Markup kept as written.
+    Text(Vec<u16>),
+    /// `{expression}` in element content: XML values keep their markup, other values are escaped.
+    Content(ExprId),
+    /// `{expression}` as an attribute's value.
+    Attribute(ExprId),
+    /// `{expression}` as an element or attribute name, its string checked as an XML name.
+    Name(ExprId),
+    /// `{expression}` as a run of attributes, its string checked as `name="value"` attributes.
+    Attributes(ExprId),
+}
+
+/// What stands before `::` in a qualified name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum XmlQualifier {
+    /// `*::name`: any namespace.
+    Any,
+    Expr(ExprId),
+}
+
+/// The name in an E4X name.
+#[derive(Clone, Debug, PartialEq)]
+pub enum XmlNamePart {
+    Ident(String),
+    /// `*`.
+    Star,
+    /// `[expression]`.
+    Computed(ExprId),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -218,19 +276,55 @@ pub enum Stmt {
     Expr(ExprId),
     Block(Vec<StmtId>),
     Empty,
-    If { test: ExprId, consequent: StmtId, alternate: Option<StmtId> },
-    DoWhile { body: StmtId, test: ExprId },
-    While { test: ExprId, body: StmtId },
-    For { init: Option<ForInit>, test: Option<ExprId>, update: Option<ExprId>, body: StmtId },
-    ForIn { target: ForInTarget, object: ExprId, body: StmtId },
+    If {
+        test: ExprId,
+        consequent: StmtId,
+        alternate: Option<StmtId>,
+    },
+    DoWhile {
+        body: StmtId,
+        test: ExprId,
+    },
+    While {
+        test: ExprId,
+        body: StmtId,
+    },
+    For {
+        init: Option<ForInit>,
+        test: Option<ExprId>,
+        update: Option<ExprId>,
+        body: StmtId,
+    },
+    /// `for (… in …)`, or with `each` the E4X `for each (… in …)`, which assigns the values.
+    ForIn {
+        target: ForInTarget,
+        object: ExprId,
+        body: StmtId,
+        each: bool,
+    },
+    /// `default xml namespace = expression;`.
+    DefaultXmlNamespace(ExprId),
     Continue(Option<Name>),
     Break(Option<Name>),
     Return(Option<ExprId>),
-    With { object: ExprId, body: StmtId },
-    Switch { discriminant: ExprId, cases: Vec<SwitchCase> },
-    Labeled { label: Name, body: StmtId },
+    With {
+        object: ExprId,
+        body: StmtId,
+    },
+    Switch {
+        discriminant: ExprId,
+        cases: Vec<SwitchCase>,
+    },
+    Labeled {
+        label: Name,
+        body: StmtId,
+    },
     Throw(ExprId),
-    Try { block: Vec<StmtId>, handler: Option<CatchClause>, finalizer: Option<Vec<StmtId>> },
+    Try {
+        block: Vec<StmtId>,
+        handler: Option<CatchClause>,
+        finalizer: Option<Vec<StmtId>>,
+    },
     Debugger,
 }
 
