@@ -28,6 +28,7 @@
 //! - Members the help pages list that are not here yet throw an error that says so.
 
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -84,13 +85,15 @@ pub(super) enum Coords {
 const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
-/// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, whether a call's own savepoint
-/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made.
+/// What the object model keeps for one run: its coordinate system, the lists of page items and the
+/// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
+/// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
+/// open, and the settings of each `DocumentPreset` the run made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
-    items: RefCell<Option<ItemList>>,
+    items: RefCell<Vec<ItemList>>,
+    locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
@@ -124,6 +127,57 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
 
 /// A document's uid, the document as it was, and the ids of its page items then.
 type ItemList = (u64, Arc<Document>, Rc<Vec<NodeId>>);
+
+/// A document's uid, the document and its new art ([`Document::new_art`]) as they were, and for
+/// each object of a layer or sublayer asked about then, whether it was on a locked artboard.
+type LockedList = (u64, Arc<Document>, Arc<HashSet<NodeId>>, HashMap<NodeId, bool>);
+
+/// How many documents' lists [`State`] keeps at once, of each kind.
+const ITEM_LISTS: usize = 4;
+
+/// The kept list of the document `uid` as `doc` is, if there is one.
+fn kept_items(lists: &[ItemList], uid: u64, doc: &Arc<Document>) -> Option<Rc<Vec<NodeId>>> {
+    lists.iter().find(|(u, d, _)| *u == uid && Arc::ptr_eq(d, doc)).map(|(_, _, ids)| ids.clone())
+}
+
+/// Keeps `list` in place of any earlier list of the same document, dropping the least recently
+/// kept list beyond [`ITEM_LISTS`].
+fn keep_items(lists: &mut Vec<ItemList>, list: ItemList) {
+    lists.retain(|(u, _, _)| *u != list.0);
+    if lists.len() >= ITEM_LISTS {
+        lists.remove(0);
+    }
+    lists.push(list);
+}
+
+/// Whether node `id` of `st` is on a locked artboard ([`Document::on_locked_artboard`]). Each
+/// object of a layer or sublayer is measured once while the document and its new art stay as they
+/// are, so the members of a group are answered with one measurement of the group.
+fn on_locked_artboard(h: &Host, st: &DocState, id: NodeId) -> bool {
+    if !st.doc.artboards.iter().any(|a| a.locked) {
+        return false;
+    }
+    let Some(object) = st.doc.layer_object(id).map(|n| n.id) else {
+        return false;
+    };
+    let new_art = st.doc.new_art.get();
+    let mut lists = h.dom.locked.borrow_mut();
+    let at = match lists.iter().position(|(u, d, n, _)| *u == st.uid && Arc::ptr_eq(d, &st.doc) && Arc::ptr_eq(n, &new_art)) {
+        Some(at) => at,
+        None => {
+            lists.retain(|(u, ..)| *u != st.uid);
+            if lists.len() >= ITEM_LISTS {
+                lists.remove(0);
+            }
+            lists.push((st.uid, st.doc.clone(), new_art, HashMap::new()));
+            lists.len() - 1
+        }
+    };
+    match lists.get_mut(at) {
+        Some((.., held)) => *held.entry(object).or_insert_with(|| st.doc.on_locked_artboard(object)),
+        None => st.doc.on_locked_artboard(object),
+    }
+}
 
 type Answer = std::result::Result<Data, HostError>;
 
@@ -332,13 +386,11 @@ fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     }
 }
 
-/// The ids of a document's page items in paint order ([`State`] keeps the last list).
+/// The ids of a document's page items in paint order ([`State`] keeps the lists of the last
+/// documents read).
 fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.items.borrow()
-        && *uid == st.uid
-        && Arc::ptr_eq(doc, &st.doc)
-    {
-        return ids.clone();
+    if let Some(ids) = kept_items(&h.dom.items.borrow(), st.uid, &st.doc) {
+        return ids;
     }
     fn walk(nodes: &[Arc<crate::doc::Node>], out: &mut Vec<NodeId>) {
         for n in nodes {
@@ -356,7 +408,7 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     let mut ids = Vec::new();
     walk(&st.doc.layers, &mut ids);
     let ids = Rc::new(ids);
-    *h.dom.items.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
+    keep_items(&mut h.dom.items.borrow_mut(), (st.uid, st.doc.clone(), ids.clone()));
     ids
 }
 
@@ -1518,9 +1570,11 @@ fn item_set_height(h: &Host, a: &[Data]) -> Answer {
     resize(h, a, false)
 }
 
+/// `editable`: false for an object that is hidden or locked, in a hidden or locked layer or group,
+/// or on a locked artboard.
 fn item_editable(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    Ok(Data::Bool(with_doc(h, item.doc, |_, st| editable(&st.doc, item.id))))
+    Ok(Data::Bool(with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && !on_locked_artboard(h, st, item.id))))
 }
 
 /// The item's place in its parent's stacking order, from 1 at the bottom.
@@ -1949,5 +2003,30 @@ mod tests {
         // An internal failure or a stop ends the run instead of being taken for a refusal.
         assert_eq!(done_unless_refused(Err(HostError::Abort("canceled".into()))), Err(HostError::Abort("canceled".into())));
         assert_eq!(done_unless_refused(Err(HostError::Range("too large".into()))), Err(HostError::Range("too large".into())));
+    }
+
+    #[test]
+    fn page_item_lists_are_kept_for_several_documents() {
+        let docs: Vec<Arc<Document>> = (0..=ITEM_LISTS).map(|_| Arc::new(Document::new(100.0, 100.0))).collect();
+        let ids = |n: u64| Rc::new(vec![NodeId(n)]);
+        let mut lists = Vec::new();
+        keep_items(&mut lists, (1, docs[0].clone(), ids(1)));
+        keep_items(&mut lists, (2, docs[1].clone(), ids(2)));
+        // Reading two documents in turn keeps both lists.
+        assert_eq!(kept_items(&lists, 1, &docs[0]), Some(ids(1)));
+        assert_eq!(kept_items(&lists, 2, &docs[1]), Some(ids(2)));
+        // A changed document has no kept list, and its new list replaces the old one.
+        let changed = Arc::new(Document::new(100.0, 100.0));
+        assert_eq!(kept_items(&lists, 1, &changed), None);
+        keep_items(&mut lists, (1, changed.clone(), ids(3)));
+        assert_eq!(lists.len(), 2);
+        assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
+        // Past the limit, the list kept longest ago goes.
+        for (uid, d) in (10..).zip(&docs[2..]) {
+            keep_items(&mut lists, (uid, d.clone(), ids(uid)));
+        }
+        assert_eq!(lists.len(), ITEM_LISTS);
+        assert_eq!(kept_items(&lists, 2, &docs[1]), None);
+        assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
     }
 }

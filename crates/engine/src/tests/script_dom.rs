@@ -1016,9 +1016,32 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
     let doc = &s.active().unwrap().doc;
     assert!(doc.node(a).is_some() && doc.node(b).is_some() && doc.node(c).is_some());
     assert_eq!(undo_steps(&s), steps);
+    // `editable` is false for art on the locked artboard and true for art on the unlocked one.
+    let editable = "var p = app.activeDocument.pageItems; vc.log([p[0].editable, p[1].editable, p[2].editable]);";
+    assert_eq!(log(&mut s, editable), vec![json!([false, false, true])]);
     lock(&mut s, false);
+    assert_eq!(log(&mut s, editable), vec![json!([true, true, true])]);
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
     assert_eq!(out, vec![json!(0)]);
+}
+
+/// Reading `editable` on every member of a group on a locked artboard measures the group once.
+#[test]
+fn editable_measures_a_group_on_a_locked_artboard_once() {
+    let (mut s, a, b) = doc();
+    let mut ids = vec![a.0, b.0];
+    ids.extend((0..20).map(|i| rect(&mut s, 10.0 + f64::from(i), 200.0, 5.0, 5.0).0));
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let before = vectorcraft_doc::locked_artboard_measures();
+    let out = log(&mut s, "var p = app.activeDocument.pageItems, n = 0; for (var i = 0; i < p.length; i++) if (!p[i].editable) n++; vc.log(n);");
+    assert_eq!(out, vec![json!(23)], "the group and its 22 members are on the locked artboard");
+    assert_eq!(vectorcraft_doc::locked_artboard_measures() - before, 1);
 }
 
 #[test]
