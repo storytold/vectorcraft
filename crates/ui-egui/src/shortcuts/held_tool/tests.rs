@@ -24,11 +24,7 @@ impl Keyboard {
     /// [`Self::frame`], with the window having the keyboard (`focused`) or not.
     fn frame_with_focus(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>, focused: bool) {
         let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
-        let mut out = self.ctx.run_ui(egui::RawInput { events, screen_rect, time: Some(time), focused, ..Default::default() }, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, &self.ctx, egui::RawInput { events, screen_rect, time: Some(time), focused, ..Default::default() });
     }
 
     /// `key` pressed (or repeated while it is down) at `time`, typing `letter`.

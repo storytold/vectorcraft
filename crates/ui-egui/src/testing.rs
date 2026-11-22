@@ -1,5 +1,6 @@
 //! The app's own interface install for tests: the runtime, the fonts and the root theme the app
-//! gives a real window, so a test lays text out and paints in the app's look.
+//! gives a real window, so a test lays text out and paints in the app's look; and the frame the
+//! hosts run.
 
 use craft::ui::runtime::frame::{FrameInput, set_input};
 use craft::ui::shell::embed;
@@ -31,4 +32,18 @@ pub(crate) fn ui_context() -> egui::Context {
     let ctx = egui::Context::default();
     install(&ctx);
     ctx
+}
+
+/// One frame of the whole app on `ctx` as the hosts run it (kb.C26): the app gives the input of the frame
+/// (`embed::before_input`), the window draws with `raw`, and the app takes what the runtime gathered in it, running the
+/// commands it fired, as the host's next frame begins. The frame's texture uploads are handled.
+pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, raw: egui::RawInput) -> egui::FullOutput {
+    embed::before_input(ctx, |out| app.frame_input(out));
+    let mut out = ctx.run_ui(raw, |ui| {
+        app.tick(ui.ctx());
+        app.ui(ui);
+    });
+    embed::before_input(ctx, |out| app.frame_input(out));
+    out.textures_delta.clear();
+    out
 }

@@ -17,13 +17,7 @@ pub(super) fn host_frame(app: &mut VectorcraftApp, hidden: bool) {
     if hidden {
         raw.viewports.entry(egui::ViewportId::ROOT).or_default().occluded = Some(true);
     }
-    // PLAN: assumed `VectorcraftApp::frame_input(&mut self, out: FrameOutput) -> FrameInput` (hub-w1, sh.S7).
-    craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
-    let mut out = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    crate::testing::app_frame(app, &ctx, raw);
 }
 
 /// Runs `act` on the window's dialog host, as automation's `ui.dialog.*` does, then the frame's dialog pump, which
@@ -392,7 +386,6 @@ fn control_requests_come_before_the_step_that_is_due() {
     let tick = |app: &mut VectorcraftApp, now: f64| {
         let ctx = app.ui_ctx.clone().unwrap();
         app.now_override = Some(now);
-        // PLAN: assumed `VectorcraftApp::frame_input(&mut self, out: FrameOutput) -> FrameInput` (hub-w1, sh.S7).
         craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();

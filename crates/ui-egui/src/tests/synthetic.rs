@@ -27,11 +27,7 @@ pub(crate) fn key_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: V
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    crate::testing::app_frame(app, &ctx, raw);
 }
 
 /// A document with one selected 10 × 10 square at (10, 10) → (app, its id).

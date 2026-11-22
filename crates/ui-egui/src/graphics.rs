@@ -159,11 +159,7 @@ mod tests {
     /// One headless frame of the whole window (800×600) in `ctx`.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, &ctx, raw);
     }
 
     /// The name of texture `id` in `ctx`, if `ctx` has it.

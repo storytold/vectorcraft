@@ -303,10 +303,7 @@ pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui:
     }
     let ctx = CTX.with(Clone::clone);
     craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
-    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
+    let mut out = crate::testing::app_frame(app, &ctx, egui::RawInput { events, ..Default::default() });
     craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
     out.textures_delta.clear();
     out

@@ -589,12 +589,7 @@ fn a_pass_with_injected_input_runs_inside_the_roots() {
         if dropped {
             raw.dropped_files.push(std::sync::Arc::new(Dropped(outside.clone())));
         }
-        ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        })
-        .textures_delta
-        .clear();
+        crate::testing::app_frame(app, &ctx, raw);
         app.session.documents().len()
     };
     assert_eq!(pass(&mut app, true), 0, "the pass carrying the key is confined");

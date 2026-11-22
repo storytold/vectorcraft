@@ -130,13 +130,7 @@ impl Harness {
             (host.infos(), host.focus == ViewportId::ROOT, host.time)
         };
         let input = egui::RawInput { time: Some(time), events, screen_rect: Some(SCREEN), viewports, focused, ..Default::default() };
-        craft::ui::shell::embed::before_input(&self.ctx, |out| self.app.frame_input(out));
-        let app = &mut self.app;
-        let mut full = self.ctx.run_ui(input, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        full.textures_delta.clear();
+        let full = crate::testing::app_frame(&mut self.app, &self.ctx, input);
         self.host.borrow_mut().apply(&full);
     }
 

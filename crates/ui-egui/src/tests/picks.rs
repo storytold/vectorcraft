@@ -710,11 +710,7 @@ fn app_frame(ctx: &egui::Context, app: &mut VectorcraftApp, close: bool) -> Vec<
     if close {
         raw.viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
     }
-    let mut out = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    let out = crate::testing::app_frame(app, &ctx, raw);
     out.viewport_output.get(&egui::ViewportId::ROOT).map(|v| v.commands.clone()).unwrap_or_default()
 }
 

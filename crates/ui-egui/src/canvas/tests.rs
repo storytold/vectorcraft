@@ -2858,13 +2858,8 @@ fn retype_all_of_a_copied_type(ime: bool) {
     let time = std::cell::Cell::new(0.0);
     let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
         time.set(time.get() + 0.03);
-        craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
         let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0));
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time.get()), events, ..Default::default() }, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, &ctx, egui::RawInput { screen_rect: Some(screen), time: Some(time.get()), events, ..Default::default() });
     };
     for _ in 0..3 {
         frame(&mut app, vec![]);
@@ -3072,13 +3067,8 @@ fn a_press_on_type_in_a_missing_font_keeps_an_open_dialog() {
     let ctx = crate::testing::ui_context();
     // A frame of the whole window opens the question the app queued.
     let window = |app: &mut VectorcraftApp| {
-        craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, &ctx, raw);
     };
     window(&mut app);
     let doc = app.session.active().unwrap().uid;

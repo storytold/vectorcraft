@@ -45,12 +45,7 @@ impl Harness {
 
     /// Draw one application frame and retain its accessibility output for assertions.
     fn run(&mut self, input: egui::RawInput) {
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(input, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        let out = crate::testing::app_frame(&mut self.app, &self.ctx, input);
         self.nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
     }
 

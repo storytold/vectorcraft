@@ -25,11 +25,7 @@ fn reader() -> egui::Context {
 /// One whole app frame in a window 1200 points wide and `height` tall; returns the screen-reader nodes.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, height: f32) -> Vec<Node> {
     let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, height)));
-    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() }, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    let mut out = crate::testing::app_frame(app, &ctx, egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() });
     out.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default()
 }
 

@@ -47,16 +47,9 @@ fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
 
 /// One frame of the whole app on `ctx`, with `events` as the host's input.
 fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
-    // PLAN: assumed `app.frame_input(FrameOutput) -> FrameInput`, what the host hands `embed::before_input`
-    craft::ui::shell::embed::before_input(ctx, |out| app.frame_input(out));
     let raw =
         egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))), ..Default::default() };
-    ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    })
-    .textures_delta
-    .clear();
+    crate::testing::app_frame(app, &ctx, raw);
 }
 
 /// The first open dialog and its fields.

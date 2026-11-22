@@ -223,11 +223,7 @@ fn a_whole_path_converts_with_the_tools_that_edit_anchors() {
 fn anchor_delete_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) {
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0));
     let time = ctx.input(|i| i.time) + 0.1;
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    crate::testing::app_frame(app, &ctx, egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() });
 }
 
 /// Real canvas picking and both deletion keys split an ordinary path, then clear every survivor.

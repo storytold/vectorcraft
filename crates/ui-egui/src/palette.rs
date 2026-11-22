@@ -2273,12 +2273,7 @@ mod tests {
             self.time += 0.1;
             let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, WINDOW);
             let input = egui::RawInput { time: Some(self.time), screen_rect: Some(screen), events, ..Default::default() };
-            let app = &mut self.app;
-            let mut out = self.ctx.run_ui(input, |ui| {
-                app.tick(ui.ctx());
-                app.ui(ui);
-            });
-            out.textures_delta.clear();
+            let out = crate::testing::app_frame(&mut self.app, &self.ctx, input);
             out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
         }
 

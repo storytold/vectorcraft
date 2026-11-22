@@ -571,12 +571,7 @@ mod tests {
     fn window_frame_with(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, height: f32, events: Vec<egui::Event>) {
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
         let raw = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() };
-        ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        })
-        .textures_delta
-        .clear();
+        crate::testing::app_frame(app, &ctx, raw);
     }
 
     /// One frame of the whole window, `height` points tall.

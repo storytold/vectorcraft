@@ -104,13 +104,8 @@ impl GuideDrag {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
-        assert!(!app.ui.status.starts_with("Internal error:"), "{}", app.ui.status);
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw);
+        assert!(!self.app.ui.status.starts_with("Internal error:"), "{}", self.app.ui.status);
     }
 
     fn button(&self, pos: Pos2, pressed: bool) -> Event {

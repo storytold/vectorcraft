@@ -24,11 +24,7 @@ pub(super) fn app() -> VectorcraftApp {
 pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
     let ctx = app.ui_ctx.clone().expect("a window app");
     let raw = egui::RawInput { events, focused: true, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, SCREEN)), ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    let out = crate::testing::app_frame(app, &ctx, raw);
     out
 }
 

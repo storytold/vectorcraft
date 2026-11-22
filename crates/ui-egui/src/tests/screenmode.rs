@@ -11,11 +11,7 @@ use crate::VectorcraftApp;
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
     let raw =
         egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), events, ..Default::default() };
-    let mut out = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    out.textures_delta.clear();
+    let out = crate::testing::app_frame(app, &ctx, raw);
     out
 }
 
@@ -379,10 +375,6 @@ fn presentation_mode_fits_the_artboard() {
     assert!(200.0 * zoom >= f64::from(canvas.width()) * 0.8 || 100.0 * zoom >= f64::from(canvas.height()) * 0.8, "fitted: {zoom} in {canvas:?}");
     // A bigger canvas (the window gone full screen) fits it again.
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1200.0))), ..Default::default() };
-    let mut big = ctx.run_ui(raw, |ui| {
-        app.tick(ui.ctx());
-        app.ui(ui);
-    });
-    big.textures_delta.clear();
+    crate::testing::app_frame(&mut app, &ctx, raw);
     assert!(app.view().unwrap().zoom > zoom * 1.5, "fitted again to the larger canvas");
 }

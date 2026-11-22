@@ -340,12 +340,7 @@ impl Window {
         self.time += seconds;
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
         let raw = egui::RawInput { screen_rect: Some(rect), time: Some(self.time), events, ..Default::default() };
-        let app = &mut self.app;
-        let mut out = self.ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        let out = crate::testing::app_frame(&mut self.app, &self.ctx, raw);
         out
     }
 

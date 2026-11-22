@@ -127,11 +127,7 @@ impl Mac {
         };
         let app = &mut self.app;
         craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
-        let mut out = self.ctx.run_ui(raw, |ui| {
-            app.tick(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        let out = crate::testing::app_frame(app, &self.ctx, raw);
         out
     }
 
