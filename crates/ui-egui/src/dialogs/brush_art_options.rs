@@ -40,7 +40,7 @@ use craft::ui::runtime::env::UnitKind;
 use craft::ui::runtime::requests::EyedropperRequest;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::{Slider, SliderScale};
-use egui::{Color32, ColorImage, Ui};
+use egui::{Color32, ColorImage, Response, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation};
 use vectorcraft_color::{Color, Paint};
@@ -439,7 +439,7 @@ pub(super) fn preview_row(doc: Option<Arc<Document>>, ty: &str) -> Param {
 }
 
 /// A whole-number field bound to `f[key]`, kept within `range`, named `label`.
-fn number_cell(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str, range: (f64, f64), unit: UnitKind, enabled: bool) {
+fn number_cell(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str, range: (f64, f64), unit: UnitKind, enabled: bool) -> Response {
     let typed = NumberField::new(label, Bind::given(Some(clamped(f, key, range))))
         .range(range.0..=range.1)
         .step(1.0)
@@ -452,6 +452,13 @@ fn number_cell(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str
     if let Some(Some(value)) = typed.edit.value() {
         f.set(key, *value);
     }
+    typed.edit.response.clone()
+}
+
+/// A whole-number row kept within `range` while typed. A custom row: a value set by command outside the range is
+/// kept and clamped on OK ([`params`]), not refused.
+fn clamped_number(key: &'static str, label: &'static str, range: (f64, f64), unit: UnitKind) -> Param {
+    Param::custom(key, label, move |ui, f, _| number_cell(ui, f, key, label, range, unit, true))
 }
 
 /// A menu over `ids` (id, label) bound to the text field `key`, showing `current`.
@@ -489,8 +496,7 @@ fn scatter_rows() -> Vec<Param> {
     let relative = vec![("page".to_string(), tl!("Page").into()), ("path".to_string(), tl!("Path").into())];
     rows.push(Param::new("rotationRelativeTo", tl!("Rotation relative to"), ParamKind::radio(relative, Some("page".into()))));
     // Each copy turns its colors' hue by its own amount up to this many degrees either way.
-    let (lo, hi) = Scatter::HUE_JITTER_RANGE;
-    rows.push(Param::number("hueJitter", tl!("Hue Jitter"), 0.0, 1.0, 0).bounds(Some(lo), Some(hi)).unit(UnitKind::Degrees));
+    rows.push(clamped_number("hueJitter", tl!("Hue Jitter"), Scatter::HUE_JITTER_RANGE, UnitKind::Degrees));
     rows
 }
 
@@ -529,12 +535,7 @@ fn art_rows(object: bool) -> Vec<Param> {
         ];
         rows.push(Param::new("scaleMode", tl!("Brush Scale Options"), ParamKind::radio(scales, Some("stretch".into()))));
         for (key, label) in [("guideStart", tl!("Start")), ("guideEnd", tl!("End"))] {
-            rows.push(
-                Param::number(key, label, 0.0, 1.0, 0)
-                    .bounds(Some(0.0), Some(100.0))
-                    .unit(UnitKind::Percent)
-                    .enabled_when("scaleMode", "betweenGuides"),
-            );
+            rows.push(clamped_number(key, label, (0.0, 100.0), UnitKind::Percent).enabled_when("scaleMode", "betweenGuides"));
         }
         rows.push(direction_row());
     }

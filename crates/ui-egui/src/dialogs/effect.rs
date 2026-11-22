@@ -272,6 +272,11 @@ fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>
 fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
     let Some(mut open) = app.effect_dialogs.effect.take() else { return Ok(()) };
     let (cmd, params) = command(&open, &result.fields);
+    // An edit that sends nothing changes nothing and records no step: the preview rolls back.
+    if cmd == "effect.setParams" && params.get("warpStyle").is_none() && params["params"].as_object().is_some_and(Map::is_empty) {
+        open.preview.cancel(app);
+        return Ok(());
+    }
     let preview = std::mem::take(&mut open.preview);
     match preview.commit(app, cmd, params.clone()) {
         Ok(_) => {

@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Picture, PictureSize};
-use craft::ui::form::Field;
+use craft::ui::form::{Field, SliderField, SliderFieldLayout};
 use craft::ui::layout_components::Row;
 use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
@@ -37,7 +37,6 @@ use craft::ui::pickers::Select;
 use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::{Label, UnitKind};
 use craft::ui::text::NumberField;
-use craft::ui::value_drag::SliderScale;
 use egui::{Color32, Rect, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{Bristle, Brush, BrushKind, Calligraphic, Variation};
@@ -515,9 +514,22 @@ fn bristle_rows(doc: Option<Arc<Document>>, unit: UnitKind) -> Vec<Param> {
         Param::new("shape", tl!("Shape:"), ParamKind::choice(shapes, Some("roundPoint".into()))),
         Param::new("size", tl!("Size:"), ParamKind::number(Some(lo), Some(hi), lo, 1.0, 1)).unit(unit),
     ];
-    rows.extend(BRISTLE.into_iter().map(|(key, label, (lo, hi))| Param::new(key, tl!(label), ParamKind::range(lo, hi, lo, SliderScale::Linear))));
+    rows.extend(BRISTLE.into_iter().map(|(key, label, range)| bristle_slider(key, tl!(label), range)));
     rows.push(preview_row(doc, "bristle"));
     rows
+}
+
+/// A Bristle slider, kept within `range` while typed or dragged. A custom row: a value set by command
+/// outside the range is kept and clamped on OK ([`params`]), not refused.
+fn bristle_slider(key: &'static str, label: &'static str, range: (f64, f64)) -> Param {
+    Param::custom(key, label, move |ui, d, _| {
+        let shown =
+            SliderField::new(label, Bind::given(clamped(d, key, range)), range.0..=range.1).layout(SliderFieldLayout::Inline).id_salt(key).show(ui);
+        if let Some(v) = shown.edit.value() {
+            d.set(key, *v);
+        }
+        shown.edit.response.clone()
+    })
 }
 
 /// One Calligraphic value: its number, the mode of its variation, and (enabled while the mode is not
