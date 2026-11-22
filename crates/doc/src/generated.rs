@@ -561,6 +561,16 @@ mod tests {
         let mut w = v.clone();
         w["generated"] = json!("art");
         assert_eq!(state(&w), Some((String::new(), State::Damaged)));
+        // A null field is read as a field that can't be read, not as an absent one, from a value
+        // and from a file's text; the art stays, and saved again the object stays damaged.
+        let mut w = v.clone();
+        w["generated"] = Value::Null;
+        assert_eq!(state(&w), Some((String::new(), State::Damaged)));
+        let back: Node = serde_json::from_str(&w.to_string()).unwrap();
+        assert_eq!(back.extras().generated.as_ref().map(|a| a.state), Some(State::Damaged));
+        assert_eq!(back.children(), g.children());
+        let again = reread(&serde_json::to_value(&back).unwrap());
+        assert_eq!(again.extras().generated.as_ref().map(|a| a.state), Some(State::Damaged));
         // On a path the field is dropped, and the path stays as it was.
         let path = g.children().unwrap()[0].clone();
         let mut p = serde_json::to_value(&*path).unwrap();

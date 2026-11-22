@@ -267,8 +267,13 @@ pub(super) struct NodeWire {
     #[serde(default, deserialize_with = "image_corners")]
     image_quad: Option<Box<[vectorcraft_geom::Point; 4]>>,
     /// Read as it is and checked against the node's kind and art ([`crate::generated`]).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "present_value")]
     generated: Option<serde_json::Value>,
+}
+
+/// A field's value as a file holds it, a null included: only an absent field is none.
+fn present_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<serde_json::Value>, D::Error> {
+    serde_json::Value::deserialize(d).map(Some)
 }
 
 /// A distorted image's corners as a file holds them: a list of exactly four points, else none (the
