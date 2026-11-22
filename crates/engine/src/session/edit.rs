@@ -260,6 +260,163 @@ impl Session {
         (r, settled)
     }
 
+    /// Run `f`, the top-level command `id` with `params` from outside the tool (a panel, a menu
+    /// item, an automation client), with the active document's tool drag set aside: the command
+    /// runs on the document the drag started from and records its own undo step and journal entry.
+    /// The drag then starts from what the command left, and its preview is applied again, so the
+    /// next preview, the commit and a cancel keep the command's edit, and Undo takes back the drag's
+    /// step before the command's. While the command runs, [`Session::in_interaction`] is false, so
+    /// it updates Recent Colors and converts or remaps the new-art paints at once, as it does with
+    /// no drag in progress.
+    ///
+    /// The interaction stays as it is, and the command runs inside it, for an interaction a dialog
+    /// or a panel began (it builds its preview from commands), for typing in progress
+    /// ([`Session::edit`] keeps it as a step of its own), for the Quick Pen (an edit made outside
+    /// it ends the path it draws), and for a copy made with `object.transform` during a drag that
+    /// copies (it copies the document as the drag's move left it). A command that settles,
+    /// commits or cancels the interaction, or that hands the active tool actions to apply, gets it
+    /// back first ([`Session::put_back_interaction`]), as it found it.
+    pub(crate) fn outside_interaction(&mut self, id: &str, params: &Value, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
+        if cmd::typing_in_progress(self) || self.tool_id() == vectorcraft_tools::quickpen::ID {
+            return f(self);
+        }
+        let Some(st) = self.active_mut() else { return f(self) };
+        let Some(it) = st.interaction.as_ref().filter(|it| it.tool) else { return f(self) };
+        // A drag that copies: its latest preview, applied or held back by Real-time Drawing off, copies.
+        let copying = it.preview.as_ref().is_some_and(|(c, p)| c == "object.transform" && p.get("copy").and_then(Value::as_bool) == Some(true));
+        if copying && id == "object.transform" && params.get("copy").and_then(Value::as_bool) == Some(true) {
+            return f(self);
+        }
+        let Some(interaction) = st.interaction.take() else { return f(self) };
+        // The document and selection on show, when a preview changed them.
+        let previewed = !Arc::ptr_eq(&st.doc, &interaction.doc) || st.selection != *interaction.selection;
+        let shown = previewed.then(|| (st.doc.clone(), st.selection.clone()));
+        if previewed {
+            st.doc = interaction.doc.clone();
+            st.selection.clone_from(&interaction.selection);
+            st.revision += 1;
+            cmd::globaledit::follow_history(st);
+        }
+        let (uid, state) = (st.uid, crate::interaction::ViewState::of(st));
+        let paint = self.paint.clone();
+        self.held_interaction = Some(crate::HeldInteraction { uid, interaction, shown, state, paint });
+        if previewed {
+            self.sync_front_profiles();
+        }
+        let r = f(self);
+        self.put_back_interaction();
+        r
+    }
+
+    /// Put back the interaction [`Session::outside_interaction`] set aside. When the command left
+    /// the document and the selection as it found them, the preview on show before it is on show
+    /// again. Otherwise the interaction starts from the document the command left and from its
+    /// own selection, without the objects the command removed, hid or locked, and the preview that Real-time
+    /// Drawing showed is applied to it again. The warning or the error of that preview goes to
+    /// the command's result ([`Session::note_settled_warning`]); a preview that fails leaves the
+    /// interaction with nothing to commit. An interaction whose document the command closed ends,
+    /// and a document the command left an interaction of its own on keeps that one.
+    pub(crate) fn put_back_interaction(&mut self) {
+        let Some(crate::HeldInteraction { uid, interaction: mut it, shown, state, paint }) = self.held_interaction.take() else { return };
+        // A selection command loaded the paints of the selection it made into the fill and stroke
+        // proxies. The drag goes on with its own selection, so they show its paints again.
+        if self.paint != paint
+            && let Some(st) = self.active_mut().filter(|d| d.uid == uid && d.interaction.is_none())
+        {
+            let own = drag_selection(&it.selection, &st.doc);
+            if st.selection != own {
+                let made = std::mem::replace(&mut st.selection, own);
+                self.inherit_new_art();
+                self.load_selection_paints();
+                if let Some(st) = self.active_mut() {
+                    st.selection = made;
+                }
+            }
+        }
+        // A change the command made to the new-art paints stays when the next preview or a cancel
+        // puts back the paints the interaction began with (the Live Paint Bucket's colors); the
+        // parts it left alone keep the interaction's.
+        let (now, start) = (&self.paint, &mut it.paint);
+        if now.fill != paint.fill {
+            start.fill.clone_from(&now.fill);
+        }
+        if now.stroke != paint.stroke {
+            start.stroke.clone_from(&now.stroke);
+        }
+        if now.stroke_width != paint.stroke_width {
+            start.stroke_width = now.stroke_width;
+        }
+        if now.appearance != paint.appearance {
+            start.appearance.clone_from(&now.appearance);
+        }
+        if now.opacity != paint.opacity {
+            start.opacity = now.opacity;
+        }
+        if now.blend != paint.blend {
+            start.blend = now.blend;
+        }
+        if now.style != paint.style {
+            start.style.clone_from(&now.style);
+        }
+        if now.inherited != paint.inherited {
+            start.inherited = now.inherited;
+        }
+        let active = self.active().is_some_and(|d| d.uid == uid);
+        let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid) else { return };
+        if st.interaction.is_some() {
+            return;
+        }
+        // A change the command made to the current layer, the highlighted rows or variable, or
+        // isolation stays when the interaction is canceled.
+        state.rebase(crate::interaction::ViewState::of(st), &mut it);
+        let previewed = shown.is_some();
+        if Arc::ptr_eq(&st.doc, &it.doc) && st.selection == *it.selection {
+            if let Some((doc, selection)) = shown {
+                st.doc = doc;
+                st.selection = selection;
+                st.revision += 1;
+                cmd::globaledit::follow_history(st);
+            }
+            st.interaction = Some(it);
+            if previewed {
+                self.sync_front_profiles();
+            }
+            return;
+        }
+        it.doc = st.doc.clone();
+        // The drag acts on the objects it began with: a selection the command made (a paste, a
+        // duplicate, Select All) does not change what the drag moves.
+        it.selection = Arc::new(drag_selection(&it.selection, &st.doc));
+        it.copies = None;
+        it.move_box = std::sync::OnceLock::new();
+        // With Real-time Drawing off the preview waits for the commit, as it did before the command.
+        let again = it.preview.clone().filter(|_| previewed && active);
+        // Without a preview to apply, the drag's own selection is on show, as a preview would leave
+        // it before it acts.
+        if again.is_none() && st.selection != *it.selection {
+            st.selection.clone_from(&it.selection);
+            st.revision += 1;
+        }
+        st.interaction = Some(it);
+        self.clear_deferred_overlay_cache();
+        if let Some((cmd, p)) = again {
+            match self.preview(&cmd, &p) {
+                Ok(v) => {
+                    if let Some(w) = v.get("warning").and_then(Value::as_str) {
+                        self.note_settled_warning(w);
+                    }
+                }
+                Err(e) => self.note_settled_warning(&e.to_string()),
+            }
+        }
+    }
+
+    /// While a command from outside the tool runs: the interaction it set aside
+    /// ([`Session::outside_interaction`]).
+    pub(crate) fn holds_interaction(&self) -> bool {
+        self.held_interaction.is_some()
+    }
+
     /// [`Session::begin_interaction`] for a dialog or a panel that starts a preview → the warnings
     /// of the preview that keeping typing in progress applied, for its status bar.
     pub fn begin_interaction_warned(&mut self, label: &str) -> Result<Vec<String>> {
@@ -284,6 +441,8 @@ impl Session {
         if label != "Typing" && cmd::typing_in_progress(self) {
             cmd::settle_interaction(self)?;
         }
+        // A command from outside the tool that begins an interaction during a drag joins the drag's.
+        self.put_back_interaction();
         // An edit the tool computes on another thread (a Shape Builder merge) is applied first too,
         // so the snapshot the interaction previews from and goes back to holds it.
         if !self.in_interaction() {
@@ -300,6 +459,7 @@ impl Session {
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
+            tool: false,
             paint,
             preview_paint: None,
             color_mode_paints: None,
@@ -318,6 +478,7 @@ impl Session {
 
     /// Re-apply `cmd` on top of the interaction snapshot (replacing the previous preview).
     pub fn preview(&mut self, cmd: &str, params: &Value) -> Result<Value> {
+        self.put_back_interaction();
         if self.script_running() {
             return Err(EngineError::Busy);
         }
@@ -392,6 +553,7 @@ impl Session {
     pub fn commit_interaction(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
+        self.put_back_interaction();
         if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {
             self.paint = paint;
         }
@@ -481,6 +643,7 @@ impl Session {
     }
 
     pub fn cancel_interaction(&mut self) -> Result<()> {
+        self.put_back_interaction();
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
@@ -511,4 +674,15 @@ impl Session {
     pub fn in_interaction(&self) -> bool {
         self.active().is_some_and(|d| d.interaction.is_some())
     }
+}
+
+/// The selection a drag began with, without the objects that a command run during it removed,
+/// hid or locked in `doc`.
+fn drag_selection(began: &Selection, doc: &Document) -> Selection {
+    let mut selection = began.clone();
+    selection.prune(doc);
+    let editable = doc.editable();
+    let held: Vec<_> = selection.objects.iter().copied().filter(|&id| !editable(id)).collect();
+    selection.remove_all(held);
+    selection
 }
