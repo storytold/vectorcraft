@@ -382,7 +382,8 @@ fn revolve_takes_graphics_on_its_side_only() {
     let kept = three_d_params_as(crate::EXTRUDE, &both, REVOLVE);
     assert_eq!(kept["graphics"].as_array().map(Vec::len), Some(1));
     assert_eq!(kept["graphics"][0]["symbol"], "Red");
-    assert_eq!(three_d_params_as(REVOLVE, &front, crate::INFLATE).get("graphics"), None);
+    // Inflate keeps them, and its front takes them.
+    assert_eq!(three_d_params_as(REVOLVE, &front, crate::INFLATE)["graphics"], front["graphics"]);
 }
 
 #[test]
@@ -520,7 +521,8 @@ fn the_copies_of_a_graphics_paint_have_a_budget_of_their_own() {
     let faces = vectorcraft_three_d::revolve(path, path.bounds().unwrap(), options_of(REVOLVE, &p)).unwrap();
     let parts_of = |symbol: &str, copies: &mut usize| {
         let graphics = crate::solids::mapped_graphics(&json!({"graphics": [{"symbol": symbol}]}));
-        crate::solids::graphics::surface_parts(Some(&d), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c), copies).map(|p| p.concat().len())
+        crate::solids::graphics::surface_parts(Some(&d), NodeId(0), (&graphics, PlanarFace::Front), &faces, &|_, c| Paint::solid(c), copies)
+            .map(|p| p.concat().len())
     };
     // Each opaque part copies the paint into its fill and its seam stroke; a part with
     // transparent stops takes no seam stroke and copies it once.

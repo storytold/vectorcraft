@@ -97,7 +97,9 @@
 //!   have is the object's own appearance, not a link.
 //!
 //! - Symbols: `%AI14_BeginSymbol` (or `%AI10_`), `(name)`, `0 A 0 Xw 0 Ae`, the art (in the
-//!   symbol's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
+//!   symbol's space, y down; an image's matrix and a gradient mesh's corners in the canvas's space
+//!   turned y up about art space's origin there, an envelope's contents in its dictionary in the
+//!   canvas's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
 //!   point (1 to 9, from the top left, row by row), `%AI10_EndSymbol`; each is read by a reader of
 //!   its own into the document's symbols. `%AI24_BeginSymbolList` (or `%AI10_`) lists their names
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
@@ -122,8 +124,8 @@ use vectorcraft_color::swatch::Swatch;
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
+    Appearance, AppearanceItem, Artboard, ColorMode, CustomArrowhead, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor,
+    LineCap, LineJoin, LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
@@ -153,7 +155,7 @@ pub use document::{
 };
 pub(crate) use document::{slot_frame, slot_of};
 use graph::Graph;
-pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
+pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, read_parsed_style, read_style_list};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::BLEND_BUDGET;
@@ -193,6 +195,10 @@ pub struct Structure {
     pub unread_elsewhere: Vec<(NodeId, Rect)>,
     /// The names of text objects, by their slot's id.
     pub slot_names: HashMap<NodeId, String>,
+    /// The clipping groups whose type clips them, by the group's id: the text slot of that type,
+    /// the group's last object ([`Reader::end_container`]). Once the slot holds its type, the type
+    /// clips the group ([`clip_by_type`]).
+    pub type_clips: HashMap<NodeId, NodeId>,
     /// Where the drawn looks lay that objects read with their art style took the place of (the
     /// document's coordinates): the page draws Illustrator's rendering of those styles there.
     pub restyled: Vec<Rect>,
@@ -538,6 +544,10 @@ struct Reader<'a> {
     symbol_bounds: HashMap<String, Rect>,
     /// The symbols read, by their name in the file → their name in the document.
     symbol_names: HashMap<String, String>,
+    /// The heads of the arrowhead symbols the art styles' strokes name, by the symbol's name in
+    /// the file (`None`: not a symbol read, or not one read as a head), read with the styles
+    /// ([`Reader::read_arrowheads`]).
+    arrowheads: HashMap<String, Option<Arc<CustomArrowhead>>>,
     /// The names the symbols read have in the document, and for each name read more than once,
     /// the number its next copy is tried with.
     symbol_taken: HashSet<String>,
@@ -593,6 +603,13 @@ struct Reader<'a> {
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// How many more strokes with dashes aligned to corners this import may draw to check
+    /// ([`super::MAX_DASH_CHECKS`]).
+    dash_checks: usize,
+    /// Whether this reader reads only what comes before the first layer (swatches, brushes, styles,
+    /// symbols) for a file whose layers another reader reads: it makes no more checks once it
+    /// reaches the layers, so it spends none of theirs.
+    defs_only: bool,
     /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
     warped_type: Vec<super::envelope::WarpedLook>,
     /// The envelopes of type read with their drawn art, settled once the type is laid out
@@ -660,6 +677,8 @@ struct Reader<'a> {
     obj_hidden: bool,
     /// The names of text objects, by their slot's id.
     slot_names: HashMap<NodeId, String>,
+    /// [`Structure::type_clips`].
+    type_clips: HashMap<NodeId, NodeId>,
     /// [`Structure::xml_ids`].
     xml_ids: HashMap<String, Option<NodeId>>,
     /// The bytes of the ids in `xml_ids`.
@@ -730,6 +749,40 @@ pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
     name == Some(document::LOOK_SLOT)
 }
 
+/// Make the clipping groups of [`Structure::type_clips`] in `n` and its groups clip by their type,
+/// once their slots are filled: where a group's slot became one text object (`typed` gives its id by
+/// the slot's) that is still the group's last object, that text object moves to the front as its
+/// clipping path, and `clipping` is called on it. Where the slot was left empty or became several
+/// objects, the group stays as read, unclipped. How many groups clip.
+pub(crate) fn clip_by_type(
+    n: &mut Node,
+    clips: &HashMap<NodeId, NodeId>,
+    typed: &impl Fn(NodeId) -> Option<NodeId>,
+    clipping: &mut impl FnMut(&mut Node),
+) -> usize {
+    if clips.is_empty() || matches!(n.kind, NodeKind::Compound { .. }) {
+        return 0;
+    }
+    let mut made = 0;
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut().filter(|c| c.children().is_some_and(|k| !k.is_empty())) {
+            made += clip_by_type(Arc::make_mut(c), clips, typed, clipping);
+        }
+    }
+    let Some(text) = clips.get(&n.id).and_then(|slot| typed(*slot)) else { return made };
+    if let NodeKind::Group { children, clip } = &mut n.kind
+        && !*clip
+        && children.last().is_some_and(|last| last.id == text && matches!(last.kind, NodeKind::Text(_)))
+        && let Some(mut last) = children.pop()
+    {
+        clipping(Arc::make_mut(&mut last));
+        children.insert(0, last);
+        *clip = true;
+        made += 1;
+    }
+    made
+}
+
 impl<'a> Reader<'a> {
     /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
     /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
@@ -794,6 +847,7 @@ impl<'a> Reader<'a> {
             unread: Vec::new(),
             symbol_bounds: HashMap::new(),
             symbol_names: HashMap::new(),
+            arrowheads: HashMap::new(),
             symbol_taken: HashSet::new(),
             symbol_suffix: HashMap::new(),
             symbol_art_bounds: HashMap::new(),
@@ -822,6 +876,8 @@ impl<'a> Reader<'a> {
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            dash_checks: super::MAX_DASH_CHECKS,
+            defs_only: false,
             warped_type: Vec::new(),
             typed_envelopes: Vec::new(),
             envelopes_drawn: Vec::new(),
@@ -851,6 +907,7 @@ impl<'a> Reader<'a> {
             done: false,
             obj_hidden: false,
             slot_names: HashMap::new(),
+            type_clips: HashMap::new(),
             xml_ids: HashMap::new(),
             xml_id_bytes: 0,
             art_size: None,

@@ -7,12 +7,16 @@
 //! panel's New Art Has Basic Appearance off, the whole appearance of the last selection. With the
 //! option on (the default) an inherited appearance gives new art its top stroke's options only,
 //! and a change of selection loads only the proxies. `paint.default` resets it.
+//!
+//! A document whose Default Graphic Style no longer has the shipped look (a New Document profile
+//! redefined it) gives the reset that style's fills, strokes and effects instead, and `file.new`
+//! resets new art when it opens such a document.
 
 use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, ColorMode, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeKind, StrokeLayer};
 use vectorcraft_tools::PaintDefaults;
 
 use super::gradient::unplaced;
@@ -202,9 +206,10 @@ impl Session {
     }
 
     /// After each command: with New Art Has Basic Appearance off, new art takes the appearance of
-    /// the first selected object (so the last selection's once nothing is selected).
+    /// the first selected object (so the last selection's once nothing is selected). Not while the
+    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with.
     pub(crate) fn inherit_new_art(&mut self) {
-        if self.prefs.new_art_basic {
+        if self.prefs.new_art_basic || self.bucket_paints() {
             return;
         }
         let Some(st) = self.active() else { return };
@@ -223,9 +228,11 @@ impl Session {
         if !self.prefs.new_art_basic {
             return;
         }
-        let has_paint = self
-            .proxy_source(false)
-            .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some());
+        // A Live Paint group with edges and no faces shows only a stroke.
+        let has_paint = [false, true].into_iter().any(|stroke| {
+            self.proxy_source(stroke)
+                .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some())
+        });
         if !has_paint {
             return;
         }
@@ -263,7 +270,35 @@ fn describe(s: &mut Session, _: &Value) -> Result<Value> {
     }))
 }
 
-/// The defaults for new art reset (`paint.default`): white fill, 1 pt black stroke, no template.
+/// The defaults for new art reset (`paint.default`): white fill, 1 pt black stroke, no template;
+/// in a document whose Default Graphic Style was redefined, that style's fills, strokes and effects
+/// at full opacity, not linked to the style.
 pub(crate) fn reset(s: &mut Session) {
     s.paint = PaintDefaults::default();
+    let style = s.doc().ok().and_then(|st| redefined_default_style(&st.doc)).cloned();
+    if let Some(g) = style {
+        let ap = if g.unit_box { g.appearance } else { unplace_all(g.appearance) };
+        s.take_new_art(ap, 1.0, BlendMode::Normal, None, false);
+    }
+}
+
+/// `d`'s Default Graphic Style when its fills, strokes, effects or transparency differ from the
+/// shipped style's (white fill, 1 pt black stroke), the shipped colors converted to `d`'s color mode
+/// as a New Document profile's are.
+pub(crate) fn redefined_default_style(d: &Document) -> Option<&GraphicStyle> {
+    let g = d.graphic_styles.iter().find(|g| g.name == DEFAULT_GRAPHIC_STYLE)?;
+    let same =
+        |o: &GraphicStyle| (&o.appearance, o.opacity, o.blend, o.isolate, o.knockout) == (&g.appearance, g.opacity, g.blend, g.isolate, g.knockout);
+    if same(&GraphicStyle::new(DEFAULT_GRAPHIC_STYLE, Appearance::default_art())) {
+        return None;
+    }
+    if d.color_mode != ColorMode::Rgb {
+        let mut shipped = Document::new_with_mode(1.0, 1.0, ColorMode::Rgb);
+        shipped.graphic_styles.retain(|o| o.name == DEFAULT_GRAPHIC_STYLE);
+        super::colormgmt::set_color_mode(&mut shipped, d.color_mode, true, None, super::colormgmt::Grays::Profile);
+        if shipped.graphic_styles.first().is_some_and(same) {
+            return None;
+        }
+    }
+    Some(g)
 }

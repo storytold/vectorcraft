@@ -1,14 +1,16 @@
 //! Creating art: shapes, paths, text.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Appearance, CharStyle, LiveShape, Node, NodeKind, TextObject};
+use vectorcraft_doc::{Appearance, CharStyle, LiveShape, MAX_COORD, Node, NodeKind, TextObject};
+use vectorcraft_geom::curvature::{self, NoCircle};
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::newart::NewArt;
 use super::{
     CommandSpec, NodeId, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, f64_or, f64_req, finite_numbers, has_doc,
-    number_or, str_param, switch_or,
+    index_opt, number_or, object_param, str_param, switch_or,
 };
+use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -53,21 +55,47 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end, both or neither: one alone is an error; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: deterministically places every ring along the path, including the first for small seed values, keeping their count and sizes)} → {id}",
             has_doc,
-            flare
+            super::flare::flare
+        ),
+        cmd!(
+            "shape.editFlare",
+            "Edit Flare",
+            [],
+            None,
+            "{ids?|id?: flares (default: the selected flares), cx?, cy? (the center, where it is drawn now), x2?, y2? (the rings' end point, where it is drawn now; else pathLength at direction from the center, both where it is drawn now, when either is given; else where it was), diameter?, opacity?, brightness?, growth?, fuzziness?, rays?, longest?, rayFuzziness?, rotation? (deg, turns the rays clockwise), pathLength?, rings?, largest?, direction? (as shape.flare: what is left out stays as it was)} draws each flare again in its place, moved, scaled, rotated, reflected or sheared as it has been since it was drawn, as one undo step (none when nothing changes); a flare whose parts were edited, or that is locked or hidden, is not one → {ids}",
+            has_doc,
+            super::flare::edit_flare
         ),
         cmd!(
             "shape.circleThroughPoints",
             "Circle Through Points",
             [],
             None,
-            "{points?: [[x, y], [x, y], [x, y]] (left out: the three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the three points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same or three on one line are an error, and nothing is drawn",
+            "{points?: [[x, y], [x, y]] or [[x, y], [x, y], [x, y]] (two: the ends of a diameter; left out: the two or three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count), anchors?: \"standard\"|\"points\" (default standard: four anchors at 0°, 90°, 180° and 270°; points: an anchor at each point and more between them so that no curve turns more than a quarter)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same, three on one line, or a circle reaching past the canvas are an error, and nothing is drawn",
             has_doc,
             circle_through_points
         ),
+        cmd!(
+            "shape.curvatureCircle",
+            "Curvature Circle",
+            [],
+            None,
+            "{id, subpath?=0, segment, t: 0..1, convex?=false} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth with both handles pulled out, or where they turn by 90° or more; segments of no length between them are passed over, and an anchor reached past one is treated as not marked smooth), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
+            has_doc,
+            curvature_circle
+        ),
         cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2, fill?: bool (Fill Line: the current fill, else none)} → {id}", has_doc, line),
-        cmd!("shape.spiral", "Spiral", [], None, "{cx, cy, radius, decay=80 (%), segments=10, clockwise?} → {id}", has_doc, spiral),
+        cmd!(
+            "shape.spiral",
+            "Spiral",
+            [],
+            None,
+            "{cx, cy, radius, decay=80 (%), segments=10, clockwise?, rotation?: deg clockwise about (cx, cy)} (0: outer end at (cx + radius, cy)) → {id}",
+            has_doc,
+            spiral
+        ),
         cmd!(
             "shape.arc",
             "Arc",
@@ -76,6 +104,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{x1, y1, x2, y2, closed?, slope?: −100…100 (default 100), rotation?: deg clockwise about (x1, y1)} or {x, y, lengthX, lengthY, reference?: 0–8 (default 0), baseAlong?: x|y (either case; default x), slope?: −100…100 (default 50), closed?, fillArc?, rotation?: deg clockwise about the reference point (x, y)} (0: upright); a reference or baseAlong given as anything else (null included) or a slope outside its range is an error and draws nothing → {id}",
             has_doc,
             arc
+        ),
+        cmd!(
+            "shape.threePointArc",
+            "Three-Point Arc",
+            [],
+            None,
+            "{start: [x, y], end: [x, y], through?: [x, y], toward?: [x, y], at?: \"start\"|\"end\" (default \"start\"; only with `toward`)} → {id, cx, cy, radius, sweep}: an open circular arc from `start` to `end` in the current stroke (black when it is none) with no fill, its ends exactly at the two points (not pixel-aligned). With `through`, the arc passes through that point, an anchor of the path; with `toward`, it leaves the end `at` names heading toward that point (its tangent there). Give exactly one of `through` and `toward`; `at` with `through` is an error. `sweep` is the arc's turn in degrees, positive clockwise on the page. Two points that are the same, three on one line, or an arc reaching past the canvas are an error, and nothing is drawn",
+            has_doc,
+            three_point_arc
         ),
         cmd!(
             "shape.rectangularGrid",
@@ -118,18 +155,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused; size, font, style and color left out come from [Normal Character Style], the defaults unless the document redefined it), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
     ]
-}
-
-/// Insert a new object at the top of the insertion parent with the current paint and new-art
-/// template; select it.
-pub(crate) fn add_art(s: &mut Session, label: &str, kind: NodeKind, name: Option<String>) -> Result<Value> {
-    let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
-    add_look(s, label, kind, look, name)
 }
 
 /// Insert a new object looking like `look` (drawing modes apply); select it.
@@ -143,7 +173,8 @@ pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: Ne
     insert_look_turned(s, label, kind, look, name, select, 0.0, true)
 }
 
-/// [`add_art`] for an object made turned by a `rotation` param (degrees, clockwise on the page):
+/// Insert a new object at the top of the insertion parent with the current paint and new-art
+/// template, made turned by a `rotation` param (degrees, clockwise on the page), and select it:
 /// its bounding box turns with it, as after the Rotate tool.
 fn add_art_turned(s: &mut Session, label: &str, kind: NodeKind, rotation: f64) -> Result<Value> {
     let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
@@ -321,7 +352,7 @@ fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
 /// a box (rectangle, ellipse, grid) runs along the turned axes from `pivot`, the point the dialog
 /// placed at the click (its top-left corner `x`, `y`, or a grid's reference point), which stays
 /// put; an arc sized by its lengths turns about its reference point `x`, `y`, which the dialog
-/// placed at the click; a polygon or star turns its base orientation about its centre. The params as they are at
+/// placed at the click; a polygon, star or spiral turns its base orientation about its centre. The params as they are at
 /// 0° or a whole turn, for other commands and when they already carry a `rotation`.
 pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) -> Value {
     let base = s.prefs.constrain_angle;
@@ -337,7 +368,7 @@ pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) 
             o.insert("y".into(), json!(c.y - h / 2.0));
             o.insert("rotation".into(), json!(rotation));
         }
-        "shape.polygon" | "shape.star" => {
+        "shape.polygon" | "shape.star" | "shape.spiral" => {
             o.insert("rotation".into(), json!(rotation));
         }
         "shape.arc" if o.contains_key("lengthX") || o.contains_key("lengthY") => {
@@ -411,45 +442,58 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
-/// A live ellipse whose edge passes through three points: `points`, or the three selected anchor
-/// points ([`selected_anchor_points`]). One undo step, named as an Ellipse tool drag is.
+/// A live ellipse whose edge passes through two or three points: `points`, or the two or three
+/// selected anchor points ([`selected_anchor_points`]). Two points are the ends of a diameter. With
+/// `anchors: "points"` the circle is a plain path with an anchor at each point
+/// ([`shapes::circle_with_anchors_at`]); otherwise it is a live ellipse. One undo step, named as an
+/// Ellipse tool drag is.
 fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "shape.circleThroughPoints";
     let points = match p.get("points").filter(|v| !v.is_null()) {
-        Some(v) => three_points(v).ok_or_else(|| bad(C, "`points` must be three [x, y] pairs of numbers"))?,
-        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select three anchor points, or give `points`"))?,
+        Some(v) => two_or_three_points(v).ok_or_else(|| bad(C, "`points` must be two or three [x, y] pairs of numbers"))?,
+        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select two or three anchor points, or give `points`"))?,
     };
-    let [a, b, c] = points;
-    let (center, radius) = shapes::circle_through(a, b, c)
+    let key = "anchors";
+    let at_points = match p.get(key).map(Value::as_str) {
+        None | Some(Some("standard")) => false,
+        Some(Some("points")) => true,
+        Some(_) => return Err(bad(C, format!("`{key}` must be one of {}", "standard, points"))),
+    };
+    let (center, radius) = shapes::circle_through_points(&points)
         .ok_or_else(|| bad(C, "no circle passes through these points: two are the same or all three lie on one line"))?;
-    let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
-    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
     // Not pixel-aligned: the circle stays through the points.
-    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    let mut out = if at_points {
+        add_art_unaligned(s, "Ellipse", path_kind(shapes::circle_with_anchors_at(center, radius, &points), None))?
+    } else {
+        let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+        let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+        add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?
+    };
     out["cx"] = json!(center.x);
     out["cy"] = json!(center.y);
     out["radius"] = json!(radius);
     Ok(out)
 }
 
-/// The three points `[[x, y], [x, y], [x, y]]` holds, each pair two finite numbers.
-fn three_points(v: &Value) -> Option<[Point; 3]> {
+/// The two or three points `[[x, y], [x, y]]` or `[[x, y], [x, y], [x, y]]` holds, each pair two
+/// finite numbers.
+fn two_or_three_points(v: &Value) -> Option<Vec<Point>> {
     let pair = |v: &Value| match v.as_array().map(Vec::as_slice) {
         Some([x, y]) => x.as_f64().zip(y.as_f64()).filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)),
         _ => None,
     };
-    match v.as_array().map(Vec::as_slice) {
-        Some([a, b, c]) => Some([pair(a)?, pair(b)?, pair(c)?]),
+    match v.as_array() {
+        Some(pairs) if matches!(pairs.len(), 2 | 3) => pairs.iter().map(pair).collect(),
         _ => None,
     }
 }
 
-/// The positions of the selected anchor points, when there are exactly three. They are counted as
+/// The positions of the selected anchor points, when there are two or three. They are counted as
 /// the other anchor commands count them ([`super::path::anchor_targets`]): a selected path with
 /// anchors picked by Direct Selection gives those, and a path selected whole gives all of its own.
 /// A selected segment's ends are not selected anchor points, so a selection with segments gives
 /// none; so does a selection holding an object that is not a path, or an anchor that is gone.
-fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
+fn selected_anchor_points(s: &Session) -> Result<Option<Vec<Point>>> {
     let st = s.doc()?;
     if st.selection.segments.values().any(|set| !set.is_empty()) {
         return Ok(None);
@@ -470,10 +514,52 @@ fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
             return Ok(None);
         }
     }
-    Ok(match points.as_slice() {
-        &[a, b, c] => Some([a, b, c]),
-        _ => None,
-    })
+    Ok(matches!(points.len(), 2 | 3).then_some(points))
+}
+
+/// A live ellipse that touches a path at a point with the path's curvature there
+/// ([`curvature::curvature_circle_on`]). One undo step, named as an Ellipse tool drag is.
+fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shape.curvatureCircle";
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let si = index_opt(p, "subpath", C)?.unwrap_or(0);
+    let seg = index_opt(p, "segment", C)?.ok_or_else(|| bad(C, "missing segment"))?;
+    let t = f64_req(p, "t", C)?;
+    if !(0.0..=1.0).contains(&t) {
+        return Err(bad(C, "`t` must be from 0 to 1"));
+    }
+    let convex = switch_or(p, "convex", false, C)?;
+    let found = {
+        let st = s.doc()?;
+        let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
+        if node.is_guide() {
+            return Err(bad(C, "a guide has no curvature circle"));
+        }
+        let path = node.path_data().ok_or_else(|| bad(C, format!("object {id} is not a path")))?;
+        let sp = path.subpaths.get(si).ok_or_else(|| bad(C, "no such subpath"))?;
+        if seg >= sp.segment_count() {
+            return Err(bad(C, "no such segment"));
+        }
+        curvature::curvature_circle_on(sp, seg, t, convex)
+    };
+    let circle = found.map_err(|e| match e {
+        NoCircle::Straight => bad(C, "the path is straight there, so no circle matches its curvature"),
+        NoCircle::Cusp => bad(C, "the path has a cusp there, so it has no single curvature"),
+        NoCircle::Corner => bad(C, "the path has a corner there, so it has no single curvature"),
+    })?;
+    let (center, radius) = (circle.center, circle.radius);
+    let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_COORD) {
+        return Err(bad(C, "the circle that matches the path there would reach past the canvas"));
+    }
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+    // Not pixel-aligned: the circle stays on the path.
+    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    out["cx"] = json!(center.x);
+    out["cy"] = json!(center.y);
+    out["radius"] = json!(radius);
+    out["nominal"] = json!(circle.nominal);
+    Ok(out)
 }
 
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
@@ -515,143 +601,6 @@ fn star(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Star", path_kind(path, None), constrained_turn(s, rot))
 }
 
-/// Flare tool: a lens flare built from radial-gradient paths in Screen mode — a bright centre, a halo
-/// ring, rays of varying length and rings along the path to the end point.
-fn flare(s: &mut Session, p: &Value) -> Result<Value> {
-    use vectorcraft_color::{BlendMode, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
-    let c = Point::new(f64_req(p, "cx", "shape.flare")?, f64_req(p, "cy", "shape.flare")?);
-    let numbers = [
-        "diameter",
-        "opacity",
-        "brightness",
-        "growth",
-        "fuzziness",
-        "rays",
-        "longest",
-        "rayFuzziness",
-        "rotation",
-        "rings",
-        "largest",
-        "x2",
-        "y2",
-        "direction",
-        "pathLength",
-        "seed",
-        "ringSeed",
-    ];
-    check_numbers(p, &numbers, "shape.flare")?;
-    let pct = |k: &str, d: f64| (f64_or(p, k, d) / 100.0).clamp(0.0, 10.0);
-    let r = (f64_or(p, "diameter", 100.0) / 2.0).max(0.5);
-    let opacity = pct("opacity", 50.0).min(1.0) as f32;
-    let brightness = pct("brightness", 30.0).min(1.0) as f32;
-    let growth = pct("growth", 20.0);
-    let fuzz = pct("fuzziness", 50.0).min(1.0);
-    let rays = p.get("rays").and_then(Value::as_u64).unwrap_or(15).min(50) as usize;
-    let longest = pct("longest", 300.0);
-    let ray_fuzz = pct("rayFuzziness", 100.0).min(1.0);
-    let ray_turn = f64_or(p, "rotation", 0.0).to_radians();
-    let rings = p.get("rings").and_then(Value::as_u64).unwrap_or(10).min(50) as usize;
-    let largest = pct("largest", 50.0);
-    let end = match (p.get("x2").and_then(Value::as_f64), p.get("y2").and_then(Value::as_f64)) {
-        (Some(x), Some(y)) => Point::new(x, y),
-        _ => {
-            let a = f64_or(p, "direction", 45.0).to_radians();
-            c + vectorcraft_geom::Vec2::new(a.cos(), -a.sin()) * f64_or(p, "pathLength", 300.0)
-        }
-    };
-    // Deterministic pseudo-random sizes (same parameters → same flare). `ringSeed` places the rings
-    // along the path from a sequence of its own; their count and sizes and the other parts stay.
-    let seed_of = |key: &str| match p.get(key) {
-        None | Some(Value::Null) => Ok(None),
-        Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
-    };
-    // The generator's state is odd (never 0).
-    let random = |mut state: u64| {
-        move || {
-            state ^= state << 13;
-            state ^= state >> 7;
-            state ^= state << 17;
-            (state >> 11) as f64 / (1u64 << 53) as f64
-        }
-    };
-    let mut rnd = random(seed_of("seed")?.unwrap_or(0x2545_f491_4f6c_dd1d) | 1);
-    // Each `ringSeed` below 2^53 (what a JSON number holds exactly) gets a state of its own.
-    let ring_seed = match seed_of("ringSeed")? {
-        Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
-        r => r,
-    };
-    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
-    let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
-    let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
-        let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
-        g.geom = Some(GradientGeom { start: centre, end: centre + vectorcraft_geom::Vec2::new(radius, 0.0), aspect: 1.0, focal: None });
-        Paint::Gradient(Box::new(g))
-    };
-    let circle = |centre: Point, radius: f64| shapes::ellipse(Rect::from_center_size(centre, (radius * 2.0, radius * 2.0)));
-    let mut parts: Vec<(&str, PathData, Paint, f32)> = vec![];
-    // Halo: a soft ring just outside the centre.
-    let halo_r = r * (1.0 + growth) * 1.6;
-    let inner = (1.0 - fuzz as f32 * 0.6).clamp(0.05, 0.95);
-    parts.push(("Halo", circle(c, halo_r), radial(c, halo_r, vec![stop(0.0, 0.0), stop(inner * 0.75, 0.0), stop(inner, 0.5), stop(1.0, 0.0)]), 1.0));
-    // Rays: thin spikes of random length (Longest = % of the centre radius), fading outwards.
-    // `rotation` turns them clockwise about the center.
-    if rays > 0 {
-        let mut bp = vectorcraft_geom::BezPath::new();
-        let mut reach: f64 = 0.0;
-        for i in 0..rays {
-            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64 + ray_turn;
-            let len = r * longest * (1.0 - ray_fuzz * 0.75 * rnd()).max(0.1);
-            reach = reach.max(len);
-            let w = r * 0.035;
-            let dir = vectorcraft_geom::Vec2::new(a.cos(), a.sin());
-            let n = vectorcraft_geom::Vec2::new(-dir.y, dir.x) * w;
-            bp.move_to(c + n);
-            bp.line_to(c + dir * len);
-            bp.line_to(c - n);
-            bp.line_to(c - dir * (w * 4.0));
-            bp.close_path();
-        }
-        parts.push(("Rays", PathData::from_bezpath(&bp), radial(c, reach, vec![stop(0.0, 0.9), stop(0.25, 0.35), stop(1.0, 0.0)]), 1.0));
-    }
-    // Centre: bright core fading to transparent.
-    parts.push(("Center", circle(c, r), radial(c, r, vec![stop(0.0, 1.0), stop(0.25 + brightness * 0.5, 0.6), stop(1.0, 0.0)]), opacity));
-    // Rings along the path to the end point (Largest = % of the average ring size).
-    for _ in 0..rings {
-        let t = rnd();
-        let t = ring_at.as_mut().map_or(t, |next| next());
-        let at = c + (end - c) * t;
-        let rr = (r * largest * (0.25 + rnd() * 0.75)).max(0.5);
-        let solid = rnd() < 0.5;
-        let stops = if solid {
-            vec![stop(0.0, 0.25), stop(0.8, 0.2), stop(1.0, 0.0)]
-        } else {
-            vec![stop(0.0, 0.0), stop(0.7, 0.05), stop(0.92, 0.35), stop(1.0, 0.0)]
-        };
-        parts.push(("Ring", circle(at, rr), radial(at, rr, stops), 1.0));
-    }
-    let parent = s.doc()?.target_parent()?;
-    let id = s.edit("Flare", |d, sel| {
-        let children = parts
-            .into_iter()
-            .map(|(name, pd, paint, op)| {
-                let mut n = Node::path(d.alloc_id(), pd, Appearance::basic(paint, Paint::None, 0.0));
-                n.name = Some(name.into());
-                n.blend = BlendMode::Screen;
-                n.opacity = op;
-                super::object::align_new_object(d, &mut n);
-                std::sync::Arc::new(n)
-            })
-            .collect();
-        let gid = d.alloc_id();
-        let mut g = Node::group(gid, children);
-        g.name = Some("Flare".into());
-        d.insert(parent, usize::MAX, g)?;
-        sel.set([gid]);
-        Ok(gid)
-    })?;
-    Ok(json!({ "id": id.0 }))
-}
-
 fn line(s: &mut Session, p: &Value) -> Result<Value> {
     let a = Point::new(f64_req(p, "x1", "shape.line")?, f64_req(p, "y1", "shape.line")?);
     let b = Point::new(f64_req(p, "x2", "shape.line")?, f64_req(p, "y2", "shape.line")?);
@@ -667,6 +616,10 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", "shape.spiral")? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad("shape.spiral", "rotation must be finite"));
+    }
     let c = Point::new(f64_req(p, "cx", "shape.spiral")?, f64_req(p, "cy", "shape.spiral")?);
     let segments = count_or(p, "segments", 10, "shape.spiral")?.clamp(2, 1000) as u32;
     let path = shapes::spiral(
@@ -676,7 +629,15 @@ fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
         segments,
         switch_or(p, "clockwise", true, "shape.spiral")?,
     );
-    add_art(s, "Spiral", path_kind(path, None), None)
+    // The outer end turns clockwise from (cx + radius, cy) about the center; 0 and whole turns
+    // leave the path as it is, and quarter turns are exact.
+    let path = if bbox_turn(rotation) == 0.0 {
+        path
+    } else {
+        let c = c.to_vec2();
+        path.transformed(Affine::translate(c) * vectorcraft_geom::rotate_deg(rotation) * Affine::translate(-c))
+    };
+    add_art_turned(s, "Spiral", path_kind(path, None), constrained_turn(s, rotation))
 }
 
 fn arc(s: &mut Session, p: &Value) -> Result<Value> {
@@ -738,6 +699,50 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
         s.paint.stroke_width.max(0.1),
     );
     insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle, true)
+}
+
+/// An open circular arc from `start` to `end` ([`shapes::CircularArc`]): through `through`, or
+/// leaving the end `at` names toward `toward`. One undo step, named as an Arc tool drag is.
+fn three_point_arc(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shape.threePointArc";
+    let point = |key: &str| finite_numbers::<2>(&p[key]).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(C, format!("`{key}` must be [x, y]")));
+    let (start, end) = (point("start")?, point("end")?);
+    let from_end = match p.get("at") {
+        None => false,
+        Some(Value::String(v)) if v == "start" || v == "end" => v == "end",
+        Some(_) => return Err(bad(C, "`at` must be \"start\" or \"end\"")),
+    };
+    // The arc, and the point it passes through (an anchor of the path, so the path meets it exactly).
+    let (arc, via) = match (p.get("through"), p.get("toward")) {
+        (Some(_), None) if p.get("at").is_some() => return Err(bad(C, "give `at` only with `toward`")),
+        (Some(_), None) => {
+            let through = point("through")?;
+            (shapes::CircularArc::through(start, end, through), Some(through))
+        }
+        (None, Some(_)) if from_end => {
+            let toward = point("toward")?;
+            (shapes::CircularArc::arriving(start, end, end - toward), None)
+        }
+        (None, Some(_)) => {
+            let toward = point("toward")?;
+            (shapes::CircularArc::leaving(start, toward - start, end), None)
+        }
+        _ => return Err(bad(C, "give exactly one of `through` and `toward`")),
+    };
+    let arc = arc.ok_or_else(|| bad(C, "no arc fits these points: two are the same or all three lie on one line"))?;
+    let path = via.map_or_else(|| arc.to_path(), |v| arc.to_path_via(v));
+    let look = s.new_art_look(
+        vectorcraft_color::Paint::None,
+        if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
+        s.paint.stroke_width.max(0.1),
+    );
+    // Not pixel-aligned: the ends stay on the given points.
+    let mut out = insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, 0.0, false)?;
+    out["cx"] = json!(arc.center.x);
+    out["cy"] = json!(arc.center.y);
+    out["radius"] = json!(arc.radius);
+    out["sweep"] = json!(arc.sweep.to_degrees());
+    Ok(out)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
@@ -922,7 +927,13 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
     let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
-    if p.get("font").is_some() || p.get("style").is_some() {
+    // A face from a redefined [Normal Character Style] is checked too, as one given here is.
+    let normal_face = s
+        .doc()
+        .ok()
+        .and_then(|d| super::textstyles::style_attrs(&d.doc, false, super::textstyles::NORMAL_CHAR))
+        .is_some_and(|m| m.contains_key("font_family") || m.contains_key("font_style"));
+    if p.get("font").is_some() || p.get("style").is_some() || normal_face {
         let runs = match id.and_then(|i| s.doc().ok()?.doc.node(i)).map(|n| &n.kind) {
             Some(NodeKind::Text(t)) => t.runs.iter().flat_map(super::fonts::run_fonts).collect(),
             _ => Default::default(),
@@ -950,8 +961,9 @@ pub(crate) fn new_type_para() -> vectorcraft_doc::ParaStyle {
 
 /// The paragraph alignment, leading model and character alignment new type starts with (`t`'s
 /// paragraph and runs): `justify` from `p` (else as [`new_type_para`] left it), `leadingModel`
-/// and `charAlign` from `p`, else em box top to top and em box centre while the
-/// interface is in Japanese (#432), else the Roman baseline for both. Noted in the journal, so a
+/// and `charAlign` from `p` (`charAlign` else from a redefined `[Normal Character Style]` that
+/// sets it), else em box top to top and em box centre while the interface is in Japanese (#432),
+/// else the Roman baseline for both. Noted in the journal, so a
 /// replay sets the same whatever the interface.
 pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut TextObject) -> Result<()> {
     use vectorcraft_doc::{CharAlign, LeadingModel};
@@ -971,7 +983,14 @@ pub(crate) fn new_type_alignment(s: &mut Session, p: &Value, cmd: &str, t: &mut 
             l
         }
     };
-    let align = match super::textedit::char_align_param(p, cmd)? {
+    // A redefined [Normal Character Style] that sets Character Alignment gives it to new type.
+    let normal_align = s
+        .doc()
+        .ok()
+        .and_then(|d| super::textstyles::style_attrs(&d.doc, false, super::textstyles::NORMAL_CHAR))
+        .filter(|m| m.contains_key("charAlign"))
+        .and(t.runs.first().map(|r| r.style.char_align));
+    let align = match super::textedit::char_align_param(p, cmd)?.or(normal_align) {
         Some(a) => a,
         None => {
             let a = if japanese { CharAlign::EmBoxCenter } else { CharAlign::RomanBaseline };
@@ -999,17 +1018,25 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str, t: &mut TextObject) 
 }
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
-/// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled as `[Normal Character Style]` is (black unless redefined; never the current fill,
-/// #7975), in the document's
-/// language. A `size` outside [`super::typecmd::TYPE_SIZES`] is an error.
+/// `color` in a CMYK document as [`super::paint::new_color`] stores it), else
+/// `[Normal Character Style]`'s (the default font, size and black fill unless redefined;
+/// never the current fill, #7975), in the style's language, else the document's. A `size` outside
+/// [`super::typecmd::TYPE_SIZES`] is an error.
 pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharStyle> {
-    let mut style = CharStyle::default();
+    let mut style = s.doc().map_or_else(|_| CharStyle::default(), |d| super::textstyles::normal_char_style(&d.doc));
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
         style.size = super::typecmd::given_type_size(sz, cmd)?;
     }
+    if str_param(p, "font").is_some() || str_param(p, "style").is_some() {
+        // A face given to the command takes its own version and axis settings, as a font change
+        // does, not those [Normal Character Style] gave another face.
+        style.font_version = None;
+        style.font_axes.clear();
+    }
     if let Some(f) = str_param(p, "font") {
         style.font_family = f.to_string();
+        // A family alone starts in Regular, whatever style [Normal Character Style] has.
+        style.font_style = CharStyle::default().font_style;
     }
     if let Some(f) = str_param(p, "style") {
         style.font_style = f.to_string();
@@ -1019,12 +1046,15 @@ pub(crate) fn new_type_style(s: &Session, p: &Value, cmd: &str) -> Result<CharSt
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),
-        None => s.doc().map_or_else(|_| CharStyle::default().fill, |d| super::textstyles::normal_char_fill(&d.doc)),
+        None => style.fill,
     };
-    // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
-    // for the default. Type already in a document keeps its own.
-    let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
-    let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
-    style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
+    // In the language a redefined [Normal Character Style] gives, else the one Document Setup chose,
+    // else Preferences › Hyphenation › Default Language; none for the default. Type already in a
+    // document keeps its own.
+    if style.language.is_none() {
+        let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
+        let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
+        style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
+    }
     Ok(style)
 }

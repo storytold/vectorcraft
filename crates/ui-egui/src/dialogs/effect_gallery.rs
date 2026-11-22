@@ -1,4 +1,4 @@
-//! Effect → Effect Gallery: browse Photoshop-style raster filters by category, build a stack, and
+//! Effect → Effect Gallery: browse raster filters by category, build a stack, and
 //! apply it as separate appearance effects in one undo step.
 //!
 //! Each filter has a thumbnail, and the dialog has its own preview, as the
@@ -29,7 +29,7 @@ const PREVIEW_H: usize = 84;
 /// Dialog kind for the Effect Gallery.
 pub const KIND: &str = "effectGallery";
 
-/// Raster effect submenus in the gallery (the six Photoshop-style folders it holds).
+/// Raster effect submenus in the gallery (the six raster filter folders it holds).
 const CATEGORIES: [(&str, &[&str]); 6] = [
     ("Artistic", &["Effect", "Artistic"]),
     ("Brush Strokes", &["Effect", "Brush Strokes"]),
@@ -313,11 +313,20 @@ fn stack_batch_params(stack: &[StackEntry]) -> Value {
 }
 
 /// Live canvas preview of the stack (`command.batch` would settle the dialog interaction each frame).
+/// Typing in progress is kept as its own undo step first; only the gallery's own earlier preview is
+/// canceled.
 fn preview_stack_on_canvas(app: &mut VectorcraftApp, stack: &[StackEntry]) {
+    if let Err(e) = app.keep_typing() {
+        app.status(e);
+        return;
+    }
     if app.session.in_interaction() {
         let _ = app.session.cancel_interaction();
     }
-    let _ = app.session.begin_interaction("Effect Gallery");
+    if let Err(e) = app.begin_interaction("Effect Gallery") {
+        app.status(e);
+        return;
+    }
     for (i, entry) in stack.iter().enumerate() {
         let params = Value::Object(entry.params.clone());
         if app.run("effect.apply", json!({ "effect": entry.effect, "params": params })).is_err() {
@@ -425,7 +434,7 @@ fn sample_drawing(w: usize, h: usize) -> Vec<u8> {
     out
 }
 
-/// Run one Photoshop-style filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
+/// Run one raster filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
 /// is not one of those filters or the buffer is the wrong size.
 fn apply_pixel(id: &str, params: &Map<String, Value>, data: &mut [u8], w: usize, h: usize) {
     let Some(n) = w.checked_mul(h).and_then(|n| n.checked_mul(4)) else { return };
@@ -764,6 +773,39 @@ mod tests {
         crate::dialogs::cancel(&mut app);
         assert!(!app.session.in_interaction());
         assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects.is_empty());
+    }
+
+    /// With Real-time Drawing off, typing in progress when the stack previews is kept as a step of
+    /// its own, not canceled with the gallery's earlier preview.
+    #[test]
+    fn stack_preview_keeps_typing_in_progress() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("prefs.set", json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let id = app.run("text.create", json!({"x": 100, "y": 100, "text": "Hello", "size": 20})).unwrap()["id"].as_u64().unwrap();
+        let id = vectorcraft_doc::NodeId(id);
+        let v = vectorcraft_engine::ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        let b = app.session.active().unwrap().doc.bounds_of(&[id], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        app.session.tool_text(" world", v).unwrap();
+        let plain = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        assert_eq!(plain(&app), "Hello", "the typing waits");
+        let steps = app.session.active().unwrap().history.undo.len();
+        app.run("ui.effectGalleryDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("stack".into(), json!([{ "effect": "artistic.cutout", "visible": true, "params": { "levels": 3 } }]));
+        frame(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.interaction.as_ref().map(|it| it.label.as_str()), Some("Effect Gallery"));
+        assert_eq!(st.history.undo.len(), steps + 1, "the typing is a step of its own");
+        assert_eq!(plain(&app), "Hello world");
     }
 
     #[test]

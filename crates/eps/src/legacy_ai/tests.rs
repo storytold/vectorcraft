@@ -272,6 +272,81 @@ fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
     }
 }
 
+/// The written definition of the gradient named `name` in `text`, and how many stops it holds.
+fn definition<'a>(text: &'a str, name: &str) -> (&'a str, usize) {
+    let def = text.split(&format!("%AI5_BeginGradient: ({name})\n")).nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    (def, def.matches(" %_Bs\n").count())
+}
+
+/// The format's gradients mix their stops' colors directly: a Perceptual gradient is written in
+/// process colors with the colors on its curve as stops, no more than the reader reads, in a
+/// definition of its own rather than its swatch's, with a warning, and opens with the colors it
+/// had. A Classic gradient keeps its own stops and gives no warning.
+#[test]
+fn perceptual_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::{GradientMethod, Swatch};
+    let mut doc = Document::new(200.0, 100.0);
+    for (name, color) in [("Night", Color::cmyk(1.0, 1.0, 0.0, 0.0)), ("Sun", Color::cmyk(0.0, 0.0, 1.0, 0.0))] {
+        doc.swatches.push(Swatch { name: name.into(), paint: Paint::solid(color), global: true, spot: true });
+    }
+    let stop = |offset: f32, color: Color, swatch: &str| GradientStop { swatch: Some(swatch.into()), ..GradientStop::new(offset, color) };
+    let stops = vec![stop(0.0, Color::cmyk(1.0, 1.0, 0.0, 0.0), "Night"), stop(1.0, Color::cmyk(0.0, 0.0, 1.0, 0.0), "Sun")];
+    let mut g = GradientPaint::new(Gradient { method: GradientMethod::Perceptual, ..Gradient::new(GradientKind::Linear, stops) });
+    g.swatch = Some("Dusk".into());
+    let want = g.gradient.clone();
+    // The same stops mixed directly stray from the Perceptual curve, so a file holding only the
+    // two stops would not open with the colors it had.
+    let classic = Gradient { method: GradientMethod::Classic, ..want.clone() };
+    assert!(
+        (0..=100).any(|k| {
+            let t = k as f32 / 100.0;
+            want.sample(t).0.to_rgb().iter().zip(classic.sample(t).0.to_rgb()).any(|(a, b)| (a - b).abs() > 0.05)
+        }),
+        "the methods mix alike"
+    );
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == HUE_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert!(!text.contains("(Dusk)"), "the curve is not the swatch's gradient");
+    assert!(!text.contains("(Night)") && !text.contains("(Sun)"), "the stops are process colors: {text}");
+    let (_, written) = definition(&text, "Gradient");
+    assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut back = None;
+    read.walk(|n| {
+        if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+            back = Some(g.gradient.clone());
+        }
+    });
+    let back = back.unwrap();
+    assert!(back.method.is_classic());
+    assert_eq!(back.stops.len(), written, "every stop written is read");
+    assert!(back.stops.iter().all(|s| s.swatch.is_none()), "{:?}", back.stops);
+    for k in 0..=100 {
+        let t = k as f32 / 100.0;
+        let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+        assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "at {t}: {a:?} vs {b:?}");
+    }
+
+    // Classic: its own two stops, its spot colors and its swatch's name, without the warning.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches.push(Swatch { name: "Night".into(), paint: Paint::solid(Color::cmyk(1.0, 1.0, 0.0, 0.0)), global: true, spot: true });
+    let mut g = GradientPaint::new(classic);
+    g.swatch = Some("Dusk".into());
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert_eq!(definition(&text, "Dusk").1, 2);
+    assert!(text.contains("%%DocumentCustomColors: (Night)"), "{text}");
+}
+
 /// A radial gradient repeated out from a center far from the shape is written with its ramp points
 /// (percent) to five decimals, so its runs keep their places hundreds of runs out.
 #[test]
@@ -626,6 +701,25 @@ fn picture(doc: &mut Document, r: Rect) -> Node {
         doc.alloc_id(),
         NodeKind::Image(Box::new(ImageObject { key, width: 16, height: 16, xf, link: None, placement: Default::default(), pixels: None })),
     )
+}
+
+/// A distorted image as deep as the writer goes, the art of the innermost of 8 nested symbols, is
+/// written as one image at the placement nearest its corners, with a warning, not left out.
+#[test]
+fn a_distorted_image_nested_as_deep_as_the_limit_is_written_as_its_nearest_placement() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut art = picture(&mut doc, Rect::new(10.0, 10.0, 90.0, 90.0));
+    art.set_image_corners([(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y))).unwrap();
+    for i in 0..8 {
+        let name = format!("S{i}");
+        doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
+        art = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: name, xf: Affine::IDENTITY });
+    }
+    doc.insert(doc.default_layer(), usize::MAX, art).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DEEP_DISTORTED), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert_eq!(text.lines().filter(|l| l.ends_with(" XI")).count(), 1, "the one image");
 }
 
 /// A layer `Below` holding a clipping group (a circle clipping an image, as in #2692), a group
@@ -1073,6 +1167,63 @@ fn rgb_stops_are_written_again_unchanged() {
     let (first, again) = (stops(first), stops(again));
     assert_eq!(first.len(), 12, "{first:?}");
     assert_eq!(again, first);
+}
+
+/// With a working RGB space other than sRGB, a Lab fill and a freeform gradient's average color
+/// are written as RGB values in the working RGB space, so they read back as RGB colors that show as
+/// the colors they were written for.
+#[test]
+fn a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_LEGACY_AI_WIDE_GAMUT_LAB";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "legacy_ai::tests::a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let lab = Color::lab(60.0, 20.0, -30.0);
+    let mut doc = Document::new(100.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), Paint::solid(lab), Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    // A freeform gradient is written as the average of its stops' display colors.
+    let (a, b) = (Color::rgb(0.9, 0.2, 0.1), Color::lab(50.0, -40.0, -20.0));
+    let stops = vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)];
+    let free = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Freeform, stops))));
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(60.0, 10.0, 90.0, 50.0)), free, Paint::None);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let average = {
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        [0, 1, 2].map(|i| (a[i] + b[i]) / 2.0)
+    };
+    // Written without [`write`]'s printed comparison, which paints a gradient in its first stop's
+    // color and not in the average color the writer writes for a freeform gradient.
+    let back = crate::import(&export_legacy_ai(&doc, &LegacyAiOptions::default()).unwrap().bytes).unwrap().document;
+    let mut read = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { .. } = n.kind {
+            read.push(n.appearance.fill_paint());
+        }
+    });
+    let [Paint::Solid { color: got @ Color::Rgb { .. }, .. }, Paint::Solid { color: avg @ Color::Rgb { .. }, .. }] = read.as_slice() else {
+        panic!("two RGB fills: {read:?}")
+    };
+    for (got, w, what) in [(got, lab.to_rgb(), "Lab fill"), (avg, average, "freeform gradient's average")] {
+        let g = got.to_rgb();
+        assert!(g.iter().zip(w).all(|(a, b)| (a - b).abs() < 2e-3), "{what} {got:?} shows as {g:?}, not {w:?}");
+    }
 }
 
 /// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted
@@ -1543,6 +1694,119 @@ fn colliding_gradient_and_spot_names_are_numbered_as_before() {
         assert_eq!(text.matches(&format!("1 {name} ")).count(), if name == "(Gradient 3)" { 1 } else { 2 }, "{name}");
     }
     assert!(text.contains("%%DocumentCustomColors: (?)\n%%+ (? 2)\n%%+ (? 3)\n%%+ (? 2 2)\n"), "{text}");
+}
+
+/// `doc` written with its gradient definitions found by comparing each in turn (`scanned`) or
+/// through their index.
+fn export_scanned(doc: &Document, scanned: bool) -> LegacyAiOutput {
+    let o = LegacyAiOptions { created: Some(0), ..LegacyAiOptions::default() };
+    super::writer::SCANNED_DEFINITIONS.with(|s| s.set(scanned));
+    let out = export_legacy_ai(doc, &o);
+    super::writer::SCANNED_DEFINITIONS.with(|s| s.set(false));
+    out.unwrap()
+}
+
+/// A document of rectangles filled with gradients: one with a gradient swatch `Sky` of its own;
+/// `distinct` with gradients of their own; `reused` with one of `ramps` others in turn; one with a
+/// gradient swatch `Dawn` whose gradient is the first of those `ramps`; two whose gradients differ
+/// only in the sign of a zero offset; and two with the same gradient, whose midpoint is not a
+/// number.
+fn many_gradients(distinct: u16, reused: u16, ramps: u16) -> Document {
+    let mut doc = Document::new(1000.0, 1000.0);
+    let layer = doc.layers[0].id;
+    let shade = |i: u16, n: u16| f32::from(i) / f32::from(n.max(1));
+    let mut paints = vec![gradient_from(Color::rgb(0.1, 0.2, 0.3), Some("Sky"))];
+    for i in 0..distinct {
+        paints.push(gradient_from(Color::rgb(shade(i, distinct), 0.5, 0.0), None));
+    }
+    for i in 0..reused {
+        paints.push(gradient_from(Color::cmyk(0.0, shade(i % ramps.max(1), ramps), 0.5, 0.0), None));
+    }
+    paints.push(gradient_from(Color::cmyk(0.0, 0.0, 0.5, 0.0), Some("Dawn")));
+    let stops = |offset: f32, midpoint: f32| {
+        let mut first = GradientStop::new(offset, Color::rgb(0.2, 0.3, 0.4));
+        first.midpoint = midpoint;
+        let g = Gradient::new(GradientKind::Linear, vec![first, GradientStop::new(1.0, Color::BLACK)]);
+        Paint::Gradient(Box::new(GradientPaint::new(g)))
+    };
+    paints.extend([stops(0.0, 0.5), stops(-0.0, 0.5), stops(0.0, f32::NAN), stops(0.0, f32::NAN)]);
+    for (i, paint) in (0u16..).zip(paints) {
+        let (x, y) = (f64::from(i % 40) * 25.0, f64::from(i / 40 % 40) * 25.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), paint, Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+/// Gradient definitions found through their index are those found by comparing each in turn: the
+/// file is the same, byte for byte, with the same warnings. An earlier definition of the same
+/// gradient serves a gradient swatch of another name; gradients that differ only in the sign of a
+/// zero share a definition; a gradient that is not equal to itself is defined each time.
+#[test]
+fn indexed_gradient_definitions_write_the_same_file() {
+    let doc = many_gradients(300, 300, 7);
+    let (indexed, scanned) = (export_scanned(&doc, false), export_scanned(&doc, true));
+    let differ = indexed.bytes.iter().zip(&scanned.bytes).position(|(a, b)| a != b);
+    assert!(indexed.bytes == scanned.bytes, "the files differ from byte {differ:?} ({} and {} bytes)", indexed.bytes.len(), scanned.bytes.len());
+    assert_eq!(indexed.warnings, scanned.warnings);
+    assert_eq!(indexed.setting_notes, scanned.setting_notes);
+    let text = String::from_utf8(indexed.bytes).unwrap();
+    let defined: Vec<&str> = text.lines().filter_map(|l| l.strip_suffix(" 0 2 Bd")).collect();
+    // `Sky`, 300 of their own, 7 reused, 1 for both signs of zero and 2 for the gradient that
+    // is not a number.
+    assert_eq!(defined.len(), 1 + 300 + 7 + 1 + 2, "{defined:?}");
+    assert_eq!(defined.first(), Some(&"(Sky)"));
+    assert!(!defined.contains(&"(Dawn)"), "{defined:?}");
+}
+
+/// A gradient is matched with the definitions of the same gradient, not with each definition:
+/// 1,000 gradients of their own and 1,000 of 10 others take a comparison or so each, where
+/// comparing each definition in turn takes hundreds of thousands.
+#[test]
+fn legacy_gradient_definitions_are_found_without_comparing_each() {
+    let doc = many_gradients(1000, 1000, 10);
+    let comparisons = |scanned: bool| {
+        super::writer::GRADIENT_COMPARISONS.with(|c| c.set(0));
+        export_scanned(&doc, scanned);
+        super::writer::GRADIENT_COMPARISONS.with(std::cell::Cell::get)
+    };
+    let (indexed, scanned) = (comparisons(false), comparisons(true));
+    assert!(indexed <= 2 * 2006, "{indexed} comparisons through the index");
+    assert!(scanned > 100 * indexed, "{scanned} comparisons scanning, {indexed} through the index");
+}
+
+/// The time to write 5,000 rectangles with gradients of their own and 5,000 with 50 others, with
+/// the definitions found by comparing each in turn and through their index: the median of 7 runs
+/// of each, alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture legacy_gradient_definitions_timing`.
+#[test]
+#[ignore = "timing"]
+fn legacy_gradient_definitions_timing() {
+    let doc = many_gradients(5000, 5000, 50);
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [true, false].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let out = export_scanned(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            files[k].get_or_insert(out.bytes);
+        }
+    }
+    assert_eq!(files[0], files[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("10,006 gradient fills, median of 7 runs ({how}):");
+    println!("| definitions found | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["comparing each in turn", "through the index"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
 }
 
 /// The time this thread has run, and how it was measured.

@@ -518,6 +518,10 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     if let Some(k) = app.ui.dialog.as_mut() {
         k.fields.insert("overrides".into(), crate::keymap::stored::to_value(&shortcut_editor::saved_overrides(km.overrides(), &ov)));
+        // VectorCraft's defaults have no hold shortcuts; Add to the Current Shortcuts keeps them.
+        if !current {
+            k.fields.insert("holds".into(), json!({}));
+        }
         k.fields.insert("set".into(), json!(set));
         k.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
     }
@@ -670,6 +674,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let (keys_h, rows_h) = list_heights(ctx.content_rect().height() - rest, keys_open);
     let (mut apply, mut cancel, mut copy, mut lists) = (false, false, false, 0.0);
     crate::dialogs::modal::show(ctx, tl!("Import Shortcut Set"), id, -20.0, 20, |ui| {
+        crate::dialogs::modal::fits_itself(ui);
         ui.set_width(NAME_W + TARGET_W + CHORD_W + 220.0);
         crate::dialogs::modal::heading(ui, tl!("Import Shortcut Set"));
         ui.add_space(10.0);

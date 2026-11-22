@@ -13,7 +13,7 @@ use super::edit::selected_roots;
 use super::pathops::{length_given, number_given, shape_node};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, index_opt, number_or,
-    object_param, ok, str_param, switch_or, targets, text_param,
+    object_param, ok, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Type Path Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner; symmetric: mirror the other handle about the anchor without changing its kind, except at an open end of the path; independent and symmetric cannot both be true; both default false); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
             has_doc,
             set_path_handle
         ),
@@ -873,7 +873,7 @@ pub(crate) fn style_chars(t: &mut TextObject, range: Option<TextRange>, mut f: i
 }
 
 fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
-    let text = str_param(p, "text").ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
+    let text = text_param(p, "text", "text.setText")?.ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
     let ids = text_targets(s, p, "text.setText")?;
     // The text the type already has is no undo step.
     edit_if_nodes_changed(s, "Typing", &ids, |d| {
@@ -1449,6 +1449,10 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
     let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
     let node = s.doc()?.doc.node(id);
     let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
     if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
@@ -1461,7 +1465,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
         let within = |t: &TextObject| {
             t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
         };
-        if !(t.set_path_handle((si, ai), out, pos, independent) && within(t)) {
+        if !(t.set_path_handle_with_symmetry((si, ai), out, pos, independent, symmetric) && within(t)) {
             t.kind = before;
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }

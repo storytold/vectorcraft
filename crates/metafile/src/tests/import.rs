@@ -274,7 +274,9 @@ fn hand_built_emf_plays_like_gdi() {
     let lines = &children[1];
     assert_eq!(lines.appearance.items.len(), 1);
     assert!(near(lines.geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 5.0 * mm, 5.0 * mm), 0.01));
-    let NodeKind::Text(t) = &children[2].kind else { panic!("text") };
+    // The background mode starts opaque: the text's cells are filled white behind it.
+    assert_eq!(fill_rgb(&children[2]), Some([255, 255, 255]));
+    let NodeKind::Text(t) = &children[3].kind else { panic!("text") };
     assert_eq!(t.plain_text(), "Hi");
     let st = &t.runs[0].style;
     assert_eq!((st.font_family.as_str(), st.font_style.as_str()), ("Arial", "Bold"));
@@ -527,9 +529,98 @@ fn a_file_with_more_objects_than_are_read_says_so() {
     let many = hand_emf(5000, 3000, &vec![rect.clone(); 200_010]);
     let back = import(&many).unwrap();
     assert_eq!(paths(&back.document).len(), 200_000);
-    assert!(back.warnings.iter().any(|w| w.contains("reached the most objects")), "{:?}", back.warnings);
+    assert!(back.warnings.iter().any(|w| w.contains("reached a limit")), "{:?}", back.warnings);
+    // Exactly as many as the reader keeps: nothing was left unread.
+    let full = import(&hand_emf(5000, 3000, &vec![rect.clone(); 200_000])).unwrap();
+    assert_eq!(paths(&full.document).len(), 200_000);
+    assert!(full.warnings.is_empty(), "{:?}", full.warnings);
     let few = import(&hand_emf(5000, 3000, &vec![rect; 3])).unwrap();
     assert!(few.warnings.is_empty(), "{:?}", few.warnings);
+}
+
+#[test]
+fn a_file_cut_short_by_another_limit_says_so() {
+    // SAVEDC past the 1,024 levels the reader keeps stops the parse: the rectangle after them is
+    // not read.
+    let mut records = vec![(43, le(&[0, 0, 100, 100]))];
+    records.extend(vec![(33, vec![]); 1100]);
+    records.push((43, le(&[200, 200, 300, 300])));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(
+        back.warnings,
+        vec!["the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read".to_string()]
+    );
+}
+
+#[test]
+fn images_the_reader_does_not_read_are_counted() {
+    let records = vec![(81, png_stretch_dibits(&png_claiming(1 << 13, 1 << 13))); 2];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(back.warnings, vec!["2 images or pattern brushes that couldn't be read were left out".to_string()]);
+    let back = import(&hand_emf(5000, 3000, &records[..1])).unwrap();
+    assert_eq!(back.warnings, vec!["1 image or pattern brush that couldn't be read was left out".to_string()]);
+}
+
+#[test]
+fn a_wmf_reports_unread_pattern_brushes_and_raster_operations() {
+    let records = vec![
+        // DIBCREATEPATTERNBRUSH (style 5, usage 0) whose bitmap header can't be read.
+        (0x0142, [le16(&[5, 0]), vec![0xFF; 8]].concat()),
+        // A bitmap-less DIBBITBLT with DSTINVERT (0x00550009): rop, ySrc, xSrc, reserved, height,
+        // width, yDest, xDest.
+        (0x0940, le16(&[0x0009, 0x0055, 0, 0, 0, 100, 100, 0, 0])),
+    ];
+    let back = import(&hand_wmf(1440, 1440, &records)).unwrap();
+    assert_eq!(
+        back.warnings,
+        vec![
+            "1 image or pattern brush that couldn't be read was left out".to_string(),
+            "1 raster operation other than a plain copy (masks, inversions) was drawn as a plain copy or left out".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn clips_that_are_not_applied_are_counted() {
+    // BEGINPATH, a rectangle, ENDPATH, SELECTCLIPPATH with RGN_XOR (3), then a rectangle drawn after it.
+    let records = vec![(59, vec![]), (43, le(&[100, 100, 2000, 2000])), (60, vec![]), (67, le(&[3])), (43, le(&[500, 500, 600, 600]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(
+        back.warnings,
+        vec!["1 clip couldn't be applied as the file sets it: what is drawn after it may show more or less than the file does".to_string()]
+    );
+    // RGN_AND (1) is applied.
+    let mut records = records;
+    records[3] = (67, le(&[1]));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
+}
+
+/// An EMR_BITBLT of the 100 × 100 box at the origin with `rop` and no source bitmap.
+fn bitblt(rop: u32) -> Vec<u8> {
+    // Bounds; destination; the operation; the source origin, transform (identity) and background
+    // color; usage, then no BITMAPINFO and no bits.
+    let mut body = vec![0; 16];
+    body.extend(le(&[0, 0, 100, 100, rop as i32, 0, 0]));
+    body.extend(le_f32(&[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+    body.extend(le(&[0, 0, 0, 0, 0, 0]));
+    body
+}
+
+#[test]
+fn raster_operations_that_are_not_played_are_counted() {
+    // DSTINVERT and PATINVERT take no source bitmap and are left out.
+    let records = vec![(76, bitblt(0x0055_0009)), (76, bitblt(0x005A_0049))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(
+        back.warnings,
+        vec!["2 raster operations other than a plain copy (masks, inversions) were drawn as a plain copy or left out".to_string()]
+    );
+    // WHITENESS is played.
+    let back = import(&hand_emf(5000, 3000, &[(76, bitblt(0x00FF_0062))])).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
 }
 
 /// An EMR_STRETCHDIBITS copying `png` (a BI_PNG bitmap) to a 10 × 10 box.
@@ -677,6 +768,156 @@ fn text_keeps_a_stretch_across() {
     assert!((a - 2.0).abs() < 1e-6 && b.abs() < 1e-6 && c.abs() < 1e-6 && (d - 1.0).abs() < 1e-6, "{:?}", t.xf);
 }
 
+/// Source Sans 3 Regular's own values, read from its table directory: unitsPerEm (`head`),
+/// xAvgCharWidth and usWinAscent + usWinDescent (`OS/2`), in font units.
+fn source_sans_metrics() -> (f64, f64, f64) {
+    let font: &[u8] = include_bytes!("../../../../assets/fonts/SourceSans3-Regular.ttf");
+    let u16_at = |at: usize| u16::from_be_bytes([font[at], font[at + 1]]);
+    let table = |tag: &[u8; 4]| {
+        let at = (0..usize::from(u16_at(4))).map(|i| 12 + 16 * i).find(|at| &font[*at..*at + 4] == tag).unwrap();
+        u32::from_be_bytes([font[at + 8], font[at + 9], font[at + 10], font[at + 11]]) as usize
+    };
+    let (head, os2) = (table(b"head"), table(b"OS/2"));
+    let avg = f64::from(i16::from_be_bytes([font[os2 + 2], font[os2 + 3]]));
+    (f64::from(u16_at(head + 18)), avg, f64::from(u16_at(os2 + 74)) + f64::from(u16_at(os2 + 76)))
+}
+
+/// The style of "Hi" drawn in an EMF in Source Sans 3 with a LOGFONT of `height` and `width`
+/// (hundredths of a millimeter).
+fn emf_font_style(height: i32, width: i32) -> vectorcraft_doc::CharStyle {
+    emf_font_style_in("Source Sans 3", height, width)
+}
+
+/// [`emf_font_style`] with the LOGFONT naming `family`.
+fn emf_font_style_in(family: &str, height: i32, width: i32) -> vectorcraft_doc::CharStyle {
+    let mut text = vec![0; 16];
+    text.extend(le(&[1, 0, 0]));
+    text.extend(le(&[1000, 1500, 2, 76, 0, 0, 0, 0, 0, 0]));
+    text.extend("Hi".encode_utf16().flat_map(u16::to_le_bytes));
+    let mut font = le(&[2, height, width, 0, 0, 400]);
+    font.extend([0u8; 8]);
+    font.extend(family.encode_utf16().chain(std::iter::repeat_n(0, 32 - family.encode_utf16().count())).flat_map(u16::to_le_bytes));
+    let records = vec![(82, font), (37, le(&[2])), (84, text)];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let t = all(&back.document)
+        .into_iter()
+        .find_map(|n| match n.kind {
+            NodeKind::Text(t) => Some(t),
+            _ => None,
+        })
+        .unwrap();
+    t.runs[0].style.clone()
+}
+
+#[test]
+fn a_font_width_becomes_horizontal_scale() {
+    let (upem, avg, _) = source_sans_metrics();
+    let mm = 72.0 / 25.4;
+    // A 10 mm em and an average character width of 6 mm: the face's average width, avg/upem of
+    // the em, is scaled to 6 mm.
+    let want = 6.0 / (avg / upem * 10.0) * 100.0;
+    for width in [600, -600] {
+        let st = emf_font_style(-1000, width);
+        assert_eq!(st.font_family, "Source Sans 3");
+        assert!((st.size - 10.0 * mm).abs() < 1e-9, "{}", st.size);
+        assert!((st.h_scale - want).abs() < 1e-9, "width {width}: {} for {want}", st.h_scale);
+    }
+    assert_eq!(emf_font_style(-1000, 0).h_scale, 100.0);
+    // A 4 m em is set at the largest type size, 5000 pt, and a 2.4 m average width keeps its
+    // width at that size.
+    let st = emf_font_style(-400_000, 240_000);
+    assert_eq!(st.size, 5000.0);
+    let want = 2400.0 * mm / (avg / upem * 5000.0) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+    // With a height of 0 the type is set at the default size and the width is ignored.
+    assert_eq!(emf_font_style(0, 600).h_scale, 100.0);
+}
+
+#[test]
+fn a_positive_font_height_is_the_character_cell() {
+    let (upem, avg, cell) = source_sans_metrics();
+    let mm = 72.0 / 25.4;
+    // A 10 mm cell: the em is the cell times unitsPerEm divided by the face's usWinAscent plus
+    // usWinDescent, and a 6 mm average width is measured against that em.
+    let em = 10.0 * upem / cell;
+    let st = emf_font_style(1000, 600);
+    assert!((st.size - em * mm).abs() < 1e-9, "{} for {}", st.size, em * mm);
+    let want = 6.0 / (avg / upem * em) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+}
+
+#[test]
+fn a_font_the_system_lacks_is_measured_in_the_face_that_draws_it() {
+    // A family no system has keeps its name, and layout draws it in Source Sans 3: the cell and
+    // the average width are measured in that face.
+    let (upem, avg, cell) = source_sans_metrics();
+    let mm = 72.0 / 25.4;
+    let st = emf_font_style_in("Missing Family 7183", 1000, 600);
+    assert_eq!(st.font_family, "Missing Family 7183");
+    let em = 10.0 * upem / cell;
+    assert!((st.size - em * mm).abs() < 1e-9, "{} for {}", st.size, em * mm);
+    let want = 6.0 / (avg / upem * em) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+}
+
+#[test]
+fn wmf_font_width_becomes_horizontal_scale() {
+    let (upem, avg, _) = source_sans_metrics();
+    // CREATEFONTINDIRECT: a 0.1 inch em (144 units) with an average width of 72 units, then
+    // SELECTOBJECT and TEXTOUT "Hi" at (720, 360).
+    let mut font = le16(&[-144, 72, 0, 0, 400]);
+    font.extend([0u8; 8]);
+    font.extend(b"Source Sans 3".iter().copied().chain(std::iter::repeat_n(0, 19)));
+    let mut text = le16(&[2]);
+    text.extend(b"Hi");
+    text.extend(le16(&[360, 720]));
+    let records = vec![(0x02FB, font), (0x012D, le16(&[0])), (0x0521, text)];
+    let back = import(&hand_wmf(1440, 1440, &records)).unwrap();
+    let t = all(&back.document)
+        .into_iter()
+        .find_map(|n| match n.kind {
+            NodeKind::Text(t) => Some(t),
+            _ => None,
+        })
+        .unwrap();
+    let st = &t.runs[0].style;
+    assert!((st.size - 7.2).abs() < 1e-9, "{}", st.size);
+    let want = 72.0 / (avg / upem * 144.0) * 100.0;
+    assert!((st.h_scale - want).abs() < 1e-9, "{} for {want}", st.h_scale);
+}
+
+#[test]
+fn wmf_text_fills_its_cells_in_the_opaque_background_mode() {
+    // CREATEFONTINDIRECT and SELECTOBJECT: a 0.1 inch em; SETBKCOLOR green; SETBKMODE `mode`
+    // (none when 0); TEXTOUT "Hi" at (720, 360), top aligned.
+    let backgrounds = |mode: i16| {
+        let mut font = le16(&[-144, 0, 0, 0, 400]);
+        font.extend([0u8; 8]);
+        font.extend(b"Source Sans 3".iter().copied().chain(std::iter::repeat_n(0, 19)));
+        let mut text = le16(&[2]);
+        text.extend(b"Hi");
+        text.extend(le16(&[360, 720]));
+        let mut records = vec![(0x02FB, font), (0x012D, le16(&[0])), (0x0201, 0x0000_ff00u32.to_le_bytes().to_vec())];
+        if mode != 0 {
+            records.push((0x0102, le16(&[mode, 0])));
+        }
+        records.push((0x0521, text));
+        paths(&import(&hand_wmf(1440, 1440, &records)).unwrap().document)
+    };
+    let mm = 72.0 / 25.4;
+    // A file that never sets the mode, and one that sets OPAQUE: one green rectangle whose top
+    // is at the reference point and whose left edge is at the start of the text.
+    for mode in [0, 2] {
+        let p = backgrounds(mode);
+        assert_eq!(p.len(), 1, "{mode}");
+        assert_eq!(fill_rgb(&p[0]), Some([0, 255, 0]), "{mode}");
+        let b = p[0].geometric_bounds().unwrap();
+        assert!((b.x0 - 12.7 * mm).abs() < 0.01 && (b.y0 - 6.35 * mm).abs() < 0.01 && b.x1 > b.x0 && b.y1 > b.y0, "{mode}: {b:?}");
+    }
+    // TRANSPARENT: no background.
+    assert!(backgrounds(1).is_empty());
+}
+
 #[test]
 fn a_clip_whose_box_holds_the_picture_still_clips() {
     // A diamond around the middle of the picture, whose box holds the whole frame but which cuts
@@ -794,7 +1035,8 @@ fn clipped_text_is_clipped_to_its_rectangle() {
     let mut font = le(&[2, -1000, 0, 0, 0, 400]);
     font.extend([0, 1, 1, 0, 0, 0, 0, 0]);
     font.extend("Arial".encode_utf16().chain(std::iter::repeat_n(0, 27)).flat_map(u16::to_le_bytes));
-    let mut records = vec![(82, font), (37, le(&[2])), (84, text)];
+    // SETBKMODE TRANSPARENT: no background behind the text.
+    let mut records = vec![(18, le(&[1])), (82, font), (37, le(&[2])), (84, text)];
     let back = import(&hand_emf(5000, 3000, &records)).unwrap();
     let layer = back.document.layers[0].children().unwrap();
     assert_eq!(layer.len(), 1);
@@ -821,6 +1063,156 @@ fn clipped_text_is_clipped_to_its_rectangle() {
     let NodeKind::Group { children, clip: true } = &n.kind else { panic!("a clipping group: {:?}", n.kind) };
     assert!(near(children[0].geometric_bounds().unwrap(), own, 0.01), "{:?}", children[0].geometric_bounds());
     assert!(matches!(children[1].kind, NodeKind::Text(_)));
+}
+
+/// The layer of an EMF that sets the background color green, the background mode `mode` (none
+/// when 0) and the text alignment `align`, then draws `s` at (`x`, 1500) in `font` with the
+/// advances `dx`.
+fn on_background(mode: i32, align: i32, x: i32, font: Vec<u8>, s: &str, dx: &[i32]) -> Vec<std::sync::Arc<Node>> {
+    let mut records = vec![(25, le(&[0x0000_ff00])), (22, le(&[align])), (82, font), (37, le(&[2])), (84, text_out(x, s, dx))];
+    if mode > 0 {
+        records.insert(0, (18, le(&[mode])));
+    }
+    import(&hand_emf(5000, 3000, &records)).unwrap().document.layers[0].children().unwrap().clone()
+}
+
+#[test]
+fn opaque_backgrounds_fill_behind_the_character_cells() {
+    let mm = 72.0 / 25.4;
+    let aligned = on_background;
+    // TA_BASELINE: the baseline at (10, 15) mm.
+    let drawn = |mode: i32, font: Vec<u8>, s: &str, dx: &[i32]| aligned(mode, 24, 1000, font, s, dx);
+    let opaque = |font: Vec<u8>, s: &str, dx: &[i32]| drawn(2, font, s, dx);
+    // "Hi" with advances of 20 and 10 mm in a 10 mm em: the cells run across the advances, from
+    // the face's usWinAscent above the baseline to its usWinDescent below it, behind the type.
+    let layer = opaque(arial(), "Hi", &[2000, 1000]);
+    assert_eq!(layer.len(), 2);
+    assert_eq!(fill_rgb(&layer[0]), Some([0, 255, 0]));
+    let NodeKind::Text(t) = &layer[1].kind else { panic!("text") };
+    let face = vectorcraft_text::FontDb::global().style_face(&t.runs[0].style).unwrap();
+    let (a, d) = face.win_ascent_descent().unwrap();
+    let em = face.units_per_em();
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!(near(b, Rect::new(10.0 * mm, (15.0 - 10.0 * a / em) * mm, 40.0 * mm, (15.0 + 10.0 * d / em) * mm), 0.01), "{b:?}");
+    // TA_TOP and TA_BOTTOM put the top and the bottom of the cell at the reference point: the
+    // baseline is usWinAscent below it, or usWinDescent above it.
+    for (align, top) in [(0, 15.0), (8, 15.0 - 10.0 * (a + d) / em)] {
+        let layer = aligned(2, align, 1000, arial(), "Hi", &[2000, 1000]);
+        let b = layer[0].geometric_bounds().unwrap();
+        assert!((b.y0 - top * mm).abs() < 0.01 && (b.height() - 10.0 * (a + d) / em * mm).abs() < 0.01, "{align}: {b:?}");
+        let NodeKind::Text(t) = &layer[1].kind else { panic!("text") };
+        let baseline = (t.xf * vectorcraft_geom::Point::ZERO).y;
+        assert!((baseline - (top + 10.0 * a / em) * mm).abs() < 0.01, "{align}: {baseline}");
+    }
+    // A leading NUL's advance is filled too: right aligned at 50 mm, "\0Hi" fills from 10 mm.
+    let b = aligned(2, 26, 5000, arial(), "\0Hi", &[1000, 2000, 1000])[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 50.0 * mm).abs() < 0.01, "{b:?}");
+    // A positive height is the cell: 10 mm from top to bottom.
+    let mut font = le(&[2, 1000, 0, 0, 0, 400]);
+    font.extend([0; 8]);
+    font.extend("Arial".encode_utf16().chain(std::iter::repeat_n(0, 27)).flat_map(u16::to_le_bytes));
+    let b = opaque(font, "Hi", &[2000, 1000])[0].geometric_bounds().unwrap();
+    assert!((b.height() - 10.0 * mm).abs() < 0.01, "{b:?}");
+    // Without advances the cells run across the glyphs' own advances.
+    let layer = opaque(arial(), "Hi", &[]);
+    let NodeKind::Text(t) = &layer[1].kind else { panic!("text") };
+    let (xs, end) = glyph_xs(t);
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!((b.x0 - xs[0]).abs() < 0.01 && (b.x1 - end).abs() < 0.01, "{b:?} {xs:?} {end}");
+    // Type split where an advance is further than tracking reaches: one background across the
+    // whole line's advances comes before both pieces of type.
+    let layer = opaque(arial(), "Hiy", &[12000, 500, 1000]);
+    let kinds: Vec<bool> = layer.iter().map(|n| matches!(n.kind, NodeKind::Text(_))).collect();
+    assert_eq!(kinds, [false, true, true]);
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 145.0 * mm).abs() < 0.01, "{b:?}");
+}
+
+#[test]
+fn opaque_backgrounds_reach_as_far_as_the_advances() {
+    let mm = 72.0 / 25.4;
+    let aligned = on_background;
+    // TA_BASELINE: the baseline at (10, 15) mm.
+    let drawn = |mode: i32, font: Vec<u8>, s: &str, dx: &[i32]| aligned(mode, 24, 1000, font, s, dx);
+    let opaque = |font: Vec<u8>, s: &str, dx: &[i32]| drawn(2, font, s, dx);
+    // Two lines: a rectangle behind each, not one block over the space between them.
+    let layer = opaque(arial(), "Hi\nHi", &[]);
+    let NodeKind::Path { path, .. } = &layer[0].kind else { panic!("a path") };
+    let rects = path.to_bezpath().elements().iter().filter(|e| matches!(e, vectorcraft_geom::PathEl::MoveTo(_))).count();
+    assert_eq!(rects, 2);
+    // Without advances, one line's cells run across its glyphs' advances, trailing spaces
+    // included: right aligned, they run from the "H" to the end of the space after the "i".
+    let layer = aligned(2, 26, 4000, arial(), "Hi ", &[]);
+    let NodeKind::Text(t) = &layer[1].kind else { panic!("text") };
+    let (xs, end) = glyph_xs(t);
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!(xs.len() == 3, "{xs:?} {end}");
+    assert!((b.x0 - xs[0]).abs() < 0.01 && (b.x1 - end).abs() < 0.01, "{b:?} {xs:?} {end}");
+    // Layout aligns a line without its trailing spaces: right aligned at 40 mm, the space after
+    // the "i" runs on past it. On more than one line, the cells also run across the trailing
+    // spaces, as far as on one line.
+    assert!(end > 41.0 * mm, "{end}");
+    let b = aligned(2, 26, 4000, arial(), "Hi \nHi", &[])[0].geometric_bounds().unwrap();
+    assert!((b.x1 - end).abs() < 0.01, "{b:?} {end}");
+    // Leading NULs on a line of their own fill their cells across their advances, before the
+    // next line: from 10 to 30 mm.
+    let layer = opaque(arial(), "\0\nA", &[2000, 0, 1000]);
+    let first = layer[0].geometric_bounds().unwrap();
+    assert!((first.x0 - 10.0 * mm).abs() < 0.01 && (first.x1 - 30.0 * mm).abs() < 0.01, "{first:?}");
+    assert!(matches!(layer[1].kind, NodeKind::Path { .. }) && matches!(layer[2].kind, NodeKind::Text(_)), "{layer:?}");
+    // An underlined line of blanks between two others draws its bar across its glyphs, and its
+    // cells run across the same glyphs.
+    let layer = opaque(font_of("Arial", true), "A\n   \nB", &[]);
+    let (NodeKind::Path { path, .. }, NodeKind::Text(t)) = (&layer[0].kind, &layer[1].kind) else { panic!("a path and type") };
+    let mut rects: Vec<(f64, f64, f64)> = Vec::new();
+    for el in path.to_bezpath().elements() {
+        let p = match el {
+            vectorcraft_geom::PathEl::MoveTo(p) => {
+                rects.push((p.x, p.x, p.y));
+                *p
+            }
+            vectorcraft_geom::PathEl::LineTo(p) => *p,
+            _ => continue,
+        };
+        if let Some(r) = rects.last_mut() {
+            *r = (r.0.min(p.x), r.1.max(p.x), r.2.min(p.y));
+        }
+    }
+    rects.sort_by(|a, b| a.2.total_cmp(&b.2));
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let spaces: Vec<(f64, f64)> =
+        laid.glyphs.iter().filter(|g| g.line == 1).map(|g| ((t.xf * g.origin).x, (t.xf * g.origin).x + g.advance)).collect();
+    let (from, to) = spaces.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), (x0, x1)| (a.min(*x0), b.max(*x1)));
+    assert!(rects.len() == 3 && (rects[1].0 - from).abs() < 0.01 && (rects[1].1 - to).abs() < 0.01, "{rects:?} {spaces:?}");
+    // NULs whose advances go forward and back again still fill as far as they reach.
+    let layer = opaque(arial(), "\0\0", &[1000, -1000]);
+    assert_eq!(layer.len(), 1);
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 20.0 * mm).abs() < 0.01, "{b:?}");
+    let b = opaque(arial(), "H\0i", &[3000, -2000, 1000])[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 40.0 * mm).abs() < 0.01, "{b:?}");
+    // An advance that goes back: the cells reach as far as the advances go, here to 30 mm.
+    let b = opaque(arial(), "Hi", &[2000, -1000])[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 30.0 * mm).abs() < 0.01, "{b:?}");
+    // NULs alone fill across their advances.
+    let layer = opaque(arial(), "\0", &[2000]);
+    assert_eq!(layer.len(), 1);
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && (b.x1 - 30.0 * mm).abs() < 0.01, "{b:?}");
+    // Blanks on an opaque background still fill their cells, from the reference point on; on a
+    // transparent one nothing is left.
+    let layer = opaque(arial(), " \t", &[]);
+    assert_eq!(layer.len(), 1);
+    let b = layer[0].geometric_bounds().unwrap();
+    assert!((b.x0 - 10.0 * mm).abs() < 0.01 && b.x1 > 10.0 * mm, "{b:?}");
+    assert!(drawn(1, arial(), " \t", &[]).is_empty());
+    // NULs alone in an underlined font fill their cells and add no type.
+    let layer = opaque(font_of("Arial", true), "\0", &[2000]);
+    assert!(layer.len() == 1 && matches!(layer[0].kind, NodeKind::Path { .. }), "{layer:?}");
+    // A file that never sets the mode draws in the opaque mode a playback starts in.
+    let layer = drawn(0, arial(), "Hi", &[]);
+    assert_eq!(fill_rgb(&layer[0]), Some([0, 255, 0]));
+    assert!(drawn(1, arial(), "Hi", &[]).iter().all(|n| matches!(n.kind, NodeKind::Text(_))));
 }
 
 /// The first text object of `d`.
@@ -988,8 +1380,8 @@ fn multiline_text_with_advances_aligns_each_line() {
     }
     assert!(drops.iter().all(|d| (d - drops[0]).abs() < 0.01), "{drops:?}");
     // Underlined and left aligned, each line's underline ends with its own advances: no bar runs on
-    // past either line.
-    let records = vec![(82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hi\nHi", &[2000, 1000, 0, 2000, 1000]))];
+    // past either line (on a transparent background, SETBKMODE).
+    let records = vec![(18, le(&[1])), (82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hi\nHi", &[2000, 1000, 0, 2000, 1000]))];
     let back = import(&hand_emf(5000, 3000, &records)).unwrap();
     assert!(all(&back.document).iter().all(|n| !matches!(n.kind, NodeKind::Path { .. })));
     for (align, x, second) in [(6, 2500, [15.0, 30.0]), (2, 4000, [20.0, 35.0])] {
@@ -1047,8 +1439,9 @@ fn wmf_text_is_spaced_by_its_advances() {
 fn split_type_keeps_its_underline_and_right_to_left_order() {
     let mm = 72.0 / 25.4;
     // Underlined "Hiy" with an advance further than tracking reaches after the "H": the bar runs on
-    // from the end of the "H"'s underline to where "iy" starts, at 130 mm.
-    let records = vec![(82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hiy", &[12000, 500, 1000]))];
+    // from the end of the "H"'s underline to where "iy" starts, at 130 mm. The background is
+    // transparent (SETBKMODE) throughout.
+    let records = vec![(18, le(&[1])), (82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hiy", &[12000, 500, 1000]))];
     let back = import(&hand_emf(20000, 3000, &records)).unwrap();
     assert_eq!(texts_at(&back.document), vec![("H".to_string(), vec![10.0]), ("iy".to_string(), vec![130.0, 135.0])]);
     let bars: Vec<Rect> =
@@ -1058,7 +1451,7 @@ fn split_type_keeps_its_underline_and_right_to_left_order() {
     assert!(b.x0 > 10.0 * mm && b.x0 < 130.0 * mm && (b.x1 - 130.0 * mm).abs() < 0.01 && b.height() < 2.0 * mm, "{b:?}");
     // The "H" and the "i" before the split are tracked apart and draw a bar each: only the bar that
     // ends the piece runs on, from the end of the "i" to 130 mm.
-    let records = vec![(82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hiy", &[1000, 12000, 1000]))];
+    let records = vec![(18, le(&[1])), (82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(1000, "Hiy", &[1000, 12000, 1000]))];
     let back = import(&hand_emf(20000, 3000, &records)).unwrap();
     assert_eq!(texts_at(&back.document), vec![("Hi".to_string(), vec![10.0, 20.0]), ("y".to_string(), vec![140.0])]);
     let gaps: Vec<Node> = all(&back.document).into_iter().filter(|n| matches!(n.kind, NodeKind::Path { .. })).collect();
@@ -1069,12 +1462,12 @@ fn split_type_keeps_its_underline_and_right_to_left_order() {
     let b = gaps[0].geometric_bounds().unwrap();
     assert!(b.x0 > 20.0 * mm && (b.x1 - 140.0 * mm).abs() < 0.01, "{b:?}");
     // Without an underline, nothing but the type.
-    let records = vec![(82, arial()), (37, le(&[2])), (84, text_out(1000, "Hiy", &[12000, 500, 1000]))];
+    let records = vec![(18, le(&[1])), (82, arial()), (37, le(&[2])), (84, text_out(1000, "Hiy", &[12000, 500, 1000]))];
     let back = import(&hand_emf(20000, 3000, &records)).unwrap();
     assert!(all(&back.document).iter().all(|n| !matches!(n.kind, NodeKind::Path { .. })));
     // A last advance further than tracking reaches, right aligned at 140 mm: the "H" and the "i"
     // start at 10 and 20 mm, and the underline runs on from the "i" to 140 mm.
-    let records = vec![(22, le(&[2])), (82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(14000, "Hi", &[1000, 12000]))];
+    let records = vec![(18, le(&[1])), (22, le(&[2])), (82, font_of("Arial", true)), (37, le(&[2])), (84, text_out(14000, "Hi", &[1000, 12000]))];
     let back = import(&hand_emf(20000, 3000, &records)).unwrap();
     assert_eq!(texts_at(&back.document), vec![("Hi".to_string(), vec![10.0, 20.0])]);
     let bars: Vec<Rect> =

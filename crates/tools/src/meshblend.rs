@@ -360,6 +360,12 @@ impl Tool for MeshTool {
     fn options(&self) -> serde_json::Value {
         self.edit.options()
     }
+    /// Pick the gradient mesh points the tool chosen before held (`meshPoints`).
+    fn set_option(&mut self, key: &str, value: &serde_json::Value) {
+        if key == "meshPoints" {
+            self.edit.set_options(value);
+        }
+    }
     fn busy(&self) -> bool {
         self.edit.dragging()
     }

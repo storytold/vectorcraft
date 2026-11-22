@@ -588,6 +588,288 @@ fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
     assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
 }
 
+/// Update Links gives a distorted image its file's new pixels between the same corners: its
+/// Placement Options' fill and clip do not move or clip it. Its transform takes the new pixel size,
+/// and Link Info measures its scale at its middle.
+#[test]
+fn update_links_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-update");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // Link Info measures the scale where the effective resolution is measured: at the middle.
+    let scale_matches_ppi = |s: &mut Session| {
+        let info = s.execute("links.info", &json!({"id": id.0})).unwrap();
+        for i in 0..2 {
+            let (scale, ppi, eff) = (info["scale"][i].as_f64().unwrap(), info["ppi"][i].as_f64().unwrap(), info["effectivePpi"][i].as_f64().unwrap());
+            assert!((scale - ppi / eff * 100.0).abs() < 1e-6, "{info}");
+        }
+    };
+    scale_matches_ppi(&mut s);
+    // A copy in a symbol, distorted the same way, shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [copy.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.is_distorted_image(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let symbol_corners = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| out.extend(n.image_corners()));
+        out
+    };
+    assert_eq!(in_symbol(&s), [(true, (20, 10))]);
+    let symbol_before = symbol_corners(&s);
+    assert_eq!(symbol_before.len(), 1);
+    write(&photo, &png(60, 20, BLUE));
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"].as_array().unwrap().len(), 2, "{u}");
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(id).unwrap();
+    assert!(n.is_distorted_image());
+    assert_eq!(corners(&s), before);
+    let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    assert_eq!((im.width, im.height), (60, 20));
+    // The transform takes the new pixel size, so a placement by the transform keeps the old size.
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    let d = &s.doc().unwrap().doc;
+    assert!(!matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. })), "not clipped");
+    let mut clipped = false;
+    d.symbols[0].art.walk(&mut |n| clipped |= matches!(n.kind, NodeKind::Group { clip: true, .. }));
+    assert!(!clipped, "the symbol's image is not clipped");
+    assert_eq!(in_symbol(&s), [(true, (60, 20))]);
+    assert_eq!(symbol_corners(&s), symbol_before, "the symbol's image keeps its corners");
+    scale_matches_ppi(&mut s);
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of the distorted images
+/// in symbols too, and scales each one's transform to the new pixel size, so a placement by the
+/// transform keeps the old size.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_distorted_images_in_symbols() {
+    let dir = Folder::new("distorted-relink-all");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let before = s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // A distorted copy in a symbol shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(Some(symbol_quad), (20, 10))] = in_symbol(&s)[..] else { panic!("one distorted image in the symbol: {:?}", in_symbol(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(id.0)), "the image and the symbol's: {r}");
+    assert!(r.get("warnings").is_none(), "no preserve was given: {r}");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!((n.is_distorted_image(), n.image_corners().unwrap()), (true, before));
+    assert_eq!((image(&s, id).width, image(&s, id).height), (60, 20));
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    assert_eq!(in_symbol(&s), [(Some(symbol_quad), (60, 20))], "the symbol's image keeps its corners");
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of a distorted image in
+/// an opacity mask's art.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_a_distorted_image_in_an_opacity_mask() {
+    let dir = Folder::new("distorted-relink-mask");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [mask.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    // The image in the art of `masked`'s opacity mask: (id, corners, pixel size).
+    let in_mask = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.visit_stored(|n, place| {
+            if let NodeKind::Image(im) = &n.kind
+                && place.mask_of == Some(masked)
+            {
+                out.push((n.id, n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(mask_id, Some(quad), (20, 10))] = in_mask(&s)[..] else { panic!("one distorted image in the mask: {:?}", in_mask(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(mask_id.0)), "the image and the mask's: {r}");
+    assert_eq!(in_mask(&s), [(mask_id, Some(quad), (60, 20))], "the mask's image keeps its corners");
+}
+
+/// Relink, Embed and Unembed keep a distorted image's corners, each in one undo step: Relink puts
+/// the new file's pixels between them whatever `preserve` and the Placement Options say, Embed
+/// keeps the pixels in the document, and Unembed links the image to the file it writes.
+#[test]
+fn relink_embed_and_unembed_keep_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-relink");
+    let (photo, other, written) = (dir.file("photo.png"), dir.file("other.png"), dir.file("written.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // Around the artboard's center, where `centre_colour` looks.
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let distorted = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().is_distorted_image();
+    let clipped = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. }))
+    };
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+
+    let undo = undo_len(&s);
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "preserve": "fileDimensions"})).unwrap();
+    // The given preserve is reported as not applied.
+    let warning = format!("preserve was not applied to image {}: an image changed by Perspective Distort or Free Distort keeps its corners", id.0);
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": [], "warnings": [warning]}));
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(!clipped(&s), "not clipped by its Placement Options");
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some(other.as_str()));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r["embedded"], json!([id.0]), "{r}");
+    assert_eq!(undo_len(&s), undo + 2);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(image(&s, id).link.is_none());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    let r = s.execute("links.unembed", &json!({"id": id.0, "path": written})).unwrap();
+    assert_eq!(r["id"], json!(id.0), "{r}");
+    assert_eq!(undo_len(&s), undo + 3);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(!clipped(&s));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert!(im.link.is_some());
+    assert!(Path::new(&written).exists());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    // Undo takes each back to the same corners, and the first file's pixels in the end.
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(distorted(&s));
+        assert_eq!(corners(&s), before);
+    }
+    assert_eq!((image(&s, id).width, image(&s, id).height), (20, 10));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// Unembed into a folder keeps a distorted image's corners, in one undo step.
+#[test]
+fn unembed_to_a_folder_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-unembed-folder");
+    let (photo, out) = (dir.file("photo.png"), dir.file("out"));
+    std::fs::create_dir_all(&out).unwrap();
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("links.unembed", &json!({"ids": [id.0], "folder": out})).unwrap();
+    assert_eq!(r["unembedded"][0]["id"], json!(id.0), "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    assert_eq!(corners(&s), before);
+    assert!(image(&s, id).link.is_some());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// Embed reads the file of a distorted image that shows its saved preview and keeps the file's
+/// pixels in the document between the image's corners, in one undo step.
+#[test]
+fn embed_reads_a_distorted_images_file_between_its_corners() {
+    let dir = Folder::new("distorted-embed-preview");
+    let photo = dir.file("photo.png");
+    // Large enough that the document saves a smaller preview of it.
+    write(&photo, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&photo).unwrap();
+    open(&mut s, &doc_path);
+    assert!(s.doc().unwrap().doc.images[&image(&s, id).key].is_proxy(), "the preview stands in");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    write(&photo, &png(400, 200, BLUE));
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r, json!({"embedded": [id.0], "missing": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.is_distorted_image());
+    assert_eq!(n.image_corners().unwrap(), before);
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.is_none()), (400, 200, true));
+    assert!(!s.doc().unwrap().doc.images[&im.key].is_proxy(), "the file's pixels are in the document");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
 /// Update Links reads a changed file again for the images inside symbols, patterns and opacity
 /// masks too: those showing the same content as an image in the layers, and those no object in the
 /// layers shows. Each takes the file's place as its own Placement Options say, in one undo step,
@@ -2373,6 +2655,258 @@ fn confined_preserve_editing_svg_leaves_out_an_export_folder_outside_the_read_ro
     // Without Preserve Editing the SVG carries no native document.
     let r = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
     assert!(vectorcraft_svg::editing_data(&svg_text(&r)).is_none(), "{r}");
+    set_folder(&mut s, &inside);
+    every(&mut s, true, Some(&inside));
+}
+
+/// The native document a file of `format` carries: the file itself, a PDF's or `.ai` file's
+/// editing data, or an EPS file's.
+fn carried_document(format: &str, bytes: &[u8]) -> Document {
+    let native = if bytes.starts_with(b"%PDF") {
+        vectorcraft_pdf::editing(bytes).expect("editing data").data
+    } else if format == "eps" {
+        vectorcraft_eps::native(bytes).expect("native document")
+    } else {
+        bytes.to_vec()
+    };
+    vectorcraft_format::load(&native).unwrap()
+}
+
+/// A confined caller: every output that carries the native document (a native file or template, a
+/// `.ai` or EPS file, a PDF with Preserve Editing) of a document that links an image
+/// file outside the read roots is refused before a file or folder is written, with an error that
+/// names no file or folder, and the document keeps the link.
+#[test]
+fn confined_native_output_refuses_a_linked_image_file_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("native-image-away");
+    let home = Folder::new("native-image-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("assets.add", &json!({"ids": [a.0]})).unwrap();
+    let own = home.file("own.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": own})).unwrap();
+    let before = std::fs::read(&own).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "photo.png".to_string()];
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd);
+        assert!(matches!(e, EngineError::BadParams { .. }), "{cmd} {p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+        }
+    };
+    let file = |name: &str| home.file(name);
+    let out = file("out");
+    refused(&mut s, "document.serialize", json!({}));
+    for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+        refused(&mut s, "document.serialize", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format, "selectedOnly": true}));
+        refused(&mut s, "document.exportSelection", json!({"format": format}));
+    }
+    refused(&mut s, "document.export", json!({"format": "pdf", "path": file("export.pdf")}));
+    refused(&mut s, "document.export", json!({"format": "ai", "path": file("export.ai")}));
+    refused(&mut s, "document.export", json!({"format": "eps", "path": file("export.eps")}));
+    refused(&mut s, "document.export", json!({"format": "vectorcraft", "path": file("export.vectorcraft")}));
+    refused(&mut s, "document.exportPdf", json!({}));
+    refused(&mut s, "document.exportPdf", json!({"path": file("direct.pdf")}));
+    refused(&mut s, "document.exportEps", json!({"path": file("direct.eps")}));
+    refused(&mut s, "document.save", json!({}));
+    refused(&mut s, "document.save", json!({"path": file("save.pdf")}));
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as.ai")}));
+    // A saved `.ai` file has the artboards as its pages, whatever `useArtboards` says.
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as-art.ai"), "useArtboards": false}));
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as.eps")}));
+    refused(&mut s, "file.saveCopy", json!({"path": file("copy.vectorcraft")}));
+    refused(&mut s, "file.saveAsTemplate", json!({}));
+    refused(&mut s, "file.saveAsTemplate", json!({"format": "ait"}));
+    refused(&mut s, "document.exportForScreens", json!({"folder": out, "formats": [{"format": "png"}, {"format": "vectorcraft"}]}));
+    refused(&mut s, "document.exportForScreens", json!({"zip": true, "formats": [{"format": "pdf", "preserveEditing": true}]}));
+    refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": "ai"}]}));
+    refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": "eps"}]}));
+    assert_eq!(std::fs::read(&own).unwrap(), before, "the document's own file is left as it was");
+    let written: Vec<_> = std::fs::read_dir(&home.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(written, ["own.vectorcraft"]);
+    assert_eq!(image(&s, a).link.map(|l| l.path), Some(photo));
+}
+
+/// A confined caller's native outputs are refused when the document they carry names a file
+/// outside the read roots only as a data set's image, or holds stored brushes that cannot be read.
+/// Outputs that carry no native document (a PDF without Preserve Editing, a PDF or `.ai` file of
+/// some artboards or of the art's bounds, a legacy `.ai` file, an image, an SVG without Preserve
+/// Editing) are written, and so is a native file whose data set image is inside the read roots, or
+/// any data set image without roots.
+#[test]
+fn confined_native_output_refuses_a_data_set_image_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("native-dataset-away");
+    let home = Folder::new("native-dataset-home");
+    let outside = away.file("photo.png");
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    s.execute("artboard.new", &json!({"x": 500, "y": 0, "width": 100, "height": 100})).unwrap();
+    let set_image = |s: &mut Session, path: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let values = [("Photo".to_string(), vectorcraft_doc::DataValue::Image(path.into()))].into_iter().collect();
+        doc.variables.datasets = vec![vectorcraft_doc::DataSet { name: "Row 1".into(), values }];
+    };
+    set_image(&mut s, &outside);
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+        assert!(!e.contains(&away.0.to_string_lossy().into_owned()) && !e.contains("photo.png"), "{cmd} {p}: {e}");
+    };
+    let written = |s: &mut Session, p: Value| {
+        confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap_or_else(|e| panic!("{p}: {e}"));
+    };
+    for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+        refused(&mut s, "document.serialize", json!({"format": format}));
+    }
+    refused(&mut s, "document.serialize", json!({"format": "svg", "preserveEditing": true}));
+    refused(&mut s, "document.exportPdf", json!({}));
+    for p in [
+        json!({"format": "pdf", "preserveEditing": false}),
+        json!({"format": "pdf", "useArtboards": false}),
+        json!({"format": "pdf", "range": "2"}),
+        json!({"format": "ai", "artboards": [1]}),
+        json!({"format": "ai", "useArtboards": false}),
+        json!({"format": "ai", "aiVersion": "7"}),
+        json!({"format": "png"}),
+        json!({"format": "svg"}),
+    ] {
+        written(&mut s, p);
+    }
+    // Without roots, the native document keeps the data set's image as stored.
+    let r = s.execute("document.serialize", &json!({})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let carried = carried_document("vectorcraft", &bytes);
+    assert_eq!(carried.variables.datasets[0].values["Photo"], vectorcraft_doc::DataValue::Image(outside.clone()));
+    // An image inside the read roots.
+    set_image(&mut s, &home.file("photo.png"));
+    written(&mut s, json!({"format": "vectorcraft"}));
+    // Stored brushes that cannot be read: their links cannot be checked.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.insert(vectorcraft_brush::DOC_KEY.into(), json!(["not a brush"]));
+    refused(&mut s, "document.serialize", json!({"format": "vectorcraft"}));
+    written(&mut s, json!({"format": "png"}));
+}
+
+/// A confined caller's Export for Screens rows that write an artboard alone (native, `.ai` and EPS
+/// files) are checked against that artboard's document: an image linked outside the read roots
+/// on another artboard does not refuse them, and one on the artboard does.
+#[test]
+fn confined_screens_rows_check_the_artboard_each_file_holds() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("screens-board-away");
+    let home = Folder::new("screens-board-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &photo);
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 2010, "y": 10, "width": 50, "height": 20})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["vectorcraft", "ai", "eps"] {
+        let p = |range: &str| json!({"range": range, "formats": [{"format": format}]});
+        let r = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("2"))).unwrap_or_else(|e| panic!("{format}: {e}"));
+        assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{format}: {r}");
+        let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("1"))).expect_err(format).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{format}: {e}");
+    }
+}
+
+/// A confined caller's single-file PDF with Preserve Editing of several artboards carries the art
+/// of every artboard on its pages: an image linked outside the read roots on the second artboard
+/// alone refuses it. A single-file PDF of assets is refused before any link is checked.
+#[test]
+fn confined_single_file_pdf_checks_every_artboard_it_carries() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("single-pdf-away");
+    let home = Folder::new("single-pdf-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let p = |folder: &str| json!({"range": "1-2", "folder": home.file(folder), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let r = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("plain"))).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{r}");
+    let r = s.execute("file.place", &json!({"path": photo, "at": [2100, 100]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("linked"))).expect_err("second artboard links outside").to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+    assert!(!Path::new(&home.file("linked")).exists(), "the refused export writes no folder");
+    let asset = s.execute("assets.add", &json!({"ids": [rect.0]})).unwrap()["assets"][0].as_u64().unwrap();
+    let assets = json!({"assets": [asset], "folder": home.file("assets"), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let e = confine(roots.as_ref(), || s.execute("assets.export", &assets)).expect_err("single-file PDF of assets").to_string();
+    assert!(e.contains("pdfs `single` writes artboards as the pages of one PDF"), "{e}");
+    assert!(!Path::new(&home.file("assets")).exists(), "the refused export writes no folder");
+}
+
+/// A confined caller's native outputs (a native file or template, an EPS or `.ai` file, a PDF with
+/// Preserve Editing, a package's document) carry the document without the Export for Screens
+/// folder when it is outside the read roots, with the other export settings and the art; the open
+/// document keeps the folder. A folder inside the roots, and any folder without roots, stays.
+#[test]
+fn confined_native_output_leaves_out_an_export_folder_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("native-export-folder-away");
+    let home = Folder::new("native-export-folder-home");
+    let outside = away.0.to_string_lossy().into_owned();
+    let inside = home.file("screens");
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    s.execute("file.saveAs", &json!({"path": home.file("own.vectorcraft")})).unwrap();
+    let set_folder = |s: &mut Session, folder: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.export_settings = serde_json::from_value(json!({"folder": folder, "prefix": "web-"})).unwrap();
+    };
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let check = |d: &Document, folder: Option<&str>, what: &str| {
+        assert_eq!(d.export_settings.get("folder").and_then(Value::as_str), folder, "{what}");
+        assert_eq!(d.export_settings.get("prefix").and_then(Value::as_str), Some("web-"), "{what}");
+        assert!(d.node(rect).is_some(), "{what}: no art");
+    };
+    let package = home.file("package");
+    let every = |s: &mut Session, confined: bool, folder: Option<&str>| {
+        let run = |s: &mut Session, cmd: &str, p: Value| {
+            let r = if confined { confine(roots.as_ref(), || s.execute(cmd, &p)) } else { s.execute(cmd, &p) };
+            r.unwrap_or_else(|e| panic!("{cmd} {p}: {e}"))
+        };
+        for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+            let r = run(s, "document.serialize", json!({"format": format}));
+            let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+            check(&carried_document(format, &bytes), folder, &format!("{format} serialize"));
+        }
+        let pdf = home.file("direct.pdf");
+        run(s, "document.exportPdf", json!({"path": pdf}));
+        check(&carried_document("pdf", &std::fs::read(&pdf).unwrap()), folder, "exportPdf");
+        let eps = home.file("copy.eps");
+        run(s, "file.saveCopy", json!({"path": eps}));
+        check(&carried_document("eps", &std::fs::read(&eps).unwrap()), folder, "eps copy");
+        let _ = std::fs::remove_dir_all(&package);
+        run(s, "file.package", json!({"folder": package, "report": false, "copyFonts": false}));
+        let packaged = std::fs::read(Path::new(&package).join("own Folder").join("own.vectorcraft")).unwrap();
+        check(&vectorcraft_format::load_file(&packaged).unwrap().doc, folder, "package");
+    };
+    set_folder(&mut s, &outside);
+    every(&mut s, true, None);
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("folder").and_then(Value::as_str), Some(outside.as_str()));
+    every(&mut s, false, Some(&outside));
     set_folder(&mut s, &inside);
     every(&mut s, true, Some(&inside));
 }

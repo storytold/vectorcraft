@@ -84,6 +84,7 @@ The canvas is rasterized on the CPU (`vectorcraft-render`, vello_cpu); the GPU (
   - On Linux with Mesa, `MESA_VK_DEVICE_SELECT=10de:2f04!` (vendor:device as `vulkaninfo --summary` or `lspci -nn` show it) leaves only that GPU to Vulkan, and `DRI_PRIME=1` picks the other GPU.
 - Help › About and the control channel's `ui.inspect` (`graphicsAdapter`) show the adapter in use, and the app logs it at startup.
 - **How frames reach the display.** By default the window presents with `autovsync` and lets the display queue one frame. With `autovsync`, wgpu uses relaxed vsync (FifoRelaxed, which tears a frame that arrives late) where the driver offers it, else vsync (Fifo). For a launch, `--present-mode` (or `VECTORCRAFT_PRESENT_MODE`) sets the present mode to `fifo` (vsync), `autovsync` or `novsync` (wgpu uses Immediate, else Mailbox, else Fifo, whichever the driver offers), and `--frame-latency` (or `VECTORCRAFT_FRAME_LATENCY`) sets the frames the display may queue, `1` to `3`. A flag overrides its variable, and a value that is not one of these stops the app with a message. On Windows and Linux, a launch with either one set opens its files in a new window, as with `--new-instance`, instead of handing them to a running VectorCraft. At startup the log records what the app asks the window surface for, for example `requested window surface: autovsync, frame latency 2 (override)`. The driver chooses the mode that `autovsync` and `novsync` resolve to and may clamp the latency, and on macOS egui uses at least 2 frames while the window is being resized. The code is `apps/vectorcraft/src/presentation.rs`.
+- **Preferences › Performance › Low-Latency Drawing** (`lowLatencyDrawing`, off by default) presents with `novsync` and is read when the app starts, so a change applies after a restart. The present mode comes from `--present-mode` first, then `VECTORCRAFT_PRESENT_MODE`, then this preference, then the default (`autovsync`); `--frame-latency` and `VECTORCRAFT_FRAME_LATENCY` still set the latency with it on. The log names where the mode came from: `requested window surface: novsync (preference), frame latency 1`. Whenever the window presents without vsync (`novsync`, from the preference or an override), frames start at most 240 times a second (about 4.17 ms apart); with vsync the display paces them and no cap applies.
 
 ## Logs
 
@@ -297,13 +298,17 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). A value that starts with
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). A template needs text
+  between any two placeholders, since the catalog cannot tell where `{a}{b}` splits: make the message with the
+  side-by-side values joined into one (`unknown parameter `{key}``, where `key` is `marks.ofset`). The catalog
+  leaves out a row whose template has two placeholders in a row or no text; `i18n::tests` fails on such a row
+  and on such a message, and the untranslated report counts it as missing. A value that starts with
   `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
   also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
   ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
-  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch and Danish
+  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish and Indonesian
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
   message literals the scan finds, and the phrases a parameter schema's error builds at run time
   (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the
@@ -325,7 +330,11 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
 
 ## Cursors
 
-`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (see Adding a cursor below). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+
+### Adding a cursor
+
+The app decides which cursors exist; whoever draws them works from the list. For a new tool state with a cursor of its own: add the `Cursor` variant (`crates/tools/src/lib.rs`, with a doc comment), return it from the tool's `cursor()` with a tool test, cover it in `cursor_icon` (`crates/ui-egui/src/canvas.rs`), draw it in `crates/ui-egui/src/cursors.rs` or give it a stand-in in `Cursor::stand_in()` until it is drawn, and add its `[[cursor]]` entry to `crates/tools/src/cursors.toml` (when it shows, in plain behaviour terms, and its hotspot). A missing entry only warns (`cargo xtask cursors`): the cursor still works.
 
 ## Vendor names gate
 

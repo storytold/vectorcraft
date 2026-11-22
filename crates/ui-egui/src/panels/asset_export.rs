@@ -17,7 +17,10 @@
 //! format or item when Export for Screens remembers that choice; 3D assets' mesh files go in the
 //! folder itself.
 //!
-//! Everything runs through the `assets.*` commands.
+//! Tile context menus export or remove the asset selection, rename a tile, select its source
+//! artwork on the canvas, or collect the selected artwork.
+//!
+//! Everything runs through the `assets.*` commands (canvas selection uses `select.set`).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -121,6 +124,15 @@ struct Events {
     rename: Option<(u64, String)>,
     /// Art dropped on the panel: (ids, as one asset).
     drop: Option<(Vec<NodeId>, bool)>,
+    /// A tile context-menu action, dispatched after the document borrow ends.
+    action: Option<TileAction>,
+}
+
+enum TileAction {
+    Export(Vec<u64>),
+    Remove(Vec<u64>),
+    SelectArtwork(Vec<NodeId>),
+    Collect(bool),
 }
 
 /// The asset tiles: thumbnail, name (a text field while renaming), selection.
@@ -191,8 +203,51 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
             } else if resp.clicked() {
                 ev.click = Some((a.id, ui.input(|i| i.modifiers.shift || i.modifiers.command)));
             }
+            if resp.secondary_clicked() && !on {
+                ev.click = Some((a.id, false));
+            }
+            resp.context_menu(|ui| tile_context_menu(ui, st, a, sel, ev));
         }
     });
+}
+
+/// A tile's menu queues commands while the document is borrowed for drawing.
+fn tile_context_menu(ui: &mut Ui, st: &DocState, a: &ExportAsset, sel: &[u64], ev: &mut Events) {
+    let rename_id = egui::Id::unique("asset-export-rename");
+    // On the opening frame the queued selection has not been applied yet.
+    let targets = if sel.contains(&a.id) { sel.to_vec() } else { vec![a.id] };
+    let count = targets.len().to_string();
+    let export_label =
+        if targets.len() > 1 { crate::i18n::fmt(tl!("Export {count} Assets…"), &[("count", &count)]) } else { tl!("Export Asset…").to_string() };
+    let remove_label =
+        if targets.len() > 1 { crate::i18n::fmt(tl!("Remove {count} Assets"), &[("count", &count)]) } else { tl!("Remove Asset").to_string() };
+    if widgets::menu_item_name(ui, &export_label, true, false) {
+        ev.action = Some(TileAction::Export(targets.clone()));
+        ui.close();
+    }
+    if widgets::menu_item_name(ui, &remove_label, true, false) {
+        ev.action = Some(TileAction::Remove(targets));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Rename"), true, false) {
+        ui.data_mut(|d| d.insert_temp(rename_id, (a.id, a.name.clone())));
+        ui.close();
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Select Artwork on Canvas"), true, false) {
+        ev.action = Some(TileAction::SelectArtwork(a.nodes.clone()));
+        ui.close();
+    }
+    ui.separator();
+    let has_art = !st.selection.is_empty();
+    if menu_item(ui, tl!("Add Selected Artwork as One Asset"), has_art, false) {
+        ev.action = Some(TileAction::Collect(true));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Add Selected Artwork as Multiple Assets"), has_art, false) {
+        ev.action = Some(TileAction::Collect(false));
+        ui.close();
+    }
 }
 
 /// Art dragged off the canvas over the list: outline it; dropped, it becomes assets.
@@ -230,6 +285,17 @@ fn collect(app: &mut VectorcraftApp, ctx: &egui::Context, ids: Option<Vec<NodeId
     }
 }
 
+/// Does the export of 3D asset `asset` draw a texture for the graphics mapped onto its faces
+/// ([`vectorcraft_engine::cmd::fileio::draws_textures`])? Only objects whose 3D effects map graphics
+/// are built to find out.
+fn writes_textures(doc: &vectorcraft_doc::Document, asset: &ExportAsset) -> bool {
+    let maps = |e: &vectorcraft_doc::Effect| e.visible && !vectorcraft_render::effects::mapped_graphics(&e.params).is_empty();
+    let nodes: Vec<&Node> = asset.nodes.iter().filter_map(|id| doc.node(*id)).collect();
+    nodes.iter().any(|n| n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).any(maps))
+        && vectorcraft_render::effects::three_d_meshes_of_in(Some(doc), nodes.iter().copied())
+            .is_ok_and(|parts| vectorcraft_engine::cmd::fileio::draws_textures(doc, &parts))
+}
+
 /// Export assets `ids` (`files_each`: the files one asset makes) into a picked folder (without a
 /// folder picker: the last folder Export for Screens used, else the Desktop); the web downloads
 /// them, several as one zip.
@@ -240,11 +306,20 @@ fn export(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
 
 fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
     // 3D assets are written as mesh files (`assets.export3D`), the others as pictures.
+    let web = io::is_web(app);
     let Some(st) = app.session.active() else { return };
     let format = |id: &u64| st.doc.asset(*id).and_then(|a| a.format_3d.clone());
     let (three_d, ids): (Vec<u64>, Vec<u64>) = ids.into_iter().partition(|id| format(id).is_some());
-    // An OBJ is two files.
-    let mesh_files: usize = three_d.iter().map(|id| if format(id).as_deref() == Some("obj") { 2 } else { 1 }).sum();
+    // An OBJ is two files, and an OBJ or a USDA whose graphics draw a texture writes it beside
+    // them. Only the web, which zips several files, needs the count.
+    let mesh_files: usize = three_d
+        .iter()
+        .map(|id| {
+            let format = format(id);
+            let textures = web && matches!(format.as_deref(), Some("obj" | "usda")) && st.doc.asset(*id).is_some_and(|a| writes_textures(&st.doc, a));
+            usize::from(format.as_deref() == Some("obj")) + 1 + usize::from(textures)
+        })
+        .sum();
     // Create Sub-folders as the panel menu checks it: on by default, and remembered folders (per
     // row, format or item) are used as Export for Screens uses them (a remembered `subfolders`
     // false beside them would alone put every file in the folder itself).
@@ -513,6 +588,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if export_clicked {
         export(app, sel_or_all(&sel, &all), files_each);
+    }
+    match ev.action {
+        Some(TileAction::Export(targets)) => export(app, targets, files_each),
+        Some(TileAction::Remove(targets)) => {
+            run(app, "assets.remove", json!({ "assets": targets }));
+            set_pstate(&ctx, SELECTED, Vec::<u64>::new());
+        }
+        Some(TileAction::SelectArtwork(ids)) => {
+            run(app, "select.set", json!({ "ids": ids }));
+        }
+        Some(TileAction::Collect(single)) => collect(app, &ctx, None, single),
+        None => {}
     }
 }
 

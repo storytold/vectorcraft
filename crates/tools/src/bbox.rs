@@ -127,6 +127,18 @@ pub fn move_delta(from: Point, to: Point, shift: bool, base: f64) -> Vec2 {
     if shift { vectorcraft_geom::constrain_angle_from(d, 45.0, base) } else { d }
 }
 
+/// How far to slide along the line of unit direction `u` to take away the offset `pull` on one
+/// axis (a snap of a move Shift keeps to that line): on an axis the line runs along, the shorter
+/// way of the two; 0 when it runs along neither.
+pub(crate) fn slide_along(pull: Vec2, u: Vec2) -> f64 {
+    [(pull.x, u.x), (pull.y, u.y)]
+        .into_iter()
+        .filter(|(_, c)| c.abs() > 1e-9)
+        .map(|(p, c)| p / c)
+        .min_by(|a, b| a.abs().total_cmp(&b.abs()))
+        .unwrap_or(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

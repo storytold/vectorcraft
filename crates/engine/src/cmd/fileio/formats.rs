@@ -532,6 +532,14 @@ pub const FORMATS: &[Format] = &[
     reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
     // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
     reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
+    // `.cdr` drawings of versions 1 to 27 (`WL` files, RIFF files from version 3, and the ZIP packages of 14 on), read by
+    // `craft-cdr`; a `.cdt` template opens as a new untitled document. Exports don't write
+    // them.
+    reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    // `.cmx` exchange files with 32-bit coordinates, read by `craft-cdr`; exports don't write
+    // them.
+    reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
     // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
     reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
 ];
@@ -591,17 +599,20 @@ pub const OPEN_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
+    "cdt",
+    "cmx",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF, JPEG XL, `.cdr` or `.cmx` type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
 /// The packaging declares no type for HP-GL plot files or PICT pictures either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
+    "heic", "heif", "jxl", "cdr", "cdt", "cmx", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -688,6 +699,9 @@ pub const PLACE_EXTS: &[&str] = &[
     "af",
     "afdesign",
     "afpub",
+    "cdr",
+    "cdt",
+    "cmx",
     "txt",
     "rtf",
     "docx",
@@ -838,13 +852,13 @@ fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'stati
 /// Open-dialog filters for Swatch Libraries and Graphic Style Libraries Other Library… and Locate
 /// Library…. The library formats come first so Linux file portals (which grey out files that don't
 /// match the default filter) still list `.ase` and the other library extensions; then the same
-/// filters as [`builtin_open_filters`], without a second copy of the library filter, so a document
+/// filters as [`builtin_open_filters`], without a second filter of that label, so a document
 /// can be picked for its swatches or graphic styles.
 pub fn library_open_filters(
     library_label: &'static str,
     library_exts: &'static [&'static str],
 ) -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once((library_label, library_exts)).chain(builtin_open_filters().filter(move |f| *f != (library_label, library_exts)))
+    std::iter::once((library_label, library_exts)).chain(builtin_open_filters().filter(move |f| f.0 != library_label))
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,
