@@ -941,11 +941,15 @@ impl QuickPenTool {
         if !drag.begun {
             return vec![];
         }
-        // The command leaves a piece that already has the length unchanged; a drag that drew the
-        // last piece again has already changed the drawing.
+        // A drag that ends at the length the piece started with is taken back, as Escape takes it
+        // back: it records no undo step.
         let changed = (drag.length - drag.handle.piece.length).abs() > 1e-9 * drag.length.max(1.0);
-        if changed
-            && drag.last.is_none()
+        if !changed {
+            self.restore_last_piece(&drag);
+            return vec![Action::Cancel, drawn()];
+        }
+        // A drag that drew the last piece again has already changed the drawing.
+        if drag.last.is_none()
             && let Some(dr) = self.drawing.as_mut()
             && dr.id == Some(drag.handle.id)
             && dr.si == drag.handle.si

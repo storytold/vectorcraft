@@ -1084,8 +1084,8 @@ fn a_length_drag_stays_on_the_canvas() {
     assert_eq!(only_path(&s).anchors.len(), 3, "the drawing went on");
 }
 
-/// A length drag across a line, which leaves its length as it was, changes nothing and records no
-/// undo step, on the path being drawn and on a selected path.
+/// A length drag across a line, or out along it and back, leaves its length as it was: it changes
+/// nothing and records no undo step, on the path being drawn and on a selected path.
 #[test]
 fn a_length_drag_that_keeps_the_length_records_no_undo_step() {
     let mut s = session();
@@ -1094,15 +1094,20 @@ fn a_length_drag_that_keeps_the_length_records_no_undo_step() {
     click(&mut s, 200.0, 100.0);
     let undo = undo_steps(&s);
     let before = only_path(&s);
-    // The end handle is at (220, 100); the drag goes straight down from it.
-    press(&mut s, &[(220.0, 100.0), (220.0, 160.0)]);
-    assert_eq!(only_path(&s), before);
-    assert_eq!(undo_steps(&s), undo);
+    // The end handle is at (220, 100); the first drag goes straight down from it, the second out
+    // along the line and back.
+    for drag in [[(220.0, 100.0), (220.0, 160.0), (220.0, 160.0)], [(220.0, 100.0), (260.0, 100.0), (220.0, 100.0)]] {
+        press(&mut s, &drag);
+        assert_eq!(only_path(&s), before, "{drag:?}");
+        assert_eq!(undo_steps(&s), undo, "{drag:?}");
+    }
     key(&mut s, ToolKey::Escape);
     let undo = undo_steps(&s);
-    press(&mut s, &[(220.0, 100.0), (220.0, 160.0)]);
-    assert_eq!(only_path(&s), before);
-    assert_eq!(undo_steps(&s), undo);
+    for drag in [[(220.0, 100.0), (220.0, 160.0), (220.0, 160.0)], [(220.0, 100.0), (260.0, 100.0), (220.0, 100.0)]] {
+        press(&mut s, &drag);
+        assert_eq!(only_path(&s), before, "{drag:?}");
+        assert_eq!(undo_steps(&s), undo, "{drag:?}");
+    }
 }
 
 /// The paths of a selected compound path show length handles, also after a drag selected the
