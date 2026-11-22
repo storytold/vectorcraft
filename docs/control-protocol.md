@@ -488,9 +488,17 @@ menu, Remove from Toolbar in the context menu). `command` is a palette result's 
 button is dimmed while that item is. An unknown command, a tool, a command that needs params a click does not give
 (`toolbar.addTool`), a place past the end or a missing `toolbar` is an error and changes nothing. A command that is
 no longer installed keeps its button, dimmed, and `toolbar.removeCommand` still takes it off.
+`toolbar.renameCommand {command, toolbar, label?}` (Rename Button… in the button's context menu, which opens a
+dialog; without `label` the command opens that dialog and returns null) gives a button a label of its own, and
+`toolbar.addCommand` takes the same optional `label`. The label loses the spaces at its ends and has at most 64
+characters; an empty one, on either command, gives the button its command's label again. The hover text still shows
+the command's name and shortcut, and a screen reader says the label and then the command's name. A longer label, a
+label that is not text or a button the toolbar does not have is an error and changes nothing. `toolbar.removeCommand`
+and `toolbar.reset` drop a button's label with it.
 `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with it.
-`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, shown flag,
-two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
+`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, labels,
+shown flag, two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once
+docked).
 `window.toolbar.dock {name, side?, order?}` docks a toolbar in the lane along the window's left or right edge, and
 `window.toolbar.float {name, x?, y?}` floats it again; dropping its title bar on an edge or dragging it out of its
 lane does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:

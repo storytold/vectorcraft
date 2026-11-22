@@ -668,7 +668,7 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     let list = app.run("window.toolbar.list", json!({})).unwrap();
     assert_eq!(
         list,
-        json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]], "commands": [], "floating": true, "side": "left", "order": null}])
+        json!([{"name": "Mine", "shown": true, "double": false, "slots": [["lasso"]], "commands": [], "labels": {}, "floating": true, "side": "left", "order": null}])
     );
     // A second tool goes after the first.
     let shown = open(&mut app, 19.0);
@@ -1128,4 +1128,169 @@ fn command_buttons_ask_whether_they_can_run_a_few_at_a_time() {
         frame(&mut app, &ctx, f64::from(k), vec![]);
     }
     assert_eq!(crate::custom_toolbars::asked(&ctx), (ids.len(), false), "every button was asked in the next frames");
+}
+
+/// The labels given to the command buttons of the toolbar called Mine.
+fn mine_labels(app: &VectorcraftApp) -> std::collections::BTreeMap<String, String> {
+    crate::custom_toolbars::find(&app.ui, "Mine").unwrap().labels.clone()
+}
+
+/// `toolbar.renameCommand` gives a command button a label of its own, an empty label gives it back
+/// its command's, and a bad call changes nothing. `toolbar.addCommand` takes the label too. A move
+/// and Manage Toolbars' copy keep it, Remove and Reset drop it, and the preferences keep it while a
+/// toolbar saved without labels loads unchanged.
+#[test]
+fn a_command_button_takes_a_label_of_its_own() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    let done = app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": "  Grp "})).unwrap();
+    assert_eq!(done, json!({"command": "object.group", "label": "Grp"}), "spaces at the ends are dropped");
+    let list = app.run("window.toolbar.list", json!({})).unwrap();
+    assert_eq!(list[0]["labels"], json!({"object.group": "Grp"}), "listed");
+    let long = "x".repeat(65);
+    for (p, why) in [
+        (json!({"command": "object.group", "toolbar": "Mine", "label": long}), "a label past the limit"),
+        (json!({"command": "object.group", "toolbar": "Mine", "label": 3}), "a label that is not text"),
+        (json!({"command": "object.ungroup", "toolbar": "Mine", "label": "U"}), "a button the toolbar does not have"),
+        (json!({"command": "object.group", "label": "G"}), "no toolbar"),
+        (json!({"toolbar": "Mine", "label": "G"}), "no command"),
+    ] {
+        assert!(app.run("toolbar.renameCommand", p.clone()).is_err(), "{why}: {p}");
+        assert_eq!(mine_labels(&app).get("object.group").map(String::as_str), Some("Grp"), "{why} changes nothing");
+    }
+    for p in [
+        json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": "x".repeat(65)}),
+        json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": false}),
+    ] {
+        assert!(app.run("toolbar.addCommand", p.clone()).is_err(), "{p}");
+        assert_eq!(mine_commands(&app), ["object.group"], "a bad label adds nothing: {p}");
+    }
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "at": 0, "label": "Tidy"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine", "at": 0})).unwrap();
+    assert_eq!(mine_commands(&app), ["object.group", "object.path.cleanUp"]);
+    let both =
+        std::collections::BTreeMap::from([("object.group".to_string(), "Grp".to_string()), ("object.path.cleanUp".to_string(), "Tidy".to_string())]);
+    assert_eq!(mine_labels(&app), both, "a move keeps the label");
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": "Clear"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": ""})).unwrap();
+    assert!(!mine_labels(&app).contains_key("object.path.cleanUp"), "an empty label on addCommand gives back the command's");
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine", "label": "Tidy"})).unwrap();
+    assert_eq!(mine_labels(&app), both);
+    // Kept with the preferences; an older toolbar without labels loads with none.
+    let kept = app.ui.custom_toolbars.clone();
+    let prefs: crate::state::UiState = serde_json::from_slice(&serde_json::to_vec(&app.ui).unwrap()).unwrap();
+    assert_eq!(prefs.sanitized().custom_toolbars, kept, "kept with the preferences");
+    let mut old = serde_json::to_value(&kept[0]).unwrap();
+    old.as_object_mut().unwrap().remove("labels");
+    let old: crate::state::CustomToolbar = serde_json::from_value(old).unwrap();
+    assert!(old.labels.is_empty() && old.commands == kept[0].commands, "an older toolbar loads with its buttons and no labels");
+    let copy = app.run("window.toolbar.duplicate", json!({"name": "Mine"})).unwrap();
+    let copy = copy["toolbar"].as_str().unwrap().to_string();
+    assert_eq!(crate::custom_toolbars::find(&app.ui, &copy).unwrap().labels, both, "the copy has them");
+    // An empty label gives back the command's own.
+    let done = app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": " "})).unwrap();
+    assert_eq!(done, json!({"command": "object.group", "label": null}));
+    assert!(!mine_labels(&app).contains_key("object.group"));
+    // Removing the button drops its label, so adding it again shows the command's label.
+    app.run("toolbar.removeCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    assert!(mine_labels(&app).is_empty(), "removed with its button");
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": "G"})).unwrap();
+    app.run("toolbar.reset", json!({"toolbar": "Mine"})).unwrap();
+    assert!(mine_labels(&app).is_empty(), "Reset drops the labels");
+    assert_eq!(crate::custom_toolbars::find(&app.ui, &copy).unwrap().labels, both, "the copy keeps its own");
+}
+
+/// Loading drops the spaces at a label's ends, and drops a label whose button the toolbar does not
+/// have, one past the limit and an empty one.
+#[test]
+fn labels_load_sanitized() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.ungroup", "toolbar": "Mine"})).unwrap();
+    let bar = crate::custom_toolbars::find_mut(&mut app.ui, "Mine").unwrap();
+    bar.labels.insert("object.group".into(), " Grp ".into());
+    bar.labels.insert("object.ungroup".into(), "x".repeat(65));
+    bar.labels.insert("object.path.cleanUp".into(), "Tidy".into());
+    bar.commands.push("edit.selectAll".into());
+    bar.labels.insert("edit.selectAll".into(), String::new());
+    let loaded = app.ui.clone().sanitized();
+    let bar = loaded.custom_toolbars.iter().find(|b| b.name == "Mine").unwrap();
+    assert_eq!(bar.labels, std::collections::BTreeMap::from([("object.group".to_string(), "Grp".to_string())]));
+}
+
+/// A button with a label of its own shows that label, while its hover text still shows the
+/// command's name and shortcut, and a screen reader says the label and then the command's name.
+/// Control characters and characters that change the text's direction show as escapes.
+#[test]
+fn a_renamed_button_shows_its_label_and_keeps_the_command_name() {
+    let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Multi.session(), Default::default());
+    let ctx = ctx();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine", "label": "Grp"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.ungroup", "toolbar": "Mine", "label": "a\u{202E}b"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.path.cleanUp", "toolbar": "Mine"})).unwrap();
+    let group = crate::palette::button_text(&ctx, false, "object.group").expect("Group's result");
+    let texts = crate::custom_toolbars::button_texts(&app, &ctx, "Mine");
+    let (label, said, tip) = &texts[0];
+    assert_eq!(label, "Grp");
+    assert!(said.starts_with("Grp") && said.contains(&group.name), "the screen reader says the label, then the name: {said}");
+    assert!(tip.starts_with(&group.name) && !tip.contains("Grp"), "the hover shows the command's name: {tip}");
+    if !group.shortcut.is_empty() {
+        assert!(tip.contains(&group.shortcut), "and its shortcut: {tip}");
+    }
+    assert!(!texts[1].0.contains('\u{202E}') && texts[1].0.contains("202E"), "escaped: {:?}", texts[1].0);
+    assert_eq!(texts[2].0, crate::palette::button_text(&ctx, false, "object.path.cleanUp").unwrap().label, "no label: the command's");
+    // Drawn on the toolbar, and named so in the screen-reader tree.
+    ctx.enable_accesskit();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    assert!(on_mine(&mut app, &ctx, 0.1, "Grp").is_some(), "the button shows its label");
+    assert!(on_mine(&mut app, &ctx, 0.2, &group.label).is_none(), "and not the command's");
+    let input = RawInput { time: Some(0.3), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
+    let out = ctx.run_ui(input, |ui| crate::toolbar::show(&mut app, ui));
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    assert!(nodes.iter().any(|(_, n)| n.label() == Some(said.as_str())), "the tree names it {said}");
+    // A label that is the command's own label is said once; escapes do not cut a label short.
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine", "label": group.label.clone()})).unwrap();
+    let escaped = format!("{}{}", "\u{202E}".repeat(20), "y".repeat(44));
+    app.run("toolbar.renameCommand", json!({"command": "object.ungroup", "toolbar": "Mine", "label": escaped})).unwrap();
+    let texts = crate::custom_toolbars::button_texts(&app, &ctx, "Mine");
+    assert_eq!(texts[0].1, group.label, "said once");
+    assert!(texts[1].0.ends_with(&"y".repeat(44)) && !texts[1].0.contains('…'), "not cut: {:?}", texts[1].0);
+}
+
+/// Rename Button… in a command button's context menu opens the Rename Button dialog with the
+/// button's label, and OK gives the button the label typed.
+#[test]
+fn rename_button_in_the_context_menu_renames_it() {
+    let mut app = app();
+    let ctx = ctx();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    frame(&mut app, &ctx, 0.0, vec![]);
+    let group = crate::palette::button_text(&ctx, false, "object.group").expect("Group's result").label;
+    let (at, _) = on_mine(&mut app, &ctx, 0.1, &group).expect("the button");
+    let secondary = |pressed| Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, 1.0, vec![Event::PointerMoved(at), secondary(true)]);
+    frame(&mut app, &ctx, 1.05, vec![secondary(false)]);
+    let shown = frame(&mut app, &ctx, 1.1, vec![]);
+    let item = shown.iter().find(|(s, ..)| s.trim() == "Rename Button…").map(|(_, p, _)| *p).expect("Rename Button… in the context menu");
+    click(&mut app, &ctx, 2.0, item);
+    let d = app.ui.dialog.clone().expect("the dialog opens");
+    assert_eq!(d.kind, crate::custom_toolbars::RENAME);
+    assert_eq!((d.str("toolbar"), d.str("command"), d.str("label")), ("Mine".into(), "object.group".into(), String::new()));
+    app.ui.dialog.as_mut().unwrap().fields.insert("label".into(), json!("Grp"));
+    crate::custom_toolbars::confirm_rename(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "OK closes it");
+    assert_eq!(mine_labels(&app).get("object.group").map(String::as_str), Some("Grp"));
+    // Opened again, it shows the label; a label past the limit is refused and the dialog stays.
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("label")).as_deref(), Some("Grp"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("label".into(), json!("x".repeat(65)));
+    assert!(crate::custom_toolbars::confirm_rename(&mut app).is_err());
+    assert!(app.ui.dialog.is_some(), "the dialog stays open");
+    assert_eq!(mine_labels(&app).get("object.group").map(String::as_str), Some("Grp"), "unchanged");
+    assert!(app.run("toolbar.renameCommand", json!({"command": "object.ungroup", "toolbar": "Mine"})).is_err(), "no such button");
 }

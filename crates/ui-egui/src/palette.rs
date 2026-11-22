@@ -4081,6 +4081,7 @@ mod tests {
             double: false,
             floating: vec![],
             commands: vec![],
+            labels: Default::default(),
         };
         // Window › Tools hides the Tools panel while a toolbar made with New Toolbar holds the Pen
         // Tool: the row names that toolbar.
@@ -5367,6 +5368,7 @@ mod tests {
             double: false,
             floating: vec![],
             commands: vec![],
+            labels: Default::default(),
         }
     }
 
