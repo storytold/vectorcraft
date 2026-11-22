@@ -57,9 +57,15 @@ impl Remote {
         &self.addr
     }
 
-    /// The open connection; a new one when the app closed the last (an idle connection, a restart).
+    #[cfg(test)]
+    pub(crate) fn is_usable(&self) -> bool {
+        self.client.as_ref().is_some_and(ControlClient::is_usable)
+    }
+
+    /// The open connection; a new one when the app closed the last (an idle connection, a restart)
+    /// or it holds a line nobody asked for.
     fn open_client(&mut self, method: &str) -> Result<&mut ControlClient, String> {
-        if self.client.as_ref().is_none_or(ControlClient::is_broken) {
+        if !self.client.as_ref().is_some_and(ControlClient::is_usable) {
             self.client = None;
             let client = ControlClient::connect(self.sock, &self.token)
                 .map_err(|e| format!("VectorCraft app at {} is not reachable: {e}; `{method}`: nothing was sent", self.addr))?;

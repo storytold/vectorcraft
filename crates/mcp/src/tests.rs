@@ -1441,10 +1441,13 @@ fn signed_in(listener: &std::net::TcpListener) -> (Remote, std::net::TcpStream) 
     })
 }
 
-fn wait_for_remote_eof(remote: &Remote) {
-    let probe = remote.connection_probe();
-    probe.set_read_timeout(Some(WAIT)).unwrap();
-    assert_eq!(probe.peek(&mut [0]).unwrap(), 0);
+/// Waits until the app's end of the remote's connection closed or wrote a line nobody asked for.
+fn wait_until_unusable(remote: &Remote) {
+    let deadline = std::time::Instant::now() + WAIT;
+    while remote.is_usable() {
+        assert!(std::time::Instant::now() < deadline, "the connection stayed usable");
+        std::thread::yield_now();
+    }
 }
 
 #[test]
@@ -1470,7 +1473,7 @@ fn remote_edit_succeeds_once_when_app_restarts() {
     assert!(inspected["objects"].as_u64().unwrap() > 0);
     drop(old_handle.join().unwrap());
     drop(listener);
-    wait_for_remote_eof(&remote);
+    wait_until_unusable(&remote);
 
     let listener = reusable_listener(addr);
     listener.set_nonblocking(true).unwrap();
@@ -1522,10 +1525,7 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
     let (mut remote, mut stale) = signed_in(&listener);
     stale.set_read_timeout(Some(WAIT)).unwrap();
     writeln!(stale, "{}", json!({"ok": false, "error": "idle"})).unwrap();
-    let probe = remote.connection_probe();
-    probe.set_read_timeout(Some(WAIT)).unwrap();
-    assert_eq!(probe.peek(&mut [0]).unwrap(), 1, "the stray line arrived");
-    drop(probe);
+    wait_until_unusable(&remote);
     let h = std::thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
         stream.set_read_timeout(Some(WAIT)).unwrap();
@@ -1551,7 +1551,7 @@ fn remote_call_reports_nothing_sent_when_reconnect_is_refused() {
         let (remote, old_connection) = signed_in(&listener);
         drop(old_connection);
         drop(listener);
-        wait_for_remote_eof(&remote);
+        wait_until_unusable(&remote);
         let held = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::STREAM, None).unwrap();
         held.set_reuse_address(true).unwrap();
         held.bind(&addr.into()).unwrap();
