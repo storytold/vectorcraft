@@ -668,16 +668,16 @@ fn the_data_of_an_image_too_large_to_hold_is_skipped() {
 }
 
 /// Measuring the data of an image too large to hold decompresses it, and that is charged to the
-/// operation budget: a small compressed stream that decodes to 300 MB, kept in a reusable stream
-/// and measured again on every pass of a loop, runs out of the budget.
+/// operation budget: a program kept in a reusable stream, whose image over 300 MB of compressed
+/// zeros is left out and measured again each time a loop runs the stream from its start, runs out
+/// of the budget.
 #[test]
 fn measuring_data_too_large_to_hold_in_a_loop_runs_out_of_the_budget() {
-    let data = crate::ps::ascii85(&crate::ps::deflate(&vec![0u8; 300 << 20]));
-    super::tests::runs_out_of_budget(&format!(
-        "/R currentfile /ASCII85Decode filter /ReusableStreamDecode filter def
-{data}
-         {{ R 0 setfileposition          10000 10000 8 [1 0 0 1 0 0] R << /Predictor 15 /Colors 3 /Columns 10000 >> /FlateDecode filter false 3 colorimage }} loop"
-    ));
+    let mut program =
+        b"10000 10000 8 [1 0 0 1 0 0] currentfile << /Predictor 15 /Colors 3 /Columns 10000 >> /FlateDecode filter false 3 colorimage\n".to_vec();
+    program.extend(crate::ps::deflate(&vec![0u8; 300 << 20]));
+    let hex: String = program.iter().map(|b| format!("{b:02x}")).collect();
+    super::tests::runs_out_of_budget(&format!("/P <{hex}> /ReusableStreamDecode filter def {{ P 0 setfileposition P cvx exec }} loop"));
 }
 
 /// When an image too large to read is left out, the data of its mask (`InterleaveType` 3) is

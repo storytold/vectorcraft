@@ -936,11 +936,22 @@ impl Interp<'_> {
         };
         for src in s.sources.iter().filter(|_| streamed.is_none()) {
             if let Source::File(f) = src {
+                // A decode that fails leaves the file empty (`materialize`), but a reduced image
+                // that is left out still has its data to skip: its filters are put back for that.
+                let pending = match &*f.borrow() {
+                    Stream::Pending { chain, from } => Some((chain.clone(), from.clone())),
+                    _ => None,
+                };
                 match self.materialize(f) {
                     Ok(()) => {}
                     // Decoded data past the cap: a reduced image is left out (its data skipped)
                     // rather than failing the file, as an image too large to read at all is.
-                    Err(PsError::Limit(_)) if step > 1 => return Ok(self.leave_out(&s)),
+                    Err(PsError::Limit(_)) if step > 1 => {
+                        if let Some((chain, from)) = pending {
+                            *f.borrow_mut() = Stream::Pending { chain, from };
+                        }
+                        return Ok(self.leave_out(&s));
+                    }
                     Err(e) => return Err(e),
                 }
             }
