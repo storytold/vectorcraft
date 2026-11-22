@@ -87,14 +87,15 @@ const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, and whether a call's own savepoint
-/// ([`atomically`]) is open.
+/// page items, kept while that document is unchanged, whether a call's own savepoint
+/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
     text: text::TextState,
+    presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
 impl State {
@@ -879,10 +880,13 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
         return Err(HostError::Range("the startup preset's name is too long".into()));
     }
     let (profile, mode) = startup_preset(name).ok_or_else(|| HostError::Error(format!("no startup preset called {name}")))?;
+    // Only an object `new DocumentPreset()` made: a plain object such as `{width: 500}` is refused.
     let settings = match given(arg(a, 2)) {
         None | Some(Data::Null) => Vec::new(),
-        Some(Data::Object(o)) => o.clone(),
-        Some(_) => return Err(HostError::Type("presetSettings must be a DocumentPreset".into())),
+        Some(d) => {
+            let i = preset_of(h, d).ok_or_else(|| HostError::Type("presetSettings must be a DocumentPreset".into()))?;
+            h.dom.presets.borrow()[i].clone()
+        }
     };
     let field = |k: &str| settings.iter().find(|(n, _)| n == k).map(|(_, v)| v).and_then(given);
     for k in ["documentBleedLink", "documentBleedOffsetRect", "transparencyGrid"] {
@@ -919,23 +923,101 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
     if let Some(m) = mode {
         p.entry("colorMode").or_insert_with(|| json!(m));
     }
-    new_document(h, p)
+    // A profile whose file could not be read throws, and the document `file.new` made with the
+    // defaults is put back, with the Recent sizes as they were.
+    atomically(h, |h| {
+        let (_, value) = command_value(h, "file.new", &Value::Object(p))?;
+        if let Some(e) = value.get("profileError") {
+            let profile = e["profile"].as_str().unwrap_or_default();
+            let reason = e["reason"].as_str().unwrap_or_default();
+            return Err(HostError::Error(format!("the New Document profile {profile} could not be read: {reason}")));
+        }
+        let s = h.session.borrow();
+        let st = s.active().ok_or_else(|| HostError::Error(NO_ACTIVE_DOCUMENT.into()))?;
+        Ok(doc_ref(h, st.uid))
+    })
 }
 
 /// `new DocumentPreset()`: a record of new-document settings with the defaults the help page
 /// <https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/> gives; the other settings are
-/// left out.
-fn new_preset(_: &[Data]) -> Answer {
+/// left out. The settings stay with the run, which hands the script an object of the
+/// `DocumentPreset` class.
+fn new_preset(h: &Host) -> Answer {
+    let mut presets = h.dom.presets.borrow_mut();
+    if presets.len() >= MAX_PRESETS {
+        return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
+    }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    Ok(Data::Object(vec![
-        item("typename", text("DocumentPreset")),
+    presets.push(vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]))
+    ]);
+    Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
+}
+
+/// The most `DocumentPreset` objects one run can make.
+const MAX_PRESETS: usize = 10_000;
+
+/// The settings a `DocumentPreset` has, each a property a script reads and assigns.
+const PRESET_FIELDS: &[&str] = &[
+    "artboardLayout",
+    "artboardRowsOrCols",
+    "artboardSpacing",
+    "colorMode",
+    "documentBleedLink",
+    "documentBleedOffsetRect",
+    "height",
+    "numArtboards",
+    "previewMode",
+    "rasterResolution",
+    "title",
+    "transparencyGrid",
+    "units",
+    "width",
+];
+
+/// The index in the run's presets of the `DocumentPreset` `d` is, when it is one this run made.
+fn preset_of(h: &Host, d: &Data) -> Option<usize> {
+    let handle = handle_of(d, "DocumentPreset")?;
+    let [run, i] = handle.as_slice() else { return None };
+    if whole(*run) != Some(h.run) {
+        return None;
+    }
+    let i = usize::try_from(whole(*i)?).ok()?;
+    (i < h.dom.presets.borrow().len()).then_some(i)
+}
+
+/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`, and
+/// a value is checked when `addDocument` uses it.
+fn preset_field(link: &Link, key: &'static str) -> HostMember {
+    let not_preset = || HostError::Type("this is not a DocumentPreset".into());
+    let l = link.clone();
+    let get: HostFunction = Rc::new(move |a: Vec<Data>| {
+        let h = current(&l)?;
+        h.charge_call(16)?;
+        let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        let presets = h.dom.presets.borrow();
+        Ok(presets[i].iter().find(|(k, _)| k == key).map_or(Data::Undefined, |(_, v)| v.clone()))
+    });
+    let l = link.clone();
+    let set: HostFunction = Rc::new(move |a: Vec<Data>| {
+        let h = current(&l)?;
+        let value = arg(&a, 1).clone();
+        h.charge_call(16 + data_size(&value))?;
+        let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        let mut presets = h.dom.presets.borrow_mut();
+        let fields = &mut presets[i];
+        match fields.iter_mut().find(|(k, _)| k == key) {
+            Some((_, v)) => *v = value,
+            None => fields.push((key.to_string(), value)),
+        }
+        Ok(Data::Undefined)
+    });
+    HostMember::Property { get, set }
 }
 
 // ---- Document ----
@@ -1173,18 +1255,25 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `pageItems.removeAll()`: deletes every object of the document in one command. A hidden or
-/// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted.
+/// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted,
+/// and so does an object on a locked artboard.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
-    let (ids, refused) = with_doc(h, doc, |_, st| {
+    let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
         let whole = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !whole(i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
+        let locks = st.doc.locked_artboards();
+        let on_locked: Vec<u64> = ids.iter().filter(|i| locks.holds_id(**i)).map(|i| i.0).take(20).collect();
+        (ids, refused, on_locked)
     });
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {list}")));
+    }
+    if !on_locked.is_empty() {
+        let list = on_locked.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {list}")));
     }
     if !ids.is_empty() {
         on_doc(h, doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
@@ -1302,17 +1391,15 @@ fn item_selected(h: &Host, a: &[Data]) -> Answer {
 fn item_set_selected(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let on = boolean(arg(a, 1), "selected")?;
-    let mut ids = with_doc(h, item.doc, |_, st| st.selection.objects.clone());
-    if ids.contains(&item.id) == on {
+    if with_doc(h, item.doc, |_, st| st.selection.objects.contains(&item.id)) == on {
         return Ok(Data::Undefined);
     }
-    if on {
-        let mut given = selection_ids(h, item.doc, arg(a, 0))?;
-        ids.append(&mut given);
-    } else {
-        ids.retain(|i| *i != item.id);
-    }
-    set_selection(h, item.doc, ids)
+    // Adding or removing the one object keeps how the others are selected (their direct-selected
+    // anchors and segments, and the key object).
+    let ids = if on { selection_ids(h, item.doc, arg(a, 0))? } else { vec![item.id] };
+    let id = if on { "select.add" } else { "select.toggle" };
+    on_doc(h, item.doc.uid, false, |h| command(h, id, &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})))?;
+    Ok(Data::Undefined)
 }
 
 /// The item's geometric bounds (`visual`: its visible bounds) in document coordinates and the
@@ -1444,16 +1531,25 @@ fn item_z_order_position(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `remove()`: deletes the object. A hidden or locked object, one in a hidden or locked layer or
-/// group, or a group holding one is refused, as [`items_remove_all`] refuses it.
+/// group, a group holding one, or an object on a locked artboard is refused, as [`items_remove_all`]
+/// refuses it.
 fn item_remove(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    let whole = with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable));
+    let (whole, on_locked) = with_doc(h, item.doc, |_, st| {
+        (editable(&st.doc, item.id) && st.doc.node(item.id).is_some_and(all_editable), st.doc.on_locked_artboard(item.id))
+    });
     if !whole {
         return Err(HostError::Error(format!("cannot delete hidden or locked objects: {}", item.id.0)));
+    }
+    if on_locked {
+        return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD}: {}", item.id.0)));
     }
     edit_item(h, item, "edit.clear", &json!({"ids": [item.id.0]}))?;
     Ok(Data::Undefined)
 }
+
+/// The error of `remove()` and `removeAll()` for an object on a locked artboard.
+const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
 
 /// The error of `move` and `duplicate` given an object of another document.
 pub const CROSS_DOCUMENT: &str = "Cross-document placement is not available";
@@ -1731,11 +1827,14 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     application.push(later(l, "Application", "beep"));
     let preset = {
         let l = link.clone();
-        let f: HostFunction = Rc::new(move |a: Vec<Data>| {
-            current(&l)?.charge_call(64)?;
-            new_preset(&a)
+        let f: HostFunction = Rc::new(move |_: Vec<Data>| {
+            let h = current(&l)?;
+            h.charge_call(64)?;
+            new_preset(&h)
         });
-        HostClass { name: "DocumentPreset".into(), parent: None, members: Vec::new(), index: None, construct: Some(f) }
+        let mut members = vec![("typename".to_string(), typename_of("DocumentPreset"))];
+        members.extend(PRESET_FIELDS.iter().map(|k| (k.to_string(), preset_field(link, k))));
+        HostClass { name: "DocumentPreset".into(), parent: None, members, index: None, construct: Some(f) }
     };
     let mut classes = vec![
         class("Application", None, application, None),
