@@ -106,6 +106,31 @@ fn a_namespace_object_has_the_exports_in_order_and_takes_no_writes() {
 }
 
 #[test]
+fn a_write_that_reaches_a_namespace_through_a_prototype_is_refused() {
+    let m = "export var alpha = 1;";
+    let out = run(
+        "import * as ns from './m.mjs';
+         var o = Object.create(ns);
+         Object.defineProperty(o, 'own', { value: 1, writable: true });
+         o.own = 2;
+         try { o.alpha = 5; } catch (e) { out.push(e.name); }
+         try { o.fresh = 5; } catch (e) { out.push(e.name); }
+         try { Object.create(o).alpha = 5; } catch (e) { out.push(e.name); }
+         out.push(o.own, Object.getOwnPropertyNames(o).join(), ns.alpha, o.alpha);",
+        &[("./m.mjs", m)],
+    );
+    assert_eq!(out, "TypeError|TypeError|TypeError|2|own|1|1");
+    // A script's sloppy write is ignored.
+    let mut realm = es();
+    let out = run_with(&mut realm, "import * as ns from './m.mjs'; out.ns = ns;", &[("./m.mjs", m)], ModuleLimits::default());
+    assert_eq!(out, (Ok(JsValue::Undefined), String::new()));
+    // A namespace has no prototype, so `hasOwnProperty` is called from `Object.prototype`.
+    let sloppy = "var o = Object.create(out.ns), own = Object.prototype.hasOwnProperty; o.alpha = 5; o.fresh = 5; \
+                  [own.call(o, 'alpha'), own.call(o, 'fresh'), o.alpha].join()";
+    assert_eq!(realm.run(sloppy), Ok(JsValue::String("false,false,1".into())));
+}
+
+#[test]
 fn a_namespace_takes_only_definitions_that_change_nothing() {
     let m = "export var a = 1;";
     let out = run(
@@ -175,10 +200,14 @@ fn reading_an_import_before_its_module_ran_is_a_reference_error() {
 fn a_namespace_export_its_module_has_not_initialized_is_a_reference_error() {
     let b = "import * as ns from 'main';
         var tries = [() => ns.a, () => Object.keys(ns), () => Object.prototype.hasOwnProperty.call(ns, 'a'), () => Object.prototype.propertyIsEnumerable.call(ns, 'a'),
-            () => Object.getOwnPropertyDescriptor(ns, 'a'), () => { for (var k in ns) {} }, () => Object.isSealed(ns), () => Object.isFrozen(ns),
-            () => Object.seal(ns), () => Object.freeze(ns), () => Object.defineProperties({}, ns), () => JSON.stringify(ns)];
+            () => Object.getOwnPropertyDescriptor(ns, 'a'), () => Object.isSealed(ns), () => Object.isFrozen(ns),
+            () => Object.seal(ns), () => Object.freeze(ns), () => Object.defineProperties({}, ns), () => JSON.stringify(ns),
+            () => Object.create(ns).a, () => Object.create(Object.create(ns)).a];
         tries.forEach(function (f) { try { f(); out.push('no error'); } catch (e) { out.push(e.name); } });
-        out.push('a' in ns, Object.getOwnPropertyNames(ns).join());";
+        // Listing the export names reads none of them.
+        var names = [];
+        for (var k in ns) names.push(k);
+        out.push(names.join(), 'a' in ns, 'a' in Object.create(ns), Object.getOwnPropertyNames(ns).join());";
     let mut realm = es();
     let mut inner = loader(&[("./b.mjs", b)]);
     let mut load = |referrer: &str, specifier: &str| {
@@ -186,8 +215,8 @@ fn a_namespace_export_its_module_has_not_initialized_is_a_reference_error() {
     };
     let r = realm.run_module("main.mjs", "import './b.mjs'; export let a = 1;", ModuleLimits::default(), &mut load);
     assert_eq!(r, Ok(JsValue::Undefined));
-    let errors = "ReferenceError|".repeat(12);
-    assert_eq!(realm.run("out.join('|')"), Ok(JsValue::String(format!("{errors}true|a"))));
+    let errors = "ReferenceError|".repeat(13);
+    assert_eq!(realm.run("out.join('|')"), Ok(JsValue::String(format!("{errors}a|true|true|a"))));
 }
 
 #[test]
@@ -402,18 +431,78 @@ fn a_module_lists_what_it_imports_and_exports() {
 }
 
 #[test]
+fn a_specifier_with_an_unpaired_surrogate_parses_and_no_module_has_it() {
+    let src = "import './\\uD800.mjs'; import './\\uFFFD.mjs'; import './\\uDC00.mjs'; import './\\uD800.mjs';";
+    let (_, info) = match parse_module(src, &Options::default()) {
+        Ok(p) => p,
+        Err(e) => panic!("{e:?}"),
+    };
+    let units: Vec<&[u16]> = info.requests.iter().map(|r| r.units.as_slice()).collect();
+    let dot = [u16::from(b'.'), u16::from(b'/')];
+    let ext: Vec<u16> = ".mjs".encode_utf16().collect();
+    let with = |u: u16| [&dot[..], &[u], &ext[..]].concat();
+    assert_eq!(units, [with(0xD800).as_slice(), with(0xFFFD).as_slice(), with(0xDC00).as_slice()]);
+    assert_eq!(info.requests[0].specifier, "./\u{FFFD}.mjs");
+    // The run stops when the module is to be loaded, before any module runs, and the loader is
+    // not asked for it.
+    let e = fails("out.push('ran'); import './\\uD800.mjs';", &[], "SyntaxError: module specifier './\u{FFFD}.mjs' is not valid text", "");
+    assert_eq!(e.line, 1);
+}
+
+#[test]
+fn a_namespace_of_many_exports_lists_each_once_in_order() {
+    let names: Vec<String> = (0..3000).rev().map(|i| format!("e{i}")).collect();
+    let m: String = names.iter().map(|n| format!("export var {n} = '{n}';")).collect();
+    let star = "export * from './m.mjs'; export var e5 = 'own';";
+    let out = run(
+        "import * as ns from './star.mjs'; var k = Object.keys(ns); out.push(k.length, k[0], k[k.length - 1], ns.e5, ns.e2999);",
+        &[("./m.mjs", m.as_str()), ("./star.mjs", star)],
+    );
+    assert_eq!(out, "3000|e0|e999|own|e2999");
+}
+
+#[test]
 fn modules_survive_a_collection_while_they_link() {
     let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits { heap_bytes: 64 << 20, ..Limits::default() });
     assert!(realm.run("var out = []; var junk = []; for (var i = 0; i < 2000; i++) junk.push({ i: i }); junk = null;").is_ok());
     let m = "export var v = 'kept'; export function f() { return v; }";
     let mut load = loader(&[("./m.mjs", m)]);
-    let r = realm.run_module(
+    // A collection runs at every heap reservation while the modules load and link, before any
+    // of their code runs.
+    let before = realm.interp().heap.collections;
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(true));
+    let started = realm.start_module(
         "main.mjs",
         "import * as ns from './m.mjs'; import { f } from './m.mjs'; out.push(ns.f(), f());",
         ModuleLimits::default(),
         &mut load,
     );
-    assert_eq!(r, Ok(JsValue::Undefined));
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(false));
+    assert_eq!(started, Ok(()));
+    assert!(realm.interp().heap.collections > before);
+    assert!(matches!(realm.advance(1_000_000), Ok(Progress::Done(JsValue::Undefined))));
     realm.collect_garbage();
     assert_eq!(realm.run("out.join('|')"), Ok(JsValue::String("kept|kept".into())));
+}
+
+#[test]
+fn the_heap_counts_each_module_from_when_it_loads() {
+    // Each module holds about 4 MB of code (its text and its string). The heap holds one of them,
+    // and not two, so the run stops while the second loads and never asks for the third.
+    let body = format!("export var v = '{}';", "x".repeat(1_000_000));
+    let limits = || Limits { heap_bytes: 7 << 20, ..Limits::default() };
+    let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, limits());
+    assert!(realm.run("var out = [];").is_ok());
+    let one = run_with(&mut realm, "import { v } from './a.mjs'; out.push(v.length);", &[("./a.mjs", body.as_str())], ModuleLimits::default());
+    assert_eq!(one, (Ok(JsValue::Undefined), "1000000".to_string()));
+    let mut realm = Realm::with_options(Options { es2015: true, ..Options::default() }, limits());
+    let asked = std::cell::RefCell::new(Vec::new());
+    let mut inner = loader(&[("./a.mjs", body.as_str()), ("./b.mjs", body.as_str()), ("./c.mjs", "")]);
+    let mut load = |referrer: &str, specifier: &str| {
+        asked.borrow_mut().push(specifier.to_string());
+        inner(referrer, specifier)
+    };
+    let r = realm.run_module("main.mjs", "import './a.mjs'; import './b.mjs'; import './c.mjs';", ModuleLimits::default(), &mut load);
+    assert!(matches!(r, Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. })), "{r:?}");
+    assert_eq!(*asked.borrow(), ["./a.mjs", "./b.mjs"]);
 }

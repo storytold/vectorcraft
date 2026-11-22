@@ -61,7 +61,10 @@
 //! [`parse_module`] reads a module (section 15.2): strict mode code with those forms and `import`
 //! and `export` declarations at its top. [`Realm::start_module`] and [`Realm::run_module`] run a
 //! module and the modules it imports, which the host gives through a [`ModuleLoader`]: each module
-//! once, after the modules it imports, with each import reading the exporting module's binding.
+//! once, after the modules it imports, with each import reading the exporting module's binding. In
+//! a cycle of imports, a module is marked as visited before the modules it imports are, so it does
+//! not wait for a module that is still waiting for its own imports, and reading a binding of that
+//! module before it is initialized throws a `ReferenceError`.
 //! Dynamic `import()` is a syntax error.
 #![forbid(unsafe_code)]
 

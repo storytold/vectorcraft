@@ -1387,7 +1387,17 @@ impl Interp {
                 }
                 _ => return internal("not a declarative environment"),
             },
-            Resolved::Obj { object, .. } => self.delete(object, &name, false)?,
+            Resolved::Obj { object, with_this } => {
+                let deleted = self.delete(object, &name, false)?;
+                // A deleted global variable no longer stops a `let` or `const` of its name: the
+                // global environment's DeleteBinding drops it from its var names (ECMA-262 2015
+                // section 8.1.1.4.7). Deleting the global object's property by any other route
+                // leaves the name recorded.
+                if deleted && !with_this && object == self.global {
+                    self.global_vars.remove(&name);
+                }
+                deleted
+            }
         };
         self.push(Value::Bool(result))
     }
@@ -1532,11 +1542,16 @@ impl Interp {
 
     /// [[GetProperty]]: the property found on the object or its prototype chain.
     pub(crate) fn find_property(&self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        Ok(self.find_property_on(id, k)?.map(|(_, p)| p))
+    }
+
+    /// [`Self::find_property`], with the object on the prototype chain that has the property.
+    fn find_property_on(&self, id: ObjId, k: &[u16]) -> JsResult<Option<(ObjId, Prop)>> {
         let mut cur = Some(id);
         let mut steps = 0usize;
         while let Some(o) = cur {
             if let Some(p) = self.get_own_property(o, k)? {
-                return Ok(Some(p));
+                return Ok(Some((o, p)));
             }
             cur = self.object(o)?.proto;
             steps += 1;
@@ -1553,10 +1568,14 @@ impl Interp {
 
     /// [[Get]] starting at `start`, with `receiver` as `this` for a getter.
     pub(crate) fn get_from(&mut self, start: ObjId, k: &[u16], receiver: &Value) -> JsResult<Value> {
+        let found = self.find_property_on(start, k)?;
         // A module's export read before the module ran is in its temporal dead zone (ECMA-262
-        // 2015 section 9.4.6.8).
-        self.check_namespace_export(start, k)?;
-        match self.find_property(start, k)? {
+        // 2015 section 9.4.6.8), whether the read starts at the namespace object or reaches it
+        // through a prototype chain.
+        if let Some((holder, _)) = &found {
+            self.check_namespace_export(*holder, k)?;
+        }
+        match found.map(|(_, p)| p) {
             None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
             Some(Prop::Data { value, .. }) => Ok(value),
             Some(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
@@ -1863,8 +1882,26 @@ impl Interp {
             Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
             None => {}
         }
-        let proto = self.object(id)?.proto;
-        match proto.map(|p| self.find_property(p, &k)).transpose()?.flatten() {
+        let mut inherited = None;
+        let mut cur = self.object(id)?.proto;
+        let mut steps = 0usize;
+        while let Some(o) = cur {
+            // A write that reaches a module namespace object on the prototype chain is refused
+            // there too: its [[Set]] returns false for every key.
+            if matches!(self.object(o)?.class, Class::ModuleNamespace(_)) {
+                return self.reject(throw, &k, "a module namespace object is read-only");
+            }
+            if let Some(p) = self.get_own_property(o, &k)? {
+                inherited = Some(p);
+                break;
+            }
+            cur = self.object(o)?.proto;
+            steps += 1;
+            if steps > 1_000_000 {
+                return internal("prototype chain too long");
+            }
+        }
+        match inherited {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
@@ -1930,12 +1967,6 @@ impl Interp {
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
-                // A deleted global variable no longer stops a `let` or `const` of its name
-                // (ECMA-262 2015 section 8.1.1.4.7), and the names kept are never more than the
-                // global object's properties.
-                if id == self.global {
-                    self.global_vars.remove(k);
-                }
                 let o = self.object_mut(id)?;
                 o.props.remove(k);
                 if let Class::Arguments(map) = &mut o.class
@@ -2216,7 +2247,10 @@ impl Interp {
         let arrow = code.arrow;
         let self_name = code.self_name.clone();
         let f = self.heap.alloc_object(Object::new(Class::Function(Func::Closure { code, env }), Some(proto)));
-        self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
+        // An arrow function's `length` is configurable (ECMA-262 2015 section 9.2.4,
+        // FunctionInitialize); the other forms keep their earlier attributes.
+        let length_flags = if arrow { CONFIGURABLE } else { 0 };
+        self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: length_flags })?;
         // An arrow function has no `prototype` and cannot be constructed (section 14.2.16).
         if arrow {
             return Ok(f);
@@ -2670,14 +2704,9 @@ impl Interp {
             // listed or their bytes reserved must not free it.
             let saved = self.temp_roots.len();
             self.temp_roots.push(Value::Object(o));
-            // Listing a namespace object's exports reads each one (ECMA-262 2015 section 9.4.6.5).
+            // Listing a namespace object's exports does not read them (ECMA-262 2015 section
+            // 9.4.6.11, [[Enumerate]]), so an export still in its temporal dead zone is listed.
             let keys = self.enumerable_keys(o).and_then(|keys| {
-                for k in &keys {
-                    self.check_namespace_export(o, k)?;
-                }
-                Ok(keys)
-            });
-            let keys = keys.and_then(|keys| {
                 let bytes = keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
                 self.reserve_heap(bytes)?;
                 self.heap.bytes = self.heap.bytes.saturating_add(bytes);
@@ -2780,8 +2809,8 @@ impl Interp {
                     // keeps itself reachable.
                     return Ok(Prepared::Done(self.call_data(&f, &name, &args, &read)?));
                 }
-                Func::Eval { f, end, strict_writes, name } => {
-                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args)?));
+                Func::Eval { f, end, strict_writes, name, site } => {
+                    return Ok(Prepared::Done(self.call_evaluator(&f, &end, &strict_writes, &name, &args, site)?));
                 }
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
@@ -3435,7 +3464,8 @@ impl Interp {
     /// uninitialized. → the environment it runs in and the outer one. Both stay in the temporary
     /// roots for the caller to remove.
     pub(crate) fn instantiate_module(&mut self, code: &Rc<Code>) -> JsResult<(EnvId, EnvId)> {
-        self.charge_code(code, declaration_bytes(code).saturating_add(ENV_BYTES))?;
+        // The code itself was counted when the module was loaded ([`Self::hold_module_code`]).
+        self.reserve_heap(declaration_bytes(code).saturating_add(ENV_BYTES))?;
         let scope = self.global_lex;
         let env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(scope) });
         self.temp_envs.push(env);
@@ -3499,6 +3529,24 @@ impl Interp {
 
     pub(crate) fn temp_envs_mark(&self) -> usize {
         self.temp_envs.len()
+    }
+
+    /// Counts a loaded module's code against the heap once, when the module is loaded, and keeps
+    /// it reachable until [`Self::drop_temp_codes`] drops it, so a collection while later modules
+    /// load counts it too.
+    pub(crate) fn hold_module_code(&mut self, code: &Rc<Code>) -> JsResult<()> {
+        self.charge_code(code, 0)?;
+        self.temp_codes.push(code.clone());
+        Ok(())
+    }
+
+    pub(crate) fn temp_codes_mark(&self) -> usize {
+        self.temp_codes.len()
+    }
+
+    /// Ends module linking: drops the modules' code held from `mark` on.
+    pub(crate) fn drop_temp_codes(&mut self, mark: usize) {
+        self.temp_codes.truncate(mark);
     }
 
     /// Keeps `v` reachable until [`Self::drop_temp_roots`] drops it.

@@ -250,8 +250,10 @@ impl<'a> FnCompiler<'a> {
         let mut seen = HashSet::new();
         // The `let` and `const` names and the block functions of each statement list and loop the
         // walk enters, with the index of the one around it; the body's are first, and its
-        // functions are var-scoped.
-        let mut scopes: Vec<(Option<usize>, HashSet<Key>, HashSet<Key>)> = vec![(None, self.lexical_names(body), HashSet::new())];
+        // functions are var-scoped. Only Annex B's block functions read them, so without
+        // [`crate::Options::es2015`] none is collected.
+        let top = if self.es2015 { self.lexical_names(body) } else { HashSet::new() };
+        let mut scopes: Vec<(Option<usize>, HashSet<Key>, HashSet<Key>)> = vec![(None, top, HashSet::new())];
         let mut work: Vec<(StmtId, bool, usize)> = body.iter().rev().map(|&s| (s, false, 0)).collect();
         let mut add_var = |out: &mut Hoisted, k: Key| {
             if seen.insert(k.clone()) {
@@ -285,7 +287,7 @@ impl<'a> FnCompiler<'a> {
                     }
                 }
                 Stmt::Block(list) => {
-                    let s = enter(self.lexical_names(list), self.block_function_names(list));
+                    let s = if inner { enter(self.lexical_names(list), self.block_function_names(list)) } else { scope };
                     work.extend(list.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::If { consequent, alternate, .. } => {
@@ -293,7 +295,7 @@ impl<'a> FnCompiler<'a> {
                     // (Annex B.3.4).
                     for &branch in alternate.iter().chain(std::iter::once(consequent)) {
                         let alone = matches!(self.ast.stmt(branch), Some(Stmt::FunctionDecl(_)));
-                        let s = if alone { enter(HashSet::new(), HashSet::new()) } else { scope };
+                        let s = if alone && inner { enter(HashSet::new(), HashSet::new()) } else { scope };
                         work.push((branch, nested || inner, s));
                     }
                 }
@@ -322,23 +324,27 @@ impl<'a> FnCompiler<'a> {
                     work.push((*body, nested || inner, s));
                 }
                 Stmt::Switch { cases, .. } => {
-                    let names = cases.iter().flat_map(|c| self.lexical_names(&c.body)).collect();
-                    let funcs = cases.iter().flat_map(|c| self.block_function_names(&c.body)).collect();
-                    let s = enter(names, funcs);
+                    let s = if inner {
+                        let names = cases.iter().flat_map(|c| self.lexical_names(&c.body)).collect();
+                        let funcs = cases.iter().flat_map(|c| self.block_function_names(&c.body)).collect();
+                        enter(names, funcs)
+                    } else {
+                        scope
+                    };
                     for case in cases.iter().rev() {
                         work.extend(case.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                 }
                 Stmt::Try { block, handler, finalizer } => {
                     if let Some(f) = finalizer {
-                        let s = enter(self.lexical_names(f), self.block_function_names(f));
+                        let s = if inner { enter(self.lexical_names(f), self.block_function_names(f)) } else { scope };
                         work.extend(f.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                     if let Some(h) = handler {
-                        let s = enter(self.lexical_names(&h.body), self.block_function_names(&h.body));
+                        let s = if inner { enter(self.lexical_names(&h.body), self.block_function_names(&h.body)) } else { scope };
                         work.extend(h.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
-                    let s = enter(self.lexical_names(block), self.block_function_names(block));
+                    let s = if inner { enter(self.lexical_names(block), self.block_function_names(block)) } else { scope };
                     work.extend(block.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::Expr(_)
@@ -921,8 +927,12 @@ impl<'a> FnCompiler<'a> {
     fn switch_stmt(&mut self, id: StmtId, labels: Vec<String>) -> CResult<()> {
         let Some(Stmt::Switch { discriminant, cases }) = self.ast.stmt(id) else { return internal("not a switch") };
         self.expr(*discriminant)?;
-        let all: Vec<StmtId> = cases.iter().flat_map(|c| c.body.iter().copied()).collect();
-        let scope = self.list_scope(&all, true)?;
+        let scope = if self.es2015 {
+            let all: Vec<StmtId> = cases.iter().flat_map(|c| c.body.iter().copied()).collect();
+            self.list_scope(&all, true)?
+        } else {
+            None
+        };
         if let Some(scope) = scope {
             self.emit(Op::PushBlock(scope));
             self.env_depth += 1;

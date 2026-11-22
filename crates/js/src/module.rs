@@ -17,7 +17,7 @@
 //! properties. `export *` passes on every name but `default`; a name two `export *` give from
 //! different bindings is left out of a namespace and is a `SyntaxError` to import.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::ast::{ExportEntry, ImportName, ModuleInfo};
@@ -84,6 +84,11 @@ struct Record {
     /// The environment its code runs in and the outer one, once instantiated.
     envs: Option<(EnvId, EnvId)>,
     namespace: Option<ObjId>,
+    /// Each name the module exports itself or re-exports by name, with its entry in
+    /// `info.exports`.
+    explicit: HashMap<String, usize>,
+    /// The request each `export *` of the module names, in order.
+    stars: Vec<usize>,
 }
 
 /// Why a module run could not start.
@@ -153,7 +158,19 @@ impl Graph<'_, '_> {
             Err(CompileError::Syntax(error)) => return Err(LinkFail::Syntax { tag, error }),
             Err(CompileError::Internal(m)) => return Err(LinkFail::Run(Abrupt::Internal(m))),
         };
-        self.records.push(Record { key: key_name.clone(), info, code, tag, requested: Vec::new(), envs: None, namespace: None });
+        // The record keeps the code from here on, so the heap counts it from here on.
+        self.interp.hold_module_code(&code).map_err(LinkFail::Run)?;
+        let mut explicit = HashMap::new();
+        let mut stars = Vec::new();
+        for (i, e) in info.exports.iter().enumerate() {
+            match e {
+                ExportEntry::Local { export_name, .. } | ExportEntry::Indirect { export_name, .. } => {
+                    explicit.entry(export_name.clone()).or_insert(i);
+                }
+                ExportEntry::Star { request, .. } => stars.push(*request),
+            }
+        }
+        self.records.push(Record { key: key_name.clone(), info, code, tag, requested: Vec::new(), envs: None, namespace: None, explicit, stars });
         let index = self.records.len() - 1;
         self.by_key.insert(key_name, index);
         Ok(index)
@@ -175,10 +192,21 @@ impl Graph<'_, '_> {
         let mut depths = vec![0usize];
         let mut i = 0;
         while i < self.records.len() {
-            let requests: Vec<(String, u32)> = self.records[i].info.requests.iter().map(|r| (r.specifier.clone(), r.span.start)).collect();
+            let requests: Vec<(String, bool, u32)> = self.records[i]
+                .info
+                .requests
+                .iter()
+                .map(|r| (r.specifier.clone(), char::decode_utf16(r.units.iter().copied()).all(|c| c.is_ok()), r.span.start))
+                .collect();
             let depth = depths.get(i).copied().unwrap_or(0);
-            for (specifier, offset) in requests {
+            for (specifier, text, offset) in requests {
                 self.interp.use_fuel().map_err(LinkFail::Run)?;
+                // The host maps text to modules, and a specifier with an unpaired surrogate is not
+                // text, so it is refused here, as a host refuses a specifier it does not read.
+                if !text {
+                    let message = format!("module specifier '{specifier}' is not valid text: it has an unpaired surrogate");
+                    return Err(self.fail_at(i, offset, ErrorType::Syntax, &message));
+                }
                 let referrer = self.records[i].key.clone();
                 let loaded = match (self.load)(&referrer, &specifier) {
                     Ok(loaded) => loaded,
@@ -247,29 +275,28 @@ impl Graph<'_, '_> {
         }
         self.interp.use_fuel().map_err(LinkFail::Run)?;
         seen.push((m, name.to_string()));
-        let exports = self.records.get(m).map(|r| r.info.exports.clone()).unwrap_or_default();
-        for e in &exports {
-            match e {
-                ExportEntry::Local { export_name, local, .. } if export_name == name => {
-                    return Ok(Ok(Some(Resolution::Binding { module: m, name: local.clone() })));
-                }
-                ExportEntry::Indirect { export_name, request, import, .. } if export_name == name => {
-                    let Some(t) = self.target(m, *request) else { return Ok(Ok(None)) };
-                    return match import {
-                        ImportName::Namespace => Ok(Ok(Some(Resolution::Namespace(t)))),
-                        ImportName::Name(n) => self.resolve_export(t, n, seen),
-                    };
-                }
-                _ => {}
+        let Some(record) = self.records.get(m) else { return Ok(Ok(None)) };
+        // The module's own export of the name, looked up in its index, comes before any `export *`.
+        let explicit = record.explicit.get(name).and_then(|&i| record.info.exports.get(i));
+        match explicit {
+            Some(ExportEntry::Local { local, .. }) => return Ok(Ok(Some(Resolution::Binding { module: m, name: local.clone() }))),
+            Some(ExportEntry::Indirect { request, import, .. }) => {
+                let (request, import) = (*request, import.clone());
+                let Some(t) = self.target(m, request) else { return Ok(Ok(None)) };
+                return match import {
+                    ImportName::Namespace => Ok(Ok(Some(Resolution::Namespace(t)))),
+                    ImportName::Name(n) => self.resolve_export(t, &n, seen),
+                };
             }
+            _ => {}
         }
         if name == "default" {
             return Ok(Ok(None));
         }
         let mut star = None;
-        for e in &exports {
-            let ExportEntry::Star { request, .. } = e else { continue };
-            let Some(t) = self.target(m, *request) else { continue };
+        let stars = record.stars.clone();
+        for request in stars {
+            let Some(t) = self.target(m, request) else { continue };
             match self.resolve_export(t, name, seen)? {
                 Err(Ambiguous) => return Ok(Err(Ambiguous)),
                 Ok(None) => {}
@@ -285,23 +312,32 @@ impl Graph<'_, '_> {
 
     /// GetExportedNames (section 15.2.1.16.2): the names module `m` exports, those of its
     /// `export *` modules but `default` included, each once.
-    fn exported_names(&mut self, m: usize, star: bool, visited: &mut Vec<usize>, names: &mut Vec<String>) -> Result<(), LinkFail> {
+    fn exported_names(
+        &mut self,
+        m: usize,
+        star: bool,
+        visited: &mut Vec<usize>,
+        names: &mut Vec<String>,
+        seen: &mut HashSet<String>,
+    ) -> Result<(), LinkFail> {
         if visited.contains(&m) {
             return Ok(());
         }
         visited.push(m);
-        let exports = self.records.get(m).map(|r| r.info.exports.clone()).unwrap_or_default();
-        for e in &exports {
+        let count = self.records.get(m).map_or(0, |r| r.info.exports.len());
+        for i in 0..count {
             self.interp.use_fuel().map_err(LinkFail::Run)?;
+            let Some(e) = self.records.get(m).and_then(|r| r.info.exports.get(i)) else { break };
             match e {
                 ExportEntry::Local { export_name, .. } | ExportEntry::Indirect { export_name, .. } => {
-                    if !(star && export_name == "default") && !names.contains(export_name) {
+                    if !(star && export_name == "default") && !seen.contains(export_name) {
+                        seen.insert(export_name.clone());
                         names.push(export_name.clone());
                     }
                 }
                 ExportEntry::Star { request, .. } => {
                     if let Some(t) = self.target(m, *request) {
-                        self.exported_names(t, true, visited, names)?;
+                        self.exported_names(t, true, visited, names, seen)?;
                     }
                 }
             }
@@ -322,7 +358,7 @@ impl Graph<'_, '_> {
             return Ok(ns);
         }
         let mut names = Vec::new();
-        self.exported_names(m, false, &mut Vec::new(), &mut names)?;
+        self.exported_names(m, false, &mut Vec::new(), &mut names, &mut HashSet::new())?;
         let mut resolved = Vec::new();
         for name in names {
             if let Ok(Some(r)) = self.resolve_export(m, &name, &mut Vec::new())? {

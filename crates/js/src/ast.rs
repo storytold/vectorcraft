@@ -483,7 +483,11 @@ pub enum ImportName {
 /// A module a module imports or re-exports from: the specifier as written and where it stands.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModuleRequest {
+    /// The specifier as text, with each unpaired surrogate written as U+FFFD.
     pub specifier: String,
+    /// The specifier's string value, code unit for code unit (ECMA-262 2015 section 15.2.1.16,
+    /// ModuleRequests). It may hold an unpaired surrogate, which no host path can name.
+    pub units: Vec<u16>,
     pub span: Span,
 }
 

@@ -65,18 +65,18 @@ impl Parser<'_> {
     }
 
     /// A module specifier: a string literal, added to the module's requests once. → its index.
+    /// Any string value is a specifier here; the host decides which it can load.
     fn module_specifier(&mut self, info: &mut ModuleInfo) -> Result<usize> {
         let TokenKind::String(units) = &self.tok.kind else {
             return Err(self.error_at_token(&self.tok, format!("expected a module specifier string but found {}", describe(&self.tok))));
         };
-        let Ok(specifier) = String::from_utf16(units) else {
-            return Err(self.error_at_token(&self.tok, "a module specifier must be valid text"));
-        };
+        let units = units.to_vec();
         let span = self.bump()?.span;
-        if let Some(i) = info.requests.iter().position(|r| r.specifier == specifier) {
+        if let Some(i) = info.requests.iter().position(|r| r.units == units) {
             return Ok(i);
         }
-        info.requests.push(ModuleRequest { specifier, span });
+        let specifier = String::from_utf16_lossy(&units);
+        info.requests.push(ModuleRequest { specifier, units, span });
         Ok(info.requests.len() - 1)
     }
 

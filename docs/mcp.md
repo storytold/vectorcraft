@@ -2610,7 +2610,7 @@ the included files too.
 vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 ```
 
-`script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
+`script.run {path? | source?, module?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
 File › Scripts › Other Script… (Cmd+F12) picks a `.js`, `.mjs` or `.jsx` file and runs it the same way; the help page
 https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
 describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js`, `.mjs` or `.jsx`, in
@@ -2630,6 +2630,10 @@ an engine that `#targetengine` keeps reads each run the way that run's script do
 A `path` that ends in `.mjs` (in any case) runs as an ECMAScript 2015 module
 (https://262.ecma-international.org/6.0/#sec-modules): strict mode code with the forms above, and `import` and
 `export` declarations at its top level. `import` and `export` are syntax errors in a `.js` or `.jsx` script.
+`module` (true or false) chooses this for any `path` or `source`; it defaults to true for a `path` that ends in
+`.mjs` and false otherwise. The app passes `module: true` for a `.mjs` file picked on the web, where the script
+arrives as `source`. A `source` that runs as a module imports no files: each import ends the run with an error that
+names the specifier.
 
 - A specifier is a path relative to the file that imports it. It starts with `./` or `../`, separates names with
   `/` and names a `.mjs` or `.js` file, which is read as a module. A bare name such as `'lib'`, a URL, an absolute
@@ -2641,8 +2645,11 @@ A `path` that ends in `.mjs` (in any case) runs as an ECMAScript 2015 module
 - Every module is read, parsed and linked before any of them runs. A syntax error, a missing or refused file, an
   import of a name the module does not export, and an import of a name that two `export *` declarations give from
   different modules end the run with no code run, at the file, line and column of the module they are in.
-- Each module runs once in a run, after the modules it imports, in the order it imports them; two paths to one file
-  (a link, `sub/../x.mjs`, or names that differ only in letter case on Windows) are one module. An import reads
+- Each module runs once in a run, after the modules it imports, in the order it imports them. In a cycle of imports
+  a module does not wait for a module that is still waiting for its own imports, so it can run before that module
+  has initialized its bindings. Two paths to one file
+  (a link, `sub/../x.mjs`, or names that differ only in letter case in a Windows folder that ignores case) are one
+  module, and a module's relative imports are read from the folder the file is in, whichever path reached it first. An import reads
   the exporting module's binding each time, so it sees later assignments, and reading it before that module has
   initialized it (in a cycle of imports) throws a `ReferenceError`. Assigning to an import throws a `TypeError`.
 - `import * as ns` gives a namespace object: not extensible, with no prototype, its export names in code unit order

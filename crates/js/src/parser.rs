@@ -533,6 +533,11 @@ impl<'s> Parser<'s> {
                 Ok(self.ast.push_stmt(Stmt::Empty, start))
             }
             TokenKind::Keyword(k) => self.keyword_statement(*k, start),
+            // An expression statement cannot start with `let [` (ECMA-262 2015 section 13.5), so
+            // the body of an `if` or a loop cannot be a `let` declaration with a pattern either.
+            _ if self.es2015 && self.tok.ident() == Some("let") && !self.tok.escaped && self.peek().is_some_and(|t| t.is_punct(Punct::LBracket)) => {
+                Err(self.error_at_token(&self.tok, "a lexical declaration cannot stand here; put it in a block"))
+            }
             _ => {
                 let expr = self.parse_expression(false)?;
                 self.semicolon()?;

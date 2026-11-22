@@ -249,8 +249,9 @@ pub(crate) fn module_script(path: Option<&str>) -> bool {
 }
 
 /// What names the file at the real path `real` among a run's modules: on Unix its device and file
-/// number, so two paths to one file give one module; elsewhere its path, in lowercase on Windows,
-/// whose file names ignore letter case.
+/// number, so two paths to one file give one module; elsewhere its real path, which on Windows
+/// spells each name in the letter case the folder stores it in, so two spellings of one file in a
+/// folder that ignores case give one module and two files in a folder that does not stay two.
 fn module_key(real: &Path) -> String {
     #[cfg(unix)]
     {
@@ -259,8 +260,13 @@ fn module_key(real: &Path) -> String {
             return format!("{}:{}", m.dev(), m.ino());
         }
     }
-    let shown = display(real).to_string();
-    if cfg!(windows) { shown.to_lowercase() } else { shown }
+    display(real).to_string()
+}
+
+/// The names of the folders from `root` down to `dir`, both real paths, or `None` when `dir` is
+/// not `root` or below it, or has a name that is not Unicode.
+fn names_below(root: &Path, dir: &Path) -> Option<Vec<String>> {
+    dir.strip_prefix(root).ok()?.components().map(|c| c.as_os_str().to_str().map(str::to_string)).collect()
 }
 
 /// The names of a module specifier's path: one that starts with `./` or `../`, uses `/` between
@@ -380,6 +386,11 @@ impl Files {
         }
     }
 
+    /// Makes the run's files read ECMAScript 2015, as a module run given as text does.
+    pub(crate) fn read_es2015(&mut self) {
+        self.es2015 = true;
+    }
+
     /// The module `text`, the script's own, as a source of one file. → its key and the source.
     pub(crate) fn module_entry(&mut self, text: &str) -> Result<(String, Expanded), Failure> {
         self.bytes = self.bytes.saturating_add(text.len());
@@ -417,30 +428,38 @@ impl Files {
         if self.probes > MAX_PROBES {
             return Err(LoadError::Range(format!("module search limit ({MAX_PROBES} paths) reached")));
         }
-        let candidate = path.iter().fold(root, |p, name| p.join(name));
-        let (real, bytes) = match self.scope.read(&candidate, crate::script::MAX_SOURCE_BYTES) {
+        let candidate = path.iter().fold(root.clone(), |p, name| p.join(name));
+        // Another path to a module already read gives that module: the file is not read again, and
+        // its text is not counted again.
+        let loaded = &self.module_dirs;
+        let read = self.scope.read_unless(&candidate, crate::script::MAX_SOURCE_BYTES, |real| loaded.contains_key(&module_key(real)));
+        let (real, bytes) = match read {
             Ok(found) => found,
             Err(ScriptRead::Missing) => return Err(LoadError::Other(format!("module file not found: {specifier}"))),
             Err(ScriptRead::Refused) => return Err(LoadError::Other(format!("script file read refused: {specifier}"))),
             Err(ScriptRead::TooLarge) => return Err(LoadError::Range(format!("script file is too large: {specifier}"))),
             Err(ScriptRead::Failed(e)) => return Err(LoadError::Other(format!("cannot read script file {specifier}: {e}"))),
         };
+        let key = module_key(&real);
+        let Some(bytes) = bytes else {
+            self.module_paths.insert(relative, key.clone());
+            return Ok((key, None));
+        };
         if self.bytes.saturating_add(bytes.len()) > MAX_TOTAL_BYTES {
             return Err(LoadError::Range("script source limit reached (32 MiB)".to_string()));
-        }
-        self.bytes += bytes.len();
-        let key = module_key(&real);
-        self.module_paths.insert(relative, key.clone());
-        if self.module_dirs.contains_key(&key) {
-            return Ok((key, None));
         }
         if self.files >= MAX_FILES {
             return Err(LoadError::Range(format!("module file limit ({MAX_FILES}) reached")));
         }
-        self.files += 1;
         let text = decode(&bytes, specifier).map_err(LoadError::Other)?;
+        self.bytes += bytes.len();
+        self.files += 1;
+        self.module_paths.insert(relative, key.clone());
+        // The module's relative imports start from the folder the file is in, whichever path to it
+        // was read first; the path as written stands in when that folder is not below the script's.
         path.pop();
-        self.module_dirs.insert(key.clone(), path);
+        let dir = folder_of(&real).and_then(|d| names_below(&root, &d)).unwrap_or(path);
+        self.module_dirs.insert(key.clone(), dir);
         let map = SourceMap { files: vec![display(&real)], segments: vec![Segment { out_line: 1, file: 0, line: 1, shift: 0 }] };
         Ok((key, Some((text, map))))
     }
@@ -483,12 +502,20 @@ impl Files {
         self.expand(shown, dir, text, true)
     }
 
-    /// The file `path` names for `$.evalFile`, relative to the file being run now, read and with its
-    /// preprocessor lines read. It becomes the file being run until [`Files::end_eval`].
-    pub(crate) fn eval_file(&mut self, path: &str) -> Result<Expanded, Failure> {
+    /// The folder of the module `key` ([`Files::module`] gave it), from the script's folder.
+    pub(crate) fn module_dir(&self, key: &str) -> Option<PathBuf> {
+        let names = self.module_dirs.get(key)?;
+        let root = self.frames.first().and_then(|f| f.dir.clone())?;
+        Some(names.iter().fold(root, |p, name| p.join(name)))
+    }
+
+    /// The file `path` names for `$.evalFile`, relative to the file being run now, or to the folder
+    /// `module_dir` when a module's code calls it, read and with its preprocessor lines read. It
+    /// becomes the file being run until [`Files::end_eval`].
+    pub(crate) fn eval_file(&mut self, path: &str, module_dir: Option<PathBuf>) -> Result<Expanded, Failure> {
         let current = self.frames.last().map(|f| f.shown.clone()).unwrap_or_else(|| Arc::from(""));
         let fail = |kind, message: String| Failure { kind, message, index: 0, file: current.clone(), line: 0, column: 0 };
-        let dir = self.frames.last().and_then(|f| f.dir.clone());
+        let dir = module_dir.or_else(|| self.frames.last().and_then(|f| f.dir.clone()));
         let (real, bytes) = self.open(path, dir.as_deref(), false).map_err(|(kind, message)| fail(kind, message))?;
         let text = self.admit(&real, bytes, path).map_err(|(kind, message)| fail(kind, message))?;
         let shown = display(&real);

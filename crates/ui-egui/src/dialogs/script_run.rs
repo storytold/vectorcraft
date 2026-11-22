@@ -119,7 +119,10 @@ pub(crate) fn drain(app: &mut VectorcraftApp) {
     let Some((name, bytes)) = app.services.script_inbox.as_ref().and_then(|q| q.lock().unwrap_or_else(|e| e.into_inner()).pop()) else { return };
     let result = match bytes.as_deref().map(std::str::from_utf8) {
         None => Err(TOO_LARGE.to_string()),
-        Some(Ok(source)) => chosen(app, json!({"source": source, "name": name})),
+        Some(Ok(source)) => {
+            let module = std::path::Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("mjs"));
+            chosen(app, json!({"source": source, "name": name, "module": module}))
+        }
         Some(Err(_)) => Err("the script is not UTF-8 text".to_string()),
     };
     if let Err(e) = result {

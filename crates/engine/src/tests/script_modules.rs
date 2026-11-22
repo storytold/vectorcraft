@@ -225,3 +225,78 @@ fn script_module_is_listed_and_taken_by_path() {
     assert!(r.is_err());
     let _ = std::fs::remove_dir_all(base);
 }
+
+#[test]
+fn script_module_is_chosen_by_the_module_param() {
+    let mut s = Session::new();
+    let r = s.execute("script.run", &json!({"source": "export var a = 1;\nvc.log([a, this === undefined]);", "module": true})).unwrap();
+    assert_eq!(r["log"], json!([[1, true]]));
+    // A source run as a module imports no files.
+    let r = s.execute("script.run", &json!({"source": "import { b } from './b.mjs';", "module": true}));
+    assert!(r.is_err());
+    assert!(message(s.script_report().unwrap()).contains("./b.mjs"), "{:?}", s.script_report());
+    let r = s.execute("script.run", &json!({"source": "export var a = 1;", "module": "yes"}));
+    assert!(matches!(r, Err(EngineError::BadParams { .. })), "{r:?}");
+    // `module: false` runs a .mjs file as a script, where `export` is a syntax error.
+    let base = folder("param");
+    let main = base.join("main").join("main.mjs");
+    write(&main, "export var a = 1;");
+    let r = s.execute("script.run", &json!({"path": main.to_string_lossy(), "module": false}));
+    assert!(r.is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "syntax");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn script_module_read_again_through_another_path_is_not_counted_again() {
+    let base = folder("budget");
+    // 7 MiB, under the 8 MiB a file may have; five reads of it would pass the 32 MiB of a run.
+    let big = format!("export var v = 1;\n//{}", "x".repeat(7 * 1024 * 1024));
+    write(&base.join("main/lib/big.mjs"), &big);
+    let mut text = String::new();
+    for i in 0..5 {
+        if !link_folder(&base.join("main/lib"), &base.join(format!("main/l{i}"))) {
+            eprintln!("skipped: a folder link can't be made here");
+            let _ = std::fs::remove_dir_all(base);
+            return;
+        }
+        text.push_str(&format!("import {{ v as v{i} }} from './l{i}/big.mjs';\n"));
+    }
+    text.push_str("vc.log(v0 + v4);");
+    let r = run(&base, &text);
+    assert_eq!(r.map(|r| r["log"].clone()).ok(), Some(json!([2])));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn script_module_imports_are_read_from_the_folder_the_file_is_in() {
+    let base = folder("realdir");
+    write(&base.join("main/real/user.mjs"), "import { d } from './dep.mjs';\nexport const got = d;");
+    write(&base.join("main/real/dep.mjs"), "export const d = 'real';");
+    write(&base.join("main/other/dep.mjs"), "export const d = 'other';");
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(base.join("main/real/user.mjs"), base.join("main/other/user.mjs")).is_ok();
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_file(base.join("main/real/user.mjs"), base.join("main/other/user.mjs")).is_ok();
+    #[cfg(not(any(unix, windows)))]
+    let linked = false;
+    if !linked {
+        eprintln!("skipped: a file link can't be made here");
+        let _ = std::fs::remove_dir_all(base);
+        return;
+    }
+    let r = run(&base, "import { got } from './other/user.mjs';\nvc.log(got);").unwrap();
+    assert_eq!(r["log"], json!(["real"]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
+fn script_module_eval_file_reads_beside_the_module_that_calls_it() {
+    let base = folder("evalfile");
+    write(&base.join("main/helper.jsx"), "'top'");
+    write(&base.join("main/sub/helper.jsx"), "'sub'");
+    write(&base.join("main/sub/m.mjs"), "export const got = $.evalFile('helper.jsx');");
+    let r = run(&base, "import { got } from './sub/m.mjs';\nvc.log([got, $.evalFile('helper.jsx')]);").unwrap();
+    assert_eq!(r["log"], json!([["sub", "top"]]));
+    let _ = std::fs::remove_dir_all(base);
+}

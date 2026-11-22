@@ -202,6 +202,8 @@ pub(crate) struct Request {
     pub locale: String,
     /// The answers to the dialogs of a run with nobody to ask, in order.
     pub answers: Vec<DialogAnswer>,
+    /// The script runs as an ECMAScript 2015 module, as a `.mjs` file does ([`include::module_script`]).
+    pub module: bool,
 }
 
 thread_local! {
@@ -777,6 +779,9 @@ struct Host {
     script_map: RefCell<include::SourceMap>,
     /// The same for each source `$.evalFile` gave, in order.
     eval_maps: RefCell<Vec<include::SourceMap>>,
+    /// The module key ([`include::Files::module`]) of each of [`Host::eval_maps`] that is a
+    /// module's, by its index there.
+    module_maps: RefCell<HashMap<usize, String>>,
     /// The file, line and column of each error `$.evalFile` raised for a file it could not run, in
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
@@ -930,6 +935,18 @@ impl Host {
                 kept.as_ref().and_then(|k| k.get(tag)).map(|k| name(&k.map)).unwrap_or_default()
             }
         }
+    }
+
+    /// The folder of the module whose source has `tag`, when it is a module the script imported
+    /// (not the script itself, a file `$.evalFile` gave, or code from another run).
+    fn module_dir_at(&self, tag: u32) -> Option<std::path::PathBuf> {
+        let script = self.script_tag.get();
+        if tag == vectorcraft_js::UNKNOWN_SOURCE || script == vectorcraft_js::UNKNOWN_SOURCE {
+            return None;
+        }
+        let n = tag.checked_sub(script).filter(|n| *n > 0)?;
+        let key = self.module_maps.borrow().get(&(n as usize - 1)).cloned()?;
+        self.files.borrow().module_dir(&key)
     }
 
     /// Adds a line to the run's console and, during a slice, to the session's.
@@ -1436,6 +1453,7 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
                 }
             }),
             strict_writes: Rc::new(move || current(&strict).ok().and_then(|h| h.eval_strict.get())),
+            site: true,
         }
     };
     let mut items = vec![
@@ -1450,9 +1468,17 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
 }
 
 /// `$.evalFile(path[, timeout])`: the source of the file `path` names, relative to the file being
-/// run, with its preprocessor lines read, which the interpreter then runs. `timeout`, in
-/// milliseconds, is taken and not waited on: the file is read at once.
-fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostError> {
+/// run (for a call in a module the script imported, that module's file), with its preprocessor
+/// lines read, which the interpreter then runs. `timeout`, in milliseconds, is taken and not
+/// waited on: the file is read at once. `args` starts with the call's place, as
+/// [`HostItem::Evaluator`] gives it with `site`.
+fn eval_file(host: &Host, mut args: Vec<Data>) -> std::result::Result<Data, HostError> {
+    let tag = match args.first() {
+        Some(Data::Number(n)) if args.len() >= 3 => *n as u32,
+        _ => vectorcraft_js::UNKNOWN_SOURCE,
+    };
+    args.drain(..3.min(args.len()));
+    let module_dir = host.module_dir_at(tag);
     let Some(Data::String(path)) = args.first().filter(|p| !matches!(p, Data::String(s) if s.is_empty())) else {
         return Err(HostError::Type(EVAL_NO_PATH.to_string()));
     };
@@ -1466,7 +1492,7 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
         return Err(HostError::Type(EVAL_ARGUMENTS.to_string()));
     }
     host.charge_call(path.len() as u64 + 2)?;
-    let expanded = host.files.borrow_mut().eval_file(path).map_err(|f| {
+    let expanded = host.files.borrow_mut().eval_file(path, module_dir).map_err(|f| {
         let message = if f.line > 0 { format!("{}:{}:{}: {}", f.file, f.line, f.column, f.message) } else { f.message };
         let error = match f.kind {
             include::FailKind::Limit => HostError::Abort(message),
@@ -1582,7 +1608,10 @@ fn explained(e: &RunError) -> String {
 fn load_module(host: &Host, referrer: &str, specifier: &str) -> std::result::Result<LoadedModule, LoadError> {
     let (key, read) = host.files.borrow_mut().module(referrer, specifier)?;
     let source = read.map(|(text, map)| {
-        host.eval_maps.borrow_mut().push(map);
+        let mut maps = host.eval_maps.borrow_mut();
+        host.module_maps.borrow_mut().insert(maps.len(), key.clone());
+        maps.push(map);
+        drop(maps);
         host.disk.borrow_mut().saw_code(&text.encode_utf16().collect::<Vec<u16>>());
         text
     });
@@ -1951,9 +1980,12 @@ impl Session {
         self.script_stop.clear();
         self.script_report = None;
         let mut files = include::Files::new(request.file.as_deref(), request.checked_real, include::Files::jsinclude_env());
-        // A `.mjs` script is a module, with no preprocessor lines; `module_key` names it among the
-        // modules it imports.
-        let (expanded, module_key) = if include::module_script(request.file.as_deref()) {
+        if request.module {
+            files.read_es2015();
+        }
+        // A module (a `.mjs` file, or a script run with `module`) has no preprocessor lines;
+        // `module_key` names it among the modules it imports.
+        let (expanded, module_key) = if request.module {
             match files.module_entry(&request.source) {
                 Ok((key, expanded)) => (Ok(expanded), Some(key)),
                 Err(f) => (Err(f), None),
@@ -1992,7 +2024,7 @@ impl Session {
         let fresh = realm.is_none();
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
         // code the way the script does.
-        let es2015 = include::es2015_script(request.file.as_deref());
+        let es2015 = request.module || include::es2015_script(request.file.as_deref());
         let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
@@ -2058,6 +2090,7 @@ impl Session {
             files: RefCell::new(files),
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
+            module_maps: RefCell::default(),
             eval_failures: RefCell::default(),
             script_tag: Cell::new(vectorcraft_js::UNKNOWN_SOURCE),
             report_name: Arc::from(name.as_str()),

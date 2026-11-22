@@ -295,7 +295,7 @@ impl Realm {
         let interp = &mut self.interp;
         interp.evaluated = next_tag(interp.evaluated);
         self.script_tag = interp.evaluated;
-        let marks = (interp.temp_envs_mark(), interp.temp_roots_mark());
+        let marks = (interp.temp_envs_mark(), interp.temp_roots_mark(), interp.temp_codes_mark());
         let linked = crate::module::link(interp, key, source, self.script_tag, limits, load);
         let pushed = match linked {
             Ok(modules) => interp.push_module_frames(&modules).map_err(LinkFail::Run),
@@ -304,6 +304,7 @@ impl Realm {
         let interp = &mut self.interp;
         interp.drop_temp_envs(marks.0);
         interp.drop_temp_roots(marks.1);
+        interp.drop_temp_codes(marks.2);
         match pushed {
             Ok(()) => Ok(()),
             Err(LinkFail::Syntax { tag, error }) => {

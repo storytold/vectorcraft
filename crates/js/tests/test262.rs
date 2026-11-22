@@ -50,7 +50,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_js::{
-    JsValue, Limits, LoadError, LoadedModule, ModuleLimits, Options, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize, tokenize_module,
+    JsValue, Limits, LoadError, LoadedModule, ModuleLimits, Options, Progress, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize,
+    tokenize_module,
 };
 
 /// A test file's metadata, from its `/*--- … ---*/` block.
@@ -845,9 +846,12 @@ fn module_path(referrer: &str, specifier: &str) -> Result<String, LoadError> {
 
 /// Runs a module test's `source` (at `rel`, a path from the suite's folder) in a new realm with
 /// `options`, after `prelude` (the harness) as a script; the modules it imports are read from the
-/// suite. `Err` describes a failure. A `negative_type` is the error the run must end with: thrown,
-/// or, for a `SyntaxError`, also a module that does not parse.
-fn run_module_one(dir: &Path, prelude: &str, rel: &str, source: &str, negative_type: Option<&str>, options: &Options) -> Result<(), String> {
+/// suite. `Err` describes a failure. `negative` is the phase (`resolution` or `runtime`) and the
+/// error the test expects. A `resolution` test's module must parse, and the run must end with the
+/// error while the modules load and link, before any runs; an imported module that does not parse
+/// counts for a `SyntaxError`. A `runtime` test's modules must load and link, and the error must be thrown
+/// while they run.
+fn run_module_one(dir: &Path, prelude: &str, rel: &str, source: &str, negative: Option<(&str, &str)>, options: &Options) -> Result<(), String> {
     let mut realm = Realm::with_options(options.clone(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
     realm.run(prelude).map_err(|e| format!("the harness failed: {}", e.message))?;
     let mut given = HashSet::new();
@@ -857,10 +861,29 @@ fn run_module_one(dir: &Path, prelude: &str, rel: &str, source: &str, negative_t
         let source = if given.insert(key.clone()) { Some(read_source(&path).map_err(LoadError::Other)?) } else { None };
         Ok(LoadedModule { key, source })
     };
-    match (realm.run_module(rel, source, ModuleLimits::default(), &mut load), negative_type) {
+    let resolution = negative.is_some_and(|(phase, _)| phase == "resolution");
+    if resolution && let Err(e) = vectorcraft_js::parse_module(source, options) {
+        return Err(format!("did not parse; a resolution error was expected: {} (line {})", e.message, e.line));
+    }
+    let started = realm.start_module(rel, source, ModuleLimits::default(), &mut load);
+    let result = match started {
+        Ok(()) if resolution => return Err("linked; an error while linking was expected".to_string()),
+        Err(e) if !resolution && negative.is_some() => {
+            return Err(format!("did not start; an error while running was expected: {:?}: {} (line {})", e.kind, e.message, e.line));
+        }
+        Err(e) => Err(e),
+        Ok(()) => loop {
+            match realm.advance(u64::MAX) {
+                Ok(Progress::Paused) => {}
+                Ok(Progress::Done(v)) => break Ok(v),
+                Err(e) => break Err(e),
+            }
+        },
+    };
+    match (result, negative.map(|(_, t)| t)) {
         (Ok(_), None) => Ok(()),
         (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
-        (Err(e), Some("SyntaxError")) if e.kind == RunErrorKind::Syntax => Ok(()),
+        (Err(e), Some("SyntaxError")) if resolution && e.kind == RunErrorKind::Syntax => Ok(()),
         (Err(e), Some(t)) if e.kind == RunErrorKind::Thrown => {
             realm.bind_last_thrown("__thrown");
             match realm.run(&format!("typeof __thrown === 'object' && __thrown !== null && __thrown.constructor === {t}")) {
@@ -886,6 +909,7 @@ fn run_modules(dir: &Path) {
     let (mut selected, mut skipped) = (0usize, 0usize);
     let (mut before, mut after) = ((0usize, 0usize), (0usize, 0usize));
     let mut failures = String::new();
+    let mut panics = 0usize;
     for folder in MODULE_FOLDERS {
         let root = or_fail(inside(dir, &format!("test/language/{folder}")));
         assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
@@ -913,6 +937,7 @@ fn run_modules(dir: &Path) {
             }
             selected += 1;
             let negative_type = meta.negative_type.clone().filter(|_| matches!(phase, Some("runtime" | "resolution")));
+            let negative = phase.zip(negative_type.as_deref());
             let as_script = if matches!(phase, Some("parse" | "resolution")) {
                 parse(&source, &Options { strict: true, ..options.clone() }).is_err()
             } else {
@@ -930,9 +955,12 @@ fn run_modules(dir: &Path) {
                 }
             } else {
                 let prelude = format!("{prelude}{includes}");
-                match std::panic::catch_unwind(|| run_module_one(dir, &prelude, &rel, &source, negative_type.as_deref(), &options)) {
+                match std::panic::catch_unwind(|| run_module_one(dir, &prelude, &rel, &source, negative, &options)) {
                     Ok(r) => r,
-                    Err(_) => Err("PANIC".to_string()),
+                    Err(_) => {
+                        panics += 1;
+                        Err("PANIC".to_string())
+                    }
                 }
             };
             match outcome {
@@ -958,7 +986,7 @@ fn run_modules(dir: &Path) {
         after.1,
         report.display()
     );
-    assert!(!failures.contains("PANIC"), "the interpreter panicked; see {}", report.display());
+    assert_eq!(panics, 0, "the interpreter panicked; see {}", report.display());
 }
 
 #[test]

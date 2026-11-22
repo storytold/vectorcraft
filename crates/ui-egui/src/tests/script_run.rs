@@ -165,6 +165,18 @@ fn a_web_pick_goes_to_the_warning_and_waits_for_an_open_dialog() {
 }
 
 #[test]
+fn a_web_pick_of_a_mjs_file_runs_as_a_module() {
+    let (mut app, inbox, _picks) = app_with_picker();
+    app.session.prefs.show_external_script_warning = false;
+    // `export` is a syntax error outside a module, and `this` is undefined at a module's top.
+    let module = format!("export var a = 1;\nif (this !== undefined) throw new Error('not a module');\n{DRAW}");
+    inbox.lock().unwrap().push(("Picked.MJS".to_string(), Some(module.into_bytes())));
+    script_runs::poll(&mut app);
+    finish(&mut app);
+    assert_eq!(objects(&app), 2, "{}", app.ui.status);
+}
+
+#[test]
 fn a_web_pick_that_is_not_text_is_reported() {
     let (mut app, inbox, _picks) = app_with_picker();
     inbox.lock().unwrap().push(("bad.js".to_string(), Some(vec![0xff, 0xfe])));
