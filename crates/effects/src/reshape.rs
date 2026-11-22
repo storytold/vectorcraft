@@ -1629,8 +1629,23 @@ fn reshape_leaves_apart(
     fx: &[&Effect],
     owner: &[Effect],
     budget: Budget,
+    flags: (bool, bool),
+    doc: Option<&Document>,
+) -> crate::Carry {
+    reshape_leaves_checked(art, fx, owner, budget, flags, doc, None)
+}
+
+/// [`reshape_leaves_apart`] that, given `complete`, stops at the first effect that leaves a path in
+/// the art with its shape or makes fewer copies than it asks for, past `budget` ([`Ran::kept`],
+/// [`Ran::short`]), and sets `complete` to `false`; the art is then partly reshaped.
+fn reshape_leaves_checked(
+    art: &mut Node,
+    fx: &[&Effect],
+    owner: &[Effect],
+    budget: Budget,
     (apart, rows): (bool, bool),
     doc: Option<&Document>,
+    mut complete: Option<&mut bool>,
 ) -> crate::Carry {
     let mut whole = crate::Carry::default();
     if fx.is_empty() {
@@ -1668,11 +1683,18 @@ fn reshape_leaves_apart(
         let params = merged_params(&e.id, &e.params);
         // Where a live-effect plug-in sits, which it is listed by when it is deferred.
         let effect = owner.iter().position(|x| std::ptr::eq(x, *e)).or_else(|| listed.iter().position(|x| std::ptr::eq(*x, *e)));
-        let step = Step { e, params: &params, bounds, seed, effect, apart, rows, doc, wholes: &wholes, held };
+        let strict = complete.is_some();
+        let step = Step { e, params: &params, bounds, seed, effect, apart, rows, doc, wholes: &wholes, held, strict };
         // Art with linked masks keeps its shape under an effect that a mask in it could not take
         // as the art it masks did, so no mask is left apart from its art.
         let before = masked.then(|| (art.clone(), used));
         let ran = step.run(art, max, &mut used, copy_whole, Some(&mut warped), false, 0);
+        if (ran.kept || ran.short)
+            && let Some(complete) = complete.as_deref_mut()
+        {
+            *complete = false;
+            return whole;
+        }
         if (ran.masks || ran.short)
             && let Some((was, cost)) = before
         {
@@ -1704,7 +1726,8 @@ fn reshape_leaves_apart(
 /// swatches and patterns of painted pieces are looked up in, [`copies_whole`] of the art of
 /// each linked mask before the first effect, by the id of the object it masks, and whether one of
 /// the object's effects holds the raster effects in its art back from its Transform effects
-/// ([`follow_art`]).
+/// ([`follow_art`]), and whether a Transform effect that makes fewer copies of anything in the art
+/// than it asks for is reported ([`Ran::short`]) wherever it is (`strict`).
 struct Step<'a> {
     e: &'a Effect,
     params: &'a serde_json::Value,
@@ -1716,6 +1739,7 @@ struct Step<'a> {
     doc: Option<&'a Document>,
     wholes: &'a HashMap<NodeId, bool>,
     held: bool,
+    strict: bool,
 }
 
 /// What [`Step::run`] did to a piece of art.
@@ -1728,7 +1752,8 @@ struct Ran {
     /// took the effect, or could have ([`Step::reshape_masks`]).
     masks: bool,
     /// A Transform effect made fewer copies of a path, image or symbol instance than it asks for
-    /// (past the budget or out of reach), where a linked mask could take a different number.
+    /// (past the budget or out of reach), where a linked mask could take a different number, or
+    /// anywhere in the art for a [`Step`] with `strict`.
     short: bool,
     /// How what paints the art as a whole follows the effect, when it does.
     whole: Option<crate::Carry>,
@@ -1840,7 +1865,8 @@ impl Step<'_> {
         {
             if !own {
                 *used = copy_art(art, m, copies, copy_scaling(options), max);
-                return Ran { kept: false, took: true, masks: false, short: false, whole: None };
+                let short = self.strict && art.children().is_some_and(|c| c.iter().filter(|c| !c.is_guide()).count() <= copies);
+                return Ran { kept: false, took: true, masks: false, short, whole: None };
             }
             // A mask's art: its copies keep to what the rest of the art leaves of `max`, and the
             // linked mask of the art itself takes them too. That mask's art stays in `used`, as
@@ -1861,7 +1887,7 @@ impl Step<'_> {
         if watch && !own {
             masked_ids(art, false, &mut covered);
         }
-        let counts = |id: NodeId| watch && (own || covered.contains(&id));
+        let counts = |id: NodeId| self.strict || (watch && (own || covered.contains(&id)));
         let mut short = false;
         let mut took = false;
         for_each_leaf(art, &mut |leaf| {
@@ -2545,11 +2571,8 @@ fn paint_leaf(
         one.name = None;
         one.appearance = vectorcraft_plugins::painted::appearance(&leaf.appearance, p).into();
         set_geometry(&mut one, p.path.clone(), p.rule);
-        made = made.plus(dress_piece(&mut one, &p.look, doc));
-        // The pieces' own geometry effects keep to the budget too.
-        if !budget.fits(made) {
-            return None;
-        }
+        // The pieces' own geometry effects keep to what the pieces before them leave of the budget.
+        made = made.plus(dress_piece(&mut one, &p.look, budget.minus(made), doc)?);
         children.push(Arc::new(one));
     }
     let mut g = Node::group(leaf.id, children);
@@ -2560,18 +2583,19 @@ fn paint_leaf(
 
 /// Gives `one`, the object a painted piece becomes, the piece's `look`: its opacity times the
 /// object's, its blending mode, and its effects after the object's own. The visible geometry effects
-/// among them, and only those, reshape the piece at once ([`reshape_leaves`], with `doc`), so they run
+/// among them, and only those, reshape the piece at once ([`reshape_leaves_checked`], with `doc`), so they run
 /// before the source's later effects and the effects of its fills and strokes stay for their own
 /// stage; the object becomes a group with its id around the reshaped piece, carrying its
 /// transparency and effects. The piece's raster effects stay on it and draw on it. When the object
 /// has a blending mode other than Normal and the piece gives one, the same one included, the object
 /// becomes a group with its blending mode around the piece, so both apply. Returns what the reshaped piece costs
-/// past its own path.
-pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::Look, doc: Option<&Document>) -> Budget {
+/// past its own path; `None` when its geometry effects would cost more than `room` past it: they stop at the first
+/// effect that does not fit, and `one` is then incomplete.
+pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::Look, room: Budget, doc: Option<&Document>) -> Option<Budget> {
     use vectorcraft_doc::color::BlendMode;
     let none = Budget { anchors: 0, lines: 0 };
     if look.is_empty() {
-        return none;
+        return Some(none);
     }
     let outer = look.blend.filter(|_| one.blend != BlendMode::Normal).map(|_| one.blend);
     if let Some(o) = look.opacity {
@@ -2586,10 +2610,16 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
     if !shape.is_empty() {
         let before = art_cost(one);
         let mut art = one_piece(one);
-        reshape_leaves(&mut art, &shape.iter().collect::<Vec<_>>(), &shape, doc);
+        let mut complete = true;
+        reshape_leaves_checked(&mut art, &shape.iter().collect::<Vec<_>>(), &shape, room.plus(before), (false, false), doc, Some(&mut complete));
+        #[cfg(test)]
+        DRESSED.with(|d| d.set(d.get().plus(art_cost(&art))));
+        extra = art_cost(&art).minus(before);
+        if !complete || !room.fits(extra) {
+            return None;
+        }
         let mut art = dressed(art, one);
         art.appearance.effects = one.appearance.effects.clone();
-        extra = art_cost(&art).minus(before);
         *one = art;
     }
     if let Some(blend) = outer {
@@ -2597,7 +2627,13 @@ pub(crate) fn dress_piece(one: &mut Node, look: &vectorcraft_plugins::painted::L
         g.blend = blend;
         *one = g;
     }
-    extra
+    Some(extra)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// What the art [`dress_piece`] has reshaped on this thread has cost, all together.
+    pub(crate) static DRESSED: std::cell::Cell<Budget> = const { std::cell::Cell::new(Budget { anchors: 0, lines: 0 }) };
 }
 
 /// What a painted piece with geometry `path` costs: its anchors and lines, plus a share of the
@@ -2662,10 +2698,7 @@ fn paint_piece(
         let mut one = leaf.clone();
         one.appearance.items = items;
         set_geometry(&mut one, p.path.clone(), p.rule);
-        made = made.plus(dress_piece(&mut one, &p.look, doc));
-        if !budget.fits(made) {
-            return None;
-        }
+        made = made.plus(dress_piece(&mut one, &p.look, budget.minus(made), doc)?);
         children.push(Arc::new(one));
     }
     *leaf = Node::group(leaf.id, children);
@@ -2825,25 +2858,27 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
                     pieces.iter().map(|p| (p.path.clone(), p.rule, vectorcraft_plugins::painted::items(&it, p), p.look.clone())).collect::<Vec<_>>()
                 })
                 .filter(|pieces| room.fits(pieces.iter().map(|(p, ..)| piece_cost(p)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus)));
-            // The paths the pieces become, with their own geometry effects applied, and what they cost.
+            // The paths the pieces become, with their own geometry effects applied, and what they
+            // cost; `None` as soon as a piece's own geometry effects would pass `room`.
             let build = |returned: Vec<(PathData, FillRule, Vec<AppearanceItem>, vectorcraft_plugins::painted::Look)>| {
+                let returned: Vec<_> = returned.into_iter().filter(|(_, _, items, _)| !items.is_empty()).collect();
+                let mut made = returned.iter().map(|(path, ..)| piece_cost(path)).fold(Budget { anchors: 0, lines: 0 }, Budget::plus);
                 let mut group: Vec<Arc<Node>> = vec![];
-                let mut made = Budget { anchors: 0, lines: 0 };
-                for (path, rule, items, look) in returned.into_iter().filter(|(_, _, items, _)| !items.is_empty()) {
-                    made = made.plus(piece_cost(&path));
+                for (path, rule, items, look) in returned {
                     let mut p = piece(items);
                     set_geometry(&mut p, path, rule);
-                    made = made.plus(dress_piece(&mut p, &look, doc));
+                    made = made.plus(dress_piece(&mut p, &look, room.minus(made), doc)?);
                     group.push(Arc::new(p));
                 }
-                (group, made)
+                Some((group, made))
             };
             // A failed run, or pieces whose own geometry effects would pass the budget, draws the
-            // fill or stroke on the geometry it was given.
-            let (group, made) = painted
-                .map(&build)
-                .filter(|(_, made)| room.fits(*made))
-                .unwrap_or_else(|| build(vec![(g.clone(), rule, vec![it], Default::default())]));
+            // fill or stroke on the geometry it was given, at that geometry's own cost.
+            let (group, made) = painted.and_then(build).unwrap_or_else(|| {
+                let mut p = piece(vec![it]);
+                set_geometry(&mut p, g.clone(), rule);
+                (vec![Arc::new(p)], piece_cost(&g))
+            });
             *used = used.plus(made);
             let mut p = Node::group(leaf.id, group);
             transform_piece(&mut p, (ctx.seed, i, &kept), crate::raster::held_back(before), true, limit, used, doc);

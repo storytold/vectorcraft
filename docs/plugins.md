@@ -327,8 +327,8 @@ capability model proposed for PhotoCraft plug-ins
 - `api` is the plug-in API level the manifest is written for: `1` (the default), `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
   symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects), or `3`, which
-  adds a painted live effect's [`appearanceOutput`](#opacity-blending-and-effects-on-pieces). A higher one is refused. `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for
-  are read under `doc.read`, which a filter that lists `inputs` must list in `permissions`, so installing it asks the
+  adds a painted live effect's [`appearanceOutput`](#opacity-blending-and-effects-on-pieces). A higher one is refused.
+  `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which a filter that lists `inputs` must list in `permissions`, so installing it asks the
   user to grant them. A level 2 effect that declares `paintOutput` needs no other permission than `doc.read` and
   `effect.render`.
 - Parameter declarations are unchanged by permissions (`params`, below).
@@ -562,10 +562,11 @@ the module's start function, in a run that isn't a filter's run on a document, o
   geometry, at any level. Hosts at `api` 1 refuse the manifest for its `api`, so such an effect never draws unpainted
   there. A painted effect may say `"api": 3` without other changes.
 - `appearanceOutput` (painted live effects at `api` 3 only): `true` lets the pieces, and the fills and strokes they
-  return, carry [opacity, a blending mode and effects](#opacity-blending-and-effects-on-pieces). `true` is the only value
-  the key takes; `false`, `null`, another type, an effect without `paintOutput`, another kind or an `api` below 3 is
-  refused when the module is installed, and the error names `appearanceOutput`. It needs no permission beyond
-  `doc.read` and `effect.render`, which every live effect already has. Hosts at `api` 2 refuse the manifest for its `api`, so such an effect never draws without its looks.
+  return, carry [opacity, a blending mode and effects](#opacity-blending-and-effects-on-pieces). `true` is the only
+  value the key takes; `false`, `null`, another type, an effect without `paintOutput`, another kind or an `api` below 3
+  is refused when the module is installed, and the error names `appearanceOutput`. It needs no permission beyond
+  `doc.read` and `effect.render`, which every live effect already has. Hosts at `api` 2 refuse the manifest for its
+  `api`, so such an effect never draws without its looks.
 - `extensions` (exporters and importers only, and required): 1–8 file extensions, lower-case letters and digits
   without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
@@ -816,8 +817,9 @@ is a piece drawn by itself, in the order returned, with paints of its own:
 
 - `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
   ignored. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level `documentData`…) refuses the
-  result (an effect that declares `appearanceOutput` also takes `opacity`, `blend` and `effects`, [below](#opacity-blending-and-effects-on-pieces)), as does a key that a paint, its color, a gradient stop, a gradient's placement or a freeform point does not
-  have, such as `opacity` on a solid paint.
+  result (an effect that declares `appearanceOutput` also takes `opacity`, `blend` and `effects`,
+  [below](#opacity-blending-and-effects-on-pieces)), as does a key that a paint, its color, a gradient stop, a gradient's
+  placement or a freeform point does not have, such as `opacity` on a solid paint.
 - `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
   painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
   a filter's output sets them: an existing fill or stroke keeps its own effects, opacity and blending, and a new stroke
@@ -877,15 +879,18 @@ fill and stroke the piece returns, three more keys:
   `axes` and `name`, a Warp's `version`, a `color`, a Levels or Curves `channel`, a Radial Blur's center and the
   Pathfinder Options. Omitted parameters take the effect's defaults. On a fill or stroke only raster effects are
   taken, and only from an effect in the object's stack: the fills or strokes that an effect on a fill or a stroke
-  returns take `opacity` and `blend` but no `effects` (its pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a piece carries never
-  run a plug-in.
+  returns take `opacity` and `blend` but no `effects` (its pieces still take them). A plug-in effect (`plugin.<id>`),
+  this effect's own included, is refused, so the effects a piece carries never run a plug-in.
 - Left out, a piece's opacity is the object's, its blending mode Normal and its effects none; a fill or stroke keeps
   the opacity, blending and effects it would have without the keys. Given, a piece's opacity multiplies the object's,
   and its effects and a fill's or stroke's come after the ones it already has. The object's own opacity, blending mode
   and later effects still apply once to all the pieces together.
 - A piece's geometry effects reshape it before the effects after this one in the object's stack, which then run on
   the reshaped piece once. Its raster effects draw on the piece. What the geometry effects make counts against the
-  budget of the object's geometry effects, with the pieces.
+  budget of the object's geometry effects, with the pieces: each piece's effects run within what the pieces and the
+  pieces before it leave of it. When a piece's effects would go past that, or a Transform effect would make fewer
+  copies than it asks for, the pieces after it are not built, none of the effect's pieces are drawn, and the object, or
+  the fill or stroke the effect is on, draws the geometry it was given.
 - A bad value refuses the whole result as any other fault does, naming the field: for example
   `objects[1].blend: unknown blending mode; …` or `objects[0].fills[1].effects[2]: plug-in effects are not allowed in
   returned effects`. Without `appearanceOutput`, the three keys are refused as before.

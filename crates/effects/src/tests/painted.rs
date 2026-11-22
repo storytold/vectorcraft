@@ -8,7 +8,7 @@ use vectorcraft_plugins::wat as tpl;
 
 use crate::geometry::Budget;
 use crate::reshape;
-use crate::reshape::{HELD_PEAK, PLUGIN_RUNS};
+use crate::reshape::{DRESSED, HELD_PEAK, PLUGIN_RUNS};
 
 /// Installs live-effect plug-in `id`, which paints what it returns, replacing one with the same id:
 /// its effect returns `output` whatever it is given.
@@ -348,6 +348,82 @@ fn a_piece_s_own_geometry_effects_keep_to_the_budget() {
     vectorcraft_plugins::registry::remove(id);
 }
 
+/// Where [`many_heavy_pieces`] puts its effect.
+#[derive(Clone, Copy, Debug)]
+enum HeavyOn {
+    /// The object's own effects.
+    Object,
+    /// The square's fill, as its only effect.
+    Fill,
+    /// The square's fill, after a painted effect that returns the square.
+    LaterOnFill,
+}
+
+/// Ten painted pieces, each drawn with 4% of the effects' budget, each with a Transform effect that
+/// makes 14 copies of it (60% of the budget per piece), from an effect on a square `on`: they would
+/// pass the budget together, so the square is drawn as it was. The pieces' own geometry effects keep
+/// to what the pieces before them left: the art reshaped for them costs less than the budget
+/// together, and so does the art drawn.
+fn many_heavy_pieces(on: HeavyOn) {
+    let id = format!("test.effects.look.heavy{on:?}").to_lowercase();
+    let pieces: Vec<_> = (0..10)
+        .map(|k| json!({"path": drawn_share(0.04, 1_000.0 * f64::from(k)), "effects": [{"id": "distort.transform", "params": {"copies": 14, "moveH": 10.0}}]}))
+        .collect();
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{{}}}}"#
+    );
+    let module = wat::parse_str(tpl::returning(&manifest, &json!({ "objects": pieces }).to_string())).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&module).unwrap();
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let first = format!("{id}.first");
+    install_painting(&first, &json!({"objects": [{"path": square}]}));
+    let mut n = Node::path(NodeId(9), square.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let heavy = Effect { id: format!("plugin.{id}"), params: json!({}), visible: true };
+    let fill = n.appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    match on {
+        HeavyOn::Object => n.appearance.effects.push(heavy),
+        HeavyOn::Fill => n.appearance.items[fill].effects_mut().push(heavy),
+        HeavyOn::LaterOnFill => {
+            n.appearance.items[fill].effects_mut().push(Effect { id: format!("plugin.{first}"), params: json!({}), visible: true });
+            n.appearance.items[fill].effects_mut().push(heavy);
+        }
+    }
+    DRESSED.with(|d| d.set(Budget { anchors: 0, lines: 0 }));
+    let art = reshape(None, &n, None).unwrap();
+    let dressed = DRESSED.with(std::cell::Cell::get);
+    assert!(Budget::EFFECTS.fits(dressed), "{on:?}: the pieces' own effects made {dressed:?}");
+    let (mut bounds, mut drawn) = (vec![], Budget { anchors: 0, lines: 0 });
+    art.walk(&mut |c| {
+        if let Some(p) = c.path_data() {
+            bounds.push(p.bounds());
+            drawn = drawn.plus(Budget::of(p));
+        }
+    });
+    // On a fill, the fill and the stroke are paths of their own.
+    assert!(!bounds.is_empty() && bounds.iter().all(|b| *b == square.bounds()), "{on:?}: {bounds:?}");
+    assert!(Budget::EFFECTS.fits(drawn), "{on:?}: the art costs {drawn:?}");
+    vectorcraft_plugins::registry::remove(&id);
+    vectorcraft_plugins::registry::remove(&first);
+}
+
+/// [`many_heavy_pieces`] from the object's own effect.
+#[test]
+fn heavy_pieces_of_an_object_s_effect_stop_within_the_budget() {
+    many_heavy_pieces(HeavyOn::Object);
+}
+
+/// [`many_heavy_pieces`] from an effect on a fill.
+#[test]
+fn heavy_pieces_of_a_fill_s_effect_stop_within_the_budget() {
+    many_heavy_pieces(HeavyOn::Fill);
+}
+
+/// [`many_heavy_pieces`] from a later effect on a fill.
+#[test]
+fn heavy_pieces_of_a_later_effect_on_a_fill_stop_within_the_budget() {
+    many_heavy_pieces(HeavyOn::LaterOnFill);
+}
+
 /// A piece's own geometry effect reshapes it before the source's later effects run, and those run
 /// on it once: the square at 120, 40 grown by a 10 pt Offset Path, then moved 100 pt right by the
 /// source's Transform effect. The piece's opacity and blending mode stay on the path it becomes.
@@ -395,7 +471,7 @@ fn a_piece_s_look_runs_only_its_own_geometry_effects() {
         effects: vec![Effect { id: "path.offsetPath".into(), params: json!({"offset": 10.0}), visible: true }],
         ..Default::default()
     };
-    crate::reshape::dress_piece(&mut n, &look, None);
+    crate::reshape::dress_piece(&mut n, &look, Budget::EFFECTS, None).unwrap();
     let mut paths = vec![];
     n.walk(&mut |c| {
         if let Some(b) = c.path_data().and_then(PathData::bounds) {
@@ -417,7 +493,7 @@ fn a_piece_s_blending_mode_nests_in_the_object_s_same_mode() {
         Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
     n.blend = BlendMode::Multiply;
     let look = vectorcraft_plugins::painted::Look { blend: Some(BlendMode::Multiply), ..Default::default() };
-    crate::reshape::dress_piece(&mut n, &look, None);
+    crate::reshape::dress_piece(&mut n, &look, Budget::EFFECTS, None).unwrap();
     let mut blends = vec![];
     n.walk(&mut |c| blends.push(c.blend));
     assert_eq!(blends, [BlendMode::Multiply, BlendMode::Multiply]);
@@ -435,7 +511,7 @@ fn a_reshaped_piece_s_opacity_and_blending_mode_apply_once() {
         blend: Some(BlendMode::Screen),
         effects: vec![Effect { id: "path.offsetPath".into(), params: json!({"offset": 10.0}), visible: true }],
     };
-    crate::reshape::dress_piece(&mut n, &look, None);
+    crate::reshape::dress_piece(&mut n, &look, Budget::EFFECTS, None).unwrap();
     let (mut opacity, mut blends) = (1.0f32, vec![]);
     n.walk(&mut |c| {
         opacity *= c.opacity;
