@@ -1028,14 +1028,14 @@ fn free_copy_in(taken: &mut HashSet<String>, base: &str, reserved: impl Fn(&str)
 /// `target`, the import having made swatch `made` for it (removed again). A numbered name skips
 /// the names of the library's other swatches (`lib_by_name`), as for a color; so does a swatch
 /// named after its pattern when the pattern's name is one of them. The swatch takes the library
-/// swatch's name when it is free and the library has no other swatch of that name, and leaves a
+/// swatch's numbered name when it is free and the library has no other swatch of that name, and leaves a
 /// numbered name the library gives an earlier swatch to that one.
 fn pattern_swatch_name(w: &Swatch, target: &str, made: Option<String>, taken: &mut HashSet<String>, lib_by_name: &HashMap<&str, &Swatch>) -> String {
     let reserved = |n: &str| lib_by_name.contains_key(n);
     let owns = lib_by_name.get(w.name.as_str()).is_some_and(|o| *o == w);
     let named_after = matches!(&w.paint, Paint::Pattern { pattern, .. } if *pattern == w.name);
     match made {
-        _ if named_after && owns && !taken.contains(&w.name) => w.name.clone(),
+        _ if named_after && owns && numbered_name(&w.name) && !taken.contains(&w.name) => w.name.clone(),
         _ if !owns && numbered_name(&w.name) && !taken.contains(&w.name) => {
             let mut held = taken.clone();
             held.insert(w.name.clone());

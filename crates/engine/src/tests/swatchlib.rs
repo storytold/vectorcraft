@@ -1536,6 +1536,32 @@ fn a_new_patterns_swatch_takes_the_library_swatchs_free_name() {
     assert_eq!(doc(&s).swatch("Tiles 2").map(|w| w.paint.clone()), paint, "{r} {again}");
 }
 
+/// A library pattern swatch "Tiles" named after its pattern, added to a document that has another
+/// pattern "Tiles" without a swatch, is named after the pattern that comes in ("Tiles 2"), as
+/// before numbered names were reserved: only a numbered name is kept for the library swatch.
+#[test]
+fn a_new_patterns_swatch_of_an_unnumbered_name_is_named_after_its_pattern() {
+    let mut s = session();
+    let dot = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 6, "height": 6}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [dot]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Tiles", "width": 8, "height": 8}));
+    run(&mut s, "object.pattern.done", json!({}));
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Tiles.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let own = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 9, "height": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [own]}));
+    run(&mut s, "object.pattern.make", json!({"name": "Tiles", "width": 12, "height": 12}));
+    run(&mut s, "object.pattern.done", json!({}));
+    run(&mut s, "swatch.delete", json!({"names": ["Tiles"]}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
+    let added = r["added"].as_array().and_then(|a| a.first()).and_then(|n| n.as_str()).unwrap_or_default().to_string();
+    assert_ne!(added, "Tiles", "{r}");
+    let paint = doc(&s).swatch(&added).map(|w| w.paint.clone());
+    assert!(matches!(&paint, Some(Paint::Pattern { pattern, .. }) if *pattern == added), "{r} {paint:?}");
+    assert!(doc(&s).swatch("Tiles").is_none(), "{r}");
+}
+
 /// A library whose process color "Ink 2" shares its name with a global color in a color group
 /// that a pattern's art is painted with: the global color comes in numbered, so adding the
 /// library's "Ink 2" next adds the process color under its own name.
@@ -1692,7 +1718,8 @@ fn a_pasted_pattern_is_not_reused_by_giving_a_librarys_name_to_another_color() {
     run(&mut s, "swatch.delete", json!({"names": ["Ink 2"], "unlink": false}));
     run(&mut s, "swatch.delete", json!({"names": ["Tiles"]}));
     let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
-    let pattern = match doc(&s).swatch("Tiles").map(|w| w.paint.clone()) {
+    let added = r["added"].as_array().and_then(|a| a.first()).and_then(|n| n.as_str()).unwrap_or_default().to_string();
+    let pattern = match doc(&s).swatch(&added).map(|w| w.paint.clone()) {
         Some(Paint::Pattern { pattern, .. }) => pattern,
         p => panic!("{r} {p:?}"),
     };
