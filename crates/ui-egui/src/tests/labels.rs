@@ -359,7 +359,8 @@ fn shortcut_set_old_name_is_accepted() {
     let (old, _) = crate::shortcut_editor::LEGACY_PRESETS[0];
     assert_eq!(PRESETS, ["VectorCraft Defaults", "Classic Defaults"]);
     // UI preferences saved by an earlier version load (and save again) under the current name.
-    let ui: crate::state::UiState = serde_json::from_value(json!({ "shortcut_set": old })).unwrap();
+    // A loaded file's old keys become the sets as the settings are sanitized.
+    let ui = serde_json::from_value::<crate::state::UiState>(json!({ "shortcut_set": old })).unwrap().sanitized();
     assert_eq!(ui.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     let saved = serde_json::to_value(&ui).unwrap();
     assert_eq!(saved["shortcut_sets"]["active"], "Classic Defaults");

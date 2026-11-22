@@ -23,7 +23,10 @@ fn the_halftone_menu_item_opens_a_previewing_dialog() {
     dialogs::host::pump(&mut app, &ctx);
     assert!(app.session.in_interaction(), "the preview runs");
     assert!(app.session.active().unwrap().doc.node(id).is_none(), "the preview shows the halftone in place of the art");
-    app.run("ui.dialog.set", json!({"dialog": dialogs::halftone::CMD, "field": "mode", "value": "cmyk"})).unwrap();
+    // A control channel method, not an engine command.
+    let (req, _) = craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": "mode", "value": "cmyk"}));
+    let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("ui.dialog.set answers at once") };
+    assert_eq!(r["ok"], true, "{r}");
     dialogs::host::pump(&mut app, &ctx);
     let undo = app.session.doc().unwrap().history.undo.len();
     host.with(|h| h.confirm_by_id(&ctx, dialog));
