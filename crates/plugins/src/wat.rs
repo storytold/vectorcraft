@@ -22,7 +22,8 @@ const ALLOC: &str = r#"(func (export "vc_alloc") (param $n i32) (result i32) (lo
     (if (result i32) (i32.eq (local.get $old) (i32.const -1)) (then (i32.const 0)) (else (i32.mul (local.get $old) (i32.const 65536)))))"#;
 
 /// A plug-in module: `manifest` (JSON), a `vc_run` whose body is `run` (parameters `$in $il $pp
-/// $pl`, result i64), extra module fields `extra` and `pages` of initial memory. `vc_alloc` grows
+/// $pl`, result i64), extra module fields `extra` and `pages` of initial memory (at least 1: with
+/// none, the first `vc_alloc` block would start at 0, which the host refuses). `vc_alloc` grows
 /// memory by whole pages, so its blocks never overlap data segments. The manifest comes from the
 /// `vc_manifest` export, which the host calls when it loads the module ([`sectioned`] carries it in
 /// a custom section instead).
@@ -37,6 +38,7 @@ pub fn module(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
   {ALLOC}
   (func (export "vc_run") (param $in i32) (param $il i32) (param $pp i32) (param $pl i32) (result i64)
     {run}))"#,
+        pages = pages.max(1),
         data = string(manifest),
         len = manifest.len(),
     )
@@ -50,7 +52,7 @@ pub fn custom_section(name: &str, data: &[u8]) -> String {
 /// A plug-in module like [`module`] that carries `manifest` in its `vc_manifest` custom section
 /// ([`crate::manifest::MANIFEST_SECTION`]) and exports only `memory`, `vc_alloc` and `vc_run`: the
 /// host reads the manifest without running any of its code. The host loads it only when `manifest`
-/// gives `"abi": 1`.
+/// gives `"abi": 1`. It has `pages` of initial memory, at least 1, as [`module`] has.
 pub fn sectioned(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
     format!(
         r#"(module
@@ -61,15 +63,20 @@ pub fn sectioned(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
   (func (export "vc_run") (param $in i32) (param $il i32) (param $pp i32) (param $pl i32) (result i64)
     {run}))"#,
         section = custom_section(crate::manifest::MANIFEST_SECTION, manifest.as_bytes()),
+        pages = pages.max(1),
     )
 }
 
 /// `module` (a module in WebAssembly text that starts with `(module`, after any white space) with
-/// the module field `field` added first, such as a [`custom_section`]; `None` when `module` does not
-/// start with `(module`.
+/// the module field `field` added first, after the module's `$name` when it has one, such as a
+/// [`custom_section`]; `None` when `module` does not start with `(module`.
 pub fn with_field(module: &str, field: &str) -> Option<String> {
     let rest = module.trim_start().strip_prefix("(module")?;
-    Some(format!("(module\n  {field}{rest}"))
+    let Some(id) = rest.trim_start().strip_prefix('$') else {
+        return Some(format!("(module\n  {field}{rest}"));
+    };
+    let (name, rest) = id.split_at(id.find(|c: char| c.is_whitespace() || c == '(' || c == ')').unwrap_or(id.len()));
+    Some(format!("(module ${name}\n  {field}{rest}"))
 }
 
 /// A `vc_run` body returning the input unchanged.

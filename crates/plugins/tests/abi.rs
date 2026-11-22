@@ -538,6 +538,20 @@ fn the_manifest_section_needs_no_manifest_export_and_wins_over_one() {
     assert_eq!((p.id(), p.manifest().kind), ("test.plugin", Kind::Filter));
 }
 
+/// A test plug-in asked for no initial memory still gets one page, so its first `vc_alloc` block is
+/// not at 0; a field added to a named module goes after the module's name.
+#[test]
+fn test_modules_with_no_pages_or_a_name_still_build() {
+    for src in [tpl::sectioned(SECTION, tpl::ECHO, "", 0), tpl::module(MANIFEST, tpl::ECHO, "", 0)] {
+        let p = Plugin::load(&build(&src), Limits::default()).unwrap();
+        assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    }
+    let named = tpl::module(MANIFEST, tpl::ECHO, "", 1).replacen("(module", "(module $named", 1);
+    let p = Plugin::load(&build(&with_section(&named, SECTION.as_bytes())), Limits::default()).unwrap();
+    assert_eq!(p.id(), "test.plugin");
+    assert_eq!(tpl::with_field("(module)", "(memory 1)").as_deref(), Some("(module\n  (memory 1))"));
+}
+
 /// The section's manifest gives the ABI version as `abi`, which the host checks in place of the
 /// `vc_abi_version` export: left out or another version, the module is refused, whatever its
 /// export returns.
