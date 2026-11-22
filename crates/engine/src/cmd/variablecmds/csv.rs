@@ -3,6 +3,7 @@ use super::{
     json, read_file_head, str_param, variables_unlocked, write_file,
 };
 use crate::cmd::place::text::windows_1252;
+use crate::cmd::{MAX_GRAPH_DATA_FILE, text_param};
 
 /// Cap on a graph variable's CSV (MCP and files are untrusted).
 pub(super) const MAX_GRAPH_CSV: usize = 256 * 1024;
@@ -32,20 +33,17 @@ fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<(Vec<u8>, bool)> {
 }
 
 /// The text of a datasets CSV given as a file or as `dataBase64`: UTF-16 after a UTF-16
-/// byte-order mark, else UTF-8, with or without a byte-order mark, else Windows-1252. A file
-/// that starts with a byte-order mark must be valid in its encoding, and a file without one must
-/// not hold NUL bytes (UTF-16 without a byte-order mark).
+/// byte-order mark, else UTF-16 without one when the file holds NUL bytes (see
+/// [`utf16_without_mark`]), else UTF-8, with or without a byte-order mark, else Windows-1252. A
+/// file that starts with a byte-order mark must be valid in its encoding, and a file with NUL
+/// bytes and no byte-order mark must read as UTF-16 by [`utf16_without_mark`]'s rule.
 fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
-    let utf16 = |rest: &[u8], le: bool| {
-        let (units, odd) = rest.as_chunks::<2>();
-        let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
-        let text = char::decode_utf16(units).collect::<std::result::Result<String, _>>();
-        text.ok().filter(|_| odd.is_empty()).ok_or_else(|| bad(cmd, "CSV is not UTF-16"))
-    };
     match bytes {
-        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true),
-        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false),
-        _ if bytes.contains(&0) => return Err(bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark")),
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true).ok_or_else(|| bad(cmd, "CSV is not UTF-16")),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false).ok_or_else(|| bad(cmd, "CSV is not UTF-16")),
+        _ if bytes.contains(&0) => {
+            return utf16_without_mark(bytes).ok_or_else(|| bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark"));
+        }
         _ => {}
     }
     match std::str::from_utf8(bytes) {
@@ -53,6 +51,44 @@ fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
         Err(_) if bytes.starts_with(b"\xEF\xBB\xBF") => Err(bad(cmd, "CSV is not UTF-8")),
         Err(_) => Ok(bytes.iter().map(|&b| windows_1252(b)).collect()),
     }
+}
+
+/// `bytes` as UTF-16, little-endian when `le` is set, or `None` when they aren't valid UTF-16.
+fn utf16(bytes: &[u8], le: bool) -> Option<String> {
+    let (units, odd) = bytes.as_chunks::<2>();
+    let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
+    char::decode_utf16(units).collect::<std::result::Result<String, _>>().ok().filter(|_| odd.is_empty())
+}
+
+/// The byte order of `bytes`, which hold NUL bytes and no byte-order mark, read as UTF-16:
+/// `Some(true)` for little-endian, or `None` when they don't read as UTF-16. At least half of the
+/// two-byte units must hold a NUL byte, as characters from U+0001 to U+00FF do; a file with fewer,
+/// such as UTF-8 or Windows-1252 text with stray NUL bytes, is refused. The byte order is the one
+/// that reads a line break (`\n` or `\r`). The other order reads one only from U+0A00 or U+0D00,
+/// so a file that reads one in both orders is refused. A file that reads none in either order (one
+/// line) is big-endian when more of its units start with a NUL byte than end with one, as
+/// characters from U+0001 to U+00FF do in that order, and little-endian otherwise. An odd last
+/// byte is left out of the count.
+pub fn utf16_order_without_mark(bytes: &[u8]) -> Option<bool> {
+    let units = bytes.as_chunks::<2>().0;
+    if units.iter().filter(|c| c.contains(&0)).count() * 2 < units.len() {
+        return None;
+    }
+    let is_line_break = |u: u16| matches!(u, 0x0A | 0x0D);
+    let lines_le = units.iter().any(|&c| is_line_break(u16::from_le_bytes(c)));
+    let lines_be = units.iter().any(|&c| is_line_break(u16::from_be_bytes(c)));
+    match (lines_le, lines_be) {
+        (true, true) => None,
+        (false, false) => Some(units.iter().filter(|c| c[0] == 0).count() <= units.iter().filter(|c| c[1] == 0).count()),
+        (_, lines_be) => Some(!lines_be),
+    }
+}
+
+/// `bytes`, which hold NUL bytes and no byte-order mark, as UTF-16 in the byte order
+/// [`utf16_order_without_mark`] gives, or `None`. The file must have an even length, and the text
+/// must be valid UTF-16 in that order and hold no NUL character.
+fn utf16_without_mark(bytes: &[u8]) -> Option<String> {
+    utf16(bytes, utf16_order_without_mark(bytes)?).filter(|text| !text.contains('\0'))
 }
 
 /// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.
@@ -233,10 +269,11 @@ fn export_header(v: &Variable) -> String {
 
 /// What [`dataset_import`] does with each variable's column of the CSV that [`datasets_to_csv`]
 /// writes, in a document without the variables: the first list names the variables whose header
-/// or values it refuses, so it doesn't import the file (a `%` header, a `#` header whose values
-/// aren't true or false, a header that names a variable an earlier column named), and the second
-/// the variables it reads as another variable (a text variable whose name starts with `#` or `@`,
-/// and a graph variable, which no header cell defines).
+/// or values it refuses, so it doesn't import the file (a `%` header over values, which it reads as
+/// paths of graph data files, a `#` header whose values aren't true or false, a header that names
+/// a variable an earlier column named), and the second the variables it reads as another variable
+/// (a variable whose name starts with `#`, `@` or `%` and isn't of that prefix's kind, and a graph
+/// variable, which the export writes without `%`).
 fn kinds_a_new_document_loses(vars: &Variables) -> (Vec<&str>, Vec<&str>) {
     const C: &str = "dataset.import";
     let none = BTreeMap::new();
@@ -252,9 +289,11 @@ fn kinds_a_new_document_loses(vars: &Variables) -> (Vec<&str>, Vec<&str>) {
             refused.push(v.name.as_str());
             continue;
         };
+        // A `%` header's cells are paths of graph data files, which the values the export writes aren't.
+        let files = kind == VariableKind::Graph && name != cell;
         let cells_read = vars.datasets.iter().filter_map(|d| d.values.get(&v.name)).all(|val| {
             let cell = value_to_cell(val);
-            cell_to_value(kind, &cell, cell.is_empty(), &name, 2, C).is_ok()
+            if files { cell.trim().is_empty() } else { cell_to_value(kind, &cell, cell.is_empty(), &name, 2, C).is_ok() }
         });
         if !cells_read {
             refused.push(v.name.as_str());
@@ -305,7 +344,9 @@ fn datasets_to_csv(vars: &Variables, cmd: &str) -> Result<String> {
 /// that earlier columns define) names that variable. Otherwise `#` before the name makes it a
 /// visibility variable, `@` makes it an image variable, and a cell without a prefix names a text
 /// variable. A prefixed name that is already a variable must be one of the prefix's kind; a new
-/// name is added to `defined`. A `%` cell that names no variable (graph data files) is refused.
+/// name is added to `defined`. `%` before a name makes it a graph variable whose column holds the
+/// paths of graph data files ([`graph_file_value`]); [`dataset_import`] tells such a column apart
+/// by a returned name that is not the cell.
 fn header_variable(
     cell: &str,
     column: usize,
@@ -321,8 +362,8 @@ fn header_variable(
         (rest.trim(), VariableKind::Visibility)
     } else if let Some(rest) = cell.strip_prefix('@') {
         (rest.trim(), VariableKind::Image)
-    } else if cell.starts_with('%') {
-        return Err(bad(cmd, format!("column {column}: `{cell}` is a `%` column of graph data files, which are not read")));
+    } else if let Some(rest) = cell.strip_prefix('%') {
+        (rest.trim(), VariableKind::Graph)
     } else {
         (cell, VariableKind::Text)
     };
@@ -340,13 +381,94 @@ fn header_variable(
     }
 }
 
+/// The most bytes the `%` columns of one import read from graph data files and keep as graph
+/// values, counted together: each file's bytes once (it is read once, however many cells name it),
+/// and the graph value of every cell, which each data set holds a copy of.
+const MAX_GRAPH_FILES_TOTAL: usize = 256 * 1_048_576;
+
+/// The graph data files the `%` columns of one import have read, by path, and the bytes counted
+/// against [`MAX_GRAPH_FILES_TOTAL`] so far.
+#[derive(Default)]
+struct GraphFiles {
+    read: BTreeMap<String, String>,
+    total: usize,
+}
+
+/// The graph value of a `%` column's cell `path` on file line `line`, in 1-based `column`, for the
+/// graph variable `var`: the graph data file at `path` (taken from the folder `base` when
+/// relative), read as Graph Data's Import Data reads one ([`crate::cmd::graph::graph_csv_from_file`]),
+/// or no value for an empty cell. The path is followed as an image variable's path is
+/// ([`crate::cmd::fileio::document_path`]): only files on this computer, or on the network share
+/// `base` is on, are read. A relative path without `base`, a path on another computer or share, a
+/// device or a URL, a file that can't be read or is larger than 1 MB, a file that gives a graph
+/// value longer than [`MAX_GRAPH_CSV`] bytes and more than [`MAX_GRAPH_FILES_TOTAL`] bytes in all
+/// are refused, with the line and the column.
+fn graph_file_value(files: &mut GraphFiles, path: &str, base: Option<&str>, var: &str, (line, column): (usize, usize)) -> Result<Option<DataValue>> {
+    const C: &str = "dataset.import";
+    let path = path.trim();
+    if path.is_empty() {
+        return Ok(None);
+    }
+    // Without `base`, a path that stays relative once a `file:` URL is read is refused here, so the
+    // error says what to give.
+    if base.is_none() && craft_docpath::resolve(path, None).is_ok_and(|p| !p.is_absolute()) {
+        return Err(bad(
+            C,
+            format!("line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path"),
+        ));
+    }
+    // `document_path` takes a relative path from the folder of a document; any file name in `base`
+    // stands for the CSV there.
+    let document = base.map(|base| std::path::Path::new(base).join("data sets.csv").to_string_lossy().into_owned());
+    let full = crate::cmd::fileio::document_path(path, document.as_deref())
+        .map_err(|r| bad(C, format!("line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}")))?;
+    let csv = match files.read.get(&full) {
+        Some(csv) => csv.clone(),
+        None => {
+            // One byte past the limit is enough to refuse the file.
+            let bytes = read_file_head(&full, MAX_GRAPH_DATA_FILE + 1)
+                .map_err(|e| bad(C, format!("line {line}, column {column}: the graph data file for `{var}` can't be read: {e}")))?;
+            if bytes.len() > MAX_GRAPH_DATA_FILE {
+                return Err(bad(
+                    C,
+                    format!("line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes"),
+                ));
+            }
+            let csv = crate::cmd::graph::graph_csv_from_file(&bytes)?;
+            if csv.len() > MAX_GRAPH_CSV {
+                return Err(bad(
+                    C,
+                    format!(
+                        "line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes"
+                    ),
+                ));
+            }
+            files.total += bytes.len();
+            files.read.insert(full, csv.clone());
+            csv
+        }
+    };
+    files.total += csv.len();
+    if files.total > MAX_GRAPH_FILES_TOTAL {
+        return Err(bad(C, format!("line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all")));
+    }
+    Ok(Some(DataValue::Graph(csv)))
+}
+
 /// Import datasets from CSV. Every header cell names a variable, as [`header_variable`] reads it,
 /// and the variables the document doesn't define yet are defined, unbound. Two headers that name
-/// one variable are refused. The rows replace every dataset of the document and are named "Data
-/// Set 1", "Data Set 2" and so on, in file order. The document's variables and their bindings
+/// one variable are refused. The cells of a `%` column are paths of graph data files
+/// ([`graph_file_value`]); a relative one is taken from the folder `base` gives, else from the
+/// folder of the file `path` names. The rows replace every dataset of the document and are named
+/// "Data Set 1", "Data Set 2" and so on, in file order. The document's variables and their bindings
 /// stay. One undo step, and none when the variables and datasets stay as they were.
 pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
+    let base = match text_param(p, "base", C)? {
+        Some("") => return Err(bad(C, "`base` is empty")),
+        Some(base) => Some(absolute_path(base)),
+        None => str_param(p, "path").and_then(|path| std::path::Path::new(&absolute_path(path)).parent().map(|d| d.to_string_lossy().into_owned())),
+    };
     let (bytes, given_as_text) = datasets_csv_bytes(p, C)?;
     // `data` and `csv` are already text, NUL characters included (`dataset.export` writes them).
     let text = if given_as_text { String::from_utf8(bytes).map_err(|_| bad(C, "CSV is not UTF-8"))? } else { datasets_csv_text(&bytes, C)? };
@@ -355,7 +477,8 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "CSV is empty"));
     };
     let kinds: BTreeMap<String, VariableKind> = s.doc()?.doc.variables.variables.iter().map(|v| (v.name.clone(), v.kind)).collect();
-    let mut columns: Vec<(usize, String, VariableKind)> = Vec::new();
+    // Each column: its index, its variable and kind, and whether its cells are graph data files.
+    let mut columns: Vec<(usize, String, VariableKind, bool)> = Vec::new();
     let mut defined: Vec<Variable> = Vec::new();
     for (i, h) in header.iter().enumerate() {
         let cell = h.trim();
@@ -363,11 +486,12 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("empty header in column {}", i + 1)));
         }
         let (name, kind) = header_variable(cell, i + 1, &kinds, &mut defined, C)?;
-        if let Some(&(first, ..)) = columns.iter().find(|(_, n, _)| *n == name) {
+        if let Some(&(first, ..)) = columns.iter().find(|(_, n, ..)| *n == name) {
             let (first, column) = (first + 1, i + 1);
             return Err(bad(C, format!("columns {first} and {column} both name the variable `{name}`")));
         }
-        columns.push((i, name, kind));
+        let files = kind == VariableKind::Graph && name != cell;
+        columns.push((i, name, kind, files));
     }
     // Lock Variables refuses New Variable, so the import is refused when a header would define one.
     if !defined.is_empty() {
@@ -377,13 +501,19 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "CSV has a header but no data rows"));
     }
     let mut parsed: Vec<DataSet> = Vec::new();
+    let mut files = GraphFiles::default();
     for (n, &(line, ref row, ref quoted)) in rows.iter().skip(1).enumerate() {
         let name = format!("Data Set {}", n + 1);
         let mut values = BTreeMap::new();
-        for &(col, ref var, kind) in &columns {
+        for &(col, ref var, kind, from_files) in &columns {
             let cell = row.get(col).map(String::as_str).unwrap_or("");
             let was_quoted = quoted.get(col).copied().unwrap_or(false);
-            if let Some(v) = cell_to_value(kind, cell, was_quoted, var, line, C)? {
+            let value = if from_files {
+                graph_file_value(&mut files, cell, base.as_deref(), var, (line, col + 1))?
+            } else {
+                cell_to_value(kind, cell, was_quoted, var, line, C)?
+            };
+            if let Some(v) = value {
                 values.insert(var.clone(), v);
             }
         }

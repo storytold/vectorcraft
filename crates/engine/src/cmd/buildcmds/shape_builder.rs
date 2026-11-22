@@ -1,7 +1,7 @@
 use super::{
-    Beside, BuilderMap, EngineError, FillRule, Node, NodeId, PathData, Point, Rect, Result, Session, SubPath, Touched, Value, b, bad, check_numbers,
-    f64_or, fill_param, finite, gap_param, ids_json, json, marquee_param, po, points_param, remnant, replace_leaves, replace_with_pieces, root_ids,
-    shape_node, switch_or,
+    Arc, Beside, BuilderMap, EngineError, FillRule, Node, NodeId, PathData, Point, Rect, Result, Session, Touched, Value, b, bad, check_numbers,
+    f64_or, fill_param, finite, gap_param, ids_json, json, marquee_param, named_ids, number_or, outermost, paint_param, po, point_param,
+    points_param, remnant, replace_leaves, replace_with_pieces, root_ids, shape_node, switch_or,
 };
 
 pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
@@ -41,6 +41,7 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
     let gap = gap_param(p);
     // The map the Shape Builder tool already has, which a click or drag of it is made over.
     let shared = s.tool.shape_builder_map().filter(|(_, g)| *g == gap);
+    let prepared = s.tool.shape_builder_merge();
     let label = if erase { "Shape Builder Delete" } else { "Shape Builder" };
     let (ids, merged, touched, split) = s.edit(label, |d, sel| {
         let (shapes, leaves) = b::shape_builder_shapes(d, &roots, open_filled_as_closed);
@@ -62,7 +63,7 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
             && let Some(&q) = pts.first()
             && let Some((i, run)) = map.stroke_at(&outlines, q, tol)
             && let (Some(leaf), Some(drawn)) = (leaves.get(i), outlines.get(i))
-            && let Some(rest) = po::cut_out(drawn, &run, open_filled_as_closed && !leaf.appearance.fill_paint().is_none(), b::outline_snap(drawn))
+            && let Some(rest) = po::cut_out(drawn, &run, open_filled_as_closed && leaf.appearance.has_drawn_fill(), b::outline_snap(drawn))
             && rest.length() > b::outline_snap(drawn)
         {
             // The path keeps the rest of it, and a copy of it with the run under the click goes
@@ -89,16 +90,28 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
             touched.add(map.hit(q, Some(tol)));
             return Ok((ids, None, touched, Some(split)));
         }
-        let mut touched = Touched { regions: marquee.map(|(a, b)| map.regions_in_marquee(a, b)).unwrap_or_default(), ..Default::default() };
-        touched.extend(&map.builder_hits_along(&pts, piece_tol));
-        touched.edges = map.erased_edges(&touched);
+        let touched = map.merge_touched(&pts, marquee, piece_tol);
         if touched.is_empty() {
             return Err(EngineError::Other("Shape Builder: no region under the pointer".into()));
         }
-        let cuts: Vec<&SubPath> = touched.edges.iter().filter_map(|&k| map.edges.get(k)?.0.path.subpaths.first()).collect();
+        let inputs = b::merge_inputs(&leaves.iter().collect::<Vec<_>>(), open_filled_as_closed);
+        // The tool computed this merge on another thread when it would come out the same.
+        let ready = prepared.as_ref().filter(|m| {
+            shared.as_ref().is_some_and(|(s, _)| Arc::ptr_eq(s, &m.map) && std::ptr::eq(s.as_ref(), map))
+                && m.gap == gap
+                && m.touched == touched
+                && m.inputs == inputs
+        });
+        let computed;
+        let geometry = match ready {
+            Some(m) => &m.geometry,
+            None => {
+                computed = b::merge_geometry(map, &touched, gap, &inputs);
+                &computed
+            }
+        };
         let picked: Vec<&po::Region> = touched.regions.iter().filter_map(|&i| map.regions.get(i).map(|r| &r.0)).collect();
-        let faces = po::FaceMerger::with_gap(&map.shapes, gap_param(p));
-        let union = if picked.is_empty() { PathData::default() } else { faces.merge(&picked) };
+        let union = &geometry.union;
         // Pick Color From Artwork: the merged shape takes the look of the front-most object under the
         // drag's first point, else under its last point, else of the front-most object. Color
         // Swatches: the current fill, with the rest of the look of the front-most object over the
@@ -115,7 +128,7 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         // What goes in place of each object the map was made from (none: it stays as it is).
         let mut outs: Vec<Option<Vec<Node>>> = vec![];
         let mut merged_id = None;
-        for (i, (sh, leaf)) in map.shapes.iter().zip(&leaves).enumerate() {
+        for (i, leaf) in leaves.iter().take(map.shapes.len()).enumerate() {
             let mut out = None;
             let pieces: Vec<usize> = map.lines.iter().enumerate().filter(|(_, (l, _))| l.key == i as u64).map(|(k, _)| k).collect();
             if !pieces.is_empty() {
@@ -131,41 +144,15 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     out = Some(kept);
                 }
-            } else {
+            } else if let Some(Some(rest)) = geometry.rests.get(i) {
                 // A shape loses the regions deleted or merged, then the edges deleted (each one on
-                // its outline, shared edges from every shape along them).
-                let in_union = picked.iter().any(|r| r.sources.contains(&i));
-                let mut rest = if in_union {
-                    // What is left of it: its faces not merged or deleted, united. They share their
-                    // edges with the merged faces exactly, where subtracting the merged shape left
-                    // slivers of the outline along them (#569). A sliver goes in only where the
-                    // shape covers it and the merged shape does not take it in.
-                    let kept: Vec<&po::Region> = map
-                        .regions
-                        .iter()
-                        .enumerate()
-                        .filter(|(k, (r, ..))| r.sources.contains(&i) && !touched.regions.contains(k))
-                        .map(|(_, (r, ..))| r)
-                        .collect();
-                    if kept.is_empty() { PathData::default() } else { faces.merge_rest(i, &kept, &picked) }
+                // its outline, shared edges from every shape along them). What is left of its own
+                // outline keeps its fill rule; united faces fill with non-zero.
+                out = Some(if rest.path.is_empty() {
+                    vec![]
                 } else {
-                    b::node_outline(leaf).map_or_else(|| sh.path.clone(), |o| o.0)
-                };
-                let fill_closes = open_filled_as_closed && !leaf.appearance.fill_paint().is_none();
-                // Edges come back from the planar map within a few hundredths of the outlines they
-                // follow, whatever else is selected.
-                let cut_tol = b::outline_snap(&sh.path);
-                let mut cut = false;
-                for piece in &cuts {
-                    if let Some(r) = po::cut_out(&rest, piece, fill_closes, cut_tol) {
-                        rest = r;
-                        cut = true;
-                    }
-                }
-                if in_union || cut {
-                    // What is left of its own outline keeps its fill rule; united faces fill with non-zero.
-                    out = Some(if rest.is_empty() { vec![] } else { vec![remnant(d, leaf, rest, in_union.then_some(FillRule::NonZero))] });
-                }
+                    vec![remnant(d, leaf, rest.path.clone(), rest.united.then_some(FillRule::NonZero))]
+                });
             }
             // The merged shape goes in place of the object it takes its look from, so it stays in
             // that object's group (a clip group too).
@@ -194,6 +181,49 @@ pub(super) fn sb_merge(s: &mut Session, p: &Value) -> Result<Value> {
         out["split"] = json!(e.0);
     }
     Ok(out)
+}
+
+pub(super) fn sb_copy_region(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shapeBuilder.copyRegion";
+    let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
+    let open_filled_as_closed = switch_or(p, "openFilledAsClosed", true, C)?;
+    let gap = number_or(p, "gap", 0.0, C)?;
+    if !(0.0..=po::SHAPE_BUILDER_MAX_GAP).contains(&gap) {
+        return Err(bad(C, format!("gap must be 0 to {} pt, not {gap}", po::SHAPE_BUILDER_MAX_GAP)));
+    }
+    let fill = paint_param(s, p, "fill", C)?.unwrap_or_else(|| s.paint.fill.clone());
+    let stroke = paint_param(s, p, "stroke", C)?.unwrap_or_else(|| s.paint.stroke.clone());
+    let look = s.new_art_look(fill, stroke, s.paint.stroke_width);
+    let area = {
+        let st = s.doc()?;
+        let d = &st.doc;
+        let named = match named_ids(p)? {
+            Some(ids) => {
+                if let Some(bad_id) = ids.iter().find(|i| d.node(**i).is_none()) {
+                    return Err(EngineError::NoNode(*bad_id));
+                }
+                // An object listed with a layer or group that holds it counts once.
+                Some(outermost(d, ids))
+            }
+            None => None,
+        };
+        // In isolation mode only the isolated layer or group's paths bound areas, and the new path
+        // goes inside it.
+        b::fill_area_roots(d, st.isolation, named.as_deref())
+            .and_then(|(roots, scope)| b::AreaFinder::new(d, &roots, scope, gap, open_filled_as_closed).find(pt))
+    };
+    let Some(area) = area else { return Err(EngineError::Other("Fill Area: no enclosed area under the pointer".into())) };
+    let id = s.edit("Fill Area", |d, sel| {
+        let mut n = shape_node(d, area.path.clone(), None);
+        look.apply(d, &mut n);
+        let id = n.id;
+        let mut above = Beside::above(d, &[area.above]);
+        above.put(d, area.above, vec![n])?;
+        above.finish(d)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0, "above": area.above.0 }))
 }
 
 pub(super) fn sb_regions(s: &mut Session, p: &Value) -> Result<Value> {

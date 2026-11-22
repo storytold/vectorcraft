@@ -63,6 +63,147 @@ pub(crate) fn ask_replace(app: &mut VectorcraftApp, path: &str, typed: &str) {
     app.ui.dialog = Some(Dialog::new(REPLACE, fields));
 }
 
+/// The dialog kind of the question whether a save or export may replace the files it writes beside
+/// the one picked in the save panel ([`ask_replace_files`]). Fields: `message`, `detail`, `files`
+/// (their paths), `allowed` (files an earlier OK allowed), `doc` (the document's uid), `__command`
+/// and `__params`.
+pub const REPLACE_FILES: &str = "replaceFiles";
+
+pub(super) const REPLACE_FILES_SPEC: DialogSpec = DialogSpec { confirm: replace_files, ..SPEC };
+
+/// Ask whether to replace `files`, files that are there beside the one a save or export of the
+/// document `doc` (its uid) writes, which the save panel did not ask about (a file per artboard, a
+/// linked image). OK runs `command` with `params` again on that document, now replacing those
+/// files and `allowed` (those an earlier OK allowed); Cancel writes nothing.
+pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[String], allowed: &[String], command: &str, params: Value) {
+    let name = files.first().map(|f| vectorcraft_engine::cmd::fileio::file_name(f)).unwrap_or_default();
+    let message = crate::i18n::fmt(tl!("“{name}” already exists. Replace it?"), &[("name", &name)]);
+    // Several: every one of them, by name.
+    let detail = match files {
+        [_, _, ..] => files.iter().map(|f| vectorcraft_engine::cmd::fileio::file_name(f)).collect::<Vec<_>>().join("\n"),
+        _ => String::new(),
+    };
+    let fields =
+        json!({"message": message, "detail": detail, "files": files, "allowed": allowed, "doc": doc, "__command": command, "__params": params});
+    let d = Dialog::new(REPLACE_FILES, fields);
+    // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
+    // (however many messages wait: the save or export needs the answer).
+    match app.ui.dialog {
+        None => app.ui.dialog = Some(d),
+        Some(_) => app.ui.told.push(d),
+    }
+}
+
+/// OK on [`ask_replace_files`]: what asked runs again on its document, and the files the question
+/// named are replaced; one it writes now that was not named is asked about again. The save or export
+/// reads the allowance when it starts, before a background one hands its work to the worker.
+fn replace_files(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    app.ui.dialog = None;
+    if !crate::picks::on_document(app, d.fields.get("doc").and_then(Value::as_u64)) {
+        return Ok(Value::Null);
+    }
+    let paths = |k: &str| d.fields.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string);
+    app.picks.replace_files_ok = paths("allowed").chain(paths("files")).collect();
+    let r = confirm(app, d);
+    app.picks.replace_files_ok.clear();
+    r
+}
+
+/// The dialog kind of the question Reset Preferences asks over the Preferences dialog
+/// ([`ask_reset_prefs`]). Fields: `message`, `detail`.
+pub const RESET_PREFS: &str = "resetPreferences";
+
+pub(super) const RESET_PREFS_SPEC: DialogSpec = DialogSpec { confirm: reset_prefs, ..SPEC };
+
+/// Ask whether to reset the preferences, over the Preferences dialog open now. Cancel and Escape
+/// show Preferences again as it was; OK shows it again with every preference at its default value
+/// ([`crate::prefs_dialog::reset_fields`]). Nothing is applied until OK in Preferences.
+pub(crate) fn ask_reset_prefs(app: &mut VectorcraftApp) {
+    let under = app.ui.dialog.take().and_then(|d| serde_json::to_value(d).ok());
+    let message = tl!("Reset all preferences to their defaults?");
+    let detail = tl!("The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.");
+    let fields = json!({"message": message, "detail": detail, super::PARENT: under});
+    app.ui.dialog = Some(Dialog::new(RESET_PREFS, fields));
+}
+
+/// OK on [`ask_reset_prefs`]: Preferences again, its fields at their defaults.
+fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut prefs = super::parent(d).filter(|p| p.kind == "preferences").ok_or("the dialog it was opened over is no longer open")?;
+    crate::prefs_dialog::reset_fields(&mut prefs);
+    crate::original_editor::reset(app);
+    app.ui.dialog = Some(prefs);
+    Ok(Value::Null)
+}
+
+/// The dialog kind of the question Reset Actions asks in the Actions panel menu
+/// ([`ask_reset_actions`]). Fields: `message`, `detail`, `append` (set by Append).
+pub const RESET_ACTIONS: &str = "resetActions";
+
+pub(super) const RESET_ACTIONS_SPEC: DialogSpec = DialogSpec { confirm: reset_actions, alternate: Some(("Append", "append")), ..SPEC };
+
+/// Ask whether to replace the Actions panel's sets with the built-in set. OK replaces them, Append
+/// adds the built-in set after them ([`crate::panels::actions::reset`]), and Cancel or Escape
+/// changes nothing.
+pub(crate) fn ask_reset_actions(app: &mut VectorcraftApp) {
+    let message = tl!("Replace the current actions with the default set?");
+    let detail = tl!("Append adds the default set after the current sets instead.");
+    app.ui.dialog = Some(Dialog::new(RESET_ACTIONS, json!({"message": message, "detail": detail, "append": false})));
+}
+
+/// OK or Append on [`ask_reset_actions`]: closes, then resets the action sets.
+fn reset_actions(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mode = if d.fields.get("append").and_then(Value::as_bool) == Some(true) { "append" } else { "replace" };
+    app.ui.dialog = None;
+    app.run(crate::panels::actions::RESET, json!({ "mode": mode }))
+}
+
+/// The dialog kind of the question a click or double-click asks before it edits type set in fonts
+/// that aren't available as named ([`ask_missing_font_edit`]). Fields: `message`, `detail`,
+/// `__token` (the Type tool's edit, which the answer names).
+pub const MISSING_FONT_EDIT: &str = vectorcraft_tools::text::MISSING_FONT_EDIT;
+
+pub(super) const MISSING_FONT_EDIT_SPEC: DialogSpec = DialogSpec { confirm: edit_in_missing_fonts, ..SPEC };
+
+/// Ask whether to edit type whose story is drawn in fonts that aren't available, which the Type
+/// tool names in `p` (`token`, `missing` and `style`: "family style" names, `more`: how many more
+/// there are). The detail names each font (family and style, the family's own names, which are
+/// not translated). OK starts the edit where the type was clicked; Cancel and Escape start nothing.
+/// While another dialog is open (a press sent with `ui.pointer` reaches the tool then), that dialog
+/// stays and the Type tool forgets the edit, as Cancel would.
+pub(crate) fn ask_missing_font_edit(app: &mut VectorcraftApp, p: &Value) {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind != MISSING_FONT_EDIT) {
+        app.session.set_tool_option("missingFontEdit", &json!({"token": p.get("token"), "ok": false}));
+        return;
+    }
+    let names = |k: &str| p.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
+    let mut fonts = names("missing");
+    fonts.extend(names("style"));
+    if p.get("more").and_then(Value::as_u64).is_some_and(|n| n > 0) {
+        fonts.push("…".to_string());
+    }
+    let detail = format!("{}\n{}", fonts.join(", "), tl!("These fonts aren't available. Their text shows in another font."));
+    let message = tl!("Edit type set in fonts that aren't available?");
+    let fields = json!({"message": message, "detail": detail, "__token": p.get("token")});
+    app.ui.dialog = Some(Dialog::new(MISSING_FONT_EDIT, fields));
+}
+
+/// OK on [`ask_missing_font_edit`]: closes, then the Type tool starts the edit.
+fn edit_in_missing_fonts(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    app.ui.dialog = None;
+    answer_missing_font_edit(app, d, true);
+    Ok(Value::Null)
+}
+
+/// Give the Type tool the answer to [`ask_missing_font_edit`]'s question `d`: with `ok` the edit
+/// starts at once; without, the tool forgets it.
+pub(super) fn answer_missing_font_edit(app: &mut VectorcraftApp, d: &Dialog, ok: bool) {
+    app.session.set_tool_option("missingFontEdit", &json!({"token": d.fields.get("__token"), "ok": ok}));
+    if ok {
+        let r = app.session.tool_poll(app.view_info(), false);
+        crate::canvas::apply_requests(app, r);
+    }
+}
+
 /// Most messages kept for later while a dialog is open ([`tell`]).
 const MAX_WAITING: usize = 16;
 

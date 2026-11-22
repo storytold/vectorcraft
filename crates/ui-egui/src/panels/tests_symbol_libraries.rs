@@ -89,7 +89,7 @@ fn clicking_a_library_symbol_adds_it_to_the_documents_symbols_in_one_step() {
     assert_eq!(symbols(&app), ["Star", "Hexagon", "Arrow"]);
     // Find filters by name; list rows give the natural size.
     let lib = SymbolLibraries::get(&app, "basic-shapes").unwrap().1;
-    let rows = SymbolLibraries::rows(&lib, "arr");
+    let rows = SymbolLibraries::rows(&lib, "basic-shapes", "arr");
     assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Arrow"]);
     assert_eq!(SymbolLibraries::describe(rows[0].item.unwrap()), "48 × 32 pt");
     // Dragging a symbol out of the panel carries it to the canvas.
@@ -106,6 +106,37 @@ fn clicking_a_library_symbol_adds_it_to_the_documents_symbols_in_one_step() {
     assert!(last_open(&app.ui).is_none());
 }
 
+/// A secondary or middle drag out of a library tile carries no symbol and adds nothing; a primary
+/// drag still carries it.
+#[test]
+fn only_a_primary_drag_carries_a_library_symbol_out() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.symbolLibrary", json!({"library": "Basic Shapes"})).unwrap();
+    let undo = undo_len(&app);
+    let mut time = 0.0;
+    let mut drag = |app: &mut VectorcraftApp, pointer: PointerButton| {
+        let at = tile(app, &ctx, "Burst", time);
+        let button = |pos, pressed| Event::PointerButton { pos, button: pointer, pressed, modifiers: Modifiers::NONE };
+        frame(&ctx, vec![Event::PointerMoved(at), button(at, true)], time + 0.5, |ui| library_panel::show_window(app, ui.ctx()));
+        for (i, d) in [20.0, 60.0].into_iter().enumerate() {
+            frame(&ctx, vec![Event::PointerMoved(at + vec2(d, d))], time + 0.6 + 0.1 * i as f64, |ui| library_panel::show_window(app, ui.ctx()));
+        }
+        let carried = egui::DragAndDrop::payload::<PanelDrag>(&ctx).map(|p| (*p).clone());
+        let end = at + vec2(60.0, 60.0);
+        frame(&ctx, vec![button(end, false)], time + 0.9, |ui| library_panel::show_window(app, ui.ctx()));
+        frame(&ctx, vec![], time + 1.0, |ui| library_panel::show_window(app, ui.ctx()));
+        time += 2.0;
+        carried
+    };
+    for pointer in [PointerButton::Secondary, PointerButton::Middle] {
+        assert_eq!(drag(&mut app, pointer), None, "a {pointer:?} drag carries nothing");
+    }
+    assert_eq!((symbols(&app).len(), undo_len(&app)), (0, undo), "nothing is added");
+    let carried = drag(&mut app, PointerButton::Primary);
+    assert_eq!(carried, Some(PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Burst".into() }));
+}
+
 #[test]
 fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
     let mut app = app();
@@ -113,7 +144,19 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
     let under = |e: &crate::menus::MenuEntry| e.path == ["Window", "Symbol Libraries"];
     let opened: Vec<_> =
         entries.iter().filter(|e| under(e) && e.command.as_deref() == Some("window.symbolLibrary")).map(|e| e.params["library"].clone()).collect();
-    assert_eq!(opened, [json!("basic-shapes")]);
+    assert_eq!(
+        opened,
+        [
+            json!("basic-shapes"),
+            json!("ui-frames"),
+            json!("map-markers"),
+            json!("inventory-icons"),
+            json!("skill-icons"),
+            json!("weather-icons"),
+            json!("nature-icons"),
+            json!("media-controls"),
+        ]
+    );
     let has = |cmd: &str| entries.iter().find(|e| under(e) && e.command.as_deref() == Some(cmd)).map(|e| e.enabled);
     assert_eq!(has("window.symbolLibrary.other"), Some(true));
     assert_eq!(has("ui.saveSymbolLibrary"), Some(false), "no symbols to save yet");
@@ -193,4 +236,30 @@ fn other_library_opens_a_documents_symbols_and_reports_unreadable_files() {
     assert!(app.run("window.symbolLibrary.other", json!({"path": bad.to_string_lossy()})).is_err());
     assert!(last_open(&app.ui).is_none());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A built-in library lists its symbols in the UI language, and Find matches the name shown and the
+/// symbol's own name. A click adds the symbol under its own name. Another library's symbols are
+/// matched by their own names only.
+#[test]
+fn built_in_library_symbols_are_listed_in_the_ui_language() {
+    let mut app = app();
+    let ctx = context();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    app.run("window.symbolLibrary", json!({"library": "basic-shapes"})).unwrap();
+    let panel = last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default();
+    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+    frame(&ctx, vec![], 0.0, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    let texts = frame(&ctx, vec![], 0.25, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    assert!(texts.iter().any(|t| t == "Éclat") && texts.iter().any(|t| t == "Étoile"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Burst"), "{texts:?}");
+    let lib = SymbolLibraries::get(&app, "basic-shapes").unwrap().1;
+    for query in ["éclat", "burst"] {
+        let rows = SymbolLibraries::rows(&lib, "basic-shapes", query);
+        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Burst"], "{query}");
+    }
+    assert!(SymbolLibraries::rows(&lib, "loaded/1", "éclat").is_empty(), "another library's symbol is matched by its own name only");
+    click(&mut app, &ctx, "Star", Modifiers::NONE, 1.0);
+    assert_eq!(symbols(&app), ["Star"]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
 }

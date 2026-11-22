@@ -2,6 +2,7 @@ use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::Value;
 use vectorcraft_engine::Session;
 
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, fx_menu_ends};
 use super::*;
 
 /// One frame of the panel with `events` → the texts painted, with their rects.
@@ -28,6 +29,19 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, texts: &[(String, Rect)]
     let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
     frame(app, ctx, vec![b(false)]);
+}
+
+/// The Appearance section's fx button opens the Add Effect popup, with one row per effect group,
+/// plug-in groups included: in a short window the wheel reaches its last row.
+#[test]
+fn the_fx_popup_scrolls_inside_a_short_window() {
+    let (first, last) = fx_menu_ends();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let fx = |window: &PopupWindow| window.text("fx").expect("the fx button").center();
+    assert_last_row_scrolls_into_view(&mut app, 190.0, appearance_section, fx, &first, &last);
 }
 
 /// One selected clip group has Edit Clipping Path and Edit Contents at the top of the panel,
@@ -1501,6 +1515,26 @@ fn the_width_profile_shows_for_a_variable_width_or_the_width_tool() {
     assert_eq!(WidthProfile::id_of(profile.as_ref()), "taperStart");
 }
 
+/// A brushed stroke with a variable width: the Width Profile list lists only Uniform, which removes
+/// the profile.
+#[test]
+fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
+    let mut app = new_app();
+    let line = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("brush.apply", json!({"ids": [line], "name": "3 pt. Round"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    let spacing = ctx.global_style().spacing.item_spacing.x;
+    let texts = press(&mut app, &ctx, text_at(&texts, "Profile:").right_center() + vec2(spacing + 50.0, 0.0));
+    assert!(!shows(&texts, "Taper Start"), "{texts:?}");
+    press(&mut app, &ctx, text_at(&texts, "Uniform").center());
+    let profile =
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(line.as_u64().unwrap())).unwrap().appearance.stroke().unwrap().profile.clone();
+    assert_eq!(profile, None);
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.
@@ -1541,11 +1575,11 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     // The whole path selected.
     app.run("select.set", json!({"ids": [star]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Corner:"), "no corner selected");
-    // A live rectangle's corner: its own Corner Radius row, once.
+    // A live rectangle's corner: its own Corner Radius row and Corner menu, once each.
     let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
     app.run("select.anchors", json!({"id": r, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(!shows(&texts, "Corner:"), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner:").count(), 1, "{texts:?}");
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
 }
 
@@ -1719,7 +1753,7 @@ fn selected_guides_show_their_position_in_a_transform_section() {
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     let v = app.run("guide.add", json!({"vertical": true, "pos": 30})).unwrap()["index"].as_u64().unwrap();
     let h = app.run("guide.add", json!({"vertical": false, "pos": 20})).unwrap()["index"].as_u64().unwrap();
-    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.guides[i as usize].pos;
+    let pos = |app: &VectorcraftApp, i: u64| app.session.doc().unwrap().doc.ruler_guides()[i as usize].pos;
     let ctx = egui::Context::default();
     // Steps the field labelled `label` up by one with ↑.
     let step = |app: &mut VectorcraftApp, label: &str| {
@@ -1771,6 +1805,64 @@ fn offset_path_and_simplify_are_not_quick_actions_for_type_alone() {
     app.run("select.set", json!({"ids": [t, r]})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
     assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "type and a path: {texts:?}");
+}
+
+/// Contextual Quick Actions for type selection (G12): with text selected, Quick Actions shows
+/// Create Outlines, Retype and Find and Replace…; clicking Create Outlines converts the text
+/// to vector paths with one undo step. A non-text selection (plain path) displays Offset Path
+/// and Simplify without displaying Create Outlines.
+#[test]
+fn type_quick_actions_show_text_commands_and_create_outlines() {
+    let mut app = new_app();
+    let t = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hello"})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Create Outlines"), "text shows Create Outlines: {texts:?}");
+    assert!(shows(&texts, "Retype"), "text shows Retype: {texts:?}");
+    assert!(shows(&texts, "Find and Replace…"), "text shows Find and Replace…: {texts:?}");
+    assert!(shows(&texts, "Arrange: Bring to Front") && shows(&texts, "Lock"), "standard object actions: {texts:?}");
+    assert!(!shows(&texts, "Offset Path") && !shows(&texts, "Simplify"), "no offset path/simplify for type alone");
+
+    let undo0 = app.session.doc().unwrap().history.undo.len();
+    press(&mut app, &ctx, text_at(&texts, "Create Outlines").center());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo0 + 1, "one undo step");
+    let sel = app.session.doc().unwrap().selection.objects.clone();
+    assert!(!sel.is_empty(), "outlines are selected");
+    for id in &sel {
+        let node = app.session.doc().unwrap().doc.node(*id).unwrap();
+        assert!(!matches!(node.kind, NodeKind::Text(_)), "converted from live text: {:?}", node.kind);
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo0);
+    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(t.as_u64().unwrap())).unwrap();
+    assert!(matches!(node.kind, NodeKind::Text(_)), "undo restores live text");
+
+    // Non-text selection (plain path): continues to show Offset Path and Simplify without Create Outlines.
+    let r = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "path shows Offset Path and Simplify");
+    assert!(!shows(&texts, "Create Outlines"), "path does not show Create Outlines");
+
+    // Find and Replace… quick action opens the Find and Replace dialog.
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Find and Replace…").center());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("findReplace"), "opens findReplace dialog");
+
+    // Retype quick action reveals the Retype panel and leaves it open if already visible.
+    app.ui.dialog = None;
+    let retype_panel = crate::panels::retype::ID;
+    assert!(!crate::panel_docking::visible(&app.ui, retype_panel), "Retype is initially hidden");
+
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel is revealed when initially hidden");
+
+    // Clicking Retype again leaves the panel open rather than toggling it closed.
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel remains visible when already open");
 }
 
 /// A dynamic symbol instance with appearance changes of its own has Reset in Quick Actions, which
@@ -1865,6 +1957,39 @@ fn objects_on_path_options_set_pivot_and_rotate_in_one_undo_step() {
     assert_eq!(undo_depth(&app), depth + 1, "one undo step for both groups");
 }
 
+/// The objects of the Objects on Path group `id`, in their order along the path.
+fn on_path(app: &VectorcraftApp, id: &Value) -> Vec<u64> {
+    let d = &app.session.active().unwrap().doc;
+    let rec = d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().extras().objects_on_path.as_deref().unwrap();
+    rec.members.iter().map(|m| m.id.0).collect()
+}
+
+/// The help page's Detach in the Objects on Path Options section takes the object chosen with its
+/// Select/Move widget off the path in one undo step and selects it. It is dimmed, and a click does
+/// nothing, until one group is selected with an object chosen.
+#[test]
+fn detach_takes_the_chosen_object_off_the_path() {
+    let (mut app, ctx) = reference_setup(&[]);
+    let group = objects_on_path(&mut app, 150.0, 0.0);
+    let [first, second] = on_path(&app, &group)[..] else { panic!("two objects") };
+    assert!(shows(&panel_frame(&mut app, &ctx, vec![], objects_on_path_options), "Detach"));
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Detach");
+    assert_eq!((on_path(&app, &group), undo_depth(&app)), (vec![first, second], depth), "no object chosen: dimmed");
+    let other = objects_on_path(&mut app, 250.0, 0.0);
+    app.run("object.objectsOnPath.selectMember", json!({"member": first})).unwrap();
+    app.run("select.add", json!({"ids": [other]})).unwrap();
+    click_named(&mut app, &ctx, objects_on_path_options, "Detach");
+    assert_eq!(on_path(&app, &group), [first, second], "two groups: dimmed");
+    app.run("object.objectsOnPath.selectMember", json!({"member": first})).unwrap();
+    let depth = undo_depth(&app);
+    click_named(&mut app, &ctx, objects_on_path_options, "Detach");
+    assert_eq!(on_path(&app, &group), [second]);
+    assert_eq!(undo_depth(&app), depth + 1, "one undo step");
+    let sel = &app.session.active().unwrap().selection;
+    assert_eq!((sel.objects.iter().map(|i| i.0).collect::<Vec<_>>(), sel.on_path_member), (vec![first], None));
+}
+
 /// #3759: with area type selected, the Properties panel's Paragraph section shows Align Top, Align
 /// Center, Align Bottom and Justify Vertically; a click sets the alignment on every selected frame
 /// in one undo step. Point type shows none; frames with rows or columns and threaded frames turn
@@ -1931,4 +2056,221 @@ fn vertical_alignment_buttons_align_the_selected_area_type() {
     app.run("text.thread.create", json!({})).unwrap();
     app.run("select.set", json!({"ids": [a]})).unwrap();
     assert_eq!(vertical_align::shown(&app).map(|s| s.enabled), Some(false));
+}
+
+/// With area type selected, the Paragraph section shows a Dynamic Text checkbox, and Word Gap and
+/// Line Gap while Block is on in every selected frame. Point type in the selection shows none;
+/// threaded frames turn the checkbox off.
+#[test]
+fn dynamic_text_rows_follow_the_selected_area_type() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 500, "height": 400})).unwrap();
+    let make = |app: &mut VectorcraftApp, x: f64, y: f64| {
+        app.run("text.create", json!({"x": x, "y": y, "text": "Panel\ntext", "area": {"width": 100, "height": 120}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut app, 10.0, 10.0), make(&mut app, 200.0, 10.0));
+    let point = app.run("text.create", json!({"x": 10, "y": 350, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, point]})).unwrap();
+    assert_eq!(dynamic_text::shown(&app), None, "point type selected too: no rows");
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let off = dynamic_text::Shown { on: Some(false), word_gap: Some(100.0), line_gap: Some(0.0), enabled: true };
+    assert_eq!(dynamic_text::shown(&app), Some(off));
+    let ctx = egui::Context::default();
+    let texts = panel_frame(&mut app, &ctx, vec![], type_sections);
+    assert!(texts.iter().any(|(t, _)| t == "Dynamic Text") && !texts.iter().any(|(t, _)| t == "Word Gap"), "{texts:?}");
+    app.run("type.dynamicText", json!({"on": true, "lineGap": 2})).unwrap();
+    let on = dynamic_text::Shown { on: Some(true), word_gap: Some(100.0), line_gap: Some(2.0), enabled: true };
+    assert_eq!(dynamic_text::shown(&app), Some(on));
+    let texts = panel_frame(&mut app, &ctx, vec![], type_sections);
+    assert!(texts.iter().any(|(t, _)| t == "Word Gap") && texts.iter().any(|(t, _)| t == "Line Gap"), "{texts:?}");
+    // Differing gaps and settings show as mixed.
+    app.run("type.dynamicText", json!({"ids": [b], "wordGap": 200})).unwrap();
+    assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.word_gap, s.line_gap)), Some((Some(true), None, Some(2.0))));
+    app.run("type.dynamicText", json!({"ids": [b], "on": false})).unwrap();
+    assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.word_gap)), Some((None, None)));
+    // A threaded frame turns the checkbox off.
+    app.run("text.thread.create", json!({})).unwrap();
+    assert_eq!(dynamic_text::shown(&app).map(|s| (s.on, s.enabled)), Some((Some(false), false)));
+}
+
+/// A document with a graph of `kind` and three series, selected → the graph's id.
+fn graph_doc(app: &mut VectorcraftApp, kind: &str, x: f64) -> u64 {
+    if app.session.active().is_none() {
+        app.run("file.new", json!({"width": 800, "height": 400})).unwrap();
+    }
+    let csv = ",a,b,c\nQ1,1,2,3\nQ2,3,4,5";
+    app.run("graph.create", json!({"type": kind, "x": x, "y": 0, "width": 200, "height": 150, "csv": csv})).unwrap()["id"].as_u64().unwrap()
+}
+
+/// The ids of graph `graph`'s series groups, in series order.
+fn series_groups(app: &VectorcraftApp, graph: u64) -> Vec<u64> {
+    let st = app.session.active().unwrap();
+    let mut groups: Vec<(u32, u64)> = st
+        .doc
+        .node(vectorcraft_doc::NodeId(graph))
+        .and_then(vectorcraft_doc::Node::children)
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c.extras().series_index.map(|i| (i, c.id.0)))
+        .collect();
+    groups.sort_unstable();
+    groups.into_iter().map(|(_, id)| id).collect()
+}
+
+/// One selected column graph has a Graph section with Graph Type…, Graph Data… and Column…, and
+/// each button opens its Object › Graph dialog for the graph.
+#[test]
+fn one_selected_graph_has_a_graph_section_whose_buttons_open_the_graph_dialogs() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    graph_doc(&mut app, "column", 0.0);
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: true, marker: false }));
+    let ctx = egui::Context::default();
+    let texts = frame(&mut app, &ctx, vec![]);
+    for label in ["Graph", "Graph Type…", "Graph Data…", "Column…"] {
+        assert!(texts.iter().any(|(t, _)| t == label), "no {label:?} in {texts:?}");
+    }
+    assert!(!texts.iter().any(|(t, _)| t == "Marker…"), "{texts:?}");
+    let press = |app: &mut VectorcraftApp, label: &str| {
+        let texts = panel_frame(app, &ctx, vec![], graph::section);
+        let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"));
+        let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        panel_frame(app, &ctx, vec![Event::PointerMoved(at), b(true)], graph::section);
+        panel_frame(app, &ctx, vec![b(false)], graph::section);
+        app.ui.dialog.take().unwrap_or_else(|| panic!("{label:?} opened no dialog"))
+    };
+    let d = press(&mut app, "Graph Type…");
+    assert_eq!((d.kind.as_str(), d.str("type")), (crate::dialogs::graph_type::KIND, "column".to_string()));
+    assert_eq!(press(&mut app, "Graph Data…").kind, crate::dialogs::graph_data::KIND);
+    assert_eq!(press(&mut app, "Column…").kind, crate::dialogs::graph_design::COLUMN);
+}
+
+/// At the panel's narrowest, Graph Type… and Graph Data… share a row in English, and a translated
+/// label too long for half of the row puts each of them on a row of its own, drawn whole.
+#[test]
+fn the_graph_sections_long_labels_get_rows_of_their_own() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    graph_doc(&mut app, "column", 0.0);
+    let ctx = egui::Context::default();
+    let width = 220.0;
+    let texts = |app: &mut VectorcraftApp| {
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| graph::section(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::Shape::Text(t) = &s.shape {
+                    Some((t.galley.text().to_string(), Rect::from_min_size(t.pos, t.galley.size())))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+    let rect = |texts: &[(String, Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| *r).unwrap_or_else(|| panic!("no {label:?} in {texts:?}"))
+    };
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let english = texts(&mut app);
+    assert_eq!(rect(&english, "Graph Type…").center().y, rect(&english, "Graph Data…").center().y, "{english:?}");
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let german = texts(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (kind, data) = (rect(&german, "Diagrammtyp…"), rect(&german, "Diagrammdaten…"));
+    assert!(kind.bottom() <= data.top(), "{german:?}");
+    for r in [kind, data] {
+        assert!(r.left() >= 0.0 && r.right() <= width, "{r:?} in {german:?}");
+    }
+}
+
+/// Column… shows when every series it would change draws columns or bars, Marker… when every one
+/// draws lines, scatter points or radar lines: series picked with Group Selection count on their
+/// own, and a combined graph selected whole shows neither.
+#[test]
+fn the_graph_sections_column_and_marker_follow_the_series_they_would_change() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let g = graph_doc(&mut app, "column", 0.0);
+    app.run("graph.setType", json!({"seriesIndexes": [1], "type": "line"})).unwrap();
+    app.run("select.set", json!({"ids": [g]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "column and line series");
+    let groups = series_groups(&app, g);
+    assert_eq!(groups.len(), 3, "{groups:?}");
+    app.run("select.set", json!({"ids": [groups[1]]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: true }), "the line series");
+    app.run("select.set", json!({"ids": [groups[0], groups[2]]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: true, marker: false }), "the column series");
+    app.run("select.set", json!({"ids": [groups[0], groups[1]]})).unwrap();
+    assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "one of each");
+    for (kind, shown) in [
+        ("line", (false, true)),
+        ("scatter", (false, true)),
+        ("radar", (false, true)),
+        ("bar", (true, false)),
+        ("pie", (false, false)),
+        ("area", (false, false)),
+    ] {
+        let id = graph_doc(&mut app, kind, 300.0);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(graph::shown(&app).map(|s| (s.column, s.marker)), Some(shown), "{kind}");
+        app.run("edit.clear", json!({})).unwrap();
+    }
+    // A graph whose data was cleared has no series for Column… or Marker… to change.
+    for kind in ["column", "line"] {
+        let id = graph_doc(&mut app, kind, 300.0);
+        app.run("graph.setData", json!({"id": id, "series": [], "categories": [], "rows": []})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(graph::shown(&app), Some(graph::Shown { column: false, marker: false }), "an empty {kind} graph");
+        app.run("edit.clear", json!({})).unwrap();
+    }
+}
+
+/// The Graph section shows only while everything selected is one graph or lies in it.
+#[test]
+fn the_graph_section_needs_one_graph_selected() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let a = graph_doc(&mut app, "column", 0.0);
+    let b = graph_doc(&mut app, "column", 300.0);
+    let rect = app.run("shape.rectangle", json!({"x": 600, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    for (ids, what) in [(vec![rect], "a rectangle"), (vec![a, rect], "a graph and a rectangle"), (vec![a, b], "two graphs")] {
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        assert_eq!(graph::shown(&app), None, "{what}");
+        let texts = frame(&mut app, &egui::Context::default(), vec![]);
+        assert!(!texts.iter().any(|(t, _)| t == "Graph Type…"), "{what}: {texts:?}");
+    }
+    let groups = series_groups(&app, a);
+    app.run("select.set", json!({"ids": [groups[0], groups[1]]})).unwrap();
+    assert!(graph::shown(&app).is_some(), "two series of one graph");
+    app.run("select.set", json!({"ids": [groups[0], series_groups(&app, b)[0]]})).unwrap();
+    assert_eq!(graph::shown(&app), None, "series of two graphs");
+}
+
+/// With the Type tool, the Character section's font style shows the style of the first selected
+/// character (or of the character before the caret), not the text object's first run; with the
+/// Selection tool, the first run's (#8189).
+#[test]
+fn character_section_shows_the_type_tool_selections_style() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // Regular 0..8, Bold 8..13, Condensed 13..22.
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Regular Bold Condensed", "font": TWO_AXIS_FAMILY})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 8, "end": 13, "style": "Bold"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 13, "end": 22, "style": "Condensed"})).unwrap();
+    let ctx = egui::Context::default();
+    let shown = |app: &mut VectorcraftApp| {
+        let texts = panel_frame(app, &ctx, vec![], type_sections);
+        texts.into_iter().map(|(t, _)| t).filter(|t| ["Regular", "Bold", "Condensed"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    for (start, end, want) in [(8, 12, "Bold"), (13, 22, "Condensed"), (0, 7, "Regular"), (15, 15, "Condensed"), (13, 13, "Bold")] {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+        assert_eq!(crate::panels::character::text_editing(&app).map(|(_, a, b)| (a, b)), Some((start, end)));
+        assert_eq!(shown(&mut app), [want], "{start}..{end}");
+    }
+    app.session.select_tool("selection", Default::default()).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(crate::panels::character::text_editing(&app), None);
+    assert_eq!(shown(&mut app), ["Regular"], "the Selection tool shows the first run's style");
 }

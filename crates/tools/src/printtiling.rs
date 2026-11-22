@@ -68,7 +68,7 @@ impl Tool for PrintTilingTool {
                 self.drag = None;
                 vec![Action::Exec("print.tiling.set".into(), json!({ "reset": true }))]
             }
-            PointerKind::Move => vec![],
+            PointerKind::Move | PointerKind::TripleClick => vec![],
         }
     }
 

@@ -24,8 +24,7 @@ use crate::{Error, Kind, Limits, Plugin, Result, registry};
 /// document: 200 times a filter's base budget.
 pub const FUEL: u64 = 10_000_000_000;
 
-/// Wall-clock budget of one export, in milliseconds (native builds; the web build has no clock,
-/// and the instruction budget alone bounds it there).
+/// Wall-clock budget of one export, in milliseconds.
 pub const WALL_TIME_MS: u64 = 300_000;
 
 /// Most warnings an export reports.
@@ -75,7 +74,8 @@ pub struct Target<'a> {
 
 /// The limits of an export by `plugin`: its own, with the budgets of an export.
 pub fn limits(plugin: &Plugin) -> Limits {
-    Limits { fuel_base: FUEL, wall_time_ms: WALL_TIME_MS, ..plugin.limits().clone() }
+    let own = plugin.limits();
+    Limits { fuel_base: own.export_fuel, wall_time_ms: own.export_wall_time_ms, ..own.clone() }
 }
 
 /// Runs exporter `plugin` on `document`, the native file's JSON, with `params` (checked against
@@ -83,7 +83,7 @@ pub fn limits(plugin: &Plugin) -> Limits {
 pub fn run(plugin: &Plugin, document: &[u8], params: &Value, target: Target) -> Result<Exported> {
     let m = plugin.manifest();
     if m.kind != Kind::Exporter {
-        return Err(Error::Params(format!("`{}` is a {}, not an exporter", m.id, m.kind.name())));
+        return Err(Error::Params(format!("`{}` is a plug-in of kind `{}`, not an exporter", m.id, m.kind.name())));
     }
     let mut params = Value::Object(m.resolve_params(params)?);
     params["_context"] = json!({"mode": "export", "extension": target.extension, "name": target.name});
