@@ -695,6 +695,31 @@ fn a_plugin_command_is_placed_in_the_menu_its_manifest_names() {
     assert!(crate::shortcut_editor::entries().iter().all(|e| e.key != low(bee)));
 }
 
+/// Commands placed after an item that switches between two labels are one spot whichever label
+/// their `after` names: they keep manifest order within a plug-in and plug-in id order across
+/// plug-ins.
+#[test]
+fn both_labels_of_a_switching_item_are_one_spot() {
+    let mut app = app();
+    let (ape, bat) = ("test.ui.place.ape", "test.ui.place.bat");
+    let command = vectorcraft_engine::cmd::plugin::command_id;
+    let ape_commands = r#"[{"id":"first","label":"First","menu":{"path":["View"],"after":"Hide Bounding Box"}},
+        {"id":"second","label":"Second","menu":{"path":["View"],"after":"Show Bounding Box"}}]"#;
+    let bat_commands = r#"[{"id":"third","label":"Third","menu":{"path":["View"],"after":"Hide Bounding Box"}}]"#;
+    // Bat is installed first; Ape's id sorts first.
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(bat, "Bat", bat_commands)})).unwrap();
+    app.run("plugin.install", json!({"dataBase64": placing_plugin(ape, "Ape", ape_commands)})).unwrap();
+
+    let entries = menus::menu_entries(&app);
+    let view: Vec<&menus::MenuEntry> = entries.iter().filter(|e| e.path == ["View"]).collect();
+    let toggle = view.iter().position(|e| e.command.as_deref() == Some("view.boundingBox")).expect("Hide Bounding Box is listed");
+    let after: Vec<Option<String>> = (1..=3).map(|i| view.get(toggle + i).and_then(|e| e.command.clone())).collect();
+    assert_eq!(after, [Some(command(ape, "first")), Some(command(ape, "second")), Some(command(bat, "third"))]);
+    for id in [ape, bat] {
+        app.run("plugin.remove", json!({"id": id})).unwrap();
+    }
+}
+
 /// A live effect whose commands are all placed elsewhere is a single item in Effect › Plug-ins. A
 /// filter with the same name placing a command with the same label at the same spot keeps it in its
 /// own submenu, so the menu shows that label once. Replaced by a module whose command has no

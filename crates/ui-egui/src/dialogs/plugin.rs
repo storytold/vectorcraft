@@ -92,11 +92,11 @@ pub fn place_commands(tree: &mut [(&'static str, Vec<Item>)]) {
                 continue;
             }
             // An `after` that names no built-in item of the menu means the end of it, as no `after` does.
-            let after = place
-                .after
-                .as_deref()
-                .map(|a| anchor_key(a).to_string())
-                .filter(|a| menu_at(tree, place.path).is_some_and(|menu| menu.iter().any(|it| is_anchor(it, a))));
+            // The spot is the item's own label, so both labels of an item that switches are one spot.
+            let after = place.after.as_deref().and_then(|a| {
+                let menu = menu_at(tree, place.path)?;
+                menu.iter().find(|it| is_anchor(it, anchor_key(a))).and_then(own_key).map(str::to_string)
+            });
             let id = registry::intern(&vectorcraft_engine::cmd::plugin::command_id(&m.id, &c.id));
             let item = Item::Cmd(label(&c.menu_label(&m.name), !c.params.is_empty()), id, Value::Null);
             match spots.iter_mut().find(|s| s.0 == place.path && s.1 == after) {
@@ -123,7 +123,7 @@ pub fn place_commands(tree: &mut [(&'static str, Vec<Item>)]) {
     }
     for (path, after, items) in spots {
         let Some(menu) = menu_at(tree, path) else { continue };
-        let at = after.and_then(|a| menu.iter().position(|it| is_anchor(it, &a))).map_or(menu.len(), |i| i + 1);
+        let at = after.and_then(|a| menu.iter().position(|it| own_key(it) == Some(a.as_str()))).map_or(menu.len(), |i| i + 1);
         menu.splice(at..at, items);
     }
 }
@@ -137,14 +137,17 @@ fn anchor_key(label: &str) -> &str {
 /// [`crate::menus::DYNAMIC_LABELS`] matches by the label of either of its states
 /// ([`vectorcraft_engine::cmd::plugin::other_state`]). Items that list a plug-in are never an anchor.
 fn is_anchor(it: &Item, key: &str) -> bool {
+    let other = |l: &str| crate::menus::DYNAMIC_LABELS.contains(&l) && vectorcraft_engine::cmd::plugin::other_state(l).is_some_and(|o| o == key);
+    own_key(it).is_some_and(|own| own == key || matches!(it, Item::Cmd(l, _, _) if other(l)))
+}
+
+/// The label of `it` as [`anchor_key`] reads it, when `it` is a built-in item or submenu that can be
+/// an anchor; `None` for an item that lists a plug-in.
+fn own_key(it: &Item) -> Option<&str> {
     match it {
-        Item::Cmd(l, id, p) => {
-            let toggles = crate::menus::DYNAMIC_LABELS.contains(l);
-            let other = || vectorcraft_engine::cmd::plugin::other_state(l).is_some_and(|o| o == key);
-            !crate::menus::lists_plugin(id, p) && (anchor_key(l) == key || toggles && other())
-        }
-        Item::Sub(l, children) => !crate::menus::holds_plugin_commands(children) && anchor_key(l) == key,
-        _ => false,
+        Item::Cmd(l, id, p) if !crate::menus::lists_plugin(id, p) => Some(anchor_key(l)),
+        Item::Sub(l, children) if !crate::menus::holds_plugin_commands(children) => Some(anchor_key(l)),
+        _ => None,
     }
 }
 
