@@ -517,6 +517,23 @@ fn attributes_panel_options_strings_are_in_complete_catalogs() {
     }
 }
 
+/// Object › Plug-ins › Apply Last Filter and Last Filter…, the template that names Apply after the
+/// filter, and the error when no filter can run again.
+#[test]
+fn last_filter_strings_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Apply Last Filter", "Last Filter…", "Apply {filter}"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let none = crate::dialogs::plugin::NO_LAST_FILTER;
+    assert!(message_literals().contains(none));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, none), none, "{code}");
+    }
+}
+
 /// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
 /// falling back to the plain row).
 #[test]

@@ -11,7 +11,10 @@
 //! background too, with its progress and Cancel, when it runs at once or when OK runs it without a
 //! kept preview ([`in_background`]). A filter or live effect with commands of
 //! its own is a submenu named after it, holding its item and then its commands; a command with
-//! parameters opens the same dialog for them ([`open_command`]). Exporters are formats of File › Export ›
+//! parameters opens the same dialog for them ([`open_command`]). Object › Plug-ins starts with
+//! Apply Last Filter and Last Filter…, which run the filter that last ran again with the same
+//! parameters or open its dialog with them, and a filter's dialog opens with the parameters it last
+//! ran with in the session ([`LastFilters`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
 //! Export button writes the file. Importers open the files File › Open finds no built-in format
 //! for, and File › Open With lists them, to open a file with one of them by name; one with
@@ -120,8 +123,173 @@ pub fn effect_menu() -> Option<Item> {
     (!items.is_empty()).then_some(Item::Sub("Plug-ins", items))
 }
 
+/// Object › Plug-ins' first items: Apply Last Filter, which runs the filter that last ran again with
+/// the same parameters, and Last Filter…, which opens its dialog with them. Each is named after the
+/// filter once one has run ([`last_filter_name`]).
+pub fn last_filter_menu() -> Vec<Item> {
+    vec![Item::Cmd("Apply Last Filter", APPLY_LAST, Value::Null), Item::Cmd("Last Filter…", LAST, Value::Null), Item::Sep]
+}
+
+/// Apply Last Filter's command id.
+pub const APPLY_LAST: &str = "plugin.applyLastFilter";
+
+/// Last Filter…'s command id.
+pub const LAST: &str = "plugin.lastFilter";
+
+/// The error of Apply Last Filter and Last Filter… when no filter can run again: none ran in this
+/// session, or the one that ran last was removed or installed again, or its parameters no longer fit it.
+pub const NO_LAST_FILTER: &str = "no plug-in filter to repeat: run one from Object › Plug-ins first";
+
+/// The most filters whose last parameters [`LastFilters`] keeps.
+const MAX_REMEMBERED: usize = 64;
+
+/// The parameters filter `id` last ran with, as its manifest resolved them, and the installation
+/// that ran with them (its [`Plugin::serial`]; installing the plug-in again gives it a new one).
+#[derive(Clone, Debug, PartialEq)]
+struct Used {
+    id: String,
+    serial: u64,
+    params: Map<String, Value>,
+}
+
+/// The parameters each object filter last ran with in this session (`plugin.run`), the filter that
+/// ran last at the end, for at most [`MAX_REMEMBERED`] filters. They are never saved.
+#[derive(Default)]
+pub struct LastFilters {
+    used: Vec<Used>,
+}
+
+impl LastFilters {
+    /// The id of the filter that ran last, whether or not it can run again.
+    pub fn last_id(&self) -> Option<&str> {
+        self.used.last().map(|u| u.id.as_str())
+    }
+}
+
+/// Notes a `plugin.run` with params `p` that succeeded: its filter ran last, with the
+/// parameters its manifest resolves from `p`. Anything else (not a filter, parameters the manifest
+/// refuses) is not noted.
+pub(crate) fn record(app: &mut VectorcraftApp, p: &Value) {
+    let Some(plugin) = p.get("id").and_then(Value::as_str).and_then(registry::get) else { return };
+    let m = plugin.manifest();
+    if m.kind != Kind::Filter {
+        return;
+    }
+    let Ok(params) = m.resolve_params(&vectorcraft_engine::cmd::plugin::plugin_params(p)) else { return };
+    let used = &mut app.last_filters.used;
+    used.retain(|u| u.id != m.id);
+    used.push(Used { id: m.id.clone(), serial: plugin.serial(), params });
+    if used.len() > MAX_REMEMBERED {
+        used.remove(0);
+    }
+}
+
+/// The plug-in registry's revision before a command runs, for [`after_command`].
+pub(crate) fn before_command() -> u64 {
+    registry::revision()
+}
+
+/// After command `id` with `params` ran with result `r`, the registry at revision `before` when it
+/// started: a `plugin.run` that succeeded, or the last `plugin.run` step of a batch that succeeded
+/// (`command.batch`, or `action.batch` on at least one file or data set), is noted as the filter
+/// that ran last ([`record`]).
+pub(crate) fn after_command(app: &mut VectorcraftApp, id: &str, params: &Value, r: &Result<Value, String>, before: u64) {
+    let Ok(reply) = r else { return };
+    // Action Batch returns success even when files or data sets fail, and runs every step on each
+    // one that doesn't.
+    let played = |v: &Value| v.get("count").and_then(Value::as_u64).unwrap_or(0) > v.get("failed").and_then(Value::as_u64).unwrap_or(0);
+    let ran = match id {
+        CMD => Some(params),
+        "command.batch" | "action.batch" if id == "command.batch" || played(reply) => {
+            let steps = params.get("commands").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+            let Some(at) = steps.iter().rposition(|s| step_id(s) == Some(CMD)) else { return };
+            let p = steps[at].get("params").unwrap_or(&Value::Null);
+            // The plug-in installed under the id now is the one that ran when no later step changed
+            // the plug-ins, or when it was installed before the batch (installing gives a new serial).
+            let changed_later = steps[at + 1..].iter().any(|s| step_id(s).is_some_and(|c| REGISTRY_CHANGES.contains(&c)));
+            let installed_before = p.get("id").and_then(Value::as_str).and_then(registry::get).is_some_and(|q| q.serial() <= before);
+            if changed_later && !installed_before {
+                forget(app, p);
+                return;
+            }
+            Some(p)
+        }
+        _ => None,
+    };
+    if let Some(p) = ran.cloned() {
+        record(app, &p);
+    }
+}
+
+/// The command id of batch step `s`.
+fn step_id(s: &Value) -> Option<&str> {
+    s.get("command").and_then(Value::as_str)
+}
+
+/// The commands that install, remove or reload plug-ins.
+const REGISTRY_CHANGES: [&str; 3] = ["plugin.install", "plugin.remove", "plugin.reload"];
+
+/// Notes the filter `plugin.run` params `p` name as the one that ran last, without parameters or a
+/// module, so that Apply Last Filter and Last Filter… stay off until a filter runs again.
+fn forget(app: &mut VectorcraftApp, p: &Value) {
+    let Some(id) = p.get("id").and_then(Value::as_str) else { return };
+    let used = &mut app.last_filters.used;
+    used.retain(|u| u.id != id);
+    // Serial 0 belongs to no installed plug-in.
+    used.push(Used { id: id.to_string(), serial: 0, params: Map::new() });
+    if used.len() > MAX_REMEMBERED {
+        used.remove(0);
+    }
+}
+
+/// Filter `id`'s last parameters, while the installation that ran with them is still installed under
+/// its id and its manifest takes them as they are.
+fn remembered(app: &VectorcraftApp, id: &str) -> Option<(Arc<Plugin>, Map<String, Value>)> {
+    let used = app.last_filters.used.iter().find(|u| u.id == id)?;
+    let plugin = registry::get(id).filter(|p| p.manifest().kind == Kind::Filter && p.serial() == used.serial)?;
+    let params = Value::Object(used.params.clone());
+    plugin.manifest().resolve_params(&params).ok().filter(|r| *r == used.params)?;
+    Some((plugin, used.params.clone()))
+}
+
+/// The filter that ran last and its parameters, while it can run again with them ([`remembered`]).
+pub(crate) fn last_filter(app: &VectorcraftApp) -> Option<(Arc<Plugin>, Map<String, Value>)> {
+    remembered(app, app.last_filters.last_id()?)
+}
+
+/// The name Apply Last Filter and Last Filter… show once a filter ran that can run again
+/// ([`last_filter`]): the filter's own name, without an ellipsis at its end and with hidden
+/// characters shown as escapes, as a submenu named after a plug-in shows it. `None` before.
+pub(crate) fn last_filter_name(app: &VectorcraftApp) -> Option<String> {
+    let (plugin, _) = last_filter(app)?;
+    let name = plugin.manifest().name.trim().trim_end_matches('…').trim_end().to_string();
+    Some(permissions::display_text(&name, permissions::MAX_SHOWN_NAME))
+}
+
+/// `plugin.applyLastFilter`: runs the filter that ran last again, with the same parameters, on the
+/// selection, without its dialog, as its menu item runs it ([`run`]).
+pub fn apply_last(app: &mut VectorcraftApp) -> Result<Value, String> {
+    app.session.active().ok_or("no document open")?;
+    let (plugin, params) = last_filter(app).ok_or(NO_LAST_FILTER)?;
+    let p = json!({"id": plugin.id(), "params": params});
+    run(app, &plugin, p)
+}
+
+/// `plugin.lastFilter`: opens the dialog of the filter that ran last with the parameters it ran
+/// with; one without parameters runs at once, as its menu item runs it.
+pub fn open_last(app: &mut VectorcraftApp) -> Result<Value, String> {
+    app.session.active().ok_or("no document open")?;
+    let (plugin, params) = last_filter(app).ok_or(NO_LAST_FILTER)?;
+    if plugin.manifest().params.is_empty() {
+        return run(app, &plugin, json!({"id": plugin.id(), "params": params}));
+    }
+    open_dialog(app, plugin.manifest(), params);
+    Ok(Value::Null)
+}
+
 /// `plugin.dialog {id, params?}`: run filter `id` at once when it takes no parameters or `params`
-/// are given, else open its dialog prefilled with its defaults.
+/// are given, else open its dialog prefilled with the parameters it last ran with in this session
+/// ([`remembered`]), or with its defaults.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("id").and_then(Value::as_str).ok_or("missing `id` (see plugin.list)")?;
     let plugin = registry::get(id).ok_or_else(|| format!("no plug-in {id:?} is installed"))?;
@@ -136,12 +304,19 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if m.params.is_empty() || given.is_some() {
         return run(app, &plugin, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
     }
+    let values = remembered(app, id).map(|(_, params)| params).unwrap_or_else(|| m.defaults());
+    open_dialog(app, m, values);
+    Ok(Value::Null)
+}
+
+/// Opens filter `m`'s dialog with its parameters at `values`, with Preview on for a light filter.
+fn open_dialog(app: &mut VectorcraftApp, m: &Manifest, values: Map<String, Value>) {
     let mut fields = fields_for(m);
+    fields.extend(values);
     if m.budget == Budget::Light {
         fields.insert("preview".into(), json!(true));
     }
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    Ok(Value::Null)
 }
 
 /// The fields of plug-in `m`'s dialog: its parameters at their defaults, `__plugin` (its id) and
@@ -266,7 +441,15 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
             }
             r
         }
-        _ => form::commit_preview(app, &command(d), params(d)),
+        _ => {
+            let r = form::commit_preview(app, &command(d), params(d));
+            // A kept preview commits without running `plugin.run` again ([`after_command`]); for
+            // the filter's own run, `params(d)` is `plugin.run`'s `{id, params}`.
+            if r.is_ok() && own_run {
+                record(app, &params(d));
+            }
+            r
+        }
     }
 }
 

@@ -550,6 +550,9 @@
 	Effect	Tehoste
 	Apply Last Effect	Käytä viimeisintä tehostetta
 	Last Effect…	Viimeisin tehoste…
+	Apply Last Filter	Käytä viimeisintä suodinta
+	Last Filter…	Viimeisin suodin…
+	Apply {filter}	Käytä: {filter}
 	Document Raster Effects Settings…	Asiakirjan rasteritehosteiden asetukset…
 	Vector Effects	Vektoritehosteet
 	3D and Materials	3D ja materiaalit
@@ -5683,6 +5686,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no document	ei asiakirjaa
 @msg	no document open	asiakirjaa ei ole auki
 @msg	no effect applied yet	tehostetta ei ole vielä käytetty
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	ei toistettavaa laajennussuodinta: suorita ensin yksi kohdasta Objekti › Laajennukset
 @msg	no Pathfinder operation applied yet	polunetsimen toimintoa ei ole vielä käytetty
 @msg	no effect at index {k}	ei tehostetta indeksissä {k}
 @msg	no end record	ei loppumerkintää

@@ -2554,6 +2554,9 @@ digits	Malayalam	Malaiàlam
 	Last Effect: {name}	Últim efecte: {name}
 	Last Effect: {}	Últim efecte: {}
 	Last Effect…	Últim efecte…
+	Apply Last Filter	Aplica l’últim filtre
+	Last Filter…	Últim filtre…
+	Apply {filter}	Aplica {filter}
 	Last Page	Última pàgina
 	Latin	Llatí
 	Latin Extended	Llatí estès
@@ -6879,6 +6882,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no document	no hi ha document
 @msg	no document open	no hi ha cap document obert
 @msg	no effect applied yet	encara no s’ha aplicat cap efecte
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	no hi ha cap filtre de complement per repetir: executeu-ne primer un des d’Objecte › Complements
 @msg	no Pathfinder operation applied yet	encara no s’ha aplicat cap operació del Cercador de traçats
 @msg	no effect at index {k}	no hi ha cap efecte a l’índex {k}
 @msg	no empty artboards to delete	no hi ha taulers buits per suprimir

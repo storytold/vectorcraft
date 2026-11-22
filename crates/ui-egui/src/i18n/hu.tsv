@@ -2562,6 +2562,9 @@ file-filter	Templates	Sablonok
 	Last Effect: {name}	Legutóbbi effektus: {name}
 	Last Effect: {}	Legutóbbi effektus: {}
 	Last Effect…	Legutóbbi effektus…
+	Apply Last Filter	Legutóbbi szűrő alkalmazása
+	Last Filter…	Legutóbbi szűrő…
+	Apply {filter}	{filter} alkalmazása
 	Last Page	Utolsó oldal
 	Latin	Latin
 	Latin Extended	Bővített latin
@@ -6139,6 +6142,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no document	nincs dokumentum
 @msg	no document open	nincs megnyitott dokumentum
 @msg	no effect applied yet	még nincs alkalmazott effektus
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	nincs ismételhető bővítményszűrő: előbb futtasson egyet az Objektum › Bővítmények menüből
 @msg	no Pathfinder operation applied yet	még nincs alkalmazott útvonalkezelő-művelet
 @msg	no effect at index {k}	ezen az indexen nincs effektus: {k}
 @msg	no end record	nincs záró rekord

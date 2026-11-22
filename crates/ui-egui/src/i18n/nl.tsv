@@ -1131,6 +1131,9 @@ liquify-list-end	{0}, {1}	{0} en {1}
 	Effect	Effect
 	Apply Last Effect	Laatste effect toepassen
 	Last Effect…	Laatste effect…
+	Apply Last Filter	Laatste filter toepassen
+	Last Filter…	Laatste filter…
+	Apply {filter}	{filter} toepassen
 	Document Raster Effects Settings…	Instellingen voor documentrastereffecten…
 	Vector Effects	Vectoreffecten
 	3D and Materials	3D en materialen
@@ -5833,6 +5836,7 @@ imageTrace	Outline	Contour
 @msg	no document	geen document
 @msg	no document open	geen document geopend
 @msg	no effect applied yet	nog geen effect toegepast
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	geen plug-infilter om te herhalen: voer er eerst een uit via Object › Plug-ins
 @msg	no Pathfinder operation applied yet	nog geen Pathfinder-bewerking toegepast
 @msg	no effect at index {k}	geen effect op index {k}
 @msg	no end record	geen eindrecord

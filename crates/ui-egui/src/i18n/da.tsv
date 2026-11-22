@@ -3267,6 +3267,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Effect	Effekt
 	Apply Last Effect	Anvend sidste effekt
 	Last Effect…	Sidste effekt…
+	Apply Last Filter	Anvend sidste filter
+	Last Filter…	Sidste filter…
+	Apply {filter}	Anvend {filter}
 	Document Raster Effects Settings…	Indstillinger for rastereffekter i dokumentet…
 	Vector Effects	Vektoreffekter
 	3D and Materials	3D og materialer
@@ -7962,6 +7965,7 @@ imageTrace	Outline	Kontur
 @msg	no document	intet dokument
 @msg	no document open	intet åbent dokument
 @msg	no effect applied yet	ingen effekt er anvendt endnu
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	intet plug-in-filter at gentage: kør først et fra Objekt › Plug-ins
 @msg	no Pathfinder operation applied yet	ingen Pathfinder-handling er anvendt endnu
 @msg	no effect at index {k}	ingen effekt ved indeks {k}
 @msg	no end record	ingen slutpost

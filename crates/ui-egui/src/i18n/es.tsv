@@ -2077,6 +2077,9 @@ font-technology	Variable	Variables
 	Last Effect: {name}	Último efecto: {name}
 	Last Effect: {}	Último efecto: {}
 	Last Effect…	Último efecto…
+	Apply Last Filter	Aplicar último filtro
+	Last Filter…	Último filtro…
+	Apply {filter}	Aplicar {filter}
 	Last Page	Última página
 	Latin	Latín
 	Thai	Tailandés
@@ -5452,6 +5455,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no document	no hay documento
 @msg	no document open	no hay ningún documento abierto
 @msg	no effect applied yet	todavía no se aplicó ningún efecto
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	no hay ningún filtro de plugin que repetir: ejecute primero uno desde Objeto › Plugins
 @msg	no Pathfinder operation applied yet	todavía no se aplicó ninguna operación de Buscatrazos
 @msg	no effect at index {k}	no hay ningún efecto en el índice {k}
 @msg	no end record	no hay registro final

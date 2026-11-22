@@ -1973,6 +1973,9 @@ font-technology	Variable	Μεταβλητές
 	Last Effect: {name}	Τελευταίο εφέ: {name}
 	Last Effect: {}	Τελευταίο εφέ: {}
 	Last Effect…	Τελευταίο εφέ…
+	Apply Last Filter	Εφαρμογή τελευταίου φίλτρου
+	Last Filter…	Τελευταίο φίλτρο…
+	Apply {filter}	Εφαρμογή {filter}
 	Last Page	Τελευταία σελίδα
 	Latin Extended	Εκτεταμένα λατινικά
 	Latin-1 Supplement	Συμπλήρωμα Latin-1
@@ -5399,6 +5402,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no document	δεν υπάρχει έγγραφο
 @msg	no document open	δεν υπάρχει ανοιχτό έγγραφο
 @msg	no effect applied yet	δεν έχει εφαρμοστεί ακόμη εφέ
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	δεν υπάρχει φίλτρο πρόσθετου για επανάληψη: εκτελέστε πρώτα ένα από το Αντικείμενο › Πρόσθετα
 @msg	no Pathfinder operation applied yet	δεν έχει εφαρμοστεί ακόμη λειτουργία Pathfinder
 @msg	no effect at index {k}	δεν υπάρχει εφέ στον δείκτη {k}
 @msg	no end record	λείπει η εγγραφή τέλους

@@ -2020,6 +2020,9 @@ font-technology	Variable	Variabla
 	Last Effect: {name}	Senaste effekten: {name}
 	Last Effect: {}	Senaste effekten: {}
 	Last Effect…	Senaste effekten…
+	Apply Last Filter	Använd senaste filtret
+	Last Filter…	Senaste filtret…
+	Apply {filter}	Använd {filter}
 	Last Page	Sista sidan
 	Latin	Latin
 	Thai	Thailändska
@@ -5337,6 +5340,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no document	inget dokument
 @msg	no document open	inget dokument är öppet
 @msg	no effect applied yet	ingen effekt har använts än
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	inget pluginfilter att upprepa: kör först ett från Objekt › Plugins
 @msg	no Pathfinder operation applied yet	ingen banfinnaråtgärd har använts än
 @msg	no effect at index {k}	ingen effekt vid index {k}
 @msg	no end record	ingen slutpost

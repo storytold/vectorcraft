@@ -621,6 +621,9 @@ digits	Malayalam	マラヤーラム数字
 	Effect	効果
 	Apply Last Effect	前回の効果を適用
 	Last Effect…	前回の効果…
+	Apply Last Filter	前回のフィルターを適用
+	Last Filter…	前回のフィルター…
+	Apply {filter}	「{filter}」を適用
 	Document Raster Effects Settings…	ドキュメントのラスタライズ効果設定…
 	Vector Effects	ベクター効果
 	3D and Materials	3D とマテリアル
@@ -5712,6 +5715,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no PNG encoder	PNG エンコーダーがありません
 @msg	no document open	ドキュメントが開かれていません
 @msg	no effect applied yet	まだ効果を適用していません
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	繰り返すプラグインフィルターがありません：先にオブジェクト › プラグインからフィルターを実行してください
 @msg	no Pathfinder operation applied yet	まだパスファインダーの操作を適用していません
 @msg	no such perspective grid preset	指定された遠近グリッドプリセットが見つかりません
 @msg	no such recent file	指定された最近使ったファイルが見つかりません

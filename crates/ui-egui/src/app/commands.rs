@@ -247,6 +247,7 @@ impl VectorcraftApp {
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
         let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let spot_base = panels::color_guide::before_command(self);
+        let plugins_before = dialogs::plugin::before_command();
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         let r = panels::actions::after_recorded_command(self, r);
         if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
@@ -262,6 +263,8 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
+        // A filter plug-in run becomes Object › Plug-ins › Apply Last Filter.
+        dialogs::plugin::after_command(self, id, &params, &r, plugins_before);
         let copied = r.is_ok() && self.publish_copy(id);
         self.sync_views();
         self.refresh_replace_font_warning(false);

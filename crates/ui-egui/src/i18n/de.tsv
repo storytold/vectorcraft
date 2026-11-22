@@ -2079,6 +2079,9 @@ file-filter	Templates	Vorlagen
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
+	Apply Last Filter	Letzten Filter anwenden
+	Last Filter…	Letzter Filter…
+	Apply {filter}	{filter} anwenden
 	Last Page	Letzte Seite
 	Latin	Lateinisch
 	Thai	Thai
@@ -5342,6 +5345,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no document	kein Dokument
 @msg	no document open	kein Dokument geöffnet
 @msg	no effect applied yet	noch kein Effekt angewendet
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	kein Plug-in-Filter zum Wiederholen: Führen Sie zuerst einen über Objekt › Plug-ins aus
 @msg	no Pathfinder operation applied yet	noch keine Pathfinder-Operation angewendet
 @msg	no effect at index {k}	kein Effekt bei Index {k}
 @msg	no end record	kein Endeintrag

@@ -165,6 +165,8 @@ pub struct VectorcraftApp {
     pub last_effect: Option<(String, serde_json::Value)>,
     /// Last successful destructive Pathfinder operation, repeated on the current selection.
     pub last_pathfinder: Option<String>,
+    /// The parameters each object filter plug-in last ran with (Object › Plug-ins › Apply Last Filter).
+    pub last_filters: dialogs::plugin::LastFilters,
     /// Last confirmed Warp Options (bend, distortion, orientation) for the next new warp dialog.
     pub last_warp: Option<serde_json::Value>,
     /// The Character panel field that takes the keyboard focus when the panel next draws it

@@ -2409,6 +2409,9 @@ digits	Hindi	Hindi
 	Last Effect: {name}	Hiệu ứng vừa dùng: {name}
 	Last Effect: {}	Hiệu ứng vừa dùng: {}
 	Last Effect…	Hiệu ứng vừa dùng…
+	Apply Last Filter	Áp dụng bộ lọc cuối
+	Last Filter…	Bộ lọc vừa dùng…
+	Apply {filter}	Áp dụng {filter}
 	Last Page	Trang cuối
 	Latin	Latinh
 	Latin Extended	Latin mở rộng
@@ -5833,6 +5836,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no document	không có tài liệu
 @msg	no document open	không có tài liệu nào đang mở
 @msg	no effect applied yet	chưa áp dụng hiệu ứng
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	không có bộ lọc plug-in nào để lặp lại: hãy chạy một bộ lọc từ Đối tượng › Plug-in trước
 @msg	no Pathfinder operation applied yet	chưa áp dụng thao tác Pathfinder
 @msg	no effect at index {k}	không có hiệu ứng tại chỉ mục {k}
 @msg	no end record	không có bản ghi kết thúc

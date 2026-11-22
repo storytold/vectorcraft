@@ -1144,6 +1144,9 @@
 	Effect	Efek
 	Apply Last Effect	Terapkan efek terakhir
 	Last Effect…	Efek terakhir…
+	Apply Last Filter	Terapkan filter terakhir
+	Last Filter…	Filter terakhir…
+	Apply {filter}	Terapkan {filter}
 	Document Raster Effects Settings…	Pengaturan efek raster dokumen…
 	Vector Effects	Efek vektor
 	3D and Materials	3D dan material
@@ -5811,6 +5814,7 @@ imageTrace	Outline	Kontur
 @msg	no document	tidak ada dokumen
 @msg	no document open	tidak ada dokumen yang terbuka
 @msg	no effect applied yet	belum ada efek yang diterapkan
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	tidak ada filter plug-in untuk diulang: jalankan satu dari Objek › Plug-in terlebih dahulu
 @msg	no Pathfinder operation applied yet	belum ada operasi Pathfinder yang diterapkan
 @msg	no effect at index {k}	tidak ada efek pada indeks {k}
 @msg	no end record	tidak ada rekaman akhir

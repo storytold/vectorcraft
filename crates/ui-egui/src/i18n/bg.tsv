@@ -1998,6 +1998,9 @@ font-technology	Variable	Променливи
 	Last Effect: {name}	Посл. ефект: {name}
 	Last Effect: {}	Посл. ефект: {}
 	Last Effect…	Посл. ефект…
+	Apply Last Filter	Прилагане на последния филтър
+	Last Filter…	Посл. филтър…
+	Apply {filter}	Прилагане на {filter}
 	Last Page	Последна страница
 	Latin	Латиница
 	Thai	Тайландски
@@ -5008,6 +5011,7 @@ axis	Both	И двете
 @msg	no document	няма документ
 @msg	no document open	няма отворен документ
 @msg	no effect applied yet	все още няма приложен ефект
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	няма филтър от приставка за повторение: първо стартирайте такъв от Обект › Приставки
 @msg	no Pathfinder operation applied yet	все още няма приложена операция на Pathfinder
 @msg	no effect at index {k}	няма ефект на индекс {k}
 @msg	no end record	няма краен запис

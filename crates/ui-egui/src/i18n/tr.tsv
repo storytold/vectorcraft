@@ -1899,6 +1899,9 @@ font-technology	Variable	Değişken
 	Last Effect: {name}	Son Etki: {name}
 	Last Effect: {}	Son Etki: {}
 	Last Effect…	Son Etki…
+	Apply Last Filter	Son Filtreyi Uygula
+	Last Filter…	Son Filtre…
+	Apply {filter}	{filter} Uygula
 	Last Page	Son Sayfa
 	Latin	Latince
 	Thai	Tay dili
@@ -5162,6 +5165,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no document	belge yok
 @msg	no document open	hiçbir belge açık değil
 @msg	no effect applied yet	henüz hiçbir efekt uygulanmadı
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	yinelenecek eklenti filtresi yok: önce Nesne › Eklentiler menüsünden birini çalıştırın
 @msg	no Pathfinder operation applied yet	henüz hiçbir Yol Bulucu işlemi uygulanmadı
 @msg	no effect at index {k}	{k} endeksinde etkisi yok
 @msg	no end record	son kayıt yok

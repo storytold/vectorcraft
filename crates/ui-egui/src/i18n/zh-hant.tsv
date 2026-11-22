@@ -2723,6 +2723,7 @@ file-filter	Templates	範本
 @msg	no PNG encoder	沒有 PNG 編碼器
 @msg	no document open	沒有開啟的文件
 @msg	no effect applied yet	尚未套用任何效果
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	沒有可重複的增效模組濾鏡：請先從「物件 › 增效模組」執行一個
 @msg	no Pathfinder operation applied yet	尚未套用任何路徑管理員操作
 @msg	no such perspective grid preset	沒有這個透視格點預設集
 @msg	no such recent file	沒有這個最近使用的檔案
@@ -3387,6 +3388,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
+	Apply Last Filter	套用上次的濾鏡
+	Last Filter…	上次的濾鏡…
+	Apply {filter}	套用「{filter}」
 	Last Page	最後一頁
 	Latin	拉丁文
 	Thai	泰文

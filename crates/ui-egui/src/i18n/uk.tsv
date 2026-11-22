@@ -2113,6 +2113,9 @@ file-filter	Templates	Шаблони
 	Last Effect: {name}	Останній ефект: {name}
 	Last Effect: {}	Останній ефект: {}
 	Last Effect…	Останній ефект…
+	Apply Last Filter	Застосувати останній фільтр
+	Last Filter…	Останній фільтр…
+	Apply {filter}	Застосувати {filter}
 	Last Page	Остання сторінка
 	Latin	Латиниця
 	Thai	Тайська
@@ -5463,6 +5466,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no document	немає документа
 @msg	no document open	немає відкритого документа
 @msg	no effect applied yet	ефект ще не застосований
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	немає фільтра модуля для повторення: спершу запустіть фільтр із меню Об’єкт › Модулі
 @msg	no Pathfinder operation applied yet	операцію обробки контурів ще не застосовано
 @msg	no effect at index {k}	немає ефекту з індексом {k}
 @msg	no end record	немає кінцевого запису

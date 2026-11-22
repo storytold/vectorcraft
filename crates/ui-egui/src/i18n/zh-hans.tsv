@@ -1994,6 +1994,9 @@ file-filter	Templates	模板
 	Last Effect: {name}	最后一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	上次效果…
+	Apply Last Filter	应用上一次滤镜
+	Last Filter…	上次滤镜…
+	Apply {filter}	应用“{filter}”
 	Last Page	最后一页
 	Latin Extended	拉丁文扩充
 	Latin-1 Supplement	拉丁文-1 补充
@@ -5377,6 +5380,7 @@ imageTrace	Outline	轮廓
 @msg	no PNG encoder	没有 PNG 编码器
 @msg	no document open	没有打开的文档
 @msg	no effect applied yet	尚未应用任何效果
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	没有可重复的增效工具滤镜：请先从“对象 › 增效工具”运行一个
 @msg	no Pathfinder operation applied yet	尚未应用任何路径查找器操作
 @msg	no such perspective grid preset	没有此透视网格预设
 @msg	no such recent file	没有此最近使用的文件

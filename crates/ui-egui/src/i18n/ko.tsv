@@ -614,6 +614,9 @@ digits	Malayalam	말라얄람어
 	Effect	효과
 	Apply Last Effect	마지막 효과 적용
 	Last Effect…	마지막 효과…
+	Apply Last Filter	마지막 필터 적용
+	Last Filter…	마지막 필터…
+	Apply {filter}	{filter} 적용
 	Document Raster Effects Settings…	문서 래스터 효과 설정…
 	Vector Effects	벡터 효과
 	3D and Materials	3D 및 재질
@@ -5641,6 +5644,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no PNG encoder	PNG 인코더가 없습니다
 @msg	no document open	열린 문서가 없습니다
 @msg	no effect applied yet	아직 적용된 효과가 없습니다
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	반복할 플러그인 필터가 없습니다: 먼저 개체 › 플러그인에서 필터를 실행하세요
 @msg	no Pathfinder operation applied yet	아직 적용된 패스파인더 작업이 없습니다
 @msg	no such perspective grid preset	해당 원근 격자 프리셋이 없습니다
 @msg	no such recent file	해당 최근 파일이 없습니다

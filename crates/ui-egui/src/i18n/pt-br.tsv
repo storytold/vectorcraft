@@ -1757,6 +1757,9 @@ antiAlias	Sharp	Nítido
 	Polygonal Lasso	Laço poligonal
 	Last Effect: {name}	Último Efeito: {name}
 	Last Effect…	Último Efeito…
+	Apply Last Filter	Aplicar Último Filtro
+	Last Filter…	Último Filtro…
+	Apply {filter}	Aplicar {filter}
 	Last Page	Última Página
 	Layer Options…	Opções de Camada…
 	Layers	Camadas
@@ -4719,6 +4722,7 @@ axis	Both	Ambos
 @msg	no document	nenhum documento
 @msg	no document open	nenhum documento aberto
 @msg	no effect applied yet	nenhum efeito aplicado ainda
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	nenhum filtro de plug-in para repetir: execute um em Objeto › Plug-ins primeiro
 @msg	no Pathfinder operation applied yet	nenhuma operação do Localizador de Caminhos aplicada ainda
 @msg	no effect at index {k}	nenhum efeito no índice {k}
 @msg	no end record	sem registro final

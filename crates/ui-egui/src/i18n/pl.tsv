@@ -512,6 +512,9 @@
 	Effect	Efekt
 	Apply Last Effect	Zastosuj ostatni efekt
 	Last Effect…	Ostatni efekt…
+	Apply Last Filter	Zastosuj ostatni filtr
+	Last Filter…	Ostatni filtr…
+	Apply {filter}	Zastosuj {filter}
 	Document Raster Effects Settings…	Ustawienia efektów rastrowych dokumentu…
 	Vector Effects	Efekty wektorowe
 	3D and Materials	3D i materiały
@@ -5583,6 +5586,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no document	brak dokumentu
 @msg	no document open	brak otwartego dokumentu
 @msg	no effect applied yet	nie zastosowano jeszcze żadnego efektu
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	brak filtra wtyczki do powtórzenia: najpierw uruchom jeden z menu Obiekt › Wtyczki
 @msg	no Pathfinder operation applied yet	nie zastosowano jeszcze żadnej operacji odnajdywania ścieżek
 @msg	no effect at index {k}	brak efektu o indeksie {k}
 @msg	no end record	brak rekordu końcowego

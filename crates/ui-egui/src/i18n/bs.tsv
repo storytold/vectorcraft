@@ -539,6 +539,9 @@
 	Effect	Efekat
 	Apply Last Effect	Primijeni posljednji efekat
 	Last Effect…	Posljednji efekat…
+	Apply Last Filter	Primijeni posljednji filter
+	Last Filter…	Posljednji filter…
+	Apply {filter}	Primijeni {filter}
 	Document Raster Effects Settings…	Postavke rasterskih efekata dokumenta…
 	Vector Effects	Vektorski efekti
 	3D and Materials	3D i materijali
@@ -5439,6 +5442,7 @@ imageTrace	Outline	Obris
 @msg	no document	nema dokumenta
 @msg	no document open	nijedan dokument nije otvoren
 @msg	no effect applied yet	još nije primijenjen nijedan efekat
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	nema filtera dodatka za ponavljanje: prvo pokrenite jedan iz Objekat › Dodaci
 @msg	no effect at index {k}	nema efekta na indeksu {k}
 @msg	no end record	nema završnog zapisa
 @msg	no file manager here	ovdje nema upravitelja datoteka

@@ -553,6 +553,9 @@
 	Effect	Efekt
 	Apply Last Effect	Použít poslední efekt
 	Last Effect…	Poslední efekt…
+	Apply Last Filter	Použít poslední filtr
+	Last Filter…	Poslední filtr…
+	Apply {filter}	Použít {filter}
 	Document Raster Effects Settings…	Nastavení rastrových efektů dokumentu…
 	Vector Effects	Vektorové efekty
 	3D and Materials	3D a materiály
@@ -5764,6 +5767,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no document	žádný dokument
 @msg	no document open	není otevřen žádný dokument
 @msg	no effect applied yet	zatím nebyl použit žádný efekt
+@msg	no plug-in filter to repeat: run one from Object › Plug-ins first	žádný filtr zásuvného modulu k zopakování: nejprve jeden spusťte z nabídky Objekt › Zásuvné moduly
 @msg	no Pathfinder operation applied yet	zatím nebyla použita žádná operace s cestami
 @msg	no effect at index {k}	na indexu {k} není žádný efekt
 @msg	no end record	chybí koncový záznam
