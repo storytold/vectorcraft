@@ -13,6 +13,7 @@ use std::sync::Mutex;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::safe_mode;
+use vectorcraft_testkit::TempDir;
 
 static LOCK: Mutex<()> = Mutex::new(());
 
@@ -42,12 +43,9 @@ impl Drop for Fresh {
     }
 }
 
-/// A new, empty folder for test `tag`.
-fn tmp_dir(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("vc-script-startup-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+/// A new, empty folder for test `tag`, removed with everything in it when the test ends.
+fn tmp_dir(tag: &str) -> TempDir {
+    TempDir::new(&format!("script-startup-{tag}"))
 }
 
 /// Writes `text` to `name` under `dir`, folders included.
@@ -89,7 +87,7 @@ fn startup_scripts_are_off_by_default_and_run_nothing() {
     write(&dir, "a.jsx", "vc.log('ran');");
     let mut s = Session::new();
     assert!(!s.prefs.run_startup_scripts, "off by default");
-    s.attach_startup_scripts_dir(dir.clone());
+    s.attach_startup_scripts_dir(dir.to_path_buf());
     assert_eq!(s.startup_skip(), Some("off"));
     let r = s.execute("script.startup.run", &json!({"reason": "launch"})).unwrap();
     assert_eq!(r, json!({"reason": "launch", "skipped": true, "why": "off"}));
