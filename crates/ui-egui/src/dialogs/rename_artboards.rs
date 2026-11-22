@@ -92,6 +92,8 @@ mod tests {
         let ctx = app.ui_ctx.clone().unwrap();
         let (id, _) = open_rename(&app);
         app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(!app.any_dialog_open(), "Cancel closes the first dialog");
 
         app.session.set_tool_option("selected", &json!([2, 0]));
         crate::menus::invoke(&mut app, CMD, json!({}));

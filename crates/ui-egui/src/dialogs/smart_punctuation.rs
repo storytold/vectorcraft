@@ -140,9 +140,9 @@ mod tests {
         ok(&mut app);
         assert_eq!(plain(&app, id), "“Hi”. ½ – o\u{FB00}");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
-        // PLAN: assumed the message dialog's json_fields carry its `detail`.
-        let told = entry(&app, "message").expect("Report Results shows the counts").fields.unwrap();
-        assert_eq!(told["detail"], "ff, fi, ffi Ligatures: 1\nSmart Quotes: 2\nSmart Spaces: 1\nEn, Em Dashes: 1\nExpert Fractions: 1");
+        // The alert's automation fields list only its message: its detail is read as the app told it.
+        let (_, detail) = crate::dialogs::confirm::open_message(&app).expect("Report Results shows the counts");
+        assert_eq!(detail, "ff, fi, ffi Ligatures: 1\nSmart Quotes: 2\nSmart Spaces: 1\nEn, Em Dashes: 1\nExpert Fractions: 1");
         assert!(entry(&app, COMMAND).is_none());
         crate::menus::invoke(&mut app, COMMAND, json!({}));
         let again = entry(&app, COMMAND).unwrap().fields.unwrap();

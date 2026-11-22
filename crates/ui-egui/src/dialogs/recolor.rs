@@ -1597,7 +1597,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         let request = ColorRequest::new(row.to_string(), srgba(&color));
         Some(if swatches { request.on_swatches() } else { request })
     });
-    let previewing = preview_params(&work.fields);
+    // The preview runs first, so the feed lists what it shows (the group it renames among them).
+    if let Some(p) = preview_params(&work.fields) {
+        run_preview(app, p);
+    }
     let feed = Feed::of(app, &work.fields);
     dialogs.with(|host| {
         if let Some(d) = host.get_mut_by_id::<RecolorDialog>(id) {
@@ -1605,9 +1608,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             d.color_request = request;
         }
     });
-    if let Some(p) = previewing {
-        run_preview(app, p);
-    }
 }
 
 /// Undo Changes (`ui.recolorUndo`, `back`) or Redo Changes (`ui.recolorRedo`) in the open Recolor
@@ -1624,17 +1624,16 @@ pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String
         sync_weights(app, &mut work.fields);
     }
     let answer = json!({"changed": changed, "canUndo": work.steps.can(&work.fields, true), "canRedo": work.steps.can(&work.fields, false)});
-    let previewing = preview_params(&work.fields).filter(|_| changed);
+    // The art previews the step at once, as the frame after a button would preview it.
+    if let Some(p) = preview_params(&work.fields).filter(|_| changed) {
+        run_preview(app, p);
+    }
     let feed = Feed::of(app, &work.fields);
     dialogs.with(|host| {
         if let Some(d) = host.get_mut_by_id::<RecolorDialog>(id) {
             d.put_work(work, feed);
         }
     });
-    // The art previews the step at once, as the frame after a button would preview it.
-    if let Some(p) = previewing {
-        run_preview(app, p);
-    }
     Ok(answer)
 }
 
@@ -3800,17 +3799,17 @@ mod tests {
 
     /// Dragging the edge between two parts of the bar to the left gives the right-hand part more
     /// weight; the rows wait for the drag to end, and when it ends the rows' current colors move.
-    // PLAN: assumed color-w20's `ProminentBar` names itself "Prominent Colors" and the edge after its first part
-    // "Prominent Colors edge 1" in the access tree.
     #[test]
     fn dragging_a_prominent_edge_moves_colors_between_rows() {
         let (mut rc, purple) = prominent_setup();
         rc.settled();
         let bar = rc.by_label("Prominent Colors").expect("the Prominent Colors bar").rect;
-        let edge = rc.by_label("Prominent Colors edge 1").expect("the edge between the two parts").center();
+        // The edges are pointer-only parts with no access node: the first is on the right side of the leftmost part.
+        let first = *rc.graphics_in(bar).first().expect("the bar's parts");
+        let edge = egui::pos2(first.right(), first.center().y);
         // From 75% to 50%: a quarter of the bar to the left.
         let to = edge - egui::vec2(bar.width() * 0.25, 0.0);
-        rc.press("Prominent Colors edge 1");
+        rc.press_at(edge);
         for k in 1..=4 {
             rc.move_to(edge + (to - edge) * (k as f32 / 4.0));
         }

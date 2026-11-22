@@ -253,7 +253,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let mut verdict = s.preview.run(app, previewing, &s.label, cmd, &p).map(|r| r.map(|_| ()));
     if previewing {
         s.tried = None;
-    } else if !app.session.in_interaction() && s.tried.as_ref() != Some(&p) {
+    } else if app.session.in_interaction() && s.tried.as_ref() != Some(&p) {
+        // Changed values end the refusal of the values before them; they are tried once the other interaction ends.
+        verdict = Some(Ok(()));
+    } else if s.tried.as_ref() != Some(&p) {
         // Waits for another interaction to end: trying inside it would replace its preview and cancel it. A failure
         // to begin leaves no interaction: the try then reports it.
         let _ = app.begin_interaction(&s.label);

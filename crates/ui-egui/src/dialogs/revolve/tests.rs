@@ -195,12 +195,14 @@ fn map_art_surfaces_follow_the_active_document() {
         (st.selection.objects.first().copied(), st.revision)
     };
     let mut h = opened(app, json!({"effect":CLASSIC_EXTRUDE,"item":null}));
-    // Without a preview the second document keeps its revision, so only the document tells the two objects apart.
     h.set("preview", json!(false));
     h.set("__page", json!("mapArt"));
     let second = h.surfaces().unwrap();
     let at_second = key(&h);
     assert!(h.app().session.set_active(0));
+    // The preview the dialog opened with moved the second document's revision on: the first is given the same, so
+    // only the document tells the two objects apart.
+    h.app().session.active_mut().unwrap().revision = at_second.1;
     h.settle();
     assert_eq!(key(&h), at_second, "both documents' objects have the same id and revision");
     let first = h.surfaces().unwrap();

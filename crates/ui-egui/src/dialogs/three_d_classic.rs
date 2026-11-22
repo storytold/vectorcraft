@@ -12,10 +12,11 @@ use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::Canvas;
 use craft::ui::canvas::{CanvasSpace, canvas_space};
 use craft::ui::canvas_controls::SelectionOutline;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Picture;
 use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
+use craft::ui::pickers::Select;
 use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::style::DataColor;
@@ -442,13 +443,17 @@ pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -
         return Vec::new();
     }
     let first_page = if effect == CLASSIC_ROTATE { "rotation" } else { "object" };
-    let mut rows = vec![Param::custom("__mapDone", tl!("Map Art"), move |ui, fields, _| {
-        let done = Button::new(tl!("Done")).show(ui);
-        if done.clicked() {
-            fields.set(PAGE, first_page);
-        }
-        done.response
-    })];
+    let mut rows = vec![
+        Param::custom("__mapDone", tl!("Map Art"), move |ui, fields, _| {
+            let done = Button::new(tl!("Done")).show(ui);
+            if done.clicked() {
+                fields.set(PAGE, first_page);
+            }
+            done.response
+        })
+        // The page's maps: automation sets them whole, as the rows below edit them one surface at a time.
+        .companions([MAP_ART]),
+    ];
     let Some(listed) = data.surfaces.as_ref().filter(|s| !s.is_empty()) else { return rows };
     let count = listed.len();
     let current = shown_surface(fields, count);
@@ -458,9 +463,19 @@ pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -
     let map = maps.iter().find(|m| m.surface == current).cloned();
     let names: Vec<String> = data.doc.as_ref().map(|d| d.symbols.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
     if has_room(&maps, map.is_some()) {
-        let options = std::iter::once((String::new(), tl!("None").into())).chain(names.into_iter().map(|n| (n.clone(), n.into()))).collect();
+        let entries: Vec<Entry<String>> =
+            std::iter::once(Entry::new(String::new(), tl!("None"))).chain(names.into_iter().map(|n| Entry::new(n.clone(), n))).collect();
         let shown = map.as_ref().map(|m| m.symbol.clone()).unwrap_or_default();
-        rows.push(Param::new(MAP_SYMBOL, tl!("Symbol"), ParamKind::choice(options, Some(shown))).on_set(set_map_value));
+        // A custom row, so a pick and automation both write the map through `set_map_value`.
+        let symbol = Param::custom(MAP_SYMBOL, tl!("Symbol"), move |ui, fields, _| {
+            let picked = Select::new(tl!("Symbol"), Bind::given(shown.clone()), &entries).id_salt(MAP_SYMBOL).show(ui);
+            if let Some(name) = picked.value().cloned() {
+                // The select lists only what the map takes: a refusal cannot come from it.
+                let _ = set_map_value(fields, MAP_SYMBOL, json!(name));
+            }
+            picked.response
+        });
+        rows.push(symbol.on_set(set_map_value));
     } else {
         rows.push(Param::read_only_text(MAP_SYMBOL, tl!("Symbol"), tl!("None")));
     }

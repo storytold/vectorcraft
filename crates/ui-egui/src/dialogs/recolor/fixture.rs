@@ -192,6 +192,20 @@ impl Recolor {
         self
     }
 
+    /// The rects of the graphics objects inside `area` (a bar's parts), left to right.
+    pub(crate) fn graphics_in(&self, area: Rect) -> Vec<Rect> {
+        let mut rects: Vec<Rect> = self.fixture.by_role(Role::GRAPHICS_OBJECT).into_iter().map(|t| t.rect).filter(|r| area.contains_rect(*r)).collect();
+        rects.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        rects
+    }
+
+    /// A press at `at`, held, after the pointer moved there.
+    pub(crate) fn press_at(&mut self, at: Pos2) -> &mut Self {
+        self.fixture.frame(vec![Event::PointerMoved(at)]);
+        self.fixture.frame(vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+        self
+    }
+
     /// The held button moved to `to`.
     pub(crate) fn move_to(&mut self, to: Pos2) -> &mut Self {
         self.fixture.frame(vec![Event::PointerMoved(to)]);

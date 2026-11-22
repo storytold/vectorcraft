@@ -152,8 +152,13 @@ pub(super) mod driver {
 
     /// Sets a field as automation does.
     pub fn set(app: &mut VectorcraftApp, key: &str, value: Value) {
+        try_set(app, key, value).expect("the field takes the value");
+    }
+
+    /// Sets a field as automation does, with the dialog's refusal.
+    pub fn try_set(app: &mut VectorcraftApp, key: &str, value: Value) -> Result<(), String> {
         let (ctx, id) = (ctx(app), id(app));
-        app.dialogs().expect("window").with(|h| h.set_json_field(&ctx, id, key, value)).expect("the field takes the value");
+        app.dialogs().expect("window").with(|h| h.set_json_field(&ctx, id, key, value))
     }
 
     /// Runs the frame's pump.
@@ -208,8 +213,9 @@ mod tests {
     }
 
     /// `ui.warichuSettings` opens on the characters' values; OK sets the changed ones in one undo
-    /// step without turning Warichu on, and values past the ends are kept to them. Automation sets
-    /// the gap in points, as a number row takes it.
+    /// step without turning Warichu on. A value past the ends is refused as it is set (the framework's
+    /// `FieldRefusal::Rejects`); OK keeps an unedited one to them (the test below). Automation sets the
+    /// gap in points, as a number row takes it.
     #[test]
     fn warichu_settings_dialog_sets_lines_gap_scale_and_alignment() {
         let (mut app, id) = app();
@@ -219,7 +225,9 @@ mod tests {
         assert_eq!(f.text("warichuAlign"), Some("auto"));
         driver::set(&mut app, "warichuLines", json!(3));
         driver::set(&mut app, "warichuGap", json!(36));
-        driver::set(&mut app, "warichuScale", json!(400));
+        assert!(driver::try_set(&mut app, "warichuScale", json!(400)).unwrap_err().contains("warichuScale"));
+        assert_eq!(driver::fields(&app).number("warichuScale"), Some(50.0), "a refused value leaves the field");
+        driver::set(&mut app, "warichuScale", json!(100));
         driver::set(&mut app, "warichuAlign", json!("center"));
         let undo = app.session.active().unwrap().history.undo.len();
         driver::ok(&mut app);
