@@ -616,6 +616,101 @@ fn capture_to_a_missing_links_path_writes_nothing() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Places a linked image of the key `key` with `link` on the active document's default layer.
+fn place_linked(s: &mut Session, key: &str, link: vectorcraft_doc::LinkInfo) {
+    s.edit("Place", |d, _| {
+        let id = d.alloc_id();
+        let im = vectorcraft_doc::ImageObject {
+            key: key.into(),
+            width: 1,
+            height: 1,
+            xf: vectorcraft_geom::Affine::IDENTITY,
+            link: Some(link),
+            placement: Default::default(),
+            pixels: None,
+        };
+        d.insert(d.default_layer(), 0, vectorcraft_doc::Node::new(id, NodeKind::Image(Box::new(im))))?;
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// An untitled document opened from a template finds a link by its relative path from the
+/// template's folder, so a capture there is refused, also when the file is missing.
+#[test]
+fn capture_to_a_templates_relative_link_writes_nothing() {
+    let base = folder("template-link");
+    let (mut s, dir) = capture_doc(&base);
+    let st = s.active_mut().unwrap();
+    st.path = None;
+    st.links_from = Some(dir.join("t.vctemplate").to_string_lossy().into_owned());
+    let stale = base.join("outside/gone/pic.png").to_string_lossy().into_owned();
+    place_linked(&mut s, "pic", vectorcraft_doc::LinkInfo { path: stale, relative: Some("pic.png".into()), ..Default::default() });
+    let target = dir.join("pic.png");
+    let e = file_failure(&mut s, &base, &format!("app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]);", quoted(&target)));
+    assert!(e.contains("cannot write over an open document"), "{e}");
+    assert!(!target.exists(), "nothing written");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A DCS image whose stored path is stale reads its plate files beside the main file its relative
+/// path finds, so a capture over one of those is refused.
+#[test]
+fn capture_over_a_plate_beside_a_found_dcs_file_writes_nothing() {
+    use vectorcraft_doc::separated::{InkPlate, PlateFile, Separated};
+    let base = folder("dcs-plate");
+    let (mut s, dir) = capture_doc(&base);
+    s.active_mut().unwrap().path = Some(dir.join("doc.vectorcraft").to_string_lossy().into_owned());
+    std::fs::write(dir.join("main.eps"), b"main").unwrap();
+    let plate = dir.join("cyan.png");
+    std::fs::write(&plate, b"kept").unwrap();
+    let separated = Separated::new(1, 1, vec![InkPlate { name: "Cyan".into(), cmyk: [1.0, 0.0, 0.0, 0.0], data: vec![255] }]).unwrap();
+    let files = [PlateFile { name: "cyan.png".into(), size: 4, modified: 0 }];
+    let blob = vectorcraft_doc::ImageBlob::separated_tiff(&separated, None, &files).unwrap();
+    s.edit("Blob", |d, _| {
+        d.images.insert("dcs".into(), blob);
+        Ok(())
+    })
+    .unwrap();
+    let stale = base.join("outside/gone/main.eps").to_string_lossy().into_owned();
+    place_linked(&mut s, "dcs", vectorcraft_doc::LinkInfo { path: stale, relative: Some("main.eps".into()), ..Default::default() });
+    let e = file_failure(&mut s, &base, &format!("app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]);", quoted(&plate)));
+    assert!(e.contains("cannot write over an open document"), "{e}");
+    assert_eq!(std::fs::read(&plate).unwrap(), b"kept");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A document the interface opens while the run is paused is open too: a capture over its file is
+/// refused.
+#[test]
+fn capture_over_a_document_opened_while_paused_writes_nothing() {
+    let base = folder("paused-open");
+    let (mut s, dir) = capture_doc(&base);
+    let target = dir.join("opened.png");
+    let main = base.join("main/main.jsx");
+    let text = format!(
+        "Folder.userData; for (var i = 0; i < 2000000; i++) {{}}\
+         try {{ app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]); vc.log('written'); }} catch (e) {{ vc.log(e.message); }}",
+        quoted(&target)
+    );
+    std::fs::write(&main, text.as_bytes()).unwrap();
+    s.script_frames = true;
+    assert_eq!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap()["running"], true);
+    let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>"#;
+    crate::cmd::fileio::open_bytes(&mut s, "opened.svg", svg, Some(target.to_string_lossy().into_owned())).unwrap();
+    std::fs::write(&target, b"kept").unwrap();
+    let r = loop {
+        if let Some(r) = s.script_pump() {
+            break r.unwrap();
+        }
+    };
+    s.script_frames = false;
+    let out = r["log"].as_array().cloned().unwrap_or_default();
+    assert!(out.len() == 1 && out[0].as_str().is_some_and(|m| m.contains("cannot write over an open document")), "{out:?}");
+    assert_eq!(std::fs::read(&target).unwrap(), b"kept");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn capture_written_before_a_failure_is_reported() {
     let base = folder("report");

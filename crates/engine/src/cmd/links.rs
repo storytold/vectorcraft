@@ -194,16 +194,24 @@ pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
     out
 }
 
-/// The link of every linked image and placed document of `d`, wherever it is stored, brush art
-/// included, with the plate files of an image placed from a DCS file.
-pub(crate) fn linked_files_with_plates(d: &Document) -> Vec<(LinkInfo, Vec<String>)> {
-    groups(d, None)
-        .into_iter()
-        .map(|g| {
-            let plates = g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&g.link.path, &f.name)).collect();
-            (g.link, plates)
-        })
-        .collect()
+/// Every place a linked image or placed document of `d` (a document looking from `base`) is read
+/// from, wherever it is stored, brush art included, whether or not a file is there: each place
+/// [`locate`] looks at, and beside each one the plate files of an image placed from a DCS file,
+/// as its plate-change check finds them. A link's absolute stored and relative paths are listed
+/// as they are too.
+pub(crate) fn link_read_places(d: &Document, base: LinkBase) -> Vec<String> {
+    let mut out = vec![];
+    for g in groups(d, None) {
+        let link = &g.link;
+        let mut mains: Vec<String> =
+            std::iter::once(link.path.as_str()).chain(link.relative.as_deref()).filter(|p| Path::new(p).is_absolute()).map(str::to_string).collect();
+        mains.extend(places(link, base));
+        for main in mains {
+            out.extend(g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&main, &f.name)));
+            out.push(main);
+        }
+    }
+    out
 }
 
 /// The linked images and placed documents of `d` by file and content, wherever they are stored
@@ -397,6 +405,17 @@ fn found_at(path: String) -> Option<Found> {
 /// by name in the document's folder, then in that of [`LinkBase::relative`]. Only paths
 /// [`fileio::document_path`] follows from the document's own file are looked at.
 fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
+    let mut f = places(link, base).find_map(found_at)?;
+    f.relative = base.relative.map(|from| {
+        let from = absolute_path(from);
+        Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
+    });
+    Some(f)
+}
+
+/// The places [`locate`] looks for the file of `link` at, in its order, whether or not a file is
+/// there.
+fn places<'a>(link: &'a LinkInfo, base: LinkBase<'a>) -> impl Iterator<Item = String> + 'a {
     let (relative, other) = (link.relative.as_deref(), base.doc != base.relative);
     let stored = [
         (Some(link.path.as_str()), base.doc),
@@ -405,12 +424,7 @@ fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
         (Some(link.name()), base.doc),
         (other.then_some(link.name()), base.relative),
     ];
-    let mut f = stored.into_iter().filter_map(|(p, from)| follow_from(p?, from, base.doc, fileio::document_path)).find_map(found_at)?;
-    f.relative = base.relative.map(|from| {
-        let from = absolute_path(from);
-        Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
-    });
-    Some(f)
+    stored.into_iter().filter_map(move |(p, from)| follow_from(p?, from, base.doc, fileio::document_path))
 }
 
 /// The place `stored` names from the file `from`, as `resolve` ([`fileio::document_path`]) follows

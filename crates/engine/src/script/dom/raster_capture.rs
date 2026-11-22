@@ -281,22 +281,18 @@ fn capture_settings(items: Option<&[(String, Data)]>) -> std::result::Result<(f6
 /// The files a capture must not write over: the open documents' files and the files their linked
 /// images and placed documents show, wherever those are stored (opacity masks, symbols, patterns
 /// and brushes included), with a DCS image's plate files, also when a file is missing, in the form
-/// [`placed`] gives. A link's stored path and its relative path are each taken from its
-/// document's folder, as opening the document reads them.
+/// [`placed`] gives. A link's places are the ones opening the document looks at: its stored path
+/// from the document's folder and its relative path from the folder of the file the document was
+/// read from (a template opened as an untitled document has no file of its own), with a DCS
+/// image's plate files beside each. The documents the interface has open while the run's slice
+/// runs, such as one opened while the run was paused, count too.
 fn sources_on_disk(h: &Host) -> Vec<Placed> {
     let s = h.session.borrow();
+    let interface = h.interface_docs.borrow();
     let mut paths: Vec<String> = Vec::new();
-    for st in s.documents() {
+    for st in s.documents().iter().chain(interface.iter()) {
         paths.extend(st.path.clone());
-        let document = st.path.as_deref();
-        for (link, plates) in crate::cmd::links::linked_files_with_plates(&st.doc) {
-            for stored in std::iter::once(link.path.as_str()).chain(link.relative.as_deref()).chain(plates.iter().map(String::as_str)) {
-                if std::path::Path::new(stored).is_absolute() {
-                    paths.push(stored.to_string());
-                }
-                paths.extend(crate::cmd::fileio::document_path(stored, document).ok());
-            }
-        }
+        paths.extend(crate::cmd::links::link_read_places(&st.doc, crate::cmd::links::LinkBase::of(st)));
     }
     paths.iter().filter_map(|p| placed(std::path::Path::new(p))).collect()
 }

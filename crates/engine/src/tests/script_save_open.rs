@@ -63,7 +63,7 @@ fn save_as_export_file_and_open_write_and_read_where_the_script_may() {
             "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
              vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}});\n\
              d.saveAs(new File(dir + '/a.svg'));\n\
-             var o = new PDFSaveOptions(); vc.log([o.typename, o.compatibility, o.preserveEditability]);\n\
+             var o = new PDFSaveOptions(); vc.log([o.typename, o.compatibility, o.preserveEditability, new IllustratorSaveOptions().compatibility]);\n\
              o.compatibility = PDFCompatibility.ACROBAT7; o.viewAfterSaving = false; o.someOtherName = 3;\n\
              o.colorCompression = 'CompressionQuality.None';\n\
              d.saveAs(new File(dir + '/b.pdf'), o); vc.log(d.name);\n\
@@ -77,7 +77,7 @@ fn save_as_export_file_and_open_write_and_read_where_the_script_may() {
              var u = [app.userInteractionLevel]; app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS; u.push(app.userInteractionLevel); vc.log(u);"
         ),
     );
-    assert_eq!(out[0], json!(["PDFSaveOptions", "PDFCompatibility.ACROBAT5", true]));
+    assert_eq!(out[0], json!(["PDFSaveOptions", "PDFCompatibility.ACROBAT5", true, "Compatibility.ILLUSTRATOR19"]));
     assert_eq!(out[1], json!("b.pdf"), "saveAs gives the document the new file");
     assert_eq!(out[2], json!("b.pdf"), "exportFile leaves the document's file as it is");
     assert_eq!(out[3], json!(["Document", 2, true, "a.svg"]));

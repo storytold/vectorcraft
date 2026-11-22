@@ -2639,7 +2639,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
   `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
-  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  starts with the defaults that page gives. The settings of the `DocumentPreset` objects one run makes hold at most
+  4 MB together, and an assignment past that throws a `RangeError`. A preset's `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
@@ -2655,14 +2656,14 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
-  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
   document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
-  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  directly below it. `PLACEAFTER` with a clipping group's clipping path as the relative object throws an error and
+  changes nothing. An object of another document throws `Cross-document placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
@@ -2691,7 +2692,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.controlBounds`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
@@ -2759,7 +2760,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `transparency` the image keeps its transparency; otherwise it is drawn on `matteColor` with `matte`, and on white
   without. `matteColor` is a record with `red`, `green` and `blue` from 0 to 255. The file is checked as a `File`
   opened for writing is checked, and a path that is an open document's file or a file one of them links throws an
-  error, also when that file is missing. A name that differs from it only in letter case throws the same error in a
+  error, also when that file is missing. The linked files are every place opening the document looks for a link's
+  file (its stored path, its relative path from the file the document was read from, and its name in those files' folders), with a DCS
+  image's plate files beside each, and the documents count whether they were open when the run started or were
+  opened while it was paused. A name that differs from it only in letter case throws the same error in a
   folder whose names ignore case, and in a folder where that cannot be told. An image of more than 64 megapixels or
   32,768 pixels a side throws an error before anything is drawn or written, and the resolution is never lowered to
   make it fit. `Document.windowCapture` throws an error that says it is not available yet.

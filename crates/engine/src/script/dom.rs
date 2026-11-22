@@ -87,17 +87,21 @@ pub(super) enum Coords {
 const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
-/// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, whether a call's own savepoint
-/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made.
+/// What the object model keeps for one run: its coordinate system, the last list of page items of
+/// each of up to [`MAX_ITEM_LISTS`] documents, kept while that document is unchanged, whether a
+/// call's own savepoint ([`atomically`]) is open, and the settings of each `DocumentPreset` the run
+/// made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
-    items: RefCell<Option<ItemList>>,
+    /// The documents' lists, the one listed most recently at the end.
+    items: RefCell<Vec<ItemList>>,
     saving: Cell<bool>,
     /// `app.userInteractionLevel` ([`save_open`]).
     save_options: save_open::State,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    /// What the settings in `presets` hold together ([`MAX_PRESET_BYTES`]).
+    preset_bytes: Cell<u64>,
 }
 
 impl State {
@@ -129,6 +133,9 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
 
 /// A document's uid, the document as it was, and the ids of its page items then.
 type ItemList = (u64, Arc<Document>, Rc<Vec<NodeId>>);
+
+/// The most documents whose page-item lists a run keeps at once.
+const MAX_ITEM_LISTS: usize = 8;
 
 type Answer = std::result::Result<Data, HostError>;
 
@@ -339,10 +346,7 @@ fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
 
 /// The ids of a document's page items in paint order ([`State`] keeps the last list).
 fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.items.borrow()
-        && *uid == st.uid
-        && Arc::ptr_eq(doc, &st.doc)
-    {
+    if let Some((_, _, ids)) = h.dom.items.borrow().iter().find(|(uid, doc, _)| *uid == st.uid && Arc::ptr_eq(doc, &st.doc)) {
         return ids.clone();
     }
     fn walk(nodes: &[Arc<crate::doc::Node>], out: &mut Vec<NodeId>) {
@@ -361,7 +365,12 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     let mut ids = Vec::new();
     walk(&st.doc.layers, &mut ids);
     let ids = Rc::new(ids);
-    *h.dom.items.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
+    let mut lists = h.dom.items.borrow_mut();
+    lists.retain(|(uid, ..)| *uid != st.uid);
+    if lists.len() >= MAX_ITEM_LISTS {
+        lists.remove(0);
+    }
+    lists.push((st.uid, st.doc.clone(), ids.clone()));
     ids
 }
 
@@ -950,19 +959,25 @@ fn new_preset(h: &Host) -> Answer {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
+    let fields = vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]);
+    ];
+    h.dom.preset_bytes.set(h.dom.preset_bytes.get().saturating_add(fields.iter().map(|(_, v)| data_size(v)).sum::<u64>()));
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
 
 /// The most `DocumentPreset` objects one run can make.
 const MAX_PRESETS: usize = 10_000;
+
+/// The most bytes the settings of one run's `DocumentPreset` objects hold together, as
+/// [`data_size`] counts them.
+const MAX_PRESET_BYTES: u64 = 4 << 20;
 
 /// The settings a `DocumentPreset` has, each a property a script reads and assigns.
 const PRESET_FIELDS: &[&str] = &[
@@ -1016,7 +1031,16 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
-        match fields.iter_mut().find(|(k, _)| k == key) {
+        let slot = fields.iter_mut().find(|(k, _)| k == key);
+        // The settings of the run's presets hold at most MAX_PRESET_BYTES together, and the value a
+        // setting replaces no longer counts.
+        let old = slot.as_ref().map_or(0, |(_, v)| data_size(v));
+        let kept = h.dom.preset_bytes.get().saturating_sub(old).saturating_add(data_size(&value));
+        if kept > MAX_PRESET_BYTES {
+            return Err(HostError::Range(format!("the DocumentPresets of a script can hold at most {} MB of settings", MAX_PRESET_BYTES >> 20)));
+        }
+        h.dom.preset_bytes.set(kept);
+        match slot {
             Some((_, v)) => *v = value,
             None => fields.push((key.to_string(), value)),
         }
@@ -1628,6 +1652,10 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> s
             }
             Placement::Above | Placement::Below => {
                 let parent = d.parent_of(target).ok_or_else(|| HostError::Error("an object cannot go beside a top-level layer".into()))?;
+                let mask = d.node(parent).is_some_and(crate::doc::Node::clips) && d.position(target).is_some_and(|(_, i, _)| i == 0);
+                if how == Placement::Below && mask {
+                    return Err(HostError::Error("an object cannot go below a clipping group's clipping path".into()));
+                }
                 (parent, Some(target))
             }
         };
@@ -1908,7 +1936,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),
@@ -1920,6 +1947,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         [
             "artworkKnockout",
             "blendingMode",
+            "controlBounds",
             "isIsolated",
             "layer",
             "pixelAligned",

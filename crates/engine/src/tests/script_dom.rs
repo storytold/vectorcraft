@@ -340,6 +340,34 @@ fn a_copy_goes_beside_its_source() {
     assert!(e.contains("into itself"), "{e}");
 }
 
+/// A clipping group's clipping path stays at the bottom of the group, so an object cannot go
+/// below it; above it is the bottom of the clipped art.
+#[test]
+fn nothing_goes_below_a_clipping_path() {
+    let (mut s, a, b) = doc();
+    let c = rect(&mut s, 300.0, 10.0, 5.0, 5.0);
+    s.execute("object.setProps", &json!({"ids": [b.0], "name": "mask"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [c.0], "name": "loose"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let children = |s: &Session| -> Vec<NodeId> { s.active().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect() };
+    assert_eq!(children(&s)[0], b, "the clipping path is the group's first child");
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let steps = undo_steps(&s);
+    for source in [
+        "var p = app.activeDocument.pageItems; p.getByName('loose').move(p.getByName('mask'), ElementPlacement.PLACEAFTER);",
+        "var p = app.activeDocument.pageItems; p.getByName('loose').duplicate(p.getByName('mask'), ElementPlacement.PLACEAFTER);",
+    ] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("cannot go below a clipping group's clipping path"), "{source}: {e}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before, "a refused move changes nothing");
+    assert_eq!(undo_steps(&s), steps);
+    log(&mut s, "var p = app.activeDocument.pageItems; p.getByName('loose').move(p.getByName('mask'), ElementPlacement.PLACEBEFORE);");
+    assert_eq!(children(&s), [b, c, a]);
+}
+
 #[test]
 fn a_copy_that_cannot_be_placed_is_deleted() {
     let mut s = Session::new();
@@ -670,9 +698,12 @@ fn a_startup_preset_alone_gives_its_first_size() {
 #[test]
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
-    for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
-    {
+    for source in [
+        "app.activeDocument.pageItems[0].blendingMode;",
+        "app.activeDocument.pageItems[0].uuid = 'x';",
+        "app.activeDocument.pageItems[0].rotate(5);",
+        "app.activeDocument.pageItems[0].controlBounds;",
+    ] {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
@@ -822,6 +853,24 @@ fn document_preset_applies_only_its_given_fields() {
         assert!(e.contains(part), "{source}: {e}");
     }
     assert_eq!(s.documents().len(), 2, "a refused preset makes no document");
+}
+
+/// The presets of one run hold at most 4 MB of settings together; a setting that replaces another
+/// gives back what the old value held.
+#[test]
+fn document_preset_settings_are_limited_in_bytes() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "var big = new Array(1572865).join('a'), p = new DocumentPreset(), q = new DocumentPreset();\
+         p.title = big; p.units = big; p.title = big; q.title = 'x'; vc.log(p.title.length);\
+         try { q.colorMode = big; } catch (e) { vc.log([e.name, e.message]); }\
+         vc.log(q.colorMode === undefined); p.title = 'short'; q.colorMode = big; vc.log(q.colorMode.length);",
+    );
+    assert_eq!(out[0], json!(1_572_864));
+    assert_eq!(out[1], json!(["RangeError", "the DocumentPresets of a script can hold at most 4 MB of settings"]));
+    assert_eq!(out[2], json!(true), "a refused setting is not stored");
+    assert_eq!(out[3], json!(1_572_864), "replacing a setting frees what it held");
 }
 
 #[test]
@@ -1026,8 +1075,10 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    // Script string literals, so a quote or a backslash in the temporary folder's path stays text.
+    let literal = |p: String| serde_json::to_string(&p).unwrap();
+    let (p, other) = (literal(path.to_string_lossy().into_owned()), literal(format!("{}.other", path.to_string_lossy())));
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.

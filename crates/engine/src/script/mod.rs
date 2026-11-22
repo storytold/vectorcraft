@@ -802,6 +802,9 @@ struct Host {
     args: RefCell<(Data, u64)>,
     /// The run's state of the script object model (`app`).
     dom: dom::State,
+    /// While a slice runs: the documents the interface has open ([`World::docs`] of the run's
+    /// job), which a capture must not write over either. Empty between slices.
+    interface_docs: RefCell<Vec<DocState>>,
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -2065,6 +2068,7 @@ impl Session {
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
             dom: dom::State::default(),
+            interface_docs: RefCell::new(Vec::new()),
         });
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {
@@ -2464,6 +2468,8 @@ fn failure_frame(report: &Value) -> (String, String) {
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
+    // The interface's documents are the host's to read during the slice, and the job's again after.
+    std::mem::swap(&mut job.world.docs, &mut *job.host.interface_docs.borrow_mut());
     // The run's front document draws and converts through its own profiles, and the interface's
     // again after the slice.
     s.sync_front_profiles();
@@ -2487,6 +2493,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     }
     std::mem::swap(s, &mut *cell.borrow_mut());
     s.script_in_run = false;
+    std::mem::swap(&mut job.world.docs, &mut *job.host.interface_docs.borrow_mut());
     job.world.swap(s);
     s.depth = depth;
     s.sync_front_profiles();

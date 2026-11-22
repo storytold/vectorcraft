@@ -196,7 +196,12 @@ const AI_KEPT: &[(&str, Default)] = &[
 ];
 
 fn ai_starts() -> Vec<(&'static str, Data)> {
-    vec![("compressed", Data::Bool(true)), ("pdfCompatible", Data::Bool(true)), ("embedICCProfile", Data::Bool(false))]
+    vec![
+        ("compatibility", text("Compatibility.ILLUSTRATOR19")),
+        ("compressed", Data::Bool(true)),
+        ("pdfCompatible", Data::Bool(true)),
+        ("embedICCProfile", Data::Bool(false)),
+    ]
 }
 
 fn eps_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Result<bool, HostError> {
