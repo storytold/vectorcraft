@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default, and so does a sample without ids while the Live Paint Bucket is the active tool, `stop` included); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default, and so does a sample without ids while the Live Paint Bucket is the active tool, `stop` included); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); with `stop` and objects in `ids`, whatever tool is active, the stops come from the topmost fill (or stroke) of the first object that paint.editGradient edits for those ids (a compound path for its member); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),
@@ -529,9 +529,15 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => {
             let i = v.as_u64().map(index).ok_or_else(|| bad(C, "`stop` must be a stop index"))?;
             let color = super::paint::new_color(s, p, color_value(c).ok_or_else(|| bad(C, format!("bad color {c}")))?);
-            let (fill, stroke_paint) = s.proxy_paints();
-            let Paint::Gradient(g) = (if stroke { stroke_paint } else { fill }) else {
-                return Err(bad(C, "the paint behind the proxy is not a gradient"));
+            let (paint, source) = match given_stop_paint(s, p, stroke)? {
+                Some(paint) => (paint, "the paint of the first object in `ids`"),
+                None => {
+                    let (fill, stroke_paint) = s.proxy_paints();
+                    (if stroke { stroke_paint } else { fill }, "the paint behind the proxy")
+                }
+            };
+            let Paint::Gradient(g) = paint else {
+                return Err(bad(C, format!("{source} is not a gradient")));
             };
             let mut stops = g.gradient.stops;
             let n = stops.len();
@@ -548,6 +554,24 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
         s.paint.stroke = Paint::None;
     }
     Ok(result)
+}
+
+/// The paint whose gradient `paint.sampleColor` recolors a stop of when `p` gives `stop` and
+/// objects in `ids`: the fill (or stroke, `stroke`) of the first object `paint.editGradient` edits
+/// for those ids (a compound path for its member, a group's painted objects, not the art of a graph
+/// design in a series). None without `stop` or without objects in `ids`: the gradient behind the
+/// proxy is used.
+fn given_stop_paint(s: &Session, p: &Value, stroke: bool) -> Result<Option<Paint>> {
+    const C: &str = "paint.sampleColor";
+    if p.get("stop").is_none_or(Value::is_null) || p.get("ids").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+        return Ok(None);
+    }
+    let q = json!({ "ids": p.get("ids"), "stroke": stroke });
+    let item = super::appearance::item_target(s, &q, C)?.of_kind(s, !stroke);
+    let ids = super::appearance::drop_design_art_rows(s, item.targets_for(s, &q, !stroke)?, item, !stroke, C)?;
+    let d = &s.doc()?.doc;
+    let Some(n) = ids.first().and_then(|id| d.node(*id)) else { return Ok(None) };
+    Ok(Some(super::paint::proxy_paint(n, stroke, None)))
 }
 
 // ---------- artboards ----------

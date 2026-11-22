@@ -1736,11 +1736,17 @@ fn pathfinder_options_round_trip_and_refuse_bad_values() {
     assert_eq!(s.execute("prefs.get", &json!({"key": "pathfinder"})).unwrap(), set);
     let mm = s.execute("object.pathfinder.options", &json!({"precision": "1 mm"})).unwrap()["precision"].as_f64().unwrap();
     assert!((mm - 72.0 / 25.4).abs() < 1e-9, "a length with a unit: {mm}");
+    for (given, want) in [("10 pt", 10.0), ("0.25", 0.25)] {
+        let r = s.execute("object.pathfinder.options", &json!({"precision": given})).unwrap();
+        assert_eq!(r["precision"], json!(want), "{given}");
+    }
     s.execute("object.pathfinder.options", &json!({"precision": 0.5})).unwrap();
     for bad in [
         json!({"precision": 0}),
         json!({"precision": 11}),
         json!({"precision": "x"}),
+        json!({"precision": "1abc"}),
+        json!({"precision": "0.5 extra"}),
         json!({"precision": -1}),
         json!({"removeRedundantPoints": "yes"}),
         json!({"removeUnpainted": 1}),
@@ -2065,6 +2071,23 @@ fn a_precision_set_after_a_scale_past_its_range_is_kept() {
     let steps = s.doc().unwrap().history.undo.len();
     assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 5}})).unwrap(), json!({"ids": []}));
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// Soft Mix's Mixing Rate is compared by value: 50 over a stored 50.0 records no undo step, and 51
+/// is an edit.
+#[test]
+fn a_soft_mix_rate_set_to_its_value_records_no_step() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.softMix", "params": {"mixingRate": 50.0}})).unwrap();
+    assert_eq!(first_effect_params(&s)["mixingRate"], json!(50.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 50}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(50.0), before), "50 over 50.0: no step");
+    assert_ne!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 51}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(51), before + 1), "51 is an edit");
 }
 
 /// A single group containing multiple overlapping paths is accepted by Crop.

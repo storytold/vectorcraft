@@ -20,13 +20,14 @@ impl MirrorAxis {
     /// A single editable mirror repeat selected whole. Multi-selection keeps ordinary transforms.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
         let NodeKind::Repeat(spec) = &n.kind else { return None };
         let RepeatKind::Mirror { angle, center } = spec.kind else { return None };
-        if !angle.is_finite() || !finite(center) {
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !angle.is_finite() || !finite(center) || !doc.is_editable(*id) {
             return None;
         }
         let bounds = n.geometric_bounds_with(&doc.symbol_boxes())?;
@@ -183,6 +184,22 @@ mod tests {
         let NodeKind::Repeat(spec) = &mut doc.node_mut(id).unwrap().kind else { panic!() };
         spec.kind = RepeatKind::Mirror { angle: f64::NAN, center: Point::ZERO };
         assert!(MirrorAxis::of(&doc, &selection, 1.0).is_none());
+    }
+
+    /// With the Selection tool, a drag of the axis reads where it is released, and a tool switch
+    /// cancels it.
+    #[test]
+    fn an_axis_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let (mut doc, id) = doc_with_rect();
+        let mut source = doc.node(id).unwrap().clone();
+        source.id = doc.alloc_id();
+        doc.node_mut(id).unwrap().kind = NodeKind::Repeat(RepeatSpec::mirror(vec![Arc::new(source)], 90.0, 10.0));
+        let mut selection = Selection::default();
+        selection.set([id]);
+        let paint = paint();
+        let cx = cx(&doc, &selection, &paint);
+        let at = MirrorAxis::of(&doc, &selection, 1.0).unwrap().center;
+        crate::testutil::check_widget_release_and_tool_switch(&cx, at, at + Vec2::new(20.0, 0.0), at + Vec2::new(40.0, 0.0));
     }
 
     #[test]

@@ -41,7 +41,7 @@ vectorcraft-eps = { workspace = true }
 vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
-vectorcraft-cdr = { workspace = true }
+craft-cdr = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 vectorcraft-js = { workspace = true }
 # The commands' parameter schemas (schemas.rs).
@@ -96,7 +96,7 @@ craft-jxl = { workspace = true }
 hayro-ccitt = { workspace = true }
 craft-stream-codecs = { workspace = true }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
-vectorcraft-cdr = { workspace = true, features = ["synth"] }
+craft-cdr = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }

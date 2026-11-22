@@ -196,6 +196,32 @@ fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
     assert!(quad_clips >= 1, "no clipping path on the quad");
 }
 
+/// A distorted image's own fill that Convert to Shape gives a shape is written with it.
+#[test]
+fn a_distorted_image_keeps_its_own_shaped_fill() {
+    use vectorcraft_doc::{AppearanceItem, Effect, FillLayer, color::Color, color::Paint};
+    let mut d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    let n = d.node_mut(id).unwrap();
+    n.set_image_corners(q).unwrap();
+    let mut fill = FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
+    fill.effects = vec![Effect { id: "convertToShape.rectangle".into(), params: json!({"relative": true, "extraW": 0, "extraH": 0}), visible: true }];
+    n.appearance.items.push(AppearanceItem::Fill(fill));
+    let bytes = export_with_report(&d, &PdfOptions::default()).unwrap().bytes;
+    let back = crate::import(&bytes).unwrap();
+    let (mut green, mut pieces) = (false, 0);
+    back.walk(|n| match &n.kind {
+        NodeKind::Image(_) => pieces += 1,
+        NodeKind::Path { .. } => {
+            green |= n.appearance.fill().and_then(|f| f.paint.color()).is_some_and(|c| c.to_rgb()[1] > 0.9 && c.to_rgb()[0] < 0.1)
+        }
+        _ => {}
+    });
+    assert!(pieces > 2, "{pieces}");
+    assert!(green, "the fill is written");
+}
+
 #[test]
 fn jpeg_zip_and_automatic_compression() {
     let png = doc(encoded(colour(), ImageFormat::Png), "image/png");
