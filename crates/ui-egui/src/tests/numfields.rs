@@ -21,14 +21,15 @@ const PPI: f64 = 72.0;
 /// How far two lengths may differ and still count as the same.
 const SAME: f64 = 1e-6;
 
-/// A field showing `start` points, with the codec `codec` builds from the env's units: focus it, replace its text with
-/// `text` and press Enter. → The value the field holds afterwards.
-fn typed(start: f64, text: &str, codec: impl Fn(&Units) -> NumberCodec + 'static) -> Option<f64> {
+/// A length field keeping `start` points and showing `lengths`, with the codec `codec` builds from the env's units (it
+/// reads the shown unit, as a length field's codec does): focus it, replace its text with `text` and press Enter. → The
+/// value the field holds afterwards, in points.
+fn typed(start: f64, text: &str, lengths: LengthUnits, codec: impl Fn(&Units) -> NumberCodec + 'static) -> Option<f64> {
     let value = Rc::new(RefCell::new(Some(start)));
     let shared = value.clone();
     let mut fixture = Fixture::new(move |ui| {
         let codec = codec(&Env::of(ui).units());
-        NumberField::new("Width", Bind::bound(&mut *shared.borrow_mut())).codec(codec).id_salt("width").show(ui);
+        NumberField::length("Width", Bind::bound(&mut *shared.borrow_mut()), lengths).codec(codec).id_salt("width").show(ui);
     });
     fixture.settle();
     let at = fixture.shown().center();
@@ -40,7 +41,7 @@ fn typed(start: f64, text: &str, codec: impl Fn(&Units) -> NumberCodec + 'static
 /// `typed` in a field that stores points and shows `shown`, reading with the size codec.
 fn typed_in_size(shown: UnitKind, text: &str) -> Option<f64> {
     let lengths = LengthUnits::new(UnitKind::Points, shown, PPI);
-    typed(PPI, text, move |units| fields::size_codec(units, lengths, 2, None, false))
+    typed(PPI, text, lengths, move |units| fields::size_codec(units, lengths, 2, None, false))
 }
 
 #[test]
@@ -60,7 +61,7 @@ fn bare_numbers_in_picas_fields_are_points_when_the_preference_says_so() {
         let flag = app.session.prefs.numbers_without_units_are_points;
         assert_eq!(flag, on, "the preference reads back");
         let lengths = LengthUnits::new(UnitKind::Points, shown, PPI);
-        typed(PPI, text, move |units| NumberCodec::new(fields::length_reader(units, lengths, flag), 2)).expect(text)
+        typed(PPI, text, lengths, move |units| NumberCodec::new(fields::length_reader(units, lengths, flag), 2)).expect(text)
     };
     let (picas, mm) = (UnitKind::Picas, UnitKind::Millimetres);
     let mm_pt = |n: f64| n / 25.4 * PPI;

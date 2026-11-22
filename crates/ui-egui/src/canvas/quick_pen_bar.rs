@@ -35,6 +35,10 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canva
     if super::tool_adapter::in_gesture(app, ui.ctx()) {
         return;
     }
+    // A middle-button drag pans the canvas, which hides the toolbar as a tool's drag does.
+    if ui.input(|i| i.pointer.middle_down() && i.pointer.press_origin().is_some_and(|p| space.view.rect.contains(p))) {
+        return;
+    }
     let Some(uid) = app.session.active().map(|st| st.uid) else { return };
     let view = app.view_info();
     let end = app.session.tool_drawing_end(view);

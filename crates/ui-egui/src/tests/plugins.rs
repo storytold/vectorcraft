@@ -35,6 +35,10 @@ pub(super) fn window(app: VectorcraftApp) -> Window {
         },
         app,
     );
+    // The window reports its place and the focus, as a host does: the approval counts its time in the focused window.
+    let root = h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default();
+    root.inner_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 800.0)));
+    root.focused = Some(true);
     // The first frame installs the fonts; the second gives the app its context and host.
     app_step(&mut h);
     h

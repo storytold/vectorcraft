@@ -307,6 +307,10 @@ impl VectorcraftApp {
     /// stops and the scrub choice from the preferences, the command states and the host with
     /// the interface language.
     pub fn frame_input(&mut self, out: FrameOutput) -> FrameInput {
+        // Paste's state for the first frame's paste events, which come before the tick first reads the clipboard.
+        if self.system_paste_at == f64::NEG_INFINITY && self.services.clipboard_probe.is_none() {
+            self.system_paste = self.session.clipboard.is_empty() && self.session.active().is_some() && self.system_clipboard_pasteable();
+        }
         // The output collects every pass of the last frame, so each fired command runs once here
         // whatever number of passes fired it.
         if let Some(ctx) = self.ui_ctx.clone() {

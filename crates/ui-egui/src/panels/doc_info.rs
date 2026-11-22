@@ -5,12 +5,13 @@
 
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Show as _, ShowContainer as _};
-use craft::ui::display::{Divider, Elide, Shade, Text};
+use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout::RowAlign;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::style::TypeRole;
+use craft::ui::text::SelectableText;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::CATEGORIES;
@@ -32,8 +33,8 @@ pub struct DocInfoView {
 pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
-        // Long values (paths) are cut to the panel's width; the cut text shows whole as its tooltip.
-        Text::new(value.clone()).elide(Elide::End).show(ui);
+        // The value can be selected and copied (#8432).
+        SelectableText::new(label.to_string(), &value).show(ui);
     });
 }
 

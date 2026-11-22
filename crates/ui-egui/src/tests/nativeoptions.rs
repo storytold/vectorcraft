@@ -51,6 +51,8 @@ pub(super) fn answer(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: boo
             host.cancel_by_id(&ctx, id);
         }
     });
+    // OK is held: the pump accepts the options, and the next frame closes the dialog and goes on with the save.
+    pass(app);
     pass(app);
 }
 

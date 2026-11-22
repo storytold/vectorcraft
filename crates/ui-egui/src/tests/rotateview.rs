@@ -336,10 +336,11 @@ impl Window {
         w
     }
 
-    /// One headless frame of the whole window, `seconds` after the last one, with `events`.
+    /// One headless frame of the whole window, `seconds` after the last one, with `events`. The window is wide enough
+    /// for the docked panels and a canvas the clicks below land on.
     fn after(&mut self, seconds: f64, events: Vec<egui::Event>) -> egui::FullOutput {
         self.time += seconds;
-        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
         let raw = egui::RawInput { screen_rect: Some(rect), time: Some(self.time), events, ..Default::default() };
         let out = crate::testing::app_frame(&mut self.app, &self.ctx, raw);
         out
