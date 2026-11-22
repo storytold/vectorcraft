@@ -48,10 +48,27 @@ fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Eve
     let raw =
         egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)), max_texture_side: Some(8192), events, ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
-    out.textures_delta.clear();
+    // A pane's picture is uploaded once, maybe in this frame: [`wait_ready`] finds it later.
+    note_uploads(&mut out.textures_delta);
     let mut shapes = vec![];
     out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
     shapes
+}
+
+thread_local! {
+    /// The last picture each texture got in the frames [`frame_in`] and [`wait_ready`] ran, as pixels and size.
+    static UPLOADED: std::cell::RefCell<std::collections::HashMap<egui::TextureId, (Vec<Color32>, [usize; 2])>> = Default::default();
+}
+
+/// Notes the last picture each texture got in `delta` in [`UPLOADED`], and handles the uploads.
+fn note_uploads(delta: &mut egui::TexturesDelta) {
+    for (id, deltas) in &delta.set {
+        if let Some(d) = deltas.last() {
+            let egui::ImageData::Color(img) = &d.image;
+            UPLOADED.with(|u| u.borrow_mut().insert(*id, (img.pixels.clone(), img.size)));
+        }
+    }
+    delta.clear();
 }
 
 fn button(pos: Pos2, pressed: bool) -> egui::Event {
@@ -130,10 +147,11 @@ fn wait_ready(
     let mut uploads = seed;
     for _ in 0..400 {
         if let TextureState::Ready(texture) = picture_of(app, ctx, w, uid)
-            && uploads.iter().flat_map(|d| d.set.iter()).any(|e| *e.0 == texture.id)
+            && (uploads.iter().flat_map(|d| d.set.iter()).any(|e| *e.0 == texture.id) || UPLOADED.with(|u| u.borrow().contains_key(&texture.id)))
         {
             let picture = uploaded(&uploads, texture.id);
-            uploads.iter_mut().for_each(egui::TexturesDelta::clear);
+            // Another pane's picture these frames uploaded stays for a later wait.
+            uploads.iter_mut().for_each(note_uploads);
             return (texture, picture);
         }
         let mut out = run(app);
@@ -143,18 +161,13 @@ fn wait_ready(
     panic!("the pane of window {w:?} never got its picture");
 }
 
-/// The picture `id` as `uploads` uploaded it: its pixels and size.
+/// The picture `id` as `uploads` uploaded it, else as a frame of [`frame_in`] did: its pixels and size.
 fn uploaded(uploads: &[egui::TexturesDelta], id: egui::TextureId) -> (Vec<Color32>, [usize; 2]) {
-    let image = uploads
-        .iter()
-        .rev()
-        .flat_map(|d| d.set.iter())
-        .find(|e| e.0.eq(&id))
-        .and_then(|e| e.1.last())
-        .map(|d| d.image.clone())
-        .expect("the picture was uploaded");
-    let egui::ImageData::Color(img) = image;
-    (img.pixels.clone(), img.size)
+    let image = uploads.iter().rev().flat_map(|d| d.set.iter()).find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| d.image.clone());
+    match image {
+        Some(egui::ImageData::Color(img)) => (img.pixels.clone(), img.size),
+        None => UPLOADED.with(|u| u.borrow().get(&id).cloned()).expect("the picture was uploaded"),
+    }
 }
 
 /// Drop every picture and pane the panes hold, so the next frames make them again.
@@ -426,7 +439,8 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     assert_eq!(rects[0].left(), rects[2].left());
     assert!(rects[2].top() > rects[0].top());
     let canvas = app.canvas_view().unwrap().rect;
-    assert!(rects[2].contains_rect(canvas) && canvas.width() < tabbed.width() / 2.0, "the current document's pane is the canvas: {canvas:?}");
+    // The scroll bars are drawn inside the canvas (cv.S2), which fills its half-wide pane.
+    assert!(rects[2].contains_rect(canvas) && canvas.width() <= tabbed.width() / 2.0, "the current document's pane is the canvas: {canvas:?}");
     let artboard = Rect::new(0.0, 0.0, 400.0, 300.0);
     for i in &docs {
         let v = app.views[*i];

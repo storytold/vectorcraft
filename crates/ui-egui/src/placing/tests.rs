@@ -634,9 +634,10 @@ fn a_find_font_dialog_releases_a_deferred_swatch_paste_before_queued_work() {
         app.run("edit.copy", json!({})).unwrap();
         let newer = app.session.clipboard.clone();
         assert!(requested != newer);
+        let ctx = app.ui_ctx.clone().unwrap();
         let result = crate::control::handle(
             &mut app,
-            &crate::testing::ui_context(),
+            &ctx,
             &craft::automation::ControlRequest::new("engine.execute", json!({"command": "type.findFont", "params": {}})).0,
         );
         let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };

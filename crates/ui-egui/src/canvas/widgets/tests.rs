@@ -200,16 +200,22 @@ fn a_move_rotate_or_corner_radius_drag_hides_the_bounding_box() {
     make(&mut app, "shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100}));
     app.select_tool("selection");
     let offset = 10.0 / app.view_info().zoom;
-    let corner = {
-        let st = app.session.active().unwrap();
-        vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false).unwrap().visible().next().unwrap()
-    };
     // A move, a rotation from just outside a corner and a corner-radius drag, each hiding the box until the release.
-    for (what, from, to) in [
-        ("a move", (150.0, 150.0), (160.0, 160.0)),
-        ("a rotation", (210.0 + offset, 210.0 + offset), (260.0, 160.0)),
-        ("a corner-radius drag", (corner.x, corner.y), (corner.x + 10.0, corner.y + 10.0)),
-    ] {
+    for what in ["a move", "a rotation", "a corner-radius drag"] {
+        let (from, to) = match what {
+            "a move" => ((150.0, 150.0), (160.0, 160.0)),
+            "a rotation" => ((210.0 + offset, 210.0 + offset), (260.0, 160.0)),
+            // A corner widget of the rectangle as the move and the rotation left it.
+            _ => {
+                let st = app.session.active().unwrap();
+                let corner = vectorcraft_tools::corners::CornerWidgets::of(&st.doc, &st.selection, app.view_info().zoom, false)
+                    .unwrap()
+                    .visible()
+                    .next()
+                    .unwrap();
+                ((corner.x, corner.y), (corner.x + 10.0, corner.y + 10.0))
+            }
+        };
         assert!(bounding_box(&mut app, NONE).is_some(), "{what}: at rest");
         drag(&mut app, from, to);
         assert!(app.session.tool_transforming(), "{what}");
@@ -350,11 +356,11 @@ fn on_tools(app: &mut VectorcraftApp, member: u64, form: Form, radius: f32) -> [
 #[test]
 fn a_selected_objects_on_path_group_shows_its_rotate_all_widget() {
     let mut app = new_app(&[]);
-    let (_, members) = objects_on_path(&mut app, 2);
+    let (group, members) = objects_on_path(&mut app, 2);
     let r = objects_on_path::ROTATE_ALL_RADIUS_PX;
     assert_eq!(on_tools(&mut app, members[0], Form::Disc, r), [1, 1, 0, 0], "an object in the group, not the group");
     // It is a control, so it stays with the edges hidden.
-    app.run("select.set", json!({"ids": [members[0], members[1]]})).unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
     let zoom = app.view_info().zoom;
     app.select_tool("selection");
     assert_eq!(count(&ShapeWidgets::of(&app, false, None, zoom, 0.0).marks, Form::Disc, r), 1);

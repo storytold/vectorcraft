@@ -365,7 +365,9 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
         // The 3D dialog's gizmo owns the pointer.
         return ToolHostResponse::default();
     }
-    if matches!(pass.press.phase, PressPhase::Idle) || !pass.press.phase.is_press() {
+    // Once a frame, before its press, which then uses the new tool; a held press (its grab) waits for the frame after
+    // the release, and a pointer over another window for the pointer to come in.
+    if ui.ctx().current_pass_index() == 0 && app.canvas.grab.is_none() && ui.input(|i| i.pointer.has_pointer()) {
         crate::stylus::sync_eraser_tool(app);
     }
     let view_info = app.view_info();

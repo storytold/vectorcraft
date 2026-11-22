@@ -462,10 +462,15 @@ impl VectorcraftApp {
                 if self.clipboard_publishing.pending || self.clipboard.holds_ours() {
                     return Ok(None);
                 }
-                if defer {
-                    return Ok(self.read_system_flavour_later());
-                }
-                let Some(f) = self.read_system_flavour() else { return Ok(None) };
+                // Art and text load at once, so a paste that waits behind another takes them as it was given; only a
+                // picture is read off the UI thread.
+                let read = if defer {
+                    let at_once: Vec<&str> = PASTE_ORDER.into_iter().filter(|m| !imports_as_image(m)).collect();
+                    self.clipboard.read(&at_once).ok().flatten().and_then(engine_flavour).filter(|f| !is_picture_stand_in(f))
+                } else {
+                    self.read_system_flavour()
+                };
+                let Some(f) = read else { return Ok(if defer { self.read_system_flavour_later() } else { None }) };
                 import_command(&f, center)
             }
             // The host's text only: SVG markup is art, other text is left alone.

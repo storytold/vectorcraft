@@ -230,7 +230,8 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         if app.ui.screen_mode < 3 {
             let strip = crate::dialogs::simplify_slider::showing(app) || crate::dialogs::smooth_slider::showing(app);
             // The bars give way to a drag, not to a click.
-            let task_bar = (app.ui.task_bar && !revolve_editing(app) && !strip && !in_gesture(app, ui.ctx()))
+            let dragging = in_gesture(app, ui.ctx()) && ui.input(|i| i.pointer.is_decidedly_dragging());
+            let task_bar = (app.ui.task_bar && !revolve_editing(app) && !strip && !dragging)
                 .then(|| task_bar::task_bar(app, ui, space))
                 .flatten();
             quick_pen_bar::quick_pen_bar(app, ui, space);

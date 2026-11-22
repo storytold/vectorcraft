@@ -529,9 +529,9 @@ fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
     app.run("ui.menuDialog", json!({"command": halftone::CMD})).unwrap();
     host::pump(&mut app, &ctx);
     assert!(!outlined(&mut app));
+    // Vector Halftone holds its OK: the pump answers it.
     let id = top(&app);
-    assert!(app.dialogs().unwrap().with(|h| h.confirm_by_id(&ctx, id)));
-    host::pump(&mut app, &ctx);
+    crate::tests::picks::answer_dialog(&mut app, id, &[], true);
     assert!(!app.any_dialog_open() && !app.session.in_interaction());
     assert!(outlined(&mut app), "OK brings ordinary outlines back on the applied dots");
 }
@@ -1936,8 +1936,12 @@ fn edits_while_the_view_is_still() {
     app.canvas.worker_started = true; // no worker, as in the web build
     app.canvas.waits_for_still = true;
     let ctx = crate::testing::ui_context();
+    // Frames at 60 fps: a frame's passes share its time.
+    let clock = std::cell::Cell::new(0.0);
     let frame = |app: &mut VectorcraftApp| {
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        clock.set(clock.get() + 1.0 / 60.0);
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+        let raw = egui::RawInput { screen_rect, time: Some(clock.get()), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
     };
@@ -1949,7 +1953,7 @@ fn edits_while_the_view_is_still() {
     frame(&mut app);
     let shown = app.canvas.key.clone().unwrap();
     assert_ne!(shown.cy, app.view().unwrap().center.y, "waiting");
-    // The drag edits the document on every frame, at 60 fps (egui's input time without a clock).
+    // The drag edits the document on every frame.
     let mut frames = 0;
     while app.canvas.key.as_ref().is_none_or(|k| k.cy != app.view().unwrap().center.y) && frames < 60 {
         frames += 1;
@@ -3079,7 +3083,7 @@ fn a_press_on_type_in_a_missing_font_keeps_an_open_dialog() {
     let doc = app.session.active().unwrap().uid;
     crate::dialogs::confirm::ask_replace_files(&mut app, doc, &["/tmp/a.svg".to_string()], &[], "file.export", json!({}));
     window(&mut app);
-    let replacing = |app: &VectorcraftApp| app.dialogs().unwrap().with(|h| h.is_open::<craft::ui::dialog::StandardPrompt>());
+    let replacing = |app: &VectorcraftApp| crate::dialogs::confirm::open_replace_files(app).is_some();
     assert!(replacing(&app), "the question about replacing files is open");
     let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
     let view = app.view_info();
@@ -3088,7 +3092,7 @@ fn a_press_on_type_in_a_missing_font_keeps_an_open_dialog() {
     }
     assert!(replacing(&app), "that question stays");
     assert!(!app.dialogs().unwrap().with(|h| h.is_open::<crate::dialogs::confirm::MissingFontQuestion>()), "no question about the font");
-    assert!(app.dialogs().unwrap().with(|h| h.cancel::<craft::ui::dialog::StandardPrompt>(&ctx)));
+    assert!(app.dialogs().unwrap().with(|h| h.cancel::<crate::dialogs::confirm::ReplaceFilesPrompt>(&ctx)));
     window(&mut app);
     let r = app.session.tool_poll(view, false);
     crate::canvas::apply_requests(&mut app, r);
@@ -3527,16 +3531,18 @@ fn a_modifier_changed_mid_scale_applies_with_the_pointer_held_still() {
     let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
     let height =
         |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap().height();
+    // The pointer's screen points are f32: the scaled height is within their precision of the exact one.
+    let near = |h: f64, want: f64| (h - want).abs() < 1e-4;
     let corner = xf.to_screen(Point::new(200.0, 150.0));
     let to = xf.to_screen(Point::new(300.0, 150.0));
     with(&mut app, vec![Event::PointerMoved(corner)], Modifiers::NONE);
     with(&mut app, vec![button(corner, true)], Modifiers::NONE);
     with(&mut app, vec![Event::PointerMoved(to)], Modifiers::NONE);
-    assert!((height(&app) - 50.0).abs() < 1e-6, "a free scale keeps the height: {}", height(&app));
+    assert!(near(height(&app), 50.0), "a free scale keeps the height: {}", height(&app));
     with(&mut app, vec![], Modifiers::SHIFT);
-    assert!((height(&app) - 100.0).abs() < 1e-6, "Shift scales proportionally at once: {}", height(&app));
+    assert!(near(height(&app), 100.0), "Shift scales proportionally at once: {}", height(&app));
     with(&mut app, vec![], Modifiers::NONE);
-    assert!((height(&app) - 50.0).abs() < 1e-6, "releasing Shift frees it at once: {}", height(&app));
+    assert!(near(height(&app), 50.0), "releasing Shift frees it at once: {}", height(&app));
     with(&mut app, vec![button(to, false)], Modifiers::NONE);
     assert!(app.session.active().unwrap().interaction.is_none(), "committed");
 }
@@ -5488,6 +5494,7 @@ fn a_move_stops_snapping_to_guides_hidden_during_it() {
         let b = app.session.active().unwrap().doc.art_bounds().unwrap();
         let centre = (b.x0 + b.x1) / 2.0;
         assert_eq!((centre - 200.0).abs() < 1e-6, snaps, "{hide:?}: the grabbed centre at {centre}");
-        assert!((centre - xf.to_doc(near).x).abs() < 1e-6 || snaps, "{hide:?}: unsnapped, it follows the pointer: {centre}");
+        // Within the precision of the pointer's f32 screen points.
+        assert!((centre - xf.to_doc(near).x).abs() < 1e-4 || snaps, "{hide:?}: unsnapped, it follows the pointer: {centre}");
     }
 }

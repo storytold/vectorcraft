@@ -103,7 +103,8 @@ fn the_fade_covers_the_pasteboard_and_not_the_boards() {
     for f in &frames {
         assert!(!covers(Point::new(f.rect.center().x, f.rect.center().y)));
     }
-    assert!(covers(Point::new(-5000.0, -5000.0)));
+    // The fade is drawn over the visible pasteboard only: a point just inside the canvas's corner.
+    assert!(covers(view.to_doc(view.rect.min + egui::vec2(1.0, 1.0))));
 }
 
 #[test]

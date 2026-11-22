@@ -341,7 +341,9 @@ fn a_group_of_too_many_paths_has_no_hover_outline_and_a_key_outline_of_its_bound
     app.select_tool("selection");
     let st = app.session.active().unwrap();
     assert!(hover(&app, st, Point::new(20.0, 20.0), 1.0, true).is_none(), "no hover outline for what is too big");
-    app.run("select.set", json!({"ids": [huge.0]})).unwrap();
+    // A key object stays while another selected object lies outside it.
+    let other = id_of(&app.run("shape.rectangle", json!({"x": 300, "y": 20, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [huge.0, other.0]})).unwrap();
     app.run("select.key", json!({"id": huge.0})).unwrap();
     let st = app.session.active().unwrap();
     let key = outlines(&app, st)[0].key.as_ref().unwrap().bounding_box();

@@ -22,8 +22,8 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, (native, ui_zoom): (f32,
         ..Default::default()
     };
     input.viewports.entry(egui::ViewportId::ROOT).or_default().native_pixels_per_point = Some(native);
-    let mut out = ctx.run_ui(input, |ui| show(app, ui));
-    out.textures_delta.clear();
+    // As the hosts run it: the zoom stops come from the preferences through the app's frame input.
+    crate::testing::part_frame(app, ctx, input, |app, ui| show(app, ui));
 }
 
 /// A 512 × 512 pt document shown at `native` device pixels a point and UI Scaling `ui_zoom`, with a
@@ -32,6 +32,8 @@ fn shown(native: f32, ui_zoom: f32) -> (VectorcraftApp, egui::Context, std::sync
     let ctx = crate::testing::ui_context();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 512, "height": 512})).unwrap();
+    // The app's frames zoom the interface by the preference.
+    app.session.prefs.ui_scaling = f64::from(ui_zoom);
     app.canvas.worker_started = true;
     let (worker, jobs, _done) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);
