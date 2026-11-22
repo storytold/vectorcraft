@@ -36,7 +36,6 @@ impl FontFetcher for BrowserFetcher {
     }
 
     fn now(&self) -> f64 {
-        // PLAN: assumed craft-platform is a dependency of vectorcraft-web
         craft::platform::clock::monotonic_ms() / 1000.0
     }
 

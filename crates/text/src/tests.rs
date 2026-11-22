@@ -1898,7 +1898,7 @@ fn a_list_paragraph_at_a_deeper_level_is_set_further_in_and_counts_on_its_own() 
 /// Are the Japanese craft-fonts faces built in? Tests of Japanese glyphs skip (and say so) when
 /// they aren't: the bundled fonts have none, and [`db`] reads no system fonts.
 fn japanese_fonts() -> bool {
-    let built_in = CRAFT_FONTS.iter().any(|f| f.is_japanese());
+    let built_in = CRAFT_FONTS.iter().any(|f| f.has_script("Jpan"));
     if !built_in {
         eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
     }
@@ -2593,7 +2593,7 @@ fn optical_margin_alignment_hangs_type_on_a_path_at_its_brackets() {
 /// boxes. Skipped when built without craft-fonts or with a checkout that has no Thai font.
 #[test]
 fn thai_without_installed_fonts_takes_the_craft_fonts_thai_font() {
-    if !crate::CRAFT_FONTS.iter().any(|f| f.is_thai()) {
+    if !crate::CRAFT_FONTS.iter().any(|f| f.has_script("Thai")) {
         eprintln!("skipping: no Thai font in craft-fonts (set CRAFT_FONTS_DIR to a checkout that has one)");
         return;
     }

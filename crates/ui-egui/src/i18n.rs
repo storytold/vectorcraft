@@ -82,7 +82,7 @@ fn offered_codes(web: bool, gujarati_font: bool) -> Vec<&'static str> {
 fn shared_cell() -> &'static Arc<I18n> {
     static SHARED: OnceLock<Arc<I18n>> = OnceLock::new();
     SHARED.get_or_init(|| {
-        let offered = offered_codes(cfg!(target_arch = "wasm32"), vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr")));
+        let offered = offered_codes(cfg!(target_arch = "wasm32"), vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.has_script("Gujr")));
         let (i18n, problems) = I18n::new(EMBEDDED, &offered);
         for problem in problems {
             log::warn!("vectorcraft: interface language catalog: {problem}");

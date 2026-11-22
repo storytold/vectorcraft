@@ -44,6 +44,12 @@ vello_cpu = { workspace = true }
 # Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
 # Apache-2.0, already in the build through subsetter.
 write-fonts = { version = "0.48", optional = true }
+# The craft-fonts face types of the tables `build.rs` writes (`CRAFT_FONTS`, and `SERVED_FONTS` on the web).
+craft-fonts-build = { workspace = true }
+
+[build-dependencies]
+# Embeds the craft-fonts faces (`Embed::write`) and, for the web, writes the served ones (`Embed::serve`).
+craft-fonts-build = { workspace = true }
 
 [features]
 default = ["bundled-fonts"]

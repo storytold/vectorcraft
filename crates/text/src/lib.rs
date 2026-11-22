@@ -36,7 +36,9 @@ pub mod thread;
 
 pub use bitmap::GlyphImage;
 pub use context_alternates::{ContextAlternate, ContextAlternates, alternate_changes, alternates_in_context, is_alternate_feature};
-pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
+pub use craft_fonts::{CRAFT_FONTS, EmbeddedFace, WEB_FONTS, WebFont};
+#[cfg(target_arch = "wasm32")]
+pub use craft_fonts::{SERVED_FONTS, ServedFace};
 pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
