@@ -748,9 +748,11 @@ impl Session {
     /// doesn't grant it again. The generation is never read from the file; when it can't be raised,
     /// nothing is recorded. When the key store can't be reached ([`Trust::Unknown`], or
     /// a key can't be made or kept), the file is left as it is and nothing is recorded, and an entry
-    /// for `id` stays. A grants file that is too large, can't
-    /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
-    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. The file is read and
+    /// for `id` stays; a removal then reports a failure, also when the file doesn't name `id`. A
+    /// grants file that is too large, can't be read or doesn't hold a list is left as it is, with a
+    /// log record, and nothing is recorded; so is one whose new content would be larger than
+    /// `MAX_GRANTS_FILE`. A removal still holds for a file that is too large or doesn't hold a list
+    /// once the generation is raised ([`retire_signed_copies`]). The file is read and
     /// written in `turn`. → whether the store now holds what was asked (`false` without a folder,
     /// and when `turn` isn't held). When it does, the grant kept for `id` counts again, for every
     /// session in the process attached to the store ([`Session::ignore_stored_grant`]).
@@ -809,11 +811,9 @@ impl Session {
             Err(e) => {
                 log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
                 // A file that is too large or doesn't hold a list grants nothing and is left as it
-                // is, but a signed copy made before it must not grant `id` again once it is put back.
-                if grant.is_none() && !e.unread {
-                    retire_signed_copies(dir);
-                }
-                return false;
+                // is, but a signed copy made before it must not grant `id` again once it is put back:
+                // the removal holds once no such copy can.
+                return grant.is_none() && !e.unread && retire_signed_copies(dir);
             }
         };
         #[cfg(test)]
@@ -822,9 +822,10 @@ impl Session {
         }
         match (file.trust, &grant) {
             // Nothing in the file can be checked, so nothing in it is rewritten: a grant holds for
-            // the session only, and one the file may still hold for `id` can't be removed.
-            (Trust::Unknown, Some(_)) => return false,
-            (Trust::Unknown, None) => return !file.names(id),
+            // the session only, and one the file may still hold for `id` can't be removed. A file
+            // that doesn't name `id` may not be the one the kept generation was signed for, so the
+            // removal isn't known to hold either.
+            (Trust::Unknown, _) => return false,
             // The file grants nothing. A new grant replaces it with a signed file that holds that
             // grant alone; removing one takes its entry out and leaves the rest unsigned.
             (Trust::Unsigned, Some(_)) => {
@@ -873,6 +874,12 @@ impl Session {
             Ok(file) => file.names(id),
             Err(e) => e.unread,
         })
+    }
+
+    /// Does the attached plug-in store hold a module file for the plug-in `id`, loaded or not (one
+    /// that no grant covers is skipped at startup and stays in the folder)?
+    pub(crate) fn holds_stored_plugin(&self, id: &str) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| std::fs::symlink_metadata(dir.join(format!("{}.{PLUGIN_EXT}", file_stem(id)))).is_ok())
     }
 
     /// Remove the plug-in `id` from the store in `turn` → whether its file is gone (`false` without a

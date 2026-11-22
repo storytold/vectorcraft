@@ -362,27 +362,33 @@ each time it is drawn, and a paint linked to a global swatch is drawn in that sw
 `mac` is an HMAC-SHA-256 ([RFC 2104](https://www.rfc-editor.org/rfc/rfc2104)), in lower-case hexadecimal, of the
 folder the file is in, the `generation` and the `grants` list written as compact JSON. The key is 32 random bytes that
 VectorCraft makes when it records the first grant. VectorCraft keeps the key in the system key store, as the secret of
-the account `hmac-sha256-v1` of the service `org.storytold.vectorcraft.plugin-grants`, and never in a file:
+the account `hmac-sha256-v1` of the service `org.storytold.vectorcraft.plugin-grants`, written as 64 lower-case
+hexadecimal digits, and never in a file:
 
 - On macOS the key is in the user's Keychain.
 - On Windows the key is a generic credential in Credential Manager.
 - On Linux and the BSDs the key is in the Secret Service, for example GNOME Keyring. When its collection is locked,
   the desktop may ask to unlock it.
 
-VectorCraft makes the key while it holds `vectorcraft-plugin-grant-key.lock` in the temporary folder on Windows and
-macOS, and in `$XDG_RUNTIME_DIR` elsewhere. When that file can't be locked, or `$XDG_RUNTIME_DIR` is not set, no key
-is made, and approvals last for the session only, as when the key store can't be reached.
+When VectorCraft can't connect to the key store, it tries again the next time it needs the key, so a key store that
+starts after VectorCraft is used without a restart. VectorCraft reads the key from the key store each time it checks or
+signs `grants.json`, so a key removed or replaced there is not used.
 
-The key store also keeps a generation for each `Plug-ins` folder, as an 8-byte secret of the account `generation-v1-`
-followed by the SHA-256 of the folder's resolved path in hexadecimal, in the same service. A key store that holds no
-generation for a folder counts as generation 0. VectorCraft reads the generation from the key store only, never from
-`grants.json`. Each time VectorCraft writes a signed `grants.json`, in the folder's turn (`disabled.lock`), it first
+VectorCraft makes the key while it holds `vectorcraft-plugin-grant-key.lock` in `%LOCALAPPDATA%` on Windows, in the
+temporary folder on macOS, and in `$XDG_RUNTIME_DIR` elsewhere. When that file can't be locked, or `%LOCALAPPDATA%` or
+`$XDG_RUNTIME_DIR` is not set, no key is made, and approvals last for the session only, as when the key store can't be
+reached.
+
+The key store also keeps a generation for each `Plug-ins` folder, as a secret of 16 lower-case hexadecimal digits (the
+generation as an 8-byte big-endian number) of the account `generation-v1-` followed by the SHA-256 of the folder's
+resolved path in hexadecimal, in the same service. A key store that holds no generation for a folder counts as
+generation 0. VectorCraft reads the generation from the key store only, never from `grants.json`. Each time VectorCraft writes a signed `grants.json`, in the folder's turn (`disabled.lock`), it first
 raises the kept generation by two, then writes the file at the generation after the raised one, and then keeps that
 generation. When it removes a signed `grants.json`, it raises the generation by two first. The kept generation never
 goes down: when the file can't be written or removed after the raise, the generation stays raised, the file left in
 place grants nothing, and each plug-in it names that lists permissions asks for approval again. VectorCraft checks
 before the raise whether the signed file would be larger than 1 MiB; when it would, VectorCraft logs a warning and
-leaves the file and the generation as they are. When the key store can't keep the generation of a write, the file
+leaves the file and the generation as they are, and the file keeps its grants. When the key store can't keep the generation of a write, the file
 just written grants nothing, and the write reports a failure. That file is one generation past the kept one, so the
 next raise by two moves past it. When the kept generation is within two of the largest 64-bit value, VectorCraft
 logs a warning and leaves the file and the generation as they are.
@@ -393,7 +399,7 @@ names that lists permissions asks for approval again. This covers a file that an
 list), a grant that another program edited or added, a file whose `mac` was removed or changed, a file copied from
 another `Plug-ins` folder or another computer, an earlier copy of the file put back after a grant was revoked or the
 file was removed, a write whose generation the key store didn't keep, a file left in place by a write or removal that
-failed, and a file whose key is no longer in the key store. The next approval replaces such a file with a signed file that holds that grant alone, making a key first when
+failed after the generation was raised, and a file whose key is no longer in the key store. The next approval replaces such a file with a signed file that holds that grant alone, making a key first when
 the key store has none. When a grant is forgotten without an approval (`plugin.remove`, installing a module that lists
 no permissions under that id, or a folder load that forgets the grant), VectorCraft raises the generation by two, then
 takes that entry out of such a file and leaves the rest unsigned, so no earlier signed copy brings the entry back. It
@@ -404,8 +410,10 @@ store can't raise the generation, VectorCraft logs a warning.
 
 When the key store can't be reached (it is locked, or a headless Linux session has no Secret Service), no
 `grants.json` grants anything and VectorCraft writes none: an approval lasts for the session only, the module stored
-for the id is not replaced, and `plugin.remove` of a plug-in that the file names returns an error, as for a grant that
-can't be removed. With `VECTORCRAFT_NO_PREFS` set there is no plug-in store, and the web build keeps no grants file. The
+for the id is not replaced, and `plugin.remove` of a plug-in returns an error and leaves the plug-in installed, as for a
+grant that can't be removed. This also happens when there is no `grants.json` or the file doesn't name the plug-in.
+`plugin.remove` of an id that isn't installed deletes the module stored for it that didn't load, such as one an
+earlier version's `grants.json` approved, and returns `{removed}`. With `VECTORCRAFT_NO_PREFS` set there is no plug-in store, and the web build keeps no grants file. The
 MAC does not protect against another program running as the same user, which can read the key from the key store or
 change VectorCraft itself.
 

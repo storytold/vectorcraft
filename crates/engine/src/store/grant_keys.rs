@@ -260,11 +260,26 @@ fn from_hex(tag: &str) -> Option<Vec<u8>> {
     pairs.iter().map(|&[high, low]| Some((digit(high)? << 4) | digit(low)?)).collect()
 }
 
-/// The system's key store, through `keyring`. The key is read once and kept for the process.
+/// The system's key store, through `keyring-core` and the store crate of the platform. The key is
+/// read from the store each time it is needed. The key and the generations are kept as lower-case
+/// hexadecimal text, since some stores (KDE Wallet behind the Secret Service) keep only UTF-8.
 #[cfg(not(target_arch = "wasm32"))]
-#[derive(Default)]
 struct OsGrantKeys {
-    read: Mutex<Option<GrantKey>>,
+    /// Held while a key is kept, so that the threads of the process that make the first key at the
+    /// same time keep one.
+    making: Mutex<()>,
+    /// The connection to the system's key store, once one is made. A failed connection is not
+    /// kept: the next call tries again, so a key store that starts after VectorCraft is used.
+    store: Mutex<Option<Arc<keyring_core::CredentialStore>>>,
+    /// How a connection is made ([`connect`]).
+    connect: fn() -> Result<Arc<keyring_core::CredentialStore>, keyring_core::Error>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Default for OsGrantKeys {
+    fn default() -> Self {
+        OsGrantKeys { making: Mutex::default(), store: Mutex::default(), connect }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -272,96 +287,141 @@ impl OsGrantKeys {
     const SERVICE: &str = "org.storytold.vectorcraft.plugin-grants";
     const ACCOUNT: &str = "hmac-sha256-v1";
 
-    fn entry() -> Result<keyring::Entry, KeyStoreError> {
-        keyring::Entry::new(Self::SERVICE, Self::ACCOUNT).map_err(store_error)
+    /// The system's key store: the connection made before, else a new one.
+    fn store(&self) -> Result<Arc<keyring_core::CredentialStore>, KeyStoreError> {
+        let mut store = self.store.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(store) = store.as_ref() {
+            return Ok(store.clone());
+        }
+        Ok(store.insert((self.connect)().map_err(store_error)?).clone())
+    }
+
+    fn entry(&self, account: &str) -> Result<keyring_core::Entry, KeyStoreError> {
+        self.store()?.build(Self::SERVICE, account, None).map_err(store_error)
+    }
+
+    fn key_entry(&self) -> Result<keyring_core::Entry, KeyStoreError> {
+        self.entry(Self::ACCOUNT)
     }
 
     /// The key the system's key store keeps, read from it.
-    fn stored(entry: &keyring::Entry) -> Result<Option<GrantKey>, KeyStoreError> {
+    fn stored(entry: &keyring_core::Entry) -> Result<Option<GrantKey>, KeyStoreError> {
         match entry.get_secret() {
-            // A secret of another length is not a key this version made: there is none.
-            Ok(secret) => Ok(<[u8; KEY_LEN]>::try_from(secret.as_slice()).ok().map(GrantKey)),
-            Err(keyring::Error::NoEntry) => Ok(None),
+            // A secret that is not 64 hexadecimal digits is not a key this version made: there is none.
+            Ok(secret) => Ok(std::str::from_utf8(&secret)
+                .ok()
+                .and_then(from_hex)
+                .and_then(|bytes| <[u8; KEY_LEN]>::try_from(bytes.as_slice()).ok())
+                .map(GrantKey)),
+            Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(e) => Err(store_error(e)),
         }
     }
 
     /// The entry of the generation of the plug-in store whose folder is `folder`: the account
     /// `generation-v1-` followed by the SHA-256 of the folder in hexadecimal digits.
-    fn generation_entry(folder: &Path) -> Result<keyring::Entry, KeyStoreError> {
+    fn generation_entry(&self, folder: &Path) -> Result<keyring_core::Entry, KeyStoreError> {
         use sha2::Digest;
         let digest = sha2::Sha256::digest(folder.as_os_str().as_encoded_bytes());
-        let account: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-        keyring::Entry::new(Self::SERVICE, &format!("generation-v1-{account}")).map_err(store_error)
+        self.entry(&format!("generation-v1-{}", to_hex(&digest)))
     }
+}
+
+/// A connection to the system's key store: Keychain on macOS, Credential Manager on Windows, the
+/// Secret Service on Linux and the BSDs. The same stores, made the same way, that `keyring` 4.2
+/// uses, so entries it kept are read.
+#[cfg(not(target_arch = "wasm32"))]
+fn connect() -> Result<Arc<keyring_core::CredentialStore>, keyring_core::Error> {
+    #[cfg(target_os = "macos")]
+    {
+        let store: Arc<keyring_core::CredentialStore> = apple_native_keyring_store::keychain::Store::new()?;
+        Ok(store)
+    }
+    #[cfg(windows)]
+    {
+        let store: Arc<keyring_core::CredentialStore> = windows_native_keyring_store::Store::new()?;
+        Ok(store)
+    }
+    #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))]
+    {
+        let store: Arc<keyring_core::CredentialStore> = zbus_secret_service_keyring_store::Store::new()?;
+        Ok(store)
+    }
+    #[cfg(not(any(target_os = "macos", windows, all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))))]
+    Err(keyring_core::Error::NoDefaultStore)
+}
+
+/// `bytes` as lower-case hexadecimal digits.
+#[cfg(not(target_arch = "wasm32"))]
+fn to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl GrantKeyStore for OsGrantKeys {
+    /// Read from the key store each time, so that a key removed or replaced there is not used.
     fn key(&self) -> Result<Option<GrantKey>, KeyStoreError> {
-        let mut read = self.read.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(key) = read.as_ref() {
-            return Ok(Some(key.clone()));
-        }
-        Ok(Self::stored(&Self::entry()?)?.map(|key| read.insert(key).clone()))
+        Self::stored(&self.key_entry()?)
     }
 
     fn set_key(&self, key: &GrantKey) -> Result<(), KeyStoreError> {
-        let mut read = self.read.lock().unwrap_or_else(|e| e.into_inner());
-        Self::entry()?.set_secret(&key.0).map_err(store_error)?;
-        *read = Some(key.clone());
-        Ok(())
+        let _making = self.making.lock().unwrap_or_else(|e| e.into_inner());
+        self.key_entry()?.set_secret(to_hex(&key.0).as_bytes()).map_err(store_error)
     }
 
-    /// Reads the key store again, not the key read before, and makes the key only while holding
-    /// [`creation_lock`], so that processes of this user that make the first key at the same time
-    /// all keep the first one made.
+    /// Reads the key store again and makes the key only while holding [`creation_lock`], so that
+    /// processes of this user that make the first key at the same time all keep the first one made.
     fn create_key(&self) -> Result<GrantKey, KeyStoreError> {
-        let mut read = self.read.lock().unwrap_or_else(|e| e.into_inner());
-        let entry = Self::entry()?;
+        let _making = self.making.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = self.key_entry()?;
         if let Some(key) = Self::stored(&entry)? {
-            return Ok(read.insert(key).clone());
+            return Ok(key);
         }
         let _turn = creation_lock()?;
-        let key = match Self::stored(&entry)? {
-            Some(key) => key,
+        match Self::stored(&entry)? {
+            Some(key) => Ok(key),
             None => {
-                entry.set_secret(&GrantKey::random()?.0).map_err(store_error)?;
-                Self::stored(&entry)?.ok_or_else(|| KeyStoreError("the key store didn't keep the key".into()))?
+                entry.set_secret(to_hex(&GrantKey::random()?.0).as_bytes()).map_err(store_error)?;
+                Self::stored(&entry)?.ok_or_else(|| KeyStoreError("the key store didn't keep the key".into()))
             }
-        };
-        *read = Some(key.clone());
-        Ok(key)
+        }
     }
 
     /// Read from the key store each time, since another process on the folder may have raised it.
-    /// A kept value that is not 8 bytes is an error, so that nothing counts as signed with it.
+    /// A kept value that is not 16 hexadecimal digits is an error, so that nothing counts as signed
+    /// with it.
     fn generation(&self, folder: &Path) -> Result<Option<u64>, KeyStoreError> {
-        match Self::generation_entry(folder)?.get_secret() {
-            Ok(secret) => <[u8; 8]>::try_from(secret.as_slice())
+        match self.generation_entry(folder)?.get_secret() {
+            Ok(secret) => std::str::from_utf8(&secret)
+                .ok()
+                .and_then(from_hex)
+                .and_then(|bytes| <[u8; 8]>::try_from(bytes.as_slice()).ok())
                 .map(|bytes| Some(u64::from_be_bytes(bytes)))
-                .map_err(|_| KeyStoreError("the key store holds a generation of another length".into())),
-            Err(keyring::Error::NoEntry) => Ok(None),
+                .ok_or_else(|| KeyStoreError("the key store holds a generation that is not 16 hexadecimal digits".into())),
+            Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(e) => Err(store_error(e)),
         }
     }
 
     fn set_generation(&self, folder: &Path, generation: u64) -> Result<(), KeyStoreError> {
-        Self::generation_entry(folder)?.set_secret(&generation.to_be_bytes()).map_err(store_error)
+        self.generation_entry(folder)?.set_secret(to_hex(&generation.to_be_bytes()).as_bytes()).map_err(store_error)
     }
 }
 
 /// `vectorcraft-plugin-grant-key.lock` in a folder of this user's own, locked until the file is
-/// dropped, waiting while another process holds it: the temporary folder on Windows and macOS,
-/// `$XDG_RUNTIME_DIR` elsewhere. An error when there is no such folder or the file can't be
-/// locked: no key is made then.
+/// dropped, waiting while another process holds it: `%LOCALAPPDATA%` on Windows, the temporary
+/// folder on macOS, `$XDG_RUNTIME_DIR` elsewhere. An error when there is no such folder or the file
+/// can't be locked: no key is made then.
 #[cfg(not(target_arch = "wasm32"))]
 fn creation_lock() -> Result<std::fs::File, KeyStoreError> {
-    #[cfg(any(windows, target_os = "macos"))]
-    let dir = Some(std::env::temp_dir());
+    #[cfg(windows)]
+    let (dir, variable) = (std::env::var_os("LOCALAPPDATA"), "%LOCALAPPDATA%");
+    #[cfg(target_os = "macos")]
+    let (dir, variable) = (Some(std::env::temp_dir().into_os_string()), "$TMPDIR");
     #[cfg(not(any(windows, target_os = "macos")))]
-    let dir = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).filter(|dir| dir.is_absolute());
-    let dir = dir.ok_or_else(|| KeyStoreError("there is no folder for the key's lock ($XDG_RUNTIME_DIR is not set)".into()))?;
+    let (dir, variable) = (std::env::var_os("XDG_RUNTIME_DIR"), "$XDG_RUNTIME_DIR");
+    let dir = dir.map(std::path::PathBuf::from).filter(|dir| dir.is_absolute());
+    let dir = dir.ok_or_else(|| KeyStoreError(format!("there is no folder for the key's lock ({variable} is not set)")))?;
     let file = std::fs::File::options()
         .create(true)
         .truncate(false)
@@ -375,11 +435,64 @@ fn creation_lock() -> Result<std::fs::File, KeyStoreError> {
 
 /// What a key store error says, without the secret some of them hold.
 #[cfg(not(target_arch = "wasm32"))]
-fn store_error(e: keyring::Error) -> KeyStoreError {
+fn store_error(e: keyring_core::Error) -> KeyStoreError {
     KeyStoreError(match e {
-        keyring::Error::NoStorageAccess(e) => format!("the key store is locked or can't be reached ({e})"),
-        keyring::Error::PlatformFailure(e) => format!("the key store failed ({e})"),
-        keyring::Error::NoDefaultStore => "there is no key store".into(),
+        keyring_core::Error::NoStorageAccess(e) => format!("the key store is locked or can't be reached ({e})"),
+        keyring_core::Error::PlatformFailure(e) => format!("the key store failed ({e})"),
+        keyring_core::Error::NoDefaultStore => "there is no key store".into(),
         _ => "the key store can't read or keep the key".into(),
     })
+}
+
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use keyring_core::api::CredentialStoreApi;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Connections asked for from [`flaky`].
+    static TRIES: AtomicUsize = AtomicUsize::new(0);
+    /// The store [`flaky`] connects to.
+    static MOCK: LazyLock<Arc<keyring_core::mock::Store>> = LazyLock::new(|| keyring_core::mock::Store::new().unwrap());
+
+    /// A key store that can't be reached on the first try and is reached on every later one.
+    fn flaky() -> Result<Arc<keyring_core::CredentialStore>, keyring_core::Error> {
+        if TRIES.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Err(keyring_core::Error::NoDefaultStore);
+        }
+        let store: Arc<keyring_core::CredentialStore> = MOCK.clone();
+        Ok(store)
+    }
+
+    /// The secret `MOCK` keeps for `account`, as it is kept.
+    fn kept(account: &str) -> Vec<u8> {
+        MOCK.build(OsGrantKeys::SERVICE, account, None).unwrap().get_secret().unwrap()
+    }
+
+    /// The system key store is connected again after a connection fails, the key and the
+    /// generations are kept as hexadecimal text, and the key is read from the store each time; a
+    /// value kept as raw bytes is not read as a key or a generation.
+    #[test]
+    fn the_system_key_store_reconnects_and_keeps_text() {
+        let keys = OsGrantKeys { connect: flaky, ..OsGrantKeys::default() };
+        assert!(keys.key().is_err(), "the first connection fails");
+        let key = GrantKey::from_bytes([0xa7; KEY_LEN]);
+        keys.set_key(&key).unwrap();
+        assert_eq!(kept(OsGrantKeys::ACCOUNT), "a7".repeat(KEY_LEN).into_bytes(), "the key is kept as text");
+        assert_eq!(OsGrantKeys { connect: flaky, ..OsGrantKeys::default() }.key().unwrap(), Some(key), "and read back");
+
+        let folder = Path::new("/plug-ins");
+        keys.set_generation(folder, 0x1_0000_0005).unwrap();
+        let account = format!("generation-v1-{}", to_hex(&<sha2::Sha256 as sha2::Digest>::digest(folder.as_os_str().as_encoded_bytes())));
+        assert_eq!(kept(&account), b"0000000100000005", "the generation is kept as text");
+        assert_eq!(keys.generation(folder).unwrap(), Some(0x1_0000_0005));
+
+        MOCK.build(OsGrantKeys::SERVICE, &account, None).unwrap().set_secret(&5u64.to_be_bytes()).unwrap();
+        assert!(keys.generation(folder).is_err(), "a generation kept as raw bytes is an error");
+        MOCK.build(OsGrantKeys::SERVICE, OsGrantKeys::ACCOUNT, None).unwrap().set_secret(&[0xa7; KEY_LEN]).unwrap();
+        assert_eq!(keys.key().unwrap(), None, "a key kept as raw bytes is none, also after a key was read");
+        MOCK.build(OsGrantKeys::SERVICE, OsGrantKeys::ACCOUNT, None).unwrap().set_secret("b8".repeat(KEY_LEN).as_bytes()).unwrap();
+        assert_eq!(keys.key().unwrap(), Some(GrantKey::from_bytes([0xb8; KEY_LEN])), "a key replaced in the key store is the one used");
+    }
 }

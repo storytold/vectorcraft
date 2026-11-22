@@ -4313,8 +4313,12 @@ fn a_grants_file_changed_outside_vectorcraft_grants_nothing() {
         change(&mut file);
         serde_json::to_vec(&file).unwrap()
     };
+    // At the generation kept for the folder, so that only the MAC tells the file apart.
+    let generation = file["generation"].as_u64().unwrap();
     let other_key = {
-        let _other = ThreadKeys::using(MemoryGrantKeys::with_key(GrantKey::from_bytes([7; 32])));
+        let keys = MemoryGrantKeys::with_key(GrantKey::from_bytes([7; 32]));
+        crate::store::grant_keys::GrantKeyStore::set_generation(&keys, &crate::store::plugin_store_key(&folder.0), generation).unwrap();
+        let _other = ThreadKeys::using(keys);
         crate::store::signed_grants_file(&folder.0, &file["grants"].to_string())
     };
     let tag = file["mac"].as_str().unwrap().to_string();
@@ -4339,6 +4343,7 @@ fn a_grants_file_changed_outside_vectorcraft_grants_nothing() {
     std::fs::write(&grants, &written).unwrap();
     std::fs::write(copy.0.join("copied.wasm"), &wasm).unwrap();
     std::fs::write(copy.0.join("grants.json"), &written).unwrap();
+    crate::store::grant_keys::set_current_generation(&crate::store::plugin_store_key(&copy.0), generation).unwrap();
     assert_eq!(starts_from(&copy.0, id, &data), (false, true), "copied into another folder");
     assert_eq!(starts_from(&folder.0, id, &data), (true, false), "the file left as written keeps its grant");
     std::fs::remove_file(&added_file).unwrap();
@@ -4457,6 +4462,87 @@ fn an_unreachable_key_store_keeps_approvals_in_the_session() {
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert!(!grants.exists());
+}
+
+/// While the key store can't be reached, removing a plug-in fails and leaves it installed when no
+/// earlier signed copy of the grants file can be kept from granting it again: with the grants file
+/// gone, and with a grants file that doesn't name the plug-in. Once the key store can be reached, the
+/// removal raises the generation, and the copy put back grants nothing.
+#[test]
+fn a_removal_the_key_store_cannot_make_last_fails() {
+    let folder = crate::tests_links::Folder::new("plugin-store-unreachable-remove");
+    let id = "test.engine.permissions.unreachableremove";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
+    let module = std::path::PathBuf::from(s.stored_plugin_file(id).unwrap());
+    let written = std::fs::read(&grants).unwrap();
+    std::fs::remove_file(&grants).unwrap();
+
+    let locked = ThreadKeys::using(UnreachableKeys);
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "with the grants file gone: {refused}");
+    assert!(vectorcraft_plugins::registry::get(id).is_some() && module.exists(), "the plug-in stays installed");
+    drop(locked);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    std::fs::write(&grants, &written).unwrap();
+    std::fs::write(&module, &wasm).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the copy put back grants nothing");
+    std::fs::remove_file(&grants).unwrap();
+    std::fs::remove_file(&module).unwrap();
+
+    let other = "test.engine.permissions.unreachableremoveother";
+    let plain = vectorcraft_format::base64_encode(&asking(id, "[]", &json!({"objects": []})));
+    let other_data = vectorcraft_format::base64_encode(&asking(other, r#"["doc.read"]"#, &json!({"objects": []})));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": other_data, "grant": ["doc.read"]}));
+    run(&mut s, "plugin.install", json!({"dataBase64": plain}));
+    let names: Vec<Value> = crate::store::grant_entries(&std::fs::read(&grants).unwrap()).iter().map(|e| e["id"].clone()).collect();
+    assert_eq!(names, vec![json!(other)], "the grants file doesn't name the plug-in");
+    let locked = ThreadKeys::using(UnreachableKeys);
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains(crate::store::GRANT_NOT_REMOVED), "with a grants file that can't be checked: {refused}");
+    assert!(vectorcraft_plugins::registry::get(id).is_some() && module.exists(), "the plug-in stays installed");
+    drop(locked);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    run(&mut s, "plugin.remove", json!({"id": other}));
+}
+
+/// A stored plug-in that didn't load, because the grants file of an older version doesn't count, and
+/// that keeps no settings or cache, is removed with its module and its entry, and the removal
+/// reports it removed. A removal whose stored module can't be deleted fails.
+#[test]
+fn removing_a_stored_plugin_that_did_not_load_reports_it_removed() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-unloaded-remove");
+    let id = "test.engine.permissions.unloadedremove";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let grants = folder.0.join("grants.json");
+    let module = folder.0.join(format!("{}.wasm", crate::store::file_stem(id)));
+    std::fs::write(&grants, serde_json::to_vec(&json!([{"id": id, "hash": sha256_hex(&wasm), "permissions": ["doc.read"]}])).unwrap()).unwrap();
+    std::fs::write(&module, &wasm).unwrap();
+    assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the unsigned list grants nothing");
+
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert_eq!(s.execute("plugin.remove", &json!({"id": id})).ok(), Some(json!({"removed": id})));
+    assert!(!module.exists(), "the module is removed");
+    assert!(!grants.exists(), "and its entry");
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err(), "a second removal finds nothing");
+
+    // A stored module that can't be deleted (here a folder in its place), of a plug-in that keeps
+    // settings, fails the removal.
+    std::fs::create_dir_all(module.join("held")).unwrap();
+    std::fs::create_dir_all(crate::store::plugin_data_dir(&folder.0, id)).unwrap();
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains("can't delete"), "{refused}");
+    assert!(module.exists());
+    std::fs::remove_dir_all(&module).unwrap();
 }
 
 /// A MAC is made over the generation, the grants and the folder, and only the whole MAC of the same
@@ -4610,14 +4696,15 @@ fn a_grant_revoked_without_a_signed_file_doesnt_come_back_with_one() {
     std::fs::write(&grants, &signed).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked over an unsigned file doesn't come back");
 
-    // A file that doesn't hold a list is in place: the revoke isn't recorded, and still raises the
-    // generation.
+    // A file that doesn't hold a list is in place: it is left as it is, and the revoke holds once it
+    // raises the generation.
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read"]}));
     let signed = std::fs::read(&grants).unwrap();
     std::fs::write(&grants, br#""not a list""#).unwrap();
-    assert!(!s.store_grant(id, None));
+    assert!(s.store_grant(id, None));
+    assert_eq!(std::fs::read(&grants).unwrap(), br#""not a list""#, "the file is left as it is");
     std::fs::write(&grants, &signed).unwrap();
     assert_eq!(starts_from(&folder.0, id, &data), (false, true), "the grant revoked over a file without a list doesn't come back");
 }
@@ -4926,7 +5013,7 @@ fn a_write_whose_generation_wasnt_kept_grants_nothing_after_a_revoke() {
             "not-a-list" => std::fs::write(&grants, br#""not a list""#).unwrap(),
             _ => std::fs::write(&grants, crate::store::signed_grants_file(&folder.0, &other_grant)).unwrap(),
         }
-        assert_eq!(s.store_grant(other, None), path != "not-a-list", "{path}");
+        assert!(s.store_grant(other, None), "{path}");
         std::fs::write(&grants, &unkept).unwrap();
         assert_eq!(starts_from(&folder.0, other, &other_data), (false, true), "{path}: the revoked grant doesn't come back");
         assert_eq!(starts_from(&folder.0, id, &data), (false, true), "{path}: the copy grants nothing");

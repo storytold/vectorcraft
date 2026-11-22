@@ -1219,9 +1219,10 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     // Settings and cache the store keeps for an id that isn't installed are deleted too.
     let stored = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.has_plugin_storage(id);
     // Installed again, it asks again. A grant that can't be removed may still approve the module, and
-    // so may a grants file that can't be opened or read. One that is too large or doesn't hold a
-    // list approves nothing and doesn't stop the removal.
-    let forget = || s.store_grant_in(&turn, id, None) || !s.holds_plugin_grant(id);
+    // so may a grants file that can't be opened or read, or a signed copy of the file put back when
+    // the generation couldn't be raised (the key store can't be reached). Without a plug-in folder
+    // nothing keeps a grant.
+    let forget = || s.store_grant_in(&turn, id, None) || s.plugin_dir.is_none();
     // Its settings and cache are moved aside and its grant removed before anything is deleted: when
     // either can't be done, the plug-in stays installed, as it was, and a second `plugin.remove`
     // tries again.
@@ -1237,8 +1238,13 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(EngineError::Other(e));
     }
     registry::revoke(id);
-    s.unstore_plugin(&turn, id);
-    if !stored && (!installed || !registry::remove(id)) {
+    // A module stored for an id that isn't installed (one no grant covers is skipped at startup)
+    // counts as removed once its file is gone.
+    let module = !installed && vectorcraft_plugins::manifest::valid_id(id) && s.holds_stored_plugin(id);
+    if !s.unstore_plugin(&turn, id) && module {
+        return Err(EngineError::Other(format!("plugin.remove: can't delete {}", s.stored_plugin_file(id).unwrap_or_default())));
+    }
+    if !stored && !module && (!installed || !registry::remove(id)) {
         return Err(err(vectorcraft_plugins::Error::NotFound(id.into())));
     }
     Ok(json!({"removed": id}))
@@ -1315,7 +1321,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
+            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed, as it does when the system key store can't be reached to make sure no earlier copy of grants.json grants it again; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it and the module stored for it that didn't load, and reports it removed; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
             always,
             remove
         ),

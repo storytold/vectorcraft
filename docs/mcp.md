@@ -13231,9 +13231,11 @@ approval lasts for that session only and the file is left as it is. `plugin.remo
 forgets the approval, and so does installing a module that lists no permissions under that id: the earlier bytes then
 need a new approval. A refused install keeps the grant. A failed write of the module to the plug-in store leaves the
 grant in the store. A stored module that is disabled, or not read in Safe Mode, keeps the grant for its id. When
-`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed.
-When the plug-in's settings and cache can't be moved back from their `.removed` folder then either, the error names
-that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
+`plugin.remove` can't remove the grant from the plug-in store, it returns an error and the plug-in stays installed;
+so does a `plugin.remove` while the system key store can't be reached, also when `grants.json` is missing or doesn't
+name the plug-in. For an id that isn't installed, `plugin.remove` also deletes the module stored for it that didn't
+load and returns `{removed}`. When the plug-in's settings and cache can't be moved back from their `.removed` folder
+then either, the error names that folder, and the next load, install or `plugin.remove` of the plug-in moves them back. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
