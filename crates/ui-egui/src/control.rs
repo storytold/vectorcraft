@@ -1152,7 +1152,8 @@ fn leave_out_unreadable_values(v: &mut Value, place: ParamsPlace) {
 /// Takes out of `ui.inspect`'s copy of the UI state the paths the request may not read: recent files,
 /// a library panel's file, folder preferences (saved, and in an open Preferences dialog) and the paths
 /// in recorded actions' steps and in the item an open Insert Menu Item dialog picked, outside the
-/// read root. The file selected in an open JavaScript Files dialog is named as `svgInteractivity.info`
+/// read root. An open Preferences dialog's kept script file access names its scripts and paths as
+/// `script.grants` does. The file selected in an open JavaScript Files dialog is named as `svgInteractivity.info`
 /// names the active document's linked files. The UI state itself is not changed.
 fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<String, Value>) {
     if let Some(Value::Array(files)) = ui.get_mut("recent_files") {
@@ -1171,11 +1172,8 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
     if let Some(Value::Object(prefs)) = ui.get_mut("engine_prefs") {
         leave_out_unreadable_folders(prefs);
     }
-    if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
-        && dialog.get("kind").and_then(Value::as_str) == Some("preferences")
-        && let Some(Value::Object(fields)) = dialog.get_mut("fields")
-    {
-        leave_out_unreadable_folders(fields);
+    if let Some(Value::Object(dialog)) = ui.get_mut("dialog") {
+        leave_out_unreadable_preferences(dialog);
     }
     // The menu item picked in an open Insert Menu Item dialog, such as a saved proof setup's file.
     if let Some(Value::Object(dialog)) = ui.get_mut("dialog")
@@ -1194,6 +1192,22 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
         && let Some(st) = app.session.active()
     {
         *selected = vectorcraft_engine::cmd::links::shown_script(st, selected).into_owned();
+    }
+}
+
+/// Takes out of a copy of an open Preferences dialog `dialog` the folder preferences the request may
+/// not read, and names its kept script file access as `script.grants` does (`ui.inspect` and
+/// `ui.dialog.set`'s reply), also where a dialog over it (Reset Preferences) holds it to show again.
+/// Another dialog is left as it is.
+fn leave_out_unreadable_preferences(dialog: &mut serde_json::Map<String, Value>) {
+    let preferences = dialog.get("kind").and_then(Value::as_str) == Some("preferences");
+    let Some(Value::Object(fields)) = dialog.get_mut("fields") else { return };
+    if preferences {
+        leave_out_unreadable_folders(fields);
+        crate::prefs_dialog::script_access::list_as_listed(fields);
+    }
+    if let Some(Value::Object(parent)) = fields.get_mut(crate::dialogs::PARENT) {
+        leave_out_unreadable_preferences(parent);
     }
 }
 
@@ -1639,7 +1653,10 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                         return err(e);
                     }
                 }
-                let dialog = app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default();
+                let mut dialog = app.ui.dialog.as_ref().and_then(|d| serde_json::to_value(d).ok()).unwrap_or_default();
+                if let Value::Object(shown) = &mut dialog {
+                    leave_out_unreadable_preferences(shown);
+                }
                 // `action` answers the dialog the fields were just set in, within this request.
                 match action {
                     None => ok(dialog),

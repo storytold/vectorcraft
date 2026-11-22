@@ -3129,6 +3129,58 @@ fn script_file_access_shows_none_and_a_revoke_of_a_removed_row() {
     assert!(!text.contains("No script has kept file access."), "{text}");
 }
 
+/// Preferences opened with a read root in force shows a script and a path outside it by their file
+/// names alone, as `script.grants` lists them, and `ui.inspect`, `ui.dialog.set`'s reply and the
+/// Reset Preferences question over the dialog name them the same way; Revoke still removes that
+/// pair's kept grants, both with the root in force and without it.
+#[test]
+fn script_file_access_revokes_a_pair_outside_the_read_roots() {
+    let dir = std::env::temp_dir().join("vc-ui-prefs-grants-nowhere");
+    let (script, path) = (dir.join("a.jsx"), dir.join("out.txt"));
+    let root = temp_folder("grants-root-in");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
+    for confined in [true, false] {
+        let (mut a, store) = app_with_grants("grants-outside-roots", json!([grant(&script, &path, "1", false, false)]));
+        let (shown, inspected, set, under) = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+            open(&mut a, Some("General"));
+            let shown = access_rows(&a);
+            let ctx = egui::Context::default();
+            let inspected = crate::control::inspect(&a, &ctx);
+            let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "unitsGeneral", "value": "points"}));
+            let crate::control::Outcome::Done(set) = crate::control::handle(&mut a, &ctx, &req) else { panic!("expected an immediate reply") };
+            let kept = a.ui.dialog.clone();
+            crate::dialogs::confirm::ask_reset_prefs(&mut a);
+            let under = crate::control::inspect(&a, &ctx);
+            a.ui.dialog = kept;
+            (shown, inspected, set, under)
+        });
+        assert_eq!(shown, [("a.jsx".to_string(), "out.txt".to_string(), "read".to_string(), 1)]);
+        // The person's frame draws the rows as the request that opened the dialog was shown them.
+        let texts = script_access_in_view(&mut a, &fonts_context(), "out.txt");
+        let whole = dir.to_string_lossy();
+        assert!(texts.iter().any(|(t, _)| t == "a.jsx") && !texts.iter().any(|(t, _)| t.contains(&*whole)), "{texts:?}");
+        let listed = json!({"script": "a.jsx", "path": "out.txt"});
+        for (reply, row) in [
+            (&inspected, &inspected["ui"]["dialog"]["fields"][script_access::ROWS][0]),
+            (&set, &set["result"]["fields"][script_access::ROWS][0]),
+            (&under, &under["ui"]["dialog"]["fields"][crate::dialogs::PARENT]["fields"][script_access::ROWS][0]),
+        ] {
+            assert_eq!(json!({"script": row["script"], "path": row["path"]}), listed, "{reply}");
+            assert!(row["wholeScript"].is_null() && row["wholePath"].is_null(), "{reply}");
+        }
+        let mut d = a.ui.dialog.clone().unwrap();
+        let roots_now = if confined { roots.as_ref() } else { None };
+        vectorcraft_engine::file_access::confine(roots_now, || script_access::revoke(&mut a, &mut d, 0));
+        a.ui.dialog = Some(d);
+        assert_eq!(a.ui.status, "Script file access revoked", "confined: {confined}");
+        assert!(access_rows(&a).is_empty(), "confined: {confined}");
+        let stored: Value = serde_json::from_slice(&std::fs::read(&store).unwrap()).unwrap();
+        assert!(stored["grants"].as_array().is_some_and(Vec::is_empty), "confined: {confined}: {stored}");
+        let _ = std::fs::remove_dir_all(store.parent().unwrap());
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// A grants file that is not well formed or is larger than may be read is refused: Revoke shows
 /// the error, grants nothing and leaves the file and the rows as they were.
 #[test]

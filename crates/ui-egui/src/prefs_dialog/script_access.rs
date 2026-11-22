@@ -27,12 +27,27 @@ const ROW_HEIGHT: f32 = 30.0;
 /// The list's height before it scrolls.
 const LIST_HEIGHT: f32 = 180.0;
 
+/// The keys of a row that hold its script and path as it shows them, each with the key that holds
+/// it whole.
+const WHOLE: [(&str, &str); 2] = [("script", "wholeScript"), ("path", "wholePath")];
+
 /// The kept grants (`script.grants`) as the rows of the field [`ROWS`] in the Preferences dialog's
-/// `fields`. Where the session keeps no grants, the field is removed.
+/// `fields`. Where the session keeps no grants, the field is removed. The grants file is the app's
+/// own, so it is read with no automation roots in force: each row keeps its script and path whole
+/// (`wholeScript` and `wholePath`) for `script.grants.revoke`, and shows them (`script` and `path`)
+/// as `script.grants` names them to the request that opened the dialog ([`as_listed`]).
 pub(super) fn load(app: &mut VectorcraftApp, fields: &mut Map<String, Value>) {
-    match app.session.execute("script.grants", &json!({})) {
+    match vectorcraft_engine::file_access::unconfined(|| app.session.execute("script.grants", &json!({}))) {
         Ok(v) if !v["file"].is_null() => {
-            fields.insert(ROWS.into(), Value::Array(rows(&v["grants"])));
+            let mut rows = rows(&v["grants"]);
+            for row in rows.iter_mut().filter_map(Value::as_object_mut) {
+                for (shown, whole) in WHOLE {
+                    let Some(path) = row.get(shown).and_then(Value::as_str).map(str::to_string) else { continue };
+                    row.insert(shown.into(), json!(as_listed(&path)));
+                    row.insert(whole.into(), json!(path));
+                }
+            }
+            fields.insert(ROWS.into(), Value::Array(rows));
         }
         _ => {
             fields.remove(ROWS);
@@ -77,6 +92,29 @@ pub(super) fn shown(path: &str) -> String {
     permissions::display_text(path, MAX_SHOWN_PATH)
 }
 
+/// A kept script or path as `script.grants` names it to the request being served: whole where that
+/// request may read it, else its file name alone (empty for a path that ends in no name).
+pub(crate) fn as_listed(path: &str) -> &str {
+    if vectorcraft_engine::file_access::check_read(path).is_ok() {
+        return path;
+    }
+    let name = path.rsplit(vectorcraft_doc::links::path_separators(path)).next().unwrap_or_default();
+    if matches!(name, "." | "..") { "" } else { name }
+}
+
+/// The rows of `ROWS` in a copy of the Preferences dialog's `fields` (`ui.inspect` and
+/// `ui.dialog.set`'s reply) with each script and path as [`as_listed`] gives it to the request being
+/// served, and without the whole ones.
+pub(crate) fn list_as_listed(fields: &mut Map<String, Value>) {
+    for row in fields.get_mut(ROWS).and_then(Value::as_array_mut).into_iter().flatten().filter_map(Value::as_object_mut) {
+        for (shown, whole) in WHOLE {
+            if let Some(path) = row.remove(whole).as_ref().and_then(Value::as_str) {
+                row.insert(shown.into(), json!(as_listed(path)));
+            }
+        }
+    }
+}
+
 /// The label of a row's access.
 fn access_label(access: &str) -> &'static str {
     match access {
@@ -106,7 +144,7 @@ pub(super) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) 
     }
     let mut lines = Vec::with_capacity(rows.len() * 2);
     for (i, row) in rows.iter().enumerate() {
-        if i == 0 || rows[i - 1]["script"] != row["script"] {
+        if i == 0 || rows[i - 1]["wholeScript"] != row["wholeScript"] {
             lines.push(Line::Script(i));
         }
         lines.push(Line::Row(i));
@@ -178,13 +216,13 @@ pub(super) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) 
     }
 }
 
-/// Revoke on the row `i` of the Preferences dialog `d`: every kept grant of its script and path is
-/// removed (`script.grants.revoke`), the rows are read again and the row now at `i`, or the last
+/// Revoke on the row `i` of the Preferences dialog `d`: every kept grant of its script and path,
+/// whole, is removed (`script.grants.revoke`), the rows are read again and the row now at `i`, or the last
 /// row, takes the keyboard focus. The status bar says what happened; on an error the rows stay as
 /// they were.
 pub(super) fn revoke(app: &mut VectorcraftApp, d: &mut Dialog, i: usize) {
     let Some(row) = d.fields.get(ROWS).and_then(|rows| rows.get(i)).cloned() else { return };
-    match app.run("script.grants.revoke", json!({"script": row["script"], "path": row["path"]})) {
+    match app.run("script.grants.revoke", json!({"script": row["wholeScript"], "path": row["wholePath"]})) {
         Ok(v) => {
             load(app, &mut d.fields);
             let left = d.fields.get(ROWS).and_then(Value::as_array).map_or(0, Vec::len);
