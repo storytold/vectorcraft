@@ -9101,8 +9101,8 @@ with the defaults.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
-When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
-folder (whether or not the file exists), the document starts with the defaults and
+When the file is a link or a folder, cannot be read, is too large or is not a native document, or the request's read
+roots leave out the folder (whether or not the file exists), the document starts with the defaults and
 `file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
 a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
 file. The

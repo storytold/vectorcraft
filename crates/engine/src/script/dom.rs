@@ -885,6 +885,9 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
         None | Some(Data::Null) => Vec::new(),
         Some(d) => {
             let i = preset_of(h, d).ok_or_else(|| HostError::Type("presetSettings must be a DocumentPreset".into()))?;
+            // The settings are charged as data passed to the call before they are copied.
+            let bytes = h.dom.presets.borrow()[i].iter().map(|(k, v)| k.len() as u64 + 2 + data_size(v)).sum::<u64>();
+            h.charge_call(bytes)?;
             h.dom.presets.borrow()[i].clone()
         }
     };
@@ -998,8 +1001,11 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let l = link.clone();
     let get: HostFunction = Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
-        h.charge_call(16)?;
-        let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        // The value handed back is charged as the setter charges it, before it is copied.
+        let i = preset_of(&h, arg(&a, 0));
+        let bytes = i.map_or(0, |i| h.dom.presets.borrow()[i].iter().find(|(k, _)| k == key).map_or(0, |(_, v)| data_size(v)));
+        h.charge_call(16 + bytes)?;
+        let i = i.ok_or_else(not_preset)?;
         let presets = h.dom.presets.borrow();
         Ok(presets[i].iter().find(|(k, _)| k == key).map_or(Data::Undefined, |(_, v)| v.clone()))
     });
