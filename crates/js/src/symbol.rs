@@ -239,10 +239,10 @@ impl Interp {
             Value::Symbol(s) => f(self, PropKey::Sym(s.clone())),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::String)?;
-                if let Value::Symbol(s) = p {
-                    return f(self, PropKey::Sym(s));
-                }
-                self.rooted(std::slice::from_ref(&p), |i| i.with_key(&p, |i, k| f(i, PropKey::Str(k))))
+                self.rooted(std::slice::from_ref(&p), |i| match &p {
+                    Value::Symbol(s) => f(i, PropKey::Sym(s.clone())),
+                    _ => i.with_key(&p, |i, k| f(i, PropKey::Str(k))),
+                })
             }
             _ => self.with_key(v, |i, k| f(i, PropKey::Str(k))),
         }

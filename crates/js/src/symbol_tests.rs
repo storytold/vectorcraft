@@ -241,6 +241,71 @@ fn json_calls_the_to_primitive_method_of_a_wrapper() {
     truth(&format!("var w = new String('x'); {hook} JSON.stringify({{a: 1, b: 2}}, [w]) === '{{\"b\":2}}'"));
     truth(&format!("var w = new Number(5); {hook} JSON.stringify([w], null, w) === '[\\n  2\\n]'"));
     truth("JSON.stringify([new String('x'), new Number(1)], null, new Number(1)) === '[\\n \"x\",\\n 1\\n]'");
+    // A `@@toPrimitive` getter that deletes the prototype's method and gives `undefined` sends the
+    // lookup on to `Object.prototype`.
+    let getter = |method: &str| {
+        format!(
+            "Object.defineProperty(w, Symbol.toPrimitive, {{ get: function () {{ delete Object.getPrototypeOf(w).{method}; return undefined; }} }});"
+        )
+    };
+    let over = "Object.prototype.toString = function () { return '7'; };";
+    truth(&format!("var w = new String('x'); {over} {} JSON.stringify(w) === '\"7\"'", getter("toString")));
+    truth(&format!("var w = new Number(3); {over} delete Number.prototype.toString; {} JSON.stringify(w) === '7'", getter("valueOf")));
+}
+
+#[test]
+fn a_symbol_key_from_to_primitive_counts_against_the_heap_while_the_property_is_used() {
+    // `mk(n)` makes a string of `n` units. The key's accessor deletes itself from
+    // `Object.prototype`, so when the key is a Symbol only the read or write holds it and its
+    // description of 2,000,000 units, and then makes a string of 1,500,000 units. With `keep`
+    // (1,000,000 units) and a description still counted, that string does not fit; without one it
+    // does.
+    let src = |key: &str, access: &str| {
+        format!(
+            "function mk(n) {{ return new Array(n + 1).join('x'); }} \
+             var keep = mk(1000000), made = null; \
+             function use() {{ var p = Object.prototype; delete p[Object.getOwnPropertySymbols(p)[0] || 'k']; \
+               made = mk(1500000); return 0; }} \
+             var w = {{}}; w[Symbol.toPrimitive] = function () {{ var k = {key}; \
+               Object.defineProperty(Object.prototype, k, {{ configurable: true, get: use, set: use }}); return k; }}; \
+             {access}; made.length"
+        )
+    };
+    let limits = || Limits { heap_bytes: 8 << 20, fuel: 50_000_000, ..Limits::default() };
+    for access in ["({})[w]", "({})[w] = 1", "({})[w]++"] {
+        // A name as the key leaves the Symbol and its description to the collector, and the string
+        // fits.
+        assert_eq!(es2015(limits()).run(&src("(Symbol(mk(2000000)), 'k')", access)), Ok(JsValue::Number(1_500_000.0)), "{access}");
+        match es2015(limits()).run(&src("Symbol(mk(2000000))", access)) {
+            Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => {}
+            other => panic!("{access}: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn date_objects_convert_through_their_to_primitive_method() {
+    let date = "var d = new Date(0); d.valueOf = function () { return 7; }; d.toString = function () { return 'date'; };";
+    truth(&format!("{date} d + 1 === 'date1' && d * 1 === 7 && String(d) === 'date' && (d == 'date')"));
+    // Without a method, a Date converts with `valueOf` first when no hint is given.
+    // The inherited method is read-only, so an assignment does not shadow it.
+    truth(&format!("{date} d[Symbol.toPrimitive] = null; d + 1 === 'date1'"));
+    truth(&format!("{date} Object.defineProperty(d, Symbol.toPrimitive, {{ value: null }}); d + 1 === 8"));
+    truth(&format!("{date} Object.defineProperty(d, Symbol.toPrimitive, {{ value: undefined }}); d + 1 === 8 && String(d) === 'date'"));
+    truth(&format!("{date} delete Date.prototype[Symbol.toPrimitive]; d + 1 === 8 && d == 7"));
+    // The method itself, on any object.
+    truth(
+        "var m = Date.prototype[Symbol.toPrimitive], p = Object.getOwnPropertyDescriptor(Date.prototype, Symbol.toPrimitive); \
+         typeof m === 'function' && m.length === 1 && !p.writable && !p.enumerable && p.configurable",
+    );
+    let o = "var o = { valueOf: function () { return 7; }, toString: function () { return 's'; } }, m = Date.prototype[Symbol.toPrimitive];";
+    truth(&format!("{o} m.call(o, 'number') === 7 && m.call(o, 'string') === 's' && m.call(o, 'default') === 's'"));
+    for call in ["m.call(o)", "m.call(o, 'other')", "m.call(o, new String('number'))", "m.call(1, 'number')", "m.call(o, 'defaultx')"] {
+        throws(&format!("{o} {call}"), "TypeError");
+    }
+    // A realm without the option keeps the String-hint order for a Date.
+    let src = format!("{date} d + 1 === 'date1' && d * 1 === 7");
+    assert_eq!(Realm::with_options(Options::default(), Limits::default()).run(&src), Ok(JsValue::Bool(true)));
 }
 
 #[test]

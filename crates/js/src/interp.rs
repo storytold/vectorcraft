@@ -2782,8 +2782,11 @@ impl Interp {
     /// [[DefaultValue]] (section 8.12.8) of the object `o`, which is `v`: ToPrimitive without the
     /// `@@toPrimitive` method.
     pub(crate) fn ordinary_to_primitive(&mut self, o: ObjId, v: &Value, hint: Hint) -> JsResult<Value> {
-        // Without a hint, a Date object converts as with the String hint.
-        let date = hint == Hint::Default && matches!(self.heap.object(o).map(|ob| &ob.class), Some(Class::Date(_)));
+        // Without a hint, a Date object converts as with the String hint. In a realm with
+        // `Options::es2015`, `Date.prototype[@@toPrimitive]` picks that order for a Date instead,
+        // and OrdinaryToPrimitive treats a missing hint as the Number hint (ECMA-262 11th edition,
+        // sections 7.1.1.1 and 20.4.4.45).
+        let date = hint == Hint::Default && !self.options.es2015 && matches!(self.heap.object(o).map(|ob| &ob.class), Some(Class::Date(_)));
         let order = if hint == Hint::String || date { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
         for name in order {
             let f = self.get_from(o, &key(name), v)?;
