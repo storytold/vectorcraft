@@ -1,4 +1,4 @@
-use kurbo::{Affine, Point, Rect};
+use kurbo::{Affine, CubicBez, Point, Rect};
 use vectorcraft_geom::{PathData, SubPath, shapes};
 
 use super::*;
@@ -484,4 +484,225 @@ fn answers_about_a_tiny_shape_far_away_stay_apart() {
         let (a, b) = (w[0].center, w[1].center);
         assert!(a.y < b.y - 1e-3 || ((a.y - b.y).abs() <= 1e-3 && a.x < b.x), "{found:?}");
     }
+}
+
+/// A straight segment from `a` to `b`, its handles at its thirds so that `t` runs evenly along it.
+fn line(a: (f64, f64), b: (f64, f64)) -> CubicBez {
+    let (a, b) = (Point::new(a.0, a.1), Point::new(b.0, b.1));
+    CubicBez::new(a, a.lerp(b, 1.0 / 3.0), a.lerp(b, 2.0 / 3.0), b)
+}
+
+#[test]
+fn a_line_with_its_handles_on_its_anchors_has_a_direction_at_its_ends() {
+    let (a, b) = (Point::new(0.0, 0.0), Point::new(100.0, 0.0));
+    for t in [0.0, 1.0] {
+        let p = CubicBez::new(a, a, b, b).eval(t);
+        let found = circles_through(CubicBez::new(a, a, b, b), t, &[line((-50.0, 40.0), (150.0, 40.0))]);
+        assert_eq!(found.len(), 1, "{t}: {found:?}");
+        assert!(near(found[0].circle.center, p.x, 20.0, 1e-6), "{t}: {found:?}");
+    }
+}
+
+fn near(p: Point, x: f64, y: f64, tol: f64) -> bool {
+    (p - Point::new(x, y)).hypot() <= tol
+}
+
+#[test]
+fn a_circle_through_a_point_of_one_line_touches_a_parallel_line() {
+    let found = circles_through(line((0.0, 0.0), (100.0, 0.0)), 0.5, &[line((0.0, 40.0), (100.0, 40.0))]);
+    // Only toward the other line: away from it, no circle reaches it.
+    assert_eq!(found.len(), 1, "{found:?}");
+    let c = found[0];
+    assert!(near(c.circle.center, 50.0, 20.0, 1e-6) && (c.circle.radius - 20.0).abs() < 1e-6, "{c:?}");
+    assert!(near(c.first, 50.0, 0.0, 1e-9) && near(c.second, 50.0, 40.0, 1e-6), "{c:?}");
+}
+
+#[test]
+fn a_crossing_line_gives_a_circle_on_each_side() {
+    let found = circles_through(line((0.0, 0.0), (100.0, 0.0)), 0.3, &[line((80.0, -100.0), (80.0, 100.0))]);
+    assert_eq!(found.len(), 2, "{found:?}");
+    for y in [50.0, -50.0] {
+        assert!(found.iter().any(|c| near(c.circle.center, 30.0, y, 1e-6) && (c.circle.radius - 50.0).abs() < 1e-6), "{y}: {found:?}");
+    }
+}
+
+#[test]
+fn a_circle_that_crosses_the_first_segment_is_left_out() {
+    // Through (50, 75) on a flat first segment, the circle touching y = -200 has radius 137.5.
+    let below = [line((-500.0, -200.0), (500.0, -200.0))];
+    let flat = circles_through(line((0.0, 75.0), (100.0, 75.0)), 0.5, &below);
+    assert_eq!(flat.len(), 1, "{flat:?}");
+    assert!((flat[0].circle.radius - 137.5).abs() < 1e-6, "{flat:?}");
+    // On a hump from (0, 0) up to (50, 75) and back down to (100, 0), the same circle crosses the
+    // hump's sides (its center (50, -62.5) is 80 from (0, 0)), and none on the other side reaches.
+    let hump = CubicBez::new(Point::new(0.0, 0.0), Point::new(0.0, 100.0), Point::new(100.0, 100.0), Point::new(100.0, 0.0));
+    assert!(near(hump.eval(0.5), 50.0, 75.0, 1e-9));
+    let found = circles_through(hump, 0.5, &below);
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+fn where_the_first_segment_turns_back_only_circles_that_touch_are_kept() {
+    // Out to (75, 0) and back: the normal flips at the turn, and the distance to the line jumps there.
+    let first = CubicBez::new(Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(100.0, 0.0), Point::new(0.0, 0.0));
+    let second = [line((-100.0, 40.0), (200.0, 40.0))];
+    let found = circles_of_radius(first, &second, 30.0);
+    for c in &found {
+        assert!((c.circle.center.y - 10.0).abs() < 1e-6 || (c.circle.center.y - 70.0).abs() < 1e-6, "{c:?}");
+    }
+    assert!(!found.iter().any(|c| (c.circle.center.x - 75.0).abs() < 1.0), "{found:?}");
+}
+
+#[test]
+fn a_circle_through_a_point_touches_a_curved_segment() {
+    // The second segments are a Bézier circle of radius 20 about (50, 100): touched from outside,
+    // |center − (50, 100)| = r + 20 with the center at (50, r), so r = 40.
+    let ring = circle(50.0, 100.0, 20.0);
+    let segs: Vec<CubicBez> = (0..4).map(|i| ring.subpaths[0].segment(i)).collect();
+    let found = circles_through(line((0.0, 0.0), (100.0, 0.0)), 0.5, &segs);
+    assert_eq!(found.len(), 1, "{found:?}");
+    let c = found[0];
+    // Within the Bézier circle's own error (0.0273% of 20).
+    assert!((c.circle.radius - 40.0).abs() < 0.01 && near(c.circle.center, 50.0, 40.0, 0.01), "{c:?}");
+    assert!(near(c.second, 50.0, 80.0, 0.01), "{c:?}");
+}
+
+#[test]
+fn on_a_curved_first_segment_the_center_is_on_the_normal() {
+    // A quarter of a ring of radius 50 about (0, 0); the second segment a line far off to the right.
+    let ring = circle(0.0, 0.0, 50.0);
+    let mut checked = 0;
+    for i in 0..4 {
+        let first = ring.subpaths[0].segment(i);
+        for t in [0.0, 0.3, 0.7, 1.0] {
+            let found = circles_through(first, t, &[line((300.0, -500.0), (300.0, 500.0))]);
+            let tangent = kurbo::ParamCurveDeriv::deriv(&first).eval(t).to_vec2();
+            for c in &found {
+                let to_center = c.circle.center - c.first;
+                assert!(to_center.dot(tangent).abs() <= 1e-9 * to_center.hypot() * tangent.hypot(), "{i} {t}: {c:?}");
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked >= 8, "{checked}");
+}
+
+#[test]
+fn a_radius_fills_the_corner_between_two_lines() {
+    let first = line((0.0, 0.0), (100.0, 0.0));
+    let found = circles_of_radius(first, &[line((100.0, 0.0), (100.0, 100.0))], 10.0);
+    // Outside the corner a circle tangent to the first line reaches the second only at the shared
+    // corner, where it touches both at one point: left out.
+    assert_eq!(found.len(), 1, "{found:?}");
+    let c = found[0];
+    assert!(near(c.circle.center, 90.0, 10.0, 1e-6) && c.circle.radius == 10.0, "{c:?}");
+    assert!(near(c.first, 90.0, 0.0, 1e-6) && near(c.second, 100.0, 10.0, 1e-6), "{c:?}");
+}
+
+#[test]
+fn lines_twice_the_radius_apart_give_circles_all_along() {
+    let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[line((0.0, 40.0), (100.0, 40.0))], 20.0);
+    assert!(found.len() > 100, "{}", found.len());
+    assert!(found.iter().all(|c| (c.circle.center.y - 20.0).abs() < 1e-9 && c.circle.radius == 20.0), "{found:?}");
+    let xs: Vec<f64> = found.iter().map(|c| c.circle.center.x).collect();
+    assert!(xs.iter().any(|x| *x < 1.0) && xs.iter().any(|x| *x > 99.0), "from end to end: {xs:?}");
+    // At a radius of 1,000,000 pt the places tried along the line, 0.2 pt apart, stay apart.
+    let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[line((0.0, 2e6), (100.0, 2e6))], 1e6);
+    let xs: Vec<f64> = found.iter().map(|c| c.circle.center.x).collect();
+    let widest = xs.windows(2).map(|w| w[1] - w[0]).fold(0.0, f64::max);
+    assert!(xs.iter().any(|x| *x < 1.0) && xs.iter().any(|x| *x > 99.0) && widest < 1.0, "from end to end, none merged: {xs:?}");
+}
+
+#[test]
+fn a_circle_that_touches_a_curve_between_the_places_tried_is_found() {
+    // A ring of radius 20 about (50.3, 60): a circle of radius 20 on the line y = 0 reaches it only
+    // at x = 50.3, between the places tried along the line, without the distance changing sign.
+    let ring = circle(50.3, 60.0, 20.0);
+    let segs: Vec<CubicBez> = (0..4).map(|i| ring.subpaths[0].segment(i)).collect();
+    let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &segs, 20.0);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(near(found[0].circle.center, 50.3, 20.0, 1e-3) && near(found[0].second, 50.3, 40.0, 1e-3), "{found:?}");
+}
+
+#[test]
+fn a_touch_half_way_between_two_places_tried_is_found() {
+    // A point half way between the places tried at x = 50 and x = 50.1953125: the two samples
+    // either side are equally far from a touch.
+    let dot = line((50.097_656_25, 40.0), (50.097_656_25, 40.0));
+    let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[dot], 20.0);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(near(found[0].circle.center, 50.097_656_25, 20.0, 1e-6), "{found:?}");
+}
+
+#[test]
+fn a_touch_between_the_end_and_the_next_place_tried_is_found() {
+    for x in [0.05, 99.95] {
+        let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[line((x, 40.0), (x, 40.0))], 20.0);
+        assert_eq!(found.len(), 1, "{x}: {found:?}");
+        assert!(near(found[0].circle.center, x, 20.0, 1e-6), "{x}: {found:?}");
+    }
+}
+
+#[test]
+fn two_circles_between_the_same_two_places_tried_are_both_found() {
+    // A point a hair less than twice the radius from the line: two circles, about 0.02 pt either
+    // side of x = 50.05, both between the places tried at 50 and 50.1953125.
+    let (x, y) = (50.05, 39.99999);
+    let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[line((x, y), (x, y))], 20.0);
+    assert_eq!(found.len(), 2, "{found:?}");
+    let dx = (400.0 - (y - 20.0) * (y - 20.0)).sqrt();
+    assert!(near(found[0].circle.center, x - dx, 20.0, 1e-6) && near(found[1].circle.center, x + dx, 20.0, 1e-6), "{found:?}");
+}
+
+#[test]
+fn two_segments_that_touch_circles_close_together_give_both() {
+    // A peak whose two feet touch circles of radius 20 on y = 0 at both feet, between the same
+    // places tried along the line; then the same on a line 10,000 pt long, with the feet 10 pt apart.
+    for (len, a, b) in [(100.0, 50.03, 50.15), (1e4, 5003.0, 5013.0)] {
+        let top = 0.5 * (a + b);
+        let second = [line((a, 40.0), (top, 60.0)), line((top, 60.0), (b, 40.0))];
+        let found = circles_of_radius(line((0.0, 0.0), (len, 0.0)), &second, 20.0);
+        assert_eq!(found.len(), 2, "{len}: {found:?}");
+        assert!(near(found[0].circle.center, a, 20.0, 1e-6) && near(found[0].second, a, 40.0, 1e-6), "{len}: {found:?}");
+        assert!(near(found[1].circle.center, b, 20.0, 1e-6) && near(found[1].second, b, 40.0, 1e-6), "{len}: {found:?}");
+    }
+}
+
+#[test]
+fn a_tiny_circle_between_long_lines_close_together_is_found() {
+    let found = circles_through(line((0.0, 0.0), (100.0, 0.0)), 0.5, &[line((0.0, 1e-4), (100.0, 1e-4))]);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!((found[0].circle.radius - 5e-5).abs() < 1e-12 && near(found[0].circle.center, 50.0, 5e-5, 1e-12), "{found:?}");
+    // A short line near a very long one: the long one's size does not hide the gap.
+    let found = circles_through(line((0.0, 0.0), (100.0, 0.0)), 0.5, &[line((-5e9, 1e-3), (5e9, 1e-3))]);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!((found[0].circle.radius - 5e-4).abs() < 1e-9, "{found:?}");
+    // Lines 1e-5 pt apart moved 1e9 pt to the right.
+    let found = circles_through(line((1e9, 0.0), (1e9 + 100.0, 0.0)), 0.5, &[line((1e9, 1e-5), (1e9 + 100.0, 1e-5))]);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!((found[0].circle.radius - 5e-6).abs() < 1e-9, "{found:?}");
+}
+
+#[test]
+fn long_segments_far_apart_give_no_circle_of_a_small_radius() {
+    // Lines 1e10 pt long and 1450 pt apart: a circle of radius 500 on one stays 950 pt from the other.
+    let found = circles_of_radius(line((0.0, 0.0), (1e10, 0.0)), &[line((0.0, 1450.0), (1e10, 1450.0))], 500.0);
+    assert!(found.is_empty(), "{:?}", found.first());
+    // A radius of 1,000,000 pt and lines 0.05 pt more than twice that apart: no touch.
+    let found = circles_of_radius(line((0.0, 0.0), (100.0, 0.0)), &[line((0.0, 2_000_000.05), (100.0, 2_000_000.05))], 1e6);
+    assert!(found.is_empty(), "{:?}", found.first());
+}
+
+#[test]
+fn no_circle_when_the_radius_is_too_small_or_the_point_is_on_the_second() {
+    let (first, other) = (line((0.0, 0.0), (100.0, 0.0)), line((0.0, 40.0), (100.0, 40.0)));
+    assert!(circles_of_radius(first, &[other], 5.0).is_empty());
+    for r in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+        assert!(circles_of_radius(first, &[other], r).is_empty(), "{r}");
+    }
+    assert!(circles_through(first, 1.0, &[line((100.0, 0.0), (100.0, 100.0))]).is_empty(), "the point is on the second");
+    assert!(circles_through(first, 0.5, &[]).is_empty());
+    assert!(circles_through(first, f64::NAN, &[other]).is_empty());
+    let dot = line((5.0, 5.0), (5.0, 5.0));
+    assert!(circles_through(dot, 0.5, &[other]).is_empty(), "no direction");
 }

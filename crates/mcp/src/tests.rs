@@ -323,6 +323,7 @@ fn headless_command_list_includes_ui_commands() {
         "app.quit",
         "window.arrange.tile",
         "align.horizontalLeft",
+        "align.toKeyObject",
         "ui.action.play",
     ];
     for (n, id) in want.iter().enumerate() {
@@ -335,6 +336,23 @@ fn headless_command_list_includes_ui_commands() {
     let r = call(&mut s, 40, "command_run", json!({"id": "view.fitArtboard", "params": {}}));
     assert_eq!(r["isError"], true, "{r}");
     assert!(text_of(&r).contains("--connect"), "{r}");
+}
+
+/// Desktop commands that the app refuses for every automated request are not offered through
+/// `--connect`: the headless error says only the person at the keyboard can run them.
+#[test]
+fn headless_does_not_send_keyboard_only_commands_to_connect() {
+    let mut s = server();
+    rpc(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION}));
+    s.handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#);
+    for (n, id) in ["attributes.openUrl", "file.export.svg.browser", "file.saveForWeb.browser", "file.showPackage"].iter().enumerate() {
+        assert!(crate::ui_catalog::UI_COMMANDS.iter().any(|(cid, ..)| cid == id), "{id} is not a desktop UI command");
+        let r = call(&mut s, 10 + n as u64, "command_run", json!({"id": id, "params": {}}));
+        assert_eq!(r["isError"], true, "{id}: {r}");
+        let text = text_of(&r);
+        assert!(text.contains("only the person at the keyboard"), "{id}: {r}");
+        assert!(!text.contains("start `vectorcraft --control"), "{id}: {r}");
+    }
 }
 
 // ---------- headless end-to-end ----------
@@ -1692,6 +1710,22 @@ fn transform_rejects_a_mistyped_reflect_copy_or_origin_before_editing() {
     assert_eq!(applied["isError"], false, "{applied}");
     let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
     assert_eq!(applied["applied"], json!(["move"]));
+    let unturned = inspect(&mut s, 21)["layers"].clone();
+    let applied = call(&mut s, 22, "transform", json!({"ids": [second], "rotate": 90, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let turned = inspect(&mut s, 23)["layers"].clone();
+    assert_ne!(turned, unturned, "the rotation must change the path");
+    // A null `origin` turns about the same default pivot as an omitted one.
+    assert_eq!(call(&mut s, 24, "undo", json!({}))["isError"], false);
+    let applied = call(&mut s, 25, "transform", json!({"ids": [second], "rotate": 90}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    assert_eq!(inspect(&mut s, 26)["layers"], turned);
+    // The schema allows null for every argument but `ids`.
+    let tools = tool_definitions();
+    let props = &tools.iter().find(|t| t["name"] == "transform").unwrap()["inputSchema"]["properties"];
+    for key in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear", "reflect", "copy", "origin"] {
+        assert!(props[key]["anyOf"].as_array().is_some_and(|a| a.contains(&json!({"type": "null"}))), "{key}: {}", props[key]);
+    }
 }
 
 #[test]

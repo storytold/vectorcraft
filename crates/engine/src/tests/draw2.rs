@@ -751,14 +751,14 @@ fn eraser_size_follows_the_pen_pressure() {
     assert!(err.to_string().contains("sizeMode"), "{err}");
 }
 
-/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Rotation, Bearing,
-/// Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
+/// Eraser Tool Options' Angle, Roundness and Size variation menus: a value on Stylus Wheel, Rotation,
+/// Bearing, Tilt or Pressure takes what the pen read along the drag, Random stays within its Variation, a
 /// drag without the reading erases at the value itself, an open path is cut where the varied tip
 /// covers it, and an unknown mode or a variation out of its range is refused with nothing erased.
 #[test]
 fn the_eraser_tip_varies_with_its_modes() {
     // Which of `probes` a level drag through the middle of a 400 by 200 rectangle erases, each of
-    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation]).
+    // its points `[x, 100]` followed by `pen` ([pressure, tiltX, tiltY, rotation, wheel]).
     let erased = |tip: serde_json::Value, pen: serde_json::Value, probes: &[(f64, f64)]| -> Vec<bool> {
         let mut s = session();
         rect(&mut s, 0.0, 0.0, 400.0, 200.0);
@@ -785,6 +785,10 @@ fn the_eraser_tip_varies_with_its_modes() {
     // The barrel turned half way round reads the most, which turns the tip upright.
     assert_eq!(erased(on_rotation.clone(), json!([none, none, none, 180]), &probes), [true, true], "Rotation");
     assert_eq!(erased(on_rotation.clone(), json!([]), &probes), [true, false], "Rotation without a reading");
+    // The finger wheel at the far end of its travel reads the most; without a wheel the tip lies level.
+    let on_wheel = with(&level, json!({"angleMode": "stylusWheel", "angleVariation": 90}));
+    assert_eq!(erased(on_wheel.clone(), json!([none, none, none, none, 1.0]), &probes), [true, true], "Stylus Wheel");
+    assert_eq!(erased(on_wheel, json!([none, none, none, none, none]), &probes), [true, false], "Stylus Wheel without a reading");
     // Leaning to the left (a bearing of 180°) reads the most too.
     let on_bearing = with(&level, json!({"angleMode": "bearing", "angleVariation": 90}));
     assert_eq!(erased(on_bearing.clone(), json!([none, -45, 0, none]), &probes), [true, true], "Bearing");
@@ -831,11 +835,11 @@ fn the_eraser_tip_varies_with_its_modes() {
     let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     let stroke = json!({"points": [[-10, 50], [110, 50]]});
-    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\" or \"rotation\"";
+    let modes = "\"fixed\", \"random\", \"pressure\", \"tilt\", \"bearing\", \"rotation\" or \"stylusWheel\"";
     for (extra, want) in [
         (json!({"angleMode": "wheel"}), format!("angleMode is one of {modes}, not `wheel`")),
         (json!({"roundnessMode": 3}), format!("roundnessMode is one of {modes}, not 3")),
-        (json!({"sizeMode": "stylusWheel"}), format!("sizeMode is one of {modes}, not `stylusWheel`")),
+        (json!({"sizeMode": "Pressure"}), format!("sizeMode is one of {modes}, not `Pressure`")),
         (json!({"angleVariation": 181}), "angleVariation must be at most 180".to_string()),
         (json!({"roundnessVariation": 101}), "roundnessVariation must be at most 100".to_string()),
         (json!({"roundnessVariation": -1}), "roundnessVariation must be 0 or more".to_string()),
@@ -2688,6 +2692,28 @@ fn a_smooth_drag_that_only_meets_corners_adds_no_undo_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
 }
 
+/// Drags of the Smooth tool again and again along the lower half of an ellipse add no anchors after
+/// the first, which splits the two segments the drag's reach ends on, and leave no corner. The
+/// anchors at those splits lie on the edge of the next drag's reach, where the segment beyond each
+/// one is in reach at that anchor only, so the next drag leaves that segment as it is.
+#[test]
+fn smooth_drags_again_and_again_along_part_of_an_ellipse_add_no_anchors_or_corners() {
+    let mut s = session();
+    let r = s.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 200, "height": 120})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let drag: Vec<Point> =
+        (0..=32).map(|i| f64::from(i) / 32.0 * std::f64::consts::PI).map(|a| Point::new(200.0 + 100.0 * a.cos(), 160.0 + 60.0 * a.sin())).collect();
+    let mut first = None;
+    for pass in 1..=6 {
+        smooth_pass(&mut s, &drag);
+        let p = path(&s, id);
+        let turns = smooth_anchor_turns(&p.subpaths[0]);
+        assert!(turns.iter().all(|t| *t < 1.0), "pass {pass} leaves a corner: {turns:?}");
+        assert_eq!(p.anchor_count(), *first.get_or_insert(p.anchor_count()), "pass {pass}");
+    }
+}
+
 #[test]
 fn join_tool_joins_two_lines() {
     let mut s = session();
@@ -3171,8 +3197,9 @@ fn drawing_commands_refuse_a_point_or_pressure_given_as_text() {
 }
 
 /// The drawing tools' commands refuse a pen pressure outside 0 to 1, a tiltX or tiltY outside -90
-/// to 90 and a rotation outside 0 to 360, naming the key, and a point array of more than six
-/// numbers, naming the point; the document, the selection and the undo history stay as they were.
+/// to 90, a rotation outside 0 to 360 and a stylus wheel outside 0 to 1, naming the key, and a
+/// point array of more than seven numbers, naming the point; the document, the selection and the
+/// undo history stay as they were.
 /// The ends of each range, null, one tilt axis alone and a mouse point `[x, y]` still draw.
 #[test]
 fn pen_values_outside_their_ranges_are_refused() {
@@ -3194,7 +3221,8 @@ fn pen_values_outside_their_ranges_are_refused() {
     let tilt_x = "`tiltX` must be from -90 to 90";
     let tilt_y = "`tiltY` must be from -90 to 90";
     let rotation = "`rotation` must be from 0 to 360";
-    let entries = "`points[3]` must be an array of at most 6 entries";
+    let wheel = "`wheel` must be from 0 to 1";
+    let entries = "`points[3]` must be an array of at most 7 entries";
     for cmd in cmds {
         for (bad, want) in [
             (json!([150, 150, -0.01]), pressure),
@@ -3208,8 +3236,11 @@ fn pen_values_outside_their_ranges_are_refused() {
             (json!([150, 150, null, null, null, -1]), rotation),
             (json!({"x": 150, "y": 150, "rotation": 360.5}), rotation),
             (json!([150, 150, null, null, null, 720]), rotation),
-            (json!([150, 150, 0.5, 0, 0, 0, 1]), entries),
-            (json!([150, 150, null, null, null, null, null]), entries),
+            (json!([150, 150, null, null, null, null, -0.01]), wheel),
+            (json!([150, 150, 0.5, 0, 0, 0, 1.5]), wheel),
+            (json!({"x": 150, "y": 150, "wheel": 1e300}), wheel),
+            (json!([150, 150, 0.5, 0, 0, 0, 1, 0]), entries),
+            (json!([150, 150, null, null, null, null, null, null]), entries),
         ] {
             let points: Vec<_> = good.iter().cloned().chain([bad]).collect();
             let sel = s.doc().unwrap().selection.clone();
@@ -3220,8 +3251,8 @@ fn pen_values_outside_their_ranges_are_refused() {
     for (row, cmd) in ["path.freehand", "brush.freehand", "path.blob", "path.eraseRegion"].into_iter().enumerate() {
         let y = 300.0 + 50.0 * row as f64;
         let points = json!([
-            [100, y, 0, -90, 90, 0],
-            [150, y, 1, 90, -90, 360],
+            [100, y, 0, -90, 90, 0, 0],
+            [150, y, 1, 90, -90, 360, 1],
             [200, y, 0.5, null, 30],
             {"x": 250, "y": y, "tiltX": -45, "pressure": null},
             [300, y],
@@ -3302,6 +3333,66 @@ fn path_eraser_width_outside_its_range_is_refused() {
         s.execute("edit.undo", &json!({})).unwrap();
         s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
     }
+}
+
+/// `path.smoothRegion` refuses a `radius` outside 0.001 to 1000 pt and a `fidelity` outside the
+/// Smooth tool's tolerance range, and `path.joinScrub` a `tolerance` outside 0.001 to 1000 pt: the
+/// document, the selection and the undo history do not change. The ends of each range are taken,
+/// and null is read as the key left out, which smooths or joins in one undo step.
+#[test]
+fn smooth_and_join_refuse_a_reach_or_fidelity_outside_its_range() {
+    let mut s = session();
+    let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 100.0 + i as f64 * 5.0, "y": if i % 2 == 0 { 200.0 } else { 203.0 }})).collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let drag = json!({"points": [[90, 200], [200, 200], [310, 200]]});
+    let (lo, hi) = (vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
+    let reaches = [json!(0), json!(-1), json!(0.0009), json!(1e-300), json!(1000.01), json!(1e300)];
+    let fidelities = [json!(0), json!(-1), json!(lo / 2.0), json!(hi * 1.01), json!(1e300)];
+    let refused = reaches
+        .iter()
+        .map(|x| ("radius", x, "`radius` must be from 0.001 to 1000".to_string()))
+        .chain(fidelities.iter().map(|x| ("fidelity", x, format!("`fidelity` must be from {lo} to {hi} pt"))));
+    for (key, x, want) in refused {
+        let sel = s.doc().unwrap().selection.clone();
+        refuses_with(&mut s, "path.smoothRegion", &with(&drag, json!({ key: x })), &want);
+        assert_eq!(s.doc().unwrap().selection, sel, "{key} {x} changed the selection");
+    }
+    for extra in [json!({"radius": 0.001}), json!({"radius": 1000}), json!({"fidelity": lo}), json!({"fidelity": hi})] {
+        let undo = undo_steps(&s);
+        s.execute("path.smoothRegion", &with(&drag, extra.clone())).unwrap_or_else(|e| panic!("{extra}: {e}"));
+        while undo_steps(&s) > undo {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    }
+    let before = path(&s, id);
+    let undo = undo_steps(&s);
+    s.execute("path.smoothRegion", &with(&drag, json!({"radius": null, "fidelity": null}))).unwrap();
+    assert!(path(&s, id) != before, "the default radius and fidelity smoothed nothing");
+    assert_eq!(undo_steps(&s), undo + 1);
+
+    let mut s = session();
+    line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    line(&mut s, 205.0, 100.0, 300.0, 150.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let scrub = json!({"points": [[202, 90], [202, 110]]});
+    for x in &reaches {
+        refuses_with(&mut s, "path.joinScrub", &with(&scrub, json!({"tolerance": x})), "`tolerance` must be from 0.001 to 1000");
+        assert_eq!(paths(&s).len(), 2, "tolerance {x}");
+    }
+    s.execute("path.joinScrub", &with(&scrub, json!({"tolerance": 0.001}))).unwrap();
+    assert_eq!(paths(&s).len(), 2, "0.001 pt reaches neither end");
+    let undo = undo_steps(&s);
+    s.execute("path.joinScrub", &with(&scrub, json!({"tolerance": 1000}))).unwrap();
+    while undo_steps(&s) > undo {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("path.joinScrub", &with(&scrub, json!({"tolerance": null}))).unwrap();
+    assert_eq!(paths(&s).len(), 1, "the default tolerance joined nothing");
+    assert_eq!(undo_steps(&s), undo + 1);
 }
 
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,

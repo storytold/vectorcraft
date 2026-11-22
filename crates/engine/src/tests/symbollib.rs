@@ -84,7 +84,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 6, "{libs:?}");
+    assert_eq!(libs.len(), 8, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
@@ -105,6 +105,14 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     assert_eq!(
         (libs[5]["id"].as_str(), libs[5]["name"].as_str(), libs[5]["category"].as_str()),
         (Some("weather-icons"), Some("Weather Icons"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[6]["id"].as_str(), libs[6]["name"].as_str(), libs[6]["category"].as_str()),
+        (Some("nature-icons"), Some("Nature Icons"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[7]["id"].as_str(), libs[7]["name"].as_str(), libs[7]["category"].as_str()),
+        (Some("media-controls"), Some("Media Controls"), Some("builtIn"))
     );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
     let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
@@ -242,6 +250,71 @@ fn weather_icons_library_lists_and_places() {
             d.node(NodeId(placed[i])).map(|n| &n.kind),
             Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == *name
         ));
+    }
+}
+
+#[test]
+fn nature_icons_library_places_and_survives_save() {
+    let mut s = session();
+    let listed = run(&mut s, "symbol.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "nature-icons").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["count"].as_u64()), (Some("Nature Icons"), Some(5)));
+    let library = run(&mut s, "symbol.library", json!({"library": "nature-icons"}));
+    let names: Vec<&str> = library["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Leaf", "Flower", "Tree", "Mountain", "Wave"]);
+    for (i, name) in names.iter().enumerate() {
+        let symbol = &library["symbols"][i];
+        let size = symbol["size"].as_array().unwrap();
+        assert!(size.iter().all(|n| n.as_f64().is_some_and(|n| n.is_finite() && n > 0.0)), "{name}");
+        let added = run(
+            &mut s,
+            "symbol.addFromLibrary",
+            json!({"library": "nature-icons", "name": name, "place": true, "x": 100.0 + 80.0 * i as f64, "y": 100.0}),
+        );
+        assert_eq!(added["added"], json!([name]));
+        let id = NodeId(added["placed"].as_u64().unwrap());
+        assert!(matches!(doc(&s).node(id).map(|n| &n.kind), Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == *name));
+        assert_eq!(doc(&s).symbol_nine_slice(name), None);
+    }
+    let saved = run(&mut s, "symbol.saveLibrary", json!({"names": ["Leaf", "Flower", "Tree", "Mountain", "Wave"]}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(reopened.symbols.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), names);
+}
+
+#[test]
+fn media_controls_library_lists_and_places() {
+    let mut s = session();
+    let lib = run(&mut s, "symbol.library", json!({"library": "media-controls"}));
+    let symbols = lib["symbols"].as_array().unwrap();
+    assert_eq!(symbols.len(), 6, "media-controls must load with exactly 6 symbols");
+    let names: Vec<&str> = symbols.iter().map(|x| x["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Play", "Pause", "Stop", "Skip Next", "Shuffle", "Repeat"]);
+    let mut placed = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let r = run(
+            &mut s,
+            "symbol.addFromLibrary",
+            json!({"library": "media-controls", "name": name, "place": true, "x": 100.0 + 80.0 * i as f64, "y": 100.0}),
+        );
+        assert_eq!(r["added"], json!([name]));
+        placed.push(r["placed"].as_u64().unwrap());
+    }
+    let d = doc(&s);
+    for (i, name) in names.iter().enumerate() {
+        assert_eq!(d.symbol_nine_slice(name), None, "{name} should not carry 9-slice guides");
+        assert!(matches!(
+            d.node(NodeId(placed[i])).map(|n| &n.kind),
+            Some(NodeKind::SymbolInstance { symbol, .. }) if symbol == *name
+        ));
+        let sym = d.symbols.iter().find(|s| s.name == *name).expect("symbol exists in document");
+        assert!(matches!(sym.art.kind, NodeKind::Path { .. }), "{name} art should be a path");
+        if let NodeKind::Path { path, .. } = &sym.art.kind {
+            assert!(!path.subpaths.is_empty(), "{name} path data must have subpaths");
+            for sp in &path.subpaths {
+                assert!(!sp.anchors.is_empty(), "{name} subpath must contain anchor points");
+            }
+        }
     }
 }
 
@@ -440,4 +513,46 @@ fn another_documents_symbol_is_added_and_placed_in_one_step() {
     run(&mut s, "file.close", json!({"index": 0}));
     let e = s.execute("symbol.placeFromDocument", &json!({"sourceDocument": source, "name": "Star"})).unwrap_err();
     assert!(e.to_string().contains("no longer open"), "{e}");
+}
+
+/// A symbol dragged onto the canvas, from another document's Symbols panel or from a symbol
+/// library, is stacked as Place Symbol Instance stacks it: in Draw Behind directly below the
+/// selected object, or at the bottom of the current layer with nothing selected, in one undo step
+/// with the symbol it adds. A locked layer refuses it with no edit.
+#[test]
+fn dropped_symbols_go_below_the_selection_in_draw_behind() {
+    let mut s = kit();
+    let source = s.doc().unwrap().uid;
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let rect =
+        |s: &mut Session, x: f64| NodeId(run(s, "shape.rectangle", json!({"x": x, "y": 0, "width": 10, "height": 10}))["id"].as_u64().unwrap());
+    let (a, b) = (rect(&mut s, 0.0), rect(&mut s, 20.0));
+    let layer = doc(&s).layers[0].id;
+    let kids = |s: &Session| doc(s).node(layer).unwrap().children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>();
+    run(&mut s, "view.drawMode", json!({"mode": "behind"}));
+    let drops = [
+        ("symbol.placeFromDocument", json!({"sourceDocument": source, "name": "Badge", "x": 30, "y": 40}), "id"),
+        ("symbol.addFromLibrary", json!({"library": "basic shapes", "name": "Square", "place": true, "x": 30, "y": 40}), "placed"),
+    ];
+    for (cmd, p, key) in &drops {
+        for (picked, at) in [(vec![b], 1), (vec![], 0)] {
+            run(&mut s, "select.set", json!({"ids": picked.iter().map(|i| i.0).collect::<Vec<_>>()}));
+            let before = undo_len(&s);
+            let placed = NodeId(run(&mut s, cmd, p.clone())[*key].as_u64().unwrap());
+            let mut want = vec![a, b];
+            want.insert(at, placed);
+            assert_eq!(kids(&s), want, "{cmd} {picked:?}");
+            assert_eq!(undo_len(&s), before + 1, "{cmd}");
+            assert_eq!(s.doc().unwrap().selection.objects, [placed]);
+            run(&mut s, "edit.undo", json!({}));
+            assert!(symbols(&s).is_empty(), "{cmd}: the undo takes the added symbol too");
+        }
+    }
+    // A locked layer takes nothing.
+    run(&mut s, "layer.setProps", json!({"id": layer.0, "locked": true}));
+    let before = (undo_len(&s), doc(&s).clone());
+    for (cmd, p, _) in &drops {
+        assert!(s.execute(cmd, p).is_err(), "{cmd}");
+        assert_eq!((undo_len(&s), doc(&s)), (before.0, &before.1), "{cmd}");
+    }
 }

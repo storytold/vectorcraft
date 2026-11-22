@@ -217,6 +217,7 @@ pub(super) fn parse_names<T: Copy + PartialEq>(p: &Value, key: &str, all: &[(T, 
 struct RowsKey {
     uid: u64,
     revision: u64,
+    isolation: Option<NodeId>,
     open: u64,
     layers_only: bool,
     query: String,
@@ -224,22 +225,49 @@ struct RowsKey {
 }
 
 /// The rows the panel shows, top down: the layers (only the opacity mask's while one is edited)
-/// with the rows of the open ones inside them. A search or a filter shows every row whose name
-/// contains `query` (lowercase) and that `filter` keeps, and every row holding one.
-pub(super) fn list_rows(doc: &Document, open: &OpenRows, opts: &PanelOptions, query: &str, filter: &Filter) -> Vec<Row> {
+/// with the rows of the open ones inside them. In isolation mode (`isolation`) only the isolated
+/// layer, sublayer, group or object is listed, as the top row, with the open rows inside it. A
+/// search or a filter shows every row whose name contains `query` (lowercase) and that `filter`
+/// keeps, and every row holding one.
+pub(super) fn list_rows(doc: &Document, isolation: Option<NodeId>, open: &OpenRows, opts: &PanelOptions, query: &str, filter: &Filter) -> Vec<Row> {
     let mask_layer = doc.mask_edit.map(|m| m.layer);
     // The ruler guides' ids by `guide.list` index, listed once for every layer.
     let guides: Vec<NodeId> = doc.ruler_guides().into_iter().filter_map(|g| g.id).collect();
     let mut out = vec![];
+    if let Some((root, clip_path, around)) = isolation.and_then(|i| isolated_root(doc, i)) {
+        push_rows(root, 0, clip_path, around, (open, opts, query, filter, &guides), &mut out);
+        return out;
+    }
     for l in doc.layers.iter().rev().filter(|l| mask_layer.is_none_or(|m| m == l.id)) {
         push_rows(l, 0, false, (Color32::PLACEHOLDER, true), (open, opts, query, filter, &guides), &mut out);
     }
     out
 }
 
+/// The isolated node `id`, which heads the rows in isolation mode, with what [`push_rows`] takes
+/// for it: whether it is its parent's clipping path, and the color of the layer holding it and
+/// whether the layers and groups around it are visible. None when `id` is not in `doc`.
+pub(super) fn isolated_root(doc: &Document, id: NodeId) -> Option<(&Arc<Node>, bool, (Color32, bool))> {
+    let path = doc.index_path(id)?;
+    let (first, rest) = path.split_first()?;
+    let mut cur = doc.layers.get(*first)?;
+    let (mut clip_path, mut colour, mut shown) = (false, Color32::PLACEHOLDER, true);
+    for &i in rest {
+        if let NodeKind::Layer { color, .. } = &cur.kind {
+            let [r, g, b] = color.rgb();
+            colour = Color32::from_rgb(r, g, b);
+        }
+        shown &= cur.visible;
+        clip_path = i == 0 && cur.clips();
+        cur = cur.children()?.get(i)?;
+    }
+    Some((cur, clip_path, (colour, shown)))
+}
+
 /// Add the rows of `n` and those open inside it to `out`; `(colour, shown)` are those of what holds
 /// it (the layer's colour, and whether it is visible). The last item of `cx` is the document's
-/// ruler guide ids by `guide.list` index.
+/// ruler guide ids by `guide.list` index. With Show Layers Only on, a group or object at `depth` 0,
+/// the isolated row in isolation mode, keeps its own row.
 pub(super) fn push_rows(
     n: &Arc<Node>,
     depth: usize,
@@ -250,7 +278,7 @@ pub(super) fn push_rows(
 ) {
     let (open_rows, opts, query, filter, all_guides) = cx;
     // A ruler guide node gets no object row: its layer lists the guide rows.
-    if n.is_ruler_guide() || (opts.layers_only && !n.is_layer()) {
+    if n.is_ruler_guide() || (opts.layers_only && depth > 0 && !n.is_layer()) {
         return;
     }
     let colour = match &n.kind {
@@ -325,11 +353,12 @@ pub(super) fn push_rows(
 }
 
 /// The rows of the active document as [`list_rows`] lists them, listed again only when the
-/// document, its open rows, the search, the filter or Show Layers Only changed.
+/// document, isolation mode, its open rows, the search, the filter or Show Layers Only changed.
 pub(super) fn rows_of_doc(ui: &Ui, st: &vectorcraft_engine::DocState, opts: &PanelOptions, query: &str, filter: &Filter) -> Arc<Vec<Row>> {
     let now = RowsKey {
         uid: st.uid,
         revision: st.revision,
+        isolation: st.isolation,
         open: st.layers_open.generation(),
         layers_only: opts.layers_only,
         query: query.to_string(),
@@ -341,7 +370,7 @@ pub(super) fn rows_of_doc(ui: &Ui, st: &vectorcraft_engine::DocState, opts: &Pan
     {
         return rows;
     }
-    let rows = Arc::new(list_rows(&st.doc, &st.layers_open, opts, query, filter));
+    let rows = Arc::new(list_rows(&st.doc, st.isolation, &st.layers_open, opts, query, filter));
     ui.data_mut(|d| d.insert_temp(id, (now, rows.clone())));
     rows
 }

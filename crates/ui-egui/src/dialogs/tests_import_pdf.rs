@@ -350,3 +350,144 @@ fn the_import_dialog_stays_where_there_is_something_to_ask() {
     assert!(import_pdf::offer(&mut app, "two.ai", &two_pages(true, None), None, Some(&json!({}))));
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("mode"), "place");
 }
+
+/// `pages` pages, each showing "AB" in a font the file names without embedding it.
+fn text_pages(pages: usize) -> Vec<u8> {
+    let font = format!("/Font << /F1 {} 0 R >>", first_extra(pages));
+    let page = PdfPage { resources: font, ..PdfPage::new(100.0, 100.0, "BT /F1 20 Tf 1 0 0 1 10 40 Tm (AB) Tj ET") };
+    pdf_with(&vec![page; pages], &["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"], None)
+}
+
+/// The type objects of the active document.
+fn type_objects(app: &VectorcraftApp) -> usize {
+    let mut n = 0;
+    app.session.active().unwrap().doc.walk(|node| n += usize::from(matches!(node.kind, NodeKind::Text(_))));
+    n
+}
+
+fn set_pdf_text(app: &mut VectorcraftApp, value: &str) {
+    app.run("prefs.set", json!({"key": "pdfTextAs", "value": value})).unwrap();
+}
+
+/// The Import PDF dialog is closed; the Missing Fonts dialog an editable open asks with is
+/// dismissed.
+fn opened(app: &mut VectorcraftApp) {
+    assert!(!app.ui.dialog.as_ref().is_some_and(|d| d.kind == import_pdf::KIND), "the Import PDF dialog closed");
+    app.ui.dialog = None;
+    app.ui.pending_fonts.clear();
+}
+
+/// The Text choice starts from the PDF Text preference (Editable by default), Outlines opens the
+/// pages' text as outlines, and OK keeps the choice for the next PDF. Outlines clears and dims
+/// Import PDF pages as links (`linkPages` refuses it).
+#[test]
+fn the_text_choice_opens_text_as_outlines_and_is_kept() {
+    let mut app = app();
+    assert_eq!(app.session.prefs.pdf_text_as, "text");
+    io::open_bytes(&mut app, "two.pdf", &text_pages(2), None).unwrap();
+    assert_eq!(field(&app, "textAs"), "text", "Editable by default");
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    opened(&mut app);
+    assert_eq!(type_objects(&app), 2, "one type object per page");
+    assert_eq!(app.session.prefs.pdf_text_as, "text");
+
+    io::open_bytes(&mut app, "two.pdf", &text_pages(2), None).unwrap();
+    set(&mut app, "textAs", json!("outlines"));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    opened(&mut app);
+    assert_eq!(type_objects(&app), 0, "the text is outlines");
+    assert_eq!(app.session.prefs.pdf_text_as, "outlines", "OK keeps the choice");
+
+    // The next PDF starts from Outlines; a file it could link opens unlinked while Outlines is picked.
+    io::open_bytes(&mut app, "/tmp/two.pdf", &text_pages(2), Some("/tmp/two.pdf".into())).unwrap();
+    assert_eq!(field(&app, "textAs"), "outlines");
+    assert!(!import_pdf::links_on(app.ui.dialog.as_ref().unwrap()), "Outlines: not linked");
+    frame(&mut app);
+    set(&mut app, "textAs", json!("text"));
+    assert!(import_pdf::links_on(app.ui.dialog.as_ref().unwrap()), "Editable: All links the pages again");
+}
+
+/// A PDF that opens without the dialog (one page) takes the PDF Text preference, unless the open
+/// gives `textAs`; a `.ai` file opens as it says.
+#[test]
+fn a_pdf_opened_without_the_dialog_takes_the_pdf_text_preference() {
+    let mut app = app();
+    let one = text_pages(1);
+    io::open_bytes(&mut app, "one.pdf", &one, None).unwrap();
+    opened(&mut app);
+    assert_eq!(type_objects(&app), 1, "Editable by default");
+    set_pdf_text(&mut app, "outlines");
+    io::open_bytes(&mut app, "one.pdf", &one, None).unwrap();
+    opened(&mut app);
+    assert_eq!(type_objects(&app), 0, "Outlines");
+    io::open_document(&mut app, "one.pdf", &one, None, &json!({"textAs": "text"})).unwrap();
+    opened(&mut app);
+    assert_eq!(type_objects(&app), 1, "an open that gives textAs keeps it");
+    let p = import_pdf::with_preferred_text_as(&app, "one.ai", &one, &serde_json::Value::Null);
+    assert!(p.is_null(), "a .ai file opens as it says: {p}");
+    // In the dialog too, a .ai file starts from Editable, and its choice is not kept for PDFs.
+    assert!(import_pdf::offer(&mut app, "two.ai", &two_pages(false, None), None, None));
+    assert_eq!(field(&app, "textAs"), "text", "a .ai file starts from Editable");
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    opened(&mut app);
+    assert_eq!(app.session.prefs.pdf_text_as, "outlines", "the preference stays");
+    // An open with linkPages keeps the file's own text, which linked pages show.
+    let dir = vectorcraft_testkit::TempDir::new("import-pdf-text-link-pages");
+    let path = dir.join("one.pdf").to_string_lossy().into_owned();
+    std::fs::write(&path, &one).unwrap();
+    io::open_document(&mut app, &path, &one, Some(path.clone()), &json!({"linkPages": true})).unwrap();
+    opened(&mut app);
+    assert_eq!(placed_pages(&app), [true], "opened linked");
+}
+
+/// Placing a page embedded takes the Text choice (and the preference when no dialog asks); a
+/// linked place shows the file's own text, so the choice is dimmed and not sent.
+#[test]
+fn the_text_choice_applies_to_embedded_places_only() {
+    let mut app = app();
+    // `textAs: null` leaves the param out: the dialog's choice is sent.
+    place(&mut app, &text_pages(2), json!({"link": false, "textAs": null})).unwrap();
+    assert_eq!(field(&app, "textAs"), "text");
+    set(&mut app, "textAs", json!("outlines"));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    opened(&mut app);
+    assert_eq!(type_objects(&app), 0, "placed as outlines");
+    assert_eq!(app.session.prefs.pdf_text_as, "outlines");
+    // One page asks nothing: placed by the user, it takes the preference.
+    let one = json!({"name": "one.pdf", "dataBase64": vectorcraft_format::base64_encode(&text_pages(1))});
+    crate::place::run_for_user(&mut app, &one).unwrap();
+    assert_eq!(type_objects(&app), 0, "the preference");
+    set_pdf_text(&mut app, "text");
+    crate::place::run_for_user(&mut app, &one).unwrap();
+    assert_eq!(type_objects(&app), 1);
+
+    // Linked: the choice is not sent, and OK leaves the preference as it is.
+    set_pdf_text(&mut app, "outlines");
+    let dir = vectorcraft_testkit::TempDir::new("import-pdf-text-linked");
+    let path = dir.join("two.pdf").to_string_lossy().into_owned();
+    std::fs::write(&path, text_pages(2)).unwrap();
+    assert!(import_pdf::offer(&mut app, &path, &text_pages(2), Some(path.clone()), Some(&json!({"link": true}))));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(matches!(placed.kind, NodeKind::PlacedDocument(_)), "linked: {:?}", placed.kind);
+    assert_eq!(app.session.prefs.pdf_text_as, "outlines");
+
+    // A place that gives `textAs: "outlines"` with Link on is embedded as outlines, as without the dialog.
+    set_pdf_text(&mut app, "text");
+    assert!(import_pdf::offer(&mut app, &path, &text_pages(2), Some(path.clone()), Some(&json!({"link": true, "textAs": "outlines"}))));
+    assert_eq!(field(&app, "textAs"), "outlines");
+    frame(&mut app);
+    let before = type_objects(&app);
+    confirm(&mut app).unwrap();
+    opened(&mut app);
+    let st = app.session.active().unwrap();
+    let placed = st.doc.node(st.selection.objects[0]).unwrap();
+    assert!(!matches!(placed.kind, NodeKind::PlacedDocument(_)), "embedded: {:?}", placed.kind);
+    assert_eq!(type_objects(&app), before, "placed as outlines");
+}

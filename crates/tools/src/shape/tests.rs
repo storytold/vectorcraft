@@ -968,6 +968,23 @@ fn corners_snap_to_smart_guides() {
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &cx.segment_measure_label(from, to))));
 }
 
+/// The "anchor" label a hover shows goes when the pointer leaves the canvas, for every shape tool.
+#[test]
+fn leaving_the_canvas_drops_the_hover_label() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let label = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor"));
+    for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+        assert!(label(&t.overlays(&cx)), "{id}");
+        t.hover_ended(&cx);
+        assert!(!label(&t.overlays(&cx)), "{id}: {:?}", t.overlays(&cx));
+    }
+}
+
 /// Line Segment Tool Options: Length and Angle are options (for a click's dialog), and Fill
 /// Line makes the drag's line take the current fill.
 #[test]
@@ -1307,6 +1324,211 @@ fn a_shape_tool_drags_the_selected_shapes_widgets() {
     assert_eq!(a.first(), Some(&Action::Begin("Live Shape".into())), "{a:?}");
     assert!(matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.setLiveShape" && v.get("pieEnd").is_some()), "{a:?}");
     assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 20.0)), vec![Action::Commit]);
+}
+
+/// With a shape tool, a drag down on a selected live polygon's side widget adds sides instead of
+/// drawing, and Escape puts the count back; Line Segment draws from the widget.
+#[test]
+fn a_shape_tool_drags_a_polygons_side_widget() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let shape =
+        LiveShape::Polygon { radius: 80.0, sides: 5, xf: Affine::translate((250.0, 250.0)), radii: vec![], kinds: vec![], radii_relative: false };
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(shape));
+    }
+    d.insert(Some(l), 0, n).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let (w, _) = crate::sidewidget::SideWidget::for_tool(&c).expect("a side widget");
+    let down = |px: f64| PointerEvent::new(PointerKind::Drag, w.at.x, w.at.y + px);
+    for tool in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+        let mut t = ShapeTool::new(tool);
+        assert_eq!(t.cursor(&c, w.at, Mods::default()), Cursor::ArrowHollow, "{tool}");
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y)).is_empty(), "{tool}");
+        let a = t.pointer(&c, &down(25.0));
+        assert_eq!(
+            a,
+            vec![Action::Begin("Live Shape".into()), Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 7 }))],
+            "{tool}"
+        );
+        assert!(t.transforming() && !t.drawing_boxed(), "{tool}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, w.at.x, w.at.y + 25.0)), vec![Action::Commit], "{tool}");
+        assert!(!t.busy(), "{tool}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y));
+        t.pointer(&c, &down(-13.0));
+        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{tool}");
+        assert!(!t.busy(), "{tool}");
+    }
+    let mut t = ShapeTool::new("lineSegment");
+    assert_eq!(t.cursor(&c, w.at, Mods::default()), Cursor::Crosshair);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, w.at.x, w.at.y));
+    let a = t.pointer(&c, &down(25.0));
+    assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd == "shape.line"), "{a:?}");
+}
+
+/// With a shape tool, the side widget's release is read where it happens, with or without a drag
+/// event there first, and switching tools during the drag puts the count back, as Escape does.
+#[test]
+fn a_shape_tools_side_widget_drag_ends_at_the_release_and_cancels_on_a_tool_switch() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let shape =
+        LiveShape::Polygon { radius: 80.0, sides: 5, xf: Affine::translate((250.0, 250.0)), radii: vec![], kinds: vec![], radii_relative: false };
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(shape));
+    }
+    d.insert(Some(l), 0, n).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let (w, _) = crate::sidewidget::SideWidget::for_tool(&c).expect("a side widget");
+    let at = |kind: PointerKind, px: f64| PointerEvent::new(kind, w.at.x, w.at.y + px);
+    let sides = |n: u32| Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": n }));
+    let mut t = ShapeTool::new("polygon");
+    t.pointer(&c, &at(PointerKind::Down, 0.0));
+    assert_eq!(t.pointer(&c, &at(PointerKind::Drag, 12.0)), vec![Action::Begin("Live Shape".into()), sides(6)]);
+    assert_eq!(t.pointer(&c, &at(PointerKind::Up, 0.0)), vec![sides(5), Action::Cancel]);
+    assert!(!t.busy());
+    t.pointer(&c, &at(PointerKind::Down, 0.0));
+    t.pointer(&c, &at(PointerKind::Drag, 12.0));
+    assert_eq!(t.pointer(&c, &at(PointerKind::Up, 24.0)), vec![sides(7), Action::Commit]);
+    t.pointer(&c, &at(PointerKind::Down, 0.0));
+    t.pointer(&c, &at(PointerKind::Drag, 12.0));
+    assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
+    assert!(!t.busy() && !t.transforming());
+    // A press that changed nothing sends nothing.
+    t.pointer(&c, &at(PointerKind::Down, 0.0));
+    assert!(t.deactivate(&c).is_empty());
+    assert!(!t.busy());
+}
+
+/// With Show Shape Widgets off, the shape tools neither show nor take a selected live rectangle's
+/// corner widget, a live ellipse's pie widget or a live polygon's side widget: the pointer there is
+/// the tool's own, a drag from there draws a new shape and a double-click asks for nothing. With it
+/// on, the same drag adjusts the widget.
+#[test]
+fn hidden_shape_widgets_do_not_answer_a_shape_tool() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = |shape: LiveShape| {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        (d, s)
+    };
+    let xf = Affine::translate((100.0, 100.0));
+    let p = paint();
+    let rect = live(LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf });
+    let ellipse = live(LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf });
+    let polygon = live(LiveShape::Polygon {
+        radius: 80.0,
+        sides: 5,
+        xf: Affine::translate((250.0, 250.0)),
+        radii: vec![],
+        kinds: vec![],
+        radii_relative: false,
+    });
+    let side = crate::sidewidget::SideWidget::for_tool(&cx(&polygon.0, &polygon.1, &p)).expect("a side widget").0.at;
+    // The corner widget 10 px inside the box's top-left corner, the pie widgets 12 px right of the
+    // ellipse, and the side widget.
+    let (far, m) = (Point::new(480.0, 480.0), Mods::default());
+    for ((d, s), at) in [(&rect, Point::new(110.0, 110.0)), (&ellipse, Point::new(312.0, 150.0)), (&polygon, side)] {
+        let shown = cx(d, s, &p);
+        let hidden = ToolContext { shape_widgets: false, ..cx(d, s, &p) };
+        let drag = |t: &mut ShapeTool, c: &ToolContext| {
+            t.pointer(c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            let a = t.pointer(c, &PointerEvent::new(PointerKind::Drag, at.x + 20.0, at.y + 25.0));
+            t.pointer(c, &PointerEvent::new(PointerKind::Up, at.x + 20.0, at.y + 25.0));
+            a
+        };
+        for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star"] {
+            let mut t = ShapeTool::new(id);
+            assert_ne!(t.cursor(&shown, at, m), t.cursor(&shown, far, m), "{id} at {at:?}");
+            assert_eq!(t.cursor(&hidden, at, m), t.cursor(&hidden, far, m), "{id} at {at:?}");
+            let a = drag(&mut t, &shown);
+            assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd == "object.setLiveShape"), "{id} at {at:?}: {a:?}");
+            let a = drag(&mut t, &hidden);
+            assert!(matches!(a.last(), Some(Action::Preview(cmd, _)) if cmd.starts_with("shape.")), "{id} at {at:?}: {a:?}");
+            assert!(t.pointer(&hidden, &PointerEvent::new(PointerKind::DoubleClick, at.x, at.y)).is_empty(), "{id} at {at:?}");
+            assert!(!t.busy(), "{id}");
+        }
+    }
+}
+
+/// Switching away from a shape tool or the Selection tool during a drag of a corner, pie or side
+/// widget cancels it, as Escape does: the shape goes back. After a press that has not moved there
+/// is nothing to put back.
+#[test]
+fn a_tool_switch_cancels_a_widget_drag() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let live = |shape: LiveShape| {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        (d, s)
+    };
+    let xf = Affine::translate((100.0, 100.0));
+    let rect = live(LiveShape::Rectangle { w: 100.0, h: 100.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf });
+    let ellipse = live(LiveShape::Ellipse { w: 200.0, h: 100.0, pie: (0.0, 360.0), xf });
+    let polygon = live(LiveShape::Polygon {
+        radius: 80.0,
+        sides: 5,
+        xf: Affine::translate((250.0, 250.0)),
+        radii: vec![],
+        kinds: vec![],
+        radii_relative: false,
+    });
+    let p = paint();
+    let side = crate::sidewidget::SideWidget::for_tool(&cx(&polygon.0, &polygon.1, &p)).expect("a side widget").0.at;
+    // The corner widget at (110, 110), the pie widget 12 px right of (300, 150), the side widget.
+    let drags = [
+        (&rect, Point::new(110.0, 110.0), Point::new(130.0, 130.0)),
+        (&ellipse, Point::new(312.0, 150.0), Point::new(200.0, 20.0)),
+        (&polygon, side, side + Vec2::new(0.0, 25.0)),
+    ];
+    for ((d, s), at, to) in drags {
+        let c = cx(d, s, &p);
+        let tools: [Box<dyn Tool>; 6] = [
+            Box::new(crate::select::SelectionTool::default()),
+            Box::new(ShapeTool::new("rectangle")),
+            Box::new(ShapeTool::new("roundedRectangle")),
+            Box::new(ShapeTool::new("ellipse")),
+            Box::new(ShapeTool::new("polygon")),
+            Box::new(ShapeTool::new("star")),
+        ];
+        for mut t in tools {
+            let id = t.id();
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty(), "{id} at {at:?}");
+            let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+            assert!(matches!(a.first(), Some(Action::Begin(_))), "{id} at {at:?}: {a:?}");
+            assert_eq!(t.deactivate(&c), vec![Action::Cancel], "{id} at {at:?}");
+            assert!(!t.busy() && !t.transforming(), "{id} at {at:?}");
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, to.x, to.y)).is_empty(), "{id} at {at:?}");
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+            assert!(t.busy(), "{id} at {at:?}");
+            assert!(t.deactivate(&c).is_empty(), "{id} at {at:?}");
+            assert!(!t.busy(), "{id} at {at:?}");
+        }
+    }
 }
 
 /// A double-click on a corner widget of a selected live shape, with a shape tool that shows the

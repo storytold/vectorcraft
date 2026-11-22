@@ -139,6 +139,10 @@ pub struct RunError {
     pub message: String,
     pub line: u32,
     pub column: u32,
+    /// `message` is text the script supplied: a value it threw, or an error object it made or whose
+    /// name or message it changed. False for the interpreter's and host functions' own errors,
+    /// syntax errors and limits, even when a script caught one and threw it again.
+    pub authored: bool,
 }
 
 impl std::fmt::Display for RunError {
@@ -151,7 +155,7 @@ impl std::error::Error for RunError {}
 
 impl From<SyntaxError> for RunError {
     fn from(e: SyntaxError) -> Self {
-        RunError { kind: RunErrorKind::Syntax, message: e.to_string(), line: e.line, column: e.column }
+        RunError { kind: RunErrorKind::Syntax, message: e.to_string(), line: e.line, column: e.column, authored: false }
     }
 }
 
@@ -241,7 +245,7 @@ impl Realm {
         self.script_tag = UNKNOWN_SOURCE;
         let interp = &mut self.interp;
         if let Some(message) = &interp.install_error {
-            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0 });
+            return Err(RunError { kind: RunErrorKind::Internal, message: message.clone(), line: 0, column: 0, authored: false });
         }
         interp.fuel = interp.limits.fuel;
         interp.flattened_fuel.set(0);
@@ -269,7 +273,7 @@ impl Realm {
                 interp.error_tag = self.script_tag;
                 Err(e.into())
             }
-            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
+            Err(CompileError::Internal(m)) => Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0, authored: false }),
         }
     }
 
@@ -293,15 +297,18 @@ impl Realm {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {
                 let message = interp.describe(&v);
+                let authored = interp.thrown_by_script(&v);
                 interp.last_thrown = v;
-                Err(RunError { kind: RunErrorKind::Thrown, message, line, column })
+                Err(RunError { kind: RunErrorKind::Thrown, message, line, column, authored })
             }
             Err(Abrupt::Limit(LimitKind::Host)) => {
                 let message = interp.host_abort.take().unwrap_or_else(|| format!("limit reached: {:?}", LimitKind::Host));
-                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column })
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line, column, authored: false })
             }
-            Err(Abrupt::Limit(kind)) => Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column }),
-            Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column }),
+            Err(Abrupt::Limit(kind)) => {
+                Err(RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line, column, authored: false })
+            }
+            Err(Abrupt::Internal(message)) => Err(RunError { kind: RunErrorKind::Internal, message, line, column, authored: false }),
         }
     }
 
@@ -323,10 +330,16 @@ impl Realm {
     pub fn advance(&mut self, slice: u64) -> Result<Progress, RunError> {
         let interp = &mut self.interp;
         if interp.frames.is_empty() {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0 });
+            return Err(RunError { kind: RunErrorKind::Internal, message: "no run to advance".into(), line: 0, column: 0, authored: false });
         }
         if interp.waiting {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "the run waits for a host function's result".into(), line: 0, column: 0 });
+            return Err(RunError {
+                kind: RunErrorKind::Internal,
+                message: "the run waits for a host function's result".into(),
+                line: 0,
+                column: 0,
+                authored: false,
+            });
         }
         let total = interp.fuel;
         let cap = slice.saturating_add(self.unbroken_fuel).min(total);
@@ -384,7 +397,13 @@ impl Realm {
     pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
         let interp = &mut self.interp;
         if !interp.waiting {
-            return Err(RunError { kind: RunErrorKind::Internal, message: "no host function waits for a result".into(), line: 0, column: 0 });
+            return Err(RunError {
+                kind: RunErrorKind::Internal,
+                message: "no host function waits for a result".into(),
+                line: 0,
+                column: 0,
+                authored: false,
+            });
         }
         interp.waiting = false;
         // The value on top of the stack stood in for the result.
@@ -472,10 +491,10 @@ impl Realm {
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
-    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `pick` (the file
-    /// dialogs, where a run may wait), `encode`, `decode`, `encodingAvailable`, `current` and
-    /// `locations`, with the values `system` and `lineFeed` and the messages `text.notOpen`,
-    /// `text.badMode`, `text.noAlias` and `text.noHidden`. Each object keeps its path, its `error`
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `setHidden`,
+    /// `createAlias`, `pick` (the file dialogs, where a run may wait), `encode`, `decode`,
+    /// `encodingAvailable`, `current` and `locations`, with the values `system` and `lineFeed` and
+    /// the messages `text.notOpen` and `text.badMode`. Each object keeps its path, its `error`
     /// text, its open file's id, its encoding and its line feed in properties that are not
     /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {

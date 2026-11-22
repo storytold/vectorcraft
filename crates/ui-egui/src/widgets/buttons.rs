@@ -213,9 +213,30 @@ pub fn menu_item(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool
     menu_item_name(ui, tl!(label), enabled, checked)
 }
 
+/// [`menu_item`] that returns the row's response, for a caller that needs to know how it was
+/// clicked.
+pub(crate) fn menu_item_response(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> egui::Response {
+    menu_item_name_response(ui, tl!(label), enabled, checked)
+}
+
 /// [`menu_item`] for a name that is user or file data (a library, a recent URL), never translated.
 /// Like the menu bar's items, the row lights up under the pointer.
 pub fn menu_item_name(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> bool {
+    menu_item_name_response(ui, label, enabled, checked).clicked()
+}
+
+/// [`menu_item_name`] that returns the row's response.
+fn menu_item_name_response(ui: &mut Ui, label: &str, enabled: bool, checked: bool) -> egui::Response {
     let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
-    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false)).clicked()
+    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
+}
+
+/// [`menu_item`] that shows `hint` under the pointer while the row is disabled, to say why it is
+/// gray.
+pub fn menu_item_hint(ui: &mut Ui, label: &str, enabled: bool, checked: bool, hint: &str) -> bool {
+    let label = tl!(label);
+    let text = if checked { format!("✓ {label}") } else { format!("   {label}") };
+    ui.add_enabled(enabled, egui::Button::new(egui::RichText::new(text).size(12.5)).frame_when_inactive(false))
+        .on_disabled_hover_text(tl!(hint))
+        .clicked()
 }

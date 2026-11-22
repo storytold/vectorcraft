@@ -1,4 +1,5 @@
-//! macOS: a drawing tablet's pen pressure (#852), tilt and barrel rotation (#764). winit 0.30
+//! macOS: a drawing tablet's pen pressure (#852), tilt and barrel rotation (#764), and an airbrush
+//! pen's finger wheel. winit 0.30
 //! hands a pen to the window there as a mouse, without them, so the app reads them from AppKit
 //! itself and writes them into the UI's [`StylusFeed`] (`Services::stylus`), which the canvas
 //! reads, as on X11 ([`crate::tablet`]).
@@ -14,8 +15,9 @@
 //!   (−1..1 on each axis, ±[`TILT_DEGREES`] at the ends) and its `rotation` go into the feed as the
 //!   pen's pose, kept for that move too. AppKit gives a rotation of 0 for a pen that does not read
 //!   one and a tilt of 0 for an upright pen, so one event cannot tell a pen without tilt or rotation
-//!   from one held upright and unturned. Each reads as none until the pen reports a value other
-//!   than 0 after it comes near ([`Pen`]).
+//!   from one held upright and unturned. Its `tangentialPressure` (−1..1, an airbrush pen's finger
+//!   wheel) goes into the pose as the wheel, 0 for a pen without one as well. Each reads as none
+//!   until the pen reports a value other than 0 after it comes near ([`Pen`]).
 //!   A mouse event of any other subtype is a mouse's or a trackpad's: the feed is set to `None`.
 //! - An `NSEventTypeTabletPoint` event carries the same pressure, tilt and rotation without a move.
 //! - A tablet proximity event (`NSEventTypeTabletProximity`, or a mouse event of that subtype) says
@@ -68,6 +70,8 @@ struct RawEvent {
     tilt: (f64, f64),
     /// `rotation`, in degrees (the same events as `pressure`).
     rotation: f32,
+    /// `tangentialPressure`, −1..1 (the same events as `pressure`).
+    tangential: f32,
     /// `pointingDeviceType` (proximity events only).
     device: usize,
     /// `isEnteringProximity` (proximity events only).
@@ -107,18 +111,42 @@ impl RawEvent {
     /// and the pen's rotation is taken the same way. [`PenPose`]'s rotation runs clockwise, so the
     /// angle is negated and brought into 0..360.
     ///
-    /// The tilt is left out unless `tilts`, and the rotation unless `turns` ([`Pen`]).
-    fn pose(&self, tilts: bool, turns: bool) -> PenPose {
+    /// AppKit's `tangentialPressure` is −1.0..1.0, the finger wheel of an airbrush pen on the
+    /// devices that have one (<https://developer.apple.com/documentation/appkit/nsevent/tangentialpressure>).
+    /// It becomes [`PenPose`]'s wheel of 0..1, −1.0 at 0 and 1.0 at 1; a value past either end is
+    /// clamped.
+    ///
+    /// The tilt is left out unless `read.tilts`, the rotation unless `read.turns`, and the wheel
+    /// unless `read.wheels` ([`Pen`]).
+    fn pose(&self, read: Reads) -> PenPose {
         let degrees = |v: f64| (v.clamp(-1.0, 1.0) * TILT_DEGREES) as f32;
         // `0.0 - r` rather than `-r`: a rotation of 0 gives 0, not −0.
-        let rotation = turns.then(|| (0.0 - self.rotation).rem_euclid(360.0));
-        PenPose { tilt: tilts.then(|| [degrees(self.tilt.0), degrees(self.tilt.1)]), rotation }
+        let rotation = read.turns.then(|| (0.0 - self.rotation).rem_euclid(360.0));
+        let wheel = read.wheels.then(|| (self.tangential.clamp(-1.0, 1.0) + 1.0) / 2.0);
+        PenPose { tilt: read.tilts.then(|| [degrees(self.tilt.0), degrees(self.tilt.1)]), rotation, wheel }
     }
 
-    /// Whether the event reports a tilt other than 0, and a rotation other than 0.
-    fn reads(&self) -> (bool, bool) {
+    /// Whether the event reports a tilt other than 0, a rotation other than 0, and a tangential
+    /// pressure other than 0.
+    fn reads(&self) -> Reads {
         let read = |v: f64| v.is_finite() && v != 0.0;
-        (read(self.tilt.0) || read(self.tilt.1), read(f64::from(self.rotation)))
+        Reads { tilts: read(self.tilt.0) || read(self.tilt.1), turns: read(f64::from(self.rotation)), wheels: read(f64::from(self.tangential)) }
+    }
+}
+
+/// Which of a pen's tilt, rotation and finger wheel it has reported.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Reads {
+    tilts: bool,
+    turns: bool,
+    wheels: bool,
+}
+
+impl Reads {
+    fn add(&mut self, other: Reads) {
+        self.tilts |= other.tilts;
+        self.turns |= other.turns;
+        self.wheels |= other.wheels;
     }
 }
 
@@ -148,14 +176,14 @@ impl Update {
     }
 }
 
-/// Which end of the pen is near the tablet, and whether it has reported a tilt or a rotation other
-/// than 0 since it came near: until it has, its tilt or rotation reads as none, since AppKit gives
-/// 0 for a pen without one and for one held upright or unturned.
+/// Which end of the pen is near the tablet, and whether it has reported a tilt, a rotation or a
+/// tangential pressure other than 0 since it came near: until it has, that value reads as none,
+/// since AppKit gives 0 for a pen without one and for one held upright, unturned or with its
+/// wheel half way.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Pen {
     eraser: bool,
-    tilts: bool,
-    turns: bool,
+    read: Reads,
 }
 
 impl Pen {
@@ -163,16 +191,14 @@ impl Pen {
         if e.proximity() {
             // Entering with the tip or the eraser end: it hovers. A puck, or leaving, is a mouse.
             self.eraser = e.entering && e.device == device::ERASER;
-            (self.tilts, self.turns) = (false, false);
+            self.read = Reads::default();
             let pen = e.entering && e.device != device::CURSOR;
             return Update::Set(pen.then_some(PenSample { pressure: 0.0, eraser: self.eraser, ..PenSample::default() }));
         }
         if e.point() {
-            let (tilts, turns) = e.reads();
-            self.tilts |= tilts;
-            self.turns |= turns;
+            self.read.add(e.reads());
         }
-        let sample = PenSample { pressure: e.pressure, eraser: self.eraser, pose: e.pose(self.tilts, self.turns) };
+        let sample = PenSample { pressure: e.pressure, eraser: self.eraser, pose: e.pose(self.read) };
         match (e.point(), e.mouse()) {
             (true, true) => Update::Move(sample),
             (true, false) => Update::Set(Some(sample)),
@@ -246,6 +272,7 @@ mod monitor {
             let tilt = e.tilt();
             raw.tilt = (tilt.x, tilt.y);
             raw.rotation = e.rotation();
+            raw.tangential = e.tangentialPressure();
         }
         if raw.proximity() {
             raw.device = e.pointingDeviceType().0;
@@ -326,24 +353,42 @@ mod tests {
         let sample = |pressure, pose| PenSample { pressure, eraser: false, pose };
         assert_eq!(p.handle(&pen(DRAG, 0.5)), Update::Move(tip(0.5)), "no tilt or rotation reported yet");
         let leaning = RawEvent { tilt: (0.5, -0.25), rotation: 30.0, ..pen(DRAG, 0.5) };
-        let pose = PenPose { tilt: Some([30.0, -15.0]), rotation: Some(330.0) };
+        let pose = PenPose { tilt: Some([30.0, -15.0]), rotation: Some(330.0), wheel: None };
         assert_eq!(p.handle(&leaning), Update::Move(sample(0.5, pose)));
         let past_the_ends = RawEvent { tilt: (-4.0, 1.5), rotation: 270.0, ..pen(event_type::TABLET_POINT, 0.8) };
-        let pose = PenPose { tilt: Some([-60.0, 60.0]), rotation: Some(90.0) };
+        let pose = PenPose { tilt: Some([-60.0, 60.0]), rotation: Some(90.0), wheel: None };
         assert_eq!(p.handle(&past_the_ends), Update::Set(Some(sample(0.8, pose))), "clamped");
-        let pose = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0) };
+        let pose = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
         let Update::Move(upright) = p.handle(&pen(DRAG, 0.6)) else { panic!("a pen's drag is a move") };
         assert_eq!(upright, sample(0.6, pose), "once reported, 0 is upright and unturned");
         assert!(upright.pose.rotation.is_some_and(f32::is_sign_positive), "{upright:?}");
         let feed = StylusFeed::default();
         p.handle(&RawEvent { tilt: (f64::NAN, 0.0), rotation: -90.0, ..pen(DRAG, 0.3) }).apply(&feed);
-        assert_eq!(feed.pose(), Some(PenPose { tilt: None, rotation: Some(90.0) }), "a tilt that is not a number is left out");
+        assert_eq!(feed.pose(), Some(PenPose { rotation: Some(90.0), ..PenPose::default() }), "a tilt that is not a number is left out");
         p.handle(&proximity(1, true));
         let tilted = RawEvent { tilt: (0.0, 0.5), ..pen(event_type::TABLET_POINT, 0.8) };
-        let pose = PenPose { tilt: Some([0.0, 30.0]), rotation: None };
+        let pose = PenPose { tilt: Some([0.0, 30.0]), ..PenPose::default() };
         assert_eq!(p.handle(&tilted), Update::Set(Some(sample(0.8, pose))), "no rotation reported since the pen came near");
         p.handle(&RawEvent { kind: DRAG, ..Default::default() }).apply(&feed);
         assert_eq!(feed.pose(), None, "a mouse moved");
+    }
+
+    /// An airbrush pen's finger wheel (AppKit's `tangentialPressure`, −1..1) reaches the feed as
+    /// 0..1, once the pen has reported a value other than 0 since it came near.
+    #[test]
+    fn an_airbrush_wheel_goes_into_the_feed() {
+        let mut p = Pen::default();
+        let wheel = |p: &mut Pen, tangential: f32| match p.handle(&RawEvent { tangential, ..pen(DRAG, 0.5) }) {
+            Update::Move(s) => s.pose.wheel,
+            u => panic!("a pen's drag is a move: {u:?}"),
+        };
+        assert_eq!(wheel(&mut p, 0.0), None, "no wheel reported yet");
+        assert_eq!(wheel(&mut p, -1.0), Some(0.0));
+        assert_eq!(wheel(&mut p, 0.5), Some(0.75));
+        assert_eq!(wheel(&mut p, 0.0), Some(0.5), "once reported, 0 is half way");
+        assert_eq!(wheel(&mut p, 3.0), Some(1.0), "clamped");
+        p.handle(&proximity(1, true));
+        assert_eq!(wheel(&mut p, 0.0), None, "not reported since the pen came near");
     }
 
     #[test]
