@@ -399,9 +399,15 @@ pub(super) fn choice_label<'a>(lang: crate::i18n::Lang, path: &str, label: &'a s
 }
 
 pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, path: &str, suffix: &str, enabled: bool) {
+    number_named(ui, d, path, None, suffix, enabled);
+}
+
+/// [`number`] that screen readers name `name` (already translated) instead of by its row's label:
+/// for a field that shares its row with another, or that has no row.
+pub(super) fn number_named(ui: &mut egui::Ui, d: &mut Dialog, path: &str, name: Option<&str>, suffix: &str, enabled: bool) {
     let v = get(d, path).as_f64().unwrap_or(0.0);
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(x) = widgets::plain_field(ui, path, v, suffix, 3, 64.0) {
+        if let Some(x) = widgets::plain_field_named(ui, path, name, v, suffix, 3, 64.0) {
             set(d, path, json!(x));
         }
     });
@@ -409,9 +415,14 @@ pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, path: &str, suffix: &str
 
 /// A length in points, shown in the document's units.
 pub(super) fn length(ui: &mut egui::Ui, d: &mut Dialog, path: &str, unit: Unit, enabled: bool) {
+    length_named(ui, d, path, None, unit, enabled);
+}
+
+/// [`length`] that screen readers name `name` (already translated), as [`number_named`] is.
+pub(super) fn length_named(ui: &mut egui::Ui, d: &mut Dialog, path: &str, name: Option<&str>, unit: Unit, enabled: bool) {
     let v = get(d, path).as_f64();
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(x) = widgets::num_field(ui, path, v, unit, 80.0) {
+        if let Some(x) = widgets::num_field_named(ui, path, name, v, unit, 80.0) {
             set(d, path, json!(x));
         }
     });
@@ -637,6 +648,7 @@ fn general(ui: &mut egui::Ui, d: &mut Dialog, editor: bool) {
         let mut range = d.str("range");
         if ui
             .add_enabled(!all, egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5"))
+            .accessible_name(tl!("Range:"))
             .changed()
         {
             d.fields.insert("range".into(), json!(range));
@@ -650,11 +662,12 @@ fn image_rows(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
     let on = get(d, &format!("{base}.downsample")) != Downsample::None.id();
     ui.horizontal(|ui| {
         pick::<Downsample>(ui, d, &format!("{base}.downsample"), 150.0, |_| true);
+        // Each resolution is named by its group and the word before it.
         ui.label(tl!("to"));
         let ppi = super::ppi_suffix();
-        number(ui, d, &format!("{base}.ppi"), &ppi, on);
+        number_named(ui, d, &format!("{base}.ppi"), Some(&format!("{title} {}", tl!("to"))), &ppi, on);
         ui.label(tl!("above"));
-        number(ui, d, &format!("{base}.abovePpi"), &ppi, on);
+        number_named(ui, d, &format!("{base}.abovePpi"), Some(&format!("{title} {}", tl!("above"))), &ppi, on);
     });
     ui.horizontal(|ui| {
         ui.label(tl!("Compression:"));
@@ -728,16 +741,17 @@ pub(super) fn marks_and_bleeds(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut 
             ] {
                 for (i, p, label) in pair {
                     ui.label(label);
+                    // Each side's field is named by its label.
                     match document {
                         Some(b) => {
-                            ui.add_enabled_ui(false, |ui| widgets::num_field(ui, p, b.get(i).copied(), unit, 80.0));
+                            ui.add_enabled_ui(false, |ui| widgets::num_field_named(ui, p, Some(label), b.get(i).copied(), unit, 80.0));
                         }
                         None if pdf => {
-                            if let Some(x) = widgets::num_field(ui, p, get(d, p).as_f64(), unit, 80.0) {
+                            if let Some(x) = widgets::num_field_named(ui, p, Some(label), get(d, p).as_f64(), unit, 80.0) {
                                 edit_bleed(d, i, x);
                             }
                         }
-                        None => length(ui, d, p, unit, true),
+                        None => length_named(ui, d, p, Some(label), unit, true),
                     }
                 }
                 ui.end_row();

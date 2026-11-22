@@ -1570,3 +1570,41 @@ fn save_pdf_opens_with_the_flattener_options_given_and_refuses_bad_ones() {
         assert!(app.ui.dialog.is_none(), "{bad}");
     }
 }
+
+/// Every number and length field is named by its visible label: the image resolutions by their
+/// group and the word before the field, the bleed sides by theirs.
+#[test]
+fn every_number_and_length_field_is_named_by_its_label() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/names.pdf"})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    theme::install_fonts(&ctx);
+    let names = |app: &mut VectorcraftApp, section: &str| {
+        set_field(app, "__section", json!(section));
+        let mut out = egui::FullOutput::default();
+        for _ in 0..2 {
+            out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        let names = super::super::tests_print::field_names(&out);
+        assert!(names.iter().all(|n| !n.trim().is_empty()), "{section}: {names:?}");
+        names
+    };
+    let has = |names: &[String], expected: &[&str]| {
+        for name in expected {
+            assert_eq!(names.iter().filter(|n| n == name).count(), 1, "{name} in {names:?}");
+        }
+    };
+    has(&names(&mut app, "General"), &["Range:"]);
+    let compression =
+        ["Color images to", "Color images above", "Grayscale images to", "Grayscale images above", "Monochrome images to", "Monochrome images above"];
+    has(&names(&mut app, "Compression"), &compression);
+    // Without the document's bleed the sides take values; with it they show it dimmed.
+    let bleed = ["Offset:", "Top:", "Bottom:", "Left:", "Right:"];
+    set_field(&mut app, "bleed.useDocument", json!(false));
+    has(&names(&mut app, "Marks and Bleeds"), &bleed);
+    set_field(&mut app, "bleed.useDocument", json!(true));
+    has(&names(&mut app, "Marks and Bleeds"), &bleed);
+    has(&names(&mut app, "Advanced"), &["Subset fonts below:"]);
+}

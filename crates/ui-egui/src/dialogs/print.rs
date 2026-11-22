@@ -26,7 +26,9 @@ use vectorcraft_pdf::{
     PrintSettings,
 };
 
-use super::save_pdf::{TOP_LABEL_WIDTH, choice, current_section, flag, get, heading, length, note, number, pick, row, row_with, set, text};
+use super::save_pdf::{
+    TOP_LABEL_WIDTH, choice, current_section, flag, get, heading, length, length_named, note, number, pick, row, row_with, set, text,
+};
 use super::{DialogSpec, form};
 use crate::state::Dialog;
 use crate::theme::{self, Tokens};
@@ -606,10 +608,11 @@ fn whole(ui: &mut egui::Ui, d: &mut Dialog, path: &str, range: std::ops::RangeIn
     });
 }
 
-/// A Scale percentage at `path`, 1–1000 %: the value typed, once one was.
-fn percent(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) -> Option<f64> {
+/// A Scale percentage at `path`, 1–1000 %, that screen readers name `name`: the value typed, once
+/// one was.
+fn percent(ui: &mut egui::Ui, d: &mut Dialog, path: &str, name: &str, enabled: bool) -> Option<f64> {
     let v = get(d, path).as_f64().unwrap_or(100.0);
-    let typed = ui.add_enabled_ui(enabled, |ui| widgets::range_field(ui, path, v, 1.0..=1000.0, "%", 3, 64.0)).inner;
+    let typed = ui.add_enabled_ui(enabled, |ui| widgets::range_field_named(ui, path, Some(name), v, 1.0..=1000.0, "%", 3, 64.0)).inner;
     if let Some(x) = typed {
         set(d, path, json!(x));
     }
@@ -694,7 +697,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         }
         let mut range = get(d, "range").as_str().unwrap_or_default().to_string();
         let edit = egui::TextEdit::singleline(&mut range).align(egui::Align2::LEFT_CENTER).desired_width(140.0).hint_text("1-3, 5");
-        if ui.add_enabled(artboards == PrintArtboards::Range, edit).changed() {
+        if ui.add_enabled(artboards == PrintArtboards::Range, edit).accessible_name(tl!("Range:")).changed() {
             set(d, "range", json!(range));
         }
     });
@@ -706,18 +709,19 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     row(ui, tl!("Size:"), |ui| {
         pick::<Media>(ui, d, "media", 160.0, |_| true);
     });
-    // A paper size shows its size; Custom takes one.
+    // A paper size shows its size; Custom takes one. Each field is named by its own label.
     let media = choice::<Media>(d, "media").unwrap_or_default();
-    row(ui, tl!("Width:"), |ui| match media.size() {
+    let (width, height) = (tl!("Width:"), tl!("Height:"));
+    row(ui, width, |ui| match media.size() {
         Some((w, h)) => {
-            ui.add_enabled_ui(false, |ui| widgets::num_field(ui, "print-media-w", Some(w), unit, 80.0));
-            ui.label(tl!("Height:"));
-            ui.add_enabled_ui(false, |ui| widgets::num_field(ui, "print-media-h", Some(h), unit, 80.0));
+            ui.add_enabled_ui(false, |ui| widgets::num_field_named(ui, "print-media-w", Some(width), Some(w), unit, 80.0));
+            ui.label(height);
+            ui.add_enabled_ui(false, |ui| widgets::num_field_named(ui, "print-media-h", Some(height), Some(h), unit, 80.0));
         }
         None => {
-            length(ui, d, "width", unit, true);
-            ui.label(tl!("Height:"));
-            length(ui, d, "height", unit, true);
+            length_named(ui, d, "width", Some(width), unit, true);
+            ui.label(height);
+            length_named(ui, d, "height", Some(height), unit, true);
         }
     });
     heading(ui, tl!("Orientation"));
@@ -741,10 +745,11 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             if let Some(o) = widgets::reference_point_named(ui, current, tl!("Placement:")).and_then(|i| Origin::ALL.get(i)) {
                 set(d, "placement.origin", json!(o.id()));
             }
+            // Each offset is named by the row and its axis.
             ui.label("X:");
-            length(ui, d, "placement.x", unit, true);
+            length_named(ui, d, "placement.x", Some(&format!("{} X:", tl!("Placement:"))), unit, true);
             ui.label("Y:");
-            length(ui, d, "placement.y", unit, true);
+            length_named(ui, d, "placement.y", Some(&format!("{} Y:", tl!("Placement:"))), unit, true);
         });
     });
     if placed {
@@ -761,13 +766,14 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     row(ui, tl!("Scale:"), |ui| {
         let on = scaling == PrintScaling::Custom || tiles;
         let linked = get(d, SCALE_LINKED).as_bool() == Some(true);
+        // Each percentage is named by the row and its own label.
         ui.label(tl!("W:"));
-        let w = percent(ui, d, "scale.width", on);
+        let w = percent(ui, d, "scale.width", &format!("{} {}", tl!("Scale:"), tl!("W:")), on);
         if let Some(w) = w.filter(|_| linked) {
             set(d, "scale.height", json!(w));
         }
         ui.label(tl!("H:"));
-        let h = percent(ui, d, "scale.height", on);
+        let h = percent(ui, d, "scale.height", &format!("{} {}", tl!("Scale:"), tl!("H:")), on);
         if let Some(h) = h.filter(|_| linked) {
             set(d, "scale.width", json!(h));
         }

@@ -532,3 +532,50 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     screen.run(&mut app, vec![click(keep)]);
     assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
 }
+
+/// The names screen readers give the text fields in `out`'s accessibility tree: a field's own
+/// name, else the text of a label it is labeled by, else "".
+pub(super) fn field_names(out: &egui::FullOutput) -> Vec<String> {
+    use egui::accesskit::Role;
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    // A label node carries its text as its value.
+    let text_of = |id| nodes.iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.label().or(n.value())).map(str::to_string);
+    nodes
+        .iter()
+        .filter(|(_, n)| matches!(n.role(), Role::TextInput | Role::SpinButton))
+        .map(|(_, n)| n.label().map(str::to_string).or_else(|| n.labelled_by().iter().find_map(|l| text_of(*l))).unwrap_or_default())
+        .collect()
+}
+
+/// Every number and length field of every section is named by its visible label, and the fields
+/// of a row with several are told apart by theirs.
+#[test]
+fn every_number_and_length_field_is_named_by_its_label() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let mut screen = Screen::new();
+    let mut names = |app: &mut VectorcraftApp, section: &str| {
+        set(app, "__section", json!(section));
+        screen.run(app, vec![]);
+        let names = field_names(&screen.run(app, vec![]));
+        assert!(names.iter().all(|n| !n.trim().is_empty()), "{section}: {names:?}");
+        names
+    };
+    let has = |names: &[String], expected: &[&str]| {
+        for name in expected {
+            assert_eq!(names.iter().filter(|n| n == name).count(), 1, "{name} in {names:?}");
+        }
+    };
+    // A paper size shows its size in dimmed fields; Custom takes one.
+    let general = ["Copies:", "Range:", "Width:", "Height:", "Placement: X:", "Placement: Y:", "Scale: W:", "Scale: H:", "Overlap:", "Gutter:"];
+    has(&names(&mut app, "General"), &general);
+    set(&mut app, "media", json!("custom"));
+    has(&names(&mut app, "General"), &general);
+    // The document's bleed shows in dimmed fields; without it the fields take the values.
+    let bleed = ["Offset:", "Top:", "Bottom:", "Left:", "Right:"];
+    has(&names(&mut app, "Marks and Bleed"), &bleed);
+    super::save_pdf::set(dialog(&mut app), "bleed.useDocument", json!(false));
+    has(&names(&mut app, "Marks and Bleed"), &bleed);
+    has(&names(&mut app, "Graphics"), &["Flatness:"]);
+    has(&names(&mut app, "Advanced"), &["Unprintable margin:"]);
+}
