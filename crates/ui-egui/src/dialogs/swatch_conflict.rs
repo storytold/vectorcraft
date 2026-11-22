@@ -134,6 +134,10 @@ impl StackDialog for SwatchConflictDialog {
         self.id
     }
 
+    fn key(&self) -> Option<&str> {
+        Some(KIND)
+    }
+
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<Answer<Value>> {
         let env = Env::of(ui);
         let common = env.words::<CommonWords>();
