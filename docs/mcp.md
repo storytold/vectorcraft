@@ -8346,9 +8346,9 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `deleteKeepsPathsJoined` (General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined, off by default):
   the default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
   button while no row is highlighted). On, Delete removes the direct-selected anchors of a path as `path.removeAnchors` does, refitting the curve
-  around each one, so a closed path stays closed and an open path stays in one piece; a path left with fewer than two
-  anchors is deleted. The next anchor along (the one before at an open path's end) is then selected, so the next
-  Delete goes on along the path. Off, Delete deletes the anchors with their segments and opens the path there.
+  around each one, so a closed path stays closed and an open path stays in one piece. The next anchor along (the one
+  before at an open path's end) is then selected, so the next Delete goes on along the path. When no subpath that lost
+  an anchor keeps two anchors, the path stays selected whole, and the next Delete removes it. Off, Delete deletes the anchors with their segments and opens the path there.
   With it on, a double-click without modifier keys on a path segment with Direct Selection also adds an anchor at the
   clicked point (`path.insertAnchor` with `selectAnchor: true`): the curve keeps its shape, the new anchor alone is
   selected, and the change is one undo step. The double-click takes the path whose stroke or outline is under the
