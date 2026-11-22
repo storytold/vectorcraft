@@ -77,6 +77,21 @@ fn ask(app: &mut VectorcraftApp) -> bool {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_run::NOTICE_KIND) {
         app.ui.dialog = None;
     }
+    // A run past its growth allowance asks about it first, also when its ScriptUI dialog waits
+    // again. The question keeps the dialog of the show() the run is in, with its queued events and
+    // typed text, for Continue to show again.
+    if app.session.script_waiting() {
+        let window = app.ui.dialog.take_if(|d| d.kind == script_window::KIND);
+        if app.ui.dialog.is_none() {
+            let showing = app.session.script_window_showing();
+            let mut fields = json!({});
+            if let Some(window) = window.filter(|d| showing.as_ref().is_some_and(|w| script_window::is_open_for(d, w))) {
+                fields[crate::dialogs::PARENT] = serde_json::to_value(window).unwrap_or_default();
+            }
+            app.ui.dialog = Some(Dialog::new(script_run::GROWTH_KIND, fields));
+        }
+        return true;
+    }
     if let Some(window) = app.session.script_window() {
         // A dialog the script showed after closing the one that is open replaces it.
         if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND && !script_window::is_open_for(d, &window)) {
@@ -91,18 +106,9 @@ fn ask(app: &mut VectorcraftApp) -> bool {
         }
         return true;
     }
-    // While a handler runs, the ScriptUI dialog stays open, until its show() ends or the run asks
-    // about its growth.
-    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND)
-        && (app.session.script_waiting() || app.session.script_window_showing().is_none())
-    {
+    // While a handler runs, the ScriptUI dialog stays open, until its show() ends.
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == script_window::KIND) && app.session.script_window_showing().is_none() {
         app.ui.dialog = None;
-    }
-    if app.session.script_waiting() {
-        if app.ui.dialog.is_none() {
-            app.ui.dialog = Some(Dialog::new(script_run::GROWTH_KIND, json!({})));
-        }
-        return true;
     }
     false
 }

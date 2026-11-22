@@ -396,6 +396,95 @@ fn a_typed_text_the_script_refuses_stays_in_its_field_when_a_click_on_a_button_t
 }
 
 #[test]
+fn a_queued_click_reaches_its_button_after_a_handler_adds_a_control_before_it() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var p = w.add('panel'); var e = w.add('edittext', undefined, 'a'); w.add('button', undefined, 'OK'); \
+        e.onChange = function () { p.add('statictext', undefined, 'Added'); }; vc.log([w.show(), e.text]);",
+    );
+    assert!(until_window(&mut app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("text2".into(), json!("typed"));
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(until_window(&mut app), "the script takes the text and waits again");
+    let w = app.session.script_window().unwrap();
+    assert_eq!(w.nodes[4].text, "OK", "the handler added a control before OK");
+    frame(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([[1, "typed"]]));
+}
+
+#[test]
+fn continue_on_the_growth_question_shows_the_dialog_again_with_its_queued_click_and_typed_text() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var e = w.add('edittext', undefined, 'a'); var g = w.add('button', undefined, 'Grow'); \
+        w.add('button', undefined, 'OK'); g.onClick = function () { vc.run('shape.rectangle', {x:0,y:0,width:10,height:10}); \
+        for (var k = 0; k < 17; k++) { vc.run('select.all'); vc.run('edit.duplicate'); } }; vc.log([w.show(), e.text]);",
+    );
+    assert!(until_window(&mut app));
+    give(&mut app, json!({"event": "click", "control": "Grow"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("text1".into(), json!("typed"));
+    d.fields.insert("queued".into(), json!([{"event": "click", "control": 3, "value": null}]));
+    for _ in 0..10_000 {
+        if app.ui.dialog.as_ref().is_some_and(|d| d.kind == dialogs::script_run::GROWTH_KIND) {
+            break;
+        }
+        assert!(app.session.script_running(), "the run asks about its growth");
+        script_runs::poll(&mut app);
+    }
+    let question = app.ui.dialog.clone().expect("the growth question");
+    assert_eq!(question.kind, dialogs::script_run::GROWTH_KIND);
+    dialogs::confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().expect("Continue shows the dialog again");
+    assert_eq!(d.kind, KIND);
+    assert_eq!(d.fields.get("text1"), Some(&json!("typed")), "with the text typed in its field");
+    assert!(d.fields.contains_key("queued"), "and the click still queued");
+    assert!(until_window(&mut app), "the script waits at its dialog again");
+    frame(&mut app, Vec::new());
+    assert!(until_window(&mut app), "the script takes the typed text and waits again");
+    frame(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([[1, "typed"]]));
+}
+
+#[test]
+fn a_typed_text_stays_with_its_field_after_a_handler_adds_a_control_before_it_and_the_run_grows() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var p = w.add('panel'); var e = w.add('edittext', undefined, 'a'); \
+        var g = w.add('button', undefined, 'Grow'); w.add('button', undefined, 'OK'); g.onClick = function () { \
+        p.add('statictext', undefined, 'Added'); vc.run('shape.rectangle', {x:0,y:0,width:10,height:10}); \
+        for (var k = 0; k < 17; k++) { vc.run('select.all'); vc.run('edit.duplicate'); } }; vc.log([w.show(), e.text]);",
+    );
+    assert!(until_window(&mut app));
+    frame(&mut app, Vec::new());
+    give(&mut app, json!({"event": "click", "control": "Grow"})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("text2".into(), json!("typed"));
+    d.fields.insert("queued".into(), json!([{"event": "click", "control": 4, "value": null, "place": [3]}]));
+    frame(&mut app, Vec::new());
+    for _ in 0..10_000 {
+        if app.ui.dialog.as_ref().is_some_and(|d| d.kind == dialogs::script_run::GROWTH_KIND) {
+            break;
+        }
+        assert!(app.session.script_running(), "the run asks about its growth");
+        script_runs::poll(&mut app);
+    }
+    dialogs::confirm(&mut app).unwrap();
+    assert!(until_window(&mut app), "the script waits at its dialog again");
+    assert_eq!(app.session.script_window().unwrap().nodes[3].text, "a", "the handler added a control before the edit field");
+    frame(&mut app, Vec::new());
+    assert!(until_window(&mut app), "the script takes the typed text and waits again");
+    frame(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([[1, "typed"]]));
+}
+
+#[test]
 fn cancel_on_the_quit_question_does_not_show_a_dialog_whose_show_ended() {
     let mut app = app();
     start(

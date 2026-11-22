@@ -177,8 +177,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     app.run("script.run", script)
 }
 
-fn growth_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {
-    app.ui.dialog = None;
+/// Continue: the run goes on, and the ScriptUI dialog the question was asked over, when its
+/// `show()` has not ended, opens again as it was.
+fn growth_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let showing = app.session.script_window_showing();
+    app.ui.dialog = super::parent(d).filter(|p| showing.as_ref().is_some_and(|w| super::script_window::is_open_for(p, w)));
     app.session.script_continue();
     Ok(Value::Null)
 }
